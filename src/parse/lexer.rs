@@ -10,6 +10,7 @@ pub enum Token {
     StringLiteral(String),
     IntLiteral(i64),
     BoolLiteral(bool),
+    If,
 }
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -26,8 +27,9 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
         just("true").to(Token::BoolLiteral(true)),
         just("false").to(Token::BoolLiteral(false))
     ));
+    let r#if = just("if").to(Token::If);
 
-    let token = ty.or(duck).or(function_keyword).or(r#bool).or(ident).or(ctrl).or(string).or(int);
+    let token = ty.or(duck).or(r#if).or(function_keyword).or(r#bool).or(ident).or(ctrl).or(string).or(int);
 
     token.padded()
         .repeated()
@@ -118,6 +120,14 @@ mod tests {
             ("2003", vec![Token::IntLiteral(2003)]),
             ("true", vec![Token::BoolLiteral(true)]),
             ("false", vec![Token::BoolLiteral(false)]),
+            ("if (true) {}", vec![
+                Token::If,
+                Token::ControlChar('('),
+                Token::BoolLiteral(true),
+                Token::ControlChar(')'),
+                Token::ControlChar('{'),
+                Token::ControlChar('}')],
+            )
         ];
 
         for (src, expected_tokens) in test_cases {
