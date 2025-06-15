@@ -4,6 +4,7 @@ use chumsky::{prelude::*, text::whitespace};
 pub enum Token {
     Type,
     Duck,
+    Function,
     Ident(String),
     ControlChar(char),
 }
@@ -13,10 +14,11 @@ pub type Spanned<T> = (T, SimpleSpan);
 pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let ty = just("type").then_ignore(whitespace().at_least(1)).to(Token::Type);
     let duck = just("duck").to(Token::Duck);
+    let function_keyword = just("fun").to(Token::Function);
     let ident = text::ident().map(|str: &str| Token::Ident(str.to_string()));
-    let ctrl = one_of("=:{};,&").map(Token::ControlChar);
+    let ctrl = one_of("=:{};,&()->").map(Token::ControlChar);
 
-    let token = ty.or(duck).or(ident).or(ctrl);
+    let token = ty.or(duck).or(function_keyword).or(ident).or(ctrl);
 
     token.padded()
         .repeated()
@@ -75,7 +77,10 @@ mod tests {
                 Token::Ident("String".to_string()),
                 Token::ControlChar('}'),
                 Token::ControlChar(';'),
-            ])
+            ]),
+            ("()", vec![Token::ControlChar('('), Token::ControlChar(')')]),
+            ("->", vec![Token::ControlChar('-'), Token::ControlChar('>')]),
+            ("fun", vec![Token::Function])
         ];
 
         for (src, expected_tokens) in test_cases {
