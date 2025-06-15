@@ -1,7 +1,7 @@
 use std::error::Error;
 
-use chumsky::{input::Input, Parser};
-use parse::{lexer::lexer};
+use chumsky::Parser;
+use parse::lexer::lexer;
 
 pub mod parse;
 
