@@ -107,7 +107,7 @@ mod tests {
             ]),
             ("()", vec![Token::ControlChar('('), Token::ControlChar(')')]),
             ("->", vec![Token::ControlChar('-'), Token::ControlChar('>')]),
-            ("fun", vec![Token::Function])
+            ("fun", vec![Token::Function]),
             ("\"\"", vec![Token::StringLiteral(String::from(""))]),
             ("\"XX\"", vec![Token::StringLiteral(String::from("XX"))]),
             ("\"X\\\"X\"", vec![Token::StringLiteral(String::from("X\"X"))]),
