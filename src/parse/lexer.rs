@@ -17,7 +17,7 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let ty = just("type").then_ignore(whitespace().at_least(1)).to(Token::Type);
     let duck = just("duck").to(Token::Duck);
     let ident = text::ident().map(|str: &str| Token::Ident(str.to_string()));
-    let ctrl = one_of("=:{};,&").map(Token::ControlChar);
+    let ctrl = one_of("=:{};,&()").map(Token::ControlChar);
     let string = string_lexer();
     let int = int_lexer();
     let r#bool = choice((
