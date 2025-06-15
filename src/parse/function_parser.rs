@@ -4,6 +4,7 @@ use super::{lexer::Token, type_parser::{type_expression_parser, TypeExpression}}
 
 type Param = (String, TypeExpression);
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct FunctionDefintion {
     name: String,
