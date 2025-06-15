@@ -1,0 +1,8 @@
+[package]
+name = "duck-lang"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ariadne = "0.5.1"
+chumsky = { version = "0.10.1", features = ["nightly", "default"] }
