@@ -7,6 +7,9 @@ pub enum Token {
     Function,
     Ident(String),
     ControlChar(char),
+    StringLiteral(String),
+    IntLiteral(i64),
+    BoolLiteral(bool),
 }
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -17,12 +20,36 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let function_keyword = just("fun").to(Token::Function);
     let ident = text::ident().map(|str: &str| Token::Ident(str.to_string()));
     let ctrl = one_of("=:{};,&()->").map(Token::ControlChar);
+    let string = string_lexer();
+    let int = int_lexer();
+    let r#bool = choice((
+        just("true").to(Token::BoolLiteral(true)),
+        just("false").to(Token::BoolLiteral(false))
+    ));
 
-    let token = ty.or(duck).or(function_keyword).or(ident).or(ctrl);
+    let token = ty.or(duck).or(function_keyword).or(r#bool).or(ident).or(ctrl).or(string).or(int);
 
     token.padded()
         .repeated()
         .collect::<Vec<Token>>()
+}
+
+fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token> {
+    just('"')
+        .ignore_then(
+            choice((
+                just('\\').ignore_then(choice((just('"'), just('t').to('\t'), just('n').to('\n')))),
+                any().filter(|c| *c != '"'),
+            ))
+            .repeated()
+            .collect::<String>(),
+        )
+        .then_ignore(just('"'))
+        .map(Token::StringLiteral)
+}
+
+fn int_lexer<'a>() -> impl Parser<'a, &'a str, Token> {
+    text::int(10).map(|x: &str| Token::IntLiteral(x.parse().unwrap()))
 }
 
 #[cfg(test)]
@@ -80,7 +107,17 @@ mod tests {
             ]),
             ("()", vec![Token::ControlChar('('), Token::ControlChar(')')]),
             ("->", vec![Token::ControlChar('-'), Token::ControlChar('>')]),
-            ("fun", vec![Token::Function])
+            ("fun", vec![Token::Function]),
+            ("\"\"", vec![Token::StringLiteral(String::from(""))]),
+            ("\"XX\"", vec![Token::StringLiteral(String::from("XX"))]),
+            ("\"X\\\"X\"", vec![Token::StringLiteral(String::from("X\"X"))]),
+            ("\"Hallo ich bin ein String\\n\\n\\nNeue Zeile\"", vec![
+                Token::StringLiteral(String::from("Hallo ich bin ein String\n\n\nNeue Zeile"))
+            ]),
+            ("1", vec![Token::IntLiteral(1)]),
+            ("2003", vec![Token::IntLiteral(2003)]),
+            ("true", vec![Token::BoolLiteral(true)]),
+            ("false", vec![Token::BoolLiteral(false)]),
         ];
 
         for (src, expected_tokens) in test_cases {
