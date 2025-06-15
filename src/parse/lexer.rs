@@ -11,6 +11,7 @@ pub enum Token {
     IntLiteral(i64),
     BoolLiteral(bool),
     If,
+    Else,
 }
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -28,8 +29,9 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
         just("false").to(Token::BoolLiteral(false))
     ));
     let r#if = just("if").to(Token::If);
+    let r#else = just("else").to(Token::Else);
 
-    let token = ty.or(duck).or(r#if).or(function_keyword).or(r#bool).or(ident).or(ctrl).or(string).or(int);
+    let token = ty.or(duck).or(r#if).or(r#else).or(function_keyword).or(r#bool).or(ident).or(ctrl).or(string).or(int);
 
     token.padded()
         .repeated()
@@ -127,7 +129,37 @@ mod tests {
                 Token::ControlChar(')'),
                 Token::ControlChar('{'),
                 Token::ControlChar('}')],
-            )
+            ),
+            ("if (true) {} else {}", vec![
+                Token::If,
+                Token::ControlChar('('),
+                Token::BoolLiteral(true),
+                Token::ControlChar(')'),
+                Token::ControlChar('{'),
+                Token::ControlChar('}'),
+                Token::Else,
+                Token::ControlChar('{'),
+                Token::ControlChar('}')],
+            ),
+            ("if (true) {} else if {} else if {} else {}", vec![
+                Token::If,
+                Token::ControlChar('('),
+                Token::BoolLiteral(true),
+                Token::ControlChar(')'),
+                Token::ControlChar('{'),
+                Token::ControlChar('}'),
+                Token::Else,
+                Token::If,
+                Token::ControlChar('{'),
+                Token::ControlChar('}'),
+                Token::Else,
+                Token::If,
+                Token::ControlChar('{'),
+                Token::ControlChar('}'),
+                Token::Else,
+                Token::ControlChar('{'),
+                Token::ControlChar('}')],
+            ),
         ];
 
         for (src, expected_tokens) in test_cases {
