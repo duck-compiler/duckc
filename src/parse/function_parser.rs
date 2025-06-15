@@ -12,7 +12,38 @@ pub struct FunctionDefintion {
     params: Option<Vec<Param>>,
 }
 
-pub fn function_definition_parser<'src>() -> impl Parser<'src, &'src [Token], FunctionDefintion> {
+// TODO body
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct LambdaFunctionExpr {
+    pub params: Vec<Param>,
+}
+
+fn lambda_function_expr_parser<'src>() -> impl Parser<'src, &'src [Token], LambdaFunctionExpr> {
+    let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
+        .then_ignore(just(Token::ControlChar(':')))
+        .then(type_expression_parser())
+        .map(|(identifier, type_expr)| (identifier, type_expr) as Param);
+
+    let params_parser = param_parser.separated_by(just(Token::ControlChar(',')))
+        .allow_trailing()
+        .collect::<Vec<Param>>()
+        .or_not();
+
+    let return_type_parser = just(Token::ControlChar('-')).ignore_then(just(Token::ControlChar('>')))
+        .ignore_then(type_expression_parser());
+
+    just(Token::ControlChar('('))
+        .ignore_then(params_parser)
+        .then_ignore(just(Token::ControlChar(')')))
+        .then(return_type_parser.or_not())
+        .then_ignore(just(Token::ControlChar('=')))
+        .then_ignore(just(Token::ControlChar('>')))
+        .then_ignore(just(Token::ControlChar('{')))
+        .then_ignore(just(Token::ControlChar('}')));
+}
+
+fn function_definition_parser<'src>() -> impl Parser<'src, &'src [Token], FunctionDefintion> {
     let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
         .then_ignore(just(Token::ControlChar(':')))
         .then(type_expression_parser())
