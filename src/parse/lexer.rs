@@ -8,6 +8,7 @@ pub enum Token {
     ControlChar(char),
     StringLiteral(String),
     IntLiteral(i64),
+    BoolLiteral(bool),
 }
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -19,8 +20,12 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let ctrl = one_of("=:{};,&").map(Token::ControlChar);
     let string = string_lexer();
     let int = int_lexer();
+    let r#bool = choice((
+        just("true").to(Token::BoolLiteral(true)),
+        just("false").to(Token::BoolLiteral(false))
+    ));
 
-    let token = ty.or(duck).or(ident).or(ctrl).or(string).or(int);
+    let token = ty.or(duck).or(r#bool).or(ident).or(ctrl).or(string).or(int);
 
     token.padded()
         .repeated()
@@ -106,6 +111,8 @@ mod tests {
             ]),
             ("1", vec![Token::IntLiteral(1)]),
             ("2003", vec![Token::IntLiteral(2003)]),
+            ("true", vec![Token::BoolLiteral(true)]),
+            ("false", vec![Token::BoolLiteral(false)]),
         ];
 
         for (src, expected_tokens) in test_cases {
