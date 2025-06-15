@@ -6,6 +6,7 @@ pub enum Token {
     Duck,
     Ident(String),
     ControlChar(char),
+    StringLiteral(String),
 }
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -15,12 +16,27 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let duck = just("duck").to(Token::Duck);
     let ident = text::ident().map(|str: &str| Token::Ident(str.to_string()));
     let ctrl = one_of("=:{};,&").map(Token::ControlChar);
+    let string = string_lexer();
 
-    let token = ty.or(duck).or(ident).or(ctrl);
+    let token = ty.or(duck).or(ident).or(ctrl).or(string);
 
     token.padded()
         .repeated()
         .collect::<Vec<Token>>()
+}
+
+fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token> {
+    just('"')
+        .ignore_then(
+            choice((
+                just('\\').ignore_then(choice((just('"'), just('t').to('\t'), just('n').to('\n')))),
+                any().filter(|c| *c != '"'),
+            ))
+            .repeated()
+            .collect::<String>(),
+        )
+        .then_ignore(just('"'))
+        .map(Token::StringLiteral)
 }
 
 #[cfg(test)]
@@ -75,7 +91,13 @@ mod tests {
                 Token::Ident("String".to_string()),
                 Token::ControlChar('}'),
                 Token::ControlChar(';'),
-            ])
+            ]),
+            ("\"\"", vec![Token::StringLiteral(String::from(""))]),
+            ("\"XX\"", vec![Token::StringLiteral(String::from("XX"))]),
+            ("\"X\\\"X\"", vec![Token::StringLiteral(String::from("X\"X"))]),
+            ("\"Hallo ich bin ein String\\n\\n\\nNeue Zeile\"", vec![
+                Token::StringLiteral(String::from("Hallo ich bin ein String\n\n\nNeue Zeile"))
+            ]),
         ];
 
         for (src, expected_tokens) in test_cases {
