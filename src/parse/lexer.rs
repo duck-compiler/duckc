@@ -4,6 +4,7 @@ use chumsky::{prelude::*, text::whitespace};
 pub enum Token {
     Type,
     Duck,
+    Function,
     Ident(String),
     ControlChar(char),
     StringLiteral(String),
@@ -16,8 +17,9 @@ pub type Spanned<T> = (T, SimpleSpan);
 pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let ty = just("type").then_ignore(whitespace().at_least(1)).to(Token::Type);
     let duck = just("duck").to(Token::Duck);
+    let function_keyword = just("fun").to(Token::Function);
     let ident = text::ident().map(|str: &str| Token::Ident(str.to_string()));
-    let ctrl = one_of("=:{};,&()").map(Token::ControlChar);
+    let ctrl = one_of("=:{};,&()->").map(Token::ControlChar);
     let string = string_lexer();
     let int = int_lexer();
     let r#bool = choice((
@@ -25,7 +27,7 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
         just("false").to(Token::BoolLiteral(false))
     ));
 
-    let token = ty.or(duck).or(r#bool).or(ident).or(ctrl).or(string).or(int);
+    let token = ty.or(duck).or(function_keyword).or(r#bool).or(ident).or(ctrl).or(string).or(int);
 
     token.padded()
         .repeated()
@@ -103,6 +105,9 @@ mod tests {
                 Token::ControlChar('}'),
                 Token::ControlChar(';'),
             ]),
+            ("()", vec![Token::ControlChar('('), Token::ControlChar(')')]),
+            ("->", vec![Token::ControlChar('-'), Token::ControlChar('>')]),
+            ("fun", vec![Token::Function]),
             ("\"\"", vec![Token::StringLiteral(String::from(""))]),
             ("\"XX\"", vec![Token::StringLiteral(String::from("XX"))]),
             ("\"X\\\"X\"", vec![Token::StringLiteral(String::from("X\"X"))]),
