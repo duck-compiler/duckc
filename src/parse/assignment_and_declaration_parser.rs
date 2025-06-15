@@ -3,35 +3,42 @@ use chumsky::{prelude::just, Parser};
 
 use super::type_parser::{type_expression_parser, TypeExpression};
 use super::lexer::Token;
+use super::value_parser::{value_expr_parser, ValueExpr};
 
 #[derive(Debug, Clone)]
 pub struct Declaration {
     pub name: String,
     pub type_expr: TypeExpression,
-    pub initializer: Option<i8>,
+    pub initializer: Option<ValueExpr>,
 }
 
 // TODO parse initializer
 fn declaration_parser<'src>() -> impl Parser<'src, &'src [Token], Declaration> {
+    let initializer = just(Token::ControlChar('='))
+        .ignore_then(value_expr_parser())
+        .or_not();
+
     just(Token::Let)
         .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
         .then_ignore(just(Token::ControlChar(':')))
         .then(type_expression_parser())
+        .then(initializer)
         .then_ignore(just(Token::ControlChar(';')))
-        .map(|(identifier, type_expr)| Declaration { name: identifier, type_expr, initializer: None })
+        .map(|((identifier, type_expr), initializer)| Declaration { name: identifier, type_expr, initializer })
 }
 
 #[derive(Debug, Clone)]
 pub struct Assignment {
     pub name: String,
-    pub value: i32, // TODO: ValueExpression
+    pub value_expr: ValueExpr,
 }
 
 fn assignment_parser<'src>() -> impl Parser<'src, &'src [Token], Assignment> {
     select_ref! { Token::Ident(identifier) => identifier.to_string() }
         .then_ignore(just(Token::ControlChar('=')))
+        .then(value_expr_parser())
         .then_ignore(just(Token::ControlChar(';')))
-        .map(|identifier| Assignment { name: identifier, value: 5 })
+        .map(|(identifier, value_expr)| Assignment { name: identifier, value_expr })
 }
 
 #[cfg(test)]
@@ -47,6 +54,11 @@ pub mod tests {
             "let x: { x: String, y: String };",
             "let y: { x: String, y: String };",
             "let z: { h: String, x: { y: String }};",
+            "let x: { h: String, x: { y: String }} = 0;",
+            "let x: { h: String, x: { y: String }} = true;",
+            "let x: { h: String, x: { y: String }} = false;",
+            "let x: Int = false;",
+            "let x: String = \"Hallo, Welt!\";",
         ];
 
         for valid_declaration in valid_declarations {
@@ -67,8 +79,11 @@ pub mod tests {
     #[test]
     pub fn test_assignment_parser() {
         let valid_assignments = vec![
-            "x =;",
-            "y=;",
+            "x = 580;",
+            "y = 80;",
+            "y = true;",
+            "y = false;",
+            "y = \"Hallo\";",
         ];
 
         for valid_assignment in valid_assignments {
