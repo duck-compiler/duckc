@@ -29,6 +29,7 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
 
         let fields = field
             .separated_by(just(Token::ControlChar(',')))
+            .allow_trailing()
             .collect::<Vec<(String, TypeExpression)>>();
 
         let duck = just(Token::Duck).or_not()
@@ -93,6 +94,8 @@ pub mod tests {
             "{}",
             "duck { x: String }",
             "duck { x: duck { y: String } }",
+            "duck { x: String, }",
+            "duck { x: String, y : {}, }",
             "{ x: { y: String } }",
             "String",
             "{ x: {}, y: {}, z: {} }",
@@ -114,5 +117,31 @@ pub mod tests {
             assert_eq!(typedef_parse_result.has_output(), true);
         }
 
+        let invalid_type_expressions = vec![
+            "{ x }",
+            "{ x: String,, }",
+            "{ x:{ }",
+            "{ y:} }",
+            "{ y: }",
+            "x: {}",
+            "{ {}: x }",
+            "{ x: String",
+            "x: String }",
+            "{ x: duck { }",
+        ];
+
+        for invalid_type_expression in invalid_type_expressions {
+            println!("lexing {invalid_type_expression}");
+            let lexer_parse_result = lexer().parse(invalid_type_expression);
+            assert_eq!(lexer_parse_result.has_errors(), false);
+            assert_eq!(lexer_parse_result.has_output(), true);
+
+            let Some(tokens) = lexer_parse_result.into_output() else { unreachable!()};
+
+            println!("typedef_parsing {invalid_type_expression}");
+            let typedef_parse_result = type_expression_parser().parse(tokens.as_slice());
+            assert_eq!(typedef_parse_result.has_errors(), true);
+            assert_eq!(typedef_parse_result.has_output(), false);
+        }
     }
 }
