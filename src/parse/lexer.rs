@@ -7,6 +7,7 @@ pub enum Token {
     Ident(String),
     ControlChar(char),
     StringLiteral(String),
+    IntLiteral(i64),
 }
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -17,8 +18,9 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let ident = text::ident().map(|str: &str| Token::Ident(str.to_string()));
     let ctrl = one_of("=:{};,&").map(Token::ControlChar);
     let string = string_lexer();
+    let int = int_lexer();
 
-    let token = ty.or(duck).or(ident).or(ctrl).or(string);
+    let token = ty.or(duck).or(ident).or(ctrl).or(string).or(int);
 
     token.padded()
         .repeated()
@@ -37,6 +39,10 @@ fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token> {
         )
         .then_ignore(just('"'))
         .map(Token::StringLiteral)
+}
+
+fn int_lexer<'a>() -> impl Parser<'a, &'a str, Token> {
+    text::int(10).map(|x: &str| Token::IntLiteral(x.parse().unwrap()))
 }
 
 #[cfg(test)]
@@ -98,6 +104,8 @@ mod tests {
             ("\"Hallo ich bin ein String\\n\\n\\nNeue Zeile\"", vec![
                 Token::StringLiteral(String::from("Hallo ich bin ein String\n\n\nNeue Zeile"))
             ]),
+            ("1", vec![Token::IntLiteral(1)]),
+            ("2003", vec![Token::IntLiteral(2003)]),
         ];
 
         for (src, expected_tokens) in test_cases {
