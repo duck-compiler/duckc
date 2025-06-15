@@ -10,6 +10,7 @@ pub enum Token {
     StringLiteral(String),
     IntLiteral(i64),
     BoolLiteral(bool),
+    Let,
 }
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -18,6 +19,7 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let ty = just("type").then_ignore(whitespace().at_least(1)).to(Token::Type);
     let duck = just("duck").to(Token::Duck);
     let function_keyword = just("fun").to(Token::Function);
+    let let_keyword = just("let").to(Token::Let);
     let ident = text::ident().map(|str: &str| Token::Ident(str.to_string()));
     let ctrl = one_of("=:{};,&()->").map(Token::ControlChar);
     let string = string_lexer();
@@ -27,7 +29,15 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
         just("false").to(Token::BoolLiteral(false))
     ));
 
-    let token = ty.or(duck).or(function_keyword).or(r#bool).or(ident).or(ctrl).or(string).or(int);
+    let token = ty
+        .or(duck)
+        .or(let_keyword)
+        .or(function_keyword)
+        .or(r#bool)
+        .or(ident)
+        .or(ctrl)
+        .or(string)
+        .or(int);
 
     token.padded()
         .repeated()
@@ -118,6 +128,14 @@ mod tests {
             ("2003", vec![Token::IntLiteral(2003)]),
             ("true", vec![Token::BoolLiteral(true)]),
             ("false", vec![Token::BoolLiteral(false)]),
+            ("let x: {};", vec![
+                Token::Let,
+                Token::Ident("x".to_string()),
+                Token::ControlChar(':'),
+                Token::ControlChar('{'),
+                Token::ControlChar('}'),
+                Token::ControlChar(';'),
+            ]),
         ];
 
         for (src, expected_tokens) in test_cases {
