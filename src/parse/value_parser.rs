@@ -10,6 +10,12 @@ pub enum ValueExpr {
     Int(i64),
     String(String),
     Bool(bool),
+    Variable(String),
+    If {
+        condition: Box<ValueExpr>,
+        then: Box<ValueExpr>,
+        r#else: Box<ValueExpr>,
+    },
 }
 
 pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> {
@@ -21,6 +27,16 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .collect::<Vec<_>>()
             .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')));
 
+        let if_condition = e
+            .clone()
+            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')));
+        let if_body = e
+            .clone()
+            .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')));
+        let if_with_condition_and_body = just(Token::If)
+            .ignore_then(if_condition.clone())
+            .then(if_body.clone());
+
         choice((
             select_ref! { Token::Ident(ident) => ident.to_string() }
                 .then(params)
@@ -28,9 +44,33 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     name: fn_name,
                     params,
                 }),
-            select_ref! { Token::IntLiteral(i) => *i }.map(|i| ValueExpr::Int(i)),
-            select_ref! { Token::BoolLiteral(b) => *b }.map(|b| ValueExpr::Bool(b)),
-            select_ref! { Token::StringLiteral(s) => s }.map(|s| ValueExpr::String(s.to_owned())),
+            select_ref! { Token::IntLiteral(i) => *i }.map(ValueExpr::Int),
+            select_ref! { Token::BoolLiteral(b) => *b }.map(ValueExpr::Bool),
+            select_ref! { Token::StringLiteral(s) => s.to_owned() }.map(ValueExpr::String),
+            select_ref! { Token::Ident(ident) => ident.to_owned() }.map(ValueExpr::Variable),
+            if_with_condition_and_body
+                .clone()
+                .then(
+                    just(Token::Else)
+                        .ignore_then(if_with_condition_and_body.clone())
+                        .repeated()
+                        .collect::<Vec<(ValueExpr, ValueExpr)>>(),
+                )
+                .then_ignore(just(Token::Else))
+                .then(if_body.clone())
+                .map(|(((condition, then), else_ifs), r#else)| ValueExpr::If {
+                    condition: Box::new(condition),
+                    then: Box::new(then),
+                    r#else: else_ifs
+                        .into_iter()
+                        .rfold(Box::new(r#else), |acc, (cond, then)| {
+                            Box::new(ValueExpr::If {
+                                condition: Box::new(cond),
+                                then: Box::new(then),
+                                r#else: acc,
+                            })
+                        }),
+                }),
         ))
     })
 }
@@ -140,6 +180,47 @@ mod tests {
                         ValueExpr::String("hallo".into()),
                         ValueExpr::String("moin".into()),
                     ],
+                },
+            ),
+            ("x", ValueExpr::Variable("x".into())),
+            (
+                "print(x, true, lol())",
+                ValueExpr::FunctionCall {
+                    name: "print".into(),
+                    params: vec![
+                        ValueExpr::Variable("x".into()),
+                        ValueExpr::Bool(true),
+                        ValueExpr::FunctionCall {
+                            name: "lol".into(),
+                            params: vec![],
+                        },
+                    ],
+                },
+            ),
+            (
+                "if (true) { 1 } else { 2 }",
+                ValueExpr::If {
+                    condition: ValueExpr::Bool(true).into(),
+                    then: ValueExpr::Int(1).into(),
+                    r#else: ValueExpr::Int(2).into(),
+                },
+            ),
+            (
+                "if (true) { 1 } else if (false) { 3 } else if (200) { 4 } else { 2 }",
+                ValueExpr::If {
+                    condition: ValueExpr::Bool(true).into(),
+                    then: ValueExpr::Int(1).into(),
+                    r#else: ValueExpr::If {
+                        condition: ValueExpr::Bool(false).into(),
+                        then: ValueExpr::Int(3).into(),
+                        r#else: ValueExpr::If {
+                            condition: ValueExpr::Int(200).into(),
+                            then: ValueExpr::Int(4).into(),
+                            r#else: ValueExpr::Int(2).into(),
+                        }
+                        .into(),
+                    }
+                    .into(),
                 },
             ),
         ];
