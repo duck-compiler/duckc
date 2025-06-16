@@ -10,6 +10,7 @@ pub enum Token {
     StringLiteral(String),
     IntLiteral(i64),
     BoolLiteral(bool),
+    CharLiteral(char),
     If,
     Else,
 }
@@ -30,12 +31,25 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     ));
     let r#if = just("if").to(Token::If);
     let r#else = just("else").to(Token::Else);
+    let r#char = char_lexer();
 
-    let token = ty.or(duck).or(r#if).or(r#else).or(function_keyword).or(r#bool).or(ident).or(ctrl).or(string).or(int);
+    let token = ty.or(duck).or(r#if).or(r#else).or(function_keyword).or(r#bool).or(ident).or(ctrl).or(string).or(int).or(r#char);
 
     token.padded()
         .repeated()
         .collect::<Vec<Token>>()
+}
+
+fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token> {
+    just("'")
+        .ignore_then(
+            choice((
+                just('\\').ignore_then(choice((just('\''), just('t').to('\t'), just('n').to('\n')))),
+                any().filter(|c| *c != '\''),
+            ))
+        )
+        .then_ignore(just("'"))
+        .map(Token::CharLiteral)
 }
 
 fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token> {
@@ -160,6 +174,12 @@ mod tests {
                 Token::ControlChar('{'),
                 Token::ControlChar('}')],
             ),
+            ("'c'", vec![
+                Token::CharLiteral('c')
+            ]),
+            ("'\\n'", vec![
+                Token::CharLiteral('\n')
+            ]),
         ];
 
         for (src, expected_tokens) in test_cases {
