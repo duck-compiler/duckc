@@ -97,8 +97,6 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .ignore_then(while_condition.clone())
             .then(while_body.clone());
 
-        let cl = e.clone();
-
         choice((
             any()
                 .filter(|t| !matches!(t, Token::ControlChar('.')))
@@ -107,13 +105,16 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 .collect::<Vec<_>>()
                 .then_ignore(just(Token::ControlChar('.')))
                 .then(select_ref! { Token::Ident(field_name) => field_name.to_owned() })
-                .map(move |(tokens, field_name)| {
-                    let tokens = Box::leak(Box::new(tokens));
-                    dbg!(&tokens);
-                    let target_obj = cl.parse(tokens.as_slice()).unwrap();
-                    ValueExpr::FieldAccess {
-                        target_obj: target_obj.into(),
-                        field_name: field_name,
+                .map({
+                    let e = e.clone();
+                    move |(tokens, field_name)| {
+                        let tokens = Box::leak(Box::new(tokens));
+                        dbg!(&tokens);
+                        let target_obj = e.parse(tokens.as_slice()).unwrap();
+                        ValueExpr::FieldAccess {
+                            target_obj: target_obj.into(),
+                            field_name: field_name,
+                        }
                     }
                 }),
             select_ref! { Token::Ident(ident) => ident.to_string() }
