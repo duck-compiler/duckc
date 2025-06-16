@@ -23,15 +23,15 @@ pub enum ValueExpr {
         body: Box<ValueExpr>,
     },
     Tuple(Vec<ValueExpr>),
-    Concat(Vec<ValueExpr>),
+    Block(Vec<ValueExpr>),
     Break,
     Continue,
 }
 
 impl ValueExpr {
-    fn flatten_concat(&self) -> ValueExpr {
+    fn flatten_block(&self) -> ValueExpr {
         match self {
-            ValueExpr::Concat(x) if x.len() <= 1 => {
+            ValueExpr::Block(x) if x.len() <= 1 => {
                 if let Some(x) = x.get(0) {
                     x.clone()
                 } else {
@@ -66,7 +66,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 if x.is_empty() || x.last().unwrap().1.is_some() {
                     x.push((empty_tuple(), None));
                 }
-                ValueExpr::Concat(x.into_iter().map(|(t, _)| t).collect()).flatten_concat()
+                ValueExpr::Block(x.into_iter().map(|(t, _)| t).collect()).flatten_block()
             });
 
         let if_condition = e
@@ -301,7 +301,7 @@ mod tests {
             ("{1}", ValueExpr::Int(1)),
             (
                 "{1;  2   ;3;x()}",
-                ValueExpr::Concat(vec![
+                ValueExpr::Block(vec![
                     ValueExpr::Int(1),
                     ValueExpr::Int(2),
                     ValueExpr::Int(3),
@@ -313,7 +313,7 @@ mod tests {
             ),
             (
                 "{1;  2   ;3;x({})}",
-                ValueExpr::Concat(vec![
+                ValueExpr::Block(vec![
                     ValueExpr::Int(1),
                     ValueExpr::Int(2),
                     ValueExpr::Int(3),
@@ -325,7 +325,7 @@ mod tests {
             ),
             (
                 "{x();y();}",
-                ValueExpr::Concat(vec![
+                ValueExpr::Block(vec![
                     ValueExpr::FunctionCall {
                         name: "x".into(),
                         params: vec![],
@@ -342,12 +342,12 @@ mod tests {
                 ValueExpr::FunctionCall {
                     name: "x".into(),
                     params: vec![
-                        ValueExpr::Concat(vec![
+                        ValueExpr::Block(vec![
                             ValueExpr::Int(1),
                             ValueExpr::Int(2),
                             ValueExpr::FunctionCall {
                                 name: "y".into(),
-                                params: vec![ValueExpr::Concat(vec![
+                                params: vec![ValueExpr::Block(vec![
                                     ValueExpr::FunctionCall {
                                         name: "z".into(),
                                         params: vec![],
@@ -386,7 +386,7 @@ mod tests {
                         params: vec![],
                     }
                     .into(),
-                    body: ValueExpr::Concat(vec![ValueExpr::Int(1), ValueExpr::Break, empty_tuple()]).into(),
+                    body: ValueExpr::Block(vec![ValueExpr::Int(1), ValueExpr::Break, empty_tuple()]).into(),
                 },
             ),
             (
@@ -397,7 +397,7 @@ mod tests {
                         params: vec![],
                     }
                     .into(),
-                    body: ValueExpr::Concat(vec![ValueExpr::Int(1), ValueExpr::Continue, empty_tuple()]).into(),
+                    body: ValueExpr::Block(vec![ValueExpr::Int(1), ValueExpr::Continue, empty_tuple()]).into(),
                 },
             ),
             ("()", empty_tuple()),
