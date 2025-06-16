@@ -17,6 +17,8 @@ pub enum Token {
     Else,
     Let,
     While,
+    Break,
+    Continue,
 }
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -39,10 +41,14 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let r#char = char_lexer();
     let num = num_literal();
     let r#while = just("while").to(Token::While);
+    let r#break = just("break").to(Token::Break);
+    let r#continue = just("continue").to(Token::Continue);
 
     let token = ty
         .or(duck)
         .or(r#while)
+        .or(r#break)
+        .or(r#continue)
         .or(let_keyword)
         .or(r#if)
         .or(r#else)

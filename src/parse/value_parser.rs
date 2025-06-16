@@ -22,6 +22,8 @@ pub enum ValueExpr {
     },
     Tuple(Vec<ValueExpr>),
     Concat(Vec<ValueExpr>),
+    Break,
+    Continue,
 }
 
 impl ValueExpr {
@@ -121,6 +123,8 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     body: Box::new(body),
                 }),
             concated_body.clone(),
+            just(Token::Break).to(ValueExpr::Break),
+            just(Token::Continue).to(ValueExpr::Continue),
         ))
     })
 }
@@ -371,14 +375,25 @@ mod tests {
                 },
             ),
             (
-                "while (my_func()) {1;}",
+                "while (my_func()) {1;break;}",
                 ValueExpr::While {
                     condition: ValueExpr::FunctionCall {
                         name: "my_func".into(),
                         params: vec![],
                     }
                     .into(),
-                    body: ValueExpr::Concat(vec![ValueExpr::Int(1), empty_tuple()]).into(),
+                    body: ValueExpr::Concat(vec![ValueExpr::Int(1), ValueExpr::Break, empty_tuple()]).into(),
+                },
+            ),
+            (
+                "while (my_func()) {1;continue;}",
+                ValueExpr::While {
+                    condition: ValueExpr::FunctionCall {
+                        name: "my_func".into(),
+                        params: vec![],
+                    }
+                    .into(),
+                    body: ValueExpr::Concat(vec![ValueExpr::Int(1), ValueExpr::Continue, empty_tuple()]).into(),
                 },
             ),
         ];
