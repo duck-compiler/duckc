@@ -1,4 +1,4 @@
-use chumsky::{prelude::*, text::whitespace};
+use chumsky::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Token {
@@ -24,42 +24,29 @@ pub enum Token {
 pub type Spanned<T> = (T, SimpleSpan);
 
 pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
-    let ty = just("type").then_ignore(whitespace().at_least(1)).to(Token::Type);
-    let duck = just("duck").to(Token::Duck);
-    let function_keyword = just("fun").to(Token::Function);
-    let return_keyword = just("return").to(Token::Return);
-    let let_keyword = just("let").to(Token::Let);
-    let ident = text::ident().map(|str: &str| Token::Ident(str.to_string()));
+    let keyword_or_ident = text::ident().map(|str: &str| match str {
+        "type" => Token::Type,
+        "duck" => Token::Duck,
+        "fun" => Token::Function,
+        "return" => Token::Return,
+        "let" => Token::Let,
+        "if" => Token::If,
+        "else" => Token::Else,
+        "while"=> Token::While,
+        "break" => Token::Break,
+        "continue" => Token::Continue,
+        _ => Token::Ident(str.to_string()),
+    });
     let ctrl = one_of("=:{};,&()->.").map(Token::ControlChar);
     let string = string_lexer();
     let r#bool = choice((
         just("true").to(Token::BoolLiteral(true)),
         just("false").to(Token::BoolLiteral(false))
     ));
-    let r#if = just("if").to(Token::If);
-    let r#else = just("else").to(Token::Else);
     let r#char = char_lexer();
     let num = num_literal();
-    let r#while = just("while").to(Token::While);
-    let r#break = just("break").to(Token::Break);
-    let r#continue = just("continue").to(Token::Continue);
 
-    let token = ty
-        .or(duck)
-        .or(r#while)
-        .or(r#break)
-        .or(r#continue)
-        .or(let_keyword)
-        .or(r#if)
-        .or(r#else)
-        .or(function_keyword)
-        .or(return_keyword)
-        .or(r#bool)
-        .or(ident)
-        .or(ctrl)
-        .or(string)
-        .or(num)
-        .or(r#char);
+    let token = r#bool.or(keyword_or_ident).or(ctrl).or(string).or(num).or(r#char);
 
     token.padded()
         .repeated()

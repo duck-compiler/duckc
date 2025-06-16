@@ -103,25 +103,36 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 .repeated()
                 .at_least(1)
                 .collect::<Vec<_>>()
-                .then_ignore(just(Token::ControlChar('.')))
-                .then(select_ref! { Token::Ident(field_name) => field_name.to_owned() })
+                .then(
+                    (just(Token::ControlChar('.')).ignore_then(
+                        select_ref! { Token::Ident(field_name) => field_name.to_owned() },
+                    ))
+                    .repeated()
+                    .at_least(1)
+                    .collect::<Vec<_>>(),
+                )
                 .map({
                     let e = e.clone();
-                    move |(tokens, field_name)| {
-                        let tokens = Box::leak(Box::new(tokens));
-                        dbg!(&tokens);
-                        let target_obj = e.parse(tokens.as_slice()).unwrap();
-                        ValueExpr::FieldAccess {
-                            target_obj: target_obj.into(),
-                            field_name: field_name,
-                        }
+                    move |(base_expr, field_accesses)| {
+                        let base_expr = base_expr.leak() as &[Token];
+                        let base = e.parse(base_expr).unwrap();
+                        let r = field_accesses.into_iter().fold(base, |acc, x| {
+                            ValueExpr::FieldAccess {
+                                target_obj: acc.into(),
+                                field_name: x,
+                            }
+                        });
+                        r
                     }
                 }),
             select_ref! { Token::Ident(ident) => ValueExpr::Variable(ident.to_owned()) }
-                .or(e.clone().delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))))
+                .or(e
+                    .clone()
+                    .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))))
                 .then(params.clone())
-                .map(|(target, params)| {
-                    ValueExpr::FunctionCall { target: target.into(), params }
+                .map(|(target, params)| ValueExpr::FunctionCall {
+                    target: target.into(),
+                    params,
                 }),
             // any()
             //     .filter(|t| !matches!(t, Token::ControlChar('(')))
@@ -542,13 +553,65 @@ mod tests {
             ),
             (
                 "(x)()",
-                ValueExpr::FunctionCall { target: var("x"), params: vec![] }
-            )
+                ValueExpr::FunctionCall {
+                    target: var("x"),
+                    params: vec![],
+                },
+            ),
+            (
+                "x()",
+                ValueExpr::FunctionCall {
+                    target: var("x"),
+                    params: vec![],
+                },
+            ),
+            (
+                "(1)()",
+                ValueExpr::FunctionCall {
+                    target: ValueExpr::Int(1).into(),
+                    params: vec![],
+                },
+            ),
+            (
+                "(123)()",
+                ValueExpr::FunctionCall {
+                    target: ValueExpr::Int(123).into(),
+                    params: vec![],
+                },
+            ),
+            (
+                "(returns_lambda())()",
+                ValueExpr::FunctionCall {
+                    target: ValueExpr::FunctionCall {
+                        target: var("returns_lambda"),
+                        params: vec![],
+                    }
+                    .into(),
+                    params: vec![],
+                },
+            ),
+            (
+                "x.y.z.w",
+                ValueExpr::FieldAccess {
+                    target_obj: ValueExpr::FieldAccess {
+                        target_obj: ValueExpr::FieldAccess {
+                            target_obj: var("x"),
+                            field_name: "y".into(),
+                        }
+                        .into(),
+                        field_name: "z".into(),
+                    }
+                    .into(),
+                    field_name: "w".into(),
+                },
+            ),
         ];
 
         for (src, expected_tokens) in test_cases {
             let lex_result = lexer().parse(src).into_result().expect(&src);
             let parse_result = value_expr_parser().parse(&lex_result);
+
+            dbg!(&lex_result, &parse_result);
 
             assert_eq!(parse_result.has_errors(), false, "{}", src);
             assert_eq!(parse_result.has_output(), true, "{}", src);
