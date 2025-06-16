@@ -16,6 +16,7 @@ pub enum ValueExpr {
         then: Box<ValueExpr>,
         r#else: Box<ValueExpr>,
     },
+    Tuple(Vec<ValueExpr>),
 }
 
 pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> {
@@ -39,7 +40,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
 
         choice((
             select_ref! { Token::Ident(ident) => ident.to_string() }
-                .then(params)
+                .then(params.clone())
                 .map(|(fn_name, params)| ValueExpr::FunctionCall {
                     name: fn_name,
                     params,
@@ -71,6 +72,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                             })
                         }),
                 }),
+            params.clone().map(ValueExpr::Tuple)
         ))
     })
 }
@@ -223,6 +225,15 @@ mod tests {
                     .into(),
                 },
             ),
+            (
+                "(1,true,2,\"hallo\")",
+                ValueExpr::Tuple(vec![
+                    ValueExpr::Int(1),
+                    ValueExpr::Bool(true),
+                    ValueExpr::Int(2),
+                    ValueExpr::String("hallo".into())
+                ])
+            )
         ];
 
         for (src, expected_tokens) in test_cases {
