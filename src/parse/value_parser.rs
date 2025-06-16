@@ -26,6 +26,7 @@ pub enum ValueExpr {
     Block(Vec<ValueExpr>),
     Break,
     Continue,
+    Duck(Vec<(String, ValueExpr)>),
 }
 
 impl ValueExpr {
@@ -52,7 +53,16 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .collect::<Vec<_>>()
             .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')));
 
-        let concated_body = e
+        let duck_expression = select_ref! { Token::Ident(ident) => ident.to_owned() }
+            .then_ignore(just(Token::ControlChar(':')))
+            .then(e.clone())
+            .separated_by(just(Token::ControlChar(',')))
+            .allow_trailing()
+            .collect::<Vec<_>>()
+            .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
+            .map(|x| ValueExpr::Duck(x));
+
+        let block_expression = e
             .clone()
             .then(just(Token::ControlChar(';')).or_not())
             .repeated()
@@ -72,13 +82,13 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
         let if_condition = e
             .clone()
             .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')));
-        let if_body = concated_body.clone();
+        let if_body = block_expression.clone();
         let if_with_condition_and_body = just(Token::If)
             .ignore_then(if_condition.clone())
             .then(if_body.clone());
 
         let while_condition = if_condition.clone();
-        let while_body = concated_body.clone();
+        let while_body = block_expression.clone();
         let while_with_condition_and_body = just(Token::While)
             .ignore_then(while_condition.clone())
             .then(while_body.clone());
@@ -124,7 +134,8 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     condition: Box::new(cond),
                     body: Box::new(body),
                 }),
-            concated_body.clone(),
+            duck_expression.clone(),
+            block_expression.clone(),
             just(Token::Break).to(ValueExpr::Break),
             just(Token::Continue).to(ValueExpr::Continue),
             select_ref! { Token::CharLiteral(c) => *c }.map(ValueExpr::Char),
@@ -137,13 +148,17 @@ fn empty_tuple() -> ValueExpr {
     ValueExpr::Tuple(Vec::new())
 }
 
+fn empty_duck() -> ValueExpr {
+    ValueExpr::Duck(Vec::new())
+}
+
 #[cfg(test)]
 mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
         lexer::lexer,
-        value_parser::{empty_tuple, value_expr_parser},
+        value_parser::{empty_duck, empty_tuple, value_expr_parser},
     };
 
     use super::ValueExpr;
@@ -297,7 +312,7 @@ mod tests {
                     ValueExpr::String("hallo".into()),
                 ]),
             ),
-            ("{}", empty_tuple()),
+            ("{}", empty_duck()),
             ("{1}", ValueExpr::Int(1)),
             (
                 "{1;  2   ;3;x()}",
@@ -319,7 +334,7 @@ mod tests {
                     ValueExpr::Int(3),
                     ValueExpr::FunctionCall {
                         name: "x".into(),
-                        params: vec![empty_tuple()],
+                        params: vec![empty_duck()],
                     },
                 ]),
             ),
@@ -386,7 +401,12 @@ mod tests {
                         params: vec![],
                     }
                     .into(),
-                    body: ValueExpr::Block(vec![ValueExpr::Int(1), ValueExpr::Break, empty_tuple()]).into(),
+                    body: ValueExpr::Block(vec![
+                        ValueExpr::Int(1),
+                        ValueExpr::Break,
+                        empty_tuple(),
+                    ])
+                    .into(),
                 },
             ),
             (
@@ -397,11 +417,60 @@ mod tests {
                         params: vec![],
                     }
                     .into(),
-                    body: ValueExpr::Block(vec![ValueExpr::Int(1), ValueExpr::Continue, empty_tuple()]).into(),
+                    body: ValueExpr::Block(vec![
+                        ValueExpr::Int(1),
+                        ValueExpr::Continue,
+                        empty_tuple(),
+                    ])
+                    .into(),
                 },
             ),
             ("()", empty_tuple()),
-            ("(1.1, 'x')", ValueExpr::Tuple(vec![ValueExpr::Float(1.1), ValueExpr::Char('x')])),
+            (
+                "(1.1, 'x')",
+                ValueExpr::Tuple(vec![ValueExpr::Float(1.1), ValueExpr::Char('x')]),
+            ),
+            (
+                "{x: 1, y: { z: true }}",
+                ValueExpr::Duck(vec![
+                    ("x".into(), ValueExpr::Int(1)),
+                    (
+                        "y".into(),
+                        ValueExpr::Duck(vec![("z".into(), ValueExpr::Bool(true))]),
+                    ),
+                ]),
+            ),
+            (
+                "{x: 1, y: { z: true, w: { print();2;true } }}",
+                ValueExpr::Duck(vec![
+                    ("x".into(), ValueExpr::Int(1)),
+                    (
+                        "y".into(),
+                        ValueExpr::Duck(vec![
+                            ("z".into(), ValueExpr::Bool(true)),
+                            (
+                                "w".into(),
+                                ValueExpr::Block(vec![
+                                    ValueExpr::FunctionCall {
+                                        name: "print".into(),
+                                        params: vec![],
+                                    },
+                                    ValueExpr::Int(2),
+                                    ValueExpr::Bool(true),
+                                ]),
+                            ),
+                        ]),
+                    ),
+                ]),
+            ),
+            (
+                "if (true) {{}} else {{x: 1}}",
+                ValueExpr::If {
+                    condition: ValueExpr::Bool(true).into(),
+                    then: ValueExpr::Duck(vec![]).into(),
+                    r#else: ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(1))]).into(),
+                },
+            ),
         ];
 
         for (src, expected_tokens) in test_cases {
