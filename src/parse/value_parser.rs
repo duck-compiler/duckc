@@ -16,6 +16,10 @@ pub enum ValueExpr {
         then: Box<ValueExpr>,
         r#else: Box<ValueExpr>,
     },
+    While {
+        condition: Box<ValueExpr>,
+        body: Box<ValueExpr>,
+    },
     Tuple(Vec<ValueExpr>),
     Concat(Vec<ValueExpr>),
 }
@@ -69,6 +73,12 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .ignore_then(if_condition.clone())
             .then(if_body.clone());
 
+        let while_condition = if_condition.clone();
+        let while_body = concated_body.clone();
+        let while_with_condition_and_body = just(Token::While)
+            .ignore_then(while_condition.clone())
+            .then(while_body.clone());
+
         choice((
             select_ref! { Token::Ident(ident) => ident.to_string() }
                 .then(params.clone())
@@ -104,6 +114,12 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                         }),
                 }),
             params.clone().map(ValueExpr::Tuple),
+            while_with_condition_and_body
+                .clone()
+                .map(|(cond, body)| ValueExpr::While {
+                    condition: Box::new(cond),
+                    body: Box::new(body),
+                }),
             concated_body.clone(),
         ))
     })
@@ -334,6 +350,35 @@ mod tests {
                         ]),
                         ValueExpr::Variable("lol".into()),
                     ],
+                },
+            ),
+            (
+                "while (true) {}",
+                ValueExpr::While {
+                    condition: ValueExpr::Bool(true).into(),
+                    body: empty_tuple().into(),
+                },
+            ),
+            (
+                "while (my_func()) {}",
+                ValueExpr::While {
+                    condition: ValueExpr::FunctionCall {
+                        name: "my_func".into(),
+                        params: vec![],
+                    }
+                    .into(),
+                    body: empty_tuple().into(),
+                },
+            ),
+            (
+                "while (my_func()) {1;}",
+                ValueExpr::While {
+                    condition: ValueExpr::FunctionCall {
+                        name: "my_func".into(),
+                        params: vec![],
+                    }
+                    .into(),
+                    body: ValueExpr::Concat(vec![ValueExpr::Int(1), empty_tuple()]).into(),
                 },
             ),
         ];
