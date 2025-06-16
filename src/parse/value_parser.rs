@@ -1,4 +1,4 @@
-use super::{lexer::Token, statement_parser::Statement};
+use super::lexer::Token;
 use chumsky::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -17,9 +17,22 @@ pub enum ValueExpr {
         r#else: Box<ValueExpr>,
     },
     Tuple(Vec<ValueExpr>),
-    Block {
-        statements: Vec<Statement>
-    },
+    Concat(Vec<ValueExpr>),
+}
+
+impl ValueExpr {
+    fn flatten_concat(&self) -> ValueExpr {
+        match self {
+            ValueExpr::Concat(x) if x.len() <= 1 => {
+                if let Some(x) = x.get(0) {
+                    x.clone()
+                } else {
+                    empty_tuple()
+                }
+            }
+            _ => self.clone(),
+        }
+    }
 }
 
 pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> {
@@ -31,12 +44,27 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .collect::<Vec<_>>()
             .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')));
 
+        let concated_body = e
+            .clone()
+            .then(just(Token::ControlChar(';')).or_not())
+            .repeated()
+            .collect::<Vec<_>>()
+            .map_err(|e| {
+                dbg!(e);
+                todo!()
+            })
+            .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
+            .map(|mut x| {
+                if x.is_empty() || x.last().unwrap().1.is_some() {
+                    x.push((empty_tuple(), None));
+                }
+                ValueExpr::Concat(x.into_iter().map(|(t, _)| t).collect()).flatten_concat()
+            });
+
         let if_condition = e
             .clone()
             .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')));
-        let if_body = e
-            .clone()
-            .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')));
+        let if_body = concated_body.clone();
         let if_with_condition_and_body = just(Token::If)
             .ignore_then(if_condition.clone())
             .then(if_body.clone());
@@ -75,16 +103,24 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                             })
                         }),
                 }),
-            params.clone().map(ValueExpr::Tuple)
+            params.clone().map(ValueExpr::Tuple),
+            concated_body.clone(),
         ))
     })
+}
+
+fn empty_tuple() -> ValueExpr {
+    ValueExpr::Tuple(Vec::new())
 }
 
 #[cfg(test)]
 mod tests {
     use chumsky::Parser;
 
-    use crate::parse::{lexer::lexer, value_parser::value_expr_parser};
+    use crate::parse::{
+        lexer::lexer,
+        value_parser::{empty_tuple, value_expr_parser},
+    };
 
     use super::ValueExpr;
 
@@ -234,21 +270,61 @@ mod tests {
                     ValueExpr::Int(1),
                     ValueExpr::Bool(true),
                     ValueExpr::Int(2),
-                    ValueExpr::String("hallo".into())
-                ])
-            )
+                    ValueExpr::String("hallo".into()),
+                ]),
+            ),
+            ("{}", empty_tuple()),
+            ("{1}", ValueExpr::Int(1)),
+            (
+                "{1;  2   ;3;x()}",
+                ValueExpr::Concat(vec![
+                    ValueExpr::Int(1),
+                    ValueExpr::Int(2),
+                    ValueExpr::Int(3),
+                    ValueExpr::FunctionCall {
+                        name: "x".into(),
+                        params: vec![],
+                    },
+                ]),
+            ),
+            (
+                "{1;  2   ;3;x({})}",
+                ValueExpr::Concat(vec![
+                    ValueExpr::Int(1),
+                    ValueExpr::Int(2),
+                    ValueExpr::Int(3),
+                    ValueExpr::FunctionCall {
+                        name: "x".into(),
+                        params: vec![empty_tuple()],
+                    },
+                ]),
+            ),
+            (
+                "{x();y();}",
+                ValueExpr::Concat(vec![
+                    ValueExpr::FunctionCall {
+                        name: "x".into(),
+                        params: vec![],
+                    },
+                    ValueExpr::FunctionCall {
+                        name: "y".into(),
+                        params: vec![],
+                    },
+                    empty_tuple(),
+                ]),
+            ),
         ];
 
         for (src, expected_tokens) in test_cases {
-            let lex_result = lexer().parse(src).unwrap();
+            let lex_result = lexer().parse(src).into_result().expect(&src);
             let parse_result = value_expr_parser().parse(&lex_result);
 
-            assert_eq!(parse_result.has_errors(), false);
-            assert_eq!(parse_result.has_output(), true);
+            assert_eq!(parse_result.has_errors(), false, "{}", src);
+            assert_eq!(parse_result.has_output(), true, "{}", src);
 
             let output: ValueExpr = parse_result.unwrap();
 
-            assert_eq!(output, expected_tokens);
+            assert_eq!(output, expected_tokens, "{}", src);
         }
     }
 }
