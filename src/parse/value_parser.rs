@@ -1,4 +1,4 @@
-use super::lexer::Token;
+use super::{lexer::Token, statement_parser::Statement};
 use chumsky::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -17,6 +17,9 @@ pub enum ValueExpr {
         r#else: Box<ValueExpr>,
     },
     Tuple(Vec<ValueExpr>),
+    Block {
+        statements: Vec<Statement>
+    },
 }
 
 pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> {

@@ -2,17 +2,17 @@ use chumsky::prelude::*;
 
 use super::{lexer::Token, type_parser::{type_expression_parser, TypeExpression}};
 
-type Param = (String, TypeExpression);
+pub type Param = (String, TypeExpression);
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
-struct FunctionDefintion {
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionDefintion {
     name: String,
     return_type: Option<TypeExpression>,
     params: Option<Vec<Param>>,
 }
 
-fn function_definition_parser<'src>() -> impl Parser<'src, &'src [Token], FunctionDefintion> {
+pub fn function_definition_parser<'src>() -> impl Parser<'src, &'src [Token], FunctionDefintion> {
     let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
         .then_ignore(just(Token::ControlChar(':')))
         .then(type_expression_parser())

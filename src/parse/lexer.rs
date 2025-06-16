@@ -5,6 +5,7 @@ pub enum Token {
     Type,
     Duck,
     Function,
+    Return,
     Ident(String),
     ControlChar(char),
     StringLiteral(String),
@@ -14,6 +15,7 @@ pub enum Token {
     FloatLiteral(f64),
     If,
     Else,
+    Let,
 }
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -22,6 +24,8 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let ty = just("type").then_ignore(whitespace().at_least(1)).to(Token::Type);
     let duck = just("duck").to(Token::Duck);
     let function_keyword = just("fun").to(Token::Function);
+    let return_keyword = just("return").to(Token::Return);
+    let let_keyword = just("let").to(Token::Let);
     let ident = text::ident().map(|str: &str| Token::Ident(str.to_string()));
     let ctrl = one_of("=:{};,&()->").map(Token::ControlChar);
     let string = string_lexer();
@@ -34,7 +38,7 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let r#char = char_lexer();
     let num = num_literal();
 
-    let token = ty.or(duck).or(r#if).or(r#else).or(function_keyword).or(r#bool).or(ident).or(ctrl).or(string).or(num).or(r#char);
+    let token = ty.or(duck).or(let_keyword).or(r#if).or(r#else).or(function_keyword).or(return_keyword).or(r#bool).or(ident).or(ctrl).or(string).or(num).or(r#char);
 
     token.padded()
         .repeated()
@@ -192,6 +196,14 @@ mod tests {
                 Token::CharLiteral('\n')
             ]),
             ("1.1", vec![Token::FloatLiteral(1.1)]),
+            ("let x: {};", vec![
+                Token::Let,
+                Token::Ident("x".to_string()),
+                Token::ControlChar(':'),
+                Token::ControlChar('{'),
+                Token::ControlChar('}'),
+                Token::ControlChar(';'),
+            ]),
         ];
 
         for (src, expected_tokens) in test_cases {
