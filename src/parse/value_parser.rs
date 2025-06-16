@@ -27,6 +27,10 @@ pub enum ValueExpr {
     Break,
     Continue,
     Duck(Vec<(String, ValueExpr)>),
+    FieldAccess {
+        target_obj: Box<ValueExpr>,
+        field_name: String,
+    },
 }
 
 impl ValueExpr {
@@ -93,7 +97,25 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .ignore_then(while_condition.clone())
             .then(while_body.clone());
 
+        let cl = e.clone();
+
         choice((
+            any()
+                .filter(|t| !matches!(t, Token::ControlChar('.')))
+                .repeated()
+                .at_least(1)
+                .collect::<Vec<_>>()
+                .then_ignore(just(Token::ControlChar('.')))
+                .then(select_ref! { Token::Ident(field_name) => field_name.to_owned() })
+                .map(move |(tokens, field_name)| {
+                    let tokens = Box::leak(Box::new(tokens));
+                    dbg!(&tokens);
+                    let target_obj = cl.parse(tokens.as_slice()).unwrap();
+                    ValueExpr::FieldAccess {
+                        target_obj: target_obj.into(),
+                        field_name: field_name,
+                    }
+                }),
             select_ref! { Token::Ident(ident) => ident.to_string() }
                 .then(params.clone())
                 .map(|(fn_name, params)| ValueExpr::FunctionCall {
@@ -469,6 +491,31 @@ mod tests {
                     condition: ValueExpr::Bool(true).into(),
                     then: ValueExpr::Duck(vec![]).into(),
                     r#else: ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(1))]).into(),
+                },
+            ),
+            (
+                "x.y",
+                ValueExpr::FieldAccess {
+                    target_obj: ValueExpr::Variable("x".into()).into(),
+                    field_name: "y".into(),
+                },
+            ),
+            (
+                "{x: 123}.y",
+                ValueExpr::FieldAccess {
+                    target_obj: ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(123))]).into(),
+                    field_name: "y".into(),
+                },
+            ),
+            (
+                "x().y",
+                ValueExpr::FieldAccess {
+                    target_obj: ValueExpr::FunctionCall {
+                        name: "x".into(),
+                        params: vec![],
+                    }
+                    .into(),
+                    field_name: "y".into(),
                 },
             ),
         ];

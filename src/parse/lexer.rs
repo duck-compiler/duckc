@@ -30,7 +30,7 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let return_keyword = just("return").to(Token::Return);
     let let_keyword = just("let").to(Token::Let);
     let ident = text::ident().map(|str: &str| Token::Ident(str.to_string()));
-    let ctrl = one_of("=:{};,&()->").map(Token::ControlChar);
+    let ctrl = one_of("=:{};,&()->.").map(Token::ControlChar);
     let string = string_lexer();
     let r#bool = choice((
         just("true").to(Token::BoolLiteral(true)),
