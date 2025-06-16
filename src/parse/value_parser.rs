@@ -57,6 +57,18 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .collect::<Vec<_>>()
             .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')));
 
+        let tuple = (just(Token::ControlChar('('))
+            .ignore_then(just(Token::ControlChar(')')))
+            .to(ValueExpr::Tuple(vec![])))
+        .or(e
+            .clone()
+            .separated_by(just(Token::ControlChar(',')))
+            .at_least(1)
+            .allow_trailing()
+            .collect::<Vec<_>>()
+            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+            .map(|x| ValueExpr::Tuple(dbg!(x))));
+
         let duck_expression = select_ref! { Token::Ident(ident) => ident.to_owned() }
             .then_ignore(just(Token::ControlChar(':')))
             .then(e.clone())
@@ -97,100 +109,101 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .ignore_then(while_condition.clone())
             .then(while_body.clone());
 
-        choice((
-            any()
-                .filter(|t| !matches!(t, Token::ControlChar('.')))
+        let field_access = any()
+            .filter(|t| !matches!(t, Token::ControlChar('.')))
+            .repeated()
+            .at_least(1)
+            .collect::<Vec<_>>()
+            .then(
+                (just(Token::ControlChar('.')).ignore_then(
+                    select_ref! { Token::Ident(field_name) => field_name.to_owned() },
+                ))
                 .repeated()
                 .at_least(1)
-                .collect::<Vec<_>>()
-                .then(
-                    (just(Token::ControlChar('.')).ignore_then(
-                        select_ref! { Token::Ident(field_name) => field_name.to_owned() },
-                    ))
-                    .repeated()
-                    .at_least(1)
-                    .collect::<Vec<_>>(),
-                )
-                .map({
-                    let e = e.clone();
-                    move |(base_expr, field_accesses)| {
-                        let base_expr = base_expr.leak() as &[Token];
-                        let base = e.parse(base_expr).unwrap();
-                        let r = field_accesses.into_iter().fold(base, |acc, x| {
-                            ValueExpr::FieldAccess {
+                .collect::<Vec<_>>(),
+            )
+            .map({
+                let e = e.clone();
+                move |(base_expr, field_accesses)| {
+                    let base_expr = base_expr.leak() as &[Token];
+                    dbg!(&base_expr);
+                    let base = e.parse(base_expr).unwrap();
+                    let r =
+                        field_accesses
+                            .into_iter()
+                            .fold(base, |acc, x| ValueExpr::FieldAccess {
                                 target_obj: acc.into(),
                                 field_name: x,
-                            }
-                        });
-                        r
-                    }
-                }),
-            select_ref! { Token::Ident(ident) => ValueExpr::Variable(ident.to_owned()) }
-                .or(e
+                            });
+                    r
+                }
+            });
+
+        let int = select_ref! { Token::IntLiteral(i) => *i }.map(ValueExpr::Int);
+        let bool_val = select_ref! { Token::BoolLiteral(b) => *b }.map(ValueExpr::Bool);
+        let string_val =
+            select_ref! { Token::StringLiteral(s) => s.to_owned() }.map(ValueExpr::String);
+        let var_expr =
+            select_ref! { Token::Ident(ident) => ident.to_owned() }.map(ValueExpr::Variable);
+        let if_expr = if_with_condition_and_body
+            .clone()
+            .then(
+                just(Token::Else)
+                    .ignore_then(if_with_condition_and_body.clone())
+                    .repeated()
+                    .collect::<Vec<(ValueExpr, ValueExpr)>>(),
+            )
+            .then_ignore(just(Token::Else))
+            .then(if_body.clone())
+            .map(|(((condition, then), else_ifs), r#else)| ValueExpr::If {
+                condition: Box::new(condition),
+                then: Box::new(then),
+                r#else: else_ifs
+                    .into_iter()
+                    .rfold(Box::new(r#else), |acc, (cond, then)| {
+                        Box::new(ValueExpr::If {
+                            condition: Box::new(cond),
+                            then: Box::new(then),
+                            r#else: acc,
+                        })
+                    }),
+            });
+        let char_expr = select_ref! { Token::CharLiteral(c) => *c }.map(ValueExpr::Char);
+        let float_expr = select_ref! { Token::FloatLiteral(num) => *num }.map(ValueExpr::Float);
+
+        let atom = e
+            .clone()
+            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+            .or(choice((
+                field_access,
+                int,
+                bool_val,
+                string_val,
+                var_expr,
+                if_expr,
+                char_expr,
+                float_expr,
+                tuple,
+                duck_expression,
+                block_expression,
+                just(Token::Break).to(ValueExpr::Break),
+                just(Token::Continue).to(ValueExpr::Continue),
+                while_with_condition_and_body
                     .clone()
-                    .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))))
+                    .map(|(cond, body)| ValueExpr::While {
+                        condition: Box::new(cond),
+                        body: Box::new(body),
+                    }),
+            )));
+
+        choice((
+            atom.clone()
                 .then(params.clone())
                 .map(|(target, params)| ValueExpr::FunctionCall {
                     target: target.into(),
                     params,
                 }),
-            // any()
-            //     .filter(|t| !matches!(t, Token::ControlChar('(')))
-            //     .repeated()
-            //     .at_least(1)
-            //     .collect::<Vec<_>>()
-            //     .then(params.clone())
-            //     .map({
-            //         let e = e.clone();
-            //         move |(tokens, params)| {
-            //             let tokens = Box::leak(Box::new(tokens));
-            //             dbg!(&tokens);
-            //             ValueExpr::FunctionCall {
-            //                 target: e.parse(tokens.as_slice()).unwrap().into(),
-            //                 params,
-            //             }
-            //         }
-            //     }),
-            select_ref! { Token::IntLiteral(i) => *i }.map(ValueExpr::Int),
-            select_ref! { Token::BoolLiteral(b) => *b }.map(ValueExpr::Bool),
-            select_ref! { Token::StringLiteral(s) => s.to_owned() }.map(ValueExpr::String),
-            select_ref! { Token::Ident(ident) => ident.to_owned() }.map(ValueExpr::Variable),
-            if_with_condition_and_body
-                .clone()
-                .then(
-                    just(Token::Else)
-                        .ignore_then(if_with_condition_and_body.clone())
-                        .repeated()
-                        .collect::<Vec<(ValueExpr, ValueExpr)>>(),
-                )
-                .then_ignore(just(Token::Else))
-                .then(if_body.clone())
-                .map(|(((condition, then), else_ifs), r#else)| ValueExpr::If {
-                    condition: Box::new(condition),
-                    then: Box::new(then),
-                    r#else: else_ifs
-                        .into_iter()
-                        .rfold(Box::new(r#else), |acc, (cond, then)| {
-                            Box::new(ValueExpr::If {
-                                condition: Box::new(cond),
-                                then: Box::new(then),
-                                r#else: acc,
-                            })
-                        }),
-                }),
-            params.clone().map(ValueExpr::Tuple),
-            while_with_condition_and_body
-                .clone()
-                .map(|(cond, body)| ValueExpr::While {
-                    condition: Box::new(cond),
-                    body: Box::new(body),
-                }),
-            duck_expression.clone(),
-            block_expression.clone(),
-            just(Token::Break).to(ValueExpr::Break),
-            just(Token::Continue).to(ValueExpr::Continue),
-            select_ref! { Token::CharLiteral(c) => *c }.map(ValueExpr::Char),
-            select_ref! { Token::FloatLiteral(num) => *num }.map(ValueExpr::Float),
+            atom,
         ))
     })
 }
@@ -605,9 +618,11 @@ mod tests {
                     field_name: "w".into(),
                 },
             ),
+            ("((1))", ValueExpr::Int(1)),
         ];
 
         for (src, expected_tokens) in test_cases {
+            dbg!(src);
             let lex_result = lexer().parse(src).into_result().expect(&src);
             let parse_result = value_expr_parser().parse(&lex_result);
 
@@ -616,7 +631,7 @@ mod tests {
             assert_eq!(parse_result.has_errors(), false, "{}", src);
             assert_eq!(parse_result.has_output(), true, "{}", src);
 
-            let output: ValueExpr = parse_result.unwrap();
+            let output: ValueExpr = parse_result.into_result().expect(&src);
 
             assert_eq!(output, expected_tokens, "{}", src);
         }
