@@ -10,6 +10,8 @@ pub enum ValueExpr {
     Int(i64),
     String(String),
     Bool(bool),
+    Float(f64),
+    Char(char),
     Variable(String),
     If {
         condition: Box<ValueExpr>,
@@ -125,6 +127,8 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             concated_body.clone(),
             just(Token::Break).to(ValueExpr::Break),
             just(Token::Continue).to(ValueExpr::Continue),
+            select_ref! { Token::CharLiteral(c) => *c }.map(ValueExpr::Char),
+            select_ref! { Token::FloatLiteral(num) => *num }.map(ValueExpr::Float),
         ))
     })
 }
@@ -396,6 +400,8 @@ mod tests {
                     body: ValueExpr::Concat(vec![ValueExpr::Int(1), ValueExpr::Continue, empty_tuple()]).into(),
                 },
             ),
+            ("()", empty_tuple()),
+            ("(1.1, 'x')", ValueExpr::Tuple(vec![ValueExpr::Float(1.1), ValueExpr::Char('x')])),
         ];
 
         for (src, expected_tokens) in test_cases {
