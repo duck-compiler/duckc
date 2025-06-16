@@ -3,20 +3,20 @@ use chumsky::Parser;
 
 use super::lexer::Token;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeDefinition {
     pub name: String,
     pub type_expression: TypeExpression,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TypeExpression {
     Any,
     Duck(Duck),
     TypeName(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Duck {
     pub fields: Vec<(String, TypeExpression)>,
 }
@@ -48,7 +48,7 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
     })
 }
 
-pub fn type_def_parser<'src>() -> impl Parser<'src, &'src [Token], TypeDefinition> {
+pub fn type_definition_parser<'src>() -> impl Parser<'src, &'src [Token], TypeDefinition> {
     just(Token::Type)
         .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
         .then_ignore(just(Token::ControlChar('=')))
@@ -65,7 +65,7 @@ pub mod tests {
     use super::*;
 
     #[test]
-    pub fn test_type_definition_parser() {
+    fn test_type_definition_parser() {
         let valid_type_definitions = vec![
             "type X = Hallo;",
             "type Yolo = duck { x: String };",
@@ -81,14 +81,14 @@ pub mod tests {
             let Some(tokens) = lexer_parse_result.into_output() else { unreachable!()};
 
             println!("typedef_parsing {valid_type_definition}");
-            let typedef_parse_result = type_def_parser().parse(tokens.as_slice());
+            let typedef_parse_result = type_definition_parser().parse(tokens.as_slice());
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
     }
 
     #[test]
-    pub fn test_type_expression_parser() {
+    fn test_type_expression_parser() {
         let valid_type_expressions = vec![
             "duck {}",
             "{}",

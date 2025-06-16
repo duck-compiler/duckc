@@ -5,6 +5,7 @@ pub enum Token {
     Type,
     Duck,
     Function,
+    Return,
     Ident(String),
     ControlChar(char),
     StringLiteral(String),
@@ -19,6 +20,7 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let ty = just("type").then_ignore(whitespace().at_least(1)).to(Token::Type);
     let duck = just("duck").to(Token::Duck);
     let function_keyword = just("fun").to(Token::Function);
+    let return_keyword = just("return").to(Token::Return);
     let let_keyword = just("let").to(Token::Let);
     let ident = text::ident().map(|str: &str| Token::Ident(str.to_string()));
     let ctrl = one_of("=:{};,&()->").map(Token::ControlChar);
@@ -33,6 +35,7 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
         .or(duck)
         .or(let_keyword)
         .or(function_keyword)
+        .or(return_keyword)
         .or(r#bool)
         .or(ident)
         .or(ctrl)
