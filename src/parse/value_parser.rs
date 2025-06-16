@@ -4,7 +4,7 @@ use chumsky::prelude::*;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueExpr {
     FunctionCall {
-        name: String,
+        target: Box<ValueExpr>,
         params: Vec<ValueExpr>,
     },
     Int(i64),
@@ -117,12 +117,29 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                         }
                     }
                 }),
-            select_ref! { Token::Ident(ident) => ident.to_string() }
+            select_ref! { Token::Ident(ident) => ValueExpr::Variable(ident.to_owned()) }
+                .or(e.clone().delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))))
                 .then(params.clone())
-                .map(|(fn_name, params)| ValueExpr::FunctionCall {
-                    name: fn_name,
-                    params,
+                .map(|(target, params)| {
+                    ValueExpr::FunctionCall { target: target.into(), params }
                 }),
+            // any()
+            //     .filter(|t| !matches!(t, Token::ControlChar('(')))
+            //     .repeated()
+            //     .at_least(1)
+            //     .collect::<Vec<_>>()
+            //     .then(params.clone())
+            //     .map({
+            //         let e = e.clone();
+            //         move |(tokens, params)| {
+            //             let tokens = Box::leak(Box::new(tokens));
+            //             dbg!(&tokens);
+            //             ValueExpr::FunctionCall {
+            //                 target: e.parse(tokens.as_slice()).unwrap().into(),
+            //                 params,
+            //             }
+            //         }
+            //     }),
             select_ref! { Token::IntLiteral(i) => *i }.map(ValueExpr::Int),
             select_ref! { Token::BoolLiteral(b) => *b }.map(ValueExpr::Bool),
             select_ref! { Token::StringLiteral(s) => s.to_owned() }.map(ValueExpr::String),
@@ -186,6 +203,10 @@ mod tests {
 
     use super::ValueExpr;
 
+    fn var(x: impl Into<String>) -> Box<ValueExpr> {
+        ValueExpr::Variable(x.into()).into()
+    }
+
     #[test]
     fn test_value_expression_parser() {
         let test_cases = vec![
@@ -194,78 +215,78 @@ mod tests {
             (
                 "to_upper()",
                 ValueExpr::FunctionCall {
-                    name: "to_upper".into(),
+                    target: var("to_upper"),
                     params: Vec::new(),
                 },
             ),
             (
                 "to_upper(1)",
                 ValueExpr::FunctionCall {
-                    name: "to_upper".into(),
+                    target: var("to_upper"),
                     params: vec![ValueExpr::Int(1)],
                 },
             ),
             (
                 "to_upper(1,)",
                 ValueExpr::FunctionCall {
-                    name: "to_upper".into(),
+                    target: var("to_upper"),
                     params: vec![ValueExpr::Int(1)],
                 },
             ),
             (
                 "to_upper ()",
                 ValueExpr::FunctionCall {
-                    name: "to_upper".into(),
+                    target: var("to_upper"),
                     params: Vec::new(),
                 },
             ),
             (
                 "to_upper (1)",
                 ValueExpr::FunctionCall {
-                    name: "to_upper".into(),
+                    target: var("to_upper"),
                     params: vec![ValueExpr::Int(1)],
                 },
             ),
             (
                 "to_upper (1,)",
                 ValueExpr::FunctionCall {
-                    name: "to_upper".into(),
+                    target: var("to_upper"),
                     params: vec![ValueExpr::Int(1)],
                 },
             ),
             (
                 "to_upper (   )",
                 ValueExpr::FunctionCall {
-                    name: "to_upper".into(),
+                    target: var("to_upper"),
                     params: Vec::new(),
                 },
             ),
             (
                 "to_upper ( 1 )",
                 ValueExpr::FunctionCall {
-                    name: "to_upper".into(),
+                    target: var("to_upper"),
                     params: vec![ValueExpr::Int(1)],
                 },
             ),
             (
                 "to_upper ( 1  ,  )",
                 ValueExpr::FunctionCall {
-                    name: "to_upper".into(),
+                    target: var("to_upper"),
                     params: vec![ValueExpr::Int(1)],
                 },
             ),
             (
                 "to_upper ( to_lower(1,2,add(5, 10),4), true  )",
                 ValueExpr::FunctionCall {
-                    name: "to_upper".into(),
+                    target: var("to_upper"),
                     params: vec![
                         ValueExpr::FunctionCall {
-                            name: "to_lower".into(),
+                            target: var("to_lower"),
                             params: vec![
                                 ValueExpr::Int(1),
                                 ValueExpr::Int(2),
                                 ValueExpr::FunctionCall {
-                                    name: "add".to_string(),
+                                    target: var("add"),
                                     params: vec![ValueExpr::Int(5), ValueExpr::Int(10)],
                                 },
                                 ValueExpr::Int(4),
@@ -278,7 +299,7 @@ mod tests {
             (
                 "print(\"hallo\", \"moin\")",
                 ValueExpr::FunctionCall {
-                    name: "print".into(),
+                    target: var("print"),
                     params: vec![
                         ValueExpr::String("hallo".into()),
                         ValueExpr::String("moin".into()),
@@ -289,12 +310,12 @@ mod tests {
             (
                 "print(x, true, lol())",
                 ValueExpr::FunctionCall {
-                    name: "print".into(),
+                    target: var("print"),
                     params: vec![
                         ValueExpr::Variable("x".into()),
                         ValueExpr::Bool(true),
                         ValueExpr::FunctionCall {
-                            name: "lol".into(),
+                            target: var("lol"),
                             params: vec![],
                         },
                     ],
@@ -344,7 +365,7 @@ mod tests {
                     ValueExpr::Int(2),
                     ValueExpr::Int(3),
                     ValueExpr::FunctionCall {
-                        name: "x".into(),
+                        target: var("x"),
                         params: vec![],
                     },
                 ]),
@@ -356,7 +377,7 @@ mod tests {
                     ValueExpr::Int(2),
                     ValueExpr::Int(3),
                     ValueExpr::FunctionCall {
-                        name: "x".into(),
+                        target: var("x"),
                         params: vec![empty_duck()],
                     },
                 ]),
@@ -365,11 +386,11 @@ mod tests {
                 "{x();y();}",
                 ValueExpr::Block(vec![
                     ValueExpr::FunctionCall {
-                        name: "x".into(),
+                        target: var("x"),
                         params: vec![],
                     },
                     ValueExpr::FunctionCall {
-                        name: "y".into(),
+                        target: var("y"),
                         params: vec![],
                     },
                     empty_tuple(),
@@ -378,16 +399,16 @@ mod tests {
             (
                 "x({ 1; 2; y({ z(); }) }, lol)",
                 ValueExpr::FunctionCall {
-                    name: "x".into(),
+                    target: var("x"),
                     params: vec![
                         ValueExpr::Block(vec![
                             ValueExpr::Int(1),
                             ValueExpr::Int(2),
                             ValueExpr::FunctionCall {
-                                name: "y".into(),
+                                target: var("y"),
                                 params: vec![ValueExpr::Block(vec![
                                     ValueExpr::FunctionCall {
-                                        name: "z".into(),
+                                        target: var("z"),
                                         params: vec![],
                                     },
                                     empty_tuple(),
@@ -409,7 +430,7 @@ mod tests {
                 "while (my_func()) {}",
                 ValueExpr::While {
                     condition: ValueExpr::FunctionCall {
-                        name: "my_func".into(),
+                        target: var("my_func"),
                         params: vec![],
                     }
                     .into(),
@@ -420,7 +441,7 @@ mod tests {
                 "while (my_func()) {1;break;}",
                 ValueExpr::While {
                     condition: ValueExpr::FunctionCall {
-                        name: "my_func".into(),
+                        target: var("my_func"),
                         params: vec![],
                     }
                     .into(),
@@ -436,7 +457,7 @@ mod tests {
                 "while (my_func()) {1;continue;}",
                 ValueExpr::While {
                     condition: ValueExpr::FunctionCall {
-                        name: "my_func".into(),
+                        target: var("my_func"),
                         params: vec![],
                     }
                     .into(),
@@ -475,7 +496,7 @@ mod tests {
                                 "w".into(),
                                 ValueExpr::Block(vec![
                                     ValueExpr::FunctionCall {
-                                        name: "print".into(),
+                                        target: var("print"),
                                         params: vec![],
                                     },
                                     ValueExpr::Int(2),
@@ -512,13 +533,17 @@ mod tests {
                 "x().y",
                 ValueExpr::FieldAccess {
                     target_obj: ValueExpr::FunctionCall {
-                        name: "x".into(),
+                        target: var("x"),
                         params: vec![],
                     }
                     .into(),
                     field_name: "y".into(),
                 },
             ),
+            (
+                "(x)()",
+                ValueExpr::FunctionCall { target: var("x"), params: vec![] }
+            )
         ];
 
         for (src, expected_tokens) in test_cases {
