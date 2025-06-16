@@ -11,6 +11,10 @@ pub enum Token {
     StringLiteral(String),
     IntLiteral(i64),
     BoolLiteral(bool),
+    CharLiteral(char),
+    FloatLiteral(f64),
+    If,
+    Else,
     Let,
 }
 
@@ -25,26 +29,46 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let ident = text::ident().map(|str: &str| Token::Ident(str.to_string()));
     let ctrl = one_of("=:{};,&()->").map(Token::ControlChar);
     let string = string_lexer();
-    let int = int_lexer();
     let r#bool = choice((
         just("true").to(Token::BoolLiteral(true)),
         just("false").to(Token::BoolLiteral(false))
     ));
+    let r#if = just("if").to(Token::If);
+    let r#else = just("else").to(Token::Else);
+    let r#char = char_lexer();
+    let num = num_literal();
 
-    let token = ty
-        .or(duck)
-        .or(let_keyword)
-        .or(function_keyword)
-        .or(return_keyword)
-        .or(r#bool)
-        .or(ident)
-        .or(ctrl)
-        .or(string)
-        .or(int);
+    let token = ty.or(duck).or(let_keyword).or(r#if).or(r#else).or(function_keyword).or(return_keyword).or(r#bool).or(ident).or(ctrl).or(string).or(num).or(r#char);
 
     token.padded()
         .repeated()
         .collect::<Vec<Token>>()
+}
+
+fn num_literal<'src>() -> impl Parser<'src, &'src str, Token> {
+    let pre = text::int(10).map(|s: &str| s.parse::<i64>().unwrap());
+    let frac = just('.').ignore_then(text::digits(10)).to_slice();
+    pre.then(frac.or_not())
+        .map(|(pre, frac)| {
+            if let Some(frac) = frac {
+                let num = format!("{}{}", pre, frac).parse().unwrap();
+                Token::FloatLiteral(num)
+            } else {
+                Token::IntLiteral(pre)
+            }
+        })
+}
+
+fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token> {
+    just("'")
+        .ignore_then(
+            choice((
+                just('\\').ignore_then(choice((just('\''), just('t').to('\t'), just('n').to('\n')))),
+                any().filter(|c| *c != '\''),
+            ))
+        )
+        .then_ignore(just("'"))
+        .map(Token::CharLiteral)
 }
 
 fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token> {
@@ -59,10 +83,6 @@ fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token> {
         )
         .then_ignore(just('"'))
         .map(Token::StringLiteral)
-}
-
-fn int_lexer<'a>() -> impl Parser<'a, &'a str, Token> {
-    text::int(10).map(|x: &str| Token::IntLiteral(x.parse().unwrap()))
 }
 
 #[cfg(test)]
@@ -131,6 +151,51 @@ mod tests {
             ("2003", vec![Token::IntLiteral(2003)]),
             ("true", vec![Token::BoolLiteral(true)]),
             ("false", vec![Token::BoolLiteral(false)]),
+            ("if (true) {}", vec![
+                Token::If,
+                Token::ControlChar('('),
+                Token::BoolLiteral(true),
+                Token::ControlChar(')'),
+                Token::ControlChar('{'),
+                Token::ControlChar('}')],
+            ),
+            ("if (true) {} else {}", vec![
+                Token::If,
+                Token::ControlChar('('),
+                Token::BoolLiteral(true),
+                Token::ControlChar(')'),
+                Token::ControlChar('{'),
+                Token::ControlChar('}'),
+                Token::Else,
+                Token::ControlChar('{'),
+                Token::ControlChar('}')],
+            ),
+            ("if (true) {} else if {} else if {} else {}", vec![
+                Token::If,
+                Token::ControlChar('('),
+                Token::BoolLiteral(true),
+                Token::ControlChar(')'),
+                Token::ControlChar('{'),
+                Token::ControlChar('}'),
+                Token::Else,
+                Token::If,
+                Token::ControlChar('{'),
+                Token::ControlChar('}'),
+                Token::Else,
+                Token::If,
+                Token::ControlChar('{'),
+                Token::ControlChar('}'),
+                Token::Else,
+                Token::ControlChar('{'),
+                Token::ControlChar('}')],
+            ),
+            ("'c'", vec![
+                Token::CharLiteral('c')
+            ]),
+            ("'\\n'", vec![
+                Token::CharLiteral('\n')
+            ]),
+            ("1.1", vec![Token::FloatLiteral(1.1)]),
             ("let x: {};", vec![
                 Token::Let,
                 Token::Ident("x".to_string()),
@@ -144,16 +209,16 @@ mod tests {
         for (src, expected_tokens) in test_cases {
             let parse_result = lexer().parse(src);
 
-            assert_eq!(parse_result.has_errors(), false);
-            assert_eq!(parse_result.has_output(), true);
+            assert_eq!(parse_result.has_errors(), false, "{}", src);
+            assert_eq!(parse_result.has_output(), true, "{}", src);
 
             let output: Vec<Token> = parse_result.output()
-                .unwrap()
+                .expect(&src)
                 .iter()
                 .map(|token| token.clone())
                 .collect();
 
-            assert_eq!(output, expected_tokens);
+            assert_eq!(output, expected_tokens, "{}", src);
         }
     }
 }
