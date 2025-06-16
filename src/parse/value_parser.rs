@@ -313,6 +313,29 @@ mod tests {
                     empty_tuple(),
                 ]),
             ),
+            (
+                "x({ 1; 2; y({ z(); }) }, lol)",
+                ValueExpr::FunctionCall {
+                    name: "x".into(),
+                    params: vec![
+                        ValueExpr::Concat(vec![
+                            ValueExpr::Int(1),
+                            ValueExpr::Int(2),
+                            ValueExpr::FunctionCall {
+                                name: "y".into(),
+                                params: vec![ValueExpr::Concat(vec![
+                                    ValueExpr::FunctionCall {
+                                        name: "z".into(),
+                                        params: vec![],
+                                    },
+                                    empty_tuple(),
+                                ])],
+                            },
+                        ]),
+                        ValueExpr::Variable("lol".into()),
+                    ],
+                },
+            ),
         ];
 
         for (src, expected_tokens) in test_cases {
