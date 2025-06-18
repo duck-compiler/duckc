@@ -619,6 +619,30 @@ mod tests {
                 },
             ),
             ("((1))", ValueExpr::Int(1)),
+            (
+                "x({();();},1)",
+                ValueExpr::FunctionCall {
+                    target: var("x"),
+                    params: vec![
+                        ValueExpr::Block(vec![empty_tuple(), empty_tuple(), empty_tuple()]),
+                        ValueExpr::Int(1),
+                    ],
+                },
+            ),
+            (
+                "x({();{();1;};},1)",
+                ValueExpr::FunctionCall {
+                    target: var("x"),
+                    params: vec![
+                        ValueExpr::Block(vec![
+                            empty_tuple(),
+                            ValueExpr::Block(vec![empty_tuple(), ValueExpr::Int(1), empty_tuple()]),
+                            empty_tuple(),
+                        ]),
+                        ValueExpr::Int(1),
+                    ],
+                },
+            ),
         ];
 
         for (src, expected_tokens) in test_cases {
