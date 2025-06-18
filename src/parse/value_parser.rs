@@ -31,6 +31,7 @@ pub enum ValueExpr {
         target_obj: Box<ValueExpr>,
         field_name: String,
     },
+    Return(Box<ValueExpr>),
 }
 
 impl ValueExpr {
@@ -203,6 +204,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     target: target.into(),
                     params,
                 }),
+            just(Token::Return).ignore_then(atom.clone()).map(|x| ValueExpr::Return(x.into())),
             atom,
         ))
     })
@@ -642,6 +644,10 @@ mod tests {
                         ValueExpr::Int(1),
                     ],
                 },
+            ),
+            (
+                "return 123",
+                ValueExpr::Return(ValueExpr::Int(123).into()),
             ),
         ];
 

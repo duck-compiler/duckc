@@ -4,26 +4,19 @@ use super::{function_parser::{function_definition_parser, FunctionDefintion}, le
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
-    Return(ValueExpr),
     ValueExpr(ValueExpr),
     TypeDefinition(TypeDefinition),
     FunctionDefinition(FunctionDefintion),
 }
 
 pub fn statement_parser<'src>() -> impl Parser<'src, &'src [Token], Statement> {
-    let return_statement = just(Token::Return)
-        .ignore_then(value_expr_parser())
-        .then_ignore(just(Token::ControlChar(';')))
-        .map(|return_value_expr| Statement::Return(return_value_expr));
-
     let type_definition = type_definition_parser().map(|type_definition| Statement::TypeDefinition(type_definition));
     let function_definition = function_definition_parser().map(|function_definition| Statement::FunctionDefinition(function_definition));
 
     choice((
-        return_statement,
         type_definition,
         function_definition,
-        value_expr_parser().map(|value_expr| Statement::ValueExpr(value_expr))
+        value_expr_parser().then_ignore(just(Token::ControlChar(';'))).map(|value_expr| Statement::ValueExpr(value_expr))
     ))
 }
 
@@ -36,7 +29,6 @@ pub mod tests {
     #[test]
     pub fn test_statement_parser() {
         let valid_statements = vec![
-            "return 5;",
             "type X = {};",
             "fun y() -> String {}",
         ];
@@ -55,9 +47,7 @@ pub mod tests {
             assert_eq!(typedef_parse_result.has_output(), true);
         }
 
-        let invalid_statements = vec![
-            "return 5", // missing semicolon
-        ];
+        let invalid_statements = vec![];
 
         for invalid_statement in invalid_statements {
             println!("lexing {invalid_statement}");
