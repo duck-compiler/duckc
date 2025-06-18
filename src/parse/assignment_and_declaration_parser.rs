@@ -5,7 +5,7 @@ use super::type_parser::{type_expression_parser, TypeExpression};
 use super::lexer::Token;
 use super::value_parser::{value_expr_parser, ValueExpr};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Declaration {
     pub name: String,
     pub type_expr: TypeExpression,
@@ -43,12 +43,46 @@ fn assignment_parser<'src>() -> impl Parser<'src, &'src [Token], Assignment> {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::lexer::lexer;
+    use crate::parse::{lexer::lexer, type_parser::Duck};
 
     use super::*;
 
     #[test]
     pub fn test_declaration_parser() {
+        let inputs_and_expected_outputs = vec![
+            ("let x: String;", Declaration {
+                name: "x".to_string(),
+                type_expr: TypeExpression::TypeName("String".to_string()),
+                initializer: None,
+            }),
+            ("let y: { x: Int } = {};", Declaration {
+                name: "y".to_string(),
+                type_expr: TypeExpression::Duck(Duck { fields: vec![("x".to_string(), TypeExpression::TypeName("Int".to_string()))] }),
+                initializer: Some(ValueExpr::Duck(vec![])),
+            }),
+            ("let z: {};", Declaration {
+                name: "z".to_string(),
+                type_expr: TypeExpression::Duck(Duck { fields: vec![] }),
+                initializer: None,
+            }),
+        ];
+
+        for (input, expected_output) in inputs_and_expected_outputs {
+            let lexer_parse_result = lexer().parse(input);
+            assert_eq!(lexer_parse_result.has_errors(), false);
+            assert_eq!(lexer_parse_result.has_output(), true);
+
+            let Some(tokens) = lexer_parse_result.into_output() else { unreachable!() };
+
+            let declaration_parse_result = declaration_parser().parse(tokens.as_slice());
+            assert_eq!(declaration_parse_result.has_errors(), false);
+            assert_eq!(declaration_parse_result.has_output(), true);
+
+            let Some(declaration) = declaration_parse_result.into_output() else { unreachable!() };
+
+            assert_eq!(declaration, expected_output);
+        }
+
         let valid_declarations = vec![
             "let x: String;",
             "let x: { x: String, y: String };",
@@ -57,6 +91,7 @@ pub mod tests {
             "let x: { h: String, x: { y: String }} = 0;",
             "let x: { h: String, x: { y: String }} = true;",
             "let x: { h: String, x: { y: String }} = false;",
+            "let x: { h: Int, x: { y: Int }} = { h: 4, x: { y: 8 } };",
             "let x: Int = false;",
             "let x: String = \"Hallo, Welt!\";",
         ];
@@ -69,7 +104,7 @@ pub mod tests {
 
             let Some(tokens) = lexer_parse_result.into_output() else { unreachable!()};
 
-            println!("typedef_parsing {valid_declaration}");
+            println!("declaration parsing {valid_declaration}");
             let typedef_parse_result = declaration_parser().parse(tokens.as_slice());
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
