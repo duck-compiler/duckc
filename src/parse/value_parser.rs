@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use super::lexer::Token;
 use chumsky::prelude::*;
 
@@ -31,6 +33,7 @@ pub enum ValueExpr {
         target_obj: Box<ValueExpr>,
         field_name: String,
     },
+    Return(Box<ValueExpr>),
 }
 
 impl ValueExpr {
@@ -45,6 +48,119 @@ impl ValueExpr {
             }
             _ => self.clone(),
         }
+    }
+}
+
+fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Option<String>) {
+    let new_var = || {
+        let x = format!("var_{}", var_counter.borrow());
+        *var_counter.borrow_mut() += 1;
+        x
+    };
+
+    let single = |instr: &str| {
+        let r = new_var();
+        (vec![format!("{r} := {instr}\n")], Some(r.to_string()))
+    };
+
+    let no_var = |instr: &str| (vec![instr.to_owned()], None);
+
+    match x {
+        ValueExpr::Break => no_var("break"),
+        ValueExpr::Continue => no_var("continue"),
+        ValueExpr::Int(i) => single(&i.to_string()),
+        ValueExpr::Bool(b) => single(&b.to_string()),
+        ValueExpr::Float(f) => single(&f.to_string()),
+        ValueExpr::Char(c) => single(&format!("'{c}'")),
+        ValueExpr::String(s) => single(&format!("\"{s}\"")),
+        ValueExpr::Variable(ident) => single(&ident),
+        ValueExpr::Tuple(exprs) => {
+            let mut instrs: Vec<String> = Vec::new();
+            let mut results = Vec::new();
+            for expr in exprs.into_iter() {
+                let (instr, Some(res)) = emit(expr, Rc::clone(&var_counter)) else {
+                    panic!()
+                };
+                instrs.extend(instr.into_iter());
+                results.push(res);
+            }
+
+            let res = new_var();
+
+            let mut final_instr = Vec::new();
+            final_instr.push(format!("{res} := "));
+            final_instr.push("struct{".to_string());
+            final_instr.push(
+                results
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _)| {
+                        format!(
+                            "field_{i} interface{}{}\n",
+                            "{}",
+                            if i < results.len() - 1 { "," } else { "" }
+                        )
+                    })
+                    .reduce(|acc, x| format!("{acc}{x}"))
+                    .unwrap_or(String::new()),
+            );
+            final_instr.push("}{".to_string());
+            final_instr.push(
+                results
+                    .into_iter()
+                    .reduce(|acc, x| format!("{acc}, {x}"))
+                    .unwrap_or(String::new()),
+            );
+            final_instr.push("}".to_string());
+            instrs.extend(final_instr.into_iter());
+            (instrs, Some(res))
+        }
+        ValueExpr::FunctionCall { target, params } => {
+            let mut res = Vec::new();
+            let mut target = ValueExpr::clone(target.as_ref());
+
+            if let ValueExpr::Variable(x) = &mut target {
+                if x == "@println" {
+                    *x = "fmt.Println".to_string();
+                }
+            }
+
+            let (target_instr, Some(target_res_name)) = emit(target, Rc::clone(&var_counter))
+            else {
+                panic!()
+            };
+            dbg!(&target_instr);
+            res.extend(target_instr.into_iter());
+
+            let mut params_instructions = Vec::new();
+            let mut param_results = Vec::new();
+
+            for expr in params.into_iter() {
+                let (instr, Some(res)) = emit(expr, Rc::clone(&var_counter)) else {
+                    panic!()
+                };
+                params_instructions.extend(instr.into_iter());
+
+                param_results.push(res);
+            }
+
+            let result = new_var();
+
+            let final_instr = format!(
+                "{result} := {target_res_name}({})\n",
+                param_results
+                    .clone()
+                    .into_iter()
+                    .reduce(|acc, x| format!("{acc}, {x}"))
+                    .unwrap_or(String::new())
+            );
+
+            res.extend(params_instructions.into_iter());
+            res.push(final_instr);
+
+            (res, Some(result))
+        }
+        _ => panic!(),
     }
 }
 
@@ -66,8 +182,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .at_least(1)
             .allow_trailing()
             .collect::<Vec<_>>()
-            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-            .map(|x| ValueExpr::Tuple(dbg!(x))));
+            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))) .map(|x| ValueExpr::Tuple(dbg!(x))));
 
         let duck_expression = select_ref! { Token::Ident(ident) => ident.to_owned() }
             .then_ignore(just(Token::ControlChar(':')))
@@ -203,6 +318,9 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     target: target.into(),
                     params,
                 }),
+            just(Token::Return)
+                .ignore_then(atom.clone())
+                .map(|x| ValueExpr::Return(x.into())),
             atom,
         ))
     })
@@ -218,11 +336,13 @@ fn empty_duck() -> ValueExpr {
 
 #[cfg(test)]
 mod tests {
+    use std::{cell::RefCell, rc::Rc};
+
     use chumsky::Parser;
 
     use crate::parse::{
         lexer::lexer,
-        value_parser::{empty_duck, empty_tuple, value_expr_parser},
+        value_parser::{emit, empty_duck, empty_tuple, value_expr_parser},
     };
 
     use super::ValueExpr;
@@ -619,6 +739,31 @@ mod tests {
                 },
             ),
             ("((1))", ValueExpr::Int(1)),
+            (
+                "x({();();},1)",
+                ValueExpr::FunctionCall {
+                    target: var("x"),
+                    params: vec![
+                        ValueExpr::Block(vec![empty_tuple(), empty_tuple(), empty_tuple()]),
+                        ValueExpr::Int(1),
+                    ],
+                },
+            ),
+            (
+                "x({();{();1;};},1)",
+                ValueExpr::FunctionCall {
+                    target: var("x"),
+                    params: vec![
+                        ValueExpr::Block(vec![
+                            empty_tuple(),
+                            ValueExpr::Block(vec![empty_tuple(), ValueExpr::Int(1), empty_tuple()]),
+                            empty_tuple(),
+                        ]),
+                        ValueExpr::Int(1),
+                    ],
+                },
+            ),
+            ("return 123", ValueExpr::Return(ValueExpr::Int(123).into())),
         ];
 
         for (src, expected_tokens) in test_cases {
@@ -634,6 +779,39 @@ mod tests {
             let output: ValueExpr = parse_result.into_result().expect(&src);
 
             assert_eq!(output, expected_tokens, "{}", src);
+        }
+    }
+
+    #[test]
+    fn test_code_emit() {
+        let test_cases = vec![
+            (
+                "@println(1, 2, 3, true)",
+                "var_0 := fmt.Println\nvar_1 := 1\nvar_2 := 2\nvar_3 := 3\nvar_4 := true\nvar_5 := var_0(var_1, var_2, var_3, var_4)\n",
+            ),
+        ];
+        for (src, expected_tokens) in test_cases {
+            dbg!(src);
+            let lex_result = lexer().parse(src).into_result().expect(&src);
+            let parse_result = value_expr_parser().parse(&lex_result);
+
+            dbg!(&lex_result, &parse_result);
+
+            assert_eq!(parse_result.has_errors(), false, "{}", src);
+            assert_eq!(parse_result.has_output(), true, "{}", src);
+
+            let output: ValueExpr = parse_result.into_result().expect(&src);
+            let output = emit(output, Rc::new(RefCell::new(0)));
+            assert_eq!(
+                expected_tokens,
+                output
+                    .0
+                    .into_iter()
+                    .reduce(|acc, x| format!("{acc}{x}"))
+                    .unwrap(),
+                "{}",
+                src
+            );
         }
     }
 }

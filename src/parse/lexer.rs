@@ -24,7 +24,7 @@ pub enum Token {
 pub type Spanned<T> = (T, SimpleSpan);
 
 pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
-    let keyword_or_ident = text::ident().map(|str: &str| match str {
+    let keyword_or_ident = just("@").or_not().then(text::ident()).map(|(x, str)| match str {
         "type" => Token::Type,
         "duck" => Token::Duck,
         "fun" => Token::Function,
@@ -35,7 +35,7 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
         "while"=> Token::While,
         "break" => Token::Break,
         "continue" => Token::Continue,
-        _ => Token::Ident(str.to_string()),
+        _ => Token::Ident(format!("{}{str}", x.unwrap_or(""))),
     });
     let ctrl = one_of("=:{};,&()->.").map(Token::ControlChar);
     let string = string_lexer();
