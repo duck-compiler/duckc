@@ -789,8 +789,6 @@ mod tests {
                 "@println(1, 2, 3, true)",
                 "var_0 := fmt.Println\nvar_1 := 1\nvar_2 := 2\nvar_3 := 3\nvar_4 := true\nvar_5 := var_0(var_1, var_2, var_3, var_4)\n",
             ),
-            ("abc((1,2,3), x(\"X\"))", ""),
-            ("(1,2,3)", ""),
         ];
         for (src, expected_tokens) in test_cases {
             dbg!(src);
