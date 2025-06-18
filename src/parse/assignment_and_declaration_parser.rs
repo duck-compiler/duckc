@@ -12,7 +12,6 @@ pub struct Declaration {
     pub initializer: Option<ValueExpr>,
 }
 
-// TODO parse initializer
 fn declaration_parser<'src>() -> impl Parser<'src, &'src [Token], Declaration> {
     let initializer = just(Token::ControlChar('='))
         .ignore_then(value_expr_parser())
