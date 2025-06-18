@@ -1,7 +1,7 @@
-use std::{cell::RefCell, ops::Deref, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use super::lexer::Token;
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueExpr {
