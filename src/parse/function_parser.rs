@@ -1,6 +1,6 @@
 use chumsky::prelude::*;
 
-use super::{lexer::Token, type_parser::{type_expression_parser, TypeExpression}};
+use super::{lexer::Token, type_parser::{type_expression_parser, TypeExpression}, value_parser::{value_expr_parser, ValueExpr}};
 
 pub type Param = (String, TypeExpression);
 
@@ -10,6 +10,40 @@ pub struct FunctionDefintion {
     name: String,
     return_type: Option<TypeExpression>,
     params: Option<Vec<Param>>,
+    value_expr: ValueExpr,
+}
+
+// TODO body
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct LambdaFunctionExpr {
+    pub params: Vec<Param>,
+    pub return_type: Option<TypeExpression>,
+    pub value_expr: ValueExpr,
+}
+
+pub fn lambda_function_expr_parser<'src>() -> impl Parser<'src, &'src [Token], LambdaFunctionExpr> {
+    let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
+        .then_ignore(just(Token::ControlChar(':')))
+        .then(type_expression_parser())
+        .map(|(identifier, type_expr)| (identifier, type_expr) as Param);
+
+    let params_parser = param_parser.separated_by(just(Token::ControlChar(',')))
+        .allow_trailing()
+        .collect::<Vec<Param>>()
+        .or_not();
+
+    let return_type_parser = just(Token::ControlChar('-')).ignore_then(just(Token::ControlChar('>')))
+        .ignore_then(type_expression_parser());
+
+    just(Token::ControlChar('('))
+        .ignore_then(params_parser)
+        .then_ignore(just(Token::ControlChar(')')))
+        .then(return_type_parser.or_not())
+        .then_ignore(just(Token::ControlChar('=')))
+        .then_ignore(just(Token::ControlChar('>')))
+        .then(value_expr_parser())
+        .map(|((params, return_type), value_expr)| LambdaFunctionExpr { params: params.or(Some(vec![])).unwrap(), return_type, value_expr })
 }
 
 pub fn function_definition_parser<'src>() -> impl Parser<'src, &'src [Token], FunctionDefintion> {
@@ -32,9 +66,8 @@ pub fn function_definition_parser<'src>() -> impl Parser<'src, &'src [Token], Fu
         .then(params_parser)
         .then_ignore(just(Token::ControlChar(')')))
         .then(return_type_parser.or_not())
-        .then_ignore(just(Token::ControlChar('{')))
-        .then_ignore(just(Token::ControlChar('}')))
-        .map(|((identifier, params), type_expr)| FunctionDefintion { name: identifier, return_type: type_expr, params: params })
+        .then(value_expr_parser())
+        .map(|(((identifier, params), return_type), value_expr)| FunctionDefintion { name: identifier, return_type, params, value_expr })
 }
 
 #[cfg(test)]
@@ -51,6 +84,8 @@ pub mod tests {
             "fun x(x: { hallo: String, x: { y: {} }}){}",
             "fun x() -> String {}",
             "fun x() -> {x: String} {}",
+            "fun x() -> {x: String} { 5; }",
+            "fun x() -> {x: String} { 5; }",
         ];
 
         for valid_function_definition in valid_function_definitions {
@@ -65,6 +100,46 @@ pub mod tests {
             let typedef_parse_result = function_definition_parser().parse(tokens.as_slice());
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
+        }
+
+        let invalid_function_definitions = vec![
+        ];
+
+        for invalid_function_definition in invalid_function_definitions {
+            println!("lexing {invalid_function_definition}");
+            let lexer_parse_result = lexer().parse(invalid_function_definition);
+            assert_eq!(lexer_parse_result.has_errors(), false);
+            assert_eq!(lexer_parse_result.has_output(), true);
+
+            let Some(tokens) = lexer_parse_result.into_output() else { unreachable!()};
+
+            println!("typedef_parsing {invalid_function_definition}");
+            let typedef_parse_result = function_definition_parser().parse(tokens.as_slice());
+            assert_eq!(typedef_parse_result.has_errors(), true);
+            assert_eq!(typedef_parse_result.has_output(), false);
+        }
+    }
+
+    #[test]
+    fn test_lambda_function_defintion() {
+        let valid_lambda_function_definitions = vec![
+            "() => {}",
+            "() -> String => {}",
+            "() => { 5; }",
+        ];
+
+        for valid_lambda_function_definition in valid_lambda_function_definitions {
+            println!("lexing {valid_lambda_function_definition}");
+            let lexer_parse_result = lexer().parse(valid_lambda_function_definition);
+            assert_eq!(lexer_parse_result.has_errors(), false);
+            assert_eq!(lexer_parse_result.has_output(), true);
+
+            let Some(tokens) = lexer_parse_result.into_output() else { unreachable!()};
+
+            println!("lambda parsing {valid_lambda_function_definition}");
+            let lambda_parse_result = lambda_function_expr_parser().parse(tokens.as_slice());
+            assert_eq!(lambda_parse_result.has_errors(), false);
+            assert_eq!(lambda_parse_result.has_output(), true);
         }
 
         let invalid_function_definitions = vec![
