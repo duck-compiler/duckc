@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{cell::RefCell, ops::Deref, rc::Rc};
 
 use super::lexer::Token;
 use chumsky::{input::ValueInput, prelude::*};
@@ -51,70 +51,114 @@ impl ValueExpr {
     }
 }
 
-fn r(v: impl IntoIterator<Item = ValueExpr>) -> String {
-    v.into_iter()
-        .map(|x| {
-            let emitted = emit(x);
-            emitted.into_iter().reduce(|acc, x| format!("{acc};{x}")).unwrap_or(String::new())
-        })
-        .reduce(|acc, x| format!("{acc};{x}"))
-        .unwrap_or(String::new())
-}
+fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Option<String>) {
+    let new_var = || {
+        let x = format!("var_{}", var_counter.borrow());
+        *var_counter.borrow_mut() += 1;
+        x
+    };
 
-fn emit(x: ValueExpr) -> Vec<String> {
+    let single = |instr: &str| {
+        let r = new_var();
+        (vec![format!("{r} := {instr}\n")], Some(r.to_string()))
+    };
+
+    let no_var = |instr: &str| (vec![instr.to_owned()], None);
+
     match x {
-        ValueExpr::Break => vec!["break".to_string()],
-        ValueExpr::Int(i) => vec![i.to_string()],
-        ValueExpr::Bool(b) => vec![b.to_string()],
-        ValueExpr::Float(f) => vec![f.to_string()],
-        ValueExpr::Continue => vec!["continue".to_string()],
-        ValueExpr::Char(c) => vec![format!("'{c}'")],
-        ValueExpr::FunctionCall { target, params } => {
-            let target = ValueExpr::clone(target.as_ref());
-            let params_str = params
-                .into_iter()
-                .map(|x| emit(x)[0].to_owned())
-                .reduce(|acc, x| format!("{acc},{x}"))
-                .unwrap_or(String::new());
+        ValueExpr::Break => no_var("break"),
+        ValueExpr::Continue => no_var("continue"),
+        ValueExpr::Int(i) => single(&i.to_string()),
+        ValueExpr::Bool(b) => single(&b.to_string()),
+        ValueExpr::Float(f) => single(&f.to_string()),
+        ValueExpr::Char(c) => single(&format!("'{c}'")),
+        ValueExpr::String(s) => single(&format!("\"{s}\"")),
+        ValueExpr::Variable(ident) => single(&ident),
+        ValueExpr::Tuple(exprs) => {
+            let mut instrs: Vec<String> = Vec::new();
+            let mut results = Vec::new();
+            for expr in exprs.into_iter() {
+                let (instr, Some(res)) = emit(expr, Rc::clone(&var_counter)) else {
+                    panic!()
+                };
+                instrs.extend(instr.into_iter());
+                results.push(res);
+            }
 
-            if let ValueExpr::Variable(x) = &target {
-                if x == "println" {
-                    return vec![format!("fmt.Println({})", params_str)];
-                }
-            }
-            let target_expr = emit(target)[0].to_owned();
-            vec![format!("{target_expr}({params_str})")]
-        }
-        ValueExpr::Return(expr) => {
-            let go_lines = emit((*expr).clone());
-            vec![format!("return ({})", go_lines[0].clone(),)]
-        }
-        ValueExpr::Variable(x) => vec![x],
-        ValueExpr::Block(mut exprs) => {
-            let mut func_body = String::new();
-            if let Some(last) = exprs.pop() {
-                exprs.push(ValueExpr::Return(last.into()));
-            }
-            func_body.push_str("func() interface{} {");
-            func_body.push_str(
-                &exprs
-                    .into_iter()
-                    .map(|x| emit(x)[0].to_owned())
-                    .reduce(|acc, x| format!("{acc};{x}"))
+            let res = new_var();
+
+            let mut final_instr = Vec::new();
+            final_instr.push(format!("{res} := "));
+            final_instr.push("struct{".to_string());
+            final_instr.push(
+                results
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _)| {
+                        format!(
+                            "field_{i} interface{}{}\n",
+                            "{}",
+                            if i < results.len() - 1 { "," } else { "" }
+                        )
+                    })
+                    .reduce(|acc, x| format!("{acc}{x}"))
                     .unwrap_or(String::new()),
             );
-            func_body.push_str("}()");
-            vec![func_body]
+            final_instr.push("}{".to_string());
+            final_instr.push(
+                results
+                    .into_iter()
+                    .reduce(|acc, x| format!("{acc}, {x}"))
+                    .unwrap_or(String::new()),
+            );
+            final_instr.push("}".to_string());
+            instrs.extend(final_instr.into_iter());
+            (instrs, Some(res))
         }
-        ValueExpr::If { condition, then, r#else } => {
-            let cond = emit(condition)[0].to_owned();
-            let then = emit
-            let mut func_body = String::new();
-            func_body.push_str("func() interface{} { if ");
-            func_body.push_str(&cond);
-            func_body.push_str(" {");
-            func_body.push()
-            func_body.push_str("}()");
+        ValueExpr::FunctionCall { target, params } => {
+            let mut res = Vec::new();
+            let mut target = ValueExpr::clone(target.as_ref());
+
+            if let ValueExpr::Variable(x) = &mut target {
+                if x == "@println" {
+                    *x = "fmt.Println".to_string();
+                }
+            }
+
+            let (target_instr, Some(target_res_name)) = emit(target, Rc::clone(&var_counter))
+            else {
+                panic!()
+            };
+            dbg!(&target_instr);
+            res.extend(target_instr.into_iter());
+
+            let mut params_instructions = Vec::new();
+            let mut param_results = Vec::new();
+
+            for expr in params.into_iter() {
+                let (instr, Some(res)) = emit(expr, Rc::clone(&var_counter)) else {
+                    panic!()
+                };
+                params_instructions.extend(instr.into_iter());
+
+                param_results.push(res);
+            }
+
+            let result = new_var();
+
+            let final_instr = format!(
+                "{result} := {target_res_name}({})\n",
+                param_results
+                    .clone()
+                    .into_iter()
+                    .reduce(|acc, x| format!("{acc}, {x}"))
+                    .unwrap_or(String::new())
+            );
+
+            res.extend(params_instructions.into_iter());
+            res.push(final_instr);
+
+            (res, Some(result))
         }
         _ => panic!(),
     }
@@ -138,8 +182,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .at_least(1)
             .allow_trailing()
             .collect::<Vec<_>>()
-            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-            .map(|x| ValueExpr::Tuple(dbg!(x))));
+            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))) .map(|x| ValueExpr::Tuple(dbg!(x))));
 
         let duck_expression = select_ref! { Token::Ident(ident) => ident.to_owned() }
             .then_ignore(just(Token::ControlChar(':')))
@@ -293,6 +336,8 @@ fn empty_duck() -> ValueExpr {
 
 #[cfg(test)]
 mod tests {
+    use std::{cell::RefCell, rc::Rc};
+
     use chumsky::Parser;
 
     use crate::parse::{
@@ -740,12 +785,12 @@ mod tests {
     #[test]
     fn test_code_emit() {
         let test_cases = vec![
-            ("println(1, 2, 3, true)", vec!["fmt.Println(1,2,3,true)"]),
-            ("abc()", vec!["abc()"]),
             (
-                "abc({println(1); 3}, 2)",
-                vec!["abc(func() interface{} {fmt.Println(1);return (3)}(),2)"],
+                "@println(1, 2, 3, true)",
+                "var_0 := fmt.Println\nvar_1 := 1\nvar_2 := 2\nvar_3 := 3\nvar_4 := true\nvar_5 := var_0(var_1, var_2, var_3, var_4)\n",
             ),
+            ("abc((1,2,3), x(\"X\"))", ""),
+            ("(1,2,3)", ""),
         ];
         for (src, expected_tokens) in test_cases {
             dbg!(src);
@@ -758,8 +803,17 @@ mod tests {
             assert_eq!(parse_result.has_output(), true, "{}", src);
 
             let output: ValueExpr = parse_result.into_result().expect(&src);
-            let output = emit(output);
-            assert_eq!(expected_tokens, output, "{}", src);
+            let output = emit(output, Rc::new(RefCell::new(0)));
+            assert_eq!(
+                expected_tokens,
+                output
+                    .0
+                    .into_iter()
+                    .reduce(|acc, x| format!("{acc}{x}"))
+                    .unwrap(),
+                "{}",
+                src
+            );
         }
     }
 }
