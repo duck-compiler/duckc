@@ -1,5 +1,7 @@
+use std::ops::Deref;
+
 use super::lexer::Token;
-use chumsky::prelude::*;
+use chumsky::{input::ValueInput, prelude::*};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueExpr {
@@ -46,6 +48,75 @@ impl ValueExpr {
             }
             _ => self.clone(),
         }
+    }
+}
+
+fn r(v: impl IntoIterator<Item = ValueExpr>) -> String {
+    v.into_iter()
+        .map(|x| {
+            let emitted = emit(x);
+            emitted.into_iter().reduce(|acc, x| format!("{acc};{x}")).unwrap_or(String::new())
+        })
+        .reduce(|acc, x| format!("{acc};{x}"))
+        .unwrap_or(String::new())
+}
+
+fn emit(x: ValueExpr) -> Vec<String> {
+    match x {
+        ValueExpr::Break => vec!["break".to_string()],
+        ValueExpr::Int(i) => vec![i.to_string()],
+        ValueExpr::Bool(b) => vec![b.to_string()],
+        ValueExpr::Float(f) => vec![f.to_string()],
+        ValueExpr::Continue => vec!["continue".to_string()],
+        ValueExpr::Char(c) => vec![format!("'{c}'")],
+        ValueExpr::FunctionCall { target, params } => {
+            let target = ValueExpr::clone(target.as_ref());
+            let params_str = params
+                .into_iter()
+                .map(|x| emit(x)[0].to_owned())
+                .reduce(|acc, x| format!("{acc},{x}"))
+                .unwrap_or(String::new());
+
+            if let ValueExpr::Variable(x) = &target {
+                if x == "println" {
+                    return vec![format!("fmt.Println({})", params_str)];
+                }
+            }
+            let target_expr = emit(target)[0].to_owned();
+            vec![format!("{target_expr}({params_str})")]
+        }
+        ValueExpr::Return(expr) => {
+            let go_lines = emit((*expr).clone());
+            vec![format!("return ({})", go_lines[0].clone(),)]
+        }
+        ValueExpr::Variable(x) => vec![x],
+        ValueExpr::Block(mut exprs) => {
+            let mut func_body = String::new();
+            if let Some(last) = exprs.pop() {
+                exprs.push(ValueExpr::Return(last.into()));
+            }
+            func_body.push_str("func() interface{} {");
+            func_body.push_str(
+                &exprs
+                    .into_iter()
+                    .map(|x| emit(x)[0].to_owned())
+                    .reduce(|acc, x| format!("{acc};{x}"))
+                    .unwrap_or(String::new()),
+            );
+            func_body.push_str("}()");
+            vec![func_body]
+        }
+        ValueExpr::If { condition, then, r#else } => {
+            let cond = emit(condition)[0].to_owned();
+            let then = emit
+            let mut func_body = String::new();
+            func_body.push_str("func() interface{} { if ");
+            func_body.push_str(&cond);
+            func_body.push_str(" {");
+            func_body.push()
+            func_body.push_str("}()");
+        }
+        _ => panic!(),
     }
 }
 
@@ -204,7 +275,9 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     target: target.into(),
                     params,
                 }),
-            just(Token::Return).ignore_then(atom.clone()).map(|x| ValueExpr::Return(x.into())),
+            just(Token::Return)
+                .ignore_then(atom.clone())
+                .map(|x| ValueExpr::Return(x.into())),
             atom,
         ))
     })
@@ -224,7 +297,7 @@ mod tests {
 
     use crate::parse::{
         lexer::lexer,
-        value_parser::{empty_duck, empty_tuple, value_expr_parser},
+        value_parser::{emit, empty_duck, empty_tuple, value_expr_parser},
     };
 
     use super::ValueExpr;
@@ -645,10 +718,7 @@ mod tests {
                     ],
                 },
             ),
-            (
-                "return 123",
-                ValueExpr::Return(ValueExpr::Int(123).into()),
-            ),
+            ("return 123", ValueExpr::Return(ValueExpr::Int(123).into())),
         ];
 
         for (src, expected_tokens) in test_cases {
@@ -664,6 +734,32 @@ mod tests {
             let output: ValueExpr = parse_result.into_result().expect(&src);
 
             assert_eq!(output, expected_tokens, "{}", src);
+        }
+    }
+
+    #[test]
+    fn test_code_emit() {
+        let test_cases = vec![
+            ("println(1, 2, 3, true)", vec!["fmt.Println(1,2,3,true)"]),
+            ("abc()", vec!["abc()"]),
+            (
+                "abc({println(1); 3}, 2)",
+                vec!["abc(func() interface{} {fmt.Println(1);return (3)}(),2)"],
+            ),
+        ];
+        for (src, expected_tokens) in test_cases {
+            dbg!(src);
+            let lex_result = lexer().parse(src).into_result().expect(&src);
+            let parse_result = value_expr_parser().parse(&lex_result);
+
+            dbg!(&lex_result, &parse_result);
+
+            assert_eq!(parse_result.has_errors(), false, "{}", src);
+            assert_eq!(parse_result.has_output(), true, "{}", src);
+
+            let output: ValueExpr = parse_result.into_result().expect(&src);
+            let output = emit(output);
+            assert_eq!(expected_tokens, output, "{}", src);
         }
     }
 }
