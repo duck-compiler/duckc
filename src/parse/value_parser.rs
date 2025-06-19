@@ -57,13 +57,16 @@ pub struct GoMethodDef {
 
 impl GoMethodDef {
     pub fn emit(&self, receiver: Option<String>, interface_style: bool) -> Vec<String> {
-        let name_param_return_type = format!("{}({}) {}", self.name,
-        self.params
-            .iter()
-            .map(|(name, data_type)| format!("{name} {data_type}"))
-            .reduce(|acc, x| format!("{acc}, {x}"))
-            .unwrap_or(String::new()),
-        self.return_type.as_ref().unwrap_or(&String::new()));
+        let name_param_return_type = format!(
+            "{}({}) {}",
+            self.name,
+            self.params
+                .iter()
+                .map(|(name, data_type)| format!("{name} {data_type}"))
+                .reduce(|acc, x| format!("{acc}, {x}"))
+                .unwrap_or(String::new()),
+            self.return_type.as_ref().unwrap_or(&String::new())
+        );
         if interface_style {
             vec![name_param_return_type, "\n".to_string()]
         } else {
@@ -100,6 +103,12 @@ pub enum GoTypeDef {
 }
 
 impl GoTypeDef {
+    pub fn name(&self) -> &str {
+        match self {
+            GoTypeDef::Struct { name, fields: _, methods: _ } => name,
+            GoTypeDef::Interface { name, methods: _ } => name,
+        }
+    }
     pub fn emit(&self) -> Vec<String> {
         match self {
             GoTypeDef::Struct {
@@ -138,6 +147,17 @@ pub struct EmitEnvironment {
     pub var_counter: Rc<RefCell<usize>>,
 }
 
+impl EmitEnvironment {
+    pub fn push_types(&self, types: impl Iterator<Item = GoTypeDef>) {
+        let mut x = self.types.borrow_mut();
+        for type_def in types {
+            if !x.iter().any(|e| e.name() == type_def.name()) {
+                x.push(type_def);
+            }
+        }
+    }
+}
+
 impl ValueExpr {
     fn flatten_block(&self) -> ValueExpr {
         match self {
@@ -153,7 +173,7 @@ impl ValueExpr {
     }
 }
 
-pub fn emit(x: ValueExpr,  env: EmitEnvironment) -> (Vec<String>, Option<String>) {
+pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>) {
     let new_var = || {
         let x = format!("var_{}", env.var_counter.borrow());
         *env.var_counter.borrow_mut() += 1;
@@ -276,10 +296,9 @@ pub fn emit(x: ValueExpr,  env: EmitEnvironment) -> (Vec<String>, Option<String>
             r#else,
         } => {
             let res_var = new_var();
-            let (cond_instr, Some(cond_res)) = emit(
-                ValueExpr::clone(condition.as_ref()),
-                env.clone(),
-            ) else {
+            let (cond_instr, Some(cond_res)) =
+                emit(ValueExpr::clone(condition.as_ref()), env.clone())
+            else {
                 panic!()
             };
 
@@ -293,8 +312,7 @@ pub fn emit(x: ValueExpr,  env: EmitEnvironment) -> (Vec<String>, Option<String>
                 res_instr.push(format!("{res_var} = {res}\n"))
             }
             res_instr.push("} else {\n".to_string());
-            let (r#else_instr, res) =
-                emit(ValueExpr::clone(r#else.as_ref()), env.clone());
+            let (r#else_instr, res) = emit(ValueExpr::clone(r#else.as_ref()), env.clone());
             res_instr.extend(r#else_instr.into_iter());
             if let Some(res) = res {
                 res_instr.push(format!("{res_var} = {res}\n"))
@@ -358,8 +376,7 @@ pub fn emit(x: ValueExpr,  env: EmitEnvironment) -> (Vec<String>, Option<String>
                 }
             }
 
-            let (target_instr, Some(target_res_name)) = emit(target, env.clone())
-            else {
+            let (target_instr, Some(target_res_name)) = emit(target, env.clone()) else {
                 panic!()
             };
             dbg!(&target_instr);
@@ -393,6 +410,67 @@ pub fn emit(x: ValueExpr,  env: EmitEnvironment) -> (Vec<String>, Option<String>
             res.push(final_instr);
 
             (res, Some(result))
+        }
+        ValueExpr::Duck(fields) => {
+            let mut field_instr = Vec::new();
+            let mut field_res = Vec::new();
+
+            let mut type_fields = Vec::new();
+            let mut go_type_name = "Duck".to_string();
+
+            let mut methods = Vec::new();
+
+            for (field_name, field_init) in fields {
+                let (this_field_instr, Some(this_field_res)) = emit(field_init, env.clone()) else {
+                    panic!()
+                };
+                field_instr.extend(this_field_instr.into_iter());
+                field_res.push(this_field_res);
+                let go_type_name = "interface{}".to_string();
+                type_fields.push((field_name.clone(), go_type_name.clone()));
+                methods.push(GoMethodDef {
+                    name: format!("Duck_Get{field_name}"),
+                    body: vec![format!("return self.{field_name}")],
+                    params: vec![],
+                    return_type: Some(go_type_name.clone()),
+                });
+            }
+
+            type_fields.sort();
+
+            for (field_name, field_type) in &type_fields {
+                go_type_name.push_str(&format!(
+                    "_Has{field_name}_{}",
+                    field_type.replace("interface{}", "Any")
+                ));
+            }
+
+            let mut go_interface_name = go_type_name.clone();
+            go_interface_name.push_str("_Interface");
+
+            go_type_name.push_str("_Struct");
+
+            let go_struct = GoTypeDef::Struct {
+                name: go_type_name.clone(),
+                fields: type_fields,
+                methods: methods.clone(),
+            };
+            let go_interface = GoTypeDef::Interface {
+                name: go_interface_name,
+                methods: methods.clone(),
+            };
+
+            env.push_types([go_struct, go_interface].into_iter());
+
+            let res_name = new_var();
+
+            field_instr.extend([
+                format!("{res_name} := {go_type_name}{}{}{}\n", "{",
+                    field_res.join(", "),
+                    "}")
+            ].into_iter());
+
+            (field_instr, Some(res_name))
         }
         ValueExpr::Block(exprs) => {
             let mut instrs = Vec::new();
