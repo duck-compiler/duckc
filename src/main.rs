@@ -3,7 +3,9 @@ use std::{cell::RefCell, error::Error, rc::Rc};
 use chumsky::Parser;
 use parse::lexer::lexer;
 
-use crate::parse::value_parser::{emit, value_expr_parser};
+use crate::parse::value_parser::{
+    EmitEnvironment, GoMethodDef, GoTypeDef, emit, value_expr_parser,
+};
 
 pub mod parse;
 
@@ -22,7 +24,54 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let lex = lexer().parse(src).unwrap();
         let parse = value_expr_parser().parse(&lex).unwrap();
-        let emitted = emit(parse, Rc::new(RefCell::new(0)));
+        let emit_env = EmitEnvironment {
+            imports: Rc::new(RefCell::new(Vec::new())),
+            types: Rc::new(RefCell::new(Vec::new())),
+            var_counter: Rc::new(RefCell::new(0)),
+        };
+        let emitted = emit(parse, emit_env.clone());
+
+        let types = vec![
+            GoTypeDef::Struct {
+                name: "HasX".into(),
+                fields: vec![("x".into(), "interface{}".into())],
+                methods: vec![GoMethodDef {
+                    name: "GetX".into(),
+                    body: vec!["return self.x".into()],
+                    params: vec![],
+                    return_type: Some("interface{}".into()),
+                }],
+            },
+            GoTypeDef::Interface {
+                name: "HasX_Any".into(),
+                methods: vec![GoMethodDef {
+                    name: "GetX".into(),
+                    body: vec!["return self.x".into()],
+                    params: vec![],
+                    return_type: Some("interface{}".into()),
+                }],
+            },
+        ];
+        std::fs::write(
+            "outgen.go",
+            types[0]
+                .emit()
+                .into_iter()
+                .reduce(|acc, x| format!("{acc}{x}"))
+                .unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            "outgen_2.go",
+            types[1]
+                .emit()
+                .into_iter()
+                .reduce(|acc, x| format!("{acc}{x}"))
+                .unwrap(),
+        )
+        .unwrap();
+        return Ok(());
+
         std::fs::write(
             "outgen.go",
             &emitted

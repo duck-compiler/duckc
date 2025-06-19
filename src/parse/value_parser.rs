@@ -132,9 +132,10 @@ impl GoTypeDef {
 }
 
 #[derive(Clone, Debug)]
-struct EmitEnvironment {
-    imports: Rc<RefCell<Vec<String>>>,
-    types: Rc<RefCell<Vec<GoTypeDef>>>,
+pub struct EmitEnvironment {
+    pub imports: Rc<RefCell<Vec<String>>>,
+    pub types: Rc<RefCell<Vec<GoTypeDef>>>,
+    pub var_counter: Rc<RefCell<usize>>,
 }
 
 impl ValueExpr {
@@ -152,10 +153,10 @@ impl ValueExpr {
     }
 }
 
-pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Option<String>) {
+pub fn emit(x: ValueExpr,  env: EmitEnvironment) -> (Vec<String>, Option<String>) {
     let new_var = || {
-        let x = format!("var_{}", var_counter.borrow());
-        *var_counter.borrow_mut() += 1;
+        let x = format!("var_{}", env.var_counter.borrow());
+        *env.var_counter.borrow_mut() += 1;
         x
     };
 
@@ -168,10 +169,10 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
 
     match x {
         ValueExpr::Equals(x, y) => {
-            let (mut x_instr, Some(x_res)) = emit(*x, Rc::clone(&var_counter)) else {
+            let (mut x_instr, Some(x_res)) = emit(*x, env.clone()) else {
                 panic!()
             };
-            let (y_instr, Some(y_res)) = emit(*y, Rc::clone(&var_counter)) else {
+            let (y_instr, Some(y_res)) = emit(*y, env.clone()) else {
                 panic!()
             };
             x_instr.extend(y_instr.into_iter());
@@ -181,17 +182,17 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
         }
         ValueExpr::BoolNegate(expr) => {
             let res_var = new_var();
-            let (mut expr_instr, Some(expr_res)) = emit(*expr, Rc::clone(&var_counter)) else {
+            let (mut expr_instr, Some(expr_res)) = emit(*expr, env.clone()) else {
                 panic!()
             };
             expr_instr.push(format!("{res_var} := !{expr_res}\n"));
             (expr_instr, Some(res_var))
         }
         ValueExpr::Add(x, y) => {
-            let (mut x_instr, Some(x_res)) = emit(*x, Rc::clone(&var_counter)) else {
+            let (mut x_instr, Some(x_res)) = emit(*x, env.clone()) else {
                 panic!()
             };
-            let (y_instr, Some(y_res)) = emit(*y, Rc::clone(&var_counter)) else {
+            let (y_instr, Some(y_res)) = emit(*y, env.clone()) else {
                 panic!()
             };
             x_instr.extend(y_instr.into_iter());
@@ -200,10 +201,10 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
             (x_instr, Some(res_var))
         }
         ValueExpr::Mul(x, y) => {
-            let (mut x_instr, Some(x_res)) = emit(*x, Rc::clone(&var_counter)) else {
+            let (mut x_instr, Some(x_res)) = emit(*x, env.clone()) else {
                 panic!()
             };
-            let (y_instr, Some(y_res)) = emit(*y, Rc::clone(&var_counter)) else {
+            let (y_instr, Some(y_res)) = emit(*y, env.clone()) else {
                 panic!()
             };
             x_instr.extend(y_instr.into_iter());
@@ -218,7 +219,7 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
                 initializer,
             } = *b;
             if let Some(initializer) = initializer {
-                let (instr, Some(res_var)) = emit(initializer, Rc::clone(&var_counter)) else {
+                let (instr, Some(res_var)) = emit(initializer, env.clone()) else {
                     panic!()
                 };
                 let mut res = Vec::new();
@@ -231,14 +232,14 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
         }
         ValueExpr::VarAssign(b) => {
             let Assignment { name, value_expr } = *b;
-            let (mut instr, Some(res)) = emit(value_expr, Rc::clone(&var_counter)) else {
+            let (mut instr, Some(res)) = emit(value_expr, env.clone()) else {
                 panic!()
             };
             instr.push(format!("{name} = {res}\n"));
             (instr, Some(name))
         }
         ValueExpr::While { condition, body } => {
-            let (cond_instr, Some(cond_res)) = emit(*condition, Rc::clone(&var_counter)) else {
+            let (cond_instr, Some(cond_res)) = emit(*condition, env.clone()) else {
                 panic!()
             };
             let mut instr = Vec::new();
@@ -249,7 +250,7 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
             instr.push("break\n".to_string());
             instr.push("}\n".to_string());
 
-            let (body_instr, _) = emit(*body, Rc::clone(&var_counter));
+            let (body_instr, _) = emit(*body, env.clone());
             instr.extend(body_instr.into_iter());
 
             instr.push("}\n".to_string());
@@ -259,7 +260,7 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
         ValueExpr::Return(expr) => {
             let mut instr = Vec::new();
             if let Some(expr) = expr {
-                let (expr_instr, Some(expr_res)) = emit(*expr, Rc::clone(&var_counter)) else {
+                let (expr_instr, Some(expr_res)) = emit(*expr, env.clone()) else {
                     panic!()
                 };
                 instr.extend(expr_instr.into_iter());
@@ -277,7 +278,7 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
             let res_var = new_var();
             let (cond_instr, Some(cond_res)) = emit(
                 ValueExpr::clone(condition.as_ref()),
-                Rc::clone(&var_counter),
+                env.clone(),
             ) else {
                 panic!()
             };
@@ -286,14 +287,14 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
             res_instr.extend(cond_instr.into_iter());
             res_instr.push(format!("var {res_var} interface{}\n", "{}"));
             res_instr.push(format!("if {} {}\n", cond_res, "{"));
-            let (then_instr, res) = emit(ValueExpr::clone(then.as_ref()), Rc::clone(&var_counter));
+            let (then_instr, res) = emit(ValueExpr::clone(then.as_ref()), env.clone());
             res_instr.extend(then_instr.into_iter());
             if let Some(res) = res {
                 res_instr.push(format!("{res_var} = {res}\n"))
             }
             res_instr.push("} else {\n".to_string());
             let (r#else_instr, res) =
-                emit(ValueExpr::clone(r#else.as_ref()), Rc::clone(&var_counter));
+                emit(ValueExpr::clone(r#else.as_ref()), env.clone());
             res_instr.extend(r#else_instr.into_iter());
             if let Some(res) = res {
                 res_instr.push(format!("{res_var} = {res}\n"))
@@ -314,7 +315,7 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
             let mut instrs: Vec<String> = Vec::new();
             let mut results = Vec::new();
             for expr in exprs.into_iter() {
-                let (instr, Some(res)) = emit(expr, Rc::clone(&var_counter)) else {
+                let (instr, Some(res)) = emit(expr, env.clone()) else {
                     panic!()
                 };
                 instrs.extend(instr.into_iter());
@@ -357,7 +358,7 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
                 }
             }
 
-            let (target_instr, Some(target_res_name)) = emit(target, Rc::clone(&var_counter))
+            let (target_instr, Some(target_res_name)) = emit(target, env.clone())
             else {
                 panic!()
             };
@@ -368,7 +369,7 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
             let mut param_results = Vec::new();
 
             for expr in params.into_iter() {
-                let (instr, Some(res)) = emit(expr, Rc::clone(&var_counter)) else {
+                let (instr, Some(res)) = emit(expr, env.clone()) else {
                     panic!()
                 };
                 params_instructions.extend(instr.into_iter());
@@ -397,7 +398,7 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
             let mut instrs = Vec::new();
             let mut res = Vec::new();
             for expr in exprs {
-                let (instr, res_var) = emit(expr, Rc::clone(&var_counter));
+                let (instr, res_var) = emit(expr, env.clone());
                 instrs.extend(instr.into_iter());
                 if let Some(res_var) = res_var {
                     res.push(res_var);
