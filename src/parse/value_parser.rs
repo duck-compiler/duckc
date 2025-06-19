@@ -174,6 +174,32 @@ impl EmitEnvironment {
             }
         }
     }
+
+    pub fn push_import(&self, import: impl Into<String>) {
+        let mut imports = self.imports.borrow_mut();
+        let import = import.into();
+        if !imports.contains(&import) {
+            imports.push(import);
+        }
+    }
+
+    pub fn emit_all(&self) -> String {
+        format!(
+            "import (\n{}\n)\n{}",
+            self.imports
+                .borrow()
+                .iter()
+                .map(|x| format!("\"{x}\""))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            self.types
+                .borrow()
+                .iter()
+                .map(|x| x.emit().join(""))
+                .collect::<Vec<_>>()
+                .join("")
+        )
+    }
 }
 
 impl ValueExpr {
@@ -391,6 +417,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                 && x == "@println"
             {
                 *x = "fmt.Println".to_string();
+                env.push_import("fmt");
                 with_result = false;
             }
 

@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // let src = "if (x(1,true, (1,2,3,\"ABC\", (50, 100)))) { (\"lol\", 1) } else { return; }";
         // let src = "if ({@println(1); true}) {1} else {2}";
         // let src = "{ let i: Int = 0; while(!(i == 5)) {i = i + 1;@println(i);} }";
-        let src = "{{ x: 1, y: \"lol\" };{ y: \"lol\", x: \"fisch\" };}";
+        let src = "{{ x: 1, y: \"lol\" };@println({ y: \"lol\", x: \"fisch\" });}";
         // let src = "{ let x: Int = 0; while (x ) }";
         // let src = "{i = 10;}";
 
@@ -72,9 +72,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
         .unwrap();
 
-        let t = emit_env.types.borrow().iter().map(|x| {
-            x.emit().join("")
-        }).collect::<Vec<String>>().join("");
+        emit_env.imports.borrow_mut().push("fmt".to_string());
+        emit_env.imports.borrow_mut().push("io".to_string());
+        let t = emit_env.emit_all();
 
         std::fs::write(
             "outgen.go",
