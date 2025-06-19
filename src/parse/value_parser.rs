@@ -47,6 +47,96 @@ pub enum ValueExpr {
     Equals(Box<ValueExpr>, Box<ValueExpr>),
 }
 
+#[derive(Clone, Debug)]
+pub struct GoMethodDef {
+    pub name: String,
+    pub return_type: Option<String>,
+    pub params: Vec<(String, String)>,
+    pub body: Vec<String>,
+}
+
+impl GoMethodDef {
+    pub fn emit(&self, receiver: Option<String>, interface_style: bool) -> Vec<String> {
+        let name_param_return_type = format!("{}({}) {}", self.name,
+        self.params
+            .iter()
+            .map(|(name, data_type)| format!("{name} {data_type}"))
+            .reduce(|acc, x| format!("{acc}, {x}"))
+            .unwrap_or(String::new()),
+        self.return_type.as_ref().unwrap_or(&String::new()));
+        if interface_style {
+            vec![name_param_return_type, "\n".to_string()]
+        } else {
+            vec![
+                format!(
+                    "func {} {} {}\n",
+                    receiver.unwrap_or(String::new()),
+                    name_param_return_type,
+                    "{"
+                ),
+                self.body
+                    .iter()
+                    .map(ToOwned::to_owned)
+                    .reduce(|acc, x| format!("{acc}{x}\n"))
+                    .unwrap_or(String::new()),
+                "\n}".to_string(),
+                "\n".to_string(),
+            ]
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum GoTypeDef {
+    Struct {
+        name: String,
+        fields: Vec<(String, String)>,
+        methods: Vec<GoMethodDef>,
+    },
+    Interface {
+        name: String,
+        methods: Vec<GoMethodDef>,
+    },
+}
+
+impl GoTypeDef {
+    pub fn emit(&self) -> Vec<String> {
+        match self {
+            GoTypeDef::Struct {
+                name,
+                fields,
+                methods,
+            } => {
+                let mut res = Vec::new();
+                res.push(format!("type {} struct {}\n", name, "{"));
+                for (name, field_type) in fields {
+                    res.push(format!("{name} {field_type}\n"));
+                }
+                res.push("}\n".to_string());
+                for method in methods {
+                    res.extend(method.emit(Some(format!("(self {name})")), false));
+                }
+                res
+            }
+            GoTypeDef::Interface { name, methods } => {
+                let mut res = Vec::new();
+                res.push(format!("type {} interface {}\n", name, "{"));
+                for method in methods {
+                    res.extend(method.emit(None, true).into_iter());
+                }
+                res.push("}\n".to_string());
+                res
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct EmitEnvironment {
+    imports: Rc<RefCell<Vec<String>>>,
+    types: Rc<RefCell<Vec<GoTypeDef>>>,
+}
+
 impl ValueExpr {
     fn flatten_block(&self) -> ValueExpr {
         match self {
@@ -466,31 +556,33 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
         let char_expr = select_ref! { Token::CharLiteral(c) => *c }.map(ValueExpr::Char);
         let float_expr = select_ref! { Token::FloatLiteral(num) => *num }.map(ValueExpr::Float);
 
-        let atom =
-            just(Token::ControlChar('!')).or_not().then(e
-            .clone()
-            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-            .or(choice((
-                field_access.clone(),
-                int,
-                bool_val,
-                string_val,
-                var_expr,
-                if_expr,
-                char_expr,
-                float_expr,
-                tuple,
-                duck_expression,
-                block_expression,
-                just(Token::Break).to(ValueExpr::Break),
-                just(Token::Continue).to(ValueExpr::Continue),
-                while_with_condition_and_body
-                    .clone()
-                    .map(|(cond, body)| ValueExpr::While {
-                        condition: Box::new(cond),
-                        body: Box::new(body),
-                    }),
-            ))))
+        let atom = just(Token::ControlChar('!'))
+            .or_not()
+            .then(
+                e.clone()
+                    .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                    .or(choice((
+                        field_access.clone(),
+                        int,
+                        bool_val,
+                        string_val,
+                        var_expr,
+                        if_expr,
+                        char_expr,
+                        float_expr,
+                        tuple,
+                        duck_expression,
+                        block_expression,
+                        just(Token::Break).to(ValueExpr::Break),
+                        just(Token::Continue).to(ValueExpr::Continue),
+                        while_with_condition_and_body.clone().map(|(cond, body)| {
+                            ValueExpr::While {
+                                condition: Box::new(cond),
+                                body: Box::new(body),
+                            }
+                        }),
+                    ))),
+            )
             .then(params.clone().or_not())
             .map(|((neg, target), params)| {
                 let res = if let Some(params) = params {
@@ -509,19 +601,19 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 }
             });
 
-                let assignment = select_ref! { Token::Ident(identifier) => identifier.to_string() }
-                    .then_ignore(just(Token::ControlChar('=')))
-                    .then(e.clone())
-                    .then_ignore(just(Token::ControlChar(';')).or_not())
-                    .map(|(identifier, value_expr)| {
-                        ValueExpr::VarAssign(
-                            Assignment {
-                                name: identifier,
-                                value_expr,
-                            }
-                            .into(),
-                        )
-                    });
+        let assignment = select_ref! { Token::Ident(identifier) => identifier.to_string() }
+            .then_ignore(just(Token::ControlChar('=')))
+            .then(e.clone())
+            .then_ignore(just(Token::ControlChar(';')).or_not())
+            .map(|(identifier, value_expr)| {
+                ValueExpr::VarAssign(
+                    Assignment {
+                        name: identifier,
+                        value_expr,
+                    }
+                    .into(),
+                )
+            });
 
         let prod = atom
             .clone()
@@ -1165,10 +1257,7 @@ mod tests {
 
     #[test]
     fn test_code_emit() {
-        let test_cases = vec![(
-            "1",
-            "var_0 := 1\n",
-        )];
+        let test_cases = vec![("1", "var_0 := 1\n")];
 
         for (src, expected_tokens) in test_cases {
             dbg!(src);
