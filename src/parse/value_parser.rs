@@ -73,7 +73,7 @@ impl GoMethodDef {
             vec![
                 format!(
                     "func {} {} {}\n",
-                    receiver.unwrap_or(String::new()),
+                    receiver.unwrap_or_default(),
                     name_param_return_type,
                     "{"
                 ),
@@ -81,7 +81,7 @@ impl GoMethodDef {
                     .iter()
                     .map(ToOwned::to_owned)
                     .reduce(|acc, x| format!("{acc}{x}\n"))
-                    .unwrap_or(String::new()),
+                    .unwrap_or_default(),
                 "\n}".to_string(),
                 "\n".to_string(),
             ]
@@ -105,7 +105,11 @@ pub enum GoTypeDef {
 impl GoTypeDef {
     pub fn name(&self) -> &str {
         match self {
-            GoTypeDef::Struct { name, fields: _, methods: _ } => name,
+            GoTypeDef::Struct {
+                name,
+                fields: _,
+                methods: _,
+            } => name,
             GoTypeDef::Interface { name, methods: _ } => name,
         }
     }
@@ -147,7 +151,21 @@ pub struct EmitEnvironment {
     pub var_counter: Rc<RefCell<usize>>,
 }
 
+impl Default for EmitEnvironment {
+    fn default() -> Self {
+        EmitEnvironment {
+            imports: Rc::new(RefCell::new(Vec::new())),
+            types: Rc::new(RefCell::new(Vec::new())),
+            var_counter: Rc::new(RefCell::new(0)),
+        }
+    }
+}
+
 impl EmitEnvironment {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
     pub fn push_types(&self, types: impl Iterator<Item = GoTypeDef>) {
         let mut x = self.types.borrow_mut();
         for type_def in types {
@@ -162,7 +180,7 @@ impl ValueExpr {
     fn flatten_block(&self) -> ValueExpr {
         match self {
             ValueExpr::Block(x) if x.len() <= 1 => {
-                if let Some(x) = x.get(0) {
+                if let Some(x) = x.first() {
                     x.clone()
                 } else {
                     empty_tuple()
@@ -195,7 +213,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let (y_instr, Some(y_res)) = emit(*y, env.clone()) else {
                 panic!()
             };
-            x_instr.extend(y_instr.into_iter());
+            x_instr.extend(y_instr);
             let res_var = new_var();
             x_instr.push(format!("{res_var} := {x_res} == {y_res}\n"));
             (x_instr, Some(res_var))
@@ -215,7 +233,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let (y_instr, Some(y_res)) = emit(*y, env.clone()) else {
                 panic!()
             };
-            x_instr.extend(y_instr.into_iter());
+            x_instr.extend(y_instr);
             let res_var = new_var();
             x_instr.push(format!("{res_var} := {x_res} + {y_res}\n"));
             (x_instr, Some(res_var))
@@ -227,7 +245,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let (y_instr, Some(y_res)) = emit(*y, env.clone()) else {
                 panic!()
             };
-            x_instr.extend(y_instr.into_iter());
+            x_instr.extend(y_instr);
             let res_var = new_var();
             x_instr.push(format!("{res_var} := {x_res} * {y_res}\n"));
             (x_instr, Some(res_var))
@@ -243,7 +261,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                     panic!()
                 };
                 let mut res = Vec::new();
-                res.extend(instr.into_iter());
+                res.extend(instr);
                 res.push(format!("{name} := {res_var}\n"));
                 (res, Some(name))
             } else {
@@ -265,13 +283,13 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let mut instr = Vec::new();
 
             instr.push("for {\n".to_string());
-            instr.extend(cond_instr.into_iter());
+            instr.extend(cond_instr);
             instr.push(format!("if !{} {}\n", cond_res, "{"));
             instr.push("break\n".to_string());
             instr.push("}\n".to_string());
 
             let (body_instr, _) = emit(*body, env.clone());
-            instr.extend(body_instr.into_iter());
+            instr.extend(body_instr);
 
             instr.push("}\n".to_string());
 
@@ -283,10 +301,10 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                 let (expr_instr, Some(expr_res)) = emit(*expr, env.clone()) else {
                     panic!()
                 };
-                instr.extend(expr_instr.into_iter());
+                instr.extend(expr_instr);
                 instr.push(format!("return {expr_res}"));
             } else {
-                instr.push(format!("return\n"));
+                instr.push("return\n".to_string());
             }
             (instr, None)
         }
@@ -303,17 +321,17 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             };
 
             let mut res_instr = Vec::new();
-            res_instr.extend(cond_instr.into_iter());
+            res_instr.extend(cond_instr);
             res_instr.push(format!("var {res_var} interface{}\n", "{}"));
             res_instr.push(format!("if {} {}\n", cond_res, "{"));
             let (then_instr, res) = emit(ValueExpr::clone(then.as_ref()), env.clone());
-            res_instr.extend(then_instr.into_iter());
+            res_instr.extend(then_instr);
             if let Some(res) = res {
                 res_instr.push(format!("{res_var} = {res}\n"))
             }
             res_instr.push("} else {\n".to_string());
             let (r#else_instr, res) = emit(ValueExpr::clone(r#else.as_ref()), env.clone());
-            res_instr.extend(r#else_instr.into_iter());
+            res_instr.extend(r#else_instr);
             if let Some(res) = res {
                 res_instr.push(format!("{res_var} = {res}\n"))
             }
@@ -361,7 +379,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                     .unwrap_or(String::new()),
             );
             final_instr.push("}\n".to_string());
-            instrs.extend(final_instr.into_iter());
+            instrs.extend(final_instr);
             (instrs, Some(res))
         }
         ValueExpr::FunctionCall { target, params } => {
@@ -369,18 +387,18 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let mut target = ValueExpr::clone(target.as_ref());
 
             let mut with_result = true;
-            if let ValueExpr::Variable(x) = &mut target {
-                if x == "@println" {
-                    *x = "fmt.Println".to_string();
-                    with_result = false;
-                }
+            if let ValueExpr::Variable(x) = &mut target
+                && x == "@println"
+            {
+                *x = "fmt.Println".to_string();
+                with_result = false;
             }
 
             let (target_instr, Some(target_res_name)) = emit(target, env.clone()) else {
                 panic!()
             };
             dbg!(&target_instr);
-            res.extend(target_instr.into_iter());
+            res.extend(target_instr);
 
             let mut params_instructions = Vec::new();
             let mut param_results = Vec::new();
@@ -406,7 +424,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                     .unwrap_or(String::new())
             );
 
-            res.extend(params_instructions.into_iter());
+            res.extend(params_instructions);
             res.push(final_instr);
 
             (res, Some(result))
@@ -464,11 +482,12 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
 
             let res_name = new_var();
 
-            field_instr.extend([
-                format!("{res_name} := {go_type_name}{}{}{}\n", "{",
-                    field_res.join(", "),
-                    "}")
-            ].into_iter());
+            field_instr.extend([format!(
+                "{res_name} := {go_type_name}{}{}{}\n",
+                "{",
+                field_res.join(", "),
+                "}"
+            )]);
 
             (field_instr, Some(res_name))
         }
@@ -595,14 +614,12 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     let base_expr = base_expr.leak() as &[Token];
                     dbg!(&base_expr);
                     let base = e.parse(base_expr).unwrap();
-                    let r =
-                        field_accesses
-                            .into_iter()
-                            .fold(base, |acc, x| ValueExpr::FieldAccess {
-                                target_obj: acc.into(),
-                                field_name: x,
-                            });
-                    r
+                    field_accesses
+                        .into_iter()
+                        .fold(base, |acc, x| ValueExpr::FieldAccess {
+                            target_obj: acc.into(),
+                            field_name: x,
+                        })
                 }
             });
 
@@ -670,7 +687,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 let res = if let Some(params) = params {
                     ValueExpr::FunctionCall {
                         target: target.into(),
-                        params: params,
+                        params,
                     }
                 } else {
                     target
@@ -746,7 +763,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             declaration,
             just(Token::Return)
                 .ignore_then(e.clone().or_not())
-                .map(|x: Option<ValueExpr>| ValueExpr::Return(x.map(|x| Box::new(x)))),
+                .map(|x: Option<ValueExpr>| ValueExpr::Return(x.map(Box::new))),
             atom,
         ))
     })
@@ -762,15 +779,13 @@ fn empty_duck() -> ValueExpr {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, rc::Rc};
-
     use chumsky::Parser;
 
     use crate::parse::{
         assignment_and_declaration_parser::Declaration,
         lexer::lexer,
         type_parser::{Duck, TypeExpression},
-        value_parser::{emit, empty_duck, empty_tuple, value_expr_parser},
+        value_parser::{EmitEnvironment, emit, empty_duck, empty_tuple, value_expr_parser},
     };
 
     use super::ValueExpr;
@@ -1063,7 +1078,6 @@ mod tests {
                     (
                         "y".into(),
                         ValueExpr::Duck(vec![
-                            ("z".into(), ValueExpr::Bool(true)),
                             (
                                 "w".into(),
                                 ValueExpr::Block(vec![
@@ -1075,6 +1089,7 @@ mod tests {
                                     ValueExpr::Bool(true),
                                 ]),
                             ),
+                            ("z".into(), ValueExpr::Bool(true)),
                         ]),
                     ),
                 ]),
@@ -1352,7 +1367,8 @@ mod tests {
             assert_eq!(parse_result.has_output(), true, "{}", src);
 
             let output: ValueExpr = parse_result.into_result().expect(&src);
-            let output = emit(output, Rc::new(RefCell::new(0)));
+            let env = EmitEnvironment::new();
+            let output = emit(output, env);
             assert_eq!(
                 expected_tokens,
                 output

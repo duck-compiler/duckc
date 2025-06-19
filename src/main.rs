@@ -1,6 +1,6 @@
 use std::{cell::RefCell, error::Error, rc::Rc};
 
-use chumsky::{input::Input, Parser};
+use chumsky::Parser;
 use parse::lexer::lexer;
 
 use crate::parse::value_parser::{
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
         let emitted = emit(parse, emit_env.clone());
 
-        let types = vec![
+        let types = [
             GoTypeDef::Struct {
                 name: "HasX".into(),
                 fields: vec![("x".into(), "interface{}".into())],
