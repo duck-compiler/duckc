@@ -67,7 +67,7 @@ fn num_literal<'src>() -> impl Parser<'src, &'src str, Token> {
     let frac = just('.').ignore_then(text::digits(10)).to_slice();
     pre.then(frac.or_not()).map(|(pre, frac)| {
         if let Some(frac) = frac {
-            let num = format!("{}{}", pre, frac).parse().unwrap();
+            let num = format!("{pre}{frac}").parse().unwrap();
             Token::FloatLiteral(num)
         } else {
             Token::IntLiteral(pre)

@@ -10,13 +10,13 @@ pub enum Statement {
 }
 
 pub fn statement_parser<'src>() -> impl Parser<'src, &'src [Token], Statement> {
-    let type_definition = type_definition_parser().map(|type_definition| Statement::TypeDefinition(type_definition));
-    let function_definition = function_definition_parser().map(|function_definition| Statement::FunctionDefinition(function_definition));
+    let type_definition = type_definition_parser().map(Statement::TypeDefinition);
+    let function_definition = function_definition_parser().map(Statement::FunctionDefinition);
 
     choice((
         type_definition,
         function_definition,
-        value_expr_parser().then_ignore(just(Token::ControlChar(';'))).map(|value_expr| Statement::ValueExpr(value_expr))
+        value_expr_parser().then_ignore(just(Token::ControlChar(';'))).map(Statement::ValueExpr)
     ))
 }
 
