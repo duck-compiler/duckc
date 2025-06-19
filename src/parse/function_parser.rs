@@ -43,7 +43,7 @@ pub fn lambda_function_expr_parser<'src>() -> impl Parser<'src, &'src [Token], L
         .then_ignore(just(Token::ControlChar('=')))
         .then_ignore(just(Token::ControlChar('>')))
         .then(value_expr_parser())
-        .map(|((params, return_type), value_expr)| LambdaFunctionExpr { params: params.or(Some(vec![])).unwrap(), return_type, value_expr })
+        .map(|((params, return_type), value_expr)| LambdaFunctionExpr { params: params.unwrap_or_default(), return_type, value_expr })
 }
 
 pub fn function_definition_parser<'src>() -> impl Parser<'src, &'src [Token], FunctionDefintion> {

@@ -773,6 +773,7 @@ fn empty_tuple() -> ValueExpr {
     ValueExpr::Tuple(Vec::new())
 }
 
+#[allow(dead_code)]
 fn empty_duck() -> ValueExpr {
     ValueExpr::Duck(Vec::new())
 }
@@ -799,6 +800,7 @@ mod tests {
         let test_cases = vec![
             ("true", ValueExpr::Bool(true)),
             ("false", ValueExpr::Bool(false)),
+            ("{}", empty_duck()),
             (
                 "to_upper()",
                 ValueExpr::FunctionCall {

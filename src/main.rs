@@ -104,5 +104,5 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // let type_expressions = type_parser_result.output();
 
-    return Ok(());
+    Ok(())
 }

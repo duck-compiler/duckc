@@ -42,7 +42,7 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
             });
 
         let type_name = select_ref! { Token::Ident(identifier) => identifier.to_string() }
-            .map(|identifier| TypeExpression::TypeName(identifier));
+            .map(TypeExpression::TypeName);
 
         type_name.or(duck)
     })
