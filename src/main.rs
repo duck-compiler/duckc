@@ -1,11 +1,26 @@
-use std::error::Error;
+use std::{cell::RefCell, error::Error, rc::Rc};
 
 use chumsky::Parser;
 use parse::lexer::lexer;
 
+use crate::parse::value_parser::{emit, value_expr_parser};
+
 pub mod parse;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    if true {
+        let src = "if (x(1,true, (1,2,3,\"ABC\", (50, 100)))) { (\"lol\", 1) } else { return; }";
+        let src = "if ({@println(1); true}) {1} else {2}";
+        let lex = lexer().parse(src).unwrap();
+        let parse = value_expr_parser().parse(&lex).unwrap();
+        let emitted = emit(parse, Rc::new(RefCell::new(0)));
+        std::fs::write("outgen.go", &emitted.0.into_iter().reduce(|acc, x| {
+            format!("{acc}{x}")
+        }).unwrap_or(String::new())).unwrap();
+        return Ok(());
+    }
+
+
     let source = Box::leak(Box::new("duck { x: String };"));
     let lexer_parse_result = lexer().parse(source);
     if !lexer_parse_result.has_output() {
