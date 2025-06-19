@@ -11,6 +11,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     if true {
         let src = "if (x(1,true, (1,2,3,\"ABC\", (50, 100)))) { (\"lol\", 1) } else { return; }";
         let src = "if ({@println(1); true}) {1} else {2}";
+        let src = "while ({(1,2,3);x(true);false}) {@println(\"kek\")}";
+
+        // let mut i = 0;
+        // while {println!("{i}"); i+= 1; if i == 500 {return Ok(());} i < 1000} {
+        //     dbg!(2);
+        // }
+
         let lex = lexer().parse(src).unwrap();
         let parse = value_expr_parser().parse(&lex).unwrap();
         let emitted = emit(parse, Rc::new(RefCell::new(0)));

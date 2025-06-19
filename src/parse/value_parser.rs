@@ -66,6 +66,25 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
     let no_var = |instr: &str| (vec![instr.to_owned()], None);
 
     match x {
+        ValueExpr::While { condition, body } => {
+            let (cond_instr, Some(cond_res)) = emit(*condition, Rc::clone(&var_counter)) else {
+                panic!()
+            };
+            let mut instr = Vec::new();
+
+            instr.push("for {\n".to_string());
+            instr.extend(cond_instr.into_iter());
+            instr.push(format!("if !{} {}\n", cond_res, "{"));
+            instr.push("break\n".to_string());
+            instr.push("}\n".to_string());
+
+            let (body_instr, _) = emit(*body, Rc::clone(&var_counter));
+            instr.extend(body_instr.into_iter());
+
+            instr.push("}\n".to_string());
+
+            (instr, None)
+        }
         ValueExpr::Return(expr) => {
             let mut instr = Vec::new();
             if let Some(expr) = expr {
