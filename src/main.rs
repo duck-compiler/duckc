@@ -9,8 +9,8 @@ pub mod parse;
 
 fn main() -> Result<(), Box<dyn Error>> {
     if true {
-        let src = "if (x(1,true, (1,2,3,\"ABC\", (50, 100)))) { (\"lol\", 1) } else { return; }";
-        let src = "if ({@println(1); true}) {1} else {2}";
+        // let src = "if (x(1,true, (1,2,3,\"ABC\", (50, 100)))) { (\"lol\", 1) } else { return; }";
+        // let src = "if ({@println(1); true}) {1} else {2}";
         let src = "{ let i: Int = 0; while(!(i == 5)) {i = i + 1;@println(i);} }";
         // let src = "{ let x: Int = 0; while (x ) }";
         // let src = "{i = 10;}";

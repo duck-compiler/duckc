@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::parse::{
-    assignment_and_declaration_parser::{self, Assignment, Declaration},
+    assignment_and_declaration_parser::{Assignment, Declaration},
     type_parser::type_expression_parser,
 };
 
@@ -124,7 +124,7 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
         ValueExpr::VarDecl(b) => {
             let Declaration {
                 name,
-                type_expr,
+                type_expr: _,
                 initializer,
             } = *b;
             if let Some(initializer) = initializer {
@@ -1165,10 +1165,9 @@ mod tests {
 
     #[test]
     fn test_code_emit() {
-        return;
         let test_cases = vec![(
-            "@println(1, 2, 3, true)",
-            "var_0 := fmt.Println\nvar_1 := 1\nvar_2 := 2\nvar_3 := 3\nvar_4 := true\nvar_5 := var_0(var_1, var_2, var_3, var_4)\n",
+            "1",
+            "var_0 := 1\n",
         )];
 
         for (src, expected_tokens) in test_cases {
