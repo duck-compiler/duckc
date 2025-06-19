@@ -7,7 +7,7 @@ pub struct Declaration {
     pub initializer: Option<ValueExpr>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Assignment {
     pub name: String,
     pub value_expr: ValueExpr,
