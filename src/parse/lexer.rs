@@ -2,6 +2,7 @@ use chumsky::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Token {
+    Use,
     Type,
     Duck,
     Function,
@@ -25,6 +26,7 @@ pub type Spanned<T> = (T, SimpleSpan);
 
 pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
     let keyword_or_ident = just("@").or_not().then(text::ident()).map(|(x, str)| match str {
+        "use" => Token::Use,
         "type" => Token::Type,
         "duck" => Token::Duck,
         "fun" => Token::Function,
@@ -37,7 +39,7 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
         "continue" => Token::Continue,
         _ => Token::Ident(format!("{}{str}", x.unwrap_or(""))),
     });
-    let ctrl = one_of("=:{};,&()->.").map(Token::ControlChar);
+    let ctrl = one_of("=:{};,&()->.*").map(Token::ControlChar);
     let string = string_lexer();
     let r#bool = choice((
         just("true").to(Token::BoolLiteral(true)),
