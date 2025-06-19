@@ -540,7 +540,10 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .allow_trailing()
             .collect::<Vec<_>>()
             .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
-            .map(|x| ValueExpr::Duck(x));
+            .map(|mut x| {
+                x.sort_by_key(|(name, _)| name.clone());
+                ValueExpr::Duck(x)
+            });
 
         let block_expression = e
             .clone()
