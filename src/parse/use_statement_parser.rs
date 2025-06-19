@@ -51,31 +51,52 @@ mod tests {
 
     #[test]
     fn test_use_statement_parser() {
-        let valid_use_statements = vec![
-            "use std;",
-            "use std::io;",
-            "use std::io::{println};",
-            "use std::io::{println, print};",
+        let src_and_expected_ast = vec![
+            ("use std;", UseStatement {
+                indicator_track: vec![Indicator::Module("std".to_string())]
+            }),
+            ("use std::io;", UseStatement {
+                indicator_track: vec![Indicator::Module("std".to_string()), Indicator::Module("io".to_string())]
+            }),
+            ("use std::io::{println};", UseStatement {
+                indicator_track: vec![Indicator::Module("std".to_string()), Indicator::Module("io".to_string()), Indicator::Symbols(vec![
+                    "println".to_string(),
+                ])]
+            }),
+            ("use std::io::{println, print};", UseStatement {
+                indicator_track: vec![Indicator::Module("std".to_string()), Indicator::Module("io".to_string()), Indicator::Symbols(vec![
+                    "println".to_string(),
+                    "print".to_string(),
+                ])]
+            }),
         ];
 
-        for valid_use_statement in valid_use_statements {
-            println!("lexing {valid_use_statement}");
-            let lexer_parse_result = lexer().parse(valid_use_statement);
+        for (src, expected_ast) in src_and_expected_ast {
+            println!("lexing {src}");
+            let lexer_parse_result = lexer().parse(src);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
             let Some(tokens) = lexer_parse_result.into_output() else { unreachable!()};
 
-            println!("parsing use statement {valid_use_statement}");
-            let typedef_parse_result = use_statement_parser().parse(tokens.as_slice());
-            assert_eq!(typedef_parse_result.has_errors(), false);
-            assert_eq!(typedef_parse_result.has_output(), true);
+            println!("parsing use statement {src}");
+            let use_statement_parse_result = use_statement_parser().parse(tokens.as_slice());
+            assert_eq!(use_statement_parse_result.has_errors(), false);
+            assert_eq!(use_statement_parse_result.has_output(), true);
+
+            let Some(ast) = use_statement_parse_result.into_output() else { unreachable!() };
+
+            assert_eq!(ast, expected_ast);
         }
 
         let invalid_use_statements = vec![
             "use x::;",
             "use y::{};",
             "use std::{}",
+            "use ::;",
+            "use ::std;",
+            "use :std:;",
+            "use :std::{};",
         ];
 
         for invalid_use_statement in invalid_use_statements {
