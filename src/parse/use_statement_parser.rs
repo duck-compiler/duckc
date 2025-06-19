@@ -3,15 +3,15 @@ use chumsky::prelude::*;
 use super::lexer::Token;
 
 #[derive(Debug, Clone, PartialEq)]
-enum Indicator {
+pub enum Indicator {
     Symbols(Vec<String>),
     Module(String),
     Wildcard,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct UseStatement {
-    indicator_track: Vec<Indicator>,
+pub struct UseStatement {
+    pub indicator_track: Vec<Indicator>,
 }
 
 pub fn use_statement_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> {
