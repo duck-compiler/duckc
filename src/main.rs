@@ -11,8 +11,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     if true {
         let src = "if (x(1,true, (1,2,3,\"ABC\", (50, 100)))) { (\"lol\", 1) } else { return; }";
         let src = "if ({@println(1); true}) {1} else {2}";
-        let src = "while ({(1,2,3);x(true);false}) {@println(\"kek\");@println(\"moin\")}";
-        let src = "{let x: String = 1; x = 2; let y: String;}";
+        let src = "{ let i: Int = 0; while(!(i == 5)) {i = i + 1;@println(i);} }";
+        // let src = "{ let x: Int = 0; while (x ) }";
+        // let src = "{i = 10;}";
 
         // let mut i = 0;
         // while {println!("{i}"); i+= 1; if i == 500 {return Ok(());} i < 1000} {
@@ -22,12 +23,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         let lex = lexer().parse(src).unwrap();
         let parse = value_expr_parser().parse(&lex).unwrap();
         let emitted = emit(parse, Rc::new(RefCell::new(0)));
-        std::fs::write("outgen.go", &emitted.0.into_iter().reduce(|acc, x| {
-            format!("{acc}{x}")
-        }).unwrap_or(String::new())).unwrap();
+        std::fs::write(
+            "outgen.go",
+            &emitted
+                .0
+                .into_iter()
+                .reduce(|acc, x| format!("{acc}{x}"))
+                .unwrap_or(String::new()),
+        )
+        .unwrap();
         return Ok(());
     }
-
 
     let source = Box::leak(Box::new("duck { x: String };"));
     let lexer_parse_result = lexer().parse(source);
@@ -40,14 +46,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // let type_parser_result = type_parser().parse(tokens.iter().map(|(token, span)| token).collect());
     // if type_parser_result.has_errors() {
-      //  type_parser_result.errors().for_each(|err| println!("Error => {}", err));
-      // }
+    //  type_parser_result.errors().for_each(|err| println!("Error => {}", err));
+    // }
 
     // if !type_parser_result.has_output() {
-        //panic!("Error while type parsing");
-        //}
+    //panic!("Error while type parsing");
+    //}
 
-   // let type_expressions = type_parser_result.output();
+    // let type_expressions = type_parser_result.output();
 
-    return Ok(())
+    return Ok(());
 }

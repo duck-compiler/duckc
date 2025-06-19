@@ -41,6 +41,10 @@ pub enum ValueExpr {
     Return(Option<Box<ValueExpr>>),
     VarAssign(Box<Assignment>),
     VarDecl(Box<Declaration>),
+    Add(Box<ValueExpr>, Box<ValueExpr>),
+    Mul(Box<ValueExpr>, Box<ValueExpr>),
+    BoolNegate(Box<ValueExpr>),
+    Equals(Box<ValueExpr>, Box<ValueExpr>),
 }
 
 impl ValueExpr {
@@ -73,6 +77,50 @@ pub fn emit(x: ValueExpr, var_counter: Rc<RefCell<usize>>) -> (Vec<String>, Opti
     let no_var = |instr: &str| (vec![instr.to_owned()], None);
 
     match x {
+        ValueExpr::Equals(x, y) => {
+            let (mut x_instr, Some(x_res)) = emit(*x, Rc::clone(&var_counter)) else {
+                panic!()
+            };
+            let (y_instr, Some(y_res)) = emit(*y, Rc::clone(&var_counter)) else {
+                panic!()
+            };
+            x_instr.extend(y_instr.into_iter());
+            let res_var = new_var();
+            x_instr.push(format!("{res_var} := {x_res} == {y_res}\n"));
+            (x_instr, Some(res_var))
+        }
+        ValueExpr::BoolNegate(expr) => {
+            let res_var = new_var();
+            let (mut expr_instr, Some(expr_res)) = emit(*expr, Rc::clone(&var_counter)) else {
+                panic!()
+            };
+            expr_instr.push(format!("{res_var} := !{expr_res}\n"));
+            (expr_instr, Some(res_var))
+        }
+        ValueExpr::Add(x, y) => {
+            let (mut x_instr, Some(x_res)) = emit(*x, Rc::clone(&var_counter)) else {
+                panic!()
+            };
+            let (y_instr, Some(y_res)) = emit(*y, Rc::clone(&var_counter)) else {
+                panic!()
+            };
+            x_instr.extend(y_instr.into_iter());
+            let res_var = new_var();
+            x_instr.push(format!("{res_var} := {x_res} + {y_res}\n"));
+            (x_instr, Some(res_var))
+        }
+        ValueExpr::Mul(x, y) => {
+            let (mut x_instr, Some(x_res)) = emit(*x, Rc::clone(&var_counter)) else {
+                panic!()
+            };
+            let (y_instr, Some(y_res)) = emit(*y, Rc::clone(&var_counter)) else {
+                panic!()
+            };
+            x_instr.extend(y_instr.into_iter());
+            let res_var = new_var();
+            x_instr.push(format!("{res_var} := {x_res} * {y_res}\n"));
+            (x_instr, Some(res_var))
+        }
         ValueExpr::VarDecl(b) => {
             let Declaration {
                 name,
@@ -304,27 +352,13 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .then_ignore(just(Token::ControlChar(':')))
             .then(type_expression_parser())
             .then(initializer)
-            .then_ignore(just(Token::ControlChar(';')))
+            .then_ignore(just(Token::ControlChar(';')).or_not())
             .map(|((identifier, type_expr), initializer)| {
                 ValueExpr::VarDecl(
                     Declaration {
                         name: identifier,
                         type_expr,
                         initializer,
-                    }
-                    .into(),
-                )
-            });
-
-        let assignment = select_ref! { Token::Ident(identifier) => identifier.to_string() }
-            .then_ignore(just(Token::ControlChar('=')))
-            .then(e.clone())
-            .then_ignore(just(Token::ControlChar(';')))
-            .map(|(identifier, value_expr)| {
-                ValueExpr::VarAssign(
-                    Assignment {
-                        name: identifier,
-                        value_expr,
                     }
                     .into(),
                 )
@@ -432,11 +466,12 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
         let char_expr = select_ref! { Token::CharLiteral(c) => *c }.map(ValueExpr::Char);
         let float_expr = select_ref! { Token::FloatLiteral(num) => *num }.map(ValueExpr::Float);
 
-        let atom = e
+        let atom =
+            just(Token::ControlChar('!')).or_not().then(e
             .clone()
             .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
             .or(choice((
-                field_access,
+                field_access.clone(),
                 int,
                 bool_val,
                 string_val,
@@ -455,20 +490,89 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                         condition: Box::new(cond),
                         body: Box::new(body),
                     }),
-            )));
+            ))))
+            .then(params.clone().or_not())
+            .map(|((neg, target), params)| {
+                let res = if let Some(params) = params {
+                    ValueExpr::FunctionCall {
+                        target: target.into(),
+                        params: params,
+                    }
+                } else {
+                    target
+                };
+
+                if neg.is_some() {
+                    ValueExpr::BoolNegate(res.into())
+                } else {
+                    res
+                }
+            });
+
+                let assignment = select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                    .then_ignore(just(Token::ControlChar('=')))
+                    .then(e.clone())
+                    .then_ignore(just(Token::ControlChar(';')).or_not())
+                    .map(|(identifier, value_expr)| {
+                        ValueExpr::VarAssign(
+                            Assignment {
+                                name: identifier,
+                                value_expr,
+                            }
+                            .into(),
+                        )
+                    });
+
+        let prod = atom
+            .clone()
+            .then(
+                just(Token::ControlChar('*'))
+                    .ignore_then(atom.clone())
+                    .repeated()
+                    .collect::<Vec<_>>(),
+            )
+            .map(|(init, additional)| {
+                additional
+                    .into_iter()
+                    .fold(init, |acc, x| ValueExpr::Mul(acc.into(), x.into()))
+            });
+
+        let add = prod
+            .clone()
+            .then(
+                just(Token::ControlChar('+'))
+                    .ignore_then(prod.clone())
+                    .repeated()
+                    .collect::<Vec<_>>(),
+            )
+            .map(|(init, additional)| {
+                additional
+                    .into_iter()
+                    .fold(init, |acc, x| ValueExpr::Add(acc.into(), x.into()))
+            });
+
+        let equals = add
+            .clone()
+            .then_ignore(just(Token::Equals))
+            .then(add.clone())
+            .map(|(x, y)| ValueExpr::Equals(x.into(), y.into()));
+
+        // let equals = add.clone()
+        //     .then(just(Token::Equals).ignore_then(add.clone()).repeated().at_least(1).collect::<Vec<_>>())
+        //     .map(|(init, additional)| {
+        //         additional
+        //             .into_iter()
+        //             .fold(init, |acc, x| ValueExpr::Equals(acc.into(), x.into()))
+        //     });
 
         choice((
-            atom.clone()
-                .then(params.clone())
-                .map(|(target, params)| ValueExpr::FunctionCall {
-                    target: target.into(),
-                    params,
-                }),
-            just(Token::Return)
-                .ignore_then(atom.clone().or_not())
-                .map(|x: Option<ValueExpr>| ValueExpr::Return(x.map(|x| Box::new(x)))),
-            declaration,
             assignment,
+            equals,
+            add,
+            declaration,
+            just(Token::Return)
+                .ignore_then(e.clone().or_not())
+                .map(|x: Option<ValueExpr>| ValueExpr::Return(x.map(|x| Box::new(x)))),
             atom,
         ))
     })
@@ -928,6 +1032,119 @@ mod tests {
                     .into(),
                 ),
             ),
+            (
+                "x() * y()",
+                ValueExpr::Mul(
+                    ValueExpr::FunctionCall {
+                        target: var("x"),
+                        params: vec![],
+                    }
+                    .into(),
+                    ValueExpr::FunctionCall {
+                        target: var("y"),
+                        params: vec![],
+                    }
+                    .into(),
+                ),
+            ),
+            (
+                "3 * 5",
+                ValueExpr::Mul(ValueExpr::Int(3).into(), ValueExpr::Int(5).into()),
+            ),
+            (
+                "3 + 5",
+                ValueExpr::Add(ValueExpr::Int(3).into(), ValueExpr::Int(5).into()),
+            ),
+            (
+                "3 * 5 * 6",
+                ValueExpr::Mul(
+                    ValueExpr::Mul(ValueExpr::Int(3).into(), ValueExpr::Int(5).into()).into(),
+                    ValueExpr::Int(6).into(),
+                ),
+            ),
+            (
+                "x() * 5 * 6",
+                ValueExpr::Mul(
+                    ValueExpr::Mul(
+                        ValueExpr::FunctionCall {
+                            target: var("x"),
+                            params: vec![],
+                        }
+                        .into(),
+                        ValueExpr::Int(5).into(),
+                    )
+                    .into(),
+                    ValueExpr::Int(6).into(),
+                ),
+            ),
+            ("!true", ValueExpr::BoolNegate(ValueExpr::Bool(true).into())),
+            (
+                "!{1;2;true}",
+                ValueExpr::BoolNegate(
+                    ValueExpr::Block(vec![
+                        ValueExpr::Int(1),
+                        ValueExpr::Int(2),
+                        ValueExpr::Bool(true),
+                    ])
+                    .into(),
+                ),
+            ),
+            (
+                "!x()",
+                ValueExpr::BoolNegate(
+                    ValueExpr::FunctionCall {
+                        target: var("x"),
+                        params: vec![],
+                    }
+                    .into(),
+                ),
+            ),
+            (
+                "!x.y.z",
+                ValueExpr::BoolNegate(
+                    ValueExpr::FieldAccess {
+                        target_obj: ValueExpr::FieldAccess {
+                            target_obj: ValueExpr::Variable("x".into()).into(),
+                            field_name: "y".into(),
+                        }
+                        .into(),
+                        field_name: "z".into(),
+                    }
+                    .into(),
+                ),
+            ),
+            (
+                "x() == y()",
+                ValueExpr::Equals(
+                    ValueExpr::FunctionCall {
+                        target: var("x"),
+                        params: vec![],
+                    }
+                    .into(),
+                    ValueExpr::FunctionCall {
+                        target: var("y"),
+                        params: vec![],
+                    }
+                    .into(),
+                ),
+            ),
+            (
+                "1 == 2",
+                ValueExpr::Equals(ValueExpr::Int(1).into(), ValueExpr::Int(2).into()),
+            ),
+            (
+                "!(1 == 2)",
+                ValueExpr::BoolNegate(
+                    ValueExpr::Equals(ValueExpr::Int(1).into(), ValueExpr::Int(2).into()).into(),
+                ),
+            ),
+            (
+                "!1 == !2",
+                ValueExpr::Equals(
+                    ValueExpr::BoolNegate(ValueExpr::Int(1).into()).into(),
+                    ValueExpr::BoolNegate(ValueExpr::Int(2).into()).into(),
+                ),
+            ),
         ];
 
         for (src, expected_tokens) in test_cases {
@@ -1067,6 +1284,11 @@ mod tests {
     #[test]
     pub fn test_assignment_parser() {
         let valid_assignments = vec![
+            "y = 1",
+            "{y = 1;}",
+            "while(true){y = 1;}",
+            "while(true){y = y + 1;}",
+            "{let y: Int = 0; while(true){y = 1;@println(y)}}",
             "x = 580;",
             "y = 80;",
             "y = true;",
@@ -1077,6 +1299,7 @@ mod tests {
         for valid_assignment in valid_assignments {
             println!("lexing {valid_assignment}");
             let lexer_parse_result = lexer().parse(valid_assignment);
+            dbg!(&lexer_parse_result);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
