@@ -21,7 +21,7 @@ pub struct Duck {
     pub fields: Vec<(String, TypeExpression)>,
 }
 
-pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeExpression> {
+pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeExpression> + Clone {
     recursive(|p| {
         let field = select_ref! { Token::Ident(identifier) => identifier.to_string() }
                 .then_ignore(just(Token::ControlChar(':')))
@@ -48,7 +48,7 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
     })
 }
 
-pub fn type_definition_parser<'src>() -> impl Parser<'src, &'src [Token], TypeDefinition> {
+pub fn type_definition_parser<'src>() -> impl Parser<'src, &'src [Token], TypeDefinition> + Clone {
     just(Token::Type)
         .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
         .then_ignore(just(Token::ControlChar('=')))

@@ -13,6 +13,7 @@ pub enum Token {
     BoolLiteral(bool),
     CharLiteral(char),
     FloatLiteral(f64),
+    Equals,
     If,
     Else,
     Let,
@@ -24,47 +25,54 @@ pub enum Token {
 pub type Spanned<T> = (T, SimpleSpan);
 
 pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
-    let keyword_or_ident = just("@").or_not().then(text::ident()).map(|(x, str)| match str {
-        "type" => Token::Type,
-        "duck" => Token::Duck,
-        "fun" => Token::Function,
-        "return" => Token::Return,
-        "let" => Token::Let,
-        "if" => Token::If,
-        "else" => Token::Else,
-        "while"=> Token::While,
-        "break" => Token::Break,
-        "continue" => Token::Continue,
-        _ => Token::Ident(format!("{}{str}", x.unwrap_or(""))),
-    });
-    let ctrl = one_of("=:{};,&()->.").map(Token::ControlChar);
+    let keyword_or_ident = just("@")
+        .or_not()
+        .then(text::ident())
+        .map(|(x, str)| match str {
+            "type" => Token::Type,
+            "duck" => Token::Duck,
+            "fun" => Token::Function,
+            "return" => Token::Return,
+            "let" => Token::Let,
+            "if" => Token::If,
+            "else" => Token::Else,
+            "while" => Token::While,
+            "break" => Token::Break,
+            "continue" => Token::Continue,
+            _ => Token::Ident(format!("{}{str}", x.unwrap_or(""))),
+        });
+    let ctrl = one_of("!=:{};,&()->.+-*/%").map(Token::ControlChar);
     let string = string_lexer();
     let r#bool = choice((
         just("true").to(Token::BoolLiteral(true)),
-        just("false").to(Token::BoolLiteral(false))
+        just("false").to(Token::BoolLiteral(false)),
     ));
     let r#char = char_lexer();
     let num = num_literal();
+    let equals = just("==").to(Token::Equals);
 
-    let token = r#bool.or(keyword_or_ident).or(ctrl).or(string).or(num).or(r#char);
+    let token = r#bool
+        .or(equals)
+        .or(keyword_or_ident)
+        .or(ctrl)
+        .or(string)
+        .or(num)
+        .or(r#char);
 
-    token.padded()
-        .repeated()
-        .collect::<Vec<Token>>()
+    token.padded().repeated().collect::<Vec<Token>>()
 }
 
 fn num_literal<'src>() -> impl Parser<'src, &'src str, Token> {
     let pre = text::int(10).map(|s: &str| s.parse::<i64>().unwrap());
     let frac = just('.').ignore_then(text::digits(10)).to_slice();
-    pre.then(frac.or_not())
-        .map(|(pre, frac)| {
-            if let Some(frac) = frac {
-                let num = format!("{}{}", pre, frac).parse().unwrap();
-                Token::FloatLiteral(num)
-            } else {
-                Token::IntLiteral(pre)
-            }
-        })
+    pre.then(frac.or_not()).map(|(pre, frac)| {
+        if let Some(frac) = frac {
+            let num = format!("{}{}", pre, frac).parse().unwrap();
+            Token::FloatLiteral(num)
+        } else {
+            Token::IntLiteral(pre)
+        }
+    })
 }
 
 fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token> {
