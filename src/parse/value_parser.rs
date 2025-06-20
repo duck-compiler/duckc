@@ -215,6 +215,15 @@ impl ValueExpr {
             _ => self.clone(),
         }
     }
+
+    pub fn needs_semicolon(&self) -> bool {
+        match self {
+            ValueExpr::If { condition: _, then: _, r#else: _ } => false,
+            ValueExpr::While { condition: _, body: _ } => false,
+            ValueExpr::Block(_) => false,
+            _ => true,
+        }
+    }
 }
 
 pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>) {
@@ -567,7 +576,6 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .then_ignore(just(Token::ControlChar(':')))
             .then(type_expression_parser())
             .then(initializer)
-            .then_ignore(just(Token::ControlChar(';')).or_not())
             .map(|((identifier, type_expr), initializer)| {
                 ValueExpr::VarDecl(
                     Declaration {
@@ -602,6 +610,15 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             })
             .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
             .map(|mut x| {
+                if x.len() >= 2 {
+                    for (expr, has_semi) in &x[..x.len() - 1] {
+                        if expr.needs_semicolon() && has_semi.is_none() {
+                            dbg!(expr, &x);
+                            panic!("needs_semi")
+                        }
+                    }
+                }
+
                 if x.is_empty() || x.last().unwrap().1.is_some() {
                     x.push((empty_tuple(), None));
                 }
@@ -729,7 +746,6 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
         let assignment = select_ref! { Token::Ident(identifier) => identifier.to_string() }
             .then_ignore(just(Token::ControlChar('=')))
             .then(e.clone())
-            .then_ignore(just(Token::ControlChar(';')).or_not())
             .map(|(identifier, value_expr)| {
                 ValueExpr::VarAssign(
                     Assignment {
@@ -1239,7 +1255,7 @@ mod tests {
                 ValueExpr::Return(Some(Box::new(ValueExpr::Int(123).into()))),
             ),
             (
-                "let x: String;",
+                "let x: String",
                 ValueExpr::VarDecl(
                     Declaration {
                         name: "x".into(),
@@ -1444,7 +1460,7 @@ mod tests {
     pub fn test_declaration_parser() {
         let inputs_and_expected_outputs = vec![
             (
-                "let x: String;",
+                "let x: String",
                 Declaration {
                     name: "x".to_string(),
                     type_expr: TypeExpression::TypeName("String".to_string()),
@@ -1452,7 +1468,7 @@ mod tests {
                 },
             ),
             (
-                "let y: { x: Int } = {};",
+                "let y: { x: Int } = {}",
                 Declaration {
                     name: "y".to_string(),
                     type_expr: TypeExpression::Duck(Duck {
@@ -1465,7 +1481,7 @@ mod tests {
                 },
             ),
             (
-                "let z: {};",
+                "let z: {}",
                 Declaration {
                     name: "z".to_string(),
                     type_expr: TypeExpression::Duck(Duck { fields: vec![] }),
@@ -1496,16 +1512,16 @@ mod tests {
         }
 
         let valid_declarations = vec![
-            "let x: String;",
-            "let x: { x: String, y: String };",
-            "let y: { x: String, y: String };",
-            "let z: { h: String, x: { y: String }};",
-            "let x: { h: String, x: { y: String }} = 0;",
-            "let x: { h: String, x: { y: String }} = true;",
-            "let x: { h: String, x: { y: String }} = false;",
-            "let x: { h: Int, x: { y: Int }} = { h: 4, x: { y: 8 } };",
-            "let x: Int = false;",
-            "let x: String = \"Hallo, Welt!\";",
+            "let x: String",
+            "let x: { x: String, y: String }",
+            "let y: { x: String, y: String }",
+            "let z: { h: String, x: { y: String }}",
+            "let x: { h: String, x: { y: String }} = 0",
+            "let x: { h: String, x: { y: String }} = true",
+            "let x: { h: String, x: { y: String }} = false",
+            "let x: { h: Int, x: { y: Int }} = { h: 4, x: { y: 8 } }",
+            "let x: Int = false",
+            "let x: String = \"Hallo, Welt!\"",
         ];
 
         for valid_declaration in valid_declarations {
@@ -1529,19 +1545,19 @@ mod tests {
     pub fn test_assignment_parser() {
         let valid_assignments = vec![
             "y = 1",
-            "{y = 1;}",
-            "while(true){y = 1;}",
-            "while(true){y = y + 1;}",
+            "{y = 1}",
+            "while(true){y = 1}",
+            "while(true){y = y + 1}",
             "{let y: Int = 0; while(true){y = 1;@println(y)}}",
-            "x = 580;",
-            "y = 80;",
-            "y = true;",
-            "y = false;",
-            "y = \"Hallo\";",
+            "x = 580",
+            "y = 80",
+            "y = true",
+            "y = false",
+            "y = \"Hallo\"",
         ];
 
         for valid_assignment in valid_assignments {
-            println!("lexing {valid_assignment}");
+            dbg!("lexing {valid_assignment}");
             let lexer_parse_result = lexer().parse(valid_assignment);
             dbg!(&lexer_parse_result);
             assert_eq!(lexer_parse_result.has_errors(), false);
