@@ -3,8 +3,9 @@ use std::{cell::RefCell, error::Error, rc::Rc};
 use chumsky::Parser;
 use parse::lexer::lexer;
 
-use crate::parse::value_parser::{
-    EmitEnvironment, GoMethodDef, GoTypeDef, emit, value_expr_parser,
+use crate::parse::{
+    source_file_parser::source_file_parser,
+    value_parser::{EmitEnvironment, GoMethodDef, GoTypeDef, emit, value_expr_parser},
 };
 
 pub mod parse;
@@ -15,6 +16,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // let src = "if ({@println(1); true}) {1} else {2}";
         // let src = "{ let i: Int = 0; while(!(i == 5)) {i = i + 1;@println(i);} }";
         let src = "{{ x: 1, y: \"lol\" };@println({ y: \"lol\", x: \"fisch\" });}";
+        let src = "fun abc() {}fun x(){}use x;";
         // let src = "{ let x: Int = 0; while (x ) }";
         // let src = "{i = 10;}";
 
@@ -23,7 +25,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         //     dbg!(2);
         // }
 
-        let lex = lexer().parse(src).unwrap();
+        let src = std::fs::read_to_string(&std::env::args().nth(1).unwrap()).unwrap();
+        let lex = lexer().parse(&src).unwrap();
+        {
+            dbg!(source_file_parser().parse(&lex).unwrap());
+            return Ok(());
+        }
         let parse = value_expr_parser().parse(&lex).unwrap();
         let emit_env = EmitEnvironment {
             imports: Rc::new(RefCell::new(Vec::new())),
@@ -76,11 +83,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         emit_env.imports.borrow_mut().push("io".to_string());
         let t = emit_env.emit_all();
 
-        std::fs::write(
-            "outgen.go",
-            format!("{}{}", t, emitted.0.join(""))
-        )
-        .unwrap();
+        std::fs::write("outgen.go", format!("{}{}", t, emitted.0.join(""))).unwrap();
         return Ok(());
     }
 

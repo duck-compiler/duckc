@@ -7,10 +7,21 @@ pub type Param = (String, TypeExpression);
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDefintion {
-    name: String,
-    return_type: Option<TypeExpression>,
-    params: Option<Vec<Param>>,
-    value_expr: ValueExpr,
+    pub name: String,
+    pub return_type: Option<TypeExpression>,
+    pub params: Option<Vec<Param>>,
+    pub value_expr: ValueExpr,
+}
+
+impl Default for FunctionDefintion {
+    fn default() -> Self {
+        FunctionDefintion {
+            name: Default::default(),
+            return_type: Default::default(),
+            params: Some(Default::default()),
+            value_expr: ValueExpr::Block(vec![ValueExpr::Tuple(vec![])])
+        }
+    }
 }
 
 // TODO body
