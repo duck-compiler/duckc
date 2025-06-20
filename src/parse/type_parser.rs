@@ -13,7 +13,38 @@ pub struct TypeDefinition {
 pub enum TypeExpression {
     Any,
     Duck(Duck),
+    Tuple(Vec<TypeExpression>),
     TypeName(String),
+}
+
+impl TypeExpression {
+
+    /// First return is go code repr, second is id
+    pub fn emit(&self) -> (String, String) {
+        match self {
+            TypeExpression::Tuple(types) => ([
+                "struct {\n",
+                &types.iter()
+                    .enumerate()
+                    .map(|(i, x)| format!("field_{i} {}\n", x.emit().0))
+                    .collect::<Vec<_>>().join(""),
+                "}"
+            ].join(""), format!("Tup{}", types.iter().map(|x| format!("_{}", x.emit().1)).collect::<Vec<_>>().join(""))),
+            TypeExpression::Duck(Duck { fields }) => {
+                let mut fields = fields.clone();
+                fields.sort_by_key(|x| x.0.clone());
+                if fields.is_empty() {
+                    ("interface{}".to_string(), "Any".to_string())
+                } else {
+                    let name = format!("Duck{}", fields.into_iter().map(|x| format!("_Has{}{}", x.0, x.1.emit().1)).collect::<Vec<_>>().join(""));
+                    (name.clone(), name)
+                }
+            }
+            TypeExpression::TypeName(x) => (x.clone(), x.clone()),
+            _ => todo!(),
+        }
+    }
+
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -25,7 +56,7 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
     recursive(|p| {
         let field = select_ref! { Token::Ident(identifier) => identifier.to_string() }
                 .then_ignore(just(Token::ControlChar(':')))
-                .then(p);
+                .then(p.clone());
 
         let fields = field
             .separated_by(just(Token::ControlChar(',')))
@@ -37,14 +68,24 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
             .ignore_then(fields.or_not())
             .then_ignore(just(Token::ControlChar('}')))
             .map(|fields| match fields {
-                Some(fields) => TypeExpression::Duck(Duck { fields }),
+                Some(mut fields) => {
+                    fields.sort_by_key(|x| x.0.clone());
+                    TypeExpression::Duck(Duck { fields })
+                },
                 None => TypeExpression::Any,
             });
+
+        let tuple = p.clone()
+            .separated_by(just(Token::ControlChar(',')))
+            .allow_trailing()
+            .collect::<Vec<_>>()
+            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+            .map(TypeExpression::Tuple);
 
         let type_name = select_ref! { Token::Ident(identifier) => identifier.to_string() }
             .map(TypeExpression::TypeName);
 
-        type_name.or(duck)
+        type_name.or(duck).or(tuple)
     })
 }
 
@@ -70,6 +111,11 @@ pub mod tests {
             "type X = Hallo;",
             "type Yolo = duck { x: String };",
             "type whatEverY = {};",
+            "type EmptyTup = ();",
+            "type Tup = (Int, String);",
+            "type Tup = (Int, String,);",
+            "type Tup = (Int, String, (Float, {x: String}));",
+            "type Tup = (Int, String, (Float, {x: String}),);",
         ];
 
         for valid_type_definition in valid_type_definitions {
@@ -84,6 +130,36 @@ pub mod tests {
             let typedef_parse_result = type_definition_parser().parse(tokens.as_slice());
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
+        }
+    }
+
+    #[test]
+    fn test_emit() {
+        let test_cases = vec![
+            (
+                "()",
+                (
+                    "struct {\n}",
+                    "Tup"
+                )
+            ),
+            (
+                "((), {})",
+                (
+                    "struct {\nfield_0 struct {\n}\nfield_1 interface{}\n}",
+                    "Tup_Tup_Any"
+                )
+            ),
+            ("{}",("interface{}", "Any")),
+            ("({})", ("struct {\nfield_0 interface{}\n}", "Tup_Any")),
+            ("{x: String, y: ({}, Int)}", ("Duck_HasxString_HasyTup_Any_Int", "Duck_HasxString_HasyTup_Any_Int")),
+        ];
+
+        for (src, exp) in test_cases {
+            let lex = lexer().parse(src).unwrap();
+            let parse = type_expression_parser().parse(&lex).unwrap().emit();
+            let exp = (exp.0.to_string(), exp.1.to_string());
+            assert_eq!(parse, exp, "{src}");
         }
     }
 

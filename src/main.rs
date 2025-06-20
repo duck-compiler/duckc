@@ -28,7 +28,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         let src = std::fs::read_to_string(&std::env::args().nth(1).unwrap()).unwrap();
         let lex = lexer().parse(&src).unwrap();
         {
-            dbg!(source_file_parser().parse(&lex).unwrap());
+            let parsed = dbg!(source_file_parser().parse(&lex).unwrap());
+
+            let emit_env = EmitEnvironment::default();
+            let functions = parsed.function_definitions.iter().map(|x| x.emit(emit_env.clone()))
+                .collect::<Vec<_>>().join("\n");
+
+            std::fs::write("generated.go", &format!("package main\n{}\n{}\n", emit_env.emit_imports_and_types(), functions)).unwrap();
+
             return Ok(());
         }
         let parse = value_expr_parser().parse(&lex).unwrap();
@@ -81,7 +88,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         emit_env.imports.borrow_mut().push("fmt".to_string());
         emit_env.imports.borrow_mut().push("io".to_string());
-        let t = emit_env.emit_all();
+        let t = emit_env.emit_imports_and_types();
 
         std::fs::write("outgen.go", format!("{}{}", t, emitted.0.join(""))).unwrap();
         return Ok(());

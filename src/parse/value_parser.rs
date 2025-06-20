@@ -183,7 +183,7 @@ impl EmitEnvironment {
         }
     }
 
-    pub fn emit_all(&self) -> String {
+    pub fn emit_imports_and_types(&self) -> String {
         format!(
             "import (\n{}\n)\n{}",
             self.imports
@@ -337,7 +337,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                     panic!()
                 };
                 instr.extend(expr_instr);
-                instr.push(format!("return {expr_res}"));
+                instr.push(format!("return {expr_res}\n"));
             } else {
                 instr.push("return\n".to_string());
             }
@@ -452,7 +452,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
 
             let final_instr = format!(
                 "{}{target_res_name}({})\n",
-                if with_result { "{result} := " } else { "" },
+                if with_result { format!("{result} := ") } else { "".to_string() },
                 param_results
                     .clone()
                     .into_iter()
@@ -462,6 +462,10 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
 
             res.extend(params_instructions);
             res.push(final_instr);
+
+            if with_result {
+                res.push(format!("_ = {result}\n"));
+            }
 
             (res, Some(result))
         }
@@ -527,17 +531,32 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
 
             (field_instr, Some(res_name))
         }
-        ValueExpr::Block(exprs) => {
+        ValueExpr::Block(mut exprs) => {
+            if !exprs.is_empty() {
+                exprs = exprs[..=exprs.iter().enumerate().filter_map(|(i, x)| match x {
+                    ValueExpr::Return(_) => Some(i),
+                    _ => None,
+                }).next().unwrap_or(exprs.len()-1)]
+                    .iter()
+                    .map(Clone::clone)
+                    .collect::<Vec<_>>();
+            }
+            dbg!(&exprs);
+
             let mut instrs = Vec::new();
             let mut res = Vec::new();
             for expr in exprs {
                 let (instr, res_var) = emit(expr, env.clone());
                 instrs.extend(instr.into_iter());
-                if let Some(res_var) = res_var {
-                    res.push(res_var);
-                }
+                res.push(res_var);
             }
-            (instrs, res.last().map(ToOwned::to_owned))
+            if let Some(Some(res)) = res.last() {
+                instrs.push(format!("_ = {res}\n"));
+                (instrs, Some(res.clone()))
+            } else {
+                (instrs, None)
+            }
+
         }
         _ => {
             dbg!(x);
