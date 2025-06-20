@@ -67,7 +67,14 @@ pub fn function_definition_parser<'src>() -> impl Parser<'src, &'src [Token], Fu
         .then_ignore(just(Token::ControlChar(')')))
         .then(return_type_parser.or_not())
         .then(value_expr_parser())
-        .map(|(((identifier, params), return_type), value_expr)| FunctionDefintion { name: identifier, return_type, params, value_expr })
+        .map(|(((identifier, params), return_type), mut value_expr)| {
+            value_expr = match value_expr {
+                ValueExpr::Duck(x) if x.is_empty() => ValueExpr::Block(vec![ValueExpr::Tuple(vec![])]),
+                x @ ValueExpr::Block(_) => x,
+                _ => panic!("Function must be block"),
+            };
+            FunctionDefintion { name: identifier, return_type, params, value_expr }
+        })
 }
 
 #[cfg(test)]
