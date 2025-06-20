@@ -683,7 +683,8 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
         let float_expr = select_ref! { Token::FloatLiteral(num) => *num }.map(ValueExpr::Float);
 
         let atom = just(Token::ControlChar('!'))
-            .or_not()
+            .repeated()
+            .collect::<Vec<_>>()
             .then(
                 e.clone()
                     .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
@@ -720,11 +721,9 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     target
                 };
 
-                if neg.is_some() {
-                    ValueExpr::BoolNegate(res.into())
-                } else {
-                    res
-                }
+                neg.into_iter().fold(res, |acc, _| {
+                    ValueExpr::BoolNegate(acc.into())
+                })
             });
 
         let assignment = select_ref! { Token::Ident(identifier) => identifier.to_string() }
@@ -1314,6 +1313,36 @@ mod tests {
                         target: var("x"),
                         params: vec![],
                     }
+                    .into(),
+                ),
+            ),
+            (
+                "!!x()",
+                ValueExpr::BoolNegate(
+                    ValueExpr::BoolNegate(
+                        ValueExpr::FunctionCall {
+                            target: var("x"),
+                            params: vec![],
+                        }
+                        .into(),
+                    )
+                    .into(),
+                ),
+            ),
+            (
+                "!!x.y.z",
+                ValueExpr::BoolNegate(
+                    ValueExpr::BoolNegate(
+                        ValueExpr::FieldAccess {
+                            target_obj: ValueExpr::FieldAccess {
+                                target_obj: ValueExpr::Variable("x".into()).into(),
+                                field_name: "y".into(),
+                            }
+                            .into(),
+                            field_name: "z".into(),
+                        }
+                        .into(),
+                    )
                     .into(),
                 ),
             ),
