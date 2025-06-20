@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 ariadne = "0.5.1"
 chumsky = { version = "0.10.1", features = ["nightly", "default"] }
+tempfile = "3.20.0"

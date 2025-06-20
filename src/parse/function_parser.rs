@@ -1,5 +1,7 @@
 use chumsky::prelude::*;
 
+use crate::parse::value_parser::{EmitEnvironment, emit};
+
 use super::{lexer::Token, type_parser::{type_expression_parser, TypeExpression}, value_parser::{value_expr_parser, ValueExpr}};
 
 pub type Param = (String, TypeExpression);
@@ -7,10 +9,42 @@ pub type Param = (String, TypeExpression);
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDefintion {
-    name: String,
-    return_type: Option<TypeExpression>,
-    params: Option<Vec<Param>>,
-    value_expr: ValueExpr,
+    pub name: String,
+    pub return_type: Option<TypeExpression>,
+    pub params: Option<Vec<Param>>,
+    pub value_expr: ValueExpr,
+}
+
+impl Default for FunctionDefintion {
+    fn default() -> Self {
+        FunctionDefintion {
+            name: Default::default(),
+            return_type: Default::default(),
+            params: Some(Default::default()),
+            value_expr: ValueExpr::Block(vec![ValueExpr::Tuple(vec![])])
+        }
+    }
+}
+
+impl FunctionDefintion {
+    pub fn emit(&self, env: EmitEnvironment) -> String {
+        let (mut emitted_body, res_name) = emit(self.value_expr.clone(), env.clone());
+        if let Some(res_name) = res_name {
+            emitted_body.push(format!("_ = {res_name}\n"));
+        }
+        let body = emitted_body.join("");
+        [
+            format!("func {}({}) {} {}\n",
+                self.name,
+                self.params.as_ref()
+                    .map(|x| x.iter().map(|x| format!("{} {}", x.0, x.1.emit().0)).collect::<Vec<_>>().join(", "))
+                    .unwrap_or_default(),
+                self.return_type.as_ref().map(|x| x.emit().0).unwrap_or_default(),
+            "{"),
+            body,
+            "}\n".to_string(),
+        ].join("")
+    }
 }
 
 // TODO body
