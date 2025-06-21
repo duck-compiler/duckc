@@ -1,1 +1,1 @@
-# Duck Lang - The Language for Hyperscalers:w
+# Duck Lang - The Language for Hyperscalers
