@@ -4,6 +4,8 @@ use chumsky::prelude::*;
 pub enum Token {
     Use,
     Type,
+    Go,
+    Struct,
     Duck,
     Function,
     Return,
@@ -33,6 +35,8 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
             "use" => Token::Use,
             "type" => Token::Type,
             "duck" => Token::Duck,
+            "go" => Token::Go,
+            "struct" => Token::Struct,
             "fun" => Token::Function,
             "return" => Token::Return,
             "let" => Token::Let,
@@ -82,12 +86,10 @@ fn num_literal<'src>() -> impl Parser<'src, &'src str, Token> {
 
 fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token> {
     just("'")
-        .ignore_then(
-            choice((
-                just('\\').ignore_then(choice((just('\''), just('t').to('\t'), just('n').to('\n')))),
-                any().filter(|c| *c != '\''),
-            ))
-        )
+        .ignore_then(choice((
+            just('\\').ignore_then(choice((just('\''), just('t').to('\t'), just('n').to('\n')))),
+            any().filter(|c| *c != '\''),
+        )))
         .then_ignore(just("'"))
         .map(Token::CharLiteral)
 }
@@ -113,118 +115,144 @@ mod tests {
     #[test]
     fn test_lex() {
         let test_cases = vec![
-            ("type Y = duck {};", vec![
-                Token::Type,
-                Token::Ident("Y".to_string()),
-                Token::ControlChar('='),
-                Token::Duck,
-                Token::ControlChar('{'),
-                Token::ControlChar('}'),
-                Token::ControlChar(';'),
-            ]),
-            ("typeY=duck{};", vec![
-                Token::Ident("typeY".to_string()),
-                Token::ControlChar('='),
-                Token::Duck,
-                Token::ControlChar('{'),
-                Token::ControlChar('}'),
-                Token::ControlChar(';'),
-            ]),
-            ("type Y = duck {} & duck {};", vec![
-                Token::Type,
-                Token::Ident("Y".to_string()),
-                Token::ControlChar('='),
-                Token::Duck,
-                Token::ControlChar('{'),
-                Token::ControlChar('}'),
-                Token::ControlChar('&'),
-                Token::Duck,
-                Token::ControlChar('{'),
-                Token::ControlChar('}'),
-                Token::ControlChar(';'),
-            ]),
-            ("type Y = duck { x: String, y: String };", vec![
-                Token::Type,
-                Token::Ident("Y".to_string()),
-                Token::ControlChar('='),
-                Token::Duck,
-                Token::ControlChar('{'),
-                Token::Ident("x".to_string()),
-                Token::ControlChar(':'),
-                Token::Ident("String".to_string()),
-                Token::ControlChar(','),
-                Token::Ident("y".to_string()),
-                Token::ControlChar(':'),
-                Token::Ident("String".to_string()),
-                Token::ControlChar('}'),
-                Token::ControlChar(';'),
-            ]),
+            (
+                "type Y = duck {};",
+                vec![
+                    Token::Type,
+                    Token::Ident("Y".to_string()),
+                    Token::ControlChar('='),
+                    Token::Duck,
+                    Token::ControlChar('{'),
+                    Token::ControlChar('}'),
+                    Token::ControlChar(';'),
+                ],
+            ),
+            (
+                "typeY=duck{};",
+                vec![
+                    Token::Ident("typeY".to_string()),
+                    Token::ControlChar('='),
+                    Token::Duck,
+                    Token::ControlChar('{'),
+                    Token::ControlChar('}'),
+                    Token::ControlChar(';'),
+                ],
+            ),
+            (
+                "type Y = duck {} & duck {};",
+                vec![
+                    Token::Type,
+                    Token::Ident("Y".to_string()),
+                    Token::ControlChar('='),
+                    Token::Duck,
+                    Token::ControlChar('{'),
+                    Token::ControlChar('}'),
+                    Token::ControlChar('&'),
+                    Token::Duck,
+                    Token::ControlChar('{'),
+                    Token::ControlChar('}'),
+                    Token::ControlChar(';'),
+                ],
+            ),
+            (
+                "type Y = duck { x: String, y: String };",
+                vec![
+                    Token::Type,
+                    Token::Ident("Y".to_string()),
+                    Token::ControlChar('='),
+                    Token::Duck,
+                    Token::ControlChar('{'),
+                    Token::Ident("x".to_string()),
+                    Token::ControlChar(':'),
+                    Token::Ident("String".to_string()),
+                    Token::ControlChar(','),
+                    Token::Ident("y".to_string()),
+                    Token::ControlChar(':'),
+                    Token::Ident("String".to_string()),
+                    Token::ControlChar('}'),
+                    Token::ControlChar(';'),
+                ],
+            ),
             ("()", vec![Token::ControlChar('('), Token::ControlChar(')')]),
             ("->", vec![Token::ControlChar('-'), Token::ControlChar('>')]),
             ("fun", vec![Token::Function]),
             ("\"\"", vec![Token::StringLiteral(String::from(""))]),
             ("\"XX\"", vec![Token::StringLiteral(String::from("XX"))]),
-            ("\"X\\\"X\"", vec![Token::StringLiteral(String::from("X\"X"))]),
-            ("\"Hallo ich bin ein String\\n\\n\\nNeue Zeile\"", vec![
-                Token::StringLiteral(String::from("Hallo ich bin ein String\n\n\nNeue Zeile"))
-            ]),
+            (
+                "\"X\\\"X\"",
+                vec![Token::StringLiteral(String::from("X\"X"))],
+            ),
+            (
+                "\"Hallo ich bin ein String\\n\\n\\nNeue Zeile\"",
+                vec![Token::StringLiteral(String::from(
+                    "Hallo ich bin ein String\n\n\nNeue Zeile",
+                ))],
+            ),
             ("1", vec![Token::IntLiteral(1)]),
             ("2003", vec![Token::IntLiteral(2003)]),
             ("true", vec![Token::BoolLiteral(true)]),
             ("false", vec![Token::BoolLiteral(false)]),
-            ("if (true) {}", vec![
-                Token::If,
-                Token::ControlChar('('),
-                Token::BoolLiteral(true),
-                Token::ControlChar(')'),
-                Token::ControlChar('{'),
-                Token::ControlChar('}')],
+            (
+                "if (true) {}",
+                vec![
+                    Token::If,
+                    Token::ControlChar('('),
+                    Token::BoolLiteral(true),
+                    Token::ControlChar(')'),
+                    Token::ControlChar('{'),
+                    Token::ControlChar('}'),
+                ],
             ),
-            ("if (true) {} else {}", vec![
-                Token::If,
-                Token::ControlChar('('),
-                Token::BoolLiteral(true),
-                Token::ControlChar(')'),
-                Token::ControlChar('{'),
-                Token::ControlChar('}'),
-                Token::Else,
-                Token::ControlChar('{'),
-                Token::ControlChar('}')],
+            (
+                "if (true) {} else {}",
+                vec![
+                    Token::If,
+                    Token::ControlChar('('),
+                    Token::BoolLiteral(true),
+                    Token::ControlChar(')'),
+                    Token::ControlChar('{'),
+                    Token::ControlChar('}'),
+                    Token::Else,
+                    Token::ControlChar('{'),
+                    Token::ControlChar('}'),
+                ],
             ),
-            ("if (true) {} else if {} else if {} else {}", vec![
-                Token::If,
-                Token::ControlChar('('),
-                Token::BoolLiteral(true),
-                Token::ControlChar(')'),
-                Token::ControlChar('{'),
-                Token::ControlChar('}'),
-                Token::Else,
-                Token::If,
-                Token::ControlChar('{'),
-                Token::ControlChar('}'),
-                Token::Else,
-                Token::If,
-                Token::ControlChar('{'),
-                Token::ControlChar('}'),
-                Token::Else,
-                Token::ControlChar('{'),
-                Token::ControlChar('}')],
+            (
+                "if (true) {} else if {} else if {} else {}",
+                vec![
+                    Token::If,
+                    Token::ControlChar('('),
+                    Token::BoolLiteral(true),
+                    Token::ControlChar(')'),
+                    Token::ControlChar('{'),
+                    Token::ControlChar('}'),
+                    Token::Else,
+                    Token::If,
+                    Token::ControlChar('{'),
+                    Token::ControlChar('}'),
+                    Token::Else,
+                    Token::If,
+                    Token::ControlChar('{'),
+                    Token::ControlChar('}'),
+                    Token::Else,
+                    Token::ControlChar('{'),
+                    Token::ControlChar('}'),
+                ],
             ),
-            ("'c'", vec![
-                Token::CharLiteral('c')
-            ]),
-            ("'\\n'", vec![
-                Token::CharLiteral('\n')
-            ]),
+            ("'c'", vec![Token::CharLiteral('c')]),
+            ("'\\n'", vec![Token::CharLiteral('\n')]),
             ("1.1", vec![Token::FloatLiteral(1.1)]),
-            ("let x: {};", vec![
-                Token::Let,
-                Token::Ident("x".to_string()),
-                Token::ControlChar(':'),
-                Token::ControlChar('{'),
-                Token::ControlChar('}'),
-                Token::ControlChar(';'),
-            ]),
+            (
+                "let x: {};",
+                vec![
+                    Token::Let,
+                    Token::Ident("x".to_string()),
+                    Token::ControlChar(':'),
+                    Token::ControlChar('{'),
+                    Token::ControlChar('}'),
+                    Token::ControlChar(';'),
+                ],
+            ),
         ];
 
         for (src, expected_tokens) in test_cases {
@@ -233,7 +261,8 @@ mod tests {
             assert_eq!(parse_result.has_errors(), false, "{}", src);
             assert_eq!(parse_result.has_output(), true, "{}", src);
 
-            let output: Vec<Token> = parse_result.output()
+            let output: Vec<Token> = parse_result
+                .output()
                 .expect(&src)
                 .iter()
                 .map(|token| token.clone())
