@@ -296,7 +296,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
         ValueExpr::VarDecl(b) => {
             let Declaration {
                 name,
-                type_expr: _,
+                type_expr,
                 initializer,
             } = *b;
             if let Some(initializer) = initializer {
@@ -308,7 +308,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                 res.push(format!("{name} := {res_var}\n"));
                 (res, Some(name))
             } else {
-                (vec![format!("var {name} interface{}\n", "{}")], Some(name))
+                (vec![format!("var {name} {}\n", type_expr.emit().0)], Some(name))
             }
         }
         ValueExpr::VarAssign(b) => {
@@ -761,7 +761,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .ignore_then(while_condition.clone())
             .then(while_body.clone());
 
-        let field_access = any()
+        let field_access = none_of(Token::Let)
             .filter(|t| !matches!(t, Token::ControlChar('.')))
             .repeated()
             .at_least(1)
