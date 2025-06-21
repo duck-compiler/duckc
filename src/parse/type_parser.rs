@@ -10,8 +10,13 @@ pub struct TypeDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Duck {
+    pub fields: Vec<(String, TypeExpression)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Struct {
-    fields: Vec<(String, TypeExpression)>,
+    pub fields: Vec<(String, TypeExpression)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -100,11 +105,6 @@ impl TypeExpression {
             _ => todo!(),
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Duck {
-    pub fields: Vec<(String, TypeExpression)>,
 }
 
 pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeExpression> + Clone {
