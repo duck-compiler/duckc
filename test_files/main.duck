@@ -1,5 +1,8 @@
+use go "fmt" as kek;
+
 fun main() {
     let i: int = 0;
+
     while (!(i == 5)) {
         @println("Outer: ");
         @println(i);

@@ -145,9 +145,15 @@ impl GoTypeDef {
     }
 }
 
+#[derive(PartialEq, Clone, Debug, Default)]
+pub struct GoImport {
+    pub path: String,
+    pub alias: Option<String>,
+}
+
 #[derive(Clone, Debug)]
 pub struct EmitEnvironment {
-    pub imports: Rc<RefCell<Vec<String>>>,
+    pub imports: Rc<RefCell<Vec<GoImport>>>,
     pub types: Rc<RefCell<Vec<GoTypeDef>>>,
     pub var_counter: Rc<RefCell<usize>>,
 }
@@ -176,12 +182,16 @@ impl EmitEnvironment {
         }
     }
 
-    pub fn push_import(&self, import: impl Into<String>) {
+    pub fn push_import(&self, import: impl Into<GoImport>) -> Option<String> {
         let mut imports = self.imports.borrow_mut();
         let import = import.into();
-        if !imports.contains(&import) {
-            imports.push(import);
+        for i in imports.iter() {
+            if i.path == import.path {
+                return i.alias.clone();
+            }
         }
+        imports.push(import);
+        None
     }
 
     pub fn emit_imports_and_types(&self) -> String {
@@ -190,7 +200,7 @@ impl EmitEnvironment {
             self.imports
                 .borrow()
                 .iter()
-                .map(|x| format!("\"{x}\""))
+                .map(|x| format!("{} \"{}\"", x.alias.as_ref().unwrap_or(&String::new()), x.path))
                 .collect::<Vec<_>>()
                 .join("\n"),
             self.types
@@ -433,8 +443,11 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             if let ValueExpr::Variable(x) = &mut target
                 && x == "@println"
             {
-                *x = "fmt.Println".to_string();
-                env.push_import("fmt");
+                let package_name = env.push_import(GoImport {
+                    alias: None,
+                    path: "fmt".into()
+                }).unwrap_or("fmt".into());
+                *x = format!("{package_name}.Println").to_string();
                 with_result = false;
             }
 
