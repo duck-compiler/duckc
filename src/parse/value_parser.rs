@@ -690,17 +690,16 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 )
             });
 
-        let struct_expression = just(Token::ControlChar('.'))
-            .ignore_then(
-                select_ref! { Token::Ident(ident) => ident.to_owned() }
-                    .then_ignore(just(Token::ControlChar(':')))
-                    .then(value_expr_parser.clone())
-                    .separated_by(just(Token::ControlChar(',')))
-                    .allow_trailing()
-                    .collect::<Vec<_>>()
-                    .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
-                    .map(|identifier| ValueExpr::Struct(identifier))
-            );
+        let struct_expression = just(Token::ControlChar('.')).ignore_then(
+            select_ref! { Token::Ident(ident) => ident.to_owned() }
+                .then_ignore(just(Token::ControlChar(':')))
+                .then(value_expr_parser.clone())
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
+                .map(|identifier| ValueExpr::Struct(identifier)),
+        );
 
         let duck_expression = select_ref! { Token::Ident(ident) => ident.to_owned() }
             .then_ignore(just(Token::ControlChar(':')))
@@ -738,13 +737,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     exprs.push((empty_tuple(), None));
                 }
 
-                ValueExpr::Block(
-                    exprs
-                        .into_iter()
-                        .map(|(expr, _)| expr)
-                        .collect(),
-                )
-                .flatten_block()
+                ValueExpr::Block(exprs.into_iter().map(|(expr, _)| expr).collect()).flatten_block()
             });
 
         let if_condition = value_expr_parser
@@ -965,13 +958,20 @@ mod tests {
         let test_cases = vec![
             ("true", ValueExpr::Bool(true)),
             ("false", ValueExpr::Bool(false)),
-            (".{ x: 5 }", ValueExpr::Struct(vec![("x".to_string(), ValueExpr::Int(5))])),
-            (".{ x: 5, y: .{ x: 5 } }", ValueExpr::Struct(vec![
-                ("x".to_string(), ValueExpr::Int(5)),
-                ("y".to_string(), ValueExpr::Struct(vec![
+            (
+                ".{ x: 5 }",
+                ValueExpr::Struct(vec![("x".to_string(), ValueExpr::Int(5))]),
+            ),
+            (
+                ".{ x: 5, y: .{ x: 5 } }",
+                ValueExpr::Struct(vec![
                     ("x".to_string(), ValueExpr::Int(5)),
-                ])),
-            ])),
+                    (
+                        "y".to_string(),
+                        ValueExpr::Struct(vec![("x".to_string(), ValueExpr::Int(5))]),
+                    ),
+                ]),
+            ),
             ("{}", empty_duck()),
             (
                 "to_upper()",
