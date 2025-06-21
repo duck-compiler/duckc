@@ -1,3 +1,6 @@
+#![feature(let_chains)]
+#![feature(impl_trait_in_bindings)]
+
 use std::{error::Error, ffi::OsString, io::Write, process::Command};
 
 use chumsky::Parser;

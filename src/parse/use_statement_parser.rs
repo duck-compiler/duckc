@@ -15,25 +15,29 @@ pub struct UseStatement {
 }
 
 pub fn use_statement_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> {
-    let module_indicator_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
-        .map(Indicator::Module);
+    let module_indicator_parser =
+        select_ref! { Token::Ident(identifier) => identifier.to_string() }.map(Indicator::Module);
 
     let symbols_indicator_parser = just(Token::ControlChar('{'))
         .ignore_then(
             select_ref! { Token::Ident(identifier) => identifier.to_string() }
                 .separated_by(just(Token::ControlChar(',')))
                 .at_least(1)
-                .collect::<Vec<String>>()
-        ).then_ignore(just(Token::ControlChar('}')))
+                .collect::<Vec<String>>(),
+        )
+        .then_ignore(just(Token::ControlChar('}')))
         .map(Indicator::Symbols);
 
-    let wildcard_indicator_parser = just(Token::ControlChar('*'))
-        .to(Indicator::Wildcard);
+    let wildcard_indicator_parser = just(Token::ControlChar('*')).to(Indicator::Wildcard);
 
     just(Token::Use)
         .ignore_then(
-            module_indicator_parser.or(symbols_indicator_parser).or(wildcard_indicator_parser)
-                .separated_by(just(Token::ControlChar(':')).ignore_then(just(Token::ControlChar(':'))))
+            module_indicator_parser
+                .or(symbols_indicator_parser)
+                .or(wildcard_indicator_parser)
+                .separated_by(
+                    just(Token::ControlChar(':')).ignore_then(just(Token::ControlChar(':'))),
+                )
                 .at_least(1)
                 .collect::<Vec<Indicator>>(),
         )
@@ -52,23 +56,41 @@ mod tests {
     #[test]
     fn test_use_statement_parser() {
         let src_and_expected_ast = vec![
-            ("use std;", UseStatement {
-                indicator_track: vec![Indicator::Module("std".to_string())]
-            }),
-            ("use std::io;", UseStatement {
-                indicator_track: vec![Indicator::Module("std".to_string()), Indicator::Module("io".to_string())]
-            }),
-            ("use std::io::{println};", UseStatement {
-                indicator_track: vec![Indicator::Module("std".to_string()), Indicator::Module("io".to_string()), Indicator::Symbols(vec![
-                    "println".to_string(),
-                ])]
-            }),
-            ("use std::io::{println, print};", UseStatement {
-                indicator_track: vec![Indicator::Module("std".to_string()), Indicator::Module("io".to_string()), Indicator::Symbols(vec![
-                    "println".to_string(),
-                    "print".to_string(),
-                ])]
-            }),
+            (
+                "use std;",
+                UseStatement {
+                    indicator_track: vec![Indicator::Module("std".to_string())],
+                },
+            ),
+            (
+                "use std::io;",
+                UseStatement {
+                    indicator_track: vec![
+                        Indicator::Module("std".to_string()),
+                        Indicator::Module("io".to_string()),
+                    ],
+                },
+            ),
+            (
+                "use std::io::{println};",
+                UseStatement {
+                    indicator_track: vec![
+                        Indicator::Module("std".to_string()),
+                        Indicator::Module("io".to_string()),
+                        Indicator::Symbols(vec!["println".to_string()]),
+                    ],
+                },
+            ),
+            (
+                "use std::io::{println, print};",
+                UseStatement {
+                    indicator_track: vec![
+                        Indicator::Module("std".to_string()),
+                        Indicator::Module("io".to_string()),
+                        Indicator::Symbols(vec!["println".to_string(), "print".to_string()]),
+                    ],
+                },
+            ),
         ];
 
         for (src, expected_ast) in src_and_expected_ast {
@@ -77,14 +99,18 @@ mod tests {
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
-            let Some(tokens) = lexer_parse_result.into_output() else { unreachable!()};
+            let Some(tokens) = lexer_parse_result.into_output() else {
+                unreachable!()
+            };
 
             println!("parsing use statement {src}");
             let use_statement_parse_result = use_statement_parser().parse(tokens.as_slice());
             assert_eq!(use_statement_parse_result.has_errors(), false);
             assert_eq!(use_statement_parse_result.has_output(), true);
 
-            let Some(ast) = use_statement_parse_result.into_output() else { unreachable!() };
+            let Some(ast) = use_statement_parse_result.into_output() else {
+                unreachable!()
+            };
 
             assert_eq!(ast, expected_ast);
         }
@@ -105,7 +131,9 @@ mod tests {
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
-            let Some(tokens) = lexer_parse_result.into_output() else { unreachable!()};
+            let Some(tokens) = lexer_parse_result.into_output() else {
+                unreachable!()
+            };
 
             println!("typedef_parsing {invalid_use_statement}");
             let typedef_parse_result = use_statement_parser().parse(tokens.as_slice());
