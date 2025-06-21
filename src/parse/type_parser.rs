@@ -95,7 +95,7 @@ impl TypeExpression {
                         .join("")
                 ),
             ),
-            TypeExpression::Go(x) => (x.clone(), x.clone()),
+            TypeExpression::Go(x) => (x.clone(), format!("Go{}", x.replace(".", "_"))),
             TypeExpression::TypeName(x) => (x.clone(), x.clone()),
             _ => todo!(),
         }
@@ -203,6 +203,7 @@ pub mod tests {
             "type Tup = (Int, String, (Float, {x: String}),);",
             "type Tup = (Int, String, (Float, {x: String}),);",
             "type Tup = go fmt;",
+            "type Tup = go sync.WaitGroup;",
             "type Struct = struct { x: String };",
             "type Struct = struct { x: String, y: String, z: String, };",
             "type Struct = struct { x: String, y: String, z: String, };",
@@ -269,6 +270,7 @@ pub mod tests {
             "{ x: {}, y: {}, z: {} }",
             "duck { x: duck {}, y: duck {}, z: duck {} }",
             "duck { x: String, y: duck {}, z: {}, w: { a: String, b: {}, c: duck { aa: String } } }",
+            "go sync.WaitGroup",
         ];
 
         for valid_type_expression in valid_type_expressions {
