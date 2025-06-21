@@ -23,6 +23,7 @@ pub enum Token {
     While,
     Break,
     Continue,
+    As,
 }
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -45,6 +46,7 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
             "while" => Token::While,
             "break" => Token::Break,
             "continue" => Token::Continue,
+            "as" => Token::As,
             _ => Token::Ident(format!("{}{str}", x.unwrap_or(""))),
         });
 

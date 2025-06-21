@@ -10,11 +10,12 @@ pub enum Indicator {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct UseStatement {
-    pub indicator_track: Vec<Indicator>,
+pub enum UseStatement {
+    Regular(Vec<Indicator>),
+    Go(String, Option<String>),
 }
 
-pub fn use_statement_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> {
+fn regular_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> {
     let module_indicator_parser =
         select_ref! { Token::Ident(identifier) => identifier.to_string() }.map(Indicator::Module);
 
@@ -42,9 +43,22 @@ pub fn use_statement_parser<'src>() -> impl Parser<'src, &'src [Token], UseState
                 .collect::<Vec<Indicator>>(),
         )
         .then_ignore(just(Token::ControlChar(';')))
-        .map(|indicators| UseStatement {
-            indicator_track: indicators,
-        })
+        .map(UseStatement::Regular)
+}
+
+fn go_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> {
+    (just(Token::Use).then(just(Token::Go)))
+        .ignore_then(select_ref! { Token::StringLiteral(s) => s.to_owned() })
+        .then(just(Token::As).ignore_then(select_ref! { Token::Ident(i) => i.to_owned() }).or_not())
+        .then_ignore(just(Token::ControlChar(';')))
+        .map(|(package_name, alias)| UseStatement::Go(package_name, alias))
+}
+
+pub fn use_statement_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> {
+    choice((
+        go_use_parser(),
+        regular_use_parser(),
+    ))
 }
 
 #[cfg(test)]
@@ -58,38 +72,44 @@ mod tests {
         let src_and_expected_ast = vec![
             (
                 "use std;",
-                UseStatement {
-                    indicator_track: vec![Indicator::Module("std".to_string())],
-                },
+                UseStatement::Regular(vec![Indicator::Module("std".to_string())]),
             ),
             (
                 "use std::io;",
-                UseStatement {
-                    indicator_track: vec![
+                UseStatement::Regular(
+                    vec![
                         Indicator::Module("std".to_string()),
                         Indicator::Module("io".to_string()),
                     ],
-                },
+                ),
             ),
             (
                 "use std::io::{println};",
-                UseStatement {
-                    indicator_track: vec![
+                UseStatement::Regular(
+                    vec![
                         Indicator::Module("std".to_string()),
                         Indicator::Module("io".to_string()),
                         Indicator::Symbols(vec!["println".to_string()]),
                     ],
-                },
+                ),
             ),
             (
                 "use std::io::{println, print};",
-                UseStatement {
-                    indicator_track: vec![
+                UseStatement::Regular(
+                    vec![
                         Indicator::Module("std".to_string()),
                         Indicator::Module("io".to_string()),
                         Indicator::Symbols(vec!["println".to_string(), "print".to_string()]),
                     ],
-                },
+                ),
+            ),
+            (
+                "use go \"fmt\";",
+                UseStatement::Go("fmt".into(), None),
+            ),
+            (
+                "use go \"fmt\" as FMT;",
+                UseStatement::Go("fmt".into(), Some("FMT".into())),
             ),
         ];
 
@@ -123,6 +143,13 @@ mod tests {
             "use ::std;",
             "use :std:;",
             "use :std::{};",
+            "use go x;",
+            "use go;",
+            "use go \"fmt\" as;",
+            "use go fmt as x",
+            "use go::x;",
+            "use go::x;",
+            "use go as;",
         ];
 
         for invalid_use_statement in invalid_use_statements {
