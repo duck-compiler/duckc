@@ -46,6 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .parse(&lex)
         .into_result()
         .expect("Parse error");
+
     let env = EmitEnvironment::new();
     let functions = parse
         .function_definitions
