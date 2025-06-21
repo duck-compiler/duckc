@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 
 use crate::parse::type_parser::{TypeExpression, Duck};
 
