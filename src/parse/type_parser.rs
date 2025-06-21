@@ -129,6 +129,7 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
             select_ref! { Token::Ident(identifier) => identifier.to_string() }
                 .separated_by(just(Token::ControlChar('.')))
                 .at_least(1)
+                .at_most(2)
                 .collect::<Vec<String>>()
                 .map(|str| str.join("."));
 
