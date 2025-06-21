@@ -27,6 +27,11 @@ pub enum TypeExpression {
     Duck(Duck),
     Tuple(Vec<TypeExpression>),
     TypeName(String),
+    String,
+    Int,
+    Bool,
+    Char,
+    Float,
 }
 
 impl TypeExpression {
