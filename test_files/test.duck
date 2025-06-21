@@ -1,0 +1,4 @@
+fun main() {
+    let x: go sync.WaitGroup;
+    @println(x);
+}
