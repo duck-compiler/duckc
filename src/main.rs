@@ -10,6 +10,7 @@ use tempfile::Builder;
 use crate::parse::{source_file_parser::source_file_parser, value_parser::EmitEnvironment};
 
 pub mod parse;
+pub mod semantics;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut keep_go = false;
