@@ -1,6 +1,9 @@
 use std::{collections::HashMap, process};
 
-use crate::parse::{type_parser::{Duck, Struct, TypeExpr}, value_parser::ValueExpr};
+use crate::parse::{
+    type_parser::{Duck, Struct, TypeExpr},
+    value_parser::ValueExpr,
+};
 
 #[derive(Debug, Clone)]
 pub struct TypeEnvironment {
@@ -18,17 +21,45 @@ impl TypeExpr {
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeName(name) => name.clone(),
-            TypeExpr::Struct(r#struct) => format!("Struct{}", r#struct.fields.iter().map(|(field_name, type_expr)| format!("{field_name}_{}", (*type_expr).to_ref_string())).collect::<Vec<_>>().join("_")),
+            TypeExpr::Struct(r#struct) => format!(
+                "Struct{}",
+                r#struct
+                    .fields
+                    .iter()
+                    .map(|(field_name, type_expr)| format!(
+                        "{field_name}_{}",
+                        (*type_expr).to_ref_string()
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("_")
+            ),
             TypeExpr::Duck(duck) => {
                 let mut fields = duck.fields.clone();
                 fields.sort_by_key(|(field_name, _)| field_name.clone());
 
-                format!("Duck{}", fields.iter().map(|(field_name, type_expr)| format!("{field_name}_{}", type_expr.to_ref_string())).collect::<Vec<_>>().join("_"))
-            },
+                format!(
+                    "Duck{}",
+                    fields
+                        .iter()
+                        .map(|(field_name, type_expr)| format!(
+                            "{field_name}_{}",
+                            type_expr.to_ref_string()
+                        ))
+                        .collect::<Vec<_>>()
+                        .join("_")
+                )
+            }
             TypeExpr::Tuple(fields) => {
-                format!("Tuple{}", fields.iter().map(|type_expr| format!("{}", type_expr.to_ref_string())).collect::<Vec<_>>().join("_"))
-            },
-            TypeExpr::Or(variants) => todo!("implement variants")
+                format!(
+                    "Tuple{}",
+                    fields
+                        .iter()
+                        .map(|type_expr| format!("{}", type_expr.to_ref_string()))
+                        .collect::<Vec<_>>()
+                        .join("_")
+                )
+            }
+            TypeExpr::Or(variants) => todo!("implement variants"),
         };
     }
 
@@ -48,11 +79,16 @@ impl TypeExpr {
             ValueExpr::Struct(fields) => {
                 let types = fields
                     .into_iter()
-                    .map(|(field_name, value_expr)| (field_name.to_string(), TypeExpr::from_value_expr(value_expr)))
+                    .map(|(field_name, value_expr)| {
+                        (
+                            field_name.to_string(),
+                            TypeExpr::from_value_expr(value_expr),
+                        )
+                    })
                     .collect::<Vec<(String, TypeExpr)>>();
 
                 TypeExpr::Struct(Struct { fields: types })
-            },
+            }
             ValueExpr::Tuple(fields) => {
                 let types = fields
                     .into_iter()
@@ -60,24 +96,36 @@ impl TypeExpr {
                     .collect::<Vec<TypeExpr>>();
 
                 TypeExpr::Tuple(types)
-            },
+            }
             ValueExpr::Duck(fields) => {
                 let types = fields
                     .into_iter()
-                    .map(|(field_name, value_expr)| (field_name.to_string(), TypeExpr::from_value_expr(value_expr)))
+                    .map(|(field_name, value_expr)| {
+                        (
+                            field_name.to_string(),
+                            TypeExpr::from_value_expr(value_expr),
+                        )
+                    })
                     .collect::<Vec<(String, TypeExpr)>>();
 
                 TypeExpr::Duck(Duck { fields: types })
-            },
+            }
             ValueExpr::Add(left, right) => {
                 let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left);
                 let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right);
 
-                require(left_type_expr.is_number(), format!("Addition '+' is only allowed for numbers. You've used {} + {}.", left_type_expr.to_ref_string(), right_type_expr.to_ref_string()));
+                require(
+                    left_type_expr.is_number(),
+                    format!(
+                        "Addition '+' is only allowed for numbers. You've used {} + {}.",
+                        left_type_expr.to_ref_string(),
+                        right_type_expr.to_ref_string()
+                    ),
+                );
                 check_type_compatability(&left_type_expr, &right_type_expr);
 
                 left_type_expr
-            },
+            }
             ValueExpr::Equals(left, right) => {
                 let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left);
                 let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right);
@@ -85,19 +133,26 @@ impl TypeExpr {
                 check_type_compatability(&left_type_expr, &right_type_expr);
 
                 left_type_expr
-            },
+            }
             ValueExpr::Mul(left, right) => {
                 let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left);
                 let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right);
 
-                require(left_type_expr.is_number(), format!("Multiplication '*' is only allowed for numbers. You've used {} + {}.", left_type_expr.to_ref_string(), right_type_expr.to_ref_string()));
+                require(
+                    left_type_expr.is_number(),
+                    format!(
+                        "Multiplication '*' is only allowed for numbers. You've used {} + {}.",
+                        left_type_expr.to_ref_string(),
+                        right_type_expr.to_ref_string()
+                    ),
+                );
                 check_type_compatability(&left_type_expr, &right_type_expr);
 
                 left_type_expr
-            },
+            }
             ValueExpr::FunctionCall { target, params } => {
                 todo!("Return Type of Function");
-            },
+            }
             ValueExpr::Block(value_exprs) => TypeExpr::from(
                 value_exprs
                     .last()
@@ -108,8 +163,12 @@ impl TypeExpr {
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(&TypeExpr::from_value_expr(bool_expr), &TypeExpr::Bool);
                 TypeExpr::Bool
-            },
-            ValueExpr::If { condition, then, r#else } => {
+            }
+            ValueExpr::If {
+                condition,
+                then,
+                r#else,
+            } => {
                 let condition_type_expr = TypeExpr::from_value_expr(condition);
                 check_type_compatability(&condition_type_expr, &TypeExpr::Bool);
 
@@ -119,32 +178,47 @@ impl TypeExpr {
                 // let x: TypeExpression = combine_types(vec![else_type_expr, then]);
 
                 todo!("combine then and else, then return combined type");
-            },
-            ValueExpr::FieldAccess { target_obj, field_name } => {
+            }
+            ValueExpr::FieldAccess {
+                target_obj,
+                field_name,
+            } => {
                 let target_obj_type_expr = TypeExpr::from_value_expr(target_obj);
-                require(target_obj_type_expr.is_object_like(), format!("the target of a field access must be of type duck, struct or tuple. Got {}", target_obj_type_expr.to_ref_string()));
-                require(target_obj_type_expr.has_field_by_name(field_name.clone()), format!("{} doesn't have a field with name {}", target_obj_type_expr.to_ref_string(), field_name));
+                require(
+                    target_obj_type_expr.is_object_like(),
+                    format!(
+                        "the target of a field access must be of type duck, struct or tuple. Got {}",
+                        target_obj_type_expr.to_ref_string()
+                    ),
+                );
+                require(
+                    target_obj_type_expr.has_field_by_name(field_name.clone()),
+                    format!(
+                        "{} doesn't have a field with name {}",
+                        target_obj_type_expr.to_ref_string(),
+                        field_name
+                    ),
+                );
 
-                let target_field_type_expr = target_obj_type_expr.typeof_field(field_name.to_string());
+                let target_field_type_expr =
+                    target_obj_type_expr.typeof_field(field_name.to_string());
 
                 target_field_type_expr
-            },
+            }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(condition);
                 check_type_compatability(&condition_type_expr, &TypeExpr::Bool);
 
                 let body_type_expr = TypeExpr::from_value_expr(body);
 
-                return TypeExpr::Tuple(vec![])
-            },
+                return TypeExpr::Tuple(vec![]);
+            }
         };
     }
 
     fn is_object_like(&self) -> bool {
         match self {
-            Self::Tuple(..)
-            | Self::Duck(..)
-            | Self::Struct(..) => true,
+            Self::Tuple(..) | Self::Duck(..) | Self::Struct(..) => true,
             _ => false,
         }
     }
@@ -152,8 +226,14 @@ impl TypeExpr {
     fn has_field(&self, field: (String, TypeExpr)) -> bool {
         match self {
             Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
-            Self::Struct(r#struct) => r#struct.fields.iter().any(|struct_field| *struct_field == field),
-            Self::Duck(duck) => duck.fields.iter().any(|struct_field| *struct_field == field),
+            Self::Struct(r#struct) => r#struct
+                .fields
+                .iter()
+                .any(|struct_field| *struct_field == field),
+            Self::Duck(duck) => duck
+                .fields
+                .iter()
+                .any(|struct_field| *struct_field == field),
             _ => false,
         }
     }
@@ -161,8 +241,14 @@ impl TypeExpr {
     fn has_field_by_name(&self, name: String) -> bool {
         match self {
             Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
-            Self::Struct(r#struct) => r#struct.fields.iter().any(|struct_field| *struct_field.0 == name),
-            Self::Duck(duck) => duck.fields.iter().any(|struct_field| *struct_field.0 == name),
+            Self::Struct(r#struct) => r#struct
+                .fields
+                .iter()
+                .any(|struct_field| *struct_field.0 == name),
+            Self::Duck(duck) => duck
+                .fields
+                .iter()
+                .any(|struct_field| *struct_field.0 == name),
             _ => false,
         }
     }
@@ -191,7 +277,6 @@ impl TypeExpr {
     fn is_number(&self) -> bool {
         return *self == TypeExpr::Int || *self == TypeExpr::Float;
     }
-
 }
 
 fn require(condition: bool, fail_message: String) {
@@ -204,7 +289,11 @@ fn require(condition: bool, fail_message: String) {
 fn check_type_compatability(one: &TypeExpr, two: &TypeExpr) {
     if one.is_number() {
         if !two.is_number() {
-            println!("Types {} and {} are not compatible.", one.to_ref_string(), two.clone().to_ref_string());
+            println!(
+                "Types {} and {} are not compatible.",
+                one.to_ref_string(),
+                two.clone().to_ref_string()
+            );
             process::exit(2);
         }
 
@@ -212,7 +301,11 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr) {
     }
 
     if *one != *two {
-        println!("Types {} and {} are not compatible.", one.to_ref_string(), two.to_ref_string());
+        println!(
+            "Types {} and {} are not compatible.",
+            one.to_ref_string(),
+            two.to_ref_string()
+        );
         process::exit(2);
     }
 }
@@ -229,15 +322,38 @@ mod test {
         let src_and_expected_type_vec = vec![
             ("4 + 4", TypeExpr::Int),
             ("\"Hallo\"", TypeExpr::String),
-            ("{ x: \"hallo\", }", TypeExpr::Duck(Duck { fields: vec![("x".to_string(), TypeExpr::String)] })),
+            (
+                "{ x: \"hallo\", }",
+                TypeExpr::Duck(Duck {
+                    fields: vec![("x".to_string(), TypeExpr::String)],
+                }),
+            ),
             ("0.5", TypeExpr::Float),
             ("0.1 + 0.4", TypeExpr::Float),
             ("0 + 0.4", TypeExpr::Int),
             ("0.4 + 0", TypeExpr::Float),
-            ("(0, 2)", TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Int])),
-            ("(0, 2 + 2)", TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Int])),
-            ("(0, (2 + 2, 5))", TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Int])])),
-            ("(0, (\"Hallo, Welt\", 5))", TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Tuple(vec![TypeExpr::String, TypeExpr::Int])])),
+            (
+                "(0, 2)",
+                TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Int]),
+            ),
+            (
+                "(0, 2 + 2)",
+                TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Int]),
+            ),
+            (
+                "(0, (2 + 2, 5))",
+                TypeExpr::Tuple(vec![
+                    TypeExpr::Int,
+                    TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Int]),
+                ]),
+            ),
+            (
+                "(0, (\"Hallo, Welt\", 5))",
+                TypeExpr::Tuple(vec![
+                    TypeExpr::Int,
+                    TypeExpr::Tuple(vec![TypeExpr::String, TypeExpr::Int]),
+                ]),
+            ),
         ];
 
         for (src, expected_type_expr) in src_and_expected_type_vec {
