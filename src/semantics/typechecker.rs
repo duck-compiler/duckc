@@ -138,17 +138,46 @@ impl TypeExpr {
 
 fn type_has_field(type_expr: &TypeExpr, identifier: &TypeExpr) {
 }
-
-fn type_is_object_like(type_expr: &TypeExpr) -> bool {
-    match type_expr {
-        TypeExpr::Struct(..) => true,
-        TypeExpr::Tuple(..) => true,
-        _ => false,
+    fn is_object_like(&self) -> bool {
+        match self {
+            Self::Tuple(..)
+            | Self::Duck(..)
+            | Self::Struct(..) => true,
+            _ => false,
+        }
     }
+
+    fn has_field(&self, field: (String, TypeExpr)) -> bool {
+        match self {
+            Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
+            Self::Struct(r#struct) => r#struct.fields.iter().any(|struct_field| *struct_field == field),
+            Self::Duck(duck) => duck.fields.iter().any(|struct_field| *struct_field == field),
+            _ => false,
+        }
+    }
+
+    fn has_field_by_name(&self, name: String) -> bool {
+        match self {
+            Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
+            Self::Struct(r#struct) => r#struct.fields.iter().any(|struct_field| *struct_field.0 == name),
+            Self::Duck(duck) => duck.fields.iter().any(|struct_field| *struct_field.0 == name),
+            _ => false,
+        }
+    }
+
+    fn get_field_type(&self, field_name)
+
+    fn is_number(&self) -> bool {
+        return *self == TypeExpr::Int || *self == TypeExpr::Float;
+    }
+
 }
 
-fn type_is_number(type_expr: &TypeExpr) -> bool {
-    return *type_expr == TypeExpr::Int || *type_expr == TypeExpr::Float;
+fn require(condition: bool, fail_message: String) {
+    if !condition {
+        println!("TypeError: {}", fail_message);
+        process::exit(2);
+    }
 }
 
 fn require_type_is_number(type_expr: &TypeExpr) {
