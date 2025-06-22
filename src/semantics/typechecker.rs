@@ -88,7 +88,7 @@ impl TypeExpression {
                 todo!("combine then and else, then return combined type");
             },
             ValueExpr::FieldAccess { target_obj, field_name } => {
-                let target_obj_type_expr = TypeExpression::from_value_expr(*target_obj);
+                let target_obj_type_expr = TypeExpression::from_value_expr(target_obj);
                 todo!()
             }
         };
