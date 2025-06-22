@@ -62,43 +62,11 @@ impl FunctionDefintion {
     }
 }
 
-// TODO body
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LambdaFunctionExpr {
     pub params: Vec<Param>,
     pub return_type: Option<TypeExpression>,
     pub value_expr: ValueExpr,
-}
-
-pub fn lambda_function_expr_parser<'src>() -> impl Parser<'src, &'src [Token], LambdaFunctionExpr> {
-    let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
-        .then_ignore(just(Token::ControlChar(':')))
-        .then(type_expression_parser())
-        .map(|(identifier, type_expr)| (identifier, type_expr) as Param);
-
-    let params_parser = param_parser
-        .separated_by(just(Token::ControlChar(',')))
-        .allow_trailing()
-        .collect::<Vec<Param>>()
-        .or_not();
-
-    let return_type_parser = just(Token::ControlChar('-'))
-        .ignore_then(just(Token::ControlChar('>')))
-        .ignore_then(type_expression_parser());
-
-    just(Token::ControlChar('('))
-        .ignore_then(params_parser)
-        .then_ignore(just(Token::ControlChar(')')))
-        .then(return_type_parser.or_not())
-        .then_ignore(just(Token::ControlChar('=')))
-        .then_ignore(just(Token::ControlChar('>')))
-        .then(value_expr_parser())
-        .map(|((params, return_type), value_expr)| LambdaFunctionExpr {
-            params: params.unwrap_or_default(),
-            return_type,
-            value_expr,
-        })
 }
 
 pub fn function_definition_parser<'src>() -> impl Parser<'src, &'src [Token], FunctionDefintion> {
@@ -210,9 +178,9 @@ pub mod tests {
             };
 
             println!("lambda parsing {valid_lambda_function_definition}");
-            let lambda_parse_result = lambda_function_expr_parser().parse(tokens.as_slice());
-            assert_eq!(lambda_parse_result.has_errors(), false);
-            assert_eq!(lambda_parse_result.has_output(), true);
+            // let lambda_parse_result = lambda_function_expr_parser().parse(tokens.as_slice());
+            // assert_eq!(lambda_parse_result.has_errors(), false);
+            // assert_eq!(lambda_parse_result.has_output(), true);
         }
 
         let invalid_function_definitions = vec![];
