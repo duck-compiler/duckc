@@ -1,7 +1,7 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    source_file_parser::SourceFile, type_parser::{Duck, Struct, TypeExpr}, value_parser::ValueExpr
+    function_parser::FunctionDefintion, source_file_parser::SourceFile, type_parser::{Duck, Struct, TypeExpr}, value_parser::ValueExpr
 };
 
 #[derive(Debug, Clone)]
@@ -189,7 +189,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 }
 
 impl TypeExpr {
-    fn to_go_type_str(&self, type_env: &TypeEnv) -> String {
+    fn to_go_type_str(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Bool => "bool".to_string(),
@@ -198,7 +198,7 @@ impl TypeExpr {
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeName(name) => (&type_env.resolve_type_alias(name.clone())).to_go_type_str(type_env),
+            TypeExpr::TypeName(name) => (type_env.resolve_type_alias(name.clone())).to_go_type_str(type_env),
             TypeExpr::Fun(param_types, return_type) => format!(
                 "func({}) {}",
                 param_types
@@ -206,7 +206,7 @@ impl TypeExpr {
                     .map(|type_expr| type_expr.to_go_type_str(type_env))
                     .collect::<Vec<_>>()
                     .join(","),
-                return_type.map_or("".to_string(), |return_type| return_type.to_go_type_str(type_env))
+                return_type.clone().map_or("".to_string(), |return_type| return_type.to_go_type_str(type_env))
             ),
             TypeExpr::Struct(r#struct) => format!(
                 "Struct{}",
@@ -250,11 +250,11 @@ impl TypeExpr {
         };
     }
 
-    pub fn from_value_expr(value_expr: &ValueExpr, type_env: &TypeEnv) -> TypeExpr {
+    pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
                 lambda_expr.params.iter().map(|(_, type_expr)| type_expr.clone()).collect(),
-                lambda_expr.return_type.map(|i| Box::new(i)),
+                lambda_expr.return_type.clone().map(|i| Box::new(i)),
             ),
             ValueExpr::InlineGo(..) => todo!("type for inline go"),
             ValueExpr::Int(..) => TypeExpr::Int,
@@ -479,7 +479,7 @@ fn require(condition: bool, fail_message: String) {
     }
 }
 
-fn check_type_compatability(one: &TypeExpr, two: &TypeExpr, type_env: &TypeEnv) {
+fn check_type_compatability(one: &TypeExpr, two: &TypeExpr, type_env: &mut TypeEnv) {
     if one.is_number() {
         if !two.is_number() {
             println!(
@@ -577,7 +577,7 @@ mod test {
             let mut type_env = TypeEnv::default();
             typeresolve_source_file(&mut source_file, &mut type_env);
 
-            let type_expr = TypeExpr::from_value_expr(&source_file.function_definitions.get(0).unwrap().value_expr, &type_env);
+            let type_expr = TypeExpr::from_value_expr(&source_file.function_definitions.get(0).unwrap().value_expr, &mut type_env);
             assert_eq!(type_expr, expected_type_expr);
         }
     }
