@@ -5,6 +5,7 @@ use std::{error::Error, ffi::OsString, io::Write, process::Command};
 
 use chumsky::Parser;
 use parse::lexer::lexer;
+use semantics::typechecker;
 use tempfile::Builder;
 
 use crate::parse::{source_file_parser::source_file_parser, value_parser::EmitEnvironment};
@@ -43,13 +44,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     let target_path = file_name.expect("No file name provided");
     let src = std::fs::read_to_string(&target_path).expect("Could not read file");
     let lex = lexer().parse(&src).into_result().expect("Lex error");
-    let parse = source_file_parser()
+    let mut source_file = source_file_parser()
         .parse(&lex)
         .into_result()
         .expect("Parse error");
 
+    println!("before resolve");
+    source_file = dbg!(source_file);
+
+    typechecker::typeresolve_source_file(&mut source_file);
+
+    println!("after resolve");
+    source_file = dbg!(source_file);
+
     let env = EmitEnvironment::new();
-    let functions = parse
+    let functions = source_file
         .function_definitions
         .iter()
         .map(|x| x.emit(env.clone()))
