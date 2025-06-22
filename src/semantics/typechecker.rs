@@ -219,6 +219,46 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr) {
 
 #[cfg(test)]
 mod test {
+    use crate::parse::{lexer::lexer, value_parser::value_expr_parser};
+    use chumsky::prelude::*;
+
+    use super::*;
+
     #[test]
-    fn test_typechecking() {}
+    fn test_typechecking() {
+        let src_and_expected_type_vec = vec![
+            ("4 + 4", TypeExpr::Int),
+            ("\"Hallo\"", TypeExpr::String),
+            ("{ x: \"hallo\", }", TypeExpr::Duck(Duck { fields: vec![("x".to_string(), TypeExpr::String)] })),
+            ("0.5", TypeExpr::Float),
+            ("0.1 + 0.4", TypeExpr::Float),
+            ("0 + 0.4", TypeExpr::Int),
+            ("0.4 + 0", TypeExpr::Float),
+            ("(0, 2)", TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Int])),
+            ("(0, 2 + 2)", TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Int])),
+            ("(0, (2 + 2, 5))", TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Int])])),
+            ("(0, (\"Hallo, Welt\", 5))", TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Tuple(vec![TypeExpr::String, TypeExpr::Int])])),
+        ];
+
+        for (src, expected_type_expr) in src_and_expected_type_vec {
+            println!("lexing {src}");
+            let lexer_parse_result = lexer().parse(src);
+            assert_eq!(lexer_parse_result.has_errors(), false);
+            assert_eq!(lexer_parse_result.has_output(), true);
+
+            let Some(tokens) = lexer_parse_result.into_output() else {
+                unreachable!()
+            };
+
+            println!("typedef_parsing {src}");
+            let value_expr_parse_result = value_expr_parser().parse(tokens.as_slice());
+            assert_eq!(value_expr_parse_result.has_errors(), false);
+            assert_eq!(value_expr_parse_result.has_output(), true);
+
+            let value_expr = value_expr_parse_result.into_output().unwrap();
+
+            let type_expr = TypeExpr::from_value_expr(&value_expr);
+            assert_eq!(type_expr, expected_type_expr);
+        }
+    }
 }
