@@ -1,22 +1,40 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    function_parser::FunctionDefintion, source_file_parser::SourceFile, type_parser::{Duck, Struct, TypeExpr}, value_parser::ValueExpr
+    function_parser::{FunctionDefintion, LambdaFunctionExpr}, source_file_parser::SourceFile, type_parser::{Duck, Struct, TypeExpr}, value_parser::ValueExpr
 };
 
 #[derive(Debug, Clone)]
 pub struct TypeEnv {
     identifier_types: Vec<HashMap<String, TypeExpr>>,
-    type_aliases: HashMap<String, TypeExpr>,
+    type_aliases: Vec<HashMap<String, TypeExpr>>,
+}
+
+impl Default for TypeEnv {
+    fn default() -> Self {
+        Self {
+            identifier_types: vec![HashMap::new()],
+            type_aliases: vec![HashMap::new()],
+        }
+    }
 }
 
 impl TypeEnv {
-    pub fn env_push(&mut self) {
+    pub fn push_type_aliases(&mut self) {
+        let cloned_hash_map = self.type_aliases.last().expect("Expect at least one env.").clone();
+        self.type_aliases.push(cloned_hash_map);
+    }
+
+    pub fn pop_type_aliases(&mut self) {
+        self.identifier_types.pop();
+    }
+
+    pub fn push_identifier_types(&mut self) {
         let cloned_hash_map = self.identifier_types.last().expect("Expect at least one env.").clone();
         self.identifier_types.push(cloned_hash_map);
     }
 
-    pub fn env_pop(&mut self) {
+    pub fn pop_identifier_types(&mut self) {
         self.identifier_types.pop();
     }
 
@@ -41,21 +59,27 @@ impl TypeEnv {
     }
 
     pub fn insert_type_alias(&mut self, alias: String, type_expr: TypeExpr) {
-        self.type_aliases
-            .insert(alias, type_expr)
-            .expect("Couldn't insert type alias.");
+         self.type_aliases
+            .last_mut()
+            .expect("At least one type aliases hashmap should exist. :(")
+            .insert(alias, type_expr);
     }
 
     pub fn resolve_type_alias(&mut self, alias: String) -> TypeExpr {
-        self.type_aliases
+        let type_aliases = self
+            .type_aliases
+            .last()
+            .expect("At least one type aliases hashmap should exist. :(");
+
+        type_aliases
             .get(&alias)
             .expect("Couldn't resolve type alias {alias}")
             .clone()
     }
 }
 
-pub fn typeresolve_source_file(source_file: &mut SourceFile) {
-    let mut type_env: TypeEnv = TypeEnv { identifier_types: vec![HashMap::new()], type_aliases: HashMap::new() };
+pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut TypeEnv) {
+    type_env.push_type_aliases();
 
     source_file
         .type_definitions
@@ -66,6 +90,8 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile) {
         .function_definitions
         .iter_mut()
         .for_each(|function_definition| typeresolve_function_definition(function_definition, &mut type_env));
+
+    type_env.pop_type_aliases();
 
     fn typeresolve_function_definition(function_definition: &mut FunctionDefintion, type_env: &mut TypeEnv) {
         let fn_type_expr = TypeExpr::Fun(
@@ -80,7 +106,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile) {
         );
 
         type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
-        type_env.env_push();
+        type_env.push_identifier_types();
 
         typeresolve_value_expr(&mut function_definition.value_expr, type_env);
     }
@@ -102,23 +128,23 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile) {
             ValueExpr::If { condition, then, r#else } => {
                 typeresolve_value_expr(condition, type_env);
 
-                type_env.env_push();
+                type_env.push_identifier_types();
                 typeresolve_value_expr(then, type_env);
-                type_env.env_pop();
+                type_env.pop_identifier_types();
 
                 typeresolve_value_expr(r#else, type_env);
             },
             ValueExpr::While { condition, body } => {
                 typeresolve_value_expr(condition, type_env);
-                type_env.env_push();
+                type_env.push_identifier_types();
                 typeresolve_value_expr(body, type_env);
-                type_env.env_pop();
+                type_env.pop_identifier_types();
             },
             ValueExpr::Tuple(value_exprs) => value_exprs.iter_mut().for_each(|value_expr| typeresolve_value_expr(value_expr, type_env)),
             ValueExpr::Block(value_exprs) => {
-                type_env.env_push();
+                type_env.push_identifier_types();
                 value_exprs.iter_mut().for_each(|value_expr| typeresolve_value_expr(value_expr, type_env));
-                type_env.env_pop();
+                type_env.pop_identifier_types();
             },
             ValueExpr::Duck(items) => items.iter_mut().for_each(|(_, value_expr)| typeresolve_value_expr(value_expr, type_env)),
             ValueExpr::Struct(items) => items.iter_mut().for_each(|(_, value_expr)| typeresolve_value_expr(value_expr, type_env)),
@@ -163,17 +189,25 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile) {
 }
 
 impl TypeExpr {
-    fn to_ref_string(&self) -> String {
+    fn to_go_type_str(&self, type_env: &TypeEnv) -> String {
         return match self {
-            TypeExpr::Any => "Any".to_string(),
+            TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Bool => "bool".to_string(),
             TypeExpr::Int => "int".to_string(),
             TypeExpr::Float => "float32".to_string(),
-            TypeExpr::Char => "char".to_string(),
+            TypeExpr::Char => "rune".to_string(),
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeName(name) => name.clone(),
-            TypeExpr::Fun(..) => todo!(),
+            TypeExpr::TypeName(name) => (&type_env.resolve_type_alias(name.clone())).to_go_type_str(type_env),
+            TypeExpr::Fun(param_types, return_type) => format!(
+                "func({}) {}",
+                param_types
+                    .iter()
+                    .map(|type_expr| type_expr.to_go_type_str(type_env))
+                    .collect::<Vec<_>>()
+                    .join(","),
+                return_type.map_or("".to_string(), |return_type| return_type.to_go_type_str(type_env))
+            ),
             TypeExpr::Struct(r#struct) => format!(
                 "Struct{}",
                 r#struct
@@ -181,7 +215,7 @@ impl TypeExpr {
                     .iter()
                     .map(|(field_name, type_expr)| format!(
                         "{field_name}_{}",
-                        (*type_expr).to_ref_string()
+                        (*type_expr).to_go_type_str(type_env)
                     ))
                     .collect::<Vec<_>>()
                     .join("_")
@@ -196,7 +230,7 @@ impl TypeExpr {
                         .iter()
                         .map(|(field_name, type_expr)| format!(
                             "{field_name}_{}",
-                            type_expr.to_ref_string()
+                            type_expr.to_go_type_str(type_env)
                         ))
                         .collect::<Vec<_>>()
                         .join("_")
@@ -207,7 +241,7 @@ impl TypeExpr {
                     "Tuple{}",
                     fields
                         .iter()
-                        .map(|type_expr| format!("{}", type_expr.to_ref_string()))
+                        .map(|type_expr| format!("{}", type_expr.to_go_type_str(type_env)))
                         .collect::<Vec<_>>()
                         .join("_")
                 )
@@ -216,9 +250,12 @@ impl TypeExpr {
         };
     }
 
-    pub fn from_value_expr(value_expr: &ValueExpr) -> TypeExpr {
+    pub fn from_value_expr(value_expr: &ValueExpr, type_env: &TypeEnv) -> TypeExpr {
         return match value_expr {
-            ValueExpr::Lambda(..) => todo!("type for lambda"),
+            ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
+                lambda_expr.params.iter().map(|(_, type_expr)| type_expr.clone()).collect(),
+                lambda_expr.return_type.map(|i| Box::new(i)),
+            ),
             ValueExpr::InlineGo(..) => todo!("type for inline go"),
             ValueExpr::Int(..) => TypeExpr::Int,
             ValueExpr::Bool(..) => TypeExpr::Bool,
@@ -227,7 +264,7 @@ impl TypeExpr {
             ValueExpr::String(..) => TypeExpr::String,
             ValueExpr::Break => TypeExpr::Tuple(vec![]),
             ValueExpr::Continue => TypeExpr::Tuple(vec![]),
-            ValueExpr::Return(Some(value_expr)) => TypeExpr::from_value_expr(value_expr),
+            ValueExpr::Return(Some(value_expr)) => TypeExpr::from_value_expr(value_expr, type_env),
             ValueExpr::Return(None) => TypeExpr::Any, // TODO return never !
             ValueExpr::VarAssign(..) => TypeExpr::Tuple(vec![]),
             ValueExpr::VarDecl(..) => TypeExpr::Tuple(vec![]),
@@ -273,8 +310,8 @@ impl TypeExpr {
                     left_type_expr.is_number(),
                     format!(
                         "Addition '+' is only allowed for numbers. You've used {} + {}.",
-                        left_type_expr.to_ref_string(),
-                        right_type_expr.to_ref_string()
+                        left_type_expr.to_go_type_str(type_env),
+                        right_type_expr.to_go_type_str(type_env)
                     ),
                 );
                 check_type_compatability(&left_type_expr, &right_type_expr);
@@ -297,8 +334,8 @@ impl TypeExpr {
                     left_type_expr.is_number(),
                     format!(
                         "Multiplication '*' is only allowed for numbers. You've used {} + {}.",
-                        left_type_expr.to_ref_string(),
-                        right_type_expr.to_ref_string()
+                        left_type_expr.to_go_type_str(),
+                        right_type_expr.to_go_type_str()
                     ),
                 );
                 check_type_compatability(&left_type_expr, &right_type_expr);
@@ -343,14 +380,14 @@ impl TypeExpr {
                     target_obj_type_expr.is_object_like(),
                     format!(
                         "the target of a field access must be of type duck, struct or tuple. Got {}",
-                        target_obj_type_expr.to_ref_string()
+                        target_obj_type_expr.to_go_type_str()
                     ),
                 );
                 require(
                     target_obj_type_expr.has_field_by_name(field_name.clone()),
                     format!(
                         "{} doesn't have a field with name {}",
-                        target_obj_type_expr.to_ref_string(),
+                        target_obj_type_expr.to_go_type_str(),
                         field_name
                     ),
                 );
@@ -447,8 +484,8 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr) {
         if !two.is_number() {
             println!(
                 "Types {} and {} are not compatible.",
-                one.to_ref_string(),
-                two.clone().to_ref_string()
+                one.to_go_type_str(),
+                two.clone().to_go_type_str()
             );
             process::exit(2);
         }
@@ -459,8 +496,8 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr) {
     if *one != *two {
         println!(
             "Types {} and {} are not compatible.",
-            one.to_ref_string(),
-            two.to_ref_string()
+            one.to_go_type_str(),
+            two.to_go_type_str()
         );
         process::exit(2);
     }
@@ -537,7 +574,7 @@ mod test {
                 ..Default::default()
             };
 
-            typeresolve_source_file(&mut source_file);
+            typeresolve_source_file(&mut source_file, type_env);
 
             let type_expr = TypeExpr::from_value_expr(&source_file.function_definitions.get(0).unwrap().value_expr);
             assert_eq!(type_expr, expected_type_expr);
