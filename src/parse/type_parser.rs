@@ -10,35 +10,42 @@ use super::lexer::Token;
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeDefinition {
     pub name: String,
-    pub type_expression: TypeExpression,
+    pub type_expression: TypeExpr,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Duck {
-    pub fields: Vec<(String, TypeExpression)>,
+    pub fields: Vec<(String, TypeExpr)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Struct {
-    pub fields: Vec<(String, TypeExpression)>,
+    pub fields: Vec<(String, TypeExpr)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TypeExpression {
+pub enum TypeExpr {
     Any,
     Struct(Struct),
     Go(String),
     Duck(Duck),
-    Tuple(Vec<TypeExpression>),
+    Tuple(Vec<TypeExpr>),
     TypeName(String),
+    String,
+    Int,
+    Bool,
+    Char,
+    Float,
+    Or(Vec<TypeExpr>),
+    Fun(Vec<TypeExpr>, Option<Box<TypeExpr>>),
 }
 
-impl TypeExpression {
+impl TypeExpr {
     /// First return is go code repr, second is id
     // First go code and second is identifier of self
     pub fn emit(&self) -> (String, String) {
         match self {
-            TypeExpression::Tuple(types) => (
+            TypeExpr::Tuple(types) => (
                 [
                     "struct {\n",
                     &types
@@ -59,7 +66,7 @@ impl TypeExpression {
                         .join("")
                 ),
             ),
-            TypeExpression::Duck(Duck { fields }) => {
+            TypeExpr::Duck(Duck { fields }) => {
                 let mut fields = fields.clone();
                 fields.sort_by_key(|x| x.0.clone());
                 if fields.is_empty() {
@@ -76,7 +83,7 @@ impl TypeExpression {
                     (name.clone(), name)
                 }
             }
-            TypeExpression::Struct(Struct { fields }) => (
+            TypeExpr::Struct(Struct { fields }) => (
                 [
                     "struct",
                     &fields
@@ -104,20 +111,25 @@ impl TypeExpression {
                         .join("")
                 ),
             ),
-            TypeExpression::Go(x) => (x.clone(), format!("Go{}", x.replace(".", "_"))),
-            TypeExpression::TypeName(x) => (x.clone(), x.clone()),
-            _ => todo!(),
+            TypeExpr::Go(x) => (x.clone(), format!("Go{}", x.replace(".", "_"))),
+            TypeExpr::TypeName(x) => (x.clone(), x.clone()),
+            TypeExpr::Int => ("Int".to_string(), "Int".to_string()),
+            TypeExpr::Float => ("Float".to_string(), "Float".to_string()),
+            TypeExpr::Bool => ("Bool".to_string(), "Bool".to_string()),
+            TypeExpr::String => ("String".to_string(), "String".to_string()),
+            TypeExpr::Char => ("Char".to_string(), "Char".to_string()),
+            _ => todo!()
         }
     }
 
     pub fn emit_into_env(&self, env: EmitEnvironment) {
         match self {
-            TypeExpression::Tuple(params) => {
+            TypeExpr::Tuple(params) => {
                 for param in params {
                     param.emit_into_env(env.clone());
                 }
             }
-            TypeExpression::Struct(Struct { fields }) => {
+            TypeExpr::Struct(Struct { fields }) => {
                 let mut type_fields = Vec::new();
                 let mut go_type_name = "Struct".to_string();
 
@@ -165,7 +177,7 @@ impl TypeExpression {
 
                 env.push_types([go_struct, go_interface].into_iter());
             }
-            TypeExpression::Duck(Duck { fields }) => {
+            TypeExpr::Duck(Duck { fields }) => {
                 let mut type_fields = Vec::new();
                 let mut go_type_name = "Duck".to_string();
 
@@ -214,7 +226,7 @@ impl TypeExpression {
     }
 }
 
-pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeExpression> + Clone {
+pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeExpr> + Clone {
     recursive(|p| {
         let field = select_ref! { Token::Ident(identifier) => identifier.to_string() }
             .then_ignore(just(Token::ControlChar(':')))
@@ -224,13 +236,13 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
             .clone()
             .separated_by(just(Token::ControlChar(',')))
             .allow_trailing()
-            .collect::<Vec<(String, TypeExpression)>>();
+            .collect::<Vec<(String, TypeExpr)>>();
 
         let struct_fields = field
             .separated_by(just(Token::ControlChar(',')))
             .at_least(1)
             .allow_trailing()
-            .collect::<Vec<(String, TypeExpression)>>();
+            .collect::<Vec<(String, TypeExpr)>>();
 
         let go_type_identifier: impl Parser<'src, &'src [Token], String> =
             select_ref! { Token::Ident(identifier) => identifier.to_string() }
@@ -242,13 +254,13 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
 
         let go_type = just(Token::Go)
             .ignore_then(go_type_identifier)
-            .map(|go_type_identifier| TypeExpression::Go(go_type_identifier));
+            .map(|go_type_identifier| TypeExpr::Go(go_type_identifier));
 
         let r#struct = just(Token::Struct)
             .ignore_then(just(Token::ControlChar('{')))
             .ignore_then(struct_fields)
             .then_ignore(just(Token::ControlChar('}')))
-            .map(|fields| TypeExpression::Struct(Struct { fields }));
+            .map(|fields| TypeExpr::Struct(Struct { fields }));
 
         let duck = just(Token::Duck)
             .or_not()
@@ -258,9 +270,9 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
             .map(|fields| match fields {
                 Some(mut fields) => {
                     fields.sort_by_key(|x| x.0.clone());
-                    TypeExpression::Duck(Duck { fields })
+                    TypeExpr::Duck(Duck { fields })
                 }
-                None => TypeExpression::Any,
+                None => TypeExpr::Any,
             });
 
         let tuple = p
@@ -269,10 +281,17 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
             .allow_trailing()
             .collect::<Vec<_>>()
             .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-            .map(TypeExpression::Tuple);
+            .map(TypeExpr::Tuple);
 
         let type_name = select_ref! { Token::Ident(identifier) => identifier.to_string() }
-            .map(TypeExpression::TypeName);
+            .map(|identifier| match identifier.as_str() {
+                "Int" => TypeExpr::Int,
+                "Float" => TypeExpr::Float,
+                "Bool" => TypeExpr::Bool,
+                "String" => TypeExpr::String,
+                "Char" => TypeExpr::Char,
+                _ => TypeExpr::TypeName(identifier),
+            });
 
         go_type.or(type_name).or(r#struct).or(duck).or(tuple)
     })

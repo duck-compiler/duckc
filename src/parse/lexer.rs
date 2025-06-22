@@ -83,9 +83,7 @@ fn go_text_parser<'src>() -> impl Parser<'src, &'src str, String> {
             .repeated()
             .collect::<Vec<_>>()
         ).then_ignore(just("}")).map(| x| {
-            dbg!(&x);
             let x = x.join("");
-            dbg!(&x);
             format!("{}{x}{}", "{", "}")
         })
     })

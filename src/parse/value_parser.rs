@@ -4,7 +4,7 @@ use crate::parse::{
     assignment_and_declaration_parser::{Assignment, Declaration}, function_parser::{LambdaFunctionExpr, Param}, type_parser::type_expression_parser,
 };
 
-use super::lexer::Token;
+use super::{lexer::Token, type_parser::TypeExpr};
 use chumsky::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -18,7 +18,7 @@ pub enum ValueExpr {
     Bool(bool),
     Float(f64),
     Char(char),
-    Variable(String),
+    Variable(String, Option<TypeExpr>),
     If {
         condition: Box<ValueExpr>,
         then: Box<ValueExpr>,
@@ -423,7 +423,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
         ValueExpr::Float(f) => single(&f.to_string()),
         ValueExpr::Char(c) => single(&format!("'{c}'")),
         ValueExpr::String(s) => single(&format!("\"{s}\"")),
-        ValueExpr::Variable(ident) => single(&ident),
+        ValueExpr::Variable(ident, ..) => single(&ident),
         ValueExpr::Tuple(exprs) => {
             let mut instrs: Vec<String> = Vec::new();
             let mut results = Vec::new();
@@ -464,7 +464,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let mut target = ValueExpr::clone(target.as_ref());
 
             let mut with_result = true;
-            if let ValueExpr::Variable(x) = &mut target
+            if let ValueExpr::Variable(x, ..) = &mut target
                 && x == "@println"
             {
                 let package_name = env.push_import(GoImport {
@@ -478,7 +478,6 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let (target_instr, Some(target_res_name)) = emit(target, env.clone()) else {
                 panic!()
             };
-            dbg!(&target_instr);
             res.extend(target_instr);
 
             let mut params_instructions = Vec::new();
@@ -676,7 +675,6 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             }
         }
         _ => {
-            dbg!(x);
             todo!()
         }
     }
@@ -733,7 +731,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     .allow_trailing()
                     .collect::<Vec<_>>()
                     .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-                    .map(|x| ValueExpr::Tuple(dbg!(x)))));
+                    .map(|x| ValueExpr::Tuple(x))));
 
         let initializer = just(Token::ControlChar('='))
             .ignore_then(value_expr_parser.clone())
@@ -793,7 +791,6 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 if exprs.len() >= 2 {
                     for (expr, has_semi) in &exprs[..exprs.len() - 1] {
                         if expr.needs_semicolon() && has_semi.is_none() {
-                            dbg!(expr, &exprs);
                             panic!("needs_semi")
                         }
                     }
@@ -843,7 +840,6 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 let e = value_expr_parser.clone();
                 move |(base_expr, field_accesses)| {
                     let base_expr = base_expr.leak() as &[Token];
-                    dbg!(&base_expr);
                     let base = e.parse(base_expr).unwrap();
                     field_accesses
                         .into_iter()
@@ -859,7 +855,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
         let string_val =
             select_ref! { Token::StringLiteral(s) => s.to_owned() }.map(ValueExpr::String);
         let var_expr =
-            select_ref! { Token::Ident(ident) => ident.to_owned() }.map(ValueExpr::Variable);
+            select_ref! { Token::Ident(ident) => ident.to_owned() }.map(|ident| ValueExpr::Variable(ident, None));
         let if_expr = if_with_condition_and_body
             .clone()
             .then(
@@ -1018,13 +1014,13 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr, lexer::lexer, type_parser::{Duck, TypeExpression}, value_parser::{emit, empty_duck, empty_tuple, value_expr_parser, EmitEnvironment}
+        assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr, lexer::lexer, type_parser::{Duck, TypeExpr}, value_parser::{emit, empty_duck, empty_tuple, value_expr_parser, EmitEnvironment}
     };
 
     use super::ValueExpr;
 
     fn var(x: impl Into<String>) -> Box<ValueExpr> {
-        ValueExpr::Variable(x.into()).into()
+        ValueExpr::Variable(x.into(), None).into()
     }
 
     #[test]
@@ -1032,13 +1028,20 @@ mod tests {
         let test_cases = vec![
             ("true", ValueExpr::Bool(true)),
             ("false", ValueExpr::Bool(false)),
-            (".{ x: 5 }", ValueExpr::Struct(vec![("x".to_string(), ValueExpr::Int(5))])),
-            (".{ x: 5, y: .{ x: 5 } }", ValueExpr::Struct(vec![
-                ("x".to_string(), ValueExpr::Int(5)),
-                ("y".to_string(), ValueExpr::Struct(vec![
+            (
+                ".{ x: 5 }",
+                ValueExpr::Struct(vec![("x".to_string(), ValueExpr::Int(5))]),
+            ),
+            (
+                ".{ x: 5, y: .{ x: 5 } }",
+                ValueExpr::Struct(vec![
                     ("x".to_string(), ValueExpr::Int(5)),
-                ])),
-            ])),
+                    (
+                        "y".to_string(),
+                        ValueExpr::Struct(vec![("x".to_string(), ValueExpr::Int(5))]),
+                    ),
+                ]),
+            ),
             ("{}", empty_duck()),
             (
                 "to_upper()",
@@ -1134,13 +1137,13 @@ mod tests {
                     ],
                 },
             ),
-            ("x", ValueExpr::Variable("x".into())),
+            ("x", ValueExpr::Variable("x".into(), None)),
             (
                 "print(x, true, lol())",
                 ValueExpr::FunctionCall {
                     target: var("print"),
                     params: vec![
-                        ValueExpr::Variable("x".into()),
+                        ValueExpr::Variable("x".into(), None),
                         ValueExpr::Bool(true),
                         ValueExpr::FunctionCall {
                             target: var("lol"),
@@ -1243,7 +1246,7 @@ mod tests {
                                 ])],
                             },
                         ]),
-                        ValueExpr::Variable("lol".into()),
+                        ValueExpr::Variable("lol".into(), None),
                     ],
                 },
             ),
@@ -1346,7 +1349,7 @@ mod tests {
             (
                 "x.y",
                 ValueExpr::FieldAccess {
-                    target_obj: ValueExpr::Variable("x".into()).into(),
+                    target_obj: ValueExpr::Variable("x".into(), None).into(),
                     field_name: "y".into(),
                 },
             ),
@@ -1457,7 +1460,7 @@ mod tests {
                     Declaration {
                         name: "x".into(),
                         initializer: None,
-                        type_expr: TypeExpression::TypeName("String".into()),
+                        type_expr: TypeExpr::String,
                     }
                     .into(),
                 ),
@@ -1548,7 +1551,7 @@ mod tests {
                     ValueExpr::BoolNegate(
                         ValueExpr::FieldAccess {
                             target_obj: ValueExpr::FieldAccess {
-                                target_obj: ValueExpr::Variable("x".into()).into(),
+                                target_obj: ValueExpr::Variable("x".into(), None).into(),
                                 field_name: "y".into(),
                             }
                             .into(),
@@ -1564,7 +1567,7 @@ mod tests {
                 ValueExpr::BoolNegate(
                     ValueExpr::FieldAccess {
                         target_obj: ValueExpr::FieldAccess {
-                            target_obj: ValueExpr::Variable("x".into()).into(),
+                            target_obj: ValueExpr::Variable("x".into(), None).into(),
                             field_name: "y".into(),
                         }
                         .into(),
@@ -1633,15 +1636,15 @@ mod tests {
                 "() -> Int => 1",
                 ValueExpr::Lambda(LambdaFunctionExpr {
                     params: vec![],
-                    return_type: Some(TypeExpression::TypeName("Int".into())),
+                    return_type: Some(TypeExpr::Int),
                     value_expr: ValueExpr::Int(1),
                 }.into())
             ),
             (
                 "(x: String) -> Int => 1",
                 ValueExpr::Lambda(LambdaFunctionExpr {
-                    params: vec![("x".into(), TypeExpression::TypeName("String".into()))],
-                    return_type: Some(TypeExpression::TypeName("Int".into())),
+                    params: vec![("x".into(), TypeExpr::String)],
+                    return_type: Some(TypeExpr::Int),
                     value_expr: ValueExpr::Int(1),
                 }.into())
             ),
@@ -1660,11 +1663,8 @@ mod tests {
         ];
 
         for (src, expected_tokens) in test_cases {
-            dbg!(src);
             let lex_result = lexer().parse(src).into_result().expect(&src);
             let parse_result = value_expr_parser().parse(&lex_result);
-
-            dbg!(&lex_result, &parse_result);
 
             assert_eq!(parse_result.has_errors(), false, "{}", src);
             assert_eq!(parse_result.has_output(), true, "{}", src);
@@ -1680,11 +1680,8 @@ mod tests {
         let test_cases = vec![("1", "var_0 := 1\n")];
 
         for (src, expected_tokens) in test_cases {
-            dbg!(src);
             let lex_result = lexer().parse(src).into_result().expect(&src);
             let parse_result = value_expr_parser().parse(&lex_result);
-
-            dbg!(&lex_result, &parse_result);
 
             assert_eq!(parse_result.has_errors(), false, "{}", src);
             assert_eq!(parse_result.has_output(), true, "{}", src);
@@ -1712,7 +1709,7 @@ mod tests {
                 "let x: String",
                 Declaration {
                     name: "x".to_string(),
-                    type_expr: TypeExpression::TypeName("String".to_string()),
+                    type_expr: TypeExpr::String,
                     initializer: None,
                 },
             ),
@@ -1720,10 +1717,10 @@ mod tests {
                 "let y: { x: Int } = {}",
                 Declaration {
                     name: "y".to_string(),
-                    type_expr: TypeExpression::Duck(Duck {
+                    type_expr: TypeExpr::Duck(Duck {
                         fields: vec![(
                             "x".to_string(),
-                            TypeExpression::TypeName("Int".to_string()),
+                            TypeExpr::Int,
                         )],
                     }),
                     initializer: Some(ValueExpr::Duck(vec![])),
@@ -1733,7 +1730,7 @@ mod tests {
                 "let z: {}",
                 Declaration {
                     name: "z".to_string(),
-                    type_expr: TypeExpression::Duck(Duck { fields: vec![] }),
+                    type_expr: TypeExpr::Duck(Duck { fields: vec![] }),
                     initializer: None,
                 },
             ),
@@ -1807,9 +1804,7 @@ mod tests {
         ];
 
         for valid_assignment in valid_assignments {
-            dbg!("lexing {valid_assignment}");
             let lexer_parse_result = lexer().parse(valid_assignment);
-            dbg!(&lexer_parse_result);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
