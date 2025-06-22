@@ -113,7 +113,12 @@ impl TypeExpr {
             ),
             TypeExpr::Go(x) => (x.clone(), format!("Go{}", x.replace(".", "_"))),
             TypeExpr::TypeName(x) => (x.clone(), x.clone()),
-            _ => todo!(),
+            TypeExpr::Int => ("Int".to_string(), "Int".to_string()),
+            TypeExpr::Float => ("Float".to_string(), "Float".to_string()),
+            TypeExpr::Bool => ("Bool".to_string(), "Bool".to_string()),
+            TypeExpr::String => ("String".to_string(), "String".to_string()),
+            TypeExpr::Char => ("Char".to_string(), "Char".to_string()),
+            _ => todo!()
         }
     }
 
@@ -279,7 +284,14 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
             .map(TypeExpr::Tuple);
 
         let type_name = select_ref! { Token::Ident(identifier) => identifier.to_string() }
-            .map(TypeExpr::TypeName);
+            .map(|identifier| match identifier.as_str() {
+                "Int" => TypeExpr::Int,
+                "Float" => TypeExpr::Float,
+                "Bool" => TypeExpr::Bool,
+                "String" => TypeExpr::String,
+                "Char" => TypeExpr::Char,
+                _ => TypeExpr::TypeName(identifier),
+            });
 
         go_type.or(type_name).or(r#struct).or(duck).or(tuple)
     })
