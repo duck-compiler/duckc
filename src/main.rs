@@ -7,7 +7,7 @@ use chumsky::Parser;
 use parse::lexer::lexer;
 use tempfile::Builder;
 
-use crate::parse::{source_file_parser::source_file_parser, value_parser::EmitEnvironment};
+use crate::parse::{source_file_parser::source_file_parser, use_statement_parser::UseStatement, value_parser::{EmitEnvironment, GoImport}};
 
 pub mod parse;
 
@@ -48,6 +48,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         .expect("Parse error");
 
     let env = EmitEnvironment::new();
+    parse.use_statements.iter().filter_map(|x| match x.to_owned() {
+        UseStatement::Go(path, alias) => Some(GoImport {
+            path,
+            alias,
+        }),
+        _ => None,
+    }).for_each(|x| {
+        env.push_import(x);
+    });
+
     let functions = parse
         .function_definitions
         .iter()

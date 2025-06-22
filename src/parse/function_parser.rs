@@ -129,6 +129,7 @@ pub fn function_definition_parser<'src>() -> impl Parser<'src, &'src [Token], Fu
                 ValueExpr::Duck(x) if x.is_empty() => {
                     ValueExpr::Block(vec![ValueExpr::Tuple(vec![])])
                 }
+                x @ ValueExpr::InlineGo(_) => ValueExpr::Block(vec![x]),
                 x @ ValueExpr::Block(_) => x,
                 _ => panic!("Function must be block"),
             };
