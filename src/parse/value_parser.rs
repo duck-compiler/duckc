@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::parse::{
-    assignment_and_declaration_parser::{Assignment, Declaration}, function_parser::{LambdaFunctionExpr, Param}, type_parser::type_expression_parser
+    assignment_and_declaration_parser::{Assignment, Declaration}, function_parser::{LambdaFunctionExpr, Param}, type_parser::type_expression_parser,
 };
 
 use super::lexer::Token;
@@ -254,6 +254,9 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
     match x {
         ValueExpr::Lambda(expr) => {
             let LambdaFunctionExpr { params, return_type, value_expr } = *expr;
+            for param in &params {
+                param.1.emit_into_env(env.clone());
+            }
             let (mut v_instr, res_name) = emit(value_expr, env.clone());
             if let Some(res_name) = res_name {
                 v_instr.push(format!("_ = {res_name}\n"))
@@ -558,8 +561,6 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                 ));
             }
 
-            go_interface_name.push_str("_Interface");
-
             let go_struct = GoTypeDef::Struct {
                 name: go_type_name.clone(),
                 fields: type_fields,
@@ -617,9 +618,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                 ));
             }
 
-            let mut go_interface_name = go_type_name.clone();
-            go_interface_name.push_str("_Interface");
-
+            let go_interface_name = go_type_name.clone();
             go_type_name.push_str("_Struct");
 
             let go_struct = GoTypeDef::Struct {
@@ -1017,7 +1016,7 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        assignment_and_declaration_parser::Declaration, function_parser::{LambdaFunctionExpr, Param}, lexer::lexer, type_parser::{Duck, TypeExpression}, value_parser::{emit, empty_duck, empty_tuple, value_expr_parser, EmitEnvironment}
+        assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr, lexer::lexer, type_parser::{Duck, TypeExpression}, value_parser::{emit, empty_duck, empty_tuple, value_expr_parser, EmitEnvironment}
     };
 
     use super::ValueExpr;
