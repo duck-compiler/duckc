@@ -19,6 +19,15 @@ impl Default for TypeEnv {
     }
 }
 
+impl Default for TypeEnv {
+    fn default() -> Self {
+        Self {
+            identifier_types: vec![HashMap::new()],
+            type_aliases: HashMap::new()
+        }
+    }
+}
+
 impl TypeEnv {
     pub fn push_type_aliases(&mut self) {
         let cloned_hash_map = self.type_aliases.last().expect("Expect at least one env.").clone();
@@ -89,7 +98,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     source_file
         .function_definitions
         .iter_mut()
-        .for_each(|function_definition| typeresolve_function_definition(function_definition, &mut type_env));
+        .for_each(|function_definition| typeresolve_function_definition(function_definition, type_env));
 
     type_env.pop_type_aliases();
 
@@ -574,7 +583,8 @@ mod test {
                 ..Default::default()
             };
 
-            typeresolve_source_file(&mut source_file, type_env);
+            let mut type_env = TypeEnv::default();
+            typeresolve_source_file(&mut source_file, &mut type_env);
 
             let type_expr = TypeExpr::from_value_expr(&source_file.function_definitions.get(0).unwrap().value_expr);
             assert_eq!(type_expr, expected_type_expr);

@@ -1,3 +1,7 @@
+use chumsky::span::SimpleSpan;
+
+pub type Spanned<T> = (T, SimpleSpan);
+
 pub mod assignment_and_declaration_parser;
 pub mod function_parser;
 pub mod lexer;
