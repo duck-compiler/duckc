@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     source_file = dbg!(source_file);
 
     let env = EmitEnvironment::new();
-    parse.use_statements.iter().filter_map(|x| match x.to_owned() {
+    source_file.use_statements.iter().filter_map(|x| match x.to_owned() {
         UseStatement::Go(path, alias) => Some(GoImport {
             path,
             alias,

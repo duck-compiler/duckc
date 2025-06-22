@@ -1018,11 +1018,7 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        assignment_and_declaration_parser::Declaration,
-        lexer::lexer,
-        type_parser::{Duck, TypeExpr},
-        value_parser::{EmitEnvironment, emit, empty_duck, empty_tuple, value_expr_parser},
-        assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr, lexer::lexer, type_parser::{Duck, TypeExpression}, value_parser::{emit, empty_duck, empty_tuple, value_expr_parser, EmitEnvironment}
+        assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr, lexer::lexer, type_parser::{Duck, TypeExpr}, value_parser::{emit, empty_duck, empty_tuple, value_expr_parser, EmitEnvironment}
     };
 
     use super::ValueExpr;
