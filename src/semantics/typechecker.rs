@@ -1,13 +1,158 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    type_parser::{Duck, Struct, TypeExpr},
-    value_parser::ValueExpr,
+    function_parser::FunctionDefintion, source_file_parser::SourceFile, type_parser::{Duck, Struct, TypeExpr}, value_parser::ValueExpr
 };
 
 #[derive(Debug, Clone)]
-pub struct TypeEnvironment {
-    pub types: Vec<HashMap<String, TypeExpr>>,
+pub struct TypeEnv {
+    identifier_types: Vec<HashMap<String, TypeExpr>>,
+    type_aliases: HashMap<String, TypeExpr>,
+}
+
+impl TypeEnv {
+    pub fn env_push(&mut self) {
+        let cloned_hash_map = self.identifier_types.last().expect("Expect at least one env.").clone();
+        self.identifier_types.push(cloned_hash_map);
+    }
+
+    pub fn env_pop(&mut self) {
+        self.identifier_types.pop();
+    }
+
+    pub fn insert_identifier_type(&mut self, identifier: String, type_expr: TypeExpr) {
+        self.identifier_types
+            .last_mut()
+            .expect("At least one env should exist. :(")
+            .insert(identifier, type_expr);
+    }
+
+    pub fn get_identifier_type(&self, identifier: String) -> Option<TypeExpr> {
+        let env = self
+            .identifier_types
+            .last()
+            .expect("At least one env should exist. :(");
+
+        if !env.contains_key(&identifier) {
+            return None;
+        }
+
+        return env.get(&identifier).cloned();
+    }
+
+    pub fn insert_type_alias(&mut self, alias: String, type_expr: TypeExpr) {
+        self.type_aliases
+            .insert(alias, type_expr)
+            .expect("Couldn't insert type alias.");
+    }
+
+    pub fn resolve_type_alias(&mut self, alias: String) -> TypeExpr {
+        self.type_aliases
+            .get(&alias)
+            .expect("Couldn't resolve type alias {alias}")
+            .clone()
+    }
+}
+
+pub fn typeresolve_source_file(source_file: &SourceFile) {
+    let mut type_env: TypeEnv = TypeEnv { identifier_types: vec![HashMap::new()], type_aliases: HashMap::new() };
+
+    source_file
+        .type_definitions
+        .iter()
+        .for_each(|type_definition| type_env.insert_type_alias(type_definition.name.clone(), type_definition.type_expression.clone()));
+
+    fn typeresolve_function_definition(function_definition: &mut FunctionDefintion, type_env: &mut TypeEnv) {
+        let fn_type_expr = TypeExpr::Fun(
+            function_definition.params
+                .as_ref()
+                .or(Some(&vec![]))
+                .unwrap()
+                .iter()
+                .map(|(_, type_expr)| type_expr.clone())
+                .collect::<Vec<_>>(),
+            function_definition.return_type.as_ref().map(|x| Box::new(x.clone()))
+        );
+
+        type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
+        type_env.env_push();
+
+        typeresolve_value_expr(&mut function_definition.value_expr, type_env);
+    }
+
+    fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
+        match value_expr {
+            ValueExpr::FunctionCall { target, params } => {
+                typeresolve_value_expr(target, type_env);
+                params.iter_mut().for_each(|param| typeresolve_value_expr(param, type_env));
+            },
+            ValueExpr::Int(_) => todo!(),
+            ValueExpr::String(_) => todo!(),
+            ValueExpr::Bool(_) => todo!(),
+            ValueExpr::Float(_) => todo!(),
+            ValueExpr::Char(_) => todo!(),
+            ValueExpr::Variable(identifier, type_expr_opt) => {
+                let type_expr = type_env.get_identifier_type(identifier.clone())
+                    .expect("Couldn't resolve type of identifier {identifier}");
+
+                *type_expr_opt = Some(type_expr)
+            },
+            ValueExpr::If { condition, then, r#else } => {
+                typeresolve_value_expr(condition, type_env);
+
+                type_env.env_push();
+                typeresolve_value_expr(then, type_env);
+                type_env.env_pop();
+
+                typeresolve_value_expr(r#else, type_env);
+            },
+            ValueExpr::While { condition, body } => {
+                typeresolve_value_expr(condition, type_env);
+                type_env.env_push();
+                typeresolve_value_expr(body, type_env);
+                type_env.env_pop();
+            },
+            ValueExpr::Tuple(value_exprs) => value_exprs.iter_mut().for_each(|value_expr| typeresolve_value_expr(value_expr, type_env)),
+            ValueExpr::Block(value_exprs) => {
+                type_env.env_push();
+                value_exprs.iter_mut().for_each(|value_expr| typeresolve_value_expr(value_expr, type_env));
+                type_env.env_pop();
+            },
+            ValueExpr::Duck(items) => items.iter_mut().for_each(|(_, value_expr)| typeresolve_value_expr(value_expr, type_env)),
+            ValueExpr::Struct(items) => items.iter_mut().for_each(|(_, value_expr)| typeresolve_value_expr(value_expr, type_env)),
+            ValueExpr::FieldAccess { target_obj, .. } => {
+                typeresolve_value_expr(target_obj, type_env);
+            },
+            ValueExpr::Return(Some(value_expr)) => typeresolve_value_expr(value_expr, type_env),
+            ValueExpr::VarAssign(assignment) => {
+                typeresolve_value_expr(&mut assignment.value_expr, type_env);
+            },
+            ValueExpr::VarDecl(declaration) => {
+                type_env.insert_identifier_type(declaration.name.clone(), declaration.type_expr.clone());
+                if let Some(type_expr) = &mut declaration.initializer {
+                    typeresolve_value_expr(type_expr, type_env);
+                }
+            },
+            ValueExpr::Add(lhs, rhs) => {
+                typeresolve_value_expr(lhs, type_env);
+                typeresolve_value_expr(rhs, type_env);
+            },
+            ValueExpr::Mul(lhs, rhs) => {
+                typeresolve_value_expr(lhs, type_env);
+                typeresolve_value_expr(rhs, type_env);
+            },
+            ValueExpr::Equals(lhs, rhs) => {
+                typeresolve_value_expr(lhs, type_env);
+                typeresolve_value_expr(rhs, type_env);
+            },
+            ValueExpr::BoolNegate(value_expr) => {
+                typeresolve_value_expr(value_expr, type_env);
+            },
+            ValueExpr::Break
+            | ValueExpr::Return(None)
+            | ValueExpr::Continue => {},
+        }
+    }
 }
 
 impl TypeExpr {
@@ -21,6 +166,7 @@ impl TypeExpr {
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeName(name) => name.clone(),
+            TypeExpr::Fun(param_types, return_type) => todo!(),
             TypeExpr::Struct(r#struct) => format!(
                 "Struct{}",
                 r#struct
@@ -159,7 +305,7 @@ impl TypeExpr {
                     .map(|value_expr| TypeExpr::from_value_expr(value_expr))
                     .expect("Block Expressions must be at least one expression long."),
             ),
-            ValueExpr::Variable(identifier) => todo!("resolve type for identifier"),
+            ValueExpr::Variable(identifier, type_expr) => type_expr.as_ref().expect("Expected type but didn't get one").clone(),
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(&TypeExpr::from_value_expr(bool_expr), &TypeExpr::Bool);
                 TypeExpr::Bool
@@ -312,7 +458,7 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr) {
 
 #[cfg(test)]
 mod test {
-    use crate::parse::{lexer::lexer, value_parser::value_expr_parser};
+    use crate::parse::{lexer::lexer, source_file_parser::source_file_parser, value_parser::value_expr_parser};
     use chumsky::prelude::*;
 
     use super::*;
@@ -354,6 +500,7 @@ mod test {
                     TypeExpr::Tuple(vec![TypeExpr::String, TypeExpr::Int]),
                 ]),
             ),
+            ("{ let x: Int = 5; x; }", TypeExpr::Int)
         ];
 
         for (src, expected_type_expr) in src_and_expected_type_vec {
@@ -372,8 +519,15 @@ mod test {
             assert_eq!(value_expr_parse_result.has_output(), true);
 
             let value_expr = value_expr_parse_result.into_output().unwrap();
+            let source_file = SourceFile {
+                use_statements: vec![],
+                function_definitions: vec![FunctionDefintion { name: "main".to_string(), params: None, return_type: None, value_expr: value_expr }],
+                type_definitions: vec![],
+            };
 
-            let type_expr = TypeExpr::from_value_expr(&value_expr);
+            typeresolve_source_file(&source_file);
+
+            let type_expr = TypeExpr::from_value_expr(&source_file.function_definitions.get(0).unwrap().value_expr);
             assert_eq!(type_expr, expected_type_expr);
         }
     }
