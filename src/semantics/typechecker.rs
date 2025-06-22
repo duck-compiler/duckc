@@ -173,6 +173,7 @@ impl TypeExpr {
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeName(name) => name.clone(),
+            TypeExpr::TypeName(name) => name.clone(),
             TypeExpr::Fun(param_types, return_type) => todo!(),
             TypeExpr::Struct(r#struct) => format!(
                 "Struct{}",
@@ -509,7 +510,10 @@ mod test {
                     TypeExpr::Tuple(vec![TypeExpr::String, TypeExpr::Int]),
                 ]),
             ),
-            ("", TypeExpr::Int)
+            ("{ 5 }", TypeExpr::Int),
+            ("{ let x: Int = 5; 5 }", TypeExpr::Int),
+            ("{ let x: Int = 5; x }", TypeExpr::Int),
+            ("{ let x: Int = 5; x * x }", TypeExpr::Int),
         ];
 
         for (src, expected_type_expr) in src_and_expected_type_vec {
