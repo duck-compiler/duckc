@@ -832,7 +832,8 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .collect::<Vec<_>>()
             .then(
                 (just(Token::ControlChar('.')).ignore_then(
-                    select_ref! { Token::Ident(field_name) => field_name.to_owned() },
+                    select_ref! { Token::Ident(field_name) => field_name.to_owned() }
+                        .or(select_ref! { Token::IntLiteral(i) => i.to_string() }),
                 ))
                 .repeated()
                 .at_least(1)
@@ -1643,6 +1644,18 @@ mod tests {
                     value_expr: ValueExpr::Int(1),
                 }.into())
             ),
+            ("{x: 1}.x",
+                ValueExpr::FieldAccess { target_obj: ValueExpr::Duck(vec![
+                    ("x".into(), ValueExpr::Int(1))
+                ]).into(), field_name: "x".into() }
+            ),
+            // ("(1,true,\"s\").a",
+            //     ValueExpr::FieldAccess { target_obj: ValueExpr::Tuple(vec![
+            //         ValueExpr::Int(1),
+            //         ValueExpr::Bool(true),
+            //         ValueExpr::String("\"s\"".into()),
+            //     ]).into(), field_name: "0".into() }
+            // )
         ];
 
         for (src, expected_tokens) in test_cases {
