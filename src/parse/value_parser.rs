@@ -890,6 +890,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .repeated()
             .collect::<Vec<_>>()
             .then(
+                field_access.clone().or(
                 value_expr_parser
                     .clone()
                     .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
@@ -915,7 +916,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                             }
                         }),
                     ))),
-            )
+            ))
             .then(params.clone().or_not())
             .map(|((neg, target), params)| {
                 let res = if let Some(params) = params {
@@ -1649,13 +1650,13 @@ mod tests {
                     ("x".into(), ValueExpr::Int(1))
                 ]).into(), field_name: "x".into() }
             ),
-            // ("(1,true,\"s\").a",
-            //     ValueExpr::FieldAccess { target_obj: ValueExpr::Tuple(vec![
-            //         ValueExpr::Int(1),
-            //         ValueExpr::Bool(true),
-            //         ValueExpr::String("\"s\"".into()),
-            //     ]).into(), field_name: "0".into() }
-            // )
+            ("(1,(3,4),\"s\").0",
+                ValueExpr::FieldAccess { target_obj: ValueExpr::Tuple(vec![
+                    ValueExpr::Int(1),
+                    ValueExpr::Tuple(vec![ValueExpr::Int(3), ValueExpr::Int(4)]),
+                    ValueExpr::String("s".into()),
+                ]).into(), field_name: "0".into() }
+            )
         ];
 
         for (src, expected_tokens) in test_cases {
