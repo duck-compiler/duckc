@@ -101,6 +101,7 @@ fn type_is_object_like(type_expr: &TypeExpression) -> bool {
     match type_expr {
         TypeExpression::Struct(..) => true,
         TypeExpression::Tuple(..) => true,
+        _ => false,
     }
 }
 
