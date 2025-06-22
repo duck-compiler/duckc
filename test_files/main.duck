@@ -1,6 +1,18 @@
 use go "fmt" as kek;
 use go "time";
 
+module abc {
+    module cbc {
+        use go "XX";
+
+        fun xx() {
+            go {
+
+            }
+        }
+    }
+}
+
 fun duck_function() {
     go {
         kek.Println("Hallo aus einer DUCK FUNCTION!")

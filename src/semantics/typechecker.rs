@@ -533,9 +533,8 @@ mod test {
 
             let value_expr = value_expr_parse_result.into_output().unwrap();
             let mut source_file = SourceFile {
-                use_statements: vec![],
                 function_definitions: vec![FunctionDefintion { name: "main".to_string(), params: None, return_type: None, value_expr: value_expr }],
-                type_definitions: vec![],
+                ..Default::default()
             };
 
             typeresolve_source_file(&mut source_file);

@@ -25,6 +25,7 @@ pub enum Token {
     Continue,
     As,
     InlineGo(String),
+    Module,
 }
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -34,6 +35,7 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
         .or_not()
         .then(text::ident())
         .map(|(x, str)| match str {
+            "module" => Token::Module,
             "use" => Token::Use,
             "type" => Token::Type,
             "duck" => Token::Duck,

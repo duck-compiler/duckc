@@ -15,7 +15,7 @@ pub enum UseStatement {
     Go(String, Option<String>),
 }
 
-fn regular_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> {
+fn regular_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> + Clone {
     let module_indicator_parser =
         select_ref! { Token::Ident(identifier) => identifier.to_string() }.map(Indicator::Module);
 
@@ -46,7 +46,7 @@ fn regular_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> 
         .map(UseStatement::Regular)
 }
 
-fn go_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> {
+fn go_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> + Clone {
     (just(Token::Use).then(just(Token::Go)))
         .ignore_then(select_ref! { Token::StringLiteral(s) => s.to_owned() })
         .then(just(Token::As).ignore_then(select_ref! { Token::Ident(i) => i.to_owned() }).or_not())
@@ -54,7 +54,7 @@ fn go_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> {
         .map(|(package_name, alias)| UseStatement::Go(package_name, alias))
 }
 
-pub fn use_statement_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> {
+pub fn use_statement_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> + Clone {
     choice((
         go_use_parser(),
         regular_use_parser(),
