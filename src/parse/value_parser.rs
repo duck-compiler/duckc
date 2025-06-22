@@ -1,8 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::parse::{
-    assignment_and_declaration_parser::{Assignment, Declaration},
-    type_parser::type_expression_parser,
+    assignment_and_declaration_parser::{Assignment, Declaration}, function_parser::{LambdaFunctionExpr, Param}, type_parser::type_expression_parser
 };
 
 use super::lexer::Token;
@@ -47,6 +46,7 @@ pub enum ValueExpr {
     BoolNegate(Box<ValueExpr>),
     Equals(Box<ValueExpr>, Box<ValueExpr>),
     InlineGo(String),
+    Lambda(Box<LambdaFunctionExpr>),
 }
 
 #[derive(Clone, Debug)]
@@ -252,6 +252,28 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
     let no_var = |instr: &str| (vec![instr.to_owned()], None);
 
     match x {
+        ValueExpr::Lambda(expr) => {
+            let LambdaFunctionExpr { params, return_type, value_expr } = *expr;
+            let (mut v_instr, res_name) = emit(value_expr, env.clone());
+            if let Some(res_name) = res_name {
+                v_instr.push(format!("_ = {res_name}\n"))
+            }
+
+            let res_var = new_var();
+            let mut instr = Vec::new();
+            let lambda_creation = format!("{res_var} := func({}) {} {}\n",
+                params.iter()
+                    .map(|(name, t)| format!("{name} {}", t.emit().0))
+                    .collect::<Vec<_>>().join(", "),
+                return_type.map(|t| t.emit().0).unwrap_or_default(),
+                "{");
+
+            instr.push(lambda_creation);
+            instr.extend(v_instr);
+            instr.push("\n}\n".to_string());
+
+            (instr, Some(res_var))
+        }
         ValueExpr::InlineGo(code) => {
             let mut res = vec!["\n".to_string()];
             res.extend(code.split("\n").map(|x| format!("{x}\n")));
@@ -663,6 +685,36 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
 
 pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> {
     recursive(|value_expr_parser| {
+        let lambda_parser = {
+            let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                .then_ignore(just(Token::ControlChar(':')))
+                .then(type_expression_parser())
+                .map(|(identifier, type_expr)| (identifier, type_expr) as Param);
+
+            let params_parser = param_parser
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<Param>>()
+                .or_not();
+
+            let return_type_parser = just(Token::ControlChar('-'))
+                .ignore_then(just(Token::ControlChar('>')))
+                .ignore_then(type_expression_parser());
+
+            just(Token::ControlChar('('))
+                .ignore_then(params_parser)
+                .then_ignore(just(Token::ControlChar(')')))
+                .then(return_type_parser.or_not())
+                .then_ignore(just(Token::ControlChar('=')))
+                .then_ignore(just(Token::ControlChar('>')))
+                .then(value_expr_parser.clone())
+                .map(|((params, return_type), value_expr)| ValueExpr::Lambda(LambdaFunctionExpr {
+                    params: params.unwrap_or_default(),
+                    return_type,
+                    value_expr,
+                }.into()))
+        };
+
         let params = value_expr_parser
             .clone()
             .separated_by(just(Token::ControlChar(',')))
@@ -670,17 +722,19 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .collect::<Vec<_>>()
             .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')));
 
-        let tuple = (just(Token::ControlChar('('))
-            .ignore_then(just(Token::ControlChar(')')))
-            .to(ValueExpr::Tuple(vec![])))
-        .or(value_expr_parser
-            .clone()
-            .separated_by(just(Token::ControlChar(',')))
-            .at_least(1)
-            .allow_trailing()
-            .collect::<Vec<_>>()
-            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-            .map(|x| ValueExpr::Tuple(dbg!(x))));
+        let tuple =
+            lambda_parser.clone().or(
+                (just(Token::ControlChar('('))
+                    .ignore_then(just(Token::ControlChar(')')))
+                    .to(ValueExpr::Tuple(vec![])))
+                .or(value_expr_parser
+                    .clone()
+                    .separated_by(just(Token::ControlChar(',')))
+                    .at_least(1)
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                    .map(|x| ValueExpr::Tuple(dbg!(x)))));
 
         let initializer = just(Token::ControlChar('='))
             .ignore_then(value_expr_parser.clone())
@@ -963,10 +1017,7 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        assignment_and_declaration_parser::Declaration,
-        lexer::lexer,
-        type_parser::{Duck, TypeExpression},
-        value_parser::{EmitEnvironment, emit, empty_duck, empty_tuple, value_expr_parser},
+        assignment_and_declaration_parser::Declaration, function_parser::{LambdaFunctionExpr, Param}, lexer::lexer, type_parser::{Duck, TypeExpression}, value_parser::{emit, empty_duck, empty_tuple, value_expr_parser, EmitEnvironment}
     };
 
     use super::ValueExpr;
@@ -1560,7 +1611,39 @@ mod tests {
             (
                 "go { go func() {} }",
                 ValueExpr::InlineGo(String::from(" go func() {} ")),
-            )
+            ),
+            (
+                "() => {}",
+                ValueExpr::Lambda(LambdaFunctionExpr {
+                    params: vec![],
+                    return_type: None,
+                    value_expr: ValueExpr::Duck(vec![])
+                }.into())
+            ),
+            (
+                "() => 1",
+                ValueExpr::Lambda(LambdaFunctionExpr {
+                    params: vec![],
+                    return_type: None,
+                    value_expr: ValueExpr::Int(1),
+                }.into())
+            ),
+            (
+                "() -> Int => 1",
+                ValueExpr::Lambda(LambdaFunctionExpr {
+                    params: vec![],
+                    return_type: Some(TypeExpression::TypeName("Int".into())),
+                    value_expr: ValueExpr::Int(1),
+                }.into())
+            ),
+            (
+                "(x: String) -> Int => 1",
+                ValueExpr::Lambda(LambdaFunctionExpr {
+                    params: vec![("x".into(), TypeExpression::TypeName("String".into()))],
+                    return_type: Some(TypeExpression::TypeName("Int".into())),
+                    value_expr: ValueExpr::Int(1),
+                }.into())
+            ),
         ];
 
         for (src, expected_tokens) in test_cases {
