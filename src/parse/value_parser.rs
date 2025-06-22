@@ -5,7 +5,7 @@ use crate::parse::{
     type_parser::type_expression_parser,
 };
 
-use super::lexer::Token;
+use super::{lexer::Token, type_parser::TypeExpr};
 use chumsky::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -19,7 +19,7 @@ pub enum ValueExpr {
     Bool(bool),
     Float(f64),
     Char(char),
-    Variable(String),
+    Variable(String, Option<TypeExpr>),
     If {
         condition: Box<ValueExpr>,
         then: Box<ValueExpr>,
@@ -389,7 +389,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
         ValueExpr::Float(f) => single(&f.to_string()),
         ValueExpr::Char(c) => single(&format!("'{c}'")),
         ValueExpr::String(s) => single(&format!("\"{s}\"")),
-        ValueExpr::Variable(ident) => single(&ident),
+        ValueExpr::Variable(ident, ..) => single(&ident),
         ValueExpr::Tuple(exprs) => {
             let mut instrs: Vec<String> = Vec::new();
             let mut results = Vec::new();
@@ -430,7 +430,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let mut target = ValueExpr::clone(target.as_ref());
 
             let mut with_result = true;
-            if let ValueExpr::Variable(x) = &mut target
+            if let ValueExpr::Variable(x, ..) = &mut target
                 && x == "@println"
             {
                 *x = "fmt.Println".to_string();
@@ -787,7 +787,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
         let string_val =
             select_ref! { Token::StringLiteral(s) => s.to_owned() }.map(ValueExpr::String);
         let var_expr =
-            select_ref! { Token::Ident(ident) => ident.to_owned() }.map(ValueExpr::Variable);
+            select_ref! { Token::Ident(ident) => ident.to_owned() }.map(|ident| ValueExpr::Variable(ident, None));
         let if_expr = if_with_condition_and_body
             .clone()
             .then(
@@ -950,7 +950,7 @@ mod tests {
     use super::ValueExpr;
 
     fn var(x: impl Into<String>) -> Box<ValueExpr> {
-        ValueExpr::Variable(x.into()).into()
+        ValueExpr::Variable(x.into(), None).into()
     }
 
     #[test]
@@ -1067,13 +1067,13 @@ mod tests {
                     ],
                 },
             ),
-            ("x", ValueExpr::Variable("x".into())),
+            ("x", ValueExpr::Variable("x".into(), None)),
             (
                 "print(x, true, lol())",
                 ValueExpr::FunctionCall {
                     target: var("print"),
                     params: vec![
-                        ValueExpr::Variable("x".into()),
+                        ValueExpr::Variable("x".into(), None),
                         ValueExpr::Bool(true),
                         ValueExpr::FunctionCall {
                             target: var("lol"),
@@ -1176,7 +1176,7 @@ mod tests {
                                 ])],
                             },
                         ]),
-                        ValueExpr::Variable("lol".into()),
+                        ValueExpr::Variable("lol".into(), None),
                     ],
                 },
             ),
@@ -1279,7 +1279,7 @@ mod tests {
             (
                 "x.y",
                 ValueExpr::FieldAccess {
-                    target_obj: ValueExpr::Variable("x".into()).into(),
+                    target_obj: ValueExpr::Variable("x".into(), None).into(),
                     field_name: "y".into(),
                 },
             ),
@@ -1481,7 +1481,7 @@ mod tests {
                     ValueExpr::BoolNegate(
                         ValueExpr::FieldAccess {
                             target_obj: ValueExpr::FieldAccess {
-                                target_obj: ValueExpr::Variable("x".into()).into(),
+                                target_obj: ValueExpr::Variable("x".into(), None).into(),
                                 field_name: "y".into(),
                             }
                             .into(),
@@ -1497,7 +1497,7 @@ mod tests {
                 ValueExpr::BoolNegate(
                     ValueExpr::FieldAccess {
                         target_obj: ValueExpr::FieldAccess {
-                            target_obj: ValueExpr::Variable("x".into()).into(),
+                            target_obj: ValueExpr::Variable("x".into(), None).into(),
                             field_name: "y".into(),
                         }
                         .into(),
