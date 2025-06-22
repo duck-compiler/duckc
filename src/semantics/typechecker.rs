@@ -21,7 +21,7 @@ impl TypeExpr {
             TypeExpr::Struct(r#struct) => format!("Struct{}", r#struct.fields.iter().map(|(field_name, type_expr)| format!("{field_name}_{}", (*type_expr).to_ref_string())).collect::<Vec<_>>().join("_")),
             TypeExpr::Duck(duck) => {
                 let fields = duck.fields.clone().sort_by_key(|(field_name, _)| field_name.clone());
-                format!("Duck{}", r#duck.fields.iter().map(|(field_name, type_expr)| format!("{field_name}_{}", type_expr.to_ref_string())).collect::<Vec<_>>().join("_"))
+                format!("Duck{}", fields.iter().map(|(field_name, type_expr)| format!("{field_name}_{}", type_expr.to_ref_string())).collect::<Vec<_>>().join("_"))
             },
             TypeExpr::Tuple(fields) => {
                 format!("Tuple{}", fields.iter().map(|type_expr| format!("{}", type_expr.to_ref_string())).collect::<Vec<_>>().join("_"))
