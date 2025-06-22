@@ -32,7 +32,7 @@ impl TypeExpr {
         };
     }
 
-    fn from_value_expr(value_expr: &ValueExpr) -> TypeExpr {
+    pub fn from_value_expr(value_expr: &ValueExpr) -> TypeExpr {
         return match value_expr {
             ValueExpr::Int(..) => TypeExpr::Int,
             ValueExpr::Bool(..) => TypeExpr::Bool,
@@ -73,7 +73,7 @@ impl TypeExpr {
                 let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left);
                 let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right);
 
-                require_type_is_number(&left_type_expr);
+                require(left_type_expr.is_number(), format!("Addition '+' is only allowed for numbers. You've used {} + {}.", left_type_expr.to_ref_string(), right_type_expr.to_ref_string()));
                 check_type_compatability(&left_type_expr, &right_type_expr);
 
                 left_type_expr
@@ -90,7 +90,7 @@ impl TypeExpr {
                 let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left);
                 let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right);
 
-                require_type_is_number(&left_type_expr);
+                require(left_type_expr.is_number(), format!("Multiplication '*' is only allowed for numbers. You've used {} + {}.", left_type_expr.to_ref_string(), right_type_expr.to_ref_string()));
                 check_type_compatability(&left_type_expr, &right_type_expr);
 
                 left_type_expr
@@ -122,7 +122,12 @@ impl TypeExpr {
             },
             ValueExpr::FieldAccess { target_obj, field_name } => {
                 let target_obj_type_expr = TypeExpr::from_value_expr(target_obj);
-                todo!()
+                require(target_obj_type_expr.is_object_like(), format!("the target of a field access must be of type duck, struct or tuple. Got {}", target_obj_type_expr.to_ref_string()));
+                require(target_obj_type_expr.has_field_by_name(field_name.clone()), format!("{} doesn't have a field with name {}", target_obj_type_expr.to_ref_string(), field_name));
+
+                let target_field_type_expr = target_obj_type_expr.typeof_field(field_name.to_string());
+
+                target_field_type_expr
             },
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(condition);
@@ -134,7 +139,6 @@ impl TypeExpr {
             },
         };
     }
-}
 
     fn is_object_like(&self) -> bool {
         match self {
@@ -163,7 +167,7 @@ impl TypeExpr {
         }
     }
 
-    fn get_field_type(&self, field_name: String) -> TypeExpr {
+    fn typeof_field(&self, field_name: String) -> TypeExpr {
         match self {
             Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
             Self::Struct(r#struct) => r#struct
@@ -197,16 +201,9 @@ fn require(condition: bool, fail_message: String) {
     }
 }
 
-fn require_type_is_number(type_expr: &TypeExpr) {
-    if !type_is_number(type_expr) {
-        println!("Required type to be of class number but got {}.", type_expr.to_ref_string());
-        process::exit(2);
-    }
-}
-
 fn check_type_compatability(one: &TypeExpr, two: &TypeExpr) {
-    if type_is_number(&one) {
-        if !type_is_number(&two) {
+    if one.is_number() {
+        if !two.is_number() {
             println!("Types {} and {} are not compatible.", one.to_ref_string(), two.clone().to_ref_string());
             process::exit(2);
         }
