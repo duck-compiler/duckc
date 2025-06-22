@@ -32,6 +32,7 @@ pub enum TypeExpression {
     Bool,
     Char,
     Float,
+    Or(Vec<TypeExpression>),
 }
 
 impl TypeExpression {
