@@ -1,5 +1,3 @@
-#[allow(dead_code)]
-
 use std::{collections::HashMap, process};
 
 use crate::parse::{
@@ -175,7 +173,7 @@ impl TypeExpr {
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeName(name) => name.clone(),
-            TypeExpr::Fun(param_types, return_type) => todo!(),
+            TypeExpr::Fun(..) => todo!(),
             TypeExpr::Struct(r#struct) => format!(
                 "Struct{}",
                 r#struct
@@ -214,7 +212,7 @@ impl TypeExpr {
                         .join("_")
                 )
             }
-            TypeExpr::Or(variants) => todo!("implement variants"),
+            TypeExpr::Or(_variants) => todo!("implement variants"),
         };
     }
 
@@ -307,7 +305,7 @@ impl TypeExpr {
 
                 left_type_expr
             }
-            ValueExpr::FunctionCall { target, params } => {
+            ValueExpr::FunctionCall {..} => {
                 todo!("Return Type of Function");
             }
             ValueExpr::Block(value_exprs) => TypeExpr::from(
@@ -316,7 +314,7 @@ impl TypeExpr {
                     .map(|value_expr| TypeExpr::from_value_expr(value_expr))
                     .expect("Block Expressions must be at least one expression long."),
             ),
-            ValueExpr::Variable(identifier, type_expr) => type_expr.as_ref().expect("Expected type but didn't get one").clone(),
+            ValueExpr::Variable(.., type_expr) => type_expr.as_ref().expect("Expected type but didn't get one").clone(),
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(&TypeExpr::from_value_expr(bool_expr), &TypeExpr::Bool);
                 TypeExpr::Bool
@@ -329,8 +327,8 @@ impl TypeExpr {
                 let condition_type_expr = TypeExpr::from_value_expr(condition);
                 check_type_compatability(&condition_type_expr, &TypeExpr::Bool);
 
-                let then_type_expr = TypeExpr::from_value_expr(then);
-                let else_type_expr = TypeExpr::from_value_expr(r#else);
+                let _then_type_expr = TypeExpr::from_value_expr(then);
+                let _else_type_expr = TypeExpr::from_value_expr(r#else);
 
                 // let x: TypeExpression = combine_types(vec![else_type_expr, then]);
 
@@ -366,7 +364,7 @@ impl TypeExpr {
                 let condition_type_expr = TypeExpr::from_value_expr(condition);
                 check_type_compatability(&condition_type_expr, &TypeExpr::Bool);
 
-                let body_type_expr = TypeExpr::from_value_expr(body);
+                let _body_type_expr = TypeExpr::from_value_expr(body);
 
                 return TypeExpr::Tuple(vec![]);
             }
@@ -380,6 +378,7 @@ impl TypeExpr {
         }
     }
 
+    #[allow(dead_code)]
     fn has_field(&self, field: (String, TypeExpr)) -> bool {
         match self {
             Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
