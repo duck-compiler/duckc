@@ -175,7 +175,6 @@ impl TypeExpr {
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeName(name) => name.clone(),
-            TypeExpr::TypeName(name) => name.clone(),
             TypeExpr::Fun(param_types, return_type) => todo!(),
             TypeExpr::Struct(r#struct) => format!(
                 "Struct{}",
