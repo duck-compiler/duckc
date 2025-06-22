@@ -215,17 +215,8 @@ impl EmitEnvironment {
 }
 
 impl ValueExpr {
-    fn flatten_block(&self) -> ValueExpr {
-        match self {
-            ValueExpr::Block(x) if x.len() <= 1 => {
-                if let Some(x) = x.first() {
-                    x.clone()
-                } else {
-                    empty_tuple()
-                }
-            }
-            _ => self.clone(),
-        }
+    pub fn into_block(self) -> ValueExpr {
+        ValueExpr::Block(vec![self])
     }
 
     pub fn needs_semicolon(&self) -> bool {
@@ -765,7 +756,6 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                         .map(|(expr, _)| expr)
                         .collect(),
                 )
-                .flatten_block()
             });
 
         let if_condition = value_expr_parser
@@ -1111,22 +1101,22 @@ mod tests {
                 "if (true) { 1 } else { 2 }",
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into(),
-                    then: ValueExpr::Int(1).into(),
-                    r#else: ValueExpr::Int(2).into(),
+                    then: ValueExpr::Int(1).into_block().into(),
+                    r#else: ValueExpr::Int(2).into_block().into(),
                 },
             ),
             (
                 "if (true) { 1 } else if (false) { 3 } else if (200) { 4 } else { 2 }",
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into(),
-                    then: ValueExpr::Int(1).into(),
+                    then: ValueExpr::Int(1).into_block().into(),
                     r#else: ValueExpr::If {
                         condition: ValueExpr::Bool(false).into(),
-                        then: ValueExpr::Int(3).into(),
+                        then: ValueExpr::Int(3).into_block().into(),
                         r#else: ValueExpr::If {
                             condition: ValueExpr::Int(200).into(),
-                            then: ValueExpr::Int(4).into(),
-                            r#else: ValueExpr::Int(2).into(),
+                            then: ValueExpr::Int(4).into_block().into(),
+                            r#else: ValueExpr::Int(2).into_block().into(),
                         }
                         .into(),
                     }
@@ -1143,7 +1133,7 @@ mod tests {
                 ]),
             ),
             ("{}", empty_duck()),
-            ("{1}", ValueExpr::Int(1)),
+            ("{1}", ValueExpr::Int(1).into_block()),
             (
                 "{1;  2   ;3;x()}",
                 ValueExpr::Block(vec![
@@ -1209,7 +1199,7 @@ mod tests {
                 "while (true) {}",
                 ValueExpr::While {
                     condition: ValueExpr::Bool(true).into(),
-                    body: empty_tuple().into(),
+                    body: empty_tuple().into_block().into(),
                 },
             ),
             (
@@ -1220,7 +1210,7 @@ mod tests {
                         params: vec![],
                     }
                     .into(),
-                    body: empty_tuple().into(),
+                    body: empty_tuple().into_block().into(),
                 },
             ),
             (
@@ -1297,8 +1287,8 @@ mod tests {
                 "if (true) {{}} else {{x: 1}}",
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into(),
-                    then: ValueExpr::Duck(vec![]).into(),
-                    r#else: ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(1))]).into(),
+                    then: ValueExpr::Duck(vec![]).into_block().into(),
+                    r#else: ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(1))]).into_block().into(),
                 },
             ),
             (
