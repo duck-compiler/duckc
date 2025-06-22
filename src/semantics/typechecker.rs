@@ -1,6 +1,6 @@
 use std::{collections::HashMap, process};
 
-use crate::parse::{type_parser::{Duck, TypeExpr}, value_parser::ValueExpr};
+use crate::parse::{type_parser::{Duck, Struct, TypeExpr}, value_parser::ValueExpr};
 
 #[derive(Debug, Clone)]
 pub struct TypeEnvironment {
@@ -38,7 +38,21 @@ impl TypeExpr {
             ValueExpr::Bool(..) => TypeExpr::Bool,
             ValueExpr::Char(..) => TypeExpr::Char,
             ValueExpr::Float(..) => TypeExpr::Float,
+            ValueExpr::String(..) => TypeExpr::String,
+            ValueExpr::Break => TypeExpr::Tuple(vec![]),
+            ValueExpr::Continue => TypeExpr::Tuple(vec![]),
+            ValueExpr::Return(Some(value_expr)) => TypeExpr::from_value_expr(value_expr),
+            ValueExpr::Return(None) => TypeExpr::Any, // TODO return never !
             ValueExpr::VarAssign(..) => TypeExpr::Tuple(vec![]),
+            ValueExpr::VarDecl(..) => TypeExpr::Tuple(vec![]),
+            ValueExpr::Struct(fields) => {
+                let types = fields
+                    .into_iter()
+                    .map(|(field_name, value_expr)| (field_name.to_string(), TypeExpr::from_value_expr(value_expr)))
+                    .collect::<Vec<(String, TypeExpr)>>();
+
+                TypeExpr::Struct(Struct { fields: types })
+            },
             ValueExpr::Tuple(fields) => {
                 let types = fields
                     .into_iter()
@@ -62,7 +76,24 @@ impl TypeExpr {
                 require_type_is_number(&left_type_expr);
                 check_type_compatability(&left_type_expr, &right_type_expr);
 
-                TypeExpr::Any
+                left_type_expr
+            },
+            ValueExpr::Equals(left, right) => {
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right);
+
+                check_type_compatability(&left_type_expr, &right_type_expr);
+
+                left_type_expr
+            },
+            ValueExpr::Mul(left, right) => {
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right);
+
+                require_type_is_number(&left_type_expr);
+                check_type_compatability(&left_type_expr, &right_type_expr);
+
+                left_type_expr
             },
             ValueExpr::FunctionCall { target, params } => {
                 todo!("Return Type of Function");
@@ -92,7 +123,15 @@ impl TypeExpr {
             ValueExpr::FieldAccess { target_obj, field_name } => {
                 let target_obj_type_expr = TypeExpr::from_value_expr(target_obj);
                 todo!()
-            }
+            },
+            ValueExpr::While { condition, body } => {
+                let condition_type_expr = TypeExpr::from_value_expr(condition);
+                check_type_compatability(&condition_type_expr, &TypeExpr::Bool);
+
+                let body_type_expr = TypeExpr::from_value_expr(body);
+
+                return TypeExpr::Tuple(vec![])
+            },
         };
     }
 }
