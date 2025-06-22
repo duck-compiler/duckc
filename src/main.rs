@@ -5,7 +5,7 @@ use std::{error::Error, ffi::OsString, io::Write, path::PathBuf, process::Comman
 
 use chumsky::Parser;
 use parse::lexer::lexer;
-use semantics::typechecker;
+use semantics::typechecker::{self, TypeEnv};
 use tempfile::Builder;
 
 use crate::parse::{source_file_parser::source_file_parser, use_statement_parser::UseStatement, value_parser::{EmitEnvironment, GoImport}};
@@ -53,7 +53,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("before resolve");
     source_file = dbg!(source_file);
 
-    typechecker::typeresolve_source_file(&mut source_file);
+    let mut type_env = TypeEnv::default();
+    typechecker::typeresolve_source_file(&mut source_file, &mut type_env);
 
     println!("after resolve");
     source_file = dbg!(source_file);
