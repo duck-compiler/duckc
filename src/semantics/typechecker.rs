@@ -191,7 +191,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 }
 
 impl TypeExpr {
-    fn to_go_type_str(&self, type_env: &mut TypeEnv) -> String {
+    pub fn to_go_type_str(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Bool => "bool".to_string(),
