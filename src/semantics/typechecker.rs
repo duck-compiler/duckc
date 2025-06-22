@@ -82,6 +82,8 @@ pub fn typeresolve_source_file(source_file: &SourceFile) {
 
     fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         match value_expr {
+            ValueExpr::InlineGo(..) => {},
+            ValueExpr::Lambda(..) => todo!("lambda expressions"),
             ValueExpr::FunctionCall { target, params } => {
                 typeresolve_value_expr(target, type_env);
                 params.iter_mut().for_each(|param| typeresolve_value_expr(param, type_env));
@@ -211,6 +213,8 @@ impl TypeExpr {
 
     pub fn from_value_expr(value_expr: &ValueExpr) -> TypeExpr {
         return match value_expr {
+            ValueExpr::Lambda(..) => todo!("type for lambda"),
+            ValueExpr::InlineGo(..) => todo!("type for inline go"),
             ValueExpr::Int(..) => TypeExpr::Int,
             ValueExpr::Bool(..) => TypeExpr::Bool,
             ValueExpr::Char(..) => TypeExpr::Char,
@@ -458,7 +462,7 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr) {
 
 #[cfg(test)]
 mod test {
-    use crate::parse::{lexer::lexer, source_file_parser::source_file_parser, value_parser::value_expr_parser};
+    use crate::parse::{lexer::lexer, value_parser::value_expr_parser};
     use chumsky::prelude::*;
 
     use super::*;

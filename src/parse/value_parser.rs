@@ -1640,15 +1640,15 @@ mod tests {
                 "() -> Int => 1",
                 ValueExpr::Lambda(LambdaFunctionExpr {
                     params: vec![],
-                    return_type: Some(TypeExpression::TypeName("Int".into())),
+                    return_type: Some(TypeExpr::TypeName("Int".into())),
                     value_expr: ValueExpr::Int(1),
                 }.into())
             ),
             (
                 "(x: String) -> Int => 1",
                 ValueExpr::Lambda(LambdaFunctionExpr {
-                    params: vec![("x".into(), TypeExpression::TypeName("String".into()))],
-                    return_type: Some(TypeExpression::TypeName("Int".into())),
+                    params: vec![("x".into(), TypeExpr::TypeName("String".into()))],
+                    return_type: Some(TypeExpr::TypeName("Int".into())),
                     value_expr: ValueExpr::Int(1),
                 }.into())
             ),

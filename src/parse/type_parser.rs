@@ -119,12 +119,12 @@ impl TypeExpr {
 
     pub fn emit_into_env(&self, env: EmitEnvironment) {
         match self {
-            TypeExpression::Tuple(params) => {
+            TypeExpr::Tuple(params) => {
                 for param in params {
                     param.emit_into_env(env.clone());
                 }
             }
-            TypeExpression::Struct(Struct { fields }) => {
+            TypeExpr::Struct(Struct { fields }) => {
                 let mut type_fields = Vec::new();
                 let mut go_type_name = "Struct".to_string();
 
@@ -172,7 +172,7 @@ impl TypeExpr {
 
                 env.push_types([go_struct, go_interface].into_iter());
             }
-            TypeExpression::Duck(Duck { fields }) => {
+            TypeExpr::Duck(Duck { fields }) => {
                 let mut type_fields = Vec::new();
                 let mut go_type_name = "Duck".to_string();
 
