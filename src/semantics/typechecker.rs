@@ -65,9 +65,10 @@ impl TypeExpression {
             ValueExpr::FunctionCall { target, params } => {
                 todo!("Return Type of Function");
             },
-            ValueExpr::Block(exprs) => TypeExpression::from(
-                *exprs
+            ValueExpr::Block(value_exprs) => TypeExpression::from(
+                value_exprs
                     .last()
+                    .map(|value_expr| TypeExpression::from_value_expr(value_expr))
                     .expect("Block Expressions must be at least one expression long."),
             ),
             ValueExpr::Variable(identifier) => todo!("resolve type for identifier"),
