@@ -136,8 +136,6 @@ impl TypeExpr {
     }
 }
 
-fn type_has_field(type_expr: &TypeExpr, identifier: &TypeExpr) {
-}
     fn is_object_like(&self) -> bool {
         match self {
             Self::Tuple(..)
@@ -165,7 +163,26 @@ fn type_has_field(type_expr: &TypeExpr, identifier: &TypeExpr) {
         }
     }
 
-    fn get_field_type(&self, field_name)
+    fn get_field_type(&self, field_name: String) -> TypeExpr {
+        match self {
+            Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
+            Self::Struct(r#struct) => r#struct
+                .fields
+                .iter()
+                .find(|struct_field| *struct_field.0 == field_name)
+                .expect("Tried to access field that doesn't exist")
+                .1
+                .clone(),
+            Self::Duck(duck) => duck
+                .fields
+                .iter()
+                .find(|struct_field| *struct_field.0 == field_name)
+                .expect("Tried to access field that doesn't exist")
+                .1
+                .clone(),
+            _ => panic!("Tried to access field on non object-like type."),
+        }
+    }
 
     fn is_number(&self) -> bool {
         return *self == TypeExpr::Int || *self == TypeExpr::Float;
