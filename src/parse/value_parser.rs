@@ -1,8 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::parse::{
-    assignment_and_declaration_parser::{Assignment, Declaration},
-    type_parser::type_expression_parser,
+    assignment_and_declaration_parser::{Assignment, Declaration}, function_parser::{LambdaFunctionExpr, Param}, type_parser::type_expression_parser,
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
@@ -46,6 +45,8 @@ pub enum ValueExpr {
     Mul(Box<ValueExpr>, Box<ValueExpr>),
     BoolNegate(Box<ValueExpr>),
     Equals(Box<ValueExpr>, Box<ValueExpr>),
+    InlineGo(String),
+    Lambda(Box<LambdaFunctionExpr>),
 }
 
 #[derive(Clone, Debug)]
@@ -145,9 +146,15 @@ impl GoTypeDef {
     }
 }
 
+#[derive(PartialEq, Clone, Debug, Default)]
+pub struct GoImport {
+    pub path: String,
+    pub alias: Option<String>,
+}
+
 #[derive(Clone, Debug)]
 pub struct EmitEnvironment {
-    pub imports: Rc<RefCell<Vec<String>>>,
+    pub imports: Rc<RefCell<Vec<GoImport>>>,
     pub types: Rc<RefCell<Vec<GoTypeDef>>>,
     pub var_counter: Rc<RefCell<usize>>,
 }
@@ -176,12 +183,16 @@ impl EmitEnvironment {
         }
     }
 
-    pub fn push_import(&self, import: impl Into<String>) {
+    pub fn push_import(&self, import: impl Into<GoImport>) -> Option<String> {
         let mut imports = self.imports.borrow_mut();
         let import = import.into();
-        if !imports.contains(&import) {
-            imports.push(import);
+        for i in imports.iter() {
+            if i.path == import.path {
+                return i.alias.clone();
+            }
         }
+        imports.push(import);
+        None
     }
 
     pub fn emit_imports_and_types(&self) -> String {
@@ -190,7 +201,7 @@ impl EmitEnvironment {
             self.imports
                 .borrow()
                 .iter()
-                .map(|x| format!("\"{x}\""))
+                .map(|x| format!("{} \"{}\"", x.alias.as_ref().unwrap_or(&String::new()), x.path))
                 .collect::<Vec<_>>()
                 .join("\n"),
             self.types
@@ -204,17 +215,8 @@ impl EmitEnvironment {
 }
 
 impl ValueExpr {
-    fn flatten_block(&self) -> ValueExpr {
-        match self {
-            ValueExpr::Block(x) if x.len() <= 1 => {
-                if let Some(x) = x.first() {
-                    x.clone()
-                } else {
-                    empty_tuple()
-                }
-            }
-            _ => self.clone(),
-        }
+    pub fn into_block(self) -> ValueExpr {
+        ValueExpr::Block(vec![self])
     }
 
     pub fn needs_semicolon(&self) -> bool {
@@ -229,6 +231,7 @@ impl ValueExpr {
                 body: _,
             } => false,
             ValueExpr::Block(_) => false,
+            ValueExpr::InlineGo(_) => false,
             _ => true,
         }
     }
@@ -249,6 +252,37 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
     let no_var = |instr: &str| (vec![instr.to_owned()], None);
 
     match x {
+        ValueExpr::Lambda(expr) => {
+            let LambdaFunctionExpr { params, return_type, value_expr } = *expr;
+            for param in &params {
+                param.1.emit_into_env(env.clone());
+            }
+            let (mut v_instr, res_name) = emit(value_expr, env.clone());
+            if let Some(res_name) = res_name {
+                v_instr.push(format!("_ = {res_name}\n"))
+            }
+
+            let res_var = new_var();
+            let mut instr = Vec::new();
+            let lambda_creation = format!("{res_var} := func({}) {} {}\n",
+                params.iter()
+                    .map(|(name, t)| format!("{name} {}", t.emit().0))
+                    .collect::<Vec<_>>().join(", "),
+                return_type.map(|t| t.emit().0).unwrap_or_default(),
+                "{");
+
+            instr.push(lambda_creation);
+            instr.extend(v_instr);
+            instr.push("\n}\n".to_string());
+
+            (instr, Some(res_var))
+        }
+        ValueExpr::InlineGo(code) => {
+            let mut res = vec!["\n".to_string()];
+            res.extend(code.split("\n").map(|x| format!("{x}\n")));
+            res.push("\n".to_string());
+            (res, None)
+        }
         ValueExpr::Equals(x, y) => {
             let (mut x_instr, Some(x_res)) = emit(*x, env.clone()) else {
                 panic!()
@@ -296,7 +330,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
         ValueExpr::VarDecl(b) => {
             let Declaration {
                 name,
-                type_expr: _,
+                type_expr: t,
                 initializer,
             } = *b;
             if let Some(initializer) = initializer {
@@ -308,7 +342,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                 res.push(format!("{name} := {res_var}\n"));
                 (res, Some(name))
             } else {
-                (vec![format!("var {name} interface{}\n", "{}")], Some(name))
+                (vec![format!("var {name} {}\n", t.emit().0)], Some(name))
             }
         }
         ValueExpr::VarAssign(b) => {
@@ -433,8 +467,11 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             if let ValueExpr::Variable(x, ..) = &mut target
                 && x == "@println"
             {
-                *x = "fmt.Println".to_string();
-                env.push_import("fmt");
+                let package_name = env.push_import(GoImport {
+                    alias: None,
+                    path: "fmt".into()
+                }).unwrap_or("fmt".into());
+                *x = format!("{package_name}.Println").to_string();
                 with_result = false;
             }
 
@@ -524,8 +561,6 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                 ));
             }
 
-            go_interface_name.push_str("_Interface");
-
             let go_struct = GoTypeDef::Struct {
                 name: go_type_name.clone(),
                 fields: type_fields,
@@ -583,9 +618,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                 ));
             }
 
-            let mut go_interface_name = go_type_name.clone();
-            go_interface_name.push_str("_Interface");
-
+            let go_interface_name = go_type_name.clone();
             go_type_name.push_str("_Struct");
 
             let go_struct = GoTypeDef::Struct {
@@ -651,6 +684,36 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
 
 pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> {
     recursive(|value_expr_parser| {
+        let lambda_parser = {
+            let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                .then_ignore(just(Token::ControlChar(':')))
+                .then(type_expression_parser())
+                .map(|(identifier, type_expr)| (identifier, type_expr) as Param);
+
+            let params_parser = param_parser
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<Param>>()
+                .or_not();
+
+            let return_type_parser = just(Token::ControlChar('-'))
+                .ignore_then(just(Token::ControlChar('>')))
+                .ignore_then(type_expression_parser());
+
+            just(Token::ControlChar('('))
+                .ignore_then(params_parser)
+                .then_ignore(just(Token::ControlChar(')')))
+                .then(return_type_parser.or_not())
+                .then_ignore(just(Token::ControlChar('=')))
+                .then_ignore(just(Token::ControlChar('>')))
+                .then(value_expr_parser.clone())
+                .map(|((params, return_type), value_expr)| ValueExpr::Lambda(LambdaFunctionExpr {
+                    params: params.unwrap_or_default(),
+                    return_type,
+                    value_expr,
+                }.into()))
+        };
+
         let params = value_expr_parser
             .clone()
             .separated_by(just(Token::ControlChar(',')))
@@ -658,17 +721,19 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .collect::<Vec<_>>()
             .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')));
 
-        let tuple = (just(Token::ControlChar('('))
-            .ignore_then(just(Token::ControlChar(')')))
-            .to(ValueExpr::Tuple(vec![])))
-        .or(value_expr_parser
-            .clone()
-            .separated_by(just(Token::ControlChar(',')))
-            .at_least(1)
-            .allow_trailing()
-            .collect::<Vec<_>>()
-            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-            .map(|x| ValueExpr::Tuple(dbg!(x))));
+        let tuple =
+            lambda_parser.clone().or(
+                (just(Token::ControlChar('('))
+                    .ignore_then(just(Token::ControlChar(')')))
+                    .to(ValueExpr::Tuple(vec![])))
+                .or(value_expr_parser
+                    .clone()
+                    .separated_by(just(Token::ControlChar(',')))
+                    .at_least(1)
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                    .map(|x| ValueExpr::Tuple(dbg!(x)))));
 
         let initializer = just(Token::ControlChar('='))
             .ignore_then(value_expr_parser.clone())
@@ -690,16 +755,17 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 )
             });
 
-        let struct_expression = just(Token::ControlChar('.')).ignore_then(
-            select_ref! { Token::Ident(ident) => ident.to_owned() }
-                .then_ignore(just(Token::ControlChar(':')))
-                .then(value_expr_parser.clone())
-                .separated_by(just(Token::ControlChar(',')))
-                .allow_trailing()
-                .collect::<Vec<_>>()
-                .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
-                .map(|identifier| ValueExpr::Struct(identifier)),
-        );
+        let struct_expression = just(Token::ControlChar('.'))
+            .ignore_then(
+                select_ref! { Token::Ident(ident) => ident.to_owned() }
+                    .then_ignore(just(Token::ControlChar(':')))
+                    .then(value_expr_parser.clone())
+                    .separated_by(just(Token::ControlChar(',')))
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
+                    .map(ValueExpr::Struct)
+            );
 
         let duck_expression = select_ref! { Token::Ident(ident) => ident.to_owned() }
             .then_ignore(just(Token::ControlChar(':')))
@@ -737,7 +803,12 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     exprs.push((empty_tuple(), None));
                 }
 
-                ValueExpr::Block(exprs.into_iter().map(|(expr, _)| expr).collect()).flatten_block()
+                ValueExpr::Block(
+                    exprs
+                        .into_iter()
+                        .map(|(expr, _)| expr)
+                        .collect(),
+                )
             });
 
         let if_condition = value_expr_parser
@@ -754,14 +825,15 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .ignore_then(while_condition.clone())
             .then(while_body.clone());
 
-        let field_access = any()
+        let field_access = none_of(Token::Let)
             .filter(|t| !matches!(t, Token::ControlChar('.')))
             .repeated()
             .at_least(1)
             .collect::<Vec<_>>()
             .then(
                 (just(Token::ControlChar('.')).ignore_then(
-                    select_ref! { Token::Ident(field_name) => field_name.to_owned() },
+                    select_ref! { Token::Ident(field_name) => field_name.to_owned() }
+                        .or(select_ref! { Token::IntLiteral(i) => i.to_string() }),
                 ))
                 .repeated()
                 .at_least(1)
@@ -818,6 +890,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .repeated()
             .collect::<Vec<_>>()
             .then(
+                field_access.clone().or(
                 value_expr_parser
                     .clone()
                     .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
@@ -843,7 +916,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                             }
                         }),
                     ))),
-            )
+            ))
             .then(params.clone().or_not())
             .map(|((neg, target), params)| {
                 let res = if let Some(params) = params {
@@ -914,7 +987,11 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
         //             .fold(init, |acc, x| ValueExpr::Equals(acc.into(), x.into()))
         //     });
 
+        let inline_go = select_ref! { Token::InlineGo(x) => x.to_owned() }
+            .map(ValueExpr::InlineGo);
+
         choice((
+            inline_go,
             assignment,
             equals,
             add,
@@ -945,6 +1022,7 @@ mod tests {
         lexer::lexer,
         type_parser::{Duck, TypeExpr},
         value_parser::{EmitEnvironment, emit, empty_duck, empty_tuple, value_expr_parser},
+        assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr, lexer::lexer, type_parser::{Duck, TypeExpression}, value_parser::{emit, empty_duck, empty_tuple, value_expr_parser, EmitEnvironment}
     };
 
     use super::ValueExpr;
@@ -1086,22 +1164,22 @@ mod tests {
                 "if (true) { 1 } else { 2 }",
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into(),
-                    then: ValueExpr::Int(1).into(),
-                    r#else: ValueExpr::Int(2).into(),
+                    then: ValueExpr::Int(1).into_block().into(),
+                    r#else: ValueExpr::Int(2).into_block().into(),
                 },
             ),
             (
                 "if (true) { 1 } else if (false) { 3 } else if (200) { 4 } else { 2 }",
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into(),
-                    then: ValueExpr::Int(1).into(),
+                    then: ValueExpr::Int(1).into_block().into(),
                     r#else: ValueExpr::If {
                         condition: ValueExpr::Bool(false).into(),
-                        then: ValueExpr::Int(3).into(),
+                        then: ValueExpr::Int(3).into_block().into(),
                         r#else: ValueExpr::If {
                             condition: ValueExpr::Int(200).into(),
-                            then: ValueExpr::Int(4).into(),
-                            r#else: ValueExpr::Int(2).into(),
+                            then: ValueExpr::Int(4).into_block().into(),
+                            r#else: ValueExpr::Int(2).into_block().into(),
                         }
                         .into(),
                     }
@@ -1118,7 +1196,7 @@ mod tests {
                 ]),
             ),
             ("{}", empty_duck()),
-            ("{1}", ValueExpr::Int(1)),
+            ("{1}", ValueExpr::Int(1).into_block()),
             (
                 "{1;  2   ;3;x()}",
                 ValueExpr::Block(vec![
@@ -1184,7 +1262,7 @@ mod tests {
                 "while (true) {}",
                 ValueExpr::While {
                     condition: ValueExpr::Bool(true).into(),
-                    body: empty_tuple().into(),
+                    body: empty_tuple().into_block().into(),
                 },
             ),
             (
@@ -1195,7 +1273,7 @@ mod tests {
                         params: vec![],
                     }
                     .into(),
-                    body: empty_tuple().into(),
+                    body: empty_tuple().into_block().into(),
                 },
             ),
             (
@@ -1272,8 +1350,8 @@ mod tests {
                 "if (true) {{}} else {{x: 1}}",
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into(),
-                    then: ValueExpr::Duck(vec![]).into(),
-                    r#else: ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(1))]).into(),
+                    then: ValueExpr::Duck(vec![]).into_block().into(),
+                    r#else: ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(1))]).into_block().into(),
                 },
             ),
             (
@@ -1538,6 +1616,58 @@ mod tests {
                     ValueExpr::BoolNegate(ValueExpr::Int(2).into()).into(),
                 ),
             ),
+            (
+                "go {}",
+                ValueExpr::InlineGo(String::new()),
+            ),
+            (
+                "go { go func() {} }",
+                ValueExpr::InlineGo(String::from(" go func() {} ")),
+            ),
+            (
+                "() => {}",
+                ValueExpr::Lambda(LambdaFunctionExpr {
+                    params: vec![],
+                    return_type: None,
+                    value_expr: ValueExpr::Duck(vec![])
+                }.into())
+            ),
+            (
+                "() => 1",
+                ValueExpr::Lambda(LambdaFunctionExpr {
+                    params: vec![],
+                    return_type: None,
+                    value_expr: ValueExpr::Int(1),
+                }.into())
+            ),
+            (
+                "() -> Int => 1",
+                ValueExpr::Lambda(LambdaFunctionExpr {
+                    params: vec![],
+                    return_type: Some(TypeExpression::TypeName("Int".into())),
+                    value_expr: ValueExpr::Int(1),
+                }.into())
+            ),
+            (
+                "(x: String) -> Int => 1",
+                ValueExpr::Lambda(LambdaFunctionExpr {
+                    params: vec![("x".into(), TypeExpression::TypeName("String".into()))],
+                    return_type: Some(TypeExpression::TypeName("Int".into())),
+                    value_expr: ValueExpr::Int(1),
+                }.into())
+            ),
+            ("{x: 1}.x",
+                ValueExpr::FieldAccess { target_obj: ValueExpr::Duck(vec![
+                    ("x".into(), ValueExpr::Int(1))
+                ]).into(), field_name: "x".into() }
+            ),
+            ("(1,(3,4),\"s\").0",
+                ValueExpr::FieldAccess { target_obj: ValueExpr::Tuple(vec![
+                    ValueExpr::Int(1),
+                    ValueExpr::Tuple(vec![ValueExpr::Int(3), ValueExpr::Int(4)]),
+                    ValueExpr::String("s".into()),
+                ]).into(), field_name: "0".into() }
+            )
         ];
 
         for (src, expected_tokens) in test_cases {
@@ -1652,6 +1782,7 @@ mod tests {
             "let x: { h: Int, x: { y: Int }} = { h: 4, x: { y: 8 } }",
             "let x: Int = false",
             "let x: String = \"Hallo, Welt!\"",
+            "let x: go sync.WaitGroup"
         ];
 
         for valid_declaration in valid_declarations {

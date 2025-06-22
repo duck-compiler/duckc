@@ -95,9 +95,9 @@ mod tests {
             (
                 "use x;",
                 SourceFile {
-                    use_statements: vec![UseStatement {
-                        indicator_track: vec![Indicator::Module("x".into())],
-                    }],
+                    use_statements: vec![UseStatement::Regular(
+                        vec![Indicator::Module("x".into())],
+                    )],
                     ..Default::default()
                 },
             ),
@@ -127,9 +127,9 @@ mod tests {
                             ..Default::default()
                         },
                     ],
-                    use_statements: vec![UseStatement {
-                        indicator_track: vec![Indicator::Module("x".into())],
-                    }],
+                    use_statements: vec![UseStatement::Regular(
+                        vec![Indicator::Module("x".into())],
+                    )],
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
                         type_expression: TypeExpr::Duck(Duck {

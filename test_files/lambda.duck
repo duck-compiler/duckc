@@ -1,0 +1,10 @@
+fun main() {
+    ((x: {x: string, y: (string, string)}) => {
+        @println("kek");
+        1
+    })({x: {x: "hallo", y: (1, 2)}})
+}
+
+fun abc(x: {z: String}) {
+
+}
