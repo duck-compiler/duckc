@@ -1,7 +1,7 @@
 #![feature(let_chains)]
 #![feature(impl_trait_in_bindings)]
 
-use std::{error::Error, ffi::OsString, io::Write, process::Command};
+use std::{error::Error, ffi::OsString, io::Write, path::PathBuf, process::Command};
 
 use chumsky::Parser;
 use parse::lexer::lexer;
@@ -42,9 +42,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let target_path = file_name.expect("No file name provided");
-    let src = std::fs::read_to_string(&target_path).expect("Could not read file");
+    let mut p = PathBuf::from(target_path);
+    let src = std::fs::read_to_string(&p).expect("Could not read file");
     let lex = lexer().parse(&src).into_result().expect("Lex error");
-    let mut source_file = source_file_parser()
+    let mut source_file = source_file_parser({p.pop();p})
         .parse(&lex)
         .into_result()
         .expect("Parse error");

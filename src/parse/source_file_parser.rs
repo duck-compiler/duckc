@@ -1,8 +1,13 @@
-use chumsky::{IterParser, Parser, prelude::choice};
+use std::{
+    fs::File,
+    path::PathBuf,
+};
+
+use chumsky::prelude::*;
 
 use crate::parse::{
     function_parser::{FunctionDefintion, function_definition_parser},
-    lexer::Token,
+    lexer::{Token, lexer},
     type_parser::{TypeDefinition, type_definition_parser},
     use_statement_parser::{UseStatement, use_statement_parser},
 };
@@ -12,6 +17,7 @@ pub struct SourceFile {
     pub function_definitions: Vec<FunctionDefintion>,
     pub type_definitions: Vec<TypeDefinition>,
     pub use_statements: Vec<UseStatement>,
+    pub sub_modules: Vec<(String, SourceFile)>,
 }
 
 #[derive(Debug, Clone)]
@@ -19,40 +25,111 @@ pub enum SourceUnit {
     Func(FunctionDefintion),
     Type(TypeDefinition),
     Use(UseStatement),
+    Module(String, SourceFile),
 }
 
-pub fn source_file_parser<'src>() -> impl Parser<'src, &'src [Token], SourceFile> {
-    choice((
-        use_statement_parser().map(SourceUnit::Use),
-        type_definition_parser().map(SourceUnit::Type),
-        function_definition_parser().map(SourceUnit::Func),
-    ))
-    .repeated()
-    .collect::<Vec<_>>()
-    .map(|xs| {
-        let mut f = Vec::new();
-        let mut t = Vec::new();
-        let mut u = Vec::new();
+fn module_descent(name: String, current_dir: PathBuf) -> (String, SourceFile) {
+    let joined = current_dir.join(&name);
+    let mod_dir = File::open(&joined);
+    if let Ok(mod_dir) = mod_dir
+        && mod_dir.metadata().unwrap().is_dir()
+    {
+        let combined = std::fs::read_dir(&joined)
+            .unwrap()
+            .map(|dir_entry| match dir_entry {
+                Ok(dir_entry) => (
+                    dir_entry.metadata().unwrap().is_file(),
+                    module_descent(
+                        dir_entry
+                            .file_name()
+                            .into_string()
+                            .unwrap()
+                            .split(".duck")
+                            .next()
+                            .unwrap()
+                            .into(),
+                        joined.clone(),
+                    )
+                    .1,
+                ),
+                _ => panic!(),
+            })
+            .fold(SourceFile::default(), |mut acc, (i, x)| {
+                dbg!(&x);
+                if i {
+                    acc.function_definitions.extend(x.function_definitions);
+                    acc.type_definitions.extend(x.type_definitions);
+                    acc.sub_modules.extend(x.sub_modules);
+                }
+                acc.use_statements.extend(x.use_statements);
+                acc
+            });
+        (name, combined)
+    } else {
+        let src_text =
+            std::fs::read_to_string(dbg!(format!("{}.duck", joined.to_str().unwrap()))).unwrap();
+        let lex = lexer().parse(&src_text).unwrap();
+        let parse = source_file_parser(current_dir.clone()).parse(&lex).unwrap();
+        (name, parse)
+    }
+}
 
-        for x in xs {
-            use SourceUnit::*;
-            match x {
-                Func(def) => f.push(def),
-                Type(def) => t.push(def),
-                Use(def) => u.push(def),
+pub fn source_file_parser<'src>(p: PathBuf) -> impl Parser<'src, &'src [Token], SourceFile> {
+    let p = Box::leak(Box::new(p));
+    recursive(|e| {
+        choice((
+            use_statement_parser().map(SourceUnit::Use),
+            type_definition_parser().map(SourceUnit::Type),
+            function_definition_parser().map(SourceUnit::Func),
+            just(Token::Module)
+                .ignore_then(select_ref! { Token::Ident(i) => i.to_owned() })
+                .then(choice((
+                    just(Token::ControlChar(';')).to(None),
+                    e.clone()
+                        .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
+                        .map(Some),
+                )))
+                .map(|(name, src)| {
+                    println!("X: {} {}", name, p.to_str().unwrap());
+                    if let Some(src) = src {
+                        SourceUnit::Module(name, src)
+                    } else {
+                        SourceUnit::Module(name.clone(), module_descent(name.clone(), p.clone()).1)
+                    }
+                }),
+        ))
+        .repeated()
+        .collect::<Vec<_>>()
+        .map(|xs| {
+            let mut f = Vec::new();
+            let mut t = Vec::new();
+            let mut u = Vec::new();
+            let mut s = Vec::new();
+
+            for x in xs {
+                use SourceUnit::*;
+                match x {
+                    Func(def) => f.push(def),
+                    Type(def) => t.push(def),
+                    Use(def) => u.push(def),
+                    Module(name, def) => s.push((name, def)),
+                }
             }
-        }
 
-        SourceFile {
-            function_definitions: f,
-            type_definitions: t,
-            use_statements: u,
-        }
+            SourceFile {
+                function_definitions: f,
+                type_definitions: t,
+                use_statements: u,
+                sub_modules: s,
+            }
+        })
     })
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use chumsky::Parser;
 
     use crate::parse::{
@@ -61,6 +138,7 @@ mod tests {
         source_file_parser::{SourceFile, source_file_parser},
         type_parser::{Duck, TypeDefinition, TypeExpr},
         use_statement_parser::{Indicator, UseStatement},
+        value_parser::ValueExpr,
     };
 
     #[test]
@@ -95,9 +173,9 @@ mod tests {
             (
                 "use x;",
                 SourceFile {
-                    use_statements: vec![UseStatement::Regular(
-                        vec![Indicator::Module("x".into())],
-                    )],
+                    use_statements: vec![UseStatement::Regular(vec![Indicator::Module(
+                        "x".into(),
+                    )])],
                     ..Default::default()
                 },
             ),
@@ -110,6 +188,64 @@ mod tests {
                             fields: vec![("x".into(), TypeExpr::String)],
                         }),
                     }],
+                    ..Default::default()
+                },
+            ),
+            (
+                "module abc {}",
+                SourceFile {
+                    sub_modules: vec![(
+                        "abc".into(),
+                        SourceFile {
+                            ..Default::default()
+                        },
+                    )],
+                    ..Default::default()
+                },
+            ),
+            (
+                "module abc {module xyz{}}",
+                SourceFile {
+                    sub_modules: vec![(
+                        "abc".into(),
+                        SourceFile {
+                            sub_modules: vec![(
+                                "xyz".into(),
+                                SourceFile {
+                                    ..Default::default()
+                                },
+                            )],
+                            ..Default::default()
+                        },
+                    )],
+                    ..Default::default()
+                },
+            ),
+            (
+                "module abc {use test; module xyz { use lol; } fun abc() {} }",
+                SourceFile {
+                    sub_modules: vec![(
+                        "abc".into(),
+                        SourceFile {
+                            sub_modules: vec![(
+                                "xyz".into(),
+                                SourceFile {
+                                    use_statements: vec![UseStatement::Regular(vec![
+                                        Indicator::Module("lol".into()),
+                                    ])],
+                                    ..Default::default()
+                                },
+                            )],
+                            use_statements: vec![UseStatement::Regular(vec![Indicator::Module(
+                                "test".into(),
+                            )])],
+                            function_definitions: vec![FunctionDefintion {
+                                name: "abc".into(),
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        },
+                    )],
                     ..Default::default()
                 },
             ),
@@ -127,23 +263,288 @@ mod tests {
                             ..Default::default()
                         },
                     ],
-                    use_statements: vec![UseStatement::Regular(
-                        vec![Indicator::Module("x".into())],
-                    )],
+                    use_statements: vec![UseStatement::Regular(vec![Indicator::Module(
+                        "x".into(),
+                    )])],
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
                         type_expression: TypeExpr::Duck(Duck {
                             fields: vec![("x".into(), TypeExpr::String)],
                         }),
                     }],
+                    ..Default::default()
                 },
             ),
         ];
 
         for (src, exp) in test_cases {
             let lex = lexer().parse(src).into_result().expect(src);
-            let parse = source_file_parser().parse(&lex).into_result().expect(src);
+            let parse = source_file_parser(PathBuf::from("test_files"))
+                .parse(&lex)
+                .into_result()
+                .expect(src);
             assert_eq!(parse, exp, "{src}");
+        }
+    }
+
+    #[test]
+    fn test_mod_structure() {
+        let test_cases = vec![
+            ("01.duck", SourceFile::default()),
+            (
+                "02.duck",
+                SourceFile {
+                    sub_modules: vec![
+                        ("abc".into(), SourceFile::default()),
+                        ("xyz".into(), SourceFile::default()),
+                    ],
+                    ..Default::default()
+                },
+            ),
+            (
+                "03.duck",
+                SourceFile {
+                    sub_modules: vec![
+                        (
+                            "abc".into(),
+                            SourceFile {
+                                sub_modules: vec![("lol".into(), SourceFile::default())],
+                                ..SourceFile::default()
+                            },
+                        ),
+                        (
+                            "xyz".into(),
+                            SourceFile {
+                                sub_modules: vec![("foo".into(), SourceFile::default())],
+                                ..SourceFile::default()
+                            },
+                        ),
+                    ],
+                    ..Default::default()
+                },
+            ),
+            (
+                "04.duck",
+                SourceFile {
+                    sub_modules: vec![("empty".into(), SourceFile::default())],
+                    ..Default::default()
+                },
+            ),
+            (
+                "05.duck",
+                SourceFile {
+                    sub_modules: vec![
+                        ("empty".into(), SourceFile::default()),
+                        (
+                            "single".into(),
+                            SourceFile {
+                                function_definitions: vec![FunctionDefintion {
+                                    name: "my_single_fun".into(),
+                                    ..Default::default()
+                                }],
+                                ..Default::default()
+                            },
+                        ),
+                    ],
+                    ..Default::default()
+                },
+            ),
+            (
+                "06.duck",
+                SourceFile {
+                    sub_modules: vec![(
+                        "multiple".into(),
+                        SourceFile {
+                            function_definitions: vec![
+                                FunctionDefintion {
+                                    name: "some_abc_func".into(),
+                                    value_expr: ValueExpr::Block(vec![ValueExpr::String(
+                                        "Hello from module".into(),
+                                    )]),
+                                    ..Default::default()
+                                },
+                                FunctionDefintion {
+                                    name: "some_xyz_func".into(),
+                                    value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                                    ..Default::default()
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                    )],
+                    ..Default::default()
+                },
+            ),
+            (
+                "07.duck",
+                SourceFile {
+                    sub_modules: vec![
+                        (
+                            "multiple".into(),
+                            SourceFile {
+                                function_definitions: vec![
+                                    FunctionDefintion {
+                                        name: "some_abc_func".into(),
+                                        value_expr: ValueExpr::Block(vec![ValueExpr::String(
+                                            "Hello from module".into(),
+                                        )]),
+                                        ..Default::default()
+                                    },
+                                    FunctionDefintion {
+                                        name: "some_xyz_func".into(),
+                                        value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                                        ..Default::default()
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        ),
+                        (
+                            "nested".into(),
+                            SourceFile {
+                                function_definitions: vec![FunctionDefintion {
+                                    name: "hello_from_x".into(),
+                                    ..Default::default()
+                                }],
+                                sub_modules: vec![(
+                                    "level1".into(),
+                                    SourceFile {
+                                        function_definitions: vec![FunctionDefintion {
+                                            name: "hello_from_y".into(),
+                                            ..Default::default()
+                                        }],
+                                        sub_modules: vec![(
+                                            "level2".into(),
+                                            SourceFile {
+                                                function_definitions: vec![FunctionDefintion {
+                                                    name: "hello_from_z".into(),
+                                                    ..Default::default()
+                                                }],
+                                                ..Default::default()
+                                            },
+                                        )],
+                                        ..Default::default()
+                                    },
+                                )],
+                                ..Default::default()
+                            },
+                        ),
+                        ("empty".into(), SourceFile::default()),
+                        ("another_mod".into(), SourceFile::default()),
+                    ],
+                    ..Default::default()
+                },
+            ),
+            (
+                "08.duck",
+                SourceFile {
+                    sub_modules: vec![
+                        (
+                            "multiple".into(),
+                            SourceFile {
+                                function_definitions: vec![
+                                    FunctionDefintion {
+                                        name: "some_abc_func".into(),
+                                        value_expr: ValueExpr::Block(vec![ValueExpr::String(
+                                            "Hello from module".into(),
+                                        )]),
+                                        ..Default::default()
+                                    },
+                                    FunctionDefintion {
+                                        name: "some_xyz_func".into(),
+                                        value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                                        ..Default::default()
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        ),
+                        (
+                            "nested".into(),
+                            SourceFile {
+                                function_definitions: vec![FunctionDefintion {
+                                    name: "hello_from_x".into(),
+                                    ..Default::default()
+                                }],
+                                sub_modules: vec![(
+                                    "level1".into(),
+                                    SourceFile {
+                                        function_definitions: vec![FunctionDefintion {
+                                            name: "hello_from_y".into(),
+                                            ..Default::default()
+                                        }],
+                                        sub_modules: vec![(
+                                            "level2".into(),
+                                            SourceFile {
+                                                function_definitions: vec![FunctionDefintion {
+                                                    name: "hello_from_z".into(),
+                                                    ..Default::default()
+                                                }],
+                                                ..Default::default()
+                                            },
+                                        )],
+                                        ..Default::default()
+                                    },
+                                )],
+                                ..Default::default()
+                            },
+                        ),
+                        (
+                            "nested2".into(),
+                            SourceFile {
+                                function_definitions: vec![FunctionDefintion {
+                                    name: "hello_from_x".into(),
+                                    ..Default::default()
+                                }],
+                                sub_modules: vec![(
+                                    "level1".into(),
+                                    SourceFile {
+                                        function_definitions: vec![FunctionDefintion {
+                                            name: "hello_from_y".into(),
+                                            ..Default::default()
+                                        }],
+                                        sub_modules: vec![(
+                                            "level2".into(),
+                                            SourceFile {
+                                                function_definitions: vec![
+                                                    FunctionDefintion {
+                                                        name: "this_is_a_func".into(),
+                                                        ..Default::default()
+                                                    },
+                                                    FunctionDefintion {
+                                                        name: "this_is_another_func".into(),
+                                                        ..Default::default()
+                                                    },
+                                                    FunctionDefintion {
+                                                        name: "yet_another".into(),
+                                                        ..Default::default()
+                                                    },
+                                                ],
+                                                ..Default::default()
+                                            },
+                                        )],
+                                        ..Default::default()
+                                    },
+                                )],
+                                ..Default::default()
+                            },
+                        ),
+                    ],
+                    ..Default::default()
+                },
+            ),
+        ];
+
+        let dir = PathBuf::from("test_files").join("modules");
+
+        for (main_file, expected) in test_cases {
+            let src = std::fs::read_to_string(dir.join(main_file)).unwrap();
+            let lex = lexer().parse(&src).unwrap();
+            assert_eq!(
+                source_file_parser(dir.clone()).parse(&lex).unwrap(),
+                expected,
+                "{main_file}"
+            );
         }
     }
 }

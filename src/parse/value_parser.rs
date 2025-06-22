@@ -680,7 +680,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
     }
 }
 
-pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> {
+pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> + Clone {
     recursive(|value_expr_parser| {
         let lambda_parser = {
             let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }

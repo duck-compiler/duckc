@@ -1,0 +1,3 @@
+module level1;
+
+fun hello_from_x() {}
