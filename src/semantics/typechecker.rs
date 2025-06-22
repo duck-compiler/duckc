@@ -1,7 +1,7 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    function_parser::{FunctionDefintion, LambdaFunctionExpr}, source_file_parser::SourceFile, type_parser::{Duck, Struct, TypeExpr}, value_parser::ValueExpr
+    source_file_parser::SourceFile, type_parser::{Duck, Struct, TypeExpr}, value_parser::ValueExpr
 };
 
 #[derive(Debug, Clone)]
@@ -15,15 +15,6 @@ impl Default for TypeEnv {
         Self {
             identifier_types: vec![HashMap::new()],
             type_aliases: vec![HashMap::new()],
-        }
-    }
-}
-
-impl Default for TypeEnv {
-    fn default() -> Self {
-        Self {
-            identifier_types: vec![HashMap::new()],
-            type_aliases: HashMap::new()
         }
     }
 }
@@ -283,7 +274,7 @@ impl TypeExpr {
                     .map(|(field_name, value_expr)| {
                         (
                             field_name.to_string(),
-                            TypeExpr::from_value_expr(value_expr),
+                            TypeExpr::from_value_expr(value_expr, type_env),
                         )
                     })
                     .collect::<Vec<(String, TypeExpr)>>();
@@ -293,7 +284,7 @@ impl TypeExpr {
             ValueExpr::Tuple(fields) => {
                 let types = fields
                     .into_iter()
-                    .map(|value_expr| TypeExpr::from_value_expr(value_expr))
+                    .map(|value_expr| TypeExpr::from_value_expr(value_expr, type_env))
                     .collect::<Vec<TypeExpr>>();
 
                 TypeExpr::Tuple(types)
@@ -304,7 +295,7 @@ impl TypeExpr {
                     .map(|(field_name, value_expr)| {
                         (
                             field_name.to_string(),
-                            TypeExpr::from_value_expr(value_expr),
+                            TypeExpr::from_value_expr(value_expr, type_env),
                         )
                     })
                     .collect::<Vec<(String, TypeExpr)>>();
@@ -312,8 +303,8 @@ impl TypeExpr {
                 TypeExpr::Duck(Duck { fields: types })
             }
             ValueExpr::Add(left, right) => {
-                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left);
-                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right);
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left, type_env);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right, type_env);
 
                 require(
                     left_type_expr.is_number(),
@@ -323,31 +314,31 @@ impl TypeExpr {
                         right_type_expr.to_go_type_str(type_env)
                     ),
                 );
-                check_type_compatability(&left_type_expr, &right_type_expr);
+                check_type_compatability(&left_type_expr, &right_type_expr, type_env);
 
                 left_type_expr
             }
             ValueExpr::Equals(left, right) => {
-                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left);
-                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right);
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left, type_env);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right, type_env);
 
-                check_type_compatability(&left_type_expr, &right_type_expr);
+                check_type_compatability(&left_type_expr, &right_type_expr, type_env);
 
                 left_type_expr
             }
             ValueExpr::Mul(left, right) => {
-                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left);
-                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right);
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left, type_env);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right, type_env);
 
                 require(
                     left_type_expr.is_number(),
                     format!(
                         "Multiplication '*' is only allowed for numbers. You've used {} + {}.",
-                        left_type_expr.to_go_type_str(),
-                        right_type_expr.to_go_type_str()
+                        left_type_expr.to_go_type_str(type_env),
+                        right_type_expr.to_go_type_str(type_env)
                     ),
                 );
-                check_type_compatability(&left_type_expr, &right_type_expr);
+                check_type_compatability(&left_type_expr, &right_type_expr, type_env);
 
                 left_type_expr
             }
@@ -357,12 +348,12 @@ impl TypeExpr {
             ValueExpr::Block(value_exprs) => TypeExpr::from(
                 value_exprs
                     .last()
-                    .map(|value_expr| TypeExpr::from_value_expr(value_expr))
+                    .map(|value_expr| TypeExpr::from_value_expr(value_expr, type_env))
                     .expect("Block Expressions must be at least one expression long."),
             ),
             ValueExpr::Variable(.., type_expr) => type_expr.as_ref().expect("Expected type but didn't get one").clone(),
             ValueExpr::BoolNegate(bool_expr) => {
-                check_type_compatability(&TypeExpr::from_value_expr(bool_expr), &TypeExpr::Bool);
+                check_type_compatability(&TypeExpr::from_value_expr(bool_expr, type_env), &TypeExpr::Bool, type_env);
                 TypeExpr::Bool
             }
             ValueExpr::If {
@@ -370,11 +361,11 @@ impl TypeExpr {
                 then,
                 r#else,
             } => {
-                let condition_type_expr = TypeExpr::from_value_expr(condition);
-                check_type_compatability(&condition_type_expr, &TypeExpr::Bool);
+                let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
+                check_type_compatability(&condition_type_expr, &TypeExpr::Bool, type_env);
 
-                let _then_type_expr = TypeExpr::from_value_expr(then);
-                let _else_type_expr = TypeExpr::from_value_expr(r#else);
+                let _then_type_expr = TypeExpr::from_value_expr(then, type_env);
+                let _else_type_expr = TypeExpr::from_value_expr(r#else, type_env);
 
                 // let x: TypeExpression = combine_types(vec![else_type_expr, then]);
 
@@ -384,19 +375,19 @@ impl TypeExpr {
                 target_obj,
                 field_name,
             } => {
-                let target_obj_type_expr = TypeExpr::from_value_expr(target_obj);
+                let target_obj_type_expr = TypeExpr::from_value_expr(target_obj, type_env);
                 require(
                     target_obj_type_expr.is_object_like(),
                     format!(
                         "the target of a field access must be of type duck, struct or tuple. Got {}",
-                        target_obj_type_expr.to_go_type_str()
+                        target_obj_type_expr.to_go_type_str(type_env)
                     ),
                 );
                 require(
                     target_obj_type_expr.has_field_by_name(field_name.clone()),
                     format!(
                         "{} doesn't have a field with name {}",
-                        target_obj_type_expr.to_go_type_str(),
+                        target_obj_type_expr.to_go_type_str(type_env),
                         field_name
                     ),
                 );
@@ -407,10 +398,10 @@ impl TypeExpr {
                 target_field_type_expr
             }
             ValueExpr::While { condition, body } => {
-                let condition_type_expr = TypeExpr::from_value_expr(condition);
-                check_type_compatability(&condition_type_expr, &TypeExpr::Bool);
+                let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
+                check_type_compatability(&condition_type_expr, &TypeExpr::Bool, type_env);
 
-                let _body_type_expr = TypeExpr::from_value_expr(body);
+                let _body_type_expr = TypeExpr::from_value_expr(body, type_env);
 
                 return TypeExpr::Tuple(vec![]);
             }
@@ -488,13 +479,13 @@ fn require(condition: bool, fail_message: String) {
     }
 }
 
-fn check_type_compatability(one: &TypeExpr, two: &TypeExpr) {
+fn check_type_compatability(one: &TypeExpr, two: &TypeExpr, type_env: &TypeEnv) {
     if one.is_number() {
         if !two.is_number() {
             println!(
                 "Types {} and {} are not compatible.",
-                one.to_go_type_str(),
-                two.clone().to_go_type_str()
+                one.to_go_type_str(type_env),
+                two.clone().to_go_type_str(type_env)
             );
             process::exit(2);
         }
@@ -505,8 +496,8 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr) {
     if *one != *two {
         println!(
             "Types {} and {} are not compatible.",
-            one.to_go_type_str(),
-            two.to_go_type_str()
+            one.to_go_type_str(type_env),
+            two.to_go_type_str(type_env)
         );
         process::exit(2);
     }
@@ -514,7 +505,7 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr) {
 
 #[cfg(test)]
 mod test {
-    use crate::parse::{lexer::lexer, value_parser::value_expr_parser};
+    use crate::parse::{function_parser::FunctionDefintion, lexer::lexer, value_parser::value_expr_parser};
     use chumsky::prelude::*;
 
     use super::*;
@@ -586,7 +577,7 @@ mod test {
             let mut type_env = TypeEnv::default();
             typeresolve_source_file(&mut source_file, &mut type_env);
 
-            let type_expr = TypeExpr::from_value_expr(&source_file.function_definitions.get(0).unwrap().value_expr);
+            let type_expr = TypeExpr::from_value_expr(&source_file.function_definitions.get(0).unwrap().value_expr, &type_env);
             assert_eq!(type_expr, expected_type_expr);
         }
     }
