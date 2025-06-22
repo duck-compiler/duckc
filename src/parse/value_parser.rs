@@ -478,7 +478,6 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let (target_instr, Some(target_res_name)) = emit(target, env.clone()) else {
                 panic!()
             };
-            dbg!(&target_instr);
             res.extend(target_instr);
 
             let mut params_instructions = Vec::new();
@@ -676,7 +675,6 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             }
         }
         _ => {
-            dbg!(x);
             todo!()
         }
     }
@@ -733,7 +731,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     .allow_trailing()
                     .collect::<Vec<_>>()
                     .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-                    .map(|x| ValueExpr::Tuple(dbg!(x)))));
+                    .map(|x| ValueExpr::Tuple(x))));
 
         let initializer = just(Token::ControlChar('='))
             .ignore_then(value_expr_parser.clone())
@@ -793,7 +791,6 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 if exprs.len() >= 2 {
                     for (expr, has_semi) in &exprs[..exprs.len() - 1] {
                         if expr.needs_semicolon() && has_semi.is_none() {
-                            dbg!(expr, &exprs);
                             panic!("needs_semi")
                         }
                     }
@@ -843,7 +840,6 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 let e = value_expr_parser.clone();
                 move |(base_expr, field_accesses)| {
                     let base_expr = base_expr.leak() as &[Token];
-                    dbg!(&base_expr);
                     let base = e.parse(base_expr).unwrap();
                     field_accesses
                         .into_iter()
@@ -1667,11 +1663,8 @@ mod tests {
         ];
 
         for (src, expected_tokens) in test_cases {
-            dbg!(src);
             let lex_result = lexer().parse(src).into_result().expect(&src);
             let parse_result = value_expr_parser().parse(&lex_result);
-
-            dbg!(&lex_result, &parse_result);
 
             assert_eq!(parse_result.has_errors(), false, "{}", src);
             assert_eq!(parse_result.has_output(), true, "{}", src);
@@ -1687,11 +1680,8 @@ mod tests {
         let test_cases = vec![("1", "var_0 := 1\n")];
 
         for (src, expected_tokens) in test_cases {
-            dbg!(src);
             let lex_result = lexer().parse(src).into_result().expect(&src);
             let parse_result = value_expr_parser().parse(&lex_result);
-
-            dbg!(&lex_result, &parse_result);
 
             assert_eq!(parse_result.has_errors(), false, "{}", src);
             assert_eq!(parse_result.has_output(), true, "{}", src);
@@ -1814,9 +1804,7 @@ mod tests {
         ];
 
         for valid_assignment in valid_assignments {
-            dbg!("lexing {valid_assignment}");
             let lexer_parse_result = lexer().parse(valid_assignment);
-            dbg!(&lexer_parse_result);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
