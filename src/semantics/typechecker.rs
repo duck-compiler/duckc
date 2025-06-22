@@ -54,13 +54,18 @@ impl TypeEnv {
     }
 }
 
-pub fn typeresolve_source_file(source_file: &SourceFile) {
+pub fn typeresolve_source_file(source_file: &mut SourceFile) {
     let mut type_env: TypeEnv = TypeEnv { identifier_types: vec![HashMap::new()], type_aliases: HashMap::new() };
 
     source_file
         .type_definitions
         .iter()
         .for_each(|type_definition| type_env.insert_type_alias(type_definition.name.clone(), type_definition.type_expression.clone()));
+
+    source_file
+        .function_definitions
+        .iter_mut()
+        .for_each(|function_definition| typeresolve_function_definition(function_definition, &mut type_env));
 
     fn typeresolve_function_definition(function_definition: &mut FunctionDefintion, type_env: &mut TypeEnv) {
         let fn_type_expr = TypeExpr::Fun(
@@ -88,11 +93,6 @@ pub fn typeresolve_source_file(source_file: &SourceFile) {
                 typeresolve_value_expr(target, type_env);
                 params.iter_mut().for_each(|param| typeresolve_value_expr(param, type_env));
             },
-            ValueExpr::Int(_) => todo!(),
-            ValueExpr::String(_) => todo!(),
-            ValueExpr::Bool(_) => todo!(),
-            ValueExpr::Float(_) => todo!(),
-            ValueExpr::Char(_) => todo!(),
             ValueExpr::Variable(identifier, type_expr_opt) => {
                 let type_expr = type_env.get_identifier_type(identifier.clone())
                     .expect("Couldn't resolve type of identifier {identifier}");
@@ -150,7 +150,12 @@ pub fn typeresolve_source_file(source_file: &SourceFile) {
             ValueExpr::BoolNegate(value_expr) => {
                 typeresolve_value_expr(value_expr, type_env);
             },
-            ValueExpr::Break
+            ValueExpr::Int(_)
+            | ValueExpr::String(_)
+            | ValueExpr::Bool(_)
+            | ValueExpr::Float(_)
+            | ValueExpr::Char(_)
+            | ValueExpr::Break
             | ValueExpr::Return(None)
             | ValueExpr::Continue => {},
         }
@@ -504,7 +509,7 @@ mod test {
                     TypeExpr::Tuple(vec![TypeExpr::String, TypeExpr::Int]),
                 ]),
             ),
-            ("{ let x: Int = 5; x; }", TypeExpr::Int)
+            ("", TypeExpr::Int)
         ];
 
         for (src, expected_type_expr) in src_and_expected_type_vec {
@@ -523,13 +528,13 @@ mod test {
             assert_eq!(value_expr_parse_result.has_output(), true);
 
             let value_expr = value_expr_parse_result.into_output().unwrap();
-            let source_file = SourceFile {
+            let mut source_file = SourceFile {
                 use_statements: vec![],
                 function_definitions: vec![FunctionDefintion { name: "main".to_string(), params: None, return_type: None, value_expr: value_expr }],
                 type_definitions: vec![],
             };
 
-            typeresolve_source_file(&source_file);
+            typeresolve_source_file(&mut source_file);
 
             let type_expr = TypeExpr::from_value_expr(&source_file.function_definitions.get(0).unwrap().value_expr);
             assert_eq!(type_expr, expected_type_expr);
