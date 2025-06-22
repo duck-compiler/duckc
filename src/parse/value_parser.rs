@@ -412,7 +412,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             if let Some(res) = res {
                 res_instr.push(format!("{res_var} = {res}\n"))
             }
-            res_instr.push("}".to_string());
+            res_instr.push("\n}\n".to_string());
 
             (res_instr, Some(res_var))
         }
