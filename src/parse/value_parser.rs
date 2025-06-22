@@ -46,6 +46,7 @@ pub enum ValueExpr {
     Mul(Box<ValueExpr>, Box<ValueExpr>),
     BoolNegate(Box<ValueExpr>),
     Equals(Box<ValueExpr>, Box<ValueExpr>),
+    InlineGo(String),
 }
 
 #[derive(Clone, Debug)]
@@ -239,6 +240,7 @@ impl ValueExpr {
                 body: _,
             } => false,
             ValueExpr::Block(_) => false,
+            ValueExpr::InlineGo(_) => false,
             _ => true,
         }
     }
@@ -259,6 +261,12 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
     let no_var = |instr: &str| (vec![instr.to_owned()], None);
 
     match x {
+        ValueExpr::InlineGo(code) => {
+            let mut res = vec!["\n".to_string()];
+            res.extend(code.split("\n").map(|x| format!("{x}\n")));
+            res.push("\n".to_string());
+            (res, None)
+        }
         ValueExpr::Equals(x, y) => {
             let (mut x_instr, Some(x_res)) = emit(*x, env.clone()) else {
                 panic!()
@@ -712,7 +720,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     .allow_trailing()
                     .collect::<Vec<_>>()
                     .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
-                    .map(|identifier| ValueExpr::Struct(identifier))
+                    .map(ValueExpr::Struct)
             );
 
         let duck_expression = select_ref! { Token::Ident(ident) => ident.to_owned() }
@@ -934,7 +942,11 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
         //             .fold(init, |acc, x| ValueExpr::Equals(acc.into(), x.into()))
         //     });
 
+        let inline_go = select_ref! { Token::InlineGo(x) => x.to_owned() }
+            .map(ValueExpr::InlineGo);
+
         choice((
+            inline_go,
             assignment,
             equals,
             add,
@@ -1551,6 +1563,14 @@ mod tests {
                     ValueExpr::BoolNegate(ValueExpr::Int(2).into()).into(),
                 ),
             ),
+            (
+                "go {}",
+                ValueExpr::InlineGo(String::new()),
+            ),
+            (
+                "go { go func() {} }",
+                ValueExpr::InlineGo(String::from(" go func() {} ")),
+            )
         ];
 
         for (src, expected_tokens) in test_cases {

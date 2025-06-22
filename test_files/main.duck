@@ -1,6 +1,27 @@
 use go "fmt" as kek;
+use go "time";
+
+fun duck_function() {
+    go {
+        kek.Println("Hallo aus einer DUCK FUNCTION!")
+    }
+}
 
 fun main() {
+    go {
+        go func() {
+            for i:= 0; i < 5; i++ {
+                kek.Println("ich bin in einer goroutine")
+                duck_function()
+                time.Sleep(time.Second * 3)
+            }
+        }()
+    }
+
+    go {
+        time.Sleep(time.Second * 10)
+    }
+
     let i: int = 0;
 
     while (!(i == 5)) {

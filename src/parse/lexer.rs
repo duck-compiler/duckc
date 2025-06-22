@@ -1,4 +1,4 @@
-use chumsky::prelude::*;
+use chumsky::{prelude::*, text::whitespace};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Token {
@@ -24,6 +24,7 @@ pub enum Token {
     Break,
     Continue,
     As,
+    InlineGo(String),
 }
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -62,7 +63,8 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
 
     let equals = just("==").to(Token::Equals);
 
-    let token = r#bool
+    let token = inline_go_parser()
+        .or(r#bool)
         .or(equals)
         .or(keyword_or_ident)
         .or(ctrl)
@@ -71,6 +73,36 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
         .or(r#char);
 
     token.padded().repeated().collect::<Vec<Token>>()
+}
+
+fn go_text_parser<'src>() -> impl Parser<'src, &'src str, String> {
+    recursive(|e| {
+        just("{").ignore_then(
+            ((just("{").rewind().ignore_then(e.clone()))
+                .or(any().filter(|c| *c != '{' && *c != '}').map(String::from)))
+            .repeated()
+            .collect::<Vec<_>>()
+        ).then_ignore(just("}")).map(| x| {
+            dbg!(&x);
+            let x = x.join("");
+            dbg!(&x);
+            format!("{}{x}{}", "{", "}")
+        })
+    })
+}
+
+fn inline_go_parser<'src>() -> impl Parser<'src, &'src str, Token> {
+    // just("go").ignore_then(whitespace().at_least(1))
+    //     .ignore_then(just("{"))
+    //     .ignore_then(any().filter(|x| *x != '}').repeated().collect::<String>())
+    //     .ignore_then(just("}"))
+    //     .map(|x| Token::InlineGo(Default::default()))
+
+    just("go")
+        .ignore_then(whitespace().at_least(1))
+        .ignore_then(just("{").rewind())
+        .ignore_then(go_text_parser())
+        .map(|x| Token::InlineGo(x[1..x.len()-1].to_owned()))
 }
 
 fn num_literal<'src>() -> impl Parser<'src, &'src str, Token> {
@@ -194,6 +226,10 @@ mod tests {
             ("2003", vec![Token::IntLiteral(2003)]),
             ("true", vec![Token::BoolLiteral(true)]),
             ("false", vec![Token::BoolLiteral(false)]),
+            ("go { {} }", vec![Token::InlineGo(String::from(" {} "))]),
+            ("go { xx }", vec![Token::InlineGo(String::from(" xx "))]),
+            ("go {}", vec![Token::InlineGo(String::from(""))]),
+            ("go {{}{}{}}", vec![Token::InlineGo(String::from("{}{}{}"))]),
             (
                 "if (true) {}",
                 vec![
