@@ -10,6 +10,15 @@ pub struct TypeEnv {
     type_aliases: HashMap<String, TypeExpr>,
 }
 
+impl Default for TypeEnv {
+    fn default() -> Self {
+        Self {
+            identifier_types: vec![HashMap::new()],
+            type_aliases: HashMap::new()
+        }
+    }
+}
+
 impl TypeEnv {
     pub fn env_push(&mut self) {
         let cloned_hash_map = self.identifier_types.last().expect("Expect at least one env.").clone();
@@ -54,9 +63,7 @@ impl TypeEnv {
     }
 }
 
-pub fn typeresolve_source_file(source_file: &mut SourceFile) {
-    let mut type_env: TypeEnv = TypeEnv { identifier_types: vec![HashMap::new()], type_aliases: HashMap::new() };
-
+pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut TypeEnv) {
     source_file
         .type_definitions
         .iter()
@@ -65,7 +72,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile) {
     source_file
         .function_definitions
         .iter_mut()
-        .for_each(|function_definition| typeresolve_function_definition(function_definition, &mut type_env));
+        .for_each(|function_definition| typeresolve_function_definition(function_definition, type_env));
 
     fn typeresolve_function_definition(function_definition: &mut FunctionDefintion, type_env: &mut TypeEnv) {
         let fn_type_expr = TypeExpr::Fun(
@@ -537,7 +544,8 @@ mod test {
                 ..Default::default()
             };
 
-            typeresolve_source_file(&mut source_file);
+            let mut type_env = TypeEnv::default();
+            typeresolve_source_file(&mut source_file, &mut type_env);
 
             let type_expr = TypeExpr::from_value_expr(&source_file.function_definitions.get(0).unwrap().value_expr);
             assert_eq!(type_expr, expected_type_expr);
