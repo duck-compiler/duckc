@@ -1460,7 +1460,7 @@ mod tests {
                     Declaration {
                         name: "x".into(),
                         initializer: None,
-                        type_expr: TypeExpr::TypeName("String".into()),
+                        type_expr: TypeExpr::String,
                     }
                     .into(),
                 ),
@@ -1636,15 +1636,15 @@ mod tests {
                 "() -> Int => 1",
                 ValueExpr::Lambda(LambdaFunctionExpr {
                     params: vec![],
-                    return_type: Some(TypeExpr::TypeName("Int".into())),
+                    return_type: Some(TypeExpr::Int),
                     value_expr: ValueExpr::Int(1),
                 }.into())
             ),
             (
                 "(x: String) -> Int => 1",
                 ValueExpr::Lambda(LambdaFunctionExpr {
-                    params: vec![("x".into(), TypeExpr::TypeName("String".into()))],
-                    return_type: Some(TypeExpr::TypeName("Int".into())),
+                    params: vec![("x".into(), TypeExpr::String)],
+                    return_type: Some(TypeExpr::Int),
                     value_expr: ValueExpr::Int(1),
                 }.into())
             ),
@@ -1709,7 +1709,7 @@ mod tests {
                 "let x: String",
                 Declaration {
                     name: "x".to_string(),
-                    type_expr: TypeExpr::TypeName("String".to_string()),
+                    type_expr: TypeExpr::String,
                     initializer: None,
                 },
             ),
@@ -1720,7 +1720,7 @@ mod tests {
                     type_expr: TypeExpr::Duck(Duck {
                         fields: vec![(
                             "x".to_string(),
-                            TypeExpr::TypeName("Int".to_string()),
+                            TypeExpr::Int,
                         )],
                     }),
                     initializer: Some(ValueExpr::Duck(vec![])),

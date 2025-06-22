@@ -107,7 +107,7 @@ mod tests {
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
                         type_expression: TypeExpr::Duck(Duck {
-                            fields: vec![("x".into(), TypeExpr::TypeName("String".into()))],
+                            fields: vec![("x".into(), TypeExpr::String)],
                         }),
                     }],
                     ..Default::default()
@@ -119,7 +119,7 @@ mod tests {
                     function_definitions: vec![
                         FunctionDefintion {
                             name: "abc".into(),
-                            return_type: Some(TypeExpr::TypeName("String".into())),
+                            return_type: Some(TypeExpr::String),
                             ..Default::default()
                         },
                         FunctionDefintion {
@@ -133,7 +133,7 @@ mod tests {
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
                         type_expression: TypeExpr::Duck(Duck {
-                            fields: vec![("x".into(), TypeExpr::TypeName("String".into()))],
+                            fields: vec![("x".into(), TypeExpr::String)],
                         }),
                     }],
                 },
