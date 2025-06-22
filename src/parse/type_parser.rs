@@ -33,6 +33,7 @@ pub enum TypeExpr {
     Char,
     Float,
     Or(Vec<TypeExpr>),
+    Fun(Vec<TypeExpr>, Option<Box<TypeExpr>>),
 }
 
 impl TypeExpr {
