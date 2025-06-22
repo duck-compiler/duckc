@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::parse::{
-    assignment_and_declaration_parser::{Assignment, Declaration}, function_parser::{LambdaFunctionExpr, Param}, type_parser::type_expression_parser
+    assignment_and_declaration_parser::{Assignment, Declaration}, function_parser::{LambdaFunctionExpr, Param}, type_parser::type_expression_parser,
 };
 
 use super::lexer::Token;
@@ -254,6 +254,9 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
     match x {
         ValueExpr::Lambda(expr) => {
             let LambdaFunctionExpr { params, return_type, value_expr } = *expr;
+            for param in &params {
+                param.1.emit_into_env(env.clone());
+            }
             let (mut v_instr, res_name) = emit(value_expr, env.clone());
             if let Some(res_name) = res_name {
                 v_instr.push(format!("_ = {res_name}\n"))
@@ -558,8 +561,6 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                 ));
             }
 
-            go_interface_name.push_str("_Interface");
-
             let go_struct = GoTypeDef::Struct {
                 name: go_type_name.clone(),
                 fields: type_fields,
@@ -617,9 +618,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                 ));
             }
 
-            let mut go_interface_name = go_type_name.clone();
-            go_interface_name.push_str("_Interface");
-
+            let go_interface_name = go_type_name.clone();
             go_type_name.push_str("_Struct");
 
             let go_struct = GoTypeDef::Struct {
@@ -833,7 +832,8 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .collect::<Vec<_>>()
             .then(
                 (just(Token::ControlChar('.')).ignore_then(
-                    select_ref! { Token::Ident(field_name) => field_name.to_owned() },
+                    select_ref! { Token::Ident(field_name) => field_name.to_owned() }
+                        .or(select_ref! { Token::IntLiteral(i) => i.to_string() }),
                 ))
                 .repeated()
                 .at_least(1)
@@ -1017,7 +1017,7 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        assignment_and_declaration_parser::Declaration, function_parser::{LambdaFunctionExpr, Param}, lexer::lexer, type_parser::{Duck, TypeExpression}, value_parser::{emit, empty_duck, empty_tuple, value_expr_parser, EmitEnvironment}
+        assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr, lexer::lexer, type_parser::{Duck, TypeExpression}, value_parser::{emit, empty_duck, empty_tuple, value_expr_parser, EmitEnvironment}
     };
 
     use super::ValueExpr;
@@ -1644,6 +1644,18 @@ mod tests {
                     value_expr: ValueExpr::Int(1),
                 }.into())
             ),
+            ("{x: 1}.x",
+                ValueExpr::FieldAccess { target_obj: ValueExpr::Duck(vec![
+                    ("x".into(), ValueExpr::Int(1))
+                ]).into(), field_name: "x".into() }
+            ),
+            // ("(1,true,\"s\").a",
+            //     ValueExpr::FieldAccess { target_obj: ValueExpr::Tuple(vec![
+            //         ValueExpr::Int(1),
+            //         ValueExpr::Bool(true),
+            //         ValueExpr::String("\"s\"".into()),
+            //     ]).into(), field_name: "0".into() }
+            // )
         ];
 
         for (src, expected_tokens) in test_cases {

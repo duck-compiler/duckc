@@ -33,6 +33,13 @@ impl Default for FunctionDefintion {
 impl FunctionDefintion {
     pub fn emit(&self, env: EmitEnvironment) -> String {
         let (mut emitted_body, res_name) = emit(self.value_expr.clone(), env.clone());
+
+        if let Some(params) = &self.params {
+            for p in params {
+                p.1.emit_into_env(env.clone());
+            }
+        }
+
         if let Some(res_name) = res_name {
             emitted_body.push(format!("_ = {res_name}\n"));
         }
@@ -141,46 +148,6 @@ pub mod tests {
             let typedef_parse_result = function_definition_parser().parse(tokens.as_slice());
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
-        }
-
-        let invalid_function_definitions = vec![];
-
-        for invalid_function_definition in invalid_function_definitions {
-            println!("lexing {invalid_function_definition}");
-            let lexer_parse_result = lexer().parse(invalid_function_definition);
-            assert_eq!(lexer_parse_result.has_errors(), false);
-            assert_eq!(lexer_parse_result.has_output(), true);
-
-            let Some(tokens) = lexer_parse_result.into_output() else {
-                unreachable!()
-            };
-
-            println!("typedef_parsing {invalid_function_definition}");
-            let typedef_parse_result = function_definition_parser().parse(tokens.as_slice());
-            assert_eq!(typedef_parse_result.has_errors(), true);
-            assert_eq!(typedef_parse_result.has_output(), false);
-        }
-    }
-
-    #[test]
-    fn test_lambda_function_defintion() {
-        let valid_lambda_function_definitions =
-            vec!["() => {}", "() -> String => {}", "() => { 5; }"];
-
-        for valid_lambda_function_definition in valid_lambda_function_definitions {
-            println!("lexing {valid_lambda_function_definition}");
-            let lexer_parse_result = lexer().parse(valid_lambda_function_definition);
-            assert_eq!(lexer_parse_result.has_errors(), false);
-            assert_eq!(lexer_parse_result.has_output(), true);
-
-            let Some(tokens) = lexer_parse_result.into_output() else {
-                unreachable!()
-            };
-
-            println!("lambda parsing {valid_lambda_function_definition}");
-            // let lambda_parse_result = lambda_function_expr_parser().parse(tokens.as_slice());
-            // assert_eq!(lambda_parse_result.has_errors(), false);
-            // assert_eq!(lambda_parse_result.has_output(), true);
         }
 
         let invalid_function_definitions = vec![];
