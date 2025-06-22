@@ -59,7 +59,7 @@ mod tests {
         function_parser::FunctionDefintion,
         lexer::lexer,
         source_file_parser::{SourceFile, source_file_parser},
-        type_parser::{Duck, TypeDefinition, TypeExpression},
+        type_parser::{Duck, TypeDefinition, TypeExpr},
         use_statement_parser::{Indicator, UseStatement},
     };
 
@@ -106,8 +106,8 @@ mod tests {
                 SourceFile {
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
-                        type_expression: TypeExpression::Duck(Duck {
-                            fields: vec![("x".into(), TypeExpression::TypeName("String".into()))],
+                        type_expression: TypeExpr::Duck(Duck {
+                            fields: vec![("x".into(), TypeExpr::TypeName("String".into()))],
                         }),
                     }],
                     ..Default::default()
@@ -119,7 +119,7 @@ mod tests {
                     function_definitions: vec![
                         FunctionDefintion {
                             name: "abc".into(),
-                            return_type: Some(TypeExpression::TypeName("String".into())),
+                            return_type: Some(TypeExpr::TypeName("String".into())),
                             ..Default::default()
                         },
                         FunctionDefintion {
@@ -132,8 +132,8 @@ mod tests {
                     }],
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
-                        type_expression: TypeExpression::Duck(Duck {
-                            fields: vec![("x".into(), TypeExpression::TypeName("String".into()))],
+                        type_expression: TypeExpr::Duck(Duck {
+                            fields: vec![("x".into(), TypeExpr::TypeName("String".into()))],
                         }),
                     }],
                 },

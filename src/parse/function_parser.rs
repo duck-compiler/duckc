@@ -4,17 +4,17 @@ use crate::parse::value_parser::{EmitEnvironment, emit};
 
 use super::{
     lexer::Token,
-    type_parser::{TypeExpression, type_expression_parser},
+    type_parser::{TypeExpr, type_expression_parser},
     value_parser::{ValueExpr, value_expr_parser},
 };
 
-pub type Param = (String, TypeExpression);
+pub type Param = (String, TypeExpr);
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDefintion {
     pub name: String,
-    pub return_type: Option<TypeExpression>,
+    pub return_type: Option<TypeExpr>,
     pub params: Option<Vec<Param>>,
     pub value_expr: ValueExpr,
 }
@@ -67,7 +67,7 @@ impl FunctionDefintion {
 #[derive(Debug, Clone)]
 pub struct LambdaFunctionExpr {
     pub params: Vec<Param>,
-    pub return_type: Option<TypeExpression>,
+    pub return_type: Option<TypeExpr>,
     pub value_expr: ValueExpr,
 }
 

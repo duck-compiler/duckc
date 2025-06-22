@@ -943,7 +943,7 @@ mod tests {
     use crate::parse::{
         assignment_and_declaration_parser::Declaration,
         lexer::lexer,
-        type_parser::{Duck, TypeExpression},
+        type_parser::{Duck, TypeExpr},
         value_parser::{EmitEnvironment, emit, empty_duck, empty_tuple, value_expr_parser},
     };
 
@@ -1390,7 +1390,7 @@ mod tests {
                     Declaration {
                         name: "x".into(),
                         initializer: None,
-                        type_expr: TypeExpression::TypeName("String".into()),
+                        type_expr: TypeExpr::TypeName("String".into()),
                     }
                     .into(),
                 ),
@@ -1593,7 +1593,7 @@ mod tests {
                 "let x: String",
                 Declaration {
                     name: "x".to_string(),
-                    type_expr: TypeExpression::TypeName("String".to_string()),
+                    type_expr: TypeExpr::TypeName("String".to_string()),
                     initializer: None,
                 },
             ),
@@ -1601,10 +1601,10 @@ mod tests {
                 "let y: { x: Int } = {}",
                 Declaration {
                     name: "y".to_string(),
-                    type_expr: TypeExpression::Duck(Duck {
+                    type_expr: TypeExpr::Duck(Duck {
                         fields: vec![(
                             "x".to_string(),
-                            TypeExpression::TypeName("Int".to_string()),
+                            TypeExpr::TypeName("Int".to_string()),
                         )],
                     }),
                     initializer: Some(ValueExpr::Duck(vec![])),
@@ -1614,7 +1614,7 @@ mod tests {
                 "let z: {}",
                 Declaration {
                     name: "z".to_string(),
-                    type_expr: TypeExpression::Duck(Duck { fields: vec![] }),
+                    type_expr: TypeExpr::Duck(Duck { fields: vec![] }),
                     initializer: None,
                 },
             ),
