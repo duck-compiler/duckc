@@ -76,7 +76,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let functions = source_file
         .function_definitions
         .iter()
-        .map(|x| x.emit(env.clone()))
+        .map(|x| x.emit(env.clone(), &mut type_env))
         .collect::<Vec<_>>()
         .join("\n");
     let out_text = format!(
