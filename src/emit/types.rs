@@ -1,4 +1,4 @@
-use crate::{emit::value::{EmitEnvironment, GoMethodDef, GoTypeDef}, parse::type_parser::{Duck, Struct, TypeExpr}, semantics::typechecker::TypeEnv};
+use crate::{parse::type_parser::{Duck, Struct, TypeExpr}, semantics::typechecker::TypeEnv};
 
 impl TypeExpr {
     pub fn as_go_implementation(&self, type_env: &mut TypeEnv) -> String {
@@ -11,7 +11,7 @@ impl TypeExpr {
             | TypeExpr::TypeName(..)
             | TypeExpr::Go(..)
             | TypeExpr::Any => self.to_go_type_str(type_env),
-            TypeExpr::Tuple(types) => [
+            TypeExpr::Tuple(_types) => [
                 "type".to_string(),
                 self.to_go_type_str(type_env),
                 "struct".to_string(),
@@ -31,10 +31,9 @@ impl TypeExpr {
                 "\n}\n".to_string(),
                 ].join(" "),
             TypeExpr::Or(..) => todo!(),
-            TypeExpr::Fun(param_types, return_type) => [
+            TypeExpr::Fun(_param_types, _return_type) => [
                 "func(",
                 ].join(" "),
-            _ => todo!(),
         }
     }
 

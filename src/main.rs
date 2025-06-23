@@ -81,7 +81,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .collect::<Vec<_>>()
         .join("\n");
 
-    let out_text = source_file.emit("main".into());
+    let out_text = source_file.emit("main".into(), &mut type_env);
 
     let mut tmp_file = Builder::new()
         .prefix("duck_gen")

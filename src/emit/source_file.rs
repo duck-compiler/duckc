@@ -1,10 +1,10 @@
 use crate::{
     emit::value::EmitEnvironment,
-    parse::{source_file_parser::SourceFile, use_statement_parser::UseStatement},
+    parse::{source_file_parser::SourceFile, use_statement_parser::UseStatement}, semantics::typechecker::TypeEnv,
 };
 
 impl SourceFile {
-    pub fn emit(mut self, pkg_name: String) -> String {
+    pub fn emit(mut self, pkg_name: String, type_env: &mut TypeEnv) -> String {
         let emit_env = EmitEnvironment::new();
 
         emit_env.emit_imports_and_types();
@@ -12,7 +12,7 @@ impl SourceFile {
         let functions = self
             .function_definitions
             .iter()
-            .map(|x| format!("\n{}\n", x.emit(emit_env.clone())))
+            .map(|x| format!("\n{}\n", x.emit(emit_env.clone(), type_env)))
             .collect::<Vec<_>>()
             .join("");
 
