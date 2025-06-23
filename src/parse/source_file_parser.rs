@@ -1,9 +1,6 @@
-use std::{
-    fs::File,
-    path::PathBuf,
-};
+use std::{fs::File, path::PathBuf};
 
-use chumsky::prelude::*;
+use chumsky::{container::Seq, prelude::*};
 
 use crate::parse::{
     function_parser::{FunctionDefintion, function_definition_parser},
@@ -28,7 +25,7 @@ pub enum SourceUnit {
     Module(String, SourceFile),
 }
 
-fn module_descent(name: String, current_dir: PathBuf) -> (String, SourceFile) {
+fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
     let joined = current_dir.join(&name);
     let mod_dir = File::open(&joined);
     if let Ok(mod_dir) = mod_dir
@@ -36,8 +33,17 @@ fn module_descent(name: String, current_dir: PathBuf) -> (String, SourceFile) {
     {
         let combined = std::fs::read_dir(&joined)
             .unwrap()
-            .map(|dir_entry| match dir_entry {
-                Ok(dir_entry) => (
+            .filter_map(|dir_entry| match dir_entry {
+                Ok(dir_entry)
+                    if dir_entry.metadata().unwrap().is_dir()
+                        || dir_entry.file_name().to_string_lossy().ends_with(".duck") =>
+                {
+                    Some(dir_entry)
+                }
+                _ => None,
+            })
+            .map(|dir_entry| {
+                (
                     dir_entry.metadata().unwrap().is_file(),
                     module_descent(
                         dir_entry
@@ -49,10 +55,8 @@ fn module_descent(name: String, current_dir: PathBuf) -> (String, SourceFile) {
                             .unwrap()
                             .into(),
                         joined.clone(),
-                    )
-                    .1,
-                ),
-                _ => panic!(),
+                    ),
+                )
             })
             .fold(SourceFile::default(), |mut acc, (i, x)| {
                 dbg!(&x);
@@ -64,13 +68,13 @@ fn module_descent(name: String, current_dir: PathBuf) -> (String, SourceFile) {
                 acc.use_statements.extend(x.use_statements);
                 acc
             });
-        (name, combined)
+        combined
     } else {
         let src_text =
             std::fs::read_to_string(dbg!(format!("{}.duck", joined.to_str().unwrap()))).unwrap();
         let lex = lexer().parse(&src_text).unwrap();
         let parse = source_file_parser(current_dir.clone()).parse(&lex).unwrap();
-        (name, parse)
+        parse
     }
 }
 
@@ -94,7 +98,7 @@ pub fn source_file_parser<'src>(p: PathBuf) -> impl Parser<'src, &'src [Token], 
                     if let Some(src) = src {
                         SourceUnit::Module(name, src)
                     } else {
-                        SourceUnit::Module(name.clone(), module_descent(name.clone(), p.clone()).1)
+                        SourceUnit::Module(name.clone(), module_descent(name.clone(), p.clone()))
                     }
                 }),
         ))
