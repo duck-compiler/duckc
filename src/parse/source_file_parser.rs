@@ -546,8 +546,15 @@ mod tests {
             let lex = lexer().parse(&src).unwrap();
             let mut got = source_file_parser(dir.clone()).parse(&lex).unwrap();
 
-            expected.function_definitions.sort_by_key(|x| x.name.clone());
-            got.function_definitions.sort_by_key(|x| x.name.clone());
+            fn sort_all(x: &mut SourceFile) {
+                x.function_definitions.sort_by_key(|x| x.name.clone());
+                for (_, s) in x.sub_modules.iter_mut() {
+                    sort_all(s);
+                }
+            }
+
+            sort_all(&mut expected);
+            sort_all(&mut got);
 
             assert_eq!(
                 expected,

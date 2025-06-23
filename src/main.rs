@@ -14,6 +14,9 @@ pub mod parse;
 pub mod semantics;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    if true {
+        return Ok(());
+    }
     let mut keep_go = false;
     let mut custom_out_name = None::<String>;
     let mut file_name = None::<String>;
