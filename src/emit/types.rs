@@ -1,6 +1,43 @@
-use crate::{emit::value::{EmitEnvironment, GoMethodDef, GoTypeDef}, parse::type_parser::{Duck, Struct, TypeExpr}};
+use crate::{emit::value::{EmitEnvironment, GoMethodDef, GoTypeDef}, parse::type_parser::{Duck, Struct, TypeExpr}, semantics::typechecker::TypeEnv};
 
 impl TypeExpr {
+    pub fn as_go_implementation(&self, type_env: &mut TypeEnv) -> String {
+        match self {
+            TypeExpr::Int
+            | TypeExpr::Char
+            | TypeExpr::Bool
+            | TypeExpr::String
+            | TypeExpr::Float
+            | TypeExpr::TypeName(..)
+            | TypeExpr::Go(..)
+            | TypeExpr::Any => self.to_go_type_str(type_env),
+            TypeExpr::Tuple(types) => [
+                "type".to_string(),
+                self.to_go_type_str(type_env),
+                "struct".to_string(),
+                "{\n".to_string(),
+                "\n}\n".to_string(),
+                ].join(" "),
+            TypeExpr::Duck(Duck { fields, }) | TypeExpr::Struct(Struct { fields }) => [
+                "type".to_string(),
+                self.to_go_type_str(type_env),
+                "struct".to_string(),
+                "{\n".to_string(),
+                fields
+                    .iter()
+                    .map(|(field_name, type_expr)| format!("    {} {}", field_name, type_expr.to_go_type_str(type_env)))
+                    .collect::<Vec<String>>()
+                    .join("\n"),
+                "\n}\n".to_string(),
+                ].join(" "),
+            TypeExpr::Or(..) => todo!(),
+            TypeExpr::Fun(param_types, return_type) => [
+                "func(",
+                ].join(" "),
+            _ => todo!(),
+        }
+    }
+
     /// First return is go code repr, second is id
     /// First go code and second is identifier of self
     pub fn emit(&self) -> (String, String) {
@@ -81,110 +118,6 @@ impl TypeExpr {
             _ => todo!()
         }
     }
-
-    pub fn emit_into_env(&self, env: EmitEnvironment) {
-        match self {
-            TypeExpr::Tuple(params) => {
-                for param in params {
-                    param.emit_into_env(env.clone());
-                }
-            }
-            TypeExpr::Struct(Struct { fields }) => {
-                let mut type_fields = Vec::new();
-                let mut go_type_name = "Struct".to_string();
-
-                let mut methods = Vec::new();
-
-                for (field_name, field_type) in fields {
-                    field_type.emit_into_env(env.clone());
-                    let go_type_name = field_type.emit();
-                    type_fields.push((field_name.clone(), go_type_name.clone()));
-                    methods.push(GoMethodDef {
-                        name: format!("Duck_Get{field_name}"),
-                        body: vec![format!("return self.{field_name}")],
-                        params: vec![],
-                        return_type: Some(go_type_name.1),
-                    });
-                }
-
-                for (field_name, field_type) in &type_fields {
-                    go_type_name.push_str(&format!(
-                        "_Has{field_name}_{}",
-                        field_type.1,
-                    ));
-                }
-
-                let mut go_interface_name = "Duck".to_string();
-
-                let mut cloned_type_fields = type_fields.clone();
-                cloned_type_fields.sort();
-                for (field_name, field_type) in &type_fields {
-                    go_interface_name.push_str(&format!(
-                        "_Has{field_name}_{}",
-                        field_type.1,
-                    ));
-                }
-
-                let go_struct = GoTypeDef::Struct {
-                    name: go_type_name.clone(),
-                    fields: type_fields.into_iter().map(|(field_name, (as_go, _))| (field_name, as_go)).collect(),
-                    methods: methods.clone(),
-                };
-                let go_interface = GoTypeDef::Interface {
-                    name: go_interface_name,
-                    methods: methods.clone(),
-                };
-
-                env.push_types([go_struct, go_interface].into_iter());
-            }
-            TypeExpr::Duck(Duck { fields }) => {
-                let mut type_fields = Vec::new();
-                let mut go_type_name = "Duck".to_string();
-
-                let mut methods = Vec::new();
-
-                for (field_name, field_type) in fields {
-                    field_type.emit_into_env(env.clone());
-                    let go_type_name = field_type.emit();
-                    type_fields.push((field_name.clone(), go_type_name.clone()));
-                    methods.push(GoMethodDef {
-                        name: format!("Duck_Get{field_name}"),
-                        body: vec![format!("return self.{field_name}")],
-                        params: vec![],
-                        return_type: Some(go_type_name.0),
-                    });
-                }
-
-                type_fields.sort();
-
-                for (field_name, field_type) in &type_fields {
-                    go_type_name.push_str(&format!(
-                        "_Has{field_name}_{}",
-                        field_type.1,
-                    ));
-                }
-
-                let go_interface_name = go_type_name.clone();
-
-                go_type_name.push_str("_Struct");
-
-                let go_struct = GoTypeDef::Struct {
-                    name: go_type_name.clone(),
-                    fields: type_fields.into_iter().map(|(field_name, (as_go, _))| (field_name, as_go)).collect(),
-                    methods: methods.clone(),
-                };
-                let go_interface = GoTypeDef::Interface {
-                    name: go_interface_name,
-                    methods: methods.clone(),
-                };
-
-                env.push_types([go_struct, go_interface].into_iter());
-            }
-            _ => {}
-        }
-
-    }
-
 }
 
 #[cfg(test)]
