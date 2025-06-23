@@ -100,7 +100,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 .or(Some(&vec![]))
                 .unwrap()
                 .iter()
-                .map(|(_, type_expr)| type_expr.clone())
+                .map(|(identifier, type_expr)| (Some(identifier.clone()), type_expr.clone()))
                 .collect::<Vec<_>>(),
             function_definition.return_type.as_ref().map(|x| Box::new(x.clone()))
         );
@@ -201,11 +201,14 @@ impl TypeExpr {
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeName(name) => (type_env.resolve_type_alias(name.clone())).to_go_type_str(type_env),
-            TypeExpr::Fun(param_types, return_type) => format!(
+            TypeExpr::Fun(params, return_type) => format!(
                 "func({}) {}",
-                param_types
+                params
                     .iter()
-                    .map(|type_expr| type_expr.to_go_type_str(type_env))
+                    .map(|(name, type_expr)| match name {
+                        Some(name) => format!("{name}: {}", type_expr.to_go_type_str(type_env)),
+                        None => type_expr.to_go_type_str(type_env),
+                    })
                     .collect::<Vec<_>>()
                     .join(","),
                 return_type.clone().map_or("".to_string(), |return_type| return_type.to_go_type_str(type_env))
@@ -255,8 +258,15 @@ impl TypeExpr {
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
-                lambda_expr.params.iter().map(|(_, type_expr)| type_expr.clone()).collect(),
-                lambda_expr.return_type.clone().map(|i| Box::new(i)),
+                lambda_expr
+                    .params
+                    .iter()
+                    .map(|(name, type_expr)| (Some(name.clone()), type_expr.clone()))
+                    .collect(),
+                lambda_expr
+                    .return_type
+                    .clone()
+                    .map(|i| Box::new(i)),
             ),
             ValueExpr::InlineGo(..) => todo!("type for inline go"),
             ValueExpr::Int(..) => TypeExpr::Int,
