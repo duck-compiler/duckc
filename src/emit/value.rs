@@ -1,10 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::parse::{
+use crate::{parse::{
     assignment_and_declaration_parser::{Assignment, Declaration},
     function_parser::LambdaFunctionExpr,
     value_parser::ValueExpr,
-};
+}, semantics::typechecker::TypeEnv};
 
 #[derive(Clone, Debug)]
 pub struct GoMethodDef {
@@ -175,7 +175,7 @@ impl EmitEnvironment {
     }
 }
 
-pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>) {
+pub fn emit(x: ValueExpr, env: EmitEnvironment, type_env: &mut TypeEnv) -> (Vec<String>, Option<String>) {
     let new_var = || {
         let x = format!("var_{}", env.var_counter.borrow());
         *env.var_counter.borrow_mut() += 1;
@@ -197,9 +197,9 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                 value_expr,
             } = *expr;
             for param in &params {
-                param.1.emit_into_env(env.clone());
+                param.1.as_go_implementation(type_env);
             }
-            let (mut v_instr, res_name) = emit(value_expr, env.clone());
+            let (mut v_instr, res_name) = emit(value_expr, env.clone(), type_env);
             if let Some(res_name) = res_name {
                 v_instr.push(format!("_ = {res_name}\n"))
             }
@@ -230,10 +230,10 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             (res, None)
         }
         ValueExpr::Equals(x, y) => {
-            let (mut x_instr, Some(x_res)) = emit(*x, env.clone()) else {
+            let (mut x_instr, Some(x_res)) = emit(*x, env.clone(), type_env) else {
                 panic!("No result provided")
             };
-            let (y_instr, Some(y_res)) = emit(*y, env.clone()) else {
+            let (y_instr, Some(y_res)) = emit(*y, env.clone(), type_env) else {
                 panic!("No result provided")
             };
             x_instr.extend(y_instr);
@@ -243,17 +243,17 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
         }
         ValueExpr::BoolNegate(expr) => {
             let res_var = new_var();
-            let (mut expr_instr, Some(expr_res)) = emit(*expr, env.clone()) else {
+            let (mut expr_instr, Some(expr_res)) = emit(*expr, env.clone(), type_env) else {
                 panic!("No result provided")
             };
             expr_instr.push(format!("{res_var} := !{expr_res}\n"));
             (expr_instr, Some(res_var))
         }
         ValueExpr::Add(x, y) => {
-            let (mut x_instr, Some(x_res)) = emit(*x, env.clone()) else {
+            let (mut x_instr, Some(x_res)) = emit(*x, env.clone(), type_env) else {
                 panic!("No result provided")
             };
-            let (y_instr, Some(y_res)) = emit(*y, env.clone()) else {
+            let (y_instr, Some(y_res)) = emit(*y, env.clone(), type_env) else {
                 panic!("No result provided")
             };
             x_instr.extend(y_instr);
@@ -262,10 +262,10 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             (x_instr, Some(res_var))
         }
         ValueExpr::Mul(x, y) => {
-            let (mut x_instr, Some(x_res)) = emit(*x, env.clone()) else {
+            let (mut x_instr, Some(x_res)) = emit(*x, env.clone(), type_env) else {
                 panic!("No result provided")
             };
-            let (y_instr, Some(y_res)) = emit(*y, env.clone()) else {
+            let (y_instr, Some(y_res)) = emit(*y, env.clone(), type_env) else {
                 panic!("No result provided")
             };
             x_instr.extend(y_instr);
@@ -280,7 +280,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                 initializer,
             } = *b;
             if let Some(initializer) = initializer {
-                let (instr, Some(res_var)) = emit(initializer, env.clone()) else {
+                let (instr, Some(res_var)) = emit(initializer, env.clone(), type_env) else {
                     panic!("No result provided")
                 };
                 let mut res = Vec::new();
@@ -293,14 +293,14 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
         }
         ValueExpr::VarAssign(b) => {
             let Assignment { name, value_expr } = *b;
-            let (mut instr, Some(res)) = emit(value_expr, env.clone()) else {
+            let (mut instr, Some(res)) = emit(value_expr, env.clone(), type_env) else {
                 panic!("No result provided")
             };
             instr.push(format!("{name} = {res}\n"));
             (instr, Some(name))
         }
         ValueExpr::While { condition, body } => {
-            let (cond_instr, Some(cond_res)) = emit(*condition, env.clone()) else {
+            let (cond_instr, Some(cond_res)) = emit(*condition, env.clone(), type_env) else {
                 panic!("No result provided")
             };
             let mut instr = Vec::new();
@@ -311,7 +311,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             instr.push("break\n".to_string());
             instr.push("}\n".to_string());
 
-            let (body_instr, _) = emit(*body, env.clone());
+            let (body_instr, _) = emit(*body, env.clone(), type_env);
             instr.extend(body_instr);
 
             instr.push("}\n".to_string());
@@ -321,7 +321,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
         ValueExpr::Return(expr) => {
             let mut instr = Vec::new();
             if let Some(expr) = expr {
-                let (expr_instr, Some(expr_res)) = emit(*expr, env.clone()) else {
+                let (expr_instr, Some(expr_res)) = emit(*expr, env.clone(), type_env) else {
                     panic!("No result provided")
                 };
                 instr.extend(expr_instr);
@@ -338,7 +338,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
         } => {
             let res_var = new_var();
             let (cond_instr, Some(cond_res)) =
-                emit(ValueExpr::clone(condition.as_ref()), env.clone())
+                emit(ValueExpr::clone(condition.as_ref()), env.clone(), type_env)
             else {
                 panic!("No result provided")
             };
@@ -347,13 +347,13 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             res_instr.extend(cond_instr);
             res_instr.push(format!("var {res_var} interface{}\n", "{}"));
             res_instr.push(format!("if {} {}\n", cond_res, "{"));
-            let (then_instr, res) = emit(ValueExpr::clone(then.as_ref()), env.clone());
+            let (then_instr, res) = emit(ValueExpr::clone(then.as_ref()), env.clone(), type_env);
             res_instr.extend(then_instr);
             if let Some(res) = res {
                 res_instr.push(format!("{res_var} = {res}\n"))
             }
             res_instr.push("} else {\n".to_string());
-            let (r#else_instr, res) = emit(ValueExpr::clone(r#else.as_ref()), env.clone());
+            let (r#else_instr, res) = emit(ValueExpr::clone(r#else.as_ref()), env.clone(), type_env);
             res_instr.extend(r#else_instr);
             if let Some(res) = res {
                 res_instr.push(format!("{res_var} = {res}\n"))
@@ -374,7 +374,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let mut instrs: Vec<String> = Vec::new();
             let mut results = Vec::new();
             for expr in exprs.into_iter() {
-                let (instr, Some(res)) = emit(expr, env.clone()) else {
+                let (instr, Some(res)) = emit(expr, env.clone(), type_env) else {
                     panic!("No result provided")
                 };
                 instrs.extend(instr.into_iter());
@@ -424,7 +424,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
                 with_result = false;
             }
 
-            let (target_instr, Some(target_res_name)) = emit(target, env.clone()) else {
+            let (target_instr, Some(target_res_name)) = emit(target, env.clone(), type_env) else {
                 panic!("No result provided")
             };
             res.extend(target_instr);
@@ -433,7 +433,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let mut param_results = Vec::new();
 
             for expr in params.into_iter() {
-                let (instr, Some(res)) = emit(expr, env.clone()) else {
+                let (instr, Some(res)) = emit(expr, env.clone(), type_env) else {
                     panic!("No result provided")
                 };
                 params_instructions.extend(instr.into_iter());
@@ -476,7 +476,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let mut methods = Vec::new();
 
             for (field_name, field_init) in fields {
-                let (this_field_instr, Some(this_field_res)) = emit(field_init, env.clone()) else {
+                let (this_field_instr, Some(this_field_res)) = emit(field_init, env.clone(), type_env) else {
                     panic!("No result provided")
                 };
                 field_instr.extend(this_field_instr.into_iter());
@@ -542,7 +542,7 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let mut methods = Vec::new();
 
             for (field_name, field_init) in fields {
-                let (this_field_instr, Some(this_field_res)) = emit(field_init, env.clone()) else {
+                let (this_field_instr, Some(this_field_res)) = emit(field_init, env.clone(), type_env) else {
                     panic!("No result provided")
                 };
                 field_instr.extend(this_field_instr.into_iter());
@@ -613,10 +613,11 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment) -> (Vec<String>, Option<String>)
             let mut instrs = Vec::new();
             let mut res = Vec::new();
             for expr in exprs {
-                let (instr, res_var) = emit(expr, env.clone());
+                let (instr, res_var) = emit(expr, env.clone(), type_env);
                 instrs.extend(instr.into_iter());
                 res.push(res_var);
             }
+
             if let Some(Some(res)) = res.last() {
                 instrs.push(format!("_ = {res}\n"));
                 (instrs, Some(res.clone()))
