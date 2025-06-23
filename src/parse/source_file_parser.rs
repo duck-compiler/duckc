@@ -1,6 +1,6 @@
 use std::{fs::File, path::PathBuf};
 
-use chumsky::{container::Seq, prelude::*};
+use chumsky::prelude::*;
 
 use crate::parse::{
     function_parser::{FunctionDefintion, function_definition_parser},
