@@ -49,16 +49,17 @@ fn regular_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> 
 fn go_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> + Clone {
     (just(Token::Use).then(just(Token::Go)))
         .ignore_then(select_ref! { Token::StringLiteral(s) => s.to_owned() })
-        .then(just(Token::As).ignore_then(select_ref! { Token::Ident(i) => i.to_owned() }).or_not())
+        .then(
+            just(Token::As)
+                .ignore_then(select_ref! { Token::Ident(i) => i.to_owned() })
+                .or_not(),
+        )
         .then_ignore(just(Token::ControlChar(';')))
         .map(|(package_name, alias)| UseStatement::Go(package_name, alias))
 }
 
 pub fn use_statement_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> + Clone {
-    choice((
-        go_use_parser(),
-        regular_use_parser(),
-    ))
+    choice((go_use_parser(), regular_use_parser()))
 }
 
 #[cfg(test)]
@@ -76,37 +77,28 @@ mod tests {
             ),
             (
                 "use std::io;",
-                UseStatement::Regular(
-                    vec![
-                        Indicator::Module("std".to_string()),
-                        Indicator::Module("io".to_string()),
-                    ],
-                ),
+                UseStatement::Regular(vec![
+                    Indicator::Module("std".to_string()),
+                    Indicator::Module("io".to_string()),
+                ]),
             ),
             (
                 "use std::io::{println};",
-                UseStatement::Regular(
-                    vec![
-                        Indicator::Module("std".to_string()),
-                        Indicator::Module("io".to_string()),
-                        Indicator::Symbols(vec!["println".to_string()]),
-                    ],
-                ),
+                UseStatement::Regular(vec![
+                    Indicator::Module("std".to_string()),
+                    Indicator::Module("io".to_string()),
+                    Indicator::Symbols(vec!["println".to_string()]),
+                ]),
             ),
             (
                 "use std::io::{println, print};",
-                UseStatement::Regular(
-                    vec![
-                        Indicator::Module("std".to_string()),
-                        Indicator::Module("io".to_string()),
-                        Indicator::Symbols(vec!["println".to_string(), "print".to_string()]),
-                    ],
-                ),
+                UseStatement::Regular(vec![
+                    Indicator::Module("std".to_string()),
+                    Indicator::Module("io".to_string()),
+                    Indicator::Symbols(vec!["println".to_string(), "print".to_string()]),
+                ]),
             ),
-            (
-                "use go \"fmt\";",
-                UseStatement::Go("fmt".into(), None),
-            ),
+            ("use go \"fmt\";", UseStatement::Go("fmt".into(), None)),
             (
                 "use go \"fmt\" as FMT;",
                 UseStatement::Go("fmt".into(), Some("FMT".into())),

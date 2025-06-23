@@ -1,10 +1,13 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{parse::{
-    assignment_and_declaration_parser::{Assignment, Declaration},
-    function_parser::LambdaFunctionExpr,
-    value_parser::ValueExpr,
-}, semantics::typechecker::TypeEnv};
+use crate::{
+    parse::{
+        assignment_and_declaration_parser::{Assignment, Declaration},
+        function_parser::LambdaFunctionExpr,
+        value_parser::ValueExpr,
+    },
+    semantics::typechecker::TypeEnv,
+};
 
 #[derive(Clone, Debug)]
 pub struct GoMethodDef {
@@ -179,7 +182,11 @@ impl EmitEnvironment {
     }
 }
 
-pub fn emit(x: ValueExpr, env: EmitEnvironment, type_env: &mut TypeEnv) -> (Vec<String>, Option<String>) {
+pub fn emit(
+    x: ValueExpr,
+    env: EmitEnvironment,
+    type_env: &mut TypeEnv,
+) -> (Vec<String>, Option<String>) {
     let new_var = || {
         let x = format!("var_{}", env.var_counter.borrow());
         *env.var_counter.borrow_mut() += 1;
@@ -357,7 +364,8 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment, type_env: &mut TypeEnv) -> (Vec<
                 res_instr.push(format!("{res_var} = {res}\n"))
             }
             res_instr.push("} else {\n".to_string());
-            let (r#else_instr, res) = emit(ValueExpr::clone(r#else.as_ref()), env.clone(), type_env);
+            let (r#else_instr, res) =
+                emit(ValueExpr::clone(r#else.as_ref()), env.clone(), type_env);
             res_instr.extend(r#else_instr);
             if let Some(res) = res {
                 res_instr.push(format!("{res_var} = {res}\n"))
@@ -480,7 +488,9 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment, type_env: &mut TypeEnv) -> (Vec<
             let mut methods = Vec::new();
 
             for (field_name, field_init) in fields {
-                let (this_field_instr, Some(this_field_res)) = emit(field_init, env.clone(), type_env) else {
+                let (this_field_instr, Some(this_field_res)) =
+                    emit(field_init, env.clone(), type_env)
+                else {
                     panic!("No result provided")
                 };
                 field_instr.extend(this_field_instr.into_iter());
@@ -546,7 +556,9 @@ pub fn emit(x: ValueExpr, env: EmitEnvironment, type_env: &mut TypeEnv) -> (Vec<
             let mut methods = Vec::new();
 
             for (field_name, field_init) in fields {
-                let (this_field_instr, Some(this_field_res)) = emit(field_init, env.clone(), type_env) else {
+                let (this_field_instr, Some(this_field_res)) =
+                    emit(field_init, env.clone(), type_env)
+                else {
                     panic!("No result provided")
                 };
                 field_instr.extend(this_field_instr.into_iter());

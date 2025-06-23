@@ -1,4 +1,8 @@
-use crate::{emit::value::{emit, EmitEnvironment}, parse::function_parser::FunctionDefintion, semantics::typechecker::TypeEnv};
+use crate::{
+    emit::value::{EmitEnvironment, emit},
+    parse::function_parser::FunctionDefintion,
+    semantics::typechecker::TypeEnv,
+};
 
 impl FunctionDefintion {
     pub fn emit(&self, env: EmitEnvironment, type_env: &mut TypeEnv) -> String {

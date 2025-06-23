@@ -10,9 +10,9 @@ use tempfile::Builder;
 
 use crate::parse::{source_file_parser::source_file_parser, use_statement_parser::UseStatement};
 
+pub mod emit;
 pub mod parse;
 pub mod semantics;
-pub mod emit;
 
 use emit::value::{EmitEnvironment, GoImport};
 
@@ -48,11 +48,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut p = PathBuf::from(target_path);
     let src = std::fs::read_to_string(&p).expect("Could not read file");
     let lex = lexer().parse(&src).into_result().expect("Lex error");
-    let mut source_file = source_file_parser({p.pop();p})
-        .parse(&lex)
-        .into_result()
-        .expect("Parse error")
-        .flatten();
+    let mut source_file = source_file_parser({
+        p.pop();
+        p
+    })
+    .parse(&lex)
+    .into_result()
+    .expect("Parse error")
+    .flatten();
 
     println!("before resolve");
     source_file = dbg!(source_file);
@@ -64,15 +67,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     source_file = dbg!(source_file);
 
     let env = EmitEnvironment::new();
-    source_file.use_statements.iter().filter_map(|x| match x.to_owned() {
-        UseStatement::Go(path, alias) => Some(GoImport {
-            path,
-            alias,
-        }),
-        _ => None,
-    }).for_each(|x| {
-        env.push_import(x);
-    });
+    source_file
+        .use_statements
+        .iter()
+        .filter_map(|x| match x.to_owned() {
+            UseStatement::Go(path, alias) => Some(GoImport { path, alias }),
+            _ => None,
+        })
+        .for_each(|x| {
+            env.push_import(x);
+        });
 
     let _functions = source_file
         .function_definitions

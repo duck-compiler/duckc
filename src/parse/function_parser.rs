@@ -35,7 +35,8 @@ pub struct LambdaFunctionExpr {
     pub value_expr: ValueExpr,
 }
 
-pub fn function_definition_parser<'src>() -> impl Parser<'src, &'src [Token], FunctionDefintion> + Clone {
+pub fn function_definition_parser<'src>()
+-> impl Parser<'src, &'src [Token], FunctionDefintion> + Clone {
     let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
         .then_ignore(just(Token::ControlChar(':')))
         .then(type_expression_parser())

@@ -36,9 +36,7 @@ pub enum TypeExpr {
     Fun(Vec<(Option<String>, TypeExpr)>, Option<Box<TypeExpr>>),
 }
 
-impl TypeExpr {
-
-}
+impl TypeExpr {}
 
 pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeExpr> + Clone {
     recursive(|p| {
@@ -97,14 +95,16 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
             .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
             .map(TypeExpr::Tuple);
 
-        let type_name = select_ref! { Token::Ident(identifier) => identifier.to_string() }
-            .map(|identifier| match identifier.as_str() {
-                "Int" => TypeExpr::Int,
-                "Float" => TypeExpr::Float,
-                "Bool" => TypeExpr::Bool,
-                "String" => TypeExpr::String,
-                "Char" => TypeExpr::Char,
-                _ => TypeExpr::TypeName(identifier),
+        let type_name =
+            select_ref! { Token::Ident(identifier) => identifier.to_string() }.map(|identifier| {
+                match identifier.as_str() {
+                    "Int" => TypeExpr::Int,
+                    "Float" => TypeExpr::Float,
+                    "Bool" => TypeExpr::Bool,
+                    "String" => TypeExpr::String,
+                    "Char" => TypeExpr::Char,
+                    _ => TypeExpr::TypeName(identifier),
+                }
             });
 
         go_type.or(type_name).or(r#struct).or(duck).or(tuple)

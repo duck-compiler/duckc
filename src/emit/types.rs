@@ -1,4 +1,7 @@
-use crate::{parse::type_parser::{Duck, Struct, TypeExpr}, semantics::typechecker::TypeEnv};
+use crate::{
+    parse::type_parser::{Duck, Struct, TypeExpr},
+    semantics::typechecker::TypeEnv,
+};
 
 impl TypeExpr {
     pub fn as_go_implementation(&self, type_env: &mut TypeEnv) -> String {
@@ -17,23 +20,25 @@ impl TypeExpr {
                 "struct".to_string(),
                 "{\n".to_string(),
                 "\n}\n".to_string(),
-                ].join(" "),
-            TypeExpr::Duck(Duck { fields, }) | TypeExpr::Struct(Struct { fields }) => [
+            ]
+            .join(" "),
+            TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => [
                 "type".to_string(),
                 self.to_go_type_str(type_env),
                 "struct".to_string(),
                 "{\n".to_string(),
                 fields
                     .iter()
-                    .map(|(field_name, type_expr)| format!("    {} {}", field_name, type_expr.to_go_type_str(type_env)))
+                    .map(|(field_name, type_expr)| {
+                        format!("    {} {}", field_name, type_expr.to_go_type_str(type_env))
+                    })
                     .collect::<Vec<String>>()
                     .join("\n"),
                 "\n}\n".to_string(),
-                ].join(" "),
+            ]
+            .join(" "),
             TypeExpr::Or(..) => todo!(),
-            TypeExpr::Fun(_param_types, _return_type) => [
-                "func(",
-                ].join(" "),
+            TypeExpr::Fun(_param_types, _return_type) => ["func("].join(" "),
         }
     }
 
@@ -51,8 +56,8 @@ impl TypeExpr {
                         .collect::<Vec<_>>()
                         .join(""),
                     "}",
-                    ]
-                    .join(""),
+                ]
+                .join(""),
                 format!(
                     "Tup{}",
                     types
@@ -96,8 +101,8 @@ impl TypeExpr {
                         .collect::<Vec<_>>()
                         .join("\n"),
                     "\n}\n",
-                    ]
-                    .join(""),
+                ]
+                .join(""),
                 format!(
                     "Struct_{}",
                     fields
@@ -114,7 +119,7 @@ impl TypeExpr {
             TypeExpr::Bool => ("Bool".to_string(), "Bool".to_string()),
             TypeExpr::String => ("String".to_string(), "String".to_string()),
             TypeExpr::Char => ("Char".to_string(), "Char".to_string()),
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }

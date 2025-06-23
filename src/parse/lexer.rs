@@ -79,15 +79,18 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
 
 fn go_text_parser<'src>() -> impl Parser<'src, &'src str, String> {
     recursive(|e| {
-        just("{").ignore_then(
-            ((just("{").rewind().ignore_then(e.clone()))
-                .or(any().filter(|c| *c != '{' && *c != '}').map(String::from)))
-            .repeated()
-            .collect::<Vec<_>>()
-        ).then_ignore(just("}")).map(| x| {
-            let x = x.join("");
-            format!("{}{x}{}", "{", "}")
-        })
+        just("{")
+            .ignore_then(
+                ((just("{").rewind().ignore_then(e.clone()))
+                    .or(any().filter(|c| *c != '{' && *c != '}').map(String::from)))
+                .repeated()
+                .collect::<Vec<_>>(),
+            )
+            .then_ignore(just("}"))
+            .map(|x| {
+                let x = x.join("");
+                format!("{}{x}{}", "{", "}")
+            })
     })
 }
 
@@ -102,7 +105,7 @@ fn inline_go_parser<'src>() -> impl Parser<'src, &'src str, Token> {
         .ignore_then(whitespace().at_least(1))
         .ignore_then(just("{").rewind())
         .ignore_then(go_text_parser())
-        .map(|x| Token::InlineGo(x[1..x.len()-1].to_owned()))
+        .map(|x| Token::InlineGo(x[1..x.len() - 1].to_owned()))
 }
 
 fn num_literal<'src>() -> impl Parser<'src, &'src str, Token> {

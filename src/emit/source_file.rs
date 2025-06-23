@@ -1,6 +1,7 @@
 use crate::{
     emit::value::EmitEnvironment,
-    parse::{source_file_parser::SourceFile, use_statement_parser::UseStatement}, semantics::typechecker::TypeEnv,
+    parse::{source_file_parser::SourceFile, use_statement_parser::UseStatement},
+    semantics::typechecker::TypeEnv,
 };
 
 impl SourceFile {
