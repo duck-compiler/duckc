@@ -8,15 +8,15 @@ use parse::lexer::lexer;
 use semantics::typechecker::{self, TypeEnv};
 use tempfile::Builder;
 
-use crate::parse::{source_file_parser::source_file_parser, use_statement_parser::UseStatement, value_parser::{EmitEnvironment, GoImport}};
+use crate::parse::{source_file_parser::source_file_parser, use_statement_parser::UseStatement};
 
 pub mod parse;
 pub mod semantics;
+pub mod emit;
+
+use emit::value::{EmitEnvironment, GoImport};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    if true {
-        return Ok(());
-    }
     let mut keep_go = false;
     let mut custom_out_name = None::<String>;
     let mut file_name = None::<String>;
