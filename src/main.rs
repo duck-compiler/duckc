@@ -51,7 +51,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut source_file = source_file_parser({p.pop();p})
         .parse(&lex)
         .into_result()
-        .expect("Parse error");
+        .expect("Parse error")
+        .flatten();
 
     println!("before resolve");
     source_file = dbg!(source_file);
@@ -73,17 +74,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         env.push_import(x);
     });
 
-    let functions = source_file
+    let _functions = source_file
         .function_definitions
         .iter()
         .map(|x| x.emit(env.clone()))
         .collect::<Vec<_>>()
         .join("\n");
-    let out_text = format!(
-        "package main\n{}\n{}\n",
-        env.emit_imports_and_types(),
-        functions
-    );
+
+    let out_text = source_file.emit("main".into());
 
     let mut tmp_file = Builder::new()
         .prefix("duck_gen")

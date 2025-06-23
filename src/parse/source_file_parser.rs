@@ -25,6 +25,48 @@ pub enum SourceUnit {
     Module(String, SourceFile),
 }
 
+impl SourceFile {
+    pub fn push_use(&mut self, s: &UseStatement) {
+        if !self.use_statements.contains(s) {
+            self.use_statements.push(s.to_owned());
+        }
+    }
+
+    pub fn flatten(&self) -> SourceFile {
+        let mut res = SourceFile::default();
+
+        fn flatten0(s: &SourceFile, result: &mut SourceFile, prefix: &str) {
+            for func in &s.function_definitions {
+                result.function_definitions.push(FunctionDefintion {
+                    name: format!("{prefix}{}", func.name),
+                    ..func.clone()
+                });
+            }
+
+            for t in &s.type_definitions {
+                result.type_definitions.push(TypeDefinition {
+                    name: format!("{prefix}_{}", t.name),
+                    ..t.clone()
+                });
+            }
+
+            for u in &s.use_statements {
+                if matches!(u, UseStatement::Go(..)) {
+                    result.push_use(u);
+                }
+            }
+
+            for (name, sub_module) in &s.sub_modules {
+                flatten0(sub_module, result, &format!("{prefix}{name}_"));
+            }
+        }
+
+        flatten0(self, &mut res, "");
+
+        res
+    }
+}
+
 fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
     let joined = current_dir.join(&name);
     let mod_dir = File::open(&joined);
@@ -556,11 +598,222 @@ mod tests {
             sort_all(&mut expected);
             sort_all(&mut got);
 
-            assert_eq!(
-                expected,
-                got,
-                "{main_file}"
-            );
+            assert_eq!(expected, got, "{main_file}");
+        }
+    }
+
+    #[test]
+    fn test_flatten() {
+        let test_cases = vec![
+            (SourceFile::default().flatten(), SourceFile::default()),
+            (
+                SourceFile::default(),
+                SourceFile {
+                    sub_modules: vec![
+                        ("abc".into(), SourceFile::default()),
+                        ("xyz".into(), SourceFile::default()),
+                    ],
+                    ..Default::default()
+                },
+            ),
+            (
+                SourceFile::default(),
+                SourceFile {
+                    sub_modules: vec![
+                        (
+                            "abc".into(),
+                            SourceFile {
+                                sub_modules: vec![("lol".into(), SourceFile::default())],
+                                ..SourceFile::default()
+                            },
+                        ),
+                        (
+                            "xyz".into(),
+                            SourceFile {
+                                sub_modules: vec![("foo".into(), SourceFile::default())],
+                                ..SourceFile::default()
+                            },
+                        ),
+                    ],
+                    ..Default::default()
+                },
+            ),
+            (
+                SourceFile::default(),
+                SourceFile {
+                    sub_modules: vec![("empty".into(), SourceFile::default())],
+                    ..Default::default()
+                },
+            ),
+            (
+                SourceFile {
+                    function_definitions: vec![FunctionDefintion {
+                        name: "single_my_single_fun".into(),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                SourceFile {
+                    sub_modules: vec![
+                        ("empty".into(), SourceFile::default()),
+                        (
+                            "single".into(),
+                            SourceFile {
+                                function_definitions: vec![FunctionDefintion {
+                                    name: "my_single_fun".into(),
+                                    ..Default::default()
+                                }],
+                                ..Default::default()
+                            },
+                        ),
+                    ],
+                    ..Default::default()
+                },
+            ),
+            (
+                SourceFile {
+                    function_definitions: vec![
+                        FunctionDefintion {
+                            name: "multiple_some_abc_func".into(),
+                            value_expr: ValueExpr::Block(vec![ValueExpr::String(
+                                "Hello from module".into(),
+                            )]),
+                            ..Default::default()
+                        },
+                        FunctionDefintion {
+                            name: "multiple_some_xyz_func".into(),
+                            value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                },
+                SourceFile {
+                    sub_modules: vec![(
+                        "multiple".into(),
+                        SourceFile {
+                            function_definitions: vec![
+                                FunctionDefintion {
+                                    name: "some_abc_func".into(),
+                                    value_expr: ValueExpr::Block(vec![ValueExpr::String(
+                                        "Hello from module".into(),
+                                    )]),
+                                    ..Default::default()
+                                },
+                                FunctionDefintion {
+                                    name: "some_xyz_func".into(),
+                                    value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                                    ..Default::default()
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                    )],
+                    ..Default::default()
+                },
+            ),
+            (
+                SourceFile {
+                    function_definitions: vec![
+                        FunctionDefintion {
+                            name: "multiple_some_abc_func".into(),
+                            value_expr: ValueExpr::Block(vec![ValueExpr::String(
+                                "Hello from module".into(),
+                            )]),
+                            ..Default::default()
+                        },
+                        FunctionDefintion {
+                            name: "multiple_some_xyz_func".into(),
+                            value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                            ..Default::default()
+                        },
+                        FunctionDefintion {
+                            name: "nested_hello_from_x".into(),
+                            ..Default::default()
+                        },
+                        FunctionDefintion {
+                            name: "nested_level1_hello_from_y".into(),
+                            ..Default::default()
+                        },
+                        FunctionDefintion {
+                            name: "nested_level1_level2_hello_from_z".into(),
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                },
+                SourceFile {
+                    sub_modules: vec![
+                        (
+                            "multiple".into(),
+                            SourceFile {
+                                function_definitions: vec![
+                                    FunctionDefintion {
+                                        name: "some_abc_func".into(),
+                                        value_expr: ValueExpr::Block(vec![ValueExpr::String(
+                                            "Hello from module".into(),
+                                        )]),
+                                        ..Default::default()
+                                    },
+                                    FunctionDefintion {
+                                        name: "some_xyz_func".into(),
+                                        value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                                        ..Default::default()
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        ),
+                        (
+                            "nested".into(),
+                            SourceFile {
+                                function_definitions: vec![FunctionDefintion {
+                                    name: "hello_from_x".into(),
+                                    ..Default::default()
+                                }],
+                                sub_modules: vec![(
+                                    "level1".into(),
+                                    SourceFile {
+                                        function_definitions: vec![FunctionDefintion {
+                                            name: "hello_from_y".into(),
+                                            ..Default::default()
+                                        }],
+                                        sub_modules: vec![(
+                                            "level2".into(),
+                                            SourceFile {
+                                                function_definitions: vec![FunctionDefintion {
+                                                    name: "hello_from_z".into(),
+                                                    ..Default::default()
+                                                }],
+                                                ..Default::default()
+                                            },
+                                        )],
+                                        ..Default::default()
+                                    },
+                                )],
+                                ..Default::default()
+                            },
+                        ),
+                        ("empty".into(), SourceFile::default()),
+                        ("another_mod".into(), SourceFile::default()),
+                    ],
+                    ..Default::default()
+                },
+            ),
+        ];
+
+        for (i, (mut expected, mut original)) in test_cases.into_iter().enumerate() {
+            fn sort_all(x: &mut SourceFile) {
+                x.function_definitions.sort_by_key(|x| x.name.clone());
+                for (_, s) in x.sub_modules.iter_mut() {
+                    sort_all(s);
+                }
+            }
+
+            sort_all(&mut expected);
+            sort_all(&mut original);
+
+            assert_eq!(expected, original.flatten(), "{i}");
         }
     }
 }

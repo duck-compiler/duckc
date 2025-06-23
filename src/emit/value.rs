@@ -152,6 +152,15 @@ impl EmitEnvironment {
         None
     }
 
+    pub fn emit_types(&self) -> String {
+        self.types
+            .borrow()
+            .iter()
+            .map(|x| x.emit().join(""))
+            .collect::<Vec<_>>()
+            .join("")
+    }
+
     pub fn emit_imports_and_types(&self) -> String {
         format!(
             "import (\n{}\n)\n{}",
@@ -165,12 +174,7 @@ impl EmitEnvironment {
                 ))
                 .collect::<Vec<_>>()
                 .join("\n"),
-            self.types
-                .borrow()
-                .iter()
-                .map(|x| x.emit().join(""))
-                .collect::<Vec<_>>()
-                .join("")
+            self.emit_types()
         )
     }
 }
