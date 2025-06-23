@@ -1,12 +1,13 @@
-use crate::{emit::value::{emit, EmitEnvironment}, parse::function_parser::FunctionDefintion};
+use crate::{emit::value::{emit, EmitEnvironment}, parse::function_parser::FunctionDefintion, semantics::typechecker::TypeEnv};
 
 impl FunctionDefintion {
-    pub fn emit(&self, env: EmitEnvironment) -> String {
-        let (mut emitted_body, res_name) = emit(self.value_expr.clone(), env.clone());
+    pub fn emit(&self, env: EmitEnvironment, type_env: &mut TypeEnv) -> String {
+        let (mut emitted_body, res_name) = emit(self.value_expr.clone(), env.clone(), type_env);
 
+        // TODO: remove this as this should be located in the typechecking
         if let Some(params) = &self.params {
             for p in params {
-                p.1.emit_into_env(env.clone());
+                p.1.to_go_type_str(type_env);
             }
         }
 
