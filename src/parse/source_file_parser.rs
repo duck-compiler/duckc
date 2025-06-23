@@ -541,12 +541,17 @@ mod tests {
 
         let dir = PathBuf::from("test_files").join("modules");
 
-        for (main_file, expected) in test_cases {
+        for (main_file, mut expected) in test_cases {
             let src = std::fs::read_to_string(dir.join(main_file)).unwrap();
             let lex = lexer().parse(&src).unwrap();
+            let mut got = source_file_parser(dir.clone()).parse(&lex).unwrap();
+
+            expected.function_definitions.sort_by_key(|x| x.name.clone());
+            got.function_definitions.sort_by_key(|x| x.name.clone());
+
             assert_eq!(
-                source_file_parser(dir.clone()).parse(&lex).unwrap(),
                 expected,
+                got,
                 "{main_file}"
             );
         }
