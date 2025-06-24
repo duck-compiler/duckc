@@ -29,8 +29,8 @@ impl TypeExpr {
                 "{\n".to_string(),
                 fields
                     .iter()
-                    .map(|(field_name, type_expr)| {
-                        format!("    {} {}", field_name, type_expr.as_go_type_annotation(type_env))
+                    .map(|field| {
+                        format!("    {} {}", field.name, field.type_expr.as_go_type_annotation(type_env))
                     })
                     .collect::<Vec<String>>()
                     .join("\n"),
@@ -69,7 +69,7 @@ impl TypeExpr {
             ),
             TypeExpr::Duck(Duck { fields }) => {
                 let mut fields = fields.clone();
-                fields.sort_by_key(|x| x.0.clone());
+                fields.sort_by_key(|x| x.name.clone());
                 if fields.is_empty() {
                     ("interface{}".to_string(), "Any".to_string())
                 } else {
@@ -77,7 +77,7 @@ impl TypeExpr {
                         "Duck{}",
                         fields
                             .into_iter()
-                            .map(|x| format!("_Has{}_{}", x.0, x.1.emit().1))
+                            .map(|x| format!("_Has{}_{}", x.name, x.type_expr.emit().1))
                             .collect::<Vec<_>>()
                             .join("")
                     );
@@ -89,14 +89,14 @@ impl TypeExpr {
                     "struct",
                     &fields
                         .iter()
-                        .map(|field| format!("_With{}{}", field.0, field.1.emit().1))
+                        .map(|field| format!("_With{}{}", field.name, field.type_expr.emit().1))
                         .collect::<Vec<_>>()
                         .join(""),
                     "{\n",
                     &fields
                         .iter()
-                        .map(|(field_name, field_type)| {
-                            format!("   {field_name} {}", field_type.emit().1)
+                        .map(|field| {
+                            format!("   {} {}", field.name, field.type_expr.emit().1)
                         })
                         .collect::<Vec<_>>()
                         .join("\n"),
@@ -107,7 +107,7 @@ impl TypeExpr {
                     "Struct_{}",
                     fields
                         .iter()
-                        .map(|field| format!("_With{}{}", field.0, field.1.emit().1))
+                        .map(|field| format!("_With{}{}", field.name, field.type_expr.emit().1))
                         .collect::<Vec<_>>()
                         .join("")
                 ),

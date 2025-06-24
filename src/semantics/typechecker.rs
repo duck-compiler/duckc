@@ -3,7 +3,7 @@ use std::{collections::HashMap, process};
 use crate::parse::{
     function_parser::FunctionDefintion,
     source_file_parser::SourceFile,
-    type_parser::{Duck, Struct, TypeExpr},
+    type_parser::{Duck, Field, Struct, TypeExpr},
     value_parser::ValueExpr,
 };
 
@@ -275,24 +275,26 @@ impl TypeExpr {
                 r#struct
                     .fields
                     .iter()
-                    .map(|(field_name, type_expr)| format!(
-                        "{field_name}_{}",
-                        (*type_expr).as_go_type_annotation(type_env)
+                    .map(|field| format!(
+                        "{}_{}",
+                        field.name,
+                        field.type_expr.as_go_type_annotation(type_env)
                     ))
                     .collect::<Vec<_>>()
                     .join("_")
             ),
             TypeExpr::Duck(duck) => {
                 let mut fields = duck.fields.clone();
-                fields.sort_by_key(|(field_name, _)| field_name.clone());
+                fields.sort_by_key(|field| field.name.clone());
 
                 format!(
                     "interface {{\n{}\n}}",
                     fields
                         .iter()
-                        .map(|(field_name, type_expr)| format!(
-                            "{field_name}_{}",
-                            type_expr.as_go_type_annotation(type_env)
+                        .map(|field| format!(
+                            "{}_{}",
+                            field.name,
+                            field.type_expr.as_go_type_annotation(type_env)
                         ))
                         .collect::<Vec<_>>()
                         .join("_")
@@ -337,13 +339,13 @@ impl TypeExpr {
             ValueExpr::Struct(fields) => {
                 let types = fields
                     .into_iter()
-                    .map(|(field_name, value_expr)| {
-                        (
-                            field_name.to_string(),
+                    .map(|field| {
+                        Field::new(
+                            field.0.to_string(),
                             TypeExpr::from_value_expr(value_expr, type_env),
                         )
                     })
-                    .collect::<Vec<(String, TypeExpr)>>();
+                    .collect::<Vec<Field>>();
 
                 TypeExpr::Struct(Struct { fields: types })
             }
@@ -358,13 +360,13 @@ impl TypeExpr {
             ValueExpr::Duck(fields) => {
                 let types = fields
                     .into_iter()
-                    .map(|(field_name, value_expr)| {
-                        (
-                            field_name.to_string(),
+                    .map(|(name, value_expr)| {
+                        Field::new(
+                            name.to_string(),
                             TypeExpr::from_value_expr(value_expr, type_env),
                         )
                     })
-                    .collect::<Vec<(String, TypeExpr)>>();
+                    .collect::<Vec<Field>>();
 
                 TypeExpr::Duck(Duck { fields: types })
             }
@@ -489,7 +491,7 @@ impl TypeExpr {
     }
 
     #[allow(dead_code)]
-    fn has_field(&self, field: (String, TypeExpr)) -> bool {
+    fn has_field(&self, field: Field) -> bool {
         match self {
             Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
             Self::Struct(r#struct) => r#struct
@@ -510,11 +512,11 @@ impl TypeExpr {
             Self::Struct(r#struct) => r#struct
                 .fields
                 .iter()
-                .any(|struct_field| *struct_field.0 == name),
+                .any(|struct_field| *struct_field.name == name),
             Self::Duck(duck) => duck
                 .fields
                 .iter()
-                .any(|struct_field| *struct_field.0 == name),
+                .any(|struct_field| *struct_field.name == name),
             _ => false,
         }
     }
@@ -525,16 +527,16 @@ impl TypeExpr {
             Self::Struct(r#struct) => r#struct
                 .fields
                 .iter()
-                .find(|struct_field| *struct_field.0 == field_name)
+                .find(|struct_field| *struct_field.name == field_name)
                 .expect("Tried to access field that doesn't exist")
-                .1
+                .type_expr
                 .clone(),
             Self::Duck(duck) => duck
                 .fields
                 .iter()
-                .find(|struct_field| *struct_field.0 == field_name)
+                .find(|struct_field| *struct_field.name == field_name)
                 .expect("Tried to access field that doesn't exist")
-                .1
+                .type_expr
                 .clone(),
             _ => panic!("Tried to access field on non object-like type."),
         }
@@ -579,7 +581,7 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr, type_env: &mut TypeE
 #[cfg(test)]
 mod test {
     use crate::parse::{
-        function_parser::FunctionDefintion, lexer::lexer, source_file_parser::source_file_parser, value_parser::value_expr_parser
+        function_parser::FunctionDefintion, lexer::lexer, type_parser::Field, value_parser::value_expr_parser
     };
     use chumsky::prelude::*;
 
@@ -593,7 +595,7 @@ mod test {
             (
                 "{ x: \"hallo\", }",
                 TypeExpr::Duck(Duck {
-                    fields: vec![("x".to_string(), TypeExpr::String)],
+                    fields: vec![Field::new("x".to_string(), TypeExpr::String)],
                 }),
             ),
             ("0.5", TypeExpr::Float),

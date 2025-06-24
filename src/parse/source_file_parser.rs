@@ -181,8 +181,8 @@ mod tests {
     use crate::parse::{
         function_parser::FunctionDefintion,
         lexer::lexer,
-        source_file_parser::{SourceFile, source_file_parser},
-        type_parser::{Duck, TypeDefinition, TypeExpr},
+        source_file_parser::{source_file_parser, SourceFile},
+        type_parser::{Duck, Field, TypeDefinition, TypeExpr},
         use_statement_parser::{Indicator, UseStatement},
         value_parser::ValueExpr,
     };
@@ -231,7 +231,7 @@ mod tests {
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
                         type_expression: TypeExpr::Duck(Duck {
-                            fields: vec![("x".into(), TypeExpr::String)],
+                            fields: vec![Field::new("x".into(), TypeExpr::String)],
                         }),
                     }],
                     ..Default::default()
@@ -315,7 +315,7 @@ mod tests {
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
                         type_expression: TypeExpr::Duck(Duck {
-                            fields: vec![("x".into(), TypeExpr::String)],
+                            fields: vec![Field::new("x".into(), TypeExpr::String)],
                         }),
                     }],
                     ..Default::default()
