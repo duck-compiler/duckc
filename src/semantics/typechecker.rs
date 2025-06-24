@@ -24,6 +24,29 @@ impl Default for TypeEnv {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum GoTypeDefinition {
+    TypaAlias {
+        name: String,
+        target: String,
+    },
+    Struct {
+        name: String,
+        fields: Vec<(String, String)>,
+        methods: Vec<String>
+    },
+    Interface {
+        name: String,
+        methods: Vec<String>
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TypesSummary {
+    pub types_used: Vec<TypeExpr>,
+    pub param_names_used: Vec<String>,
+}
+
 impl TypeEnv {
     pub fn push_type_aliases(&mut self) {
         let cloned_hash_map = self
@@ -89,13 +112,71 @@ impl TypeEnv {
             .last()
             .expect("At least one type aliases hashmap should exist. :(");
 
+        println!("Try to resolve type alias {alias}");
         type_aliases
             .get(&alias)
             .expect("Couldn't resolve type alias {alias}")
             .clone()
     }
-}
 
+    fn flatten_types(&mut self, type_expr: &mut TypeExpr, param_names_used: &mut Vec<String>) -> Vec<TypeExpr>  {
+        let mut found = vec![];
+
+        match type_expr {
+            TypeExpr::Duck(duck) => duck.fields.iter_mut()
+                .for_each(|field| {
+                    param_names_used.push(field.name.clone());
+                    if !field.type_expr.is_object_like(){
+                        return
+                    }
+
+                    let mut clone = field.type_expr.clone();
+                    let mut flattens_from_clone = self.flatten_types(&mut clone, param_names_used);
+
+                    found.push(clone);
+                    found.append(&mut flattens_from_clone);
+
+                    field.type_expr = TypeExpr::TypeName(field.type_expr.as_clean_go_type_name(self));
+                }),
+            TypeExpr::Struct(duck) => duck.fields.iter_mut()
+                .for_each(|field| {
+                    param_names_used.push(field.name.clone());
+                    if !field.type_expr.is_object_like(){
+                        return
+                    }
+
+                    let mut clone = field.type_expr.clone();
+                    let mut flattens_from_clone = self.flatten_types(&mut clone, param_names_used);
+
+                    found.push(clone);
+                    found.append(&mut flattens_from_clone);
+
+                    field.type_expr = TypeExpr::TypeName(field.type_expr.as_clean_go_type_name(self));
+                }),
+            _ => {}
+        }
+
+        found
+    }
+
+    pub fn summarize(&mut self) -> TypesSummary {
+        let mut all_types = self.all_types.clone();
+        let mut param_names_used = Vec::new();
+
+        let mut to_push = Vec::new();
+        all_types.iter_mut()
+            .for_each(|type_expr| {
+                to_push.append(&mut self.flatten_types(type_expr, &mut param_names_used));
+            });
+
+        all_types.append(&mut to_push);
+        all_types.dedup_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
+        let mut param_names_used = dbg!(param_names_used);
+        param_names_used.dedup();
+
+        return TypesSummary { types_used: all_types, param_names_used }
+    }
+}
 
 pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut TypeEnv) {
     type_env.push_type_aliases();
@@ -242,78 +323,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 }
 
 impl TypeExpr {
-    pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
-        return match self {
-            TypeExpr::Any => "interface{}".to_string(),
-            TypeExpr::Bool => "bool".to_string(),
-            TypeExpr::Int => "int".to_string(),
-            TypeExpr::Float => "float32".to_string(),
-            TypeExpr::Char => "rune".to_string(),
-            TypeExpr::String => "string".to_string(),
-            TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeName(name) => {
-                (type_env.resolve_type_alias(name.clone())).as_go_type_annotation(type_env)
-            }
-            TypeExpr::Fun(params, return_type) => format!(
-                "func({}) {}",
-                params
-                    .iter()
-                    .map(|(name, type_expr)| match name {
-                        Some(name) =>
-                            format!("{name}: {}", type_expr.as_go_type_annotation(type_env)),
-                        None => type_expr.as_go_type_annotation(type_env),
-                    })
-                    .collect::<Vec<_>>()
-                    .join(","),
-                return_type
-                    .clone()
-                    .map_or("".to_string(), |return_type| return_type
-                        .as_go_type_annotation(type_env))
-            ),
-            TypeExpr::Struct(r#struct) => format!(
-                "struct {{\n{}\n}}",
-                r#struct
-                    .fields
-                    .iter()
-                    .map(|field| format!(
-                        "{}_{}",
-                        field.name,
-                        field.type_expr.as_go_type_annotation(type_env)
-                    ))
-                    .collect::<Vec<_>>()
-                    .join("_")
-            ),
-            TypeExpr::Duck(duck) => {
-                let mut fields = duck.fields.clone();
-                fields.sort_by_key(|field| field.name.clone());
-
-                format!(
-                    "interface {{\n{}\n}}",
-                    fields
-                        .iter()
-                        .map(|field| format!(
-                            "{}_{}",
-                            field.name,
-                            field.type_expr.as_go_type_annotation(type_env)
-                        ))
-                        .collect::<Vec<_>>()
-                        .join("_")
-                )
-            }
-            TypeExpr::Tuple(fields) => {
-                format!(
-                    "struct {{\n{}\n}}",
-                    fields
-                        .iter()
-                        .map(|type_expr| format!("{}", type_expr.as_go_type_annotation(type_env)))
-                        .collect::<Vec<_>>()
-                        .join("_")
-                )
-            }
-            TypeExpr::Or(_variants) => todo!("implement variants"),
-        };
-    }
-
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
