@@ -43,6 +43,7 @@ pub enum GoTypeDefinition {
 
 #[derive(Clone, Debug)]
 pub struct TypesSummary {
+    // these are primitive types filtered
     pub types_used: Vec<TypeExpr>,
     pub param_names_used: Vec<String>,
 }
@@ -126,7 +127,8 @@ impl TypeEnv {
             TypeExpr::Duck(duck) => duck.fields.iter_mut()
                 .for_each(|field| {
                     param_names_used.push(field.name.clone());
-                    if !field.type_expr.is_object_like(){
+                    if !field.type_expr.is_object_like() {
+                        found.push(field.type_expr.clone());
                         return
                     }
 
@@ -142,6 +144,7 @@ impl TypeEnv {
                 .for_each(|field| {
                     param_names_used.push(field.name.clone());
                     if !field.type_expr.is_object_like(){
+                        found.push(field.type_expr.clone());
                         return
                     }
 
@@ -153,7 +156,20 @@ impl TypeEnv {
 
                     field.type_expr = TypeExpr::TypeName(field.type_expr.as_clean_go_type_name(self));
                 }),
-            _ => {}
+            TypeExpr::Tuple(types) => types.iter_mut().for_each(|type_expr| {
+                found.extend(self.flatten_types(type_expr, param_names_used));
+            }),
+            TypeExpr::Fun(params, return_type) => {
+                params.iter_mut()
+                    .for_each(|param| found.extend(self.flatten_types(&mut param.1, param_names_used)));
+
+                if let Some(type_expr) = return_type.as_mut() {
+                    found.extend(self.flatten_types(type_expr, param_names_used));
+                }
+            }
+            _ => {
+                found.push(type_expr.clone());
+            }
         }
 
         found
@@ -170,7 +186,11 @@ impl TypeEnv {
             });
 
         all_types.append(&mut to_push);
-        all_types.dedup_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
+        all_types.sort_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
+        all_types.dedup_by_key(|type_expr| dbg!(type_expr.as_clean_go_type_name(self)));
+
+        let all_types = dbg!(all_types);
+
         let mut param_names_used = dbg!(param_names_used);
         param_names_used.dedup();
 
@@ -310,13 +330,13 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             }
             ValueExpr::BoolNegate(value_expr) => {
                 typeresolve_value_expr(value_expr, type_env);
-            }
-            ValueExpr::Int(_)
-            | ValueExpr::String(_)
-            | ValueExpr::Bool(_)
-            | ValueExpr::Float(_)
-            | ValueExpr::Char(_)
-            | ValueExpr::Break
+            },
+            ValueExpr::String(..) => type_env.insert_type(TypeExpr::String),
+            ValueExpr::Bool(..) => type_env.insert_type(TypeExpr::Bool),
+            ValueExpr::Float(..) => type_env.insert_type(TypeExpr::Float),
+            ValueExpr::Char(..) => type_env.insert_type(TypeExpr::Char),
+            ValueExpr::Int(..) => type_env.insert_type(TypeExpr::Int), // this is so that only the used primitive types are in the type env
+            ValueExpr::Break
             | ValueExpr::Return(None)
             | ValueExpr::Continue => {}
         }
@@ -679,24 +699,61 @@ mod test {
     }
 
     #[test]
-    fn test_type_env_resolve() {
-        // the environment always holds the type of main function
-        let src_and_env_check_fun: Vec<(&str, Box<dyn FnOnce(&mut TypeEnv)>)> = vec![
+    fn test_type_summary() {
+        // the summary always holds the type of main function
+        let src_and_summary_check_funs: Vec<(&str, Box<dyn FnOnce(&TypesSummary)>)> = vec![
+            (
+                "{ let y: { x: String, y: Int } = \"Hallo\"; }",
+                Box::new(|summary: &TypesSummary| {
+                    dbg!(summary);
+                    assert_eq!(summary.types_used.len(), 4);
+                }),
+            ),
+            (
+                "{ let y: { x: String, y: Int, a: { b: { c: { d: { e: String }}}} } = \"Hallo\"; }",
+                Box::new(|summary: &TypesSummary| {
+                    dbg!(summary);
+                    assert_eq!(summary.types_used.len(), 8);
+                }),
+            ),
             (
                 "{ let x: Int = 5; }",
-                Box::new(|type_env: &mut TypeEnv| {
-                    assert_eq!(type_env.all_types.len(), 2);
+                Box::new(|summary: &TypesSummary| {
+                    dbg!(summary);
+                    assert_eq!(summary.types_used.len(), 2);
+                }),
+            ),
+            (
+                "{ let x: { a: Char, b: Char }; }",
+                Box::new(|summary: &TypesSummary| {
+                    dbg!(summary);
+                    assert_eq!(summary.types_used.len(), 3);
                 }),
             ),
             (
                 "{ let y: { x: { y: Int } } = 4; }",
-                Box::new(|type_env: &mut TypeEnv| {
-                    assert_eq!(type_env.all_types.len(), 4);
+                Box::new(|summary: &TypesSummary| {
+                    dbg!(summary);
+                    assert_eq!(summary.types_used.len(), 4);
+                }),
+            ),
+            (
+                "{ let y: { x: Int } = 4; }",
+                Box::new(|summary: &TypesSummary| {
+                    dbg!(summary);
+                    assert_eq!(summary.types_used.len(), 3);
+                }),
+            ),
+            (
+                "{ let y: { x: Int, y: String, z: { x: Int } } = 4; }",
+                Box::new(|summary: &TypesSummary| {
+                    dbg!(summary);
+                    assert_eq!(summary.types_used.len(), 5);
                 }),
             ),
         ];
 
-        for (src, env_check_fun) in src_and_env_check_fun {
+        for (src, summary_check_fun) in src_and_summary_check_funs {
             let lexer_parse_result = lexer().parse(src);
             assert_eq!(lexer_parse_result.has_errors(), false, "Couldn't lex {src}");
             assert_eq!(lexer_parse_result.has_output(), true, "Couldn't lex {src}");
@@ -730,7 +787,10 @@ mod test {
 
             let mut type_env = TypeEnv::default();
             typeresolve_source_file(&mut source_file, &mut type_env);
-            env_check_fun(&mut type_env);
+
+            let summary = type_env.summarize();
+
+            summary_check_fun(&summary);
         }
     }
 }
