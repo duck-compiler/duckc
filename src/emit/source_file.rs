@@ -29,7 +29,7 @@ impl SourceFile {
             .filter_map(|x| match x {
                 UseStatement::Go(go_mod, alias) => Some(format!(
                     "{} \"{go_mod}\"\n",
-                    alias.as_ref().map(String::clone).unwrap_or_default()
+                    alias.clone().unwrap_or_default()
                 )),
                 _ => None,
             })
@@ -37,8 +37,7 @@ impl SourceFile {
             .join("");
 
         format!(
-            "package {pkg_name}\n\nimport (\n{go_imports}\n)\n{}\n\n{functions}",
-            type_definitions,
+            "package {pkg_name}\n\nimport (\n{go_imports}\n)\n{type_definitions}\n\n{functions}",
         )
     }
 }

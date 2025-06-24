@@ -1,0 +1,6 @@
+use go "fmt";
+fun main() {
+    go {
+        fmt.Println(1)
+    }
+}

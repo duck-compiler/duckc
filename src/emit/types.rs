@@ -11,8 +11,8 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> String {
         .iter()
         .map(|param_name| {
             [
-                format!("type Has{}[T any] interface {{", param_name),
-                format!("   Get{}() T", param_name),
+                format!("type Has{param_name}[T any] interface {{"),
+                format!("   Get{param_name}() T"),
                 "}".to_string(),
             ]
             .join("\n")
@@ -34,7 +34,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> String {
         .collect::<Vec<_>>()
         .join("\n");
 
-    return format!("{}\n{}", interface_defs, type_defs,);
+    return format!("{interface_defs}\n{type_defs}");
 }
 
 impl TypeExpr {
@@ -99,7 +99,7 @@ impl TypeExpr {
                     "struct {{\n{}\n}}",
                     fields
                         .iter()
-                        .map(|type_expr| format!("{}", type_expr.as_go_type_annotation(type_env)))
+                        .map(|type_expr| type_expr.as_go_type_annotation(type_env).to_string())
                         .collect::<Vec<_>>()
                         .join("_")
                 )
@@ -151,7 +151,7 @@ impl TypeExpr {
                     "struct {{\n{}\n}}",
                     fields
                         .iter()
-                        .map(|type_expr| format!("{}", type_expr.as_go_type_annotation(type_env)))
+                        .map(|type_expr| type_expr.as_go_type_annotation(type_env).to_string())
                         .collect::<Vec<_>>()
                         .join("_")
                 )
@@ -186,7 +186,7 @@ impl TypeExpr {
                     .map(|type_expr| format!("_To_{}", type_expr.as_clean_go_type_name(type_env)))
                     .unwrap_or_else(|| "".to_string())
             ),
-            TypeExpr::Struct(r#struct) if r#struct.fields.is_empty() => format!("Any"),
+            TypeExpr::Struct(r#struct) if r#struct.fields.is_empty() => "Any".to_string(),
             TypeExpr::Struct(r#struct) => format!(
                 "Struct_{}",
                 r#struct
@@ -217,7 +217,7 @@ impl TypeExpr {
                     "struct {{\n{}\n}}",
                     fields
                         .iter()
-                        .map(|type_expr| format!("{}", type_expr.as_go_type_annotation(type_env)))
+                        .map(|type_expr| type_expr.as_go_type_annotation(type_env).to_string())
                         .collect::<Vec<_>>()
                         .join("_")
                 )
@@ -335,7 +335,10 @@ mod tests {
 
         for (src, exp) in test_cases {
             let lex = lexer().parse(src).unwrap();
-            let parse = type_expression_parser().parse(make_input((1..10).into(), &lex)).unwrap().emit();
+            let parse = type_expression_parser()
+                .parse(make_input((1..10).into(), &lex))
+                .unwrap()
+                .emit();
             let exp = (exp.0.to_string(), exp.1.to_string());
             assert_eq!(parse, exp, "{src}");
         }

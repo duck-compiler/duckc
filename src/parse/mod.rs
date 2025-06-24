@@ -1,7 +1,11 @@
 use std::fmt;
 
-use ariadne::{sources, Color, Label, Report, ReportKind};
-use chumsky::{error::Rich, input::{BorrowInput, Input}, span::SimpleSpan};
+use ariadne::{Color, Label, Report, ReportKind, sources};
+use chumsky::{
+    error::Rich,
+    input::{BorrowInput, Input},
+    span::SimpleSpan,
+};
 
 use crate::parse::lexer::Token;
 

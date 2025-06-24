@@ -75,7 +75,7 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
     if let Ok(mod_dir) = mod_dir
         && mod_dir.metadata().unwrap().is_dir()
     {
-        let combined = std::fs::read_dir(&joined)
+        std::fs::read_dir(&joined)
             .unwrap()
             .filter_map(|dir_entry| match dir_entry {
                 Ok(dir_entry)
@@ -111,8 +111,7 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
                 }
                 acc.use_statements.extend(x.use_statements);
                 acc
-            });
-        combined
+            })
     } else {
         let src_text =
             std::fs::read_to_string(dbg!(format!("{}.duck", joined.to_str().unwrap()))).unwrap();
@@ -206,10 +205,10 @@ mod tests {
         function_parser::FunctionDefintion,
         lexer::lexer,
         make_input,
-        source_file_parser::{source_file_parser, SourceFile},
+        source_file_parser::{SourceFile, source_file_parser},
         type_parser::{Duck, Field, TypeDefinition, TypeExpr},
         use_statement_parser::{Indicator, UseStatement},
-        value_parser::{all_into_empty_range, Combi, IntoBlock, IntoEmptySpan, ValueExpr},
+        value_parser::{Combi, IntoBlock, IntoEmptySpan, ValueExpr, all_into_empty_range},
     };
 
     #[test]
@@ -700,7 +699,8 @@ mod tests {
                     function_definitions: vec![
                         FunctionDefintion {
                             name: "multiple_some_abc_func".into(),
-                            value_expr: ValueExpr::String("Hello from module".into()).into_empty_span_and_block(),
+                            value_expr: ValueExpr::String("Hello from module".into())
+                                .into_empty_span_and_block(),
                             ..Default::default()
                         },
                         FunctionDefintion {
@@ -718,7 +718,8 @@ mod tests {
                             function_definitions: vec![
                                 FunctionDefintion {
                                     name: "some_abc_func".into(),
-                                    value_expr: ValueExpr::String("Hello from module".into()).into_empty_span_and_block(),
+                                    value_expr: ValueExpr::String("Hello from module".into())
+                                        .into_empty_span_and_block(),
                                     ..Default::default()
                                 },
                                 FunctionDefintion {
@@ -738,7 +739,8 @@ mod tests {
                     function_definitions: vec![
                         FunctionDefintion {
                             name: "multiple_some_abc_func".into(),
-                            value_expr: ValueExpr::String("Hello from module".into()).into_empty_span_and_block(),
+                            value_expr: ValueExpr::String("Hello from module".into())
+                                .into_empty_span_and_block(),
                             ..Default::default()
                         },
                         FunctionDefintion {

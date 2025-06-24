@@ -1,4 +1,4 @@
-use crate::parse::{type_parser::TypeExpr, value_parser::ValueExpr, Spanned};
+use crate::parse::{Spanned, type_parser::TypeExpr, value_parser::ValueExpr};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Declaration {

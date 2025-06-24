@@ -1,6 +1,9 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
-use crate::parse::{value_parser::{Combi, IntoBlock, IntoEmptySpan}, Spanned};
+use crate::parse::{
+    Spanned,
+    value_parser::{Combi, IntoBlock},
+};
 
 use super::{
     lexer::Token,
