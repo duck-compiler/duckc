@@ -11,13 +11,25 @@ pub struct TypeDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Field {
+    pub name: String,
+    pub type_expr: TypeExpr,
+}
+
+impl Field {
+    pub fn new(name: String, type_expr: TypeExpr) -> Self {
+        return Self { name, type_expr };
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Duck {
-    pub fields: Vec<(String, TypeExpr)>,
+    pub fields: Vec<Field>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Struct {
-    pub fields: Vec<(String, TypeExpr)>,
+    pub fields: Vec<Field>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -77,7 +89,15 @@ where
             .ignore_then(just(Token::ControlChar('{')))
             .ignore_then(struct_fields)
             .then_ignore(just(Token::ControlChar('}')))
-            .map(|fields| TypeExpr::Struct(Struct { fields }));
+            .map(|fields| {
+                TypeExpr::Struct(Struct {
+                    fields: fields
+                        .iter()
+                        .cloned()
+                        .map(|(name, type_expr)| Field { name, type_expr })
+                        .collect(),
+                })
+            });
 
         let duck = just(Token::Duck)
             .or_not()
@@ -87,7 +107,13 @@ where
             .map(|fields| match fields {
                 Some(mut fields) => {
                     fields.sort_by_key(|x| x.0.clone());
-                    TypeExpr::Duck(Duck { fields })
+                    TypeExpr::Duck(Duck {
+                        fields: fields
+                            .iter()
+                            .cloned()
+                            .map(|(name, type_expr)| Field { name, type_expr })
+                            .collect(),
+                    })
                 }
                 None => TypeExpr::Any,
             });

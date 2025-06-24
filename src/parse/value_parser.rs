@@ -617,16 +617,9 @@ mod tests {
     use crate::{
         emit::value::emit,
         parse::{
-            Spanned,
-            assignment_and_declaration_parser::Declaration,
-            function_parser::LambdaFunctionExpr,
-            lexer::lexer,
-            make_input,
-            type_parser::{Duck, TypeExpr},
-            value_parser::{
-                Combi, IntoEmptySpan, all_into_empty_range, empty_duck, empty_tuple,
-                value_expr_parser,
-            },
+            assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr, lexer::lexer, make_input, type_parser::{Duck, Field, TypeExpr}, value_parser::{
+                all_into_empty_range, empty_duck, empty_tuple, value_expr_parser, Combi, IntoEmptySpan
+            }, Spanned
         },
     };
 
@@ -1450,7 +1443,7 @@ mod tests {
                 Declaration {
                     name: "y".to_string(),
                     type_expr: TypeExpr::Duck(Duck {
-                        fields: vec![("x".to_string(), TypeExpr::Int)],
+                        fields: vec![Field::new("x".to_string(), TypeExpr::Int)],
                     }),
                     initializer: Some(ValueExpr::Duck(vec![]).into_empty_span()),
                 },

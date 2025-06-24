@@ -207,7 +207,7 @@ mod tests {
         lexer::lexer,
         make_input,
         source_file_parser::{source_file_parser, SourceFile},
-        type_parser::{Duck, TypeDefinition, TypeExpr},
+        type_parser::{Duck, Field, TypeDefinition, TypeExpr},
         use_statement_parser::{Indicator, UseStatement},
         value_parser::{all_into_empty_range, Combi, IntoBlock, IntoEmptySpan, ValueExpr},
     };
@@ -256,7 +256,7 @@ mod tests {
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
                         type_expression: TypeExpr::Duck(Duck {
-                            fields: vec![("x".into(), TypeExpr::String)],
+                            fields: vec![Field::new("x".into(), TypeExpr::String)],
                         }),
                     }],
                     ..Default::default()
@@ -340,7 +340,7 @@ mod tests {
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
                         type_expression: TypeExpr::Duck(Duck {
-                            fields: vec![("x".into(), TypeExpr::String)],
+                            fields: vec![Field::new("x".into(), TypeExpr::String)],
                         }),
                     }],
                     ..Default::default()

@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let target_path = file_name.expect("No file name provided");
-    let mut p = PathBuf::from(&target_path);
+    let p = PathBuf::from(&target_path);
     let src = std::fs::read_to_string(&p).expect("Could not read file");
     let (lex, lex_errors) = lexer().parse(&src).into_output_errors();
     lex_errors.into_iter().for_each(|e| {
@@ -78,6 +78,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let (src_file, parse_errors) = source_file_parser(
         {
+            let mut p = p.clone();
             p.pop();
             p
         },
@@ -91,9 +92,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     let mut source_file = src_file.unwrap();
-
-    println!("before resolve");
-    source_file = dbg!(source_file);
 
     let mut type_env = TypeEnv::default();
     typechecker::typeresolve_source_file(&mut source_file, &mut type_env);
@@ -123,7 +121,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let out_text = source_file.emit("main".into(), &mut type_env);
 
     let mut tmp_file = Builder::new()
-        .prefix("duck_gen")
+        .rand_bytes(0)
+        .prefix(p.file_name().expect("didnt provide file name").to_str().expect("not valid utf 8"))
         .suffix(".go")
         .tempfile_in(".")
         .expect("Could not create tempfile");
