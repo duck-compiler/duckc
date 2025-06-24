@@ -9,8 +9,9 @@ use crate::parse::{
 
 #[derive(Debug, Clone)]
 pub struct TypeEnv {
-    identifier_types: Vec<HashMap<String, TypeExpr>>,
-    type_aliases: Vec<HashMap<String, TypeExpr>>,
+    pub identifier_types: Vec<HashMap<String, TypeExpr>>,
+    pub type_aliases: Vec<HashMap<String, TypeExpr>>,
+    pub all_types: Vec<TypeExpr>,
 }
 
 impl Default for TypeEnv {
@@ -18,6 +19,7 @@ impl Default for TypeEnv {
         Self {
             identifier_types: vec![HashMap::new()],
             type_aliases: vec![HashMap::new()],
+            all_types: vec![],
         }
     }
 }
