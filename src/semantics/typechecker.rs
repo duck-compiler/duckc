@@ -291,8 +291,9 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     declaration.name.clone(),
                     declaration.type_expr.clone(),
                 );
-                if let Some(type_expr) = &mut declaration.initializer {
-                    typeresolve_value_expr(type_expr, type_env);
+
+                if let Some(value_expr) = &mut declaration.initializer {
+                    typeresolve_value_expr(value_expr, type_env);
                 }
             }
             ValueExpr::Add(lhs, rhs) => {
