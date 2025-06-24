@@ -76,7 +76,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::{lexer::lexer, make_no_span_input};
+    use crate::parse::{lexer::lexer, make_input};
 
     use super::*;
 
@@ -129,7 +129,7 @@ mod tests {
 
             println!("parsing use statement {src}");
             let use_statement_parse_result =
-                use_statement_parser().parse(make_no_span_input(tokens.as_slice()));
+                use_statement_parser().parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(use_statement_parse_result.has_errors(), false);
             assert_eq!(use_statement_parse_result.has_output(), true);
 
@@ -169,7 +169,7 @@ mod tests {
 
             println!("typedef_parsing {invalid_use_statement}");
             let typedef_parse_result =
-                use_statement_parser().parse(make_no_span_input(tokens.as_slice()));
+                use_statement_parser().parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), true);
             assert_eq!(typedef_parse_result.has_output(), false);
         }

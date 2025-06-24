@@ -22,7 +22,7 @@ fn test_error_messages() {
     let src = "if (1";
 
     let out = lexer().parse(src).into_result().unwrap();
-    let (out, errors) = value_expr_parser()
+    let (out, errors) = value_expr_parser(make_input)
         .parse(make_input((0..src.len()).into(), &out))
         .into_output_errors();
 
@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut source_file = source_file_parser({
         p.pop();
         p
-    })
+    }, make_input)
     .parse(make_input((0..src.len()).into(), &lex))
     .into_result()
     .expect("Parse error")

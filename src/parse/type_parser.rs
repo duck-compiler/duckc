@@ -134,7 +134,7 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::{lexer::lexer, make_no_span_input};
+    use crate::parse::{lexer::lexer, make_input};
     use chumsky::Parser;
 
     use super::*;
@@ -170,7 +170,7 @@ pub mod tests {
 
             println!("typedef_parsing {valid_type_definition}");
             let typedef_parse_result =
-                type_definition_parser().parse(make_no_span_input(tokens.as_slice()));
+                type_definition_parser().parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -205,7 +205,7 @@ pub mod tests {
 
             println!("typedef_parsing {valid_type_expression}");
             let typedef_parse_result =
-                type_expression_parser().parse(make_no_span_input(tokens.as_slice()));
+                type_expression_parser().parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -237,7 +237,7 @@ pub mod tests {
 
             println!("typedef_parsing {invalid_type_expression}");
             let typedef_parse_result =
-                type_expression_parser().parse(make_no_span_input(tokens.as_slice()));
+                type_expression_parser().parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), true);
             assert_eq!(typedef_parse_result.has_output(), false);
         }

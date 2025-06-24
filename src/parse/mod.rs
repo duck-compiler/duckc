@@ -22,12 +22,6 @@ pub fn make_input<'src>(
     toks.map(eoi, |(t, s)| (t, s))
 }
 
-pub fn make_no_span_input<'src>(
-    toks: &'src [Spanned<Token>]
-) -> impl BorrowInput<'src, Token = Token, Span = SimpleSpan> {
-    make_input((0..10).into(), toks)
-}
-
 pub fn failure(
     file_name: &'static str,
     msg: String,

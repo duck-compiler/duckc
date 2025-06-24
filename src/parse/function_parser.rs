@@ -1,5 +1,7 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
+use crate::parse::Spanned;
+
 use super::{
     lexer::Token,
     type_parser::{TypeExpr, type_expression_parser},
@@ -35,10 +37,12 @@ pub struct LambdaFunctionExpr {
     pub value_expr: ValueExpr,
 }
 
-pub fn function_definition_parser<'src, I>()
--> impl Parser<'src, I, FunctionDefintion, extra::Err<Rich<'src, Token>>> + Clone
+pub fn function_definition_parser<'src, I, M>(
+    make_input: M,
+) -> impl Parser<'src, I, FunctionDefintion, extra::Err<Rich<'src, Token>>> + Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
+    M: Fn(SimpleSpan, &'src [Spanned<Token>]) -> I + Clone + 'src,
 {
     let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
         .then_ignore(just(Token::ControlChar(':')))
@@ -61,7 +65,7 @@ where
         .then(params_parser)
         .then_ignore(just(Token::ControlChar(')')))
         .then(return_type_parser.or_not())
-        .then(value_expr_parser())
+        .then(value_expr_parser(make_input))
         .map(|(((identifier, params), return_type), mut value_expr)| {
             value_expr = match value_expr {
                 ValueExpr::Duck(x) if x.is_empty() => {
@@ -81,7 +85,7 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::{lexer::lexer, make_no_span_input};
+    use crate::parse::{lexer::lexer, make_input};
 
     use super::*;
 
@@ -109,7 +113,7 @@ pub mod tests {
 
             println!("typedef_parsing {valid_function_definition}");
             let typedef_parse_result =
-                function_definition_parser().parse(make_no_span_input(tokens.as_slice()));
+                function_definition_parser(make_input).parse(make_input((1..10).into(), &tokens));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -127,8 +131,8 @@ pub mod tests {
             };
 
             println!("typedef_parsing {invalid_function_definition}");
-            let typedef_parse_result =
-                function_definition_parser().parse(make_no_span_input(tokens.as_slice()));
+            let typedef_parse_result = function_definition_parser(make_input)
+                .parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), true);
             assert_eq!(typedef_parse_result.has_output(), false);
         }

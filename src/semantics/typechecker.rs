@@ -570,7 +570,8 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr, type_env: &mut TypeE
 #[cfg(test)]
 mod test {
     use crate::parse::{
-        function_parser::FunctionDefintion, lexer::lexer, make_no_span_input, value_parser::value_expr_parser
+        function_parser::FunctionDefintion, lexer::lexer, make_input,
+        value_parser::value_expr_parser,
     };
     use chumsky::prelude::*;
 
@@ -630,7 +631,8 @@ mod test {
             };
 
             println!("typedef_parsing {src}");
-            let value_expr_parse_result = value_expr_parser().parse(make_no_span_input(tokens.as_slice()));
+            let value_expr_parse_result =
+                value_expr_parser(make_input).parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(value_expr_parse_result.has_errors(), false);
             assert_eq!(value_expr_parse_result.has_output(), true);
 
