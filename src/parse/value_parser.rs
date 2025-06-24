@@ -1238,7 +1238,7 @@ mod tests {
             "{y = 1}",
             "while(true){y = 1}",
             "while(true){y = y + 1}",
-            "{let y: Int = 0; while(true){y = 1;@println(y)}}",
+            "{let y: Int = 0; while(true){y = 1;println(y)}}",
             "x = 580",
             "y = 80",
             "y = true",
@@ -1248,7 +1248,7 @@ mod tests {
 
         for valid_assignment in valid_assignments {
             let lexer_parse_result = lexer().parse(valid_assignment);
-            assert_eq!(lexer_parse_result.has_errors(), false);
+            assert_eq!(lexer_parse_result.has_errors(), false, "{valid_assignment}");
             assert_eq!(lexer_parse_result.has_output(), true);
 
             let Some(tokens) = lexer_parse_result.into_output() else {
