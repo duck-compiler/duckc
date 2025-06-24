@@ -150,7 +150,6 @@ impl TypeExpr {
         };
     }
 
-
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::Any => "Any".to_string(),
