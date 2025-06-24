@@ -1,4 +1,8 @@
+use std::fmt::Display;
+
 use chumsky::{prelude::*, text::whitespace};
+
+use crate::parse::Spanned;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Token {
@@ -28,9 +32,13 @@ pub enum Token {
     Module,
 }
 
-pub type Spanned<T> = (T, SimpleSpan);
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
-pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
+pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>, extra::Err<Rich<'a, char>>> {
     let keyword_or_ident = just("@")
         .or_not()
         .then(text::ident())
@@ -74,10 +82,60 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>> {
         .or(num)
         .or(r#char);
 
-    token.padded().repeated().collect::<Vec<Token>>()
+    token
+        .padded().repeated().collect::<Vec<Token>>()
 }
 
-fn go_text_parser<'src>() -> impl Parser<'src, &'src str, String> {
+pub fn lexer2<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> {
+    let keyword_or_ident = just("@")
+        .or_not()
+        .then(text::ident())
+        .map(|(x, str)| match str {
+            "module" => Token::Module,
+            "use" => Token::Use,
+            "type" => Token::Type,
+            "duck" => Token::Duck,
+            "go" => Token::Go,
+            "struct" => Token::Struct,
+            "fun" => Token::Function,
+            "return" => Token::Return,
+            "let" => Token::Let,
+            "if" => Token::If,
+            "else" => Token::Else,
+            "while" => Token::While,
+            "break" => Token::Break,
+            "continue" => Token::Continue,
+            "as" => Token::As,
+            _ => Token::Ident(format!("{}{str}", x.unwrap_or(""))),
+        });
+
+    let ctrl = one_of("!=:{};,&()->.+-*/%").map(Token::ControlChar);
+
+    let string = string_lexer();
+    let r#bool = choice((
+        just("true").to(Token::BoolLiteral(true)),
+        just("false").to(Token::BoolLiteral(false)),
+    ));
+    let r#char = char_lexer();
+    let num = num_literal();
+
+    let equals = just("==").to(Token::Equals);
+
+    let token = inline_go_parser()
+        .or(r#bool)
+        .or(equals)
+        .or(keyword_or_ident)
+        .or(ctrl)
+        .or(string)
+        .or(num)
+        .or(r#char);
+
+    token
+        .map_with(|t, e| (t, e.span()))
+        .padded().repeated().collect::<Vec<Spanned<Token>>>()
+}
+
+fn go_text_parser<'src>() -> impl Parser<'src, &'src str, String, extra::Err<Rich<'src, char>>> {
     recursive(|e| {
         just("{")
             .ignore_then(
@@ -94,7 +152,7 @@ fn go_text_parser<'src>() -> impl Parser<'src, &'src str, String> {
     })
 }
 
-fn inline_go_parser<'src>() -> impl Parser<'src, &'src str, Token> {
+fn inline_go_parser<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> {
     // just("go").ignore_then(whitespace().at_least(1))
     //     .ignore_then(just("{"))
     //     .ignore_then(any().filter(|x| *x != '}').repeated().collect::<String>())
@@ -108,7 +166,7 @@ fn inline_go_parser<'src>() -> impl Parser<'src, &'src str, Token> {
         .map(|x| Token::InlineGo(x[1..x.len() - 1].to_owned()))
 }
 
-fn num_literal<'src>() -> impl Parser<'src, &'src str, Token> {
+fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> {
     let pre = text::int(10).map(|s: &str| s.parse::<i64>().unwrap());
     let frac = just('.').ignore_then(text::digits(10)).to_slice();
     pre.then(frac.or_not()).map(|(pre, frac)| {
@@ -121,7 +179,7 @@ fn num_literal<'src>() -> impl Parser<'src, &'src str, Token> {
     })
 }
 
-fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token> {
+fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> {
     just("'")
         .ignore_then(choice((
             just('\\').ignore_then(choice((just('\''), just('t').to('\t'), just('n').to('\n')))),
@@ -131,7 +189,7 @@ fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token> {
         .map(Token::CharLiteral)
 }
 
-fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token> {
+fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, char>>> {
     just('"')
         .ignore_then(
             choice((

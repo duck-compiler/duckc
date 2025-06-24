@@ -1,4 +1,6 @@
-use chumsky::prelude::*;
+use chumsky::{input::BorrowInput, prelude::*};
+
+use crate::parse::Spanned;
 
 use super::{
     lexer::Token,
@@ -33,6 +35,13 @@ pub struct LambdaFunctionExpr {
     pub params: Vec<Param>,
     pub return_type: Option<TypeExpr>,
     pub value_expr: ValueExpr,
+}
+
+pub fn x<'src, I>() -> impl Parser<'src, I, Spanned<FunctionDefintion>, extra::Err<Rich<'src, Token>>>
+where
+    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
+{
+    just(Token::Go).to(FunctionDefintion::default()).map_with(|x,e| (x, e.span()))
 }
 
 pub fn function_definition_parser<'src>()

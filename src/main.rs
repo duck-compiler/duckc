@@ -3,12 +3,13 @@
 
 use std::{error::Error, ffi::OsString, io::Write, path::PathBuf, process::Command};
 
+use ariadne::{Color, Config, IndexType, Label, Report, ReportKind, Source};
 use chumsky::Parser;
 use parse::lexer::lexer;
 use semantics::typechecker::{self, TypeEnv};
 use tempfile::Builder;
 
-use crate::parse::{source_file_parser::source_file_parser, use_statement_parser::UseStatement};
+use crate::parse::{failure, lexer::lexer2, make_input, parse_failure, source_file_parser::source_file_parser, use_statement_parser::UseStatement, val2::value_expr_parser2};
 
 pub mod emit;
 pub mod parse;
@@ -16,7 +17,24 @@ pub mod semantics;
 
 use emit::value::{EmitEnvironment, GoImport};
 
+fn test_error_messages() {
+    let src = "if (1";
+
+    let out = lexer2().parse(src).into_result().unwrap();
+    let (out, errors) = value_expr_parser2()
+        .parse(make_input((0..src.len()).into(), &out))
+        .into_output_errors();
+
+    errors.into_iter().for_each(|e| {
+        parse_failure("test.duck", &e, src);
+    });
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
+    if true {
+        test_error_messages();
+        return Ok(());
+    }
     let mut keep_go = false;
     let mut custom_out_name = None::<String>;
     let mut file_name = None::<String>;
@@ -48,11 +66,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut p = PathBuf::from(target_path);
     let src = std::fs::read_to_string(&p).expect("Could not read file");
     let lex = lexer().parse(&src).into_result().expect("Lex error");
+    return todo!();
     let mut source_file = source_file_parser({
         p.pop();
         p
     })
-    .parse(&lex)
+    .parse(todo!())
     .into_result()
     .expect("Parse error")
     .flatten();
