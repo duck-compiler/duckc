@@ -6,6 +6,23 @@ use crate::{
 pub fn emit_type_definitions(type_env: &mut TypeEnv) -> String {
     let summary = type_env.summarize();
 
+    fn interface_implementations(typename: String, type_expr: &TypeExpr, type_env: &mut TypeEnv) -> String {
+        return match type_expr {
+            TypeExpr::Duck(duck) => duck.fields
+                .iter()
+                .map(|field| format!(
+                    "func (self {0}) Get{1}() {2} {{ return self.{1}; }}",
+                    typename,
+                    field.name,
+                    field.type_expr.as_go_concrete_annotation(type_env)
+                ))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            TypeExpr::Struct(r#struct) => todo!(),
+            _ => "".to_string()
+        }
+    }
+
     let interface_defs = summary
         .param_names_used
         .iter()
@@ -25,10 +42,13 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> String {
         .iter()
         .filter(|type_expr| type_expr.is_object_like())
         .map(|type_expr| {
+            let type_name = type_expr.as_clean_go_type_name(type_env);
+
             format!(
-                "type {} {};",
-                type_expr.as_clean_go_type_name(type_env),
-                type_expr.as_go_type_annotation(type_env)
+                "type {} {}\n{};",
+                type_name.clone(),
+                type_expr.as_go_concrete_annotation(type_env),
+                interface_implementations(type_name, type_expr, type_env),
             )
         })
         .collect::<Vec<_>>()
