@@ -364,11 +364,13 @@ pub fn emit(
                 res_instr.push(format!("{res_var} = {res}\n"))
             }
             res_instr.push("} else {\n".to_string());
-            let (r#else_instr, res) =
-                emit(ValueExpr::clone(r#else.as_ref()), env.clone(), type_env);
-            res_instr.extend(r#else_instr);
-            if let Some(res) = res {
-                res_instr.push(format!("{res_var} = {res}\n"))
+            if let Some(r#else) = r#else {
+                let (r#else_instr, res) =
+                    emit(ValueExpr::clone(r#else.as_ref()), env.clone(), type_env);
+                res_instr.extend(r#else_instr);
+                if let Some(res) = res {
+                    res_instr.push(format!("{res_var} = {res}\n"))
+                }
             }
             res_instr.push("\n}\n".to_string());
 

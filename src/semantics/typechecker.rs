@@ -166,7 +166,9 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 typeresolve_value_expr(then, type_env);
                 type_env.pop_identifier_types();
 
-                typeresolve_value_expr(r#else, type_env);
+                if let Some(r#else) = r#else {
+                    typeresolve_value_expr(r#else, type_env);
+                }
             }
             ValueExpr::While { condition, body } => {
                 typeresolve_value_expr(condition, type_env);
@@ -429,7 +431,9 @@ impl TypeExpr {
                 check_type_compatability(&condition_type_expr, &TypeExpr::Bool, type_env);
 
                 let _then_type_expr = TypeExpr::from_value_expr(then, type_env);
-                let _else_type_expr = TypeExpr::from_value_expr(r#else, type_env);
+                if let Some(r#else) = r#else {
+                    let _else_type_expr = TypeExpr::from_value_expr(r#else, type_env);
+                }
 
                 // let x: TypeExpression = combine_types(vec![else_type_expr, then]);
 

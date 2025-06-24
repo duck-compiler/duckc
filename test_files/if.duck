@@ -1,0 +1,13 @@
+use go "fmt";
+
+fun main() {
+    if (true) {
+        go {
+            fmt.Println("kek")
+        }
+    } else {
+        go {
+            fmt.Println("lOOL")
+        }
+    }
+}

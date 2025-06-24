@@ -24,7 +24,7 @@ pub enum ValueExpr {
     If {
         condition: Box<ValueExpr>,
         then: Box<ValueExpr>,
-        r#else: Box<ValueExpr>,
+        r#else: Option<Box<ValueExpr>>,
     },
     While {
         condition: Box<ValueExpr>,
@@ -298,20 +298,20 @@ where
                         .repeated()
                         .collect::<Vec<(ValueExpr, ValueExpr)>>(),
                 )
-                .then_ignore(just(Token::Else))
-                .then(if_body.clone())
+                .then(just(Token::Else).ignore_then(if_body.clone()).or_not())
                 .map(|(((condition, then), else_ifs), r#else)| ValueExpr::If {
                     condition: Box::new(condition),
                     then: Box::new(then),
-                    r#else: else_ifs
-                        .into_iter()
-                        .rfold(Box::new(r#else), |acc, (cond, then)| {
-                            Box::new(ValueExpr::If {
+                    r#else: else_ifs.into_iter().rfold(
+                        r#else.map(Box::new),
+                        |acc, (cond, then)| {
+                            Some(Box::new(ValueExpr::If {
                                 condition: Box::new(cond),
                                 then: Box::new(then),
-                                r#else: acc,
-                            })
-                        }),
+                                r#else: Some(acc.unwrap()),
+                            }))
+                        },
+                    ),
                 })
                 .boxed();
             let char_expr = select_ref! { Token::CharLiteral(c) => *c }
@@ -602,7 +602,7 @@ mod tests {
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into(),
                     then: ValueExpr::Int(1).into_block().into(),
-                    r#else: ValueExpr::Int(2).into_block().into(),
+                    r#else: Some(ValueExpr::Int(2).into_block().into()),
                 },
             ),
             (
@@ -610,17 +610,21 @@ mod tests {
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into(),
                     then: ValueExpr::Int(1).into_block().into(),
-                    r#else: ValueExpr::If {
-                        condition: ValueExpr::Bool(false).into(),
-                        then: ValueExpr::Int(3).into_block().into(),
-                        r#else: ValueExpr::If {
-                            condition: ValueExpr::Int(200).into(),
-                            then: ValueExpr::Int(4).into_block().into(),
-                            r#else: ValueExpr::Int(2).into_block().into(),
+                    r#else: Some(
+                        ValueExpr::If {
+                            condition: ValueExpr::Bool(false).into(),
+                            then: ValueExpr::Int(3).into_block().into(),
+                            r#else: Some(
+                                ValueExpr::If {
+                                    condition: ValueExpr::Int(200).into(),
+                                    then: ValueExpr::Int(4).into_block().into(),
+                                    r#else: Some(ValueExpr::Int(2).into_block().into()),
+                                }
+                                .into(),
+                            ),
                         }
                         .into(),
-                    }
-                    .into(),
+                    ),
                 },
             ),
             (
@@ -788,9 +792,11 @@ mod tests {
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into(),
                     then: ValueExpr::Duck(vec![]).into_block().into(),
-                    r#else: ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(1))])
-                        .into_block()
-                        .into(),
+                    r#else: Some(
+                        ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(1))])
+                            .into_block()
+                            .into(),
+                    ),
                 },
             ),
             (
