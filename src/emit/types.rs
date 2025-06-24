@@ -3,47 +3,203 @@ use crate::{
     semantics::typechecker::TypeEnv,
 };
 
+pub fn emit_type_definitions(type_env: &mut TypeEnv) -> String {
+    let summary = type_env.summarize();
+
+    let interface_defs = summary.param_names_used.iter()
+        .map(|param_name| [
+            format!("type Has{}[T any] interface {{", param_name),
+            format!("   Get{}() T", param_name),
+            "}".to_string(),
+        ].join("\n"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let type_defs = summary.types_used.iter()
+        .map(|type_expr| format!("type {} {};", type_expr.as_clean_go_type_name(type_env), type_expr.as_go_type_annotation(type_env)))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    return format!(
+        "{}\n{}",
+        interface_defs,
+        type_defs,
+    )
+}
+
 impl TypeExpr {
-    pub fn as_go_implementation(&self, type_env: &mut TypeEnv) -> String {
-        match self {
-            TypeExpr::Int
-            | TypeExpr::Char
-            | TypeExpr::Bool
-            | TypeExpr::String
-            | TypeExpr::Float
-            | TypeExpr::TypeName(..)
-            | TypeExpr::Go(..)
-            | TypeExpr::Any => self.as_go_type_annotation(type_env),
-            TypeExpr::Tuple(_types) => [
-                "type".to_string(),
-                self.as_go_type_annotation(type_env),
-                "struct".to_string(),
-                "{\n".to_string(),
-                "\n}\n".to_string(),
-            ]
-            .join(" "),
-            TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => [
-                "type".to_string(),
-                self.as_go_type_annotation(type_env),
-                "struct".to_string(),
-                "{\n".to_string(),
-                fields
+    pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
+        return match self {
+            TypeExpr::Any => "interface{}".to_string(),
+            TypeExpr::Bool => "bool".to_string(),
+            TypeExpr::Int => "int".to_string(),
+            TypeExpr::Float => "float32".to_string(),
+            TypeExpr::Char => "rune".to_string(),
+            TypeExpr::String => "string".to_string(),
+            TypeExpr::Go(identifier) => identifier.clone(),
+            TypeExpr::TypeName(name) => name.to_string(),
+            TypeExpr::Fun(params, return_type) => format!(
+                "func({}) {}",
+                params
                     .iter()
-                    .map(|field| {
-                        format!(
-                            "    {} {}",
+                    .map(|(name, type_expr)| match name {
+                        Some(name) =>
+                        format!("{name}: {}", type_expr.as_go_type_annotation(type_env)),
+                        None => type_expr.as_go_type_annotation(type_env),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(","),
+                return_type
+                    .clone()
+                    .map_or("".to_string(), |return_type| return_type
+                        .as_go_type_annotation(type_env))
+            ),
+            TypeExpr::Struct(r#struct) => format!(
+                "struct {{\n{}\n}}",
+                r#struct
+                    .fields
+                    .iter()
+                    .map(|field| format!(
+                        "   {} {}",
+                        field.name,
+                        field.type_expr.as_go_type_annotation(type_env)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
+            TypeExpr::Duck(duck) => {
+                let mut fields = duck.fields.clone();
+                fields.sort_by_key(|field| field.name.clone());
+
+                format!(
+                    "interface {{\n{}\n}}",
+                    fields
+                        .iter()
+                        .map(|field| format!(
+                            "   Has{}[{}]",
                             field.name,
                             field.type_expr.as_go_type_annotation(type_env)
-                        )
+                        ))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            }
+            TypeExpr::Tuple(fields) => {
+                format!(
+                    "struct {{\n{}\n}}",
+                    fields
+                        .iter()
+                        .map(|type_expr| format!("{}", type_expr.as_go_type_annotation(type_env)))
+                        .collect::<Vec<_>>()
+                        .join("_")
+                )
+            }
+            TypeExpr::Or(_variants) => todo!("implement variants"),
+        };
+    }
+
+    pub fn as_go_concrete_annotation(&self, type_env: &mut TypeEnv) -> String {
+        return match self {
+            TypeExpr::Any => "interface{}".to_string(),
+            TypeExpr::Bool => "bool".to_string(),
+            TypeExpr::Int => "int".to_string(),
+            TypeExpr::Float => "float32".to_string(),
+            TypeExpr::Char => "rune".to_string(),
+            TypeExpr::String => "string".to_string(),
+            TypeExpr::Go(identifier) => identifier.clone(),
+            TypeExpr::TypeName(name) => name.to_string(),
+            TypeExpr::Fun(params, return_type) => format!(
+                "func({}) {}",
+                params
+                    .iter()
+                    .map(|(name, type_expr)| match name {
+                        Some(name) =>
+                        format!("{name}: {}", type_expr.as_go_type_annotation(type_env)),
+                        None => type_expr.as_go_type_annotation(type_env),
                     })
-                    .collect::<Vec<String>>()
-                    .join("\n"),
-                "\n}\n".to_string(),
-            ]
-            .join(" "),
-            TypeExpr::Or(..) => todo!(),
-            TypeExpr::Fun(_param_types, _return_type) => ["func("].join(" "),
-        }
+                    .collect::<Vec<_>>()
+                    .join(","),
+                return_type
+                    .clone()
+                    .map_or("".to_string(), |return_type| return_type
+                        .as_go_type_annotation(type_env))
+            ),
+            TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => format!(
+                "struct {{\n{}\n}}",
+                fields
+                    .iter()
+                    .map(|field| format!(
+                        "   {} {}",
+                        field.name,
+                        field.type_expr.as_go_type_annotation(type_env)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
+            TypeExpr::Tuple(fields) => {
+                format!(
+                    "struct {{\n{}\n}}",
+                    fields
+                        .iter()
+                        .map(|type_expr| format!("{}", type_expr.as_go_type_annotation(type_env)))
+                        .collect::<Vec<_>>()
+                        .join("_")
+                )
+            }
+            TypeExpr::Or(_variants) => todo!("implement variants"),
+        };
+    }
+
+
+    pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
+        return match self {
+            TypeExpr::Any => "Any".to_string(),
+            TypeExpr::Bool => "bool".to_string(),
+            TypeExpr::Int => "int".to_string(),
+            TypeExpr::Float => "float32".to_string(),
+            TypeExpr::Char => "rune".to_string(),
+            TypeExpr::String => "string".to_string(),
+            TypeExpr::Go(identifier) => identifier.clone(),
+            TypeExpr::TypeName(name) => name.clone(),
+            TypeExpr::Fun(params, return_type) => format!(
+                "Fun_From_{}{}",
+                params.iter()
+                    .map(|(name, type_expr)| format!("{}_{}", name.clone().unwrap_or_else(|| "".to_string()), type_expr.as_clean_go_type_name(type_env)))
+                    .collect::<Vec<_>>()
+                    .join("_"),
+                return_type.as_ref()
+                    .map(|type_expr| format!("_To_{}", type_expr.as_clean_go_type_name(type_env)))
+                    .unwrap_or_else(|| "".to_string())
+            ),
+            TypeExpr::Struct(r#struct) if r#struct.fields.is_empty() => format!("Any"),
+            TypeExpr::Struct(r#struct) => format!(
+                "Struct_{}",
+                r#struct.fields
+                    .iter()
+                    .map(|field| format!("{}_{}", field.name, field.type_expr.as_clean_go_type_name(type_env)))
+                    .collect::<Vec<_>>()
+                    .join("_")
+            ),
+            TypeExpr::Duck(duck) => format!(
+                "Duck_{}",
+                duck.fields
+                    .iter()
+                    .map(|field| format!("{}_{}", field.name, field.type_expr.as_clean_go_type_name(type_env)))
+                    .collect::<Vec<_>>()
+                    .join("_")
+            ),
+            TypeExpr::Tuple(fields) => {
+                format!(
+                    "struct {{\n{}\n}}",
+                    fields
+                        .iter()
+                        .map(|type_expr| format!("{}", type_expr.as_go_type_annotation(type_env)))
+                        .collect::<Vec<_>>()
+                        .join("_")
+                )
+            }
+            TypeExpr::Or(_variants) => todo!("implement variants"),
+        };
     }
 
     /// First return is go code repr, second is id
@@ -60,8 +216,8 @@ impl TypeExpr {
                         .collect::<Vec<_>>()
                         .join(""),
                     "}",
-                ]
-                .join(""),
+                    ]
+                    .join(""),
                 format!(
                     "Tup{}",
                     types
@@ -103,8 +259,8 @@ impl TypeExpr {
                         .collect::<Vec<_>>()
                         .join("\n"),
                     "\n}\n",
-                ]
-                .join(""),
+                    ]
+                    .join(""),
                 format!(
                     "Struct_{}",
                     fields
