@@ -30,7 +30,11 @@ impl TypeExpr {
                 fields
                     .iter()
                     .map(|field| {
-                        format!("    {} {}", field.name, field.type_expr.as_go_type_annotation(type_env))
+                        format!(
+                            "    {} {}",
+                            field.name,
+                            field.type_expr.as_go_type_annotation(type_env)
+                        )
                     })
                     .collect::<Vec<String>>()
                     .join("\n"),
@@ -95,9 +99,7 @@ impl TypeExpr {
                     "{\n",
                     &fields
                         .iter()
-                        .map(|field| {
-                            format!("   {} {}", field.name, field.type_expr.emit().1)
-                        })
+                        .map(|field| format!("   {} {}", field.name, field.type_expr.emit().1))
                         .collect::<Vec<_>>()
                         .join("\n"),
                     "\n}\n",

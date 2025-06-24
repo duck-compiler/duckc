@@ -191,11 +191,9 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     .for_each(|value_expr| typeresolve_value_expr(value_expr, type_env));
                 type_env.pop_identifier_types();
             }
-            ValueExpr::Duck(items) => {
-                items
-                    .iter_mut()
-                    .for_each(|(_, value_expr)| typeresolve_value_expr(value_expr, type_env))
-            },
+            ValueExpr::Duck(items) => items
+                .iter_mut()
+                .for_each(|(_, value_expr)| typeresolve_value_expr(value_expr, type_env)),
             ValueExpr::Struct(items) => items
                 .iter_mut()
                 .for_each(|(_, value_expr)| typeresolve_value_expr(value_expr, type_env)),
@@ -260,7 +258,8 @@ impl TypeExpr {
                 params
                     .iter()
                     .map(|(name, type_expr)| match name {
-                        Some(name) => format!("{name}: {}", type_expr.as_go_type_annotation(type_env)),
+                        Some(name) =>
+                            format!("{name}: {}", type_expr.as_go_type_annotation(type_env)),
                         None => type_expr.as_go_type_annotation(type_env),
                     })
                     .collect::<Vec<_>>()
@@ -581,7 +580,8 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr, type_env: &mut TypeE
 #[cfg(test)]
 mod test {
     use crate::parse::{
-        function_parser::FunctionDefintion, lexer::lexer, type_parser::Field, value_parser::value_expr_parser
+        function_parser::FunctionDefintion, lexer::lexer, type_parser::Field,
+        value_parser::value_expr_parser,
     };
     use chumsky::prelude::*;
 
@@ -671,12 +671,18 @@ mod test {
     fn test_type_env_resolve() {
         // the environment always holds the type of main function
         let src_and_env_check_fun: Vec<(&str, Box<dyn FnOnce(&mut TypeEnv)>)> = vec![
-            ("{ let x: Int = 5; }", Box::new(|type_env: &mut TypeEnv| {
-                assert_eq!(type_env.all_types.len(), 2);
-            })),
-            ("{ let y: { x: { y: Int } } = 4; }", Box::new(|type_env: &mut TypeEnv| {
-                assert_eq!(type_env.all_types.len(), 4);
-            }))
+            (
+                "{ let x: Int = 5; }",
+                Box::new(|type_env: &mut TypeEnv| {
+                    assert_eq!(type_env.all_types.len(), 2);
+                }),
+            ),
+            (
+                "{ let y: { x: { y: Int } } = 4; }",
+                Box::new(|type_env: &mut TypeEnv| {
+                    assert_eq!(type_env.all_types.len(), 4);
+                }),
+            ),
         ];
 
         for (src, env_check_fun) in src_and_env_check_fun {
@@ -689,8 +695,16 @@ mod test {
             };
 
             let value_expr_parse_result = value_expr_parser().parse(tokens.as_slice());
-            assert_eq!(value_expr_parse_result.has_errors(), false, "Couldn't parse value expr {src}");
-            assert_eq!(value_expr_parse_result.has_output(), true, "Couldn't parse value expr {src}");
+            assert_eq!(
+                value_expr_parse_result.has_errors(),
+                false,
+                "Couldn't parse value expr {src}"
+            );
+            assert_eq!(
+                value_expr_parse_result.has_output(),
+                true,
+                "Couldn't parse value expr {src}"
+            );
 
             let value_expr = value_expr_parse_result.into_output().unwrap();
             let mut source_file = SourceFile {

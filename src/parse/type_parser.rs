@@ -17,10 +17,7 @@ pub struct Field {
 
 impl Field {
     pub fn new(name: String, type_expr: TypeExpr) -> Self {
-        return Self {
-            name,
-            type_expr
-        }
+        return Self { name, type_expr };
     }
 }
 
@@ -87,12 +84,15 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
             .ignore_then(just(Token::ControlChar('{')))
             .ignore_then(struct_fields)
             .then_ignore(just(Token::ControlChar('}')))
-            .map(|fields| TypeExpr::Struct(Struct { fields: fields
-                .iter()
-                .cloned()
-                .map(|(name, type_expr)| Field { name, type_expr })
-                .collect()
-            }));
+            .map(|fields| {
+                TypeExpr::Struct(Struct {
+                    fields: fields
+                        .iter()
+                        .cloned()
+                        .map(|(name, type_expr)| Field { name, type_expr })
+                        .collect(),
+                })
+            });
 
         let duck = just(Token::Duck)
             .or_not()
@@ -107,7 +107,7 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
                             .iter()
                             .cloned()
                             .map(|(name, type_expr)| Field { name, type_expr })
-                            .collect()
+                            .collect(),
                     })
                 }
                 None => TypeExpr::Any,

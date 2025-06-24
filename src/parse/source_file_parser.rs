@@ -181,7 +181,7 @@ mod tests {
     use crate::parse::{
         function_parser::FunctionDefintion,
         lexer::lexer,
-        source_file_parser::{source_file_parser, SourceFile},
+        source_file_parser::{SourceFile, source_file_parser},
         type_parser::{Duck, Field, TypeDefinition, TypeExpr},
         use_statement_parser::{Indicator, UseStatement},
         value_parser::ValueExpr,
