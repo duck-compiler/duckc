@@ -1,5 +1,5 @@
 use crate::{
-    emit::value::EmitEnvironment,
+    emit::{types::emit_type_definitions, value::EmitEnvironment},
     parse::{source_file_parser::SourceFile, use_statement_parser::UseStatement},
     semantics::typechecker::TypeEnv,
 };
@@ -9,6 +9,8 @@ impl SourceFile {
         let emit_env = EmitEnvironment::new();
 
         emit_env.emit_imports_and_types();
+
+        let type_definitions = emit_type_definitions(type_env);
 
         let functions = self
             .function_definitions
@@ -26,7 +28,7 @@ impl SourceFile {
             .iter()
             .filter_map(|x| match x {
                 UseStatement::Go(go_mod, alias) => Some(format!(
-                    "{} {go_mod}\n",
+                    "{} \"{go_mod}\"\n",
                     alias.as_ref().map(String::clone).unwrap_or_default()
                 )),
                 _ => None,
@@ -35,8 +37,8 @@ impl SourceFile {
             .join("");
 
         format!(
-            "package {pkg_name}\n\nimport (\n{go_imports}\n)\n{}\n{functions}",
-            emit_env.emit_types()
+            "package {pkg_name}\n\nimport (\n{go_imports}\n)\n{}\n\n{functions}",
+            type_definitions,
         )
     }
 }

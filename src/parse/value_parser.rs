@@ -404,7 +404,7 @@ mod tests {
         assignment_and_declaration_parser::Declaration,
         function_parser::LambdaFunctionExpr,
         lexer::lexer,
-        type_parser::{Duck, TypeExpr},
+        type_parser::{Duck, Field, TypeExpr},
         value_parser::{empty_duck, empty_tuple, value_expr_parser},
     };
 
@@ -1100,7 +1100,7 @@ mod tests {
                 Declaration {
                     name: "y".to_string(),
                     type_expr: TypeExpr::Duck(Duck {
-                        fields: vec![("x".to_string(), TypeExpr::Int)],
+                        fields: vec![Field::new("x".to_string(), TypeExpr::Int)],
                     }),
                     initializer: Some(ValueExpr::Duck(vec![])),
                 },
