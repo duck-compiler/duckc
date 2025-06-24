@@ -520,7 +520,7 @@ impl TypeExpr {
         };
     }
 
-    fn is_object_like(&self) -> bool {
+    pub fn is_object_like(&self) -> bool {
         match self {
             Self::Tuple(..) | Self::Duck(..) | Self::Struct(..) => true,
             _ => false,
@@ -528,7 +528,7 @@ impl TypeExpr {
     }
 
     #[allow(dead_code)]
-    fn has_field(&self, field: Field) -> bool {
+    pub fn has_field(&self, field: Field) -> bool {
         match self {
             Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
             Self::Struct(r#struct) => r#struct
@@ -579,7 +579,7 @@ impl TypeExpr {
         }
     }
 
-    fn is_number(&self) -> bool {
+    pub fn is_number(&self) -> bool {
         return *self == TypeExpr::Int || *self == TypeExpr::Float;
     }
 }
