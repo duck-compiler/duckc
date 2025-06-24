@@ -19,7 +19,7 @@ impl Default for TypeEnv {
         let mut identifier_type_map = HashMap::<String, TypeExpr>::new();
 
         identifier_type_map.insert(
-            "@println".to_string(),
+            "println".to_string(),
             TypeExpr::Fun(vec![(None, TypeExpr::String)], None),
         );
 
@@ -242,8 +242,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             function_definition
                 .params
                 .as_ref()
-                .or(Some(&vec![]))
-                .unwrap()
+                .unwrap_or(&Vec::new())
                 .iter()
                 .map(|(identifier, type_expr)| (Some(identifier.clone()), type_expr.clone()))
                 .collect::<Vec<_>>(),
@@ -319,7 +318,9 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ValueExpr::FieldAccess { target_obj, .. } => {
                 typeresolve_value_expr(&mut target_obj.0, type_env);
             }
-            ValueExpr::Return(Some(value_expr)) => typeresolve_value_expr(&mut value_expr.0, type_env),
+            ValueExpr::Return(Some(value_expr)) => {
+                typeresolve_value_expr(&mut value_expr.0, type_env)
+            }
             ValueExpr::VarAssign(assignment) => {
                 typeresolve_value_expr(&mut assignment.0.value_expr.0, type_env);
             }
@@ -367,7 +368,7 @@ impl TypeExpr {
                     .iter()
                     .map(|(name, type_expr)| (Some(name.clone()), type_expr.clone()))
                     .collect(),
-                lambda_expr.return_type.clone().map(|i| Box::new(i)),
+                lambda_expr.return_type.clone().map(Box::new),
             ),
             ValueExpr::InlineGo(..) => todo!("type for inline go"),
             ValueExpr::Int(..) => TypeExpr::Int,
@@ -377,17 +378,19 @@ impl TypeExpr {
             ValueExpr::String(..) => TypeExpr::String,
             ValueExpr::Break => TypeExpr::Tuple(vec![]),
             ValueExpr::Continue => TypeExpr::Tuple(vec![]),
-            ValueExpr::Return(Some(value_expr)) => TypeExpr::from_value_expr(&value_expr.0, type_env),
+            ValueExpr::Return(Some(value_expr)) => {
+                TypeExpr::from_value_expr(&value_expr.0, type_env)
+            }
             ValueExpr::Return(None) => TypeExpr::Any, // TODO return never !
             ValueExpr::VarAssign(..) => TypeExpr::Tuple(vec![]),
             ValueExpr::VarDecl(..) => TypeExpr::Tuple(vec![]),
             ValueExpr::Struct(fields) => {
                 let types = fields
-                    .into_iter()
+                    .iter()
                     .map(|field| {
                         Field::new(
                             field.0.to_string(),
-                            TypeExpr::from_value_expr(&value_expr, type_env),
+                            TypeExpr::from_value_expr(value_expr, type_env),
                         )
                     })
                     .collect::<Vec<Field>>();
@@ -396,7 +399,7 @@ impl TypeExpr {
             }
             ValueExpr::Tuple(fields) => {
                 let types = fields
-                    .into_iter()
+                    .iter()
                     .map(|value_expr| TypeExpr::from_value_expr(&value_expr.0, type_env))
                     .collect::<Vec<TypeExpr>>();
 
@@ -404,7 +407,7 @@ impl TypeExpr {
             }
             ValueExpr::Duck(fields) => {
                 let types = fields
-                    .into_iter()
+                    .iter()
                     .map(|(name, value_expr)| {
                         Field::new(
                             name.to_string(),
@@ -458,12 +461,11 @@ impl TypeExpr {
             ValueExpr::FunctionCall { .. } => {
                 todo!("Return Type of Function");
             }
-            ValueExpr::Block(value_exprs) => TypeExpr::from(
-                value_exprs
-                    .last()
-                    .map(|value_expr| TypeExpr::from_value_expr(&value_expr.0, type_env))
-                    .expect("Block Expressions must be at least one expression long."),
-            ),
+            ValueExpr::Block(value_exprs) => value_exprs
+                .last()
+                .map(|value_expr| TypeExpr::from_value_expr(&value_expr.0, type_env))
+                .expect("Block Expressions must be at least one expression long."),
+
             ValueExpr::Variable(.., type_expr) => type_expr
                 .as_ref()
                 .expect("Expected type but didn't get one")
@@ -514,10 +516,7 @@ impl TypeExpr {
                     ),
                 );
 
-                let target_field_type_expr =
-                    target_obj_type_expr.typeof_field(field_name.to_string());
-
-                target_field_type_expr
+                target_obj_type_expr.typeof_field(field_name.to_string())
             }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(&condition.0, type_env);
@@ -541,14 +540,8 @@ impl TypeExpr {
     pub fn has_field(&self, field: Field) -> bool {
         match self {
             Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
-            Self::Struct(r#struct) => r#struct
-                .fields
-                .iter()
-                .any(|struct_field| *struct_field == field),
-            Self::Duck(duck) => duck
-                .fields
-                .iter()
-                .any(|struct_field| *struct_field == field),
+            Self::Struct(r#struct) => r#struct.fields.contains(&field),
+            Self::Duck(duck) => duck.fields.contains(&field),
             _ => false,
         }
     }
@@ -596,7 +589,7 @@ impl TypeExpr {
 
 fn require(condition: bool, fail_message: String) {
     if !condition {
-        println!("TypeError: {}", fail_message);
+        println!("TypeError: {fail_message}");
         process::exit(2);
     }
 }
@@ -709,7 +702,12 @@ mod test {
             typeresolve_source_file(&mut source_file, &mut type_env);
 
             let type_expr = TypeExpr::from_value_expr(
-                &source_file.function_definitions.get(0).unwrap().value_expr.0,
+                &source_file
+                    .function_definitions
+                    .get(0)
+                    .unwrap()
+                    .value_expr
+                    .0,
                 &mut type_env,
             );
             assert_eq!(type_expr, expected_type_expr);
@@ -780,7 +778,8 @@ mod test {
                 unreachable!()
             };
 
-            let value_expr_parse_result = value_expr_parser(make_input).parse(make_input((0..1).into(), tokens.as_slice()));
+            let value_expr_parse_result =
+                value_expr_parser(make_input).parse(make_input((0..1).into(), tokens.as_slice()));
             assert_eq!(
                 value_expr_parse_result.has_errors(),
                 false,

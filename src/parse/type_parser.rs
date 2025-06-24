@@ -83,7 +83,7 @@ where
 
         let go_type = just(Token::Go)
             .ignore_then(go_type_identifier)
-            .map(|go_type_identifier| TypeExpr::Go(go_type_identifier));
+            .map(TypeExpr::Go);
 
         let r#struct = just(Token::Struct)
             .ignore_then(just(Token::ControlChar('{')))

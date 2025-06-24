@@ -1,17 +1,20 @@
 #![feature(let_chains)]
 #![feature(impl_trait_in_bindings)]
-#![allow(warnings)]
+#![allow(
+    clippy::needless_return,
+    clippy::match_like_matches_macro,
+    clippy::only_used_in_recursion
+)]
 
 use std::{error::Error, ffi::OsString, io::Write, path::PathBuf, process::Command};
 
-use ariadne::{Color, Config, IndexType, Label, Report, ReportKind, Source};
 use chumsky::Parser;
 use parse::lexer::lexer;
 use semantics::typechecker::{self, TypeEnv};
 use tempfile::Builder;
 
 use crate::parse::{
-    failure, make_input, parse_failure, source_file_parser::source_file_parser,
+    make_input, parse_failure, source_file_parser::source_file_parser,
     use_statement_parser::UseStatement, value_parser::value_expr_parser,
 };
 
@@ -25,7 +28,7 @@ fn test_error_messages() {
     let src = "if (1";
 
     let out = lexer().parse(src).into_result().unwrap();
-    let (out, errors) = value_expr_parser(make_input)
+    let (_out, errors) = value_expr_parser(make_input)
         .parse(make_input((0..src.len()).into(), &out))
         .into_output_errors();
 
@@ -122,7 +125,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut tmp_file = Builder::new()
         .rand_bytes(0)
-        .prefix(p.file_name().expect("didnt provide file name").to_str().expect("not valid utf 8"))
+        .prefix(
+            p.file_name()
+                .expect("didnt provide file name")
+                .to_str()
+                .expect("not valid utf 8"),
+        )
         .suffix(".go")
         .tempfile_in(".")
         .expect("Could not create tempfile");

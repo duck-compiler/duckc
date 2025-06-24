@@ -2,7 +2,6 @@ use crate::parse::{
     Spanned,
     assignment_and_declaration_parser::{Assignment, Declaration},
     function_parser::{LambdaFunctionExpr, Param},
-    make_input,
     type_parser::type_expression_parser,
 };
 
@@ -67,7 +66,7 @@ pub trait IntoBlock {
 
 impl IntoBlock for Spanned<ValueExpr> {
     fn into_block(self) -> Spanned<ValueExpr> {
-        let cl = self.1.clone();
+        let cl = self.1;
         (ValueExpr::Block(vec![self]), cl)
     }
 }
@@ -175,7 +174,7 @@ where
                     .allow_trailing()
                     .collect::<Vec<_>>()
                     .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-                    .map(|x| ValueExpr::Tuple(x))))
+                    .map(ValueExpr::Tuple)))
                 .map(IntoEmptySpan::into_empty_span)
                 .boxed();
 
@@ -422,7 +421,7 @@ where
                     };
 
                     neg.into_iter().fold(res, |acc, _| {
-                        ValueExpr::BoolNegate(acc.into_empty_span().into()).into()
+                        ValueExpr::BoolNegate(acc.into_empty_span().into())
                     })
                 })
                 .map(IntoEmptySpan::into_empty_span)
@@ -573,11 +572,7 @@ pub fn all_into_empty_range(v: &mut Spanned<ValueExpr>) {
         ValueExpr::Lambda(b) => {
             all_into_empty_range(&mut b.value_expr);
         }
-        ValueExpr::Return(v) => {
-            if let Some(v) = v {
-                all_into_empty_range(v);
-            }
-        }
+        ValueExpr::Return(Some(v)) => all_into_empty_range(v),
         ValueExpr::Struct(fields) => {
             for field in fields {
                 all_into_empty_range(&mut field.1);
@@ -596,15 +591,9 @@ pub fn all_into_empty_range(v: &mut Spanned<ValueExpr>) {
         ValueExpr::BoolNegate(b) => all_into_empty_range(b),
         ValueExpr::FieldAccess {
             target_obj,
-            field_name,
+            field_name: _,
         } => {
             all_into_empty_range(target_obj);
-        }
-        ValueExpr::FunctionCall { target, params } => {
-            all_into_empty_range(target);
-            for p in params {
-                all_into_empty_range(p);
-            }
         }
         _ => {}
     }
@@ -612,14 +601,17 @@ pub fn all_into_empty_range(v: &mut Spanned<ValueExpr>) {
 
 #[cfg(test)]
 mod tests {
-    use chumsky::{Parser, span::SimpleSpan};
+    use chumsky::prelude::*;
 
-    use crate::{
-        emit::value::emit,
-        parse::{
-            assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr, lexer::lexer, make_input, type_parser::{Duck, Field, TypeExpr}, value_parser::{
-                all_into_empty_range, empty_duck, empty_tuple, value_expr_parser, Combi, IntoEmptySpan
-            }, Spanned
+    use crate::parse::{
+        Spanned,
+        assignment_and_declaration_parser::Declaration,
+        function_parser::LambdaFunctionExpr,
+        lexer::lexer,
+        make_input,
+        type_parser::{Duck, Field, TypeExpr},
+        value_parser::{
+            Combi, IntoEmptySpan, all_into_empty_range, empty_duck, empty_tuple, value_expr_parser,
         },
     };
 
@@ -789,7 +781,9 @@ mod tests {
                                 ValueExpr::If {
                                     condition: ValueExpr::Int(200).into_empty_span().into(),
                                     then: ValueExpr::Int(4).into_empty_span_and_block().into(),
-                                    r#else: Some(ValueExpr::Int(2).into_empty_span_and_block().into()),
+                                    r#else: Some(
+                                        ValueExpr::Int(2).into_empty_span_and_block().into(),
+                                    ),
                                 }
                                 .into_empty_span()
                                 .into(),

@@ -441,7 +441,7 @@ pub fn emit(
 
             let mut with_result = true;
             if let ValueExpr::Variable(x, ..) = &mut target
-                && x == "@println"
+                && x == "println"
             {
                 // TODO: adds fmt import
                 let package_name = env

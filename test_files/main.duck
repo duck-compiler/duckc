@@ -37,26 +37,26 @@ fun main() {
     let i: int = 0;
 
     while (!(i == 5)) {
-        @println("Outer: ");
-        @println(i);
+        println("Outer: ");
+        println(i);
 
         let j: int = 0;
         while (!(j == 3)) {
-            @println("Inner: ");
-            @println(j);
+            println("Inner: ");
+            println(j);
             j = j + 1;
         }
         i = i + 1;
-        @println();
+        println();
     }
 }
 
 fun abc() -> int {
-    @println(123);
+    println(123);
     return 123;
 }
 
 fun xyz() -> int {
-    @println(5 + abc());
+    println(5 + abc());
     return 10;
 }
