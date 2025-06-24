@@ -52,10 +52,15 @@ impl TypeEnv {
     }
 
     pub fn insert_identifier_type(&mut self, identifier: String, type_expr: TypeExpr) {
+        self.insert_type(type_expr.clone());
         self.identifier_types
             .last_mut()
             .expect("At least one env should exist. :(")
             .insert(identifier, type_expr);
+    }
+
+    pub fn insert_type(&mut self, type_expr: TypeExpr) {
+        self.all_types.push(type_expr);
     }
 
     pub fn get_identifier_type(&self, identifier: String) -> Option<TypeExpr> {
@@ -186,9 +191,11 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     .for_each(|value_expr| typeresolve_value_expr(value_expr, type_env));
                 type_env.pop_identifier_types();
             }
-            ValueExpr::Duck(items) => items
-                .iter_mut()
-                .for_each(|(_, value_expr)| typeresolve_value_expr(value_expr, type_env)),
+            ValueExpr::Duck(items) => {
+                items
+                    .iter_mut()
+                    .for_each(|(_, value_expr)| typeresolve_value_expr(value_expr, type_env))
+            },
             ValueExpr::Struct(items) => items
                 .iter_mut()
                 .for_each(|(_, value_expr)| typeresolve_value_expr(value_expr, type_env)),
