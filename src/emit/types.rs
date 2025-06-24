@@ -16,6 +16,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> String {
         .join("\n");
 
     let type_defs = summary.types_used.iter()
+        .filter(|type_expr| type_expr.is_object_like())
         .map(|type_expr| format!("type {} {};", type_expr.as_clean_go_type_name(type_env), type_expr.as_go_type_annotation(type_env)))
         .collect::<Vec<_>>()
         .join("\n");
