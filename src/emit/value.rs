@@ -2,7 +2,10 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     parse::{
-        assignment_and_declaration_parser::{Assignment, Declaration}, function_parser::LambdaFunctionExpr, type_parser::TypeExpr, value_parser::ValueExpr
+        assignment_and_declaration_parser::{Assignment, Declaration},
+        function_parser::LambdaFunctionExpr,
+        type_parser::TypeExpr,
+        value_parser::ValueExpr,
     },
     semantics::typechecker::TypeEnv,
 };
@@ -295,10 +298,19 @@ pub fn emit(
                 };
                 let mut res = Vec::new();
                 res.extend(instr);
-                res.push(format!("var {name} {} = {res_var}\n", type_expr.as_go_concrete_annotation(type_env)));
+                res.push(format!(
+                    "var {name} {} = {res_var}\n",
+                    type_expr.as_go_concrete_annotation(type_env)
+                ));
                 (res, Some(name))
             } else {
-                (vec![format!("var {name} {}\n", type_expr.as_go_concrete_annotation(type_env))], Some(name))
+                (
+                    vec![format!(
+                        "var {name} {}\n",
+                        type_expr.as_go_concrete_annotation(type_env)
+                    )],
+                    Some(name),
+                )
             }
         }
         ValueExpr::VarAssign(b) => {
@@ -494,7 +506,8 @@ pub fn emit(
 
             let res_name = new_var();
 
-            let type_annotation = TypeExpr::from_value_expr(&value_expr_clone, type_env).as_go_type_annotation(type_env);
+            let type_annotation = TypeExpr::from_value_expr(&value_expr_clone, type_env)
+                .as_go_type_annotation(type_env);
             field_instr.extend([format!(
                 "{res_name} := {} {{\n{}\n}}\n",
                 type_annotation,
@@ -523,7 +536,8 @@ pub fn emit(
 
             let res_name = new_var();
 
-            let type_annotation = TypeExpr::from_value_expr(&value_expr_clone, type_env).as_go_concrete_annotation(type_env);
+            let type_annotation = TypeExpr::from_value_expr(&value_expr_clone, type_env)
+                .as_go_concrete_annotation(type_env);
             field_instr.extend([format!(
                 "{res_name} := {} {{\n{}\n}}\n",
                 type_annotation,

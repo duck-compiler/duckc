@@ -18,7 +18,10 @@ impl Default for TypeEnv {
     fn default() -> Self {
         let mut identifier_type_map = HashMap::<String, TypeExpr>::new();
 
-        identifier_type_map.insert("@println".to_string(), TypeExpr::Fun(vec![(None, TypeExpr::String)], None));
+        identifier_type_map.insert(
+            "@println".to_string(),
+            TypeExpr::Fun(vec![(None, TypeExpr::String)], None),
+        );
 
         let identifier_types = vec![identifier_type_map];
 
@@ -39,12 +42,12 @@ pub enum GoTypeDefinition {
     Struct {
         name: String,
         fields: Vec<(String, String)>,
-        methods: Vec<String>
+        methods: Vec<String>,
     },
     Interface {
         name: String,
-        methods: Vec<String>
-    }
+        methods: Vec<String>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -126,48 +129,51 @@ impl TypeEnv {
             .clone()
     }
 
-    fn flatten_types(&mut self, type_expr: &mut TypeExpr, param_names_used: &mut Vec<String>) -> Vec<TypeExpr>  {
+    fn flatten_types(
+        &mut self,
+        type_expr: &mut TypeExpr,
+        param_names_used: &mut Vec<String>,
+    ) -> Vec<TypeExpr> {
         let mut found = vec![];
 
         match type_expr {
-            TypeExpr::Duck(duck) => duck.fields.iter_mut()
-                .for_each(|field| {
-                    param_names_used.push(field.name.clone());
-                    if !field.type_expr.is_object_like() {
-                        found.push(field.type_expr.clone());
-                        return
-                    }
+            TypeExpr::Duck(duck) => duck.fields.iter_mut().for_each(|field| {
+                param_names_used.push(field.name.clone());
+                if !field.type_expr.is_object_like() {
+                    found.push(field.type_expr.clone());
+                    return;
+                }
 
-                    let mut clone = field.type_expr.clone();
-                    let mut flattens_from_clone = self.flatten_types(&mut clone, param_names_used);
+                let mut clone = field.type_expr.clone();
+                let mut flattens_from_clone = self.flatten_types(&mut clone, param_names_used);
 
-                    found.push(clone);
-                    found.append(&mut flattens_from_clone);
+                found.push(clone);
+                found.append(&mut flattens_from_clone);
 
-                    field.type_expr = TypeExpr::TypeName(field.type_expr.as_clean_go_type_name(self));
-                }),
-            TypeExpr::Struct(duck) => duck.fields.iter_mut()
-                .for_each(|field| {
-                    param_names_used.push(field.name.clone());
-                    if !field.type_expr.is_object_like(){
-                        found.push(field.type_expr.clone());
-                        return
-                    }
+                field.type_expr = TypeExpr::TypeName(field.type_expr.as_clean_go_type_name(self));
+            }),
+            TypeExpr::Struct(duck) => duck.fields.iter_mut().for_each(|field| {
+                param_names_used.push(field.name.clone());
+                if !field.type_expr.is_object_like() {
+                    found.push(field.type_expr.clone());
+                    return;
+                }
 
-                    let mut clone = field.type_expr.clone();
-                    let mut flattens_from_clone = self.flatten_types(&mut clone, param_names_used);
+                let mut clone = field.type_expr.clone();
+                let mut flattens_from_clone = self.flatten_types(&mut clone, param_names_used);
 
-                    found.push(clone);
-                    found.append(&mut flattens_from_clone);
+                found.push(clone);
+                found.append(&mut flattens_from_clone);
 
-                    field.type_expr = TypeExpr::TypeName(field.type_expr.as_clean_go_type_name(self));
-                }),
+                field.type_expr = TypeExpr::TypeName(field.type_expr.as_clean_go_type_name(self));
+            }),
             TypeExpr::Tuple(types) => types.iter_mut().for_each(|type_expr| {
                 found.extend(self.flatten_types(type_expr, param_names_used));
             }),
             TypeExpr::Fun(params, return_type) => {
-                params.iter_mut()
-                    .for_each(|param| found.extend(self.flatten_types(&mut param.1, param_names_used)));
+                params.iter_mut().for_each(|param| {
+                    found.extend(self.flatten_types(&mut param.1, param_names_used))
+                });
 
                 if let Some(type_expr) = return_type.as_mut() {
                     found.extend(self.flatten_types(type_expr, param_names_used));
@@ -186,10 +192,9 @@ impl TypeEnv {
         let mut param_names_used = Vec::new();
 
         let mut to_push = Vec::new();
-        all_types.iter_mut()
-            .for_each(|type_expr| {
-                to_push.append(&mut self.flatten_types(type_expr, &mut param_names_used));
-            });
+        all_types.iter_mut().for_each(|type_expr| {
+            to_push.append(&mut self.flatten_types(type_expr, &mut param_names_used));
+        });
 
         all_types.append(&mut to_push);
         all_types.sort_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
@@ -200,7 +205,10 @@ impl TypeEnv {
         let mut param_names_used = dbg!(param_names_used);
         param_names_used.dedup();
 
-        return TypesSummary { types_used: all_types, param_names_used }
+        return TypesSummary {
+            types_used: all_types,
+            param_names_used,
+        };
     }
 }
 
@@ -337,15 +345,13 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             }
             ValueExpr::BoolNegate(value_expr) => {
                 typeresolve_value_expr(value_expr, type_env);
-            },
+            }
             ValueExpr::String(..) => type_env.insert_type(TypeExpr::String),
             ValueExpr::Bool(..) => type_env.insert_type(TypeExpr::Bool),
             ValueExpr::Float(..) => type_env.insert_type(TypeExpr::Float),
             ValueExpr::Char(..) => type_env.insert_type(TypeExpr::Char),
             ValueExpr::Int(..) => type_env.insert_type(TypeExpr::Int), // this is so that only the used primitive types are in the type env
-            ValueExpr::Break
-            | ValueExpr::Return(None)
-            | ValueExpr::Continue => {}
+            ValueExpr::Break | ValueExpr::Return(None) | ValueExpr::Continue => {}
         }
     }
 }
