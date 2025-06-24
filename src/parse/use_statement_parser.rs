@@ -1,4 +1,4 @@
-use chumsky::prelude::*;
+use chumsky::{input::BorrowInput, prelude::*};
 
 use super::lexer::Token;
 
@@ -15,7 +15,11 @@ pub enum UseStatement {
     Go(String, Option<String>),
 }
 
-fn regular_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> + Clone {
+fn regular_use_parser<'src, I>()
+-> impl Parser<'src, I, UseStatement, extra::Err<Rich<'src, Token>>> + Clone
+where
+    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
+{
     let module_indicator_parser =
         select_ref! { Token::Ident(identifier) => identifier.to_string() }.map(Indicator::Module);
 
@@ -46,7 +50,11 @@ fn regular_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> 
         .map(UseStatement::Regular)
 }
 
-fn go_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> + Clone {
+fn go_use_parser<'src, I>()
+-> impl Parser<'src, I, UseStatement, extra::Err<Rich<'src, Token>>> + Clone
+where
+    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
+{
     (just(Token::Use).then(just(Token::Go)))
         .ignore_then(select_ref! { Token::StringLiteral(s) => s.to_owned() })
         .then(
@@ -58,13 +66,17 @@ fn go_use_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> + Clo
         .map(|(package_name, alias)| UseStatement::Go(package_name, alias))
 }
 
-pub fn use_statement_parser<'src>() -> impl Parser<'src, &'src [Token], UseStatement> + Clone {
+pub fn use_statement_parser<'src, I>()
+-> impl Parser<'src, I, UseStatement, extra::Err<Rich<'src, Token>>> + Clone
+where
+    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
+{
     choice((go_use_parser(), regular_use_parser()))
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::lexer::lexer;
+    use crate::parse::{lexer::lexer, make_no_span_input};
 
     use super::*;
 
@@ -116,7 +128,8 @@ mod tests {
             };
 
             println!("parsing use statement {src}");
-            let use_statement_parse_result = use_statement_parser().parse(tokens.as_slice());
+            let use_statement_parse_result =
+                use_statement_parser().parse(make_no_span_input(tokens.as_slice()));
             assert_eq!(use_statement_parse_result.has_errors(), false);
             assert_eq!(use_statement_parse_result.has_output(), true);
 
@@ -155,7 +168,8 @@ mod tests {
             };
 
             println!("typedef_parsing {invalid_use_statement}");
-            let typedef_parse_result = use_statement_parser().parse(tokens.as_slice());
+            let typedef_parse_result =
+                use_statement_parser().parse(make_no_span_input(tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), true);
             assert_eq!(typedef_parse_result.has_output(), false);
         }

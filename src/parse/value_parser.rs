@@ -5,7 +5,7 @@ use crate::parse::{
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
-use chumsky::prelude::*;
+use chumsky::{input::BorrowInput, prelude::*};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueExpr {
@@ -72,23 +72,27 @@ impl ValueExpr {
     }
 }
 
-pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> + Clone {
+pub fn value_expr_parser<'src, I>()
+-> impl Parser<'src, I, ValueExpr, extra::Err<Rich<'src, Token>>> + Clone
+where
+    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
+{
     recursive(|value_expr_parser| {
         let lambda_parser = {
             let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
                 .then_ignore(just(Token::ControlChar(':')))
                 .then(type_expression_parser())
-                .map(|(identifier, type_expr)| (identifier, type_expr) as Param);
+                .map(|(identifier, type_expr)| (identifier, type_expr) as Param).boxed();
 
             let params_parser = param_parser
                 .separated_by(just(Token::ControlChar(',')))
                 .allow_trailing()
                 .collect::<Vec<Param>>()
-                .or_not();
+                .or_not().boxed();
 
             let return_type_parser = just(Token::ControlChar('-'))
                 .ignore_then(just(Token::ControlChar('>')))
-                .ignore_then(type_expression_parser());
+                .ignore_then(type_expression_parser()).boxed();
 
             just(Token::ControlChar('('))
                 .ignore_then(params_parser)
@@ -106,7 +110,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                         }
                         .into(),
                     )
-                })
+                }).boxed()
         };
 
         let params = value_expr_parser
@@ -114,7 +118,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .separated_by(just(Token::ControlChar(',')))
             .allow_trailing()
             .collect::<Vec<_>>()
-            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')));
+            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))).boxed();
 
         let tuple = lambda_parser.clone().or((just(Token::ControlChar('('))
             .ignore_then(just(Token::ControlChar(')')))
@@ -126,11 +130,11 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .allow_trailing()
             .collect::<Vec<_>>()
             .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-            .map(|x| ValueExpr::Tuple(x))));
+            .map(|x| ValueExpr::Tuple(x)))).boxed();
 
         let initializer = just(Token::ControlChar('='))
             .ignore_then(value_expr_parser.clone())
-            .or_not();
+            .or_not().boxed();
 
         let declaration = just(Token::Let)
             .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
@@ -146,7 +150,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     }
                     .into(),
                 )
-            });
+            }).boxed();
 
         let struct_expression = just(Token::ControlChar('.')).ignore_then(
             select_ref! { Token::Ident(ident) => ident.to_owned() }
@@ -157,7 +161,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 .collect::<Vec<_>>()
                 .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
                 .map(ValueExpr::Struct),
-        );
+        ).boxed();
 
         let duck_expression = select_ref! { Token::Ident(ident) => ident.to_owned() }
             .then_ignore(just(Token::ControlChar(':')))
@@ -169,7 +173,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .map(|mut x| {
                 x.sort_by_key(|(name, _)| name.clone());
                 ValueExpr::Duck(x)
-            });
+            }).boxed();
 
         let block_expression = value_expr_parser
             .clone()
@@ -195,23 +199,23 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 }
 
                 ValueExpr::Block(exprs.into_iter().map(|(expr, _)| expr).collect())
-            });
+            }).boxed();
 
         let if_condition = value_expr_parser
             .clone()
-            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')));
+            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))).boxed();
         let if_body = block_expression.clone();
         let if_with_condition_and_body = just(Token::If)
             .ignore_then(if_condition.clone())
-            .then(if_body.clone());
+            .then(if_body.clone()).boxed();
 
         let while_condition = if_condition.clone();
         let while_body = block_expression.clone();
         let while_with_condition_and_body = just(Token::While)
             .ignore_then(while_condition.clone())
-            .then(while_body.clone());
+            .then(while_body.clone()).boxed();
 
-        let field_access = none_of(Token::Let)
+        let field_access = any_ref()
             .filter(|t| !matches!(t, Token::ControlChar('.')))
             .repeated()
             .at_least(1)
@@ -228,7 +232,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
             .map({
                 let e = value_expr_parser.clone();
                 move |(base_expr, field_accesses)| {
-                    let base_expr = base_expr.leak() as &[Token];
+                    let base_expr = todo!();
                     let base = e.parse(base_expr).unwrap();
                     field_accesses
                         .into_iter()
@@ -237,14 +241,14 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                             field_name: x,
                         })
                 }
-            });
+            }).boxed();
 
-        let int = select_ref! { Token::IntLiteral(i) => *i }.map(ValueExpr::Int);
-        let bool_val = select_ref! { Token::BoolLiteral(b) => *b }.map(ValueExpr::Bool);
+        let int = select_ref! { Token::IntLiteral(i) => *i }.map(ValueExpr::Int).boxed();
+        let bool_val = select_ref! { Token::BoolLiteral(b) => *b }.map(ValueExpr::Bool).boxed();
         let string_val =
             select_ref! { Token::StringLiteral(s) => s.to_owned() }.map(ValueExpr::String);
         let var_expr = select_ref! { Token::Ident(ident) => ident.to_owned() }
-            .map(|ident| ValueExpr::Variable(ident, None));
+            .map(|ident| ValueExpr::Variable(ident, None)).boxed();
         let if_expr = if_with_condition_and_body
             .clone()
             .then(
@@ -267,9 +271,9 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                             r#else: acc,
                         })
                     }),
-            });
-        let char_expr = select_ref! { Token::CharLiteral(c) => *c }.map(ValueExpr::Char);
-        let float_expr = select_ref! { Token::FloatLiteral(num) => *num }.map(ValueExpr::Float);
+            }).boxed();
+        let char_expr = select_ref! { Token::CharLiteral(c) => *c }.map(ValueExpr::Char).boxed();
+        let float_expr = select_ref! { Token::FloatLiteral(num) => *num }.map(ValueExpr::Float).boxed();
 
         let atom = just(Token::ControlChar('!'))
             .repeated()
@@ -314,7 +318,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
 
                 neg.into_iter()
                     .fold(res, |acc, _| ValueExpr::BoolNegate(acc.into()))
-            });
+            }).boxed();
 
         let assignment = select_ref! { Token::Ident(identifier) => identifier.to_string() }
             .then_ignore(just(Token::ControlChar('=')))
@@ -327,7 +331,9 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                     }
                     .into(),
                 )
-            });
+            }).boxed();
+
+        //
 
         let prod = atom
             .clone()
@@ -341,7 +347,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 additional
                     .into_iter()
                     .fold(init, |acc, x| ValueExpr::Mul(acc.into(), x.into()))
-            });
+            }).boxed();
 
         let add = prod
             .clone()
@@ -355,23 +361,15 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 additional
                     .into_iter()
                     .fold(init, |acc, x| ValueExpr::Add(acc.into(), x.into()))
-            });
+            }).boxed();
 
         let equals = add
             .clone()
             .then_ignore(just(Token::Equals))
             .then(add.clone())
-            .map(|(x, y)| ValueExpr::Equals(x.into(), y.into()));
+            .map(|(x, y)| ValueExpr::Equals(x.into(), y.into())).boxed();
 
-        // let equals = add.clone()
-        //     .then(just(Token::Equals).ignore_then(add.clone()).repeated().at_least(1).collect::<Vec<_>>())
-        //     .map(|(init, additional)| {
-        //         additional
-        //             .into_iter()
-        //             .fold(init, |acc, x| ValueExpr::Equals(acc.into(), x.into()))
-        //     });
-
-        let inline_go = select_ref! { Token::InlineGo(x) => x.to_owned() }.map(ValueExpr::InlineGo);
+        let inline_go = select_ref! { Token::InlineGo(x) => x.to_owned() }.map(ValueExpr::InlineGo).boxed();
 
         choice((
             inline_go,
@@ -383,7 +381,7 @@ pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> 
                 .ignore_then(value_expr_parser.clone().or_not())
                 .map(|x: Option<ValueExpr>| ValueExpr::Return(x.map(Box::new))),
             atom,
-        ))
+        )).boxed()
     })
 }
 
@@ -401,11 +399,7 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        assignment_and_declaration_parser::Declaration,
-        function_parser::LambdaFunctionExpr,
-        lexer::lexer,
-        type_parser::{Duck, TypeExpr},
-        value_parser::{empty_duck, empty_tuple, value_expr_parser},
+        assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr, lexer::lexer, make_no_span_input, type_parser::{Duck, TypeExpr}, value_parser::{empty_duck, empty_tuple, value_expr_parser}
     };
 
     use super::ValueExpr;
@@ -1073,7 +1067,7 @@ mod tests {
 
         for (src, expected_tokens) in test_cases {
             let lex_result = lexer().parse(src).into_result().expect(&src);
-            let parse_result = value_expr_parser().parse(&lex_result);
+            let parse_result = value_expr_parser().parse(make_no_span_input(&lex_result));
 
             assert_eq!(parse_result.has_errors(), false, "{}", src);
             assert_eq!(parse_result.has_output(), true, "{}", src);
@@ -1124,7 +1118,7 @@ mod tests {
                 unreachable!()
             };
 
-            let declaration_parse_result = value_expr_parser().parse(tokens.as_slice());
+            let declaration_parse_result = value_expr_parser().parse(make_no_span_input(tokens.as_slice()));
             assert_eq!(declaration_parse_result.has_errors(), false);
             assert_eq!(declaration_parse_result.has_output(), true);
 
@@ -1161,7 +1155,7 @@ mod tests {
             };
 
             println!("declaration parsing {valid_declaration}");
-            let typedef_parse_result = value_expr_parser().parse(tokens.as_slice());
+            let typedef_parse_result = value_expr_parser().parse(make_no_span_input(tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -1192,7 +1186,7 @@ mod tests {
             };
 
             println!("typedef_parsing {valid_assignment}");
-            let typedef_parse_result = value_expr_parser().parse(tokens.as_slice());
+            let typedef_parse_result = value_expr_parser().parse(make_no_span_input(tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }

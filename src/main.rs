@@ -1,5 +1,6 @@
 #![feature(let_chains)]
 #![feature(impl_trait_in_bindings)]
+#![allow(warnings)]
 
 use std::{error::Error, ffi::OsString, io::Write, path::PathBuf, process::Command};
 
@@ -9,7 +10,7 @@ use parse::lexer::lexer;
 use semantics::typechecker::{self, TypeEnv};
 use tempfile::Builder;
 
-use crate::parse::{failure, lexer::lexer2, make_input, parse_failure, source_file_parser::source_file_parser, use_statement_parser::UseStatement, val2::value_expr_parser2};
+use crate::parse::{failure, make_input, parse_failure, source_file_parser::source_file_parser, use_statement_parser::UseStatement, value_parser::value_expr_parser};
 
 pub mod emit;
 pub mod parse;
@@ -20,8 +21,8 @@ use emit::value::{EmitEnvironment, GoImport};
 fn test_error_messages() {
     let src = "if (1";
 
-    let out = lexer2().parse(src).into_result().unwrap();
-    let (out, errors) = value_expr_parser2()
+    let out = lexer().parse(src).into_result().unwrap();
+    let (out, errors) = value_expr_parser()
         .parse(make_input((0..src.len()).into(), &out))
         .into_output_errors();
 
@@ -66,12 +67,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut p = PathBuf::from(target_path);
     let src = std::fs::read_to_string(&p).expect("Could not read file");
     let lex = lexer().parse(&src).into_result().expect("Lex error");
-    return todo!();
     let mut source_file = source_file_parser({
         p.pop();
         p
     })
-    .parse(todo!())
+    .parse(make_input((0..src.len()).into(), &lex))
     .into_result()
     .expect("Parse error")
     .flatten();

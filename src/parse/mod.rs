@@ -5,6 +5,14 @@ use chumsky::{error::Rich, input::{BorrowInput, Input}, span::SimpleSpan};
 
 use crate::parse::lexer::Token;
 
+pub mod assignment_and_declaration_parser;
+pub mod function_parser;
+pub mod lexer;
+pub mod source_file_parser;
+pub mod type_parser;
+pub mod use_statement_parser;
+pub mod value_parser;
+
 pub type Spanned<T> = (T, SimpleSpan);
 
 pub fn make_input<'src>(
@@ -12,6 +20,12 @@ pub fn make_input<'src>(
     toks: &'src [Spanned<Token>],
 ) -> impl BorrowInput<'src, Token = Token, Span = SimpleSpan> {
     toks.map(eoi, |(t, s)| (t, s))
+}
+
+pub fn make_no_span_input<'src>(
+    toks: &'src [Spanned<Token>]
+) -> impl BorrowInput<'src, Token = Token, Span = SimpleSpan> {
+    make_input((0..10).into(), toks)
 }
 
 pub fn failure(
@@ -55,16 +69,3 @@ pub fn parse_failure(file_name: &str, err: &Rich<impl fmt::Display>, src: &str) 
         src,
     )
 }
-
-pub mod assignment_and_declaration_parser;
-pub mod function_parser;
-pub mod function_parser2;
-pub mod lexer;
-pub mod source_file_parser;
-mod source_file_parser2;
-pub mod type_parser;
-pub mod use_statement_parser;
-pub mod value_parser;
-pub mod val2;
-pub mod type_parser2;
-mod use_statement_parser2;

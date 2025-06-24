@@ -1,12 +1,9 @@
 use std::{fs::File, path::PathBuf};
 
-use chumsky::prelude::*;
+use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::parse::{
-    function_parser::{FunctionDefintion, function_definition_parser},
-    lexer::{Token, lexer},
-    type_parser::{TypeDefinition, type_definition_parser},
-    use_statement_parser::{UseStatement, use_statement_parser},
+    function_parser::{function_definition_parser, FunctionDefintion}, lexer::{lexer, Token}, make_input, type_parser::{type_definition_parser, TypeDefinition}, use_statement_parser::{use_statement_parser, UseStatement}
 };
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -115,12 +112,14 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
         let src_text =
             std::fs::read_to_string(dbg!(format!("{}.duck", joined.to_str().unwrap()))).unwrap();
         let lex = lexer().parse(&src_text).unwrap();
-        let parse = source_file_parser(current_dir.clone()).parse(&lex).unwrap();
+        let parse = source_file_parser(current_dir.clone()).parse(make_input((0..src_text.len()).into(), &lex)).unwrap();
         parse
     }
 }
 
-pub fn source_file_parser<'src>(p: PathBuf) -> impl Parser<'src, &'src [Token], SourceFile> {
+pub fn source_file_parser<'src, I>(p: PathBuf) -> impl Parser<'src, I, SourceFile, extra::Err<Rich<'src, Token>>>
+where I: BorrowInput<'src, Token = Token, Span = SimpleSpan>
+{
     let p = Box::leak(Box::new(p));
     recursive(|e| {
         choice((
@@ -179,12 +178,7 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        function_parser::FunctionDefintion,
-        lexer::lexer,
-        source_file_parser::{SourceFile, source_file_parser},
-        type_parser::{Duck, TypeDefinition, TypeExpr},
-        use_statement_parser::{Indicator, UseStatement},
-        value_parser::ValueExpr,
+        function_parser::FunctionDefintion, lexer::lexer, make_no_span_input, source_file_parser::{source_file_parser, SourceFile}, type_parser::{Duck, TypeDefinition, TypeExpr}, use_statement_parser::{Indicator, UseStatement}, value_parser::ValueExpr
     };
 
     #[test]
@@ -326,7 +320,7 @@ mod tests {
         for (src, exp) in test_cases {
             let lex = lexer().parse(src).into_result().expect(src);
             let parse = source_file_parser(PathBuf::from("test_files"))
-                .parse(&lex)
+                .parse(make_no_span_input(&lex))
                 .into_result()
                 .expect(src);
             assert_eq!(parse, exp, "{src}");
@@ -586,7 +580,7 @@ mod tests {
         for (main_file, mut expected) in test_cases {
             let src = std::fs::read_to_string(dir.join(main_file)).unwrap();
             let lex = lexer().parse(&src).unwrap();
-            let mut got = source_file_parser(dir.clone()).parse(&lex).unwrap();
+            let mut got = source_file_parser(dir.clone()).parse(make_no_span_input(&lex)).unwrap();
 
             fn sort_all(x: &mut SourceFile) {
                 x.function_definitions.sort_by_key(|x| x.name.clone());

@@ -1,7 +1,5 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
-use crate::parse::Spanned;
-
 use super::{
     lexer::Token,
     type_parser::{TypeExpr, type_expression_parser},
@@ -37,15 +35,11 @@ pub struct LambdaFunctionExpr {
     pub value_expr: ValueExpr,
 }
 
-pub fn x<'src, I>() -> impl Parser<'src, I, Spanned<FunctionDefintion>, extra::Err<Rich<'src, Token>>>
+pub fn function_definition_parser<'src, I>()
+-> impl Parser<'src, I, FunctionDefintion, extra::Err<Rich<'src, Token>>> + Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
 {
-    just(Token::Go).to(FunctionDefintion::default()).map_with(|x,e| (x, e.span()))
-}
-
-pub fn function_definition_parser<'src>()
--> impl Parser<'src, &'src [Token], FunctionDefintion> + Clone {
     let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
         .then_ignore(just(Token::ControlChar(':')))
         .then(type_expression_parser())
@@ -87,7 +81,7 @@ pub fn function_definition_parser<'src>()
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::lexer::lexer;
+    use crate::parse::{lexer::lexer, make_no_span_input};
 
     use super::*;
 
@@ -114,7 +108,8 @@ pub mod tests {
             };
 
             println!("typedef_parsing {valid_function_definition}");
-            let typedef_parse_result = function_definition_parser().parse(tokens.as_slice());
+            let typedef_parse_result =
+                function_definition_parser().parse(make_no_span_input(tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -132,7 +127,8 @@ pub mod tests {
             };
 
             println!("typedef_parsing {invalid_function_definition}");
-            let typedef_parse_result = function_definition_parser().parse(tokens.as_slice());
+            let typedef_parse_result =
+                function_definition_parser().parse(make_no_span_input(tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), true);
             assert_eq!(typedef_parse_result.has_output(), false);
         }

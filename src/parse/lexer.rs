@@ -38,55 +38,7 @@ impl Display for Token {
     }
 }
 
-pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Token>, extra::Err<Rich<'a, char>>> {
-    let keyword_or_ident = just("@")
-        .or_not()
-        .then(text::ident())
-        .map(|(x, str)| match str {
-            "module" => Token::Module,
-            "use" => Token::Use,
-            "type" => Token::Type,
-            "duck" => Token::Duck,
-            "go" => Token::Go,
-            "struct" => Token::Struct,
-            "fun" => Token::Function,
-            "return" => Token::Return,
-            "let" => Token::Let,
-            "if" => Token::If,
-            "else" => Token::Else,
-            "while" => Token::While,
-            "break" => Token::Break,
-            "continue" => Token::Continue,
-            "as" => Token::As,
-            _ => Token::Ident(format!("{}{str}", x.unwrap_or(""))),
-        });
-
-    let ctrl = one_of("!=:{};,&()->.+-*/%").map(Token::ControlChar);
-
-    let string = string_lexer();
-    let r#bool = choice((
-        just("true").to(Token::BoolLiteral(true)),
-        just("false").to(Token::BoolLiteral(false)),
-    ));
-    let r#char = char_lexer();
-    let num = num_literal();
-
-    let equals = just("==").to(Token::Equals);
-
-    let token = inline_go_parser()
-        .or(r#bool)
-        .or(equals)
-        .or(keyword_or_ident)
-        .or(ctrl)
-        .or(string)
-        .or(num)
-        .or(r#char);
-
-    token
-        .padded().repeated().collect::<Vec<Token>>()
-}
-
-pub fn lexer2<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> {
+pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> {
     let keyword_or_ident = just("@")
         .or_not()
         .then(text::ident())
@@ -364,7 +316,7 @@ mod tests {
                 .output()
                 .expect(&src)
                 .iter()
-                .map(|token| token.clone())
+                .map(|token| token.0.clone())
                 .collect();
 
             assert_eq!(output, expected_tokens, "{}", src);
