@@ -10,7 +10,10 @@ use parse::lexer::lexer;
 use semantics::typechecker::{self, TypeEnv};
 use tempfile::Builder;
 
-use crate::parse::{failure, make_input, parse_failure, source_file_parser::source_file_parser, use_statement_parser::UseStatement, value_parser::value_expr_parser};
+use crate::parse::{
+    failure, make_input, parse_failure, source_file_parser::source_file_parser,
+    use_statement_parser::UseStatement, value_parser::value_expr_parser,
+};
 
 pub mod emit;
 pub mod parse;
@@ -32,7 +35,7 @@ fn test_error_messages() {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    if true {
+    if false {
         test_error_messages();
         return Ok(());
     }
@@ -64,17 +67,30 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let target_path = file_name.expect("No file name provided");
-    let mut p = PathBuf::from(target_path);
+    let mut p = PathBuf::from(&target_path);
     let src = std::fs::read_to_string(&p).expect("Could not read file");
-    let lex = lexer().parse(&src).into_result().expect("Lex error");
-    let mut source_file = source_file_parser({
-        p.pop();
-        p
-    }, make_input)
+    let (lex, lex_errors) = lexer().parse(&src).into_output_errors();
+    lex_errors.into_iter().for_each(|e| {
+        parse_failure(&target_path, &e, &src);
+    });
+
+    let lex = lex.unwrap();
+
+    let (src_file, parse_errors) = source_file_parser(
+        {
+            p.pop();
+            p
+        },
+        make_input,
+    )
     .parse(make_input((0..src.len()).into(), &lex))
-    .into_result()
-    .expect("Parse error")
-    .flatten();
+    .into_output_errors();
+
+    parse_errors.into_iter().for_each(|e| {
+        parse_failure(&target_path, &e, &src);
+    });
+
+    let mut source_file = src_file.unwrap();
 
     println!("before resolve");
     source_file = dbg!(source_file);

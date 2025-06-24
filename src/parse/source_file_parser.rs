@@ -3,12 +3,7 @@ use std::{fs::File, path::PathBuf};
 use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::parse::{
-    Spanned,
-    function_parser::{FunctionDefintion, function_definition_parser},
-    lexer::{Token, lexer},
-    make_input,
-    type_parser::{TypeDefinition, type_definition_parser},
-    use_statement_parser::{UseStatement, use_statement_parser},
+    function_parser::{function_definition_parser, FunctionDefintion}, lexer::{lexer, Token}, make_input, parse_failure, type_parser::{type_definition_parser, TypeDefinition}, use_statement_parser::{use_statement_parser, UseStatement}, Spanned
 };
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -116,11 +111,24 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
     } else {
         let src_text =
             std::fs::read_to_string(dbg!(format!("{}.duck", joined.to_str().unwrap()))).unwrap();
-        let lex = lexer().parse(&src_text).unwrap();
-        let parse = source_file_parser(current_dir.clone(), make_input)
+        let (lex, lex_errors) = lexer().parse(&src_text).into_output_errors();
+
+        let target_path = joined.to_string_lossy();
+
+        lex_errors.into_iter().for_each(|e| {
+            parse_failure(&target_path, &e, &src_text);
+        });
+
+        let lex = lex.unwrap();
+        let (parse, parse_errors) = source_file_parser(current_dir.clone(), make_input)
             .parse(make_input((0..src_text.len()).into(), &lex))
-            .unwrap();
-        parse
+            .into_output_errors();
+
+        parse_errors.into_iter().for_each(|e| {
+            parse_failure(&target_path, &e, &src_text);
+        });
+
+        parse.unwrap()
     }
 }
 
