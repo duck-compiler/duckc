@@ -243,7 +243,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 }
 
 impl TypeExpr {
-    pub fn to_go_type_str(&self, type_env: &mut TypeEnv) -> String {
+    pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Bool => "bool".to_string(),
@@ -253,31 +253,31 @@ impl TypeExpr {
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeName(name) => {
-                (type_env.resolve_type_alias(name.clone())).to_go_type_str(type_env)
+                (type_env.resolve_type_alias(name.clone())).as_go_type_annotation(type_env)
             }
             TypeExpr::Fun(params, return_type) => format!(
                 "func({}) {}",
                 params
                     .iter()
                     .map(|(name, type_expr)| match name {
-                        Some(name) => format!("{name}: {}", type_expr.to_go_type_str(type_env)),
-                        None => type_expr.to_go_type_str(type_env),
+                        Some(name) => format!("{name}: {}", type_expr.as_go_type_annotation(type_env)),
+                        None => type_expr.as_go_type_annotation(type_env),
                     })
                     .collect::<Vec<_>>()
                     .join(","),
                 return_type
                     .clone()
                     .map_or("".to_string(), |return_type| return_type
-                        .to_go_type_str(type_env))
+                        .as_go_type_annotation(type_env))
             ),
             TypeExpr::Struct(r#struct) => format!(
-                "Struct{}",
+                "struct {{\n{}\n}}",
                 r#struct
                     .fields
                     .iter()
                     .map(|(field_name, type_expr)| format!(
                         "{field_name}_{}",
-                        (*type_expr).to_go_type_str(type_env)
+                        (*type_expr).as_go_type_annotation(type_env)
                     ))
                     .collect::<Vec<_>>()
                     .join("_")
@@ -287,12 +287,12 @@ impl TypeExpr {
                 fields.sort_by_key(|(field_name, _)| field_name.clone());
 
                 format!(
-                    "Duck{}",
+                    "interface {{\n{}\n}}",
                     fields
                         .iter()
                         .map(|(field_name, type_expr)| format!(
                             "{field_name}_{}",
-                            type_expr.to_go_type_str(type_env)
+                            type_expr.as_go_type_annotation(type_env)
                         ))
                         .collect::<Vec<_>>()
                         .join("_")
@@ -300,10 +300,10 @@ impl TypeExpr {
             }
             TypeExpr::Tuple(fields) => {
                 format!(
-                    "Tuple{}",
+                    "struct {{\n{}\n}}",
                     fields
                         .iter()
-                        .map(|type_expr| format!("{}", type_expr.to_go_type_str(type_env)))
+                        .map(|type_expr| format!("{}", type_expr.as_go_type_annotation(type_env)))
                         .collect::<Vec<_>>()
                         .join("_")
                 )
@@ -376,8 +376,8 @@ impl TypeExpr {
                     left_type_expr.is_number(),
                     format!(
                         "Addition '+' is only allowed for numbers. You've used {} + {}.",
-                        left_type_expr.to_go_type_str(type_env),
-                        right_type_expr.to_go_type_str(type_env)
+                        left_type_expr.as_go_type_annotation(type_env),
+                        right_type_expr.as_go_type_annotation(type_env)
                     ),
                 );
                 check_type_compatability(&left_type_expr, &right_type_expr, type_env);
@@ -400,8 +400,8 @@ impl TypeExpr {
                     left_type_expr.is_number(),
                     format!(
                         "Multiplication '*' is only allowed for numbers. You've used {} + {}.",
-                        left_type_expr.to_go_type_str(type_env),
-                        right_type_expr.to_go_type_str(type_env)
+                        left_type_expr.as_go_type_annotation(type_env),
+                        right_type_expr.as_go_type_annotation(type_env)
                     ),
                 );
                 check_type_compatability(&left_type_expr, &right_type_expr, type_env);
@@ -453,14 +453,14 @@ impl TypeExpr {
                     target_obj_type_expr.is_object_like(),
                     format!(
                         "the target of a field access must be of type duck, struct or tuple. Got {}",
-                        target_obj_type_expr.to_go_type_str(type_env)
+                        target_obj_type_expr.as_go_type_annotation(type_env)
                     ),
                 );
                 require(
                     target_obj_type_expr.has_field_by_name(field_name.clone()),
                     format!(
                         "{} doesn't have a field with name {}",
-                        target_obj_type_expr.to_go_type_str(type_env),
+                        target_obj_type_expr.as_go_type_annotation(type_env),
                         field_name
                     ),
                 );
@@ -557,8 +557,8 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr, type_env: &mut TypeE
         if !two.is_number() {
             println!(
                 "Types {} and {} are not compatible.",
-                one.to_go_type_str(type_env),
-                two.clone().to_go_type_str(type_env)
+                one.as_go_type_annotation(type_env),
+                two.clone().as_go_type_annotation(type_env)
             );
             process::exit(2);
         }
@@ -569,8 +569,8 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr, type_env: &mut TypeE
     if *one != *two {
         println!(
             "Types {} and {} are not compatible.",
-            one.to_go_type_str(type_env),
-            two.to_go_type_str(type_env)
+            one.as_go_type_annotation(type_env),
+            two.as_go_type_annotation(type_env)
         );
         process::exit(2);
     }
@@ -579,7 +579,7 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr, type_env: &mut TypeE
 #[cfg(test)]
 mod test {
     use crate::parse::{
-        function_parser::FunctionDefintion, lexer::lexer, value_parser::value_expr_parser,
+        function_parser::FunctionDefintion, lexer::lexer, source_file_parser::source_file_parser, value_parser::value_expr_parser
     };
     use chumsky::prelude::*;
 
@@ -662,6 +662,48 @@ mod test {
                 &mut type_env,
             );
             assert_eq!(type_expr, expected_type_expr);
+        }
+    }
+
+    #[test]
+    fn test_type_env_resolve() {
+        // the environment always holds the type of main function
+        let src_and_env_check_fun: Vec<(&str, Box<dyn FnOnce(&mut TypeEnv)>)> = vec![
+            ("{ let x: Int = 5; }", Box::new(|type_env: &mut TypeEnv| {
+                assert_eq!(type_env.all_types.len(), 2);
+            })),
+            ("{ let y: { x: { y: Int } } = 4; }", Box::new(|type_env: &mut TypeEnv| {
+                assert_eq!(type_env.all_types.len(), 4);
+            }))
+        ];
+
+        for (src, env_check_fun) in src_and_env_check_fun {
+            let lexer_parse_result = lexer().parse(src);
+            assert_eq!(lexer_parse_result.has_errors(), false, "Couldn't lex {src}");
+            assert_eq!(lexer_parse_result.has_output(), true, "Couldn't lex {src}");
+
+            let Some(tokens) = lexer_parse_result.into_output() else {
+                unreachable!()
+            };
+
+            let value_expr_parse_result = value_expr_parser().parse(tokens.as_slice());
+            assert_eq!(value_expr_parse_result.has_errors(), false, "Couldn't parse value expr {src}");
+            assert_eq!(value_expr_parse_result.has_output(), true, "Couldn't parse value expr {src}");
+
+            let value_expr = value_expr_parse_result.into_output().unwrap();
+            let mut source_file = SourceFile {
+                function_definitions: vec![FunctionDefintion {
+                    name: "main".to_string(),
+                    params: None,
+                    return_type: None,
+                    value_expr: value_expr,
+                }],
+                ..Default::default()
+            };
+
+            let mut type_env = TypeEnv::default();
+            typeresolve_source_file(&mut source_file, &mut type_env);
+            env_check_fun(&mut type_env);
         }
     }
 }

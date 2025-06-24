@@ -11,7 +11,7 @@ impl FunctionDefintion {
         // TODO: remove this as this should be located in the typechecking
         if let Some(params) = &self.params {
             for p in params {
-                p.1.to_go_type_str(type_env);
+                p.1.as_go_type_annotation(type_env);
             }
         }
 

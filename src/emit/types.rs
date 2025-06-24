@@ -13,10 +13,10 @@ impl TypeExpr {
             | TypeExpr::Float
             | TypeExpr::TypeName(..)
             | TypeExpr::Go(..)
-            | TypeExpr::Any => self.to_go_type_str(type_env),
+            | TypeExpr::Any => self.as_go_type_annotation(type_env),
             TypeExpr::Tuple(_types) => [
                 "type".to_string(),
-                self.to_go_type_str(type_env),
+                self.as_go_type_annotation(type_env),
                 "struct".to_string(),
                 "{\n".to_string(),
                 "\n}\n".to_string(),
@@ -24,13 +24,13 @@ impl TypeExpr {
             .join(" "),
             TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => [
                 "type".to_string(),
-                self.to_go_type_str(type_env),
+                self.as_go_type_annotation(type_env),
                 "struct".to_string(),
                 "{\n".to_string(),
                 fields
                     .iter()
                     .map(|(field_name, type_expr)| {
-                        format!("    {} {}", field_name, type_expr.to_go_type_str(type_env))
+                        format!("    {} {}", field_name, type_expr.as_go_type_annotation(type_env))
                     })
                     .collect::<Vec<String>>()
                     .join("\n"),
