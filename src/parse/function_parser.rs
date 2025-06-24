@@ -1,6 +1,6 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
-use crate::parse::Spanned;
+use crate::parse::{value_parser::{Combi, IntoBlock, IntoEmptySpan}, Spanned};
 
 use super::{
     lexer::Token,
@@ -16,7 +16,7 @@ pub struct FunctionDefintion {
     pub name: String,
     pub return_type: Option<TypeExpr>,
     pub params: Option<Vec<Param>>,
-    pub value_expr: ValueExpr,
+    pub value_expr: Spanned<ValueExpr>,
 }
 
 impl Default for FunctionDefintion {
@@ -25,7 +25,7 @@ impl Default for FunctionDefintion {
             name: Default::default(),
             return_type: Default::default(),
             params: Some(Default::default()),
-            value_expr: ValueExpr::Block(vec![ValueExpr::Tuple(vec![])]),
+            value_expr: ValueExpr::Tuple(vec![]).into_empty_span_and_block(),
         }
     }
 }
@@ -34,7 +34,7 @@ impl Default for FunctionDefintion {
 pub struct LambdaFunctionExpr {
     pub params: Vec<Param>,
     pub return_type: Option<TypeExpr>,
-    pub value_expr: ValueExpr,
+    pub value_expr: Spanned<ValueExpr>,
 }
 
 pub fn function_definition_parser<'src, I, M>(
@@ -68,10 +68,10 @@ where
         .then(value_expr_parser(make_input))
         .map(|(((identifier, params), return_type), mut value_expr)| {
             value_expr = match value_expr {
-                ValueExpr::Duck(x) if x.is_empty() => {
-                    ValueExpr::Block(vec![ValueExpr::Tuple(vec![])])
+                (ValueExpr::Duck(x), loc) if x.is_empty() => {
+                    (ValueExpr::Tuple(vec![]), loc).into_block()
                 }
-                x @ ValueExpr::Block(_) => x,
+                x @ (ValueExpr::Block(_), _) => x,
                 _ => panic!("Function must be block"),
             };
             FunctionDefintion {

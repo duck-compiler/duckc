@@ -6,7 +6,7 @@ use crate::{
 
 impl FunctionDefintion {
     pub fn emit(&self, env: EmitEnvironment, type_env: &mut TypeEnv) -> String {
-        let (mut emitted_body, res_name) = emit(self.value_expr.clone(), env.clone(), type_env);
+        let (mut emitted_body, res_name) = emit(self.value_expr.clone().0, env.clone(), type_env);
 
         // TODO: remove this as this should be located in the typechecking
         if let Some(params) = &self.params {

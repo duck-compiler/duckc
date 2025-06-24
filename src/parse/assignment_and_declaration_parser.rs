@@ -1,14 +1,14 @@
-use crate::parse::{type_parser::TypeExpr, value_parser::ValueExpr};
+use crate::parse::{type_parser::TypeExpr, value_parser::ValueExpr, Spanned};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Declaration {
     pub name: String,
     pub type_expr: TypeExpr,
-    pub initializer: Option<ValueExpr>,
+    pub initializer: Option<Spanned<ValueExpr>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assignment {
     pub name: String,
-    pub value_expr: ValueExpr,
+    pub value_expr: Spanned<ValueExpr>,
 }

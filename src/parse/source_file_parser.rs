@@ -3,7 +3,12 @@ use std::{fs::File, path::PathBuf};
 use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::parse::{
-    function_parser::{function_definition_parser, FunctionDefintion}, lexer::{lexer, Token}, make_input, parse_failure, type_parser::{type_definition_parser, TypeDefinition}, use_statement_parser::{use_statement_parser, UseStatement}, Spanned
+    Spanned,
+    function_parser::{FunctionDefintion, function_definition_parser},
+    lexer::{Token, lexer},
+    make_input, parse_failure,
+    type_parser::{TypeDefinition, type_definition_parser},
+    use_statement_parser::{UseStatement, use_statement_parser},
 };
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -198,7 +203,13 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        function_parser::FunctionDefintion, lexer::lexer, make_input, source_file_parser::{source_file_parser, SourceFile}, type_parser::{Duck, TypeDefinition, TypeExpr}, use_statement_parser::{Indicator, UseStatement}, value_parser::ValueExpr
+        function_parser::FunctionDefintion,
+        lexer::lexer,
+        make_input,
+        source_file_parser::{source_file_parser, SourceFile},
+        type_parser::{Duck, TypeDefinition, TypeExpr},
+        use_statement_parser::{Indicator, UseStatement},
+        value_parser::{all_into_empty_range, Combi, IntoBlock, IntoEmptySpan, ValueExpr},
     };
 
     #[test]
@@ -418,14 +429,14 @@ mod tests {
                             function_definitions: vec![
                                 FunctionDefintion {
                                     name: "some_abc_func".into(),
-                                    value_expr: ValueExpr::Block(vec![ValueExpr::String(
-                                        "Hello from module".into(),
-                                    )]),
+                                    value_expr: ValueExpr::String("Hello from module".into())
+                                        .into_empty_span()
+                                        .into_block(),
                                     ..Default::default()
                                 },
                                 FunctionDefintion {
                                     name: "some_xyz_func".into(),
-                                    value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                                    value_expr: ValueExpr::Int(1).into_empty_span().into_block(),
                                     ..Default::default()
                                 },
                             ],
@@ -445,14 +456,13 @@ mod tests {
                                 function_definitions: vec![
                                     FunctionDefintion {
                                         name: "some_abc_func".into(),
-                                        value_expr: ValueExpr::Block(vec![ValueExpr::String(
-                                            "Hello from module".into(),
-                                        )]),
+                                        value_expr: ValueExpr::String("Hello from module".into())
+                                            .into_empty_span_and_block(),
                                         ..Default::default()
                                     },
                                     FunctionDefintion {
                                         name: "some_xyz_func".into(),
-                                        value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                                        value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
                                         ..Default::default()
                                     },
                                 ],
@@ -505,14 +515,13 @@ mod tests {
                                 function_definitions: vec![
                                     FunctionDefintion {
                                         name: "some_abc_func".into(),
-                                        value_expr: ValueExpr::Block(vec![ValueExpr::String(
-                                            "Hello from module".into(),
-                                        )]),
+                                        value_expr: ValueExpr::String("Hello from module".into())
+                                            .into_empty_span_and_block(),
                                         ..Default::default()
                                     },
                                     FunctionDefintion {
                                         name: "some_xyz_func".into(),
-                                        value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                                        value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
                                         ..Default::default()
                                     },
                                 ],
@@ -691,14 +700,12 @@ mod tests {
                     function_definitions: vec![
                         FunctionDefintion {
                             name: "multiple_some_abc_func".into(),
-                            value_expr: ValueExpr::Block(vec![ValueExpr::String(
-                                "Hello from module".into(),
-                            )]),
+                            value_expr: ValueExpr::String("Hello from module".into()).into_empty_span_and_block(),
                             ..Default::default()
                         },
                         FunctionDefintion {
                             name: "multiple_some_xyz_func".into(),
-                            value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                            value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
                             ..Default::default()
                         },
                     ],
@@ -711,14 +718,12 @@ mod tests {
                             function_definitions: vec![
                                 FunctionDefintion {
                                     name: "some_abc_func".into(),
-                                    value_expr: ValueExpr::Block(vec![ValueExpr::String(
-                                        "Hello from module".into(),
-                                    )]),
+                                    value_expr: ValueExpr::String("Hello from module".into()).into_empty_span_and_block(),
                                     ..Default::default()
                                 },
                                 FunctionDefintion {
                                     name: "some_xyz_func".into(),
-                                    value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                                    value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
                                     ..Default::default()
                                 },
                             ],
@@ -733,14 +738,12 @@ mod tests {
                     function_definitions: vec![
                         FunctionDefintion {
                             name: "multiple_some_abc_func".into(),
-                            value_expr: ValueExpr::Block(vec![ValueExpr::String(
-                                "Hello from module".into(),
-                            )]),
+                            value_expr: ValueExpr::String("Hello from module".into()).into_empty_span_and_block(),
                             ..Default::default()
                         },
                         FunctionDefintion {
                             name: "multiple_some_xyz_func".into(),
-                            value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                            value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
                             ..Default::default()
                         },
                         FunctionDefintion {
@@ -766,14 +769,13 @@ mod tests {
                                 function_definitions: vec![
                                     FunctionDefintion {
                                         name: "some_abc_func".into(),
-                                        value_expr: ValueExpr::Block(vec![ValueExpr::String(
-                                            "Hello from module".into(),
-                                        )]),
+                                        value_expr: ValueExpr::String("Hello from module".into())
+                                            .into_empty_span_and_block(),
                                         ..Default::default()
                                     },
                                     FunctionDefintion {
                                         name: "some_xyz_func".into(),
-                                        value_expr: ValueExpr::Block(vec![ValueExpr::Int(1)]),
+                                        value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
                                         ..Default::default()
                                     },
                                 ],
@@ -828,6 +830,12 @@ mod tests {
 
             sort_all(&mut expected);
             sort_all(&mut original);
+
+            let mut original = original.flatten();
+
+            for func in original.function_definitions.iter_mut() {
+                all_into_empty_range(&mut func.value_expr);
+            }
 
             assert_eq!(expected, original.flatten(), "{i}");
         }
