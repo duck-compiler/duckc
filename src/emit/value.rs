@@ -295,10 +295,10 @@ pub fn emit(
                 };
                 let mut res = Vec::new();
                 res.extend(instr);
-                res.push(format!("var {name} {} = {res_var}\n", type_expr.as_go_type_annotation(type_env)));
+                res.push(format!("var {name} {} = {res_var}\n", type_expr.as_go_concrete_annotation(type_env)));
                 (res, Some(name))
             } else {
-                (vec![format!("var {name} {}\n", type_expr.as_go_type_annotation(type_env))], Some(name))
+                (vec![format!("var {name} {}\n", type_expr.as_go_concrete_annotation(type_env))], Some(name))
             }
         }
         ValueExpr::VarAssign(b) => {
