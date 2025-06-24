@@ -96,6 +96,7 @@ impl TypeEnv {
     }
 }
 
+
 pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut TypeEnv) {
     type_env.push_type_aliases();
 
