@@ -308,7 +308,7 @@ impl TypeExpr {
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::{lexer::lexer, type_parser::type_expression_parser};
+    use crate::parse::{lexer::lexer, make_input, type_parser::type_expression_parser};
     use chumsky::prelude::*;
 
     #[test]
@@ -335,7 +335,7 @@ mod tests {
 
         for (src, exp) in test_cases {
             let lex = lexer().parse(src).unwrap();
-            let parse = type_expression_parser().parse(&lex).unwrap().emit();
+            let parse = type_expression_parser().parse(make_input((1..10).into(), &lex)).unwrap().emit();
             let exp = (exp.0.to_string(), exp.1.to_string());
             assert_eq!(parse, exp, "{src}");
         }

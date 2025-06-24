@@ -1,4 +1,5 @@
 use chumsky::Parser;
+use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
 use super::lexer::Token;
@@ -50,7 +51,11 @@ pub enum TypeExpr {
 
 impl TypeExpr {}
 
-pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeExpr> + Clone {
+pub fn type_expression_parser<'src, I>()
+-> impl Parser<'src, I, TypeExpr, extra::Err<Rich<'src, Token>>> + Clone
+where
+    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
+{
     recursive(|p| {
         let field = select_ref! { Token::Ident(identifier) => identifier.to_string() }
             .then_ignore(just(Token::ControlChar(':')))
@@ -68,7 +73,7 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
             .allow_trailing()
             .collect::<Vec<(String, TypeExpr)>>();
 
-        let go_type_identifier: impl Parser<'src, &'src [Token], String> =
+        let go_type_identifier: impl Parser<'src, I, String, extra::Err<Rich<'src, Token>>> =
             select_ref! { Token::Ident(identifier) => identifier.to_string() }
                 .separated_by(just(Token::ControlChar('.')))
                 .at_least(1)
@@ -133,11 +138,15 @@ pub fn type_expression_parser<'src>() -> impl Parser<'src, &'src [Token], TypeEx
                 }
             });
 
-        go_type.or(type_name).or(r#struct).or(duck).or(tuple)
+        choice((go_type, type_name, r#struct, duck, tuple))
     })
 }
 
-pub fn type_definition_parser<'src>() -> impl Parser<'src, &'src [Token], TypeDefinition> + Clone {
+pub fn type_definition_parser<'src, I>()
+-> impl Parser<'src, I, TypeDefinition, extra::Err<Rich<'src, Token>>> + Clone
+where
+    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
+{
     just(Token::Type)
         .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
         .then_ignore(just(Token::ControlChar('=')))
@@ -151,7 +160,7 @@ pub fn type_definition_parser<'src>() -> impl Parser<'src, &'src [Token], TypeDe
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::lexer::lexer;
+    use crate::parse::{lexer::lexer, make_input};
     use chumsky::Parser;
 
     use super::*;
@@ -186,7 +195,8 @@ pub mod tests {
             };
 
             println!("typedef_parsing {valid_type_definition}");
-            let typedef_parse_result = type_definition_parser().parse(tokens.as_slice());
+            let typedef_parse_result =
+                type_definition_parser().parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -220,7 +230,8 @@ pub mod tests {
             };
 
             println!("typedef_parsing {valid_type_expression}");
-            let typedef_parse_result = type_expression_parser().parse(tokens.as_slice());
+            let typedef_parse_result =
+                type_expression_parser().parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -251,7 +262,8 @@ pub mod tests {
             };
 
             println!("typedef_parsing {invalid_type_expression}");
-            let typedef_parse_result = type_expression_parser().parse(tokens.as_slice());
+            let typedef_parse_result =
+                type_expression_parser().parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), true);
             assert_eq!(typedef_parse_result.has_output(), false);
         }

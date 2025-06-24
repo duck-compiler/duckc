@@ -1,14 +1,19 @@
 #![feature(let_chains)]
 #![feature(impl_trait_in_bindings)]
+#![allow(warnings)]
 
 use std::{error::Error, ffi::OsString, io::Write, path::PathBuf, process::Command};
 
+use ariadne::{Color, Config, IndexType, Label, Report, ReportKind, Source};
 use chumsky::Parser;
 use parse::lexer::lexer;
 use semantics::typechecker::{self, TypeEnv};
 use tempfile::Builder;
 
-use crate::parse::{source_file_parser::source_file_parser, use_statement_parser::UseStatement};
+use crate::parse::{
+    failure, make_input, parse_failure, source_file_parser::source_file_parser,
+    use_statement_parser::UseStatement, value_parser::value_expr_parser,
+};
 
 pub mod emit;
 pub mod parse;
@@ -16,7 +21,24 @@ pub mod semantics;
 
 use emit::value::{EmitEnvironment, GoImport};
 
+fn test_error_messages() {
+    let src = "if (1";
+
+    let out = lexer().parse(src).into_result().unwrap();
+    let (out, errors) = value_expr_parser(make_input)
+        .parse(make_input((0..src.len()).into(), &out))
+        .into_output_errors();
+
+    errors.into_iter().for_each(|e| {
+        parse_failure("test.duck", &e, src);
+    });
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
+    if false {
+        test_error_messages();
+        return Ok(());
+    }
     let mut keep_go = false;
     let mut custom_out_name = None::<String>;
     let mut file_name = None::<String>;
@@ -45,17 +67,31 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let target_path = file_name.expect("No file name provided");
-    let mut p = PathBuf::from(target_path);
+    let p = PathBuf::from(&target_path);
     let src = std::fs::read_to_string(&p).expect("Could not read file");
-    let lex = lexer().parse(&src).into_result().expect("Lex error");
-    let mut source_file = source_file_parser({
-        p.pop();
-        p.clone()
-    })
-    .parse(&lex)
-    .into_result()
-    .expect("Parse error")
-    .flatten();
+    let (lex, lex_errors) = lexer().parse(&src).into_output_errors();
+    lex_errors.into_iter().for_each(|e| {
+        parse_failure(&target_path, &e, &src);
+    });
+
+    let lex = lex.unwrap();
+
+    let (src_file, parse_errors) = source_file_parser(
+        {
+            let mut p = p.clone();
+            p.pop();
+            p
+        },
+        make_input,
+    )
+    .parse(make_input((0..src.len()).into(), &lex))
+    .into_output_errors();
+
+    parse_errors.into_iter().for_each(|e| {
+        parse_failure(&target_path, &e, &src);
+    });
+
+    let mut source_file = src_file.unwrap();
 
     let mut type_env = TypeEnv::default();
     typechecker::typeresolve_source_file(&mut source_file, &mut type_env);
@@ -86,7 +122,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut tmp_file = Builder::new()
         .rand_bytes(0)
-        .prefix(p.file_name().expect("file name").to_str().expect("file name"))
+        .prefix(p.file_name().expect("didnt provide file name").to_str().expect("not valid utf 8"))
         .suffix(".go")
         .tempfile_in(".")
         .expect("Could not create tempfile");

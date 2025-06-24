@@ -1,17 +1,19 @@
 use crate::parse::{
+    Spanned,
     assignment_and_declaration_parser::{Assignment, Declaration},
     function_parser::{LambdaFunctionExpr, Param},
+    make_input,
     type_parser::type_expression_parser,
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
-use chumsky::prelude::*;
+use chumsky::{input::BorrowInput, prelude::*};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueExpr {
     FunctionCall {
-        target: Box<ValueExpr>,
-        params: Vec<ValueExpr>,
+        target: Box<Spanned<ValueExpr>>,
+        params: Vec<Spanned<ValueExpr>>,
     },
     Int(i64),
     String(String),
@@ -20,40 +22,70 @@ pub enum ValueExpr {
     Char(char),
     Variable(String, Option<TypeExpr>),
     If {
-        condition: Box<ValueExpr>,
-        then: Box<ValueExpr>,
-        r#else: Box<ValueExpr>,
+        condition: Box<Spanned<ValueExpr>>,
+        then: Box<Spanned<ValueExpr>>,
+        r#else: Option<Box<Spanned<ValueExpr>>>,
     },
     While {
-        condition: Box<ValueExpr>,
-        body: Box<ValueExpr>,
+        condition: Box<Spanned<ValueExpr>>,
+        body: Box<Spanned<ValueExpr>>,
     },
-    Tuple(Vec<ValueExpr>),
-    Block(Vec<ValueExpr>),
+    Tuple(Vec<Spanned<ValueExpr>>),
+    Block(Vec<Spanned<ValueExpr>>),
     Break,
     Continue,
-    Duck(Vec<(String, ValueExpr)>),
-    Struct(Vec<(String, ValueExpr)>),
+    Duck(Vec<(String, Spanned<ValueExpr>)>),
+    Struct(Vec<(String, Spanned<ValueExpr>)>),
     FieldAccess {
-        target_obj: Box<ValueExpr>,
+        target_obj: Box<Spanned<ValueExpr>>,
         field_name: String,
     },
-    Return(Option<Box<ValueExpr>>),
-    VarAssign(Box<Assignment>),
-    VarDecl(Box<Declaration>),
-    Add(Box<ValueExpr>, Box<ValueExpr>),
-    Mul(Box<ValueExpr>, Box<ValueExpr>),
-    BoolNegate(Box<ValueExpr>),
-    Equals(Box<ValueExpr>, Box<ValueExpr>),
+    Return(Option<Box<Spanned<ValueExpr>>>),
+    VarAssign(Box<Spanned<Assignment>>),
+    VarDecl(Box<Spanned<Declaration>>),
+    Add(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
+    Mul(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
+    BoolNegate(Box<Spanned<ValueExpr>>),
+    Equals(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
     InlineGo(String),
     Lambda(Box<LambdaFunctionExpr>),
 }
 
-impl ValueExpr {
-    pub fn into_block(self) -> ValueExpr {
-        ValueExpr::Block(vec![self])
-    }
+pub trait IntoEmptySpan {
+    fn into_empty_span(self) -> Spanned<ValueExpr>;
+}
 
+impl IntoEmptySpan for ValueExpr {
+    fn into_empty_span(self) -> Spanned<ValueExpr> {
+        (self, (0..1).into())
+    }
+}
+
+pub trait IntoBlock {
+    fn into_block(self) -> Spanned<ValueExpr>;
+}
+
+impl IntoBlock for Spanned<ValueExpr> {
+    fn into_block(self) -> Spanned<ValueExpr> {
+        let cl = self.1.clone();
+        (ValueExpr::Block(vec![self]), cl)
+    }
+}
+
+pub trait Combi {
+    fn into_empty_span_and_block(self) -> Spanned<ValueExpr>;
+}
+
+impl<T> Combi for T
+where
+    T: IntoEmptySpan,
+{
+    fn into_empty_span_and_block(self) -> Spanned<ValueExpr> {
+        self.into_empty_span().into_block()
+    }
+}
+
+impl ValueExpr {
     pub fn needs_semicolon(&self) -> bool {
         match self {
             ValueExpr::If {
@@ -72,319 +104,410 @@ impl ValueExpr {
     }
 }
 
-pub fn value_expr_parser<'src>() -> impl Parser<'src, &'src [Token], ValueExpr> + Clone {
-    recursive(|value_expr_parser| {
-        let lambda_parser = {
-            let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
-                .then_ignore(just(Token::ControlChar(':')))
-                .then(type_expression_parser())
-                .map(|(identifier, type_expr)| (identifier, type_expr) as Param);
+pub fn value_expr_parser<'src, I, M>(
+    make_input: M,
+) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token>>> + Clone
+where
+    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
+    M: Fn(SimpleSpan, &'src [Spanned<Token>]) -> I + Clone + 'src,
+{
+    recursive(
+        |value_expr_parser: Recursive<
+            dyn Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token>>>,
+        >| {
+            let lambda_parser = {
+                let param_parser =
+                    select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                        .then_ignore(just(Token::ControlChar(':')))
+                        .then(type_expression_parser())
+                        .map(|(identifier, type_expr)| (identifier, type_expr) as Param)
+                        .boxed();
 
-            let params_parser = param_parser
+                let params_parser = param_parser
+                    .separated_by(just(Token::ControlChar(',')))
+                    .allow_trailing()
+                    .collect::<Vec<Param>>()
+                    .or_not()
+                    .boxed();
+
+                let return_type_parser = just(Token::ControlChar('-'))
+                    .ignore_then(just(Token::ControlChar('>')))
+                    .ignore_then(type_expression_parser())
+                    .boxed();
+
+                just(Token::ControlChar('('))
+                    .ignore_then(params_parser)
+                    .then_ignore(just(Token::ControlChar(')')))
+                    .then(return_type_parser.or_not())
+                    .then_ignore(just(Token::ControlChar('=')))
+                    .then_ignore(just(Token::ControlChar('>')))
+                    .then(value_expr_parser.clone())
+                    .map(|((params, return_type), value_expr)| {
+                        ValueExpr::Lambda(
+                            LambdaFunctionExpr {
+                                params: params.unwrap_or_default(),
+                                return_type,
+                                value_expr,
+                            }
+                            .into(),
+                        )
+                    })
+                    .boxed()
+            };
+
+            let params = value_expr_parser
+                .clone()
                 .separated_by(just(Token::ControlChar(',')))
                 .allow_trailing()
-                .collect::<Vec<Param>>()
-                .or_not();
+                .collect::<Vec<_>>()
+                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                .boxed();
 
-            let return_type_parser = just(Token::ControlChar('-'))
-                .ignore_then(just(Token::ControlChar('>')))
-                .ignore_then(type_expression_parser());
+            let tuple = lambda_parser
+                .clone()
+                .or((just(Token::ControlChar('('))
+                    .ignore_then(just(Token::ControlChar(')')))
+                    .to(ValueExpr::Tuple(vec![])))
+                .or(value_expr_parser
+                    .clone()
+                    .separated_by(just(Token::ControlChar(',')))
+                    .at_least(1)
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                    .map(|x| ValueExpr::Tuple(x))))
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
 
-            just(Token::ControlChar('('))
-                .ignore_then(params_parser)
-                .then_ignore(just(Token::ControlChar(')')))
-                .then(return_type_parser.or_not())
-                .then_ignore(just(Token::ControlChar('=')))
-                .then_ignore(just(Token::ControlChar('>')))
-                .then(value_expr_parser.clone())
-                .map(|((params, return_type), value_expr)| {
-                    ValueExpr::Lambda(
-                        LambdaFunctionExpr {
-                            params: params.unwrap_or_default(),
-                            return_type,
-                            value_expr,
-                        }
-                        .into(),
+            let initializer = just(Token::ControlChar('='))
+                .ignore_then(value_expr_parser.clone())
+                .or_not()
+                .boxed();
+
+            let declaration = just(Token::Let)
+                .ignore_then(
+                    select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                        .map_with(|x, e| (x, e.span())),
+                )
+                .then_ignore(just(Token::ControlChar(':')))
+                .then(type_expression_parser())
+                .then(initializer)
+                .map(|(((ident, ident_span), type_expr), initializer)| {
+                    ValueExpr::VarDecl(
+                        (
+                            Declaration {
+                                name: ident,
+                                type_expr,
+                                initializer: initializer.clone(),
+                            },
+                            initializer.map(|x| x.1).unwrap_or(ident_span),
+                        )
+                            .into(),
                     )
                 })
-        };
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
 
-        let params = value_expr_parser
-            .clone()
-            .separated_by(just(Token::ControlChar(',')))
-            .allow_trailing()
-            .collect::<Vec<_>>()
-            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')));
-
-        let tuple = lambda_parser.clone().or((just(Token::ControlChar('('))
-            .ignore_then(just(Token::ControlChar(')')))
-            .to(ValueExpr::Tuple(vec![])))
-        .or(value_expr_parser
-            .clone()
-            .separated_by(just(Token::ControlChar(',')))
-            .at_least(1)
-            .allow_trailing()
-            .collect::<Vec<_>>()
-            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-            .map(|x| ValueExpr::Tuple(x))));
-
-        let initializer = just(Token::ControlChar('='))
-            .ignore_then(value_expr_parser.clone())
-            .or_not();
-
-        let declaration = just(Token::Let)
-            .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
-            .then_ignore(just(Token::ControlChar(':')))
-            .then(type_expression_parser())
-            .then(initializer)
-            .map(|((identifier, type_expr), initializer)| {
-                ValueExpr::VarDecl(
-                    Declaration {
-                        name: identifier,
-                        type_expr,
-                        initializer,
-                    }
-                    .into(),
+            let struct_expression = just(Token::ControlChar('.'))
+                .ignore_then(
+                    select_ref! { Token::Ident(ident) => ident.to_owned() }
+                        .then_ignore(just(Token::ControlChar(':')))
+                        .then(value_expr_parser.clone())
+                        .separated_by(just(Token::ControlChar(',')))
+                        .allow_trailing()
+                        .collect::<Vec<_>>()
+                        .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
+                        .map(ValueExpr::Struct),
                 )
-            });
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
 
-        let struct_expression = just(Token::ControlChar('.')).ignore_then(
-            select_ref! { Token::Ident(ident) => ident.to_owned() }
+            let duck_expression = select_ref! { Token::Ident(ident) => ident.to_owned() }
                 .then_ignore(just(Token::ControlChar(':')))
                 .then(value_expr_parser.clone())
                 .separated_by(just(Token::ControlChar(',')))
                 .allow_trailing()
                 .collect::<Vec<_>>()
                 .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
-                .map(ValueExpr::Struct),
-        );
+                .map(|mut x| {
+                    x.sort_by_key(|(name, _)| name.clone());
+                    ValueExpr::Duck(x)
+                })
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
 
-        let duck_expression = select_ref! { Token::Ident(ident) => ident.to_owned() }
-            .then_ignore(just(Token::ControlChar(':')))
-            .then(value_expr_parser.clone())
-            .separated_by(just(Token::ControlChar(',')))
-            .allow_trailing()
-            .collect::<Vec<_>>()
-            .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
-            .map(|mut x| {
-                x.sort_by_key(|(name, _)| name.clone());
-                ValueExpr::Duck(x)
-            });
-
-        let block_expression = value_expr_parser
-            .clone()
-            .then(just(Token::ControlChar(';')).or_not())
-            .repeated()
-            .collect::<Vec<_>>()
-            .map_err(|error| {
-                dbg!(error);
-                todo!()
-            })
-            .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
-            .map(|mut exprs| {
-                if exprs.len() >= 2 {
-                    for (expr, has_semi) in &exprs[..exprs.len() - 1] {
-                        if expr.needs_semicolon() && has_semi.is_none() {
-                            panic!("needs_semi")
+            let block_expression = value_expr_parser
+                .clone()
+                .then(just(Token::ControlChar(';')).or_not())
+                .repeated()
+                .collect::<Vec<_>>()
+                .map_err(|error| {
+                    dbg!(error);
+                    todo!()
+                })
+                .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
+                .map(|mut exprs| {
+                    if exprs.len() >= 2 {
+                        for (expr, has_semi) in &exprs[..exprs.len() - 1] {
+                            if expr.0.needs_semicolon() && has_semi.is_none() {
+                                panic!("needs_semi")
+                            }
                         }
                     }
-                }
 
-                if exprs.is_empty() || exprs.last().unwrap().1.is_some() {
-                    exprs.push((empty_tuple(), None));
-                }
+                    if exprs.is_empty() || exprs.last().unwrap().1.is_some() {
+                        exprs.push((empty_tuple().into_empty_span(), None));
+                    }
 
-                ValueExpr::Block(exprs.into_iter().map(|(expr, _)| expr).collect())
-            });
+                    ValueExpr::Block(exprs.into_iter().map(|(expr, _)| expr).collect())
+                        .into_empty_span()
+                })
+                .boxed();
 
-        let if_condition = value_expr_parser
-            .clone()
-            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')));
-        let if_body = block_expression.clone();
-        let if_with_condition_and_body = just(Token::If)
-            .ignore_then(if_condition.clone())
-            .then(if_body.clone());
+            let if_condition = value_expr_parser
+                .clone()
+                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                .boxed();
+            let if_body = block_expression.clone();
+            let if_with_condition_and_body = just(Token::If)
+                .ignore_then(if_condition.clone())
+                .then(if_body.clone())
+                .boxed();
 
-        let while_condition = if_condition.clone();
-        let while_body = block_expression.clone();
-        let while_with_condition_and_body = just(Token::While)
-            .ignore_then(while_condition.clone())
-            .then(while_body.clone());
+            let while_condition = if_condition.clone();
+            let while_body = block_expression.clone();
+            let while_with_condition_and_body = just(Token::While)
+                .ignore_then(while_condition.clone())
+                .then(while_body.clone())
+                .boxed();
 
-        let field_access = none_of(Token::Let)
-            .filter(|t| !matches!(t, Token::ControlChar('.')))
-            .repeated()
-            .at_least(1)
-            .collect::<Vec<_>>()
-            .then(
-                (just(Token::ControlChar('.')).ignore_then(
-                    select_ref! { Token::Ident(field_name) => field_name.to_owned() }
-                        .or(select_ref! { Token::IntLiteral(i) => i.to_string() }),
-                ))
+            let field_access = any_ref()
+                .filter(|t| !matches!(t, Token::ControlChar('.')))
                 .repeated()
                 .at_least(1)
-                .collect::<Vec<_>>(),
-            )
-            .map({
-                let e = value_expr_parser.clone();
-                move |(base_expr, field_accesses)| {
-                    let base_expr = base_expr.leak() as &[Token];
-                    let base = e.parse(base_expr).unwrap();
-                    field_accesses
-                        .into_iter()
-                        .fold(base, |acc, x| ValueExpr::FieldAccess {
-                            target_obj: acc.into(),
-                            field_name: x,
-                        })
-                }
-            });
-
-        let int = select_ref! { Token::IntLiteral(i) => *i }.map(ValueExpr::Int);
-        let bool_val = select_ref! { Token::BoolLiteral(b) => *b }.map(ValueExpr::Bool);
-        let string_val =
-            select_ref! { Token::StringLiteral(s) => s.to_owned() }.map(ValueExpr::String);
-        let var_expr = select_ref! { Token::Ident(ident) => ident.to_owned() }
-            .map(|ident| ValueExpr::Variable(ident, None));
-        let if_expr = if_with_condition_and_body
-            .clone()
-            .then(
-                just(Token::Else)
-                    .ignore_then(if_with_condition_and_body.clone())
+                .collect::<Vec<_>>()
+                .then(
+                    (just(Token::ControlChar('.')).ignore_then(
+                        select_ref! { Token::Ident(field_name) => field_name.to_owned() }
+                            .or(select_ref! { Token::IntLiteral(i) => i.to_string() }),
+                    ))
                     .repeated()
-                    .collect::<Vec<(ValueExpr, ValueExpr)>>(),
-            )
-            .then_ignore(just(Token::Else))
-            .then(if_body.clone())
-            .map(|(((condition, then), else_ifs), r#else)| ValueExpr::If {
-                condition: Box::new(condition),
-                then: Box::new(then),
-                r#else: else_ifs
-                    .into_iter()
-                    .rfold(Box::new(r#else), |acc, (cond, then)| {
-                        Box::new(ValueExpr::If {
-                            condition: Box::new(cond),
-                            then: Box::new(then),
-                            r#else: acc,
-                        })
-                    }),
-            });
-        let char_expr = select_ref! { Token::CharLiteral(c) => *c }.map(ValueExpr::Char);
-        let float_expr = select_ref! { Token::FloatLiteral(num) => *num }.map(ValueExpr::Float);
-
-        let atom = just(Token::ControlChar('!'))
-            .repeated()
-            .collect::<Vec<_>>()
-            .then(
-                field_access.clone().or(value_expr_parser
-                    .clone()
-                    .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-                    .or(choice((
-                        field_access.clone(),
-                        int,
-                        bool_val,
-                        string_val,
-                        var_expr,
-                        if_expr,
-                        char_expr,
-                        float_expr,
-                        tuple,
-                        duck_expression,
-                        struct_expression,
-                        block_expression,
-                        just(Token::Break).to(ValueExpr::Break),
-                        just(Token::Continue).to(ValueExpr::Continue),
-                        while_with_condition_and_body.clone().map(|(cond, body)| {
-                            ValueExpr::While {
-                                condition: Box::new(cond),
-                                body: Box::new(body),
-                            }
-                        }),
-                    )))),
-            )
-            .then(params.clone().or_not())
-            .map(|((neg, target), params)| {
-                let res = if let Some(params) = params {
-                    ValueExpr::FunctionCall {
-                        target: target.into(),
-                        params,
-                    }
-                } else {
-                    target
-                };
-
-                neg.into_iter()
-                    .fold(res, |acc, _| ValueExpr::BoolNegate(acc.into()))
-            });
-
-        let assignment = select_ref! { Token::Ident(identifier) => identifier.to_string() }
-            .then_ignore(just(Token::ControlChar('=')))
-            .then(value_expr_parser.clone())
-            .map(|(identifier, value_expr)| {
-                ValueExpr::VarAssign(
-                    Assignment {
-                        name: identifier,
-                        value_expr,
-                    }
-                    .into(),
+                    .at_least(1)
+                    .collect::<Vec<_>>(),
                 )
-            });
+                .map({
+                    let e = value_expr_parser.clone();
+                    move |(base_expr, field_accesses)| {
+                        let base_expr = base_expr
+                            .clone()
+                            .into_iter()
+                            .map(|x| {
+                                (x.to_owned(), SimpleSpan::from(0_usize..10_usize))
+                                    as Spanned<Token>
+                            })
+                            .collect::<Vec<_>>()
+                            .leak() as &[Spanned<Token>];
 
-        let prod = atom
-            .clone()
-            .then(
-                just(Token::ControlChar('*'))
-                    .ignore_then(atom.clone())
-                    .repeated()
-                    .collect::<Vec<_>>(),
-            )
-            .map(|(init, additional)| {
-                additional
-                    .into_iter()
-                    .fold(init, |acc, x| ValueExpr::Mul(acc.into(), x.into()))
-            });
+                        let base = e.parse(make_input((1..10).into(), base_expr)).unwrap();
 
-        let add = prod
-            .clone()
-            .then(
-                just(Token::ControlChar('+'))
-                    .ignore_then(prod.clone())
-                    .repeated()
-                    .collect::<Vec<_>>(),
-            )
-            .map(|(init, additional)| {
-                additional
-                    .into_iter()
-                    .fold(init, |acc, x| ValueExpr::Add(acc.into(), x.into()))
-            });
+                        field_accesses.into_iter().fold(base, |acc, x| {
+                            (
+                                ValueExpr::FieldAccess {
+                                    target_obj: acc.clone().into(),
+                                    field_name: x,
+                                },
+                                acc.1,
+                            )
+                        })
+                    }
+                })
+                .boxed();
 
-        let equals = add
-            .clone()
-            .then_ignore(just(Token::Equals))
-            .then(add.clone())
-            .map(|(x, y)| ValueExpr::Equals(x.into(), y.into()));
+            let int = select_ref! { Token::IntLiteral(i) => *i }
+                .map(ValueExpr::Int)
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
+            let bool_val = select_ref! { Token::BoolLiteral(b) => *b }
+                .map(ValueExpr::Bool)
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
+            let string_val = select_ref! { Token::StringLiteral(s) => s.to_owned() }
+                .map(ValueExpr::String)
+                .map(IntoEmptySpan::into_empty_span);
+            let var_expr = select_ref! { Token::Ident(ident) => ident.to_owned() }
+                .map(|ident| ValueExpr::Variable(ident, None))
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
+            let if_expr = if_with_condition_and_body
+                .clone()
+                .then(
+                    just(Token::Else)
+                        .ignore_then(if_with_condition_and_body.clone())
+                        .repeated()
+                        .collect::<Vec<(Spanned<ValueExpr>, Spanned<ValueExpr>)>>(),
+                )
+                .then(just(Token::Else).ignore_then(if_body.clone()).or_not())
+                .map(|(((condition, then), else_ifs), r#else)| ValueExpr::If {
+                    condition: Box::new(condition),
+                    then: Box::new(then),
+                    r#else: else_ifs.into_iter().rfold(
+                        r#else.map(Box::new),
+                        |acc, (cond, then)| {
+                            Some(Box::new(
+                                ValueExpr::If {
+                                    condition: Box::new(cond),
+                                    then: Box::new(then),
+                                    r#else: Some(acc.unwrap()),
+                                }
+                                .into_empty_span(),
+                            ))
+                        },
+                    ),
+                })
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
+            let char_expr = select_ref! { Token::CharLiteral(c) => *c }
+                .map(ValueExpr::Char)
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
+            let float_expr = select_ref! { Token::FloatLiteral(num) => *num }
+                .map(ValueExpr::Float)
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
 
-        // let equals = add.clone()
-        //     .then(just(Token::Equals).ignore_then(add.clone()).repeated().at_least(1).collect::<Vec<_>>())
-        //     .map(|(init, additional)| {
-        //         additional
-        //             .into_iter()
-        //             .fold(init, |acc, x| ValueExpr::Equals(acc.into(), x.into()))
-        //     });
+            let atom = just(Token::ControlChar('!'))
+                .repeated()
+                .collect::<Vec<_>>()
+                .then(
+                    field_access.clone().or(value_expr_parser
+                        .clone()
+                        .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                        .or(choice((
+                            field_access.clone(),
+                            int,
+                            bool_val,
+                            string_val,
+                            var_expr,
+                            if_expr,
+                            char_expr,
+                            float_expr,
+                            tuple,
+                            duck_expression,
+                            struct_expression,
+                            block_expression,
+                            just(Token::Break)
+                                .to(ValueExpr::Break)
+                                .map(IntoEmptySpan::into_empty_span),
+                            just(Token::Continue)
+                                .to(ValueExpr::Continue)
+                                .map(IntoEmptySpan::into_empty_span),
+                            while_with_condition_and_body.clone().map(|(cond, body)| {
+                                ValueExpr::While {
+                                    condition: Box::new(cond),
+                                    body: Box::new(body),
+                                }
+                                .into_empty_span()
+                            }),
+                        )))),
+                )
+                .then(params.clone().or_not())
+                .map(|((neg, target), params)| {
+                    let res = if let Some(params) = params {
+                        ValueExpr::FunctionCall {
+                            target: target.into(),
+                            params,
+                        }
+                    } else {
+                        target.0
+                    };
 
-        let inline_go = select_ref! { Token::InlineGo(x) => x.to_owned() }.map(ValueExpr::InlineGo);
+                    neg.into_iter().fold(res, |acc, _| {
+                        ValueExpr::BoolNegate(acc.into_empty_span().into()).into()
+                    })
+                })
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
 
-        choice((
-            inline_go,
-            assignment,
-            equals,
-            add,
-            declaration,
-            just(Token::Return)
-                .ignore_then(value_expr_parser.clone().or_not())
-                .map(|x: Option<ValueExpr>| ValueExpr::Return(x.map(Box::new))),
-            atom,
-        ))
-    })
+            let assignment = select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                .then_ignore(just(Token::ControlChar('=')))
+                .then(value_expr_parser.clone())
+                .map(|(identifier, value_expr)| {
+                    ValueExpr::VarAssign(
+                        (
+                            Assignment {
+                                name: identifier,
+                                value_expr,
+                            },
+                            (0..1).into(),
+                        )
+                            .into(),
+                    )
+                })
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
+
+            //
+
+            let prod = atom
+                .clone()
+                .then(
+                    just(Token::ControlChar('*'))
+                        .ignore_then(atom.clone())
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(init, additional)| {
+                    additional.into_iter().fold(init, |acc, x| {
+                        ValueExpr::Mul(acc.into(), x.into()).into_empty_span()
+                    })
+                })
+                .boxed();
+
+            let add = prod
+                .clone()
+                .then(
+                    just(Token::ControlChar('+'))
+                        .ignore_then(prod.clone())
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(init, additional)| {
+                    additional.into_iter().fold(init, |acc, x| {
+                        ValueExpr::Add(acc.into(), x.into()).into_empty_span()
+                    })
+                })
+                .boxed();
+
+            let equals = add
+                .clone()
+                .then_ignore(just(Token::Equals))
+                .then(add.clone())
+                .map(|(x, y)| ValueExpr::Equals(x.into(), y.into()))
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
+
+            let inline_go = select_ref! { Token::InlineGo(x) => x.to_owned() }
+                .map(ValueExpr::InlineGo)
+                .map(IntoEmptySpan::into_empty_span)
+                .boxed();
+
+            choice((
+                inline_go,
+                assignment,
+                equals,
+                add,
+                declaration,
+                just(Token::Return)
+                    .ignore_then(value_expr_parser.clone().or_not())
+                    .map(|x: Option<Spanned<ValueExpr>>| {
+                        ValueExpr::Return(x.map(Box::new)).into_empty_span()
+                    }),
+                atom,
+            ))
+            .labelled("expression")
+            .boxed()
+        },
+    )
 }
 
 fn empty_tuple() -> ValueExpr {
@@ -396,22 +519,114 @@ fn empty_duck() -> ValueExpr {
     ValueExpr::Duck(Vec::new())
 }
 
+pub fn empty_range() -> SimpleSpan {
+    (0..1).into()
+}
+
+pub fn all_into_empty_range(v: &mut Spanned<ValueExpr>) {
+    v.1 = empty_range();
+    match &mut v.0 {
+        ValueExpr::FunctionCall { target, params } => {
+            all_into_empty_range(target);
+            for p in params {
+                all_into_empty_range(p);
+            }
+        }
+        ValueExpr::Add(v1, v2) => {
+            all_into_empty_range(v1);
+            all_into_empty_range(v2);
+        }
+        ValueExpr::If {
+            condition,
+            then,
+            r#else,
+        } => {
+            all_into_empty_range(condition);
+            all_into_empty_range(then);
+            if let Some(r#else) = r#else {
+                all_into_empty_range(r#else);
+            }
+        }
+        ValueExpr::Mul(v1, v2) => {
+            all_into_empty_range(v1);
+            all_into_empty_range(v2);
+        }
+        ValueExpr::Duck(fields) => {
+            for field in fields {
+                all_into_empty_range(&mut field.1);
+            }
+        }
+        ValueExpr::Block(exprs) => {
+            for expr in exprs {
+                all_into_empty_range(expr);
+            }
+        }
+        ValueExpr::Tuple(fields) => {
+            for field in fields {
+                all_into_empty_range(field);
+            }
+        }
+        ValueExpr::Equals(v1, v2) => {
+            all_into_empty_range(v1);
+            all_into_empty_range(v2);
+        }
+        ValueExpr::Lambda(b) => {
+            all_into_empty_range(&mut b.value_expr);
+        }
+        ValueExpr::Return(v) => {
+            if let Some(v) = v {
+                all_into_empty_range(v);
+            }
+        }
+        ValueExpr::Struct(fields) => {
+            for field in fields {
+                all_into_empty_range(&mut field.1);
+            }
+        }
+        ValueExpr::While { condition, body } => {
+            all_into_empty_range(condition);
+            all_into_empty_range(body);
+        }
+        ValueExpr::VarDecl(b) => {
+            b.1 = empty_range();
+            if let Some(init) = &mut b.0.initializer {
+                all_into_empty_range(init);
+            }
+        }
+        ValueExpr::BoolNegate(b) => all_into_empty_range(b),
+        ValueExpr::FieldAccess {
+            target_obj,
+            field_name,
+        } => {
+            all_into_empty_range(target_obj);
+        }
+        ValueExpr::FunctionCall { target, params } => {
+            all_into_empty_range(target);
+            for p in params {
+                all_into_empty_range(p);
+            }
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use chumsky::Parser;
+    use chumsky::{Parser, span::SimpleSpan};
 
-    use crate::parse::{
-        assignment_and_declaration_parser::Declaration,
-        function_parser::LambdaFunctionExpr,
-        lexer::lexer,
-        type_parser::{Duck, Field, TypeExpr},
-        value_parser::{empty_duck, empty_tuple, value_expr_parser},
+    use crate::{
+        emit::value::emit,
+        parse::{
+            assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr, lexer::lexer, make_input, type_parser::{Duck, Field, TypeExpr}, value_parser::{
+                all_into_empty_range, empty_duck, empty_tuple, value_expr_parser, Combi, IntoEmptySpan
+            }, Spanned
+        },
     };
 
     use super::ValueExpr;
 
-    fn var(x: impl Into<String>) -> Box<ValueExpr> {
-        ValueExpr::Variable(x.into(), None).into()
+    fn var(x: impl Into<String>) -> Box<Spanned<ValueExpr>> {
+        ValueExpr::Variable(x.into(), None).into_empty_span().into()
     }
 
     #[test]
@@ -421,15 +636,19 @@ mod tests {
             ("false", ValueExpr::Bool(false)),
             (
                 ".{ x: 5 }",
-                ValueExpr::Struct(vec![("x".to_string(), ValueExpr::Int(5))]),
+                ValueExpr::Struct(vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())]),
             ),
             (
                 ".{ x: 5, y: .{ x: 5 } }",
                 ValueExpr::Struct(vec![
-                    ("x".to_string(), ValueExpr::Int(5)),
+                    ("x".to_string(), ValueExpr::Int(5).into_empty_span()),
                     (
                         "y".to_string(),
-                        ValueExpr::Struct(vec![("x".to_string(), ValueExpr::Int(5))]),
+                        ValueExpr::Struct(vec![(
+                            "x".to_string(),
+                            ValueExpr::Int(5).into_empty_span(),
+                        )])
+                        .into_empty_span(),
                     ),
                 ]),
             ),
@@ -445,14 +664,14 @@ mod tests {
                 "to_upper(1)",
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
-                    params: vec![ValueExpr::Int(1)],
+                    params: vec![ValueExpr::Int(1).into_empty_span()],
                 },
             ),
             (
                 "to_upper(1,)",
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
-                    params: vec![ValueExpr::Int(1)],
+                    params: vec![ValueExpr::Int(1).into_empty_span()],
                 },
             ),
             (
@@ -466,14 +685,14 @@ mod tests {
                 "to_upper (1)",
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
-                    params: vec![ValueExpr::Int(1)],
+                    params: vec![ValueExpr::Int(1).into_empty_span()],
                 },
             ),
             (
                 "to_upper (1,)",
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
-                    params: vec![ValueExpr::Int(1)],
+                    params: vec![ValueExpr::Int(1).into_empty_span()],
                 },
             ),
             (
@@ -487,14 +706,14 @@ mod tests {
                 "to_upper ( 1 )",
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
-                    params: vec![ValueExpr::Int(1)],
+                    params: vec![ValueExpr::Int(1).into_empty_span()],
                 },
             ),
             (
                 "to_upper ( 1  ,  )",
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
-                    params: vec![ValueExpr::Int(1)],
+                    params: vec![ValueExpr::Int(1).into_empty_span()],
                 },
             ),
             (
@@ -505,16 +724,21 @@ mod tests {
                         ValueExpr::FunctionCall {
                             target: var("to_lower"),
                             params: vec![
-                                ValueExpr::Int(1),
-                                ValueExpr::Int(2),
+                                ValueExpr::Int(1).into_empty_span(),
+                                ValueExpr::Int(2).into_empty_span(),
                                 ValueExpr::FunctionCall {
                                     target: var("add"),
-                                    params: vec![ValueExpr::Int(5), ValueExpr::Int(10)],
-                                },
-                                ValueExpr::Int(4),
+                                    params: vec![
+                                        ValueExpr::Int(5).into_empty_span(),
+                                        ValueExpr::Int(10).into_empty_span(),
+                                    ],
+                                }
+                                .into_empty_span(),
+                                ValueExpr::Int(4).into_empty_span(),
                             ],
-                        },
-                        ValueExpr::Bool(true),
+                        }
+                        .into_empty_span(),
+                        ValueExpr::Bool(true).into_empty_span(),
                     ],
                 },
             ),
@@ -523,8 +747,8 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("print"),
                     params: vec![
-                        ValueExpr::String("hallo".into()),
-                        ValueExpr::String("moin".into()),
+                        ValueExpr::String("hallo".into()).into_empty_span(),
+                        ValueExpr::String("moin".into()).into_empty_span(),
                     ],
                 },
             ),
@@ -534,74 +758,86 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("print"),
                     params: vec![
-                        ValueExpr::Variable("x".into(), None),
-                        ValueExpr::Bool(true),
+                        ValueExpr::Variable("x".into(), None).into_empty_span(),
+                        ValueExpr::Bool(true).into_empty_span(),
                         ValueExpr::FunctionCall {
                             target: var("lol"),
                             params: vec![],
-                        },
+                        }
+                        .into_empty_span(),
                     ],
                 },
             ),
             (
                 "if (true) { 1 } else { 2 }",
                 ValueExpr::If {
-                    condition: ValueExpr::Bool(true).into(),
-                    then: ValueExpr::Int(1).into_block().into(),
-                    r#else: ValueExpr::Int(2).into_block().into(),
+                    condition: ValueExpr::Bool(true).into_empty_span().into(),
+                    then: ValueExpr::Int(1).into_empty_span_and_block().into(),
+                    r#else: Some(ValueExpr::Int(2).into_empty_span_and_block().into()),
                 },
             ),
             (
                 "if (true) { 1 } else if (false) { 3 } else if (200) { 4 } else { 2 }",
                 ValueExpr::If {
-                    condition: ValueExpr::Bool(true).into(),
-                    then: ValueExpr::Int(1).into_block().into(),
-                    r#else: ValueExpr::If {
-                        condition: ValueExpr::Bool(false).into(),
-                        then: ValueExpr::Int(3).into_block().into(),
-                        r#else: ValueExpr::If {
-                            condition: ValueExpr::Int(200).into(),
-                            then: ValueExpr::Int(4).into_block().into(),
-                            r#else: ValueExpr::Int(2).into_block().into(),
+                    condition: ValueExpr::Bool(true).into_empty_span().into(),
+                    then: ValueExpr::Int(1).into_empty_span_and_block().into(),
+                    r#else: Some(
+                        ValueExpr::If {
+                            condition: ValueExpr::Bool(false).into_empty_span().into(),
+                            then: ValueExpr::Int(3).into_empty_span_and_block().into(),
+                            r#else: Some(
+                                ValueExpr::If {
+                                    condition: ValueExpr::Int(200).into_empty_span().into(),
+                                    then: ValueExpr::Int(4).into_empty_span_and_block().into(),
+                                    r#else: Some(ValueExpr::Int(2).into_empty_span_and_block().into()),
+                                }
+                                .into_empty_span()
+                                .into(),
+                            ),
                         }
+                        .into_empty_span()
                         .into(),
-                    }
-                    .into(),
+                    ),
                 },
             ),
             (
                 "(1,true,2,\"hallo\")",
                 ValueExpr::Tuple(vec![
-                    ValueExpr::Int(1),
-                    ValueExpr::Bool(true),
-                    ValueExpr::Int(2),
-                    ValueExpr::String("hallo".into()),
+                    ValueExpr::Int(1).into_empty_span(),
+                    ValueExpr::Bool(true).into_empty_span(),
+                    ValueExpr::Int(2).into_empty_span(),
+                    ValueExpr::String("hallo".into()).into_empty_span(),
                 ]),
             ),
             ("{}", empty_duck()),
-            ("{1}", ValueExpr::Int(1).into_block()),
+            (
+                "{1}",
+                ValueExpr::Block(vec![ValueExpr::Int(1).into_empty_span()]),
+            ),
             (
                 "{1;  2   ;3;x()}",
                 ValueExpr::Block(vec![
-                    ValueExpr::Int(1),
-                    ValueExpr::Int(2),
-                    ValueExpr::Int(3),
+                    ValueExpr::Int(1).into_empty_span(),
+                    ValueExpr::Int(2).into_empty_span(),
+                    ValueExpr::Int(3).into_empty_span(),
                     ValueExpr::FunctionCall {
                         target: var("x"),
                         params: vec![],
-                    },
+                    }
+                    .into_empty_span(),
                 ]),
             ),
             (
                 "{1;  2   ;3;x({})}",
                 ValueExpr::Block(vec![
-                    ValueExpr::Int(1),
-                    ValueExpr::Int(2),
-                    ValueExpr::Int(3),
+                    ValueExpr::Int(1).into_empty_span(),
+                    ValueExpr::Int(2).into_empty_span(),
+                    ValueExpr::Int(3).into_empty_span(),
                     ValueExpr::FunctionCall {
                         target: var("x"),
-                        params: vec![empty_duck()],
-                    },
+                        params: vec![empty_duck().into_empty_span()],
+                    }
+                    .into_empty_span(),
                 ]),
             ),
             (
@@ -610,12 +846,14 @@ mod tests {
                     ValueExpr::FunctionCall {
                         target: var("x"),
                         params: vec![],
-                    },
+                    }
+                    .into_empty_span(),
                     ValueExpr::FunctionCall {
                         target: var("y"),
                         params: vec![],
-                    },
-                    empty_tuple(),
+                    }
+                    .into_empty_span(),
+                    empty_tuple().into_empty_span(),
                 ]),
             ),
             (
@@ -624,28 +862,34 @@ mod tests {
                     target: var("x"),
                     params: vec![
                         ValueExpr::Block(vec![
-                            ValueExpr::Int(1),
-                            ValueExpr::Int(2),
+                            ValueExpr::Int(1).into_empty_span(),
+                            ValueExpr::Int(2).into_empty_span(),
                             ValueExpr::FunctionCall {
                                 target: var("y"),
-                                params: vec![ValueExpr::Block(vec![
-                                    ValueExpr::FunctionCall {
-                                        target: var("z"),
-                                        params: vec![],
-                                    },
-                                    empty_tuple(),
-                                ])],
-                            },
-                        ]),
-                        ValueExpr::Variable("lol".into(), None),
+                                params: vec![
+                                    ValueExpr::Block(vec![
+                                        ValueExpr::FunctionCall {
+                                            target: var("z"),
+                                            params: vec![],
+                                        }
+                                        .into_empty_span(),
+                                        empty_tuple().into_empty_span(),
+                                    ])
+                                    .into_empty_span(),
+                                ],
+                            }
+                            .into_empty_span(),
+                        ])
+                        .into_empty_span(),
+                        ValueExpr::Variable("lol".into(), None).into_empty_span(),
                     ],
                 },
             ),
             (
                 "while (true) {}",
                 ValueExpr::While {
-                    condition: ValueExpr::Bool(true).into(),
-                    body: empty_tuple().into_block().into(),
+                    condition: ValueExpr::Bool(true).into_empty_span().into(),
+                    body: empty_tuple().into_empty_span_and_block().into(),
                 },
             ),
             (
@@ -655,8 +899,9 @@ mod tests {
                         target: var("my_func"),
                         params: vec![],
                     }
+                    .into_empty_span()
                     .into(),
-                    body: empty_tuple().into_block().into(),
+                    body: empty_tuple().into_empty_span_and_block().into(),
                 },
             ),
             (
@@ -666,12 +911,14 @@ mod tests {
                         target: var("my_func"),
                         params: vec![],
                     }
+                    .into_empty_span()
                     .into(),
                     body: ValueExpr::Block(vec![
-                        ValueExpr::Int(1),
-                        ValueExpr::Break,
-                        empty_tuple(),
+                        ValueExpr::Int(1).into_empty_span(),
+                        ValueExpr::Break.into_empty_span(),
+                        empty_tuple().into_empty_span(),
                     ])
+                    .into_empty_span()
                     .into(),
                 },
             ),
@@ -682,34 +929,43 @@ mod tests {
                         target: var("my_func"),
                         params: vec![],
                     }
+                    .into_empty_span()
                     .into(),
                     body: ValueExpr::Block(vec![
-                        ValueExpr::Int(1),
-                        ValueExpr::Continue,
-                        empty_tuple(),
+                        ValueExpr::Int(1).into_empty_span(),
+                        ValueExpr::Continue.into_empty_span(),
+                        empty_tuple().into_empty_span(),
                     ])
+                    .into_empty_span()
                     .into(),
                 },
             ),
             ("()", empty_tuple()),
             (
                 "(1.1, 'x')",
-                ValueExpr::Tuple(vec![ValueExpr::Float(1.1), ValueExpr::Char('x')]),
+                ValueExpr::Tuple(vec![
+                    ValueExpr::Float(1.1).into_empty_span(),
+                    ValueExpr::Char('x').into_empty_span(),
+                ]),
             ),
             (
                 "{x: 1, y: { z: true }}",
                 ValueExpr::Duck(vec![
-                    ("x".into(), ValueExpr::Int(1)),
+                    ("x".into(), ValueExpr::Int(1).into_empty_span()),
                     (
                         "y".into(),
-                        ValueExpr::Duck(vec![("z".into(), ValueExpr::Bool(true))]),
+                        ValueExpr::Duck(vec![(
+                            "z".into(),
+                            ValueExpr::Bool(true).into_empty_span(),
+                        )])
+                        .into_empty_span(),
                     ),
                 ]),
             ),
             (
                 "{x: 1, y: { z: true, w: { print();2;true } }}",
                 ValueExpr::Duck(vec![
-                    ("x".into(), ValueExpr::Int(1)),
+                    ("x".into(), ValueExpr::Int(1).into_empty_span()),
                     (
                         "y".into(),
                         ValueExpr::Duck(vec![
@@ -719,37 +975,49 @@ mod tests {
                                     ValueExpr::FunctionCall {
                                         target: var("print"),
                                         params: vec![],
-                                    },
-                                    ValueExpr::Int(2),
-                                    ValueExpr::Bool(true),
-                                ]),
+                                    }
+                                    .into_empty_span(),
+                                    ValueExpr::Int(2).into_empty_span(),
+                                    ValueExpr::Bool(true).into_empty_span(),
+                                ])
+                                .into_empty_span(),
                             ),
-                            ("z".into(), ValueExpr::Bool(true)),
-                        ]),
+                            ("z".into(), ValueExpr::Bool(true).into_empty_span()),
+                        ])
+                        .into_empty_span(),
                     ),
                 ]),
             ),
             (
                 "if (true) {{}} else {{x: 1}}",
                 ValueExpr::If {
-                    condition: ValueExpr::Bool(true).into(),
-                    then: ValueExpr::Duck(vec![]).into_block().into(),
-                    r#else: ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(1))])
-                        .into_block()
-                        .into(),
+                    condition: ValueExpr::Bool(true).into_empty_span().into(),
+                    then: ValueExpr::Duck(vec![]).into_empty_span_and_block().into(),
+                    r#else: Some(
+                        ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(1).into_empty_span())])
+                            .into_empty_span_and_block()
+                            .into(),
+                    ),
                 },
             ),
             (
                 "x.y",
                 ValueExpr::FieldAccess {
-                    target_obj: ValueExpr::Variable("x".into(), None).into(),
+                    target_obj: ValueExpr::Variable("x".into(), None)
+                        .into_empty_span()
+                        .into(),
                     field_name: "y".into(),
                 },
             ),
             (
                 "{x: 123}.y",
                 ValueExpr::FieldAccess {
-                    target_obj: ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(123))]).into(),
+                    target_obj: ValueExpr::Duck(vec![(
+                        "x".into(),
+                        ValueExpr::Int(123).into_empty_span(),
+                    )])
+                    .into_empty_span()
+                    .into(),
                     field_name: "y".into(),
                 },
             ),
@@ -760,6 +1028,7 @@ mod tests {
                         target: var("x"),
                         params: vec![],
                     }
+                    .into_empty_span()
                     .into(),
                     field_name: "y".into(),
                 },
@@ -781,14 +1050,14 @@ mod tests {
             (
                 "(1)()",
                 ValueExpr::FunctionCall {
-                    target: ValueExpr::Int(1).into(),
+                    target: ValueExpr::Int(1).into_empty_span().into(),
                     params: vec![],
                 },
             ),
             (
                 "(123)()",
                 ValueExpr::FunctionCall {
-                    target: ValueExpr::Int(123).into(),
+                    target: ValueExpr::Int(123).into_empty_span().into(),
                     params: vec![],
                 },
             ),
@@ -799,6 +1068,7 @@ mod tests {
                         target: var("returns_lambda"),
                         params: vec![],
                     }
+                    .into_empty_span()
                     .into(),
                     params: vec![],
                 },
@@ -811,9 +1081,11 @@ mod tests {
                             target_obj: var("x"),
                             field_name: "y".into(),
                         }
+                        .into_empty_span()
                         .into(),
                         field_name: "z".into(),
                     }
+                    .into_empty_span()
                     .into(),
                     field_name: "w".into(),
                 },
@@ -824,8 +1096,13 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("x"),
                     params: vec![
-                        ValueExpr::Block(vec![empty_tuple(), empty_tuple(), empty_tuple()]),
-                        ValueExpr::Int(1),
+                        ValueExpr::Block(vec![
+                            empty_tuple().into_empty_span(),
+                            empty_tuple().into_empty_span(),
+                            empty_tuple().into_empty_span(),
+                        ])
+                        .into_empty_span(),
+                        ValueExpr::Int(1).into_empty_span(),
                     ],
                 },
             ),
@@ -835,27 +1112,36 @@ mod tests {
                     target: var("x"),
                     params: vec![
                         ValueExpr::Block(vec![
-                            empty_tuple(),
-                            ValueExpr::Block(vec![empty_tuple(), ValueExpr::Int(1), empty_tuple()]),
-                            empty_tuple(),
-                        ]),
-                        ValueExpr::Int(1),
+                            empty_tuple().into_empty_span(),
+                            ValueExpr::Block(vec![
+                                empty_tuple().into_empty_span(),
+                                ValueExpr::Int(1).into_empty_span(),
+                                empty_tuple().into_empty_span(),
+                            ])
+                            .into_empty_span(),
+                            empty_tuple().into_empty_span(),
+                        ])
+                        .into_empty_span(),
+                        ValueExpr::Int(1).into_empty_span(),
                     ],
                 },
             ),
             (
                 "return 123",
-                ValueExpr::Return(Some(Box::new(ValueExpr::Int(123).into()))),
+                ValueExpr::Return(Some(Box::new(ValueExpr::Int(123).into_empty_span().into()))),
             ),
             (
                 "let x: String",
                 ValueExpr::VarDecl(
-                    Declaration {
-                        name: "x".into(),
-                        initializer: None,
-                        type_expr: TypeExpr::String,
-                    }
-                    .into(),
+                    (
+                        Declaration {
+                            name: "x".into(),
+                            initializer: None,
+                            type_expr: TypeExpr::String,
+                        },
+                        (0..1).into(),
+                    )
+                        .into(),
                 ),
             ),
             (
@@ -865,27 +1151,40 @@ mod tests {
                         target: var("x"),
                         params: vec![],
                     }
+                    .into_empty_span()
                     .into(),
                     ValueExpr::FunctionCall {
                         target: var("y"),
                         params: vec![],
                     }
+                    .into_empty_span()
                     .into(),
                 ),
             ),
             (
                 "3 * 5",
-                ValueExpr::Mul(ValueExpr::Int(3).into(), ValueExpr::Int(5).into()),
+                ValueExpr::Mul(
+                    ValueExpr::Int(3).into_empty_span().into(),
+                    ValueExpr::Int(5).into_empty_span().into(),
+                ),
             ),
             (
                 "3 + 5",
-                ValueExpr::Add(ValueExpr::Int(3).into(), ValueExpr::Int(5).into()),
+                ValueExpr::Add(
+                    ValueExpr::Int(3).into_empty_span().into(),
+                    ValueExpr::Int(5).into_empty_span().into(),
+                ),
             ),
             (
                 "3 * 5 * 6",
                 ValueExpr::Mul(
-                    ValueExpr::Mul(ValueExpr::Int(3).into(), ValueExpr::Int(5).into()).into(),
-                    ValueExpr::Int(6).into(),
+                    ValueExpr::Mul(
+                        ValueExpr::Int(3).into_empty_span().into(),
+                        ValueExpr::Int(5).into_empty_span().into(),
+                    )
+                    .into_empty_span()
+                    .into(),
+                    ValueExpr::Int(6).into_empty_span().into(),
                 ),
             ),
             (
@@ -896,22 +1195,28 @@ mod tests {
                             target: var("x"),
                             params: vec![],
                         }
+                        .into_empty_span()
                         .into(),
-                        ValueExpr::Int(5).into(),
+                        ValueExpr::Int(5).into_empty_span().into(),
                     )
+                    .into_empty_span()
                     .into(),
-                    ValueExpr::Int(6).into(),
+                    ValueExpr::Int(6).into_empty_span().into(),
                 ),
             ),
-            ("!true", ValueExpr::BoolNegate(ValueExpr::Bool(true).into())),
+            (
+                "!true",
+                ValueExpr::BoolNegate(ValueExpr::Bool(true).into_empty_span().into()),
+            ),
             (
                 "!{1;2;true}",
                 ValueExpr::BoolNegate(
                     ValueExpr::Block(vec![
-                        ValueExpr::Int(1),
-                        ValueExpr::Int(2),
-                        ValueExpr::Bool(true),
+                        ValueExpr::Int(1).into_empty_span(),
+                        ValueExpr::Int(2).into_empty_span(),
+                        ValueExpr::Bool(true).into_empty_span(),
                     ])
+                    .into_empty_span()
                     .into(),
                 ),
             ),
@@ -922,6 +1227,7 @@ mod tests {
                         target: var("x"),
                         params: vec![],
                     }
+                    .into_empty_span()
                     .into(),
                 ),
             ),
@@ -933,8 +1239,10 @@ mod tests {
                             target: var("x"),
                             params: vec![],
                         }
+                        .into_empty_span()
                         .into(),
                     )
+                    .into_empty_span()
                     .into(),
                 ),
             ),
@@ -944,14 +1252,19 @@ mod tests {
                     ValueExpr::BoolNegate(
                         ValueExpr::FieldAccess {
                             target_obj: ValueExpr::FieldAccess {
-                                target_obj: ValueExpr::Variable("x".into(), None).into(),
+                                target_obj: ValueExpr::Variable("x".into(), None)
+                                    .into_empty_span()
+                                    .into(),
                                 field_name: "y".into(),
                             }
+                            .into_empty_span()
                             .into(),
                             field_name: "z".into(),
                         }
+                        .into_empty_span()
                         .into(),
                     )
+                    .into_empty_span()
                     .into(),
                 ),
             ),
@@ -960,12 +1273,16 @@ mod tests {
                 ValueExpr::BoolNegate(
                     ValueExpr::FieldAccess {
                         target_obj: ValueExpr::FieldAccess {
-                            target_obj: ValueExpr::Variable("x".into(), None).into(),
+                            target_obj: ValueExpr::Variable("x".into(), None)
+                                .into_empty_span()
+                                .into(),
                             field_name: "y".into(),
                         }
+                        .into_empty_span()
                         .into(),
                         field_name: "z".into(),
                     }
+                    .into_empty_span()
                     .into(),
                 ),
             ),
@@ -976,29 +1293,43 @@ mod tests {
                         target: var("x"),
                         params: vec![],
                     }
+                    .into_empty_span()
                     .into(),
                     ValueExpr::FunctionCall {
                         target: var("y"),
                         params: vec![],
                     }
+                    .into_empty_span()
                     .into(),
                 ),
             ),
             (
                 "1 == 2",
-                ValueExpr::Equals(ValueExpr::Int(1).into(), ValueExpr::Int(2).into()),
+                ValueExpr::Equals(
+                    ValueExpr::Int(1).into_empty_span().into(),
+                    ValueExpr::Int(2).into_empty_span().into(),
+                ),
             ),
             (
                 "!(1 == 2)",
                 ValueExpr::BoolNegate(
-                    ValueExpr::Equals(ValueExpr::Int(1).into(), ValueExpr::Int(2).into()).into(),
+                    ValueExpr::Equals(
+                        ValueExpr::Int(1).into_empty_span().into(),
+                        ValueExpr::Int(2).into_empty_span().into(),
+                    )
+                    .into_empty_span()
+                    .into(),
                 ),
             ),
             (
                 "!1 == !2",
                 ValueExpr::Equals(
-                    ValueExpr::BoolNegate(ValueExpr::Int(1).into()).into(),
-                    ValueExpr::BoolNegate(ValueExpr::Int(2).into()).into(),
+                    ValueExpr::BoolNegate(ValueExpr::Int(1).into_empty_span().into())
+                        .into_empty_span()
+                        .into(),
+                    ValueExpr::BoolNegate(ValueExpr::Int(2).into_empty_span().into())
+                        .into_empty_span()
+                        .into(),
                 ),
             ),
             ("go {}", ValueExpr::InlineGo(String::new())),
@@ -1012,7 +1343,7 @@ mod tests {
                     LambdaFunctionExpr {
                         params: vec![],
                         return_type: None,
-                        value_expr: ValueExpr::Duck(vec![]),
+                        value_expr: ValueExpr::Duck(vec![]).into_empty_span(),
                     }
                     .into(),
                 ),
@@ -1023,7 +1354,7 @@ mod tests {
                     LambdaFunctionExpr {
                         params: vec![],
                         return_type: None,
-                        value_expr: ValueExpr::Int(1),
+                        value_expr: ValueExpr::Int(1).into_empty_span(),
                     }
                     .into(),
                 ),
@@ -1034,7 +1365,7 @@ mod tests {
                     LambdaFunctionExpr {
                         params: vec![],
                         return_type: Some(TypeExpr::Int),
-                        value_expr: ValueExpr::Int(1),
+                        value_expr: ValueExpr::Int(1).into_empty_span(),
                     }
                     .into(),
                 ),
@@ -1045,7 +1376,7 @@ mod tests {
                     LambdaFunctionExpr {
                         params: vec![("x".into(), TypeExpr::String)],
                         return_type: Some(TypeExpr::Int),
-                        value_expr: ValueExpr::Int(1),
+                        value_expr: ValueExpr::Int(1).into_empty_span(),
                     }
                     .into(),
                 ),
@@ -1053,7 +1384,12 @@ mod tests {
             (
                 "{x: 1}.x",
                 ValueExpr::FieldAccess {
-                    target_obj: ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(1))]).into(),
+                    target_obj: ValueExpr::Duck(vec![(
+                        "x".into(),
+                        ValueExpr::Int(1).into_empty_span(),
+                    )])
+                    .into_empty_span()
+                    .into(),
                     field_name: "x".into(),
                 },
             ),
@@ -1061,26 +1397,33 @@ mod tests {
                 "(1,(3,4),\"s\").0",
                 ValueExpr::FieldAccess {
                     target_obj: ValueExpr::Tuple(vec![
-                        ValueExpr::Int(1),
-                        ValueExpr::Tuple(vec![ValueExpr::Int(3), ValueExpr::Int(4)]),
-                        ValueExpr::String("s".into()),
+                        ValueExpr::Int(1).into_empty_span(),
+                        ValueExpr::Tuple(vec![
+                            ValueExpr::Int(3).into_empty_span(),
+                            ValueExpr::Int(4).into_empty_span(),
+                        ])
+                        .into_empty_span(),
+                        ValueExpr::String("s".into()).into_empty_span(),
                     ])
+                    .into_empty_span()
                     .into(),
                     field_name: "0".into(),
                 },
             ),
         ];
 
-        for (src, expected_tokens) in test_cases {
+        for (i, (src, expected_tokens)) in test_cases.into_iter().enumerate() {
             let lex_result = lexer().parse(src).into_result().expect(&src);
-            let parse_result = value_expr_parser().parse(&lex_result);
+            let parse_result =
+                value_expr_parser(make_input).parse(make_input((0..src.len()).into(), &lex_result));
 
-            assert_eq!(parse_result.has_errors(), false, "{}", src);
-            assert_eq!(parse_result.has_output(), true, "{}", src);
+            assert_eq!(parse_result.has_errors(), false, "{i}: {}", src);
+            assert_eq!(parse_result.has_output(), true, "{i}: {}", src);
 
-            let output: ValueExpr = parse_result.into_result().expect(&src);
+            let mut output = parse_result.into_result().expect(&src);
+            all_into_empty_range(&mut output);
 
-            assert_eq!(output, expected_tokens, "{}", src);
+            assert_eq!(output.0, expected_tokens, "{i}: {}", src);
         }
     }
 
@@ -1102,7 +1445,7 @@ mod tests {
                     type_expr: TypeExpr::Duck(Duck {
                         fields: vec![Field::new("x".to_string(), TypeExpr::Int)],
                     }),
-                    initializer: Some(ValueExpr::Duck(vec![])),
+                    initializer: Some(ValueExpr::Duck(vec![]).into_empty_span()),
                 },
             ),
             (
@@ -1124,16 +1467,17 @@ mod tests {
                 unreachable!()
             };
 
-            let declaration_parse_result = value_expr_parser().parse(tokens.as_slice());
+            let declaration_parse_result =
+                value_expr_parser(make_input).parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(declaration_parse_result.has_errors(), false);
             assert_eq!(declaration_parse_result.has_output(), true);
 
-            let Some(ValueExpr::VarDecl(declaration)) = declaration_parse_result.into_output()
+            let Some((ValueExpr::VarDecl(declaration), _)) = declaration_parse_result.into_output()
             else {
                 unreachable!()
             };
 
-            assert_eq!(declaration, expected_output.into());
+            assert_eq!(declaration.0, expected_output.into());
         }
 
         let valid_declarations = vec![
@@ -1161,7 +1505,8 @@ mod tests {
             };
 
             println!("declaration parsing {valid_declaration}");
-            let typedef_parse_result = value_expr_parser().parse(tokens.as_slice());
+            let typedef_parse_result =
+                value_expr_parser(make_input).parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -1174,7 +1519,7 @@ mod tests {
             "{y = 1}",
             "while(true){y = 1}",
             "while(true){y = y + 1}",
-            "{let y: Int = 0; while(true){y = 1;@println(y)}}",
+            "{let y: Int = 0; while(true){y = 1;println(y)}}",
             "x = 580",
             "y = 80",
             "y = true",
@@ -1184,7 +1529,7 @@ mod tests {
 
         for valid_assignment in valid_assignments {
             let lexer_parse_result = lexer().parse(valid_assignment);
-            assert_eq!(lexer_parse_result.has_errors(), false);
+            assert_eq!(lexer_parse_result.has_errors(), false, "{valid_assignment}");
             assert_eq!(lexer_parse_result.has_output(), true);
 
             let Some(tokens) = lexer_parse_result.into_output() else {
@@ -1192,7 +1537,8 @@ mod tests {
             };
 
             println!("typedef_parsing {valid_assignment}");
-            let typedef_parse_result = value_expr_parser().parse(tokens.as_slice());
+            let typedef_parse_result =
+                value_expr_parser(make_input).parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }

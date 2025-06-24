@@ -1,4 +1,6 @@
-use chumsky::prelude::*;
+use chumsky::{input::BorrowInput, prelude::*};
+
+use crate::parse::{value_parser::{Combi, IntoBlock, IntoEmptySpan}, Spanned};
 
 use super::{
     lexer::Token,
@@ -14,7 +16,7 @@ pub struct FunctionDefintion {
     pub name: String,
     pub return_type: Option<TypeExpr>,
     pub params: Option<Vec<Param>>,
-    pub value_expr: ValueExpr,
+    pub value_expr: Spanned<ValueExpr>,
 }
 
 impl Default for FunctionDefintion {
@@ -23,7 +25,7 @@ impl Default for FunctionDefintion {
             name: Default::default(),
             return_type: Default::default(),
             params: Some(Default::default()),
-            value_expr: ValueExpr::Block(vec![ValueExpr::Tuple(vec![])]),
+            value_expr: ValueExpr::Tuple(vec![]).into_empty_span_and_block(),
         }
     }
 }
@@ -32,11 +34,16 @@ impl Default for FunctionDefintion {
 pub struct LambdaFunctionExpr {
     pub params: Vec<Param>,
     pub return_type: Option<TypeExpr>,
-    pub value_expr: ValueExpr,
+    pub value_expr: Spanned<ValueExpr>,
 }
 
-pub fn function_definition_parser<'src>()
--> impl Parser<'src, &'src [Token], FunctionDefintion> + Clone {
+pub fn function_definition_parser<'src, I, M>(
+    make_input: M,
+) -> impl Parser<'src, I, FunctionDefintion, extra::Err<Rich<'src, Token>>> + Clone
+where
+    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
+    M: Fn(SimpleSpan, &'src [Spanned<Token>]) -> I + Clone + 'src,
+{
     let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
         .then_ignore(just(Token::ControlChar(':')))
         .then(type_expression_parser())
@@ -58,13 +65,13 @@ pub fn function_definition_parser<'src>()
         .then(params_parser)
         .then_ignore(just(Token::ControlChar(')')))
         .then(return_type_parser.or_not())
-        .then(value_expr_parser())
+        .then(value_expr_parser(make_input))
         .map(|(((identifier, params), return_type), mut value_expr)| {
             value_expr = match value_expr {
-                ValueExpr::Duck(x) if x.is_empty() => {
-                    ValueExpr::Block(vec![ValueExpr::Tuple(vec![])])
+                (ValueExpr::Duck(x), loc) if x.is_empty() => {
+                    (ValueExpr::Tuple(vec![]), loc).into_block()
                 }
-                x @ ValueExpr::Block(_) => x,
+                x @ (ValueExpr::Block(_), _) => x,
                 _ => panic!("Function must be block"),
             };
             FunctionDefintion {
@@ -78,7 +85,7 @@ pub fn function_definition_parser<'src>()
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::lexer::lexer;
+    use crate::parse::{lexer::lexer, make_input};
 
     use super::*;
 
@@ -105,7 +112,8 @@ pub mod tests {
             };
 
             println!("typedef_parsing {valid_function_definition}");
-            let typedef_parse_result = function_definition_parser().parse(tokens.as_slice());
+            let typedef_parse_result =
+                function_definition_parser(make_input).parse(make_input((1..10).into(), &tokens));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -123,7 +131,8 @@ pub mod tests {
             };
 
             println!("typedef_parsing {invalid_function_definition}");
-            let typedef_parse_result = function_definition_parser().parse(tokens.as_slice());
+            let typedef_parse_result = function_definition_parser(make_input)
+                .parse(make_input((1..10).into(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), true);
             assert_eq!(typedef_parse_result.has_output(), false);
         }
