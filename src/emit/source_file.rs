@@ -28,7 +28,7 @@ impl SourceFile {
             .iter()
             .filter_map(|x| match x {
                 UseStatement::Go(go_mod, alias) => Some(format!(
-                    "{} {go_mod}\n",
+                    "{} \"{go_mod}\"\n",
                     alias.as_ref().map(String::clone).unwrap_or_default()
                 )),
                 _ => None,
