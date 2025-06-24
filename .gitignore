@@ -1,3 +1,4 @@
 /target
 duck_out
 .DS_Store
+duck_gen*.go
