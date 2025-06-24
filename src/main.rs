@@ -50,15 +50,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let lex = lexer().parse(&src).into_result().expect("Lex error");
     let mut source_file = source_file_parser({
         p.pop();
-        p
+        p.clone()
     })
     .parse(&lex)
     .into_result()
     .expect("Parse error")
     .flatten();
-
-    println!("before resolve");
-    source_file = dbg!(source_file);
 
     let mut type_env = TypeEnv::default();
     typechecker::typeresolve_source_file(&mut source_file, &mut type_env);
@@ -88,7 +85,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let out_text = source_file.emit("main".into(), &mut type_env);
 
     let mut tmp_file = Builder::new()
-        .prefix("duck_gen")
+        .rand_bytes(0)
+        .prefix(p.file_name().expect("file name").to_str().expect("file name"))
         .suffix(".go")
         .tempfile_in(".")
         .expect("Could not create tempfile");
