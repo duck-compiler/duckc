@@ -58,11 +58,13 @@ pub fn parse_failure(file_name: &str, err: &Rich<impl fmt::Display>, src: &str) 
 
 pub mod assignment_and_declaration_parser;
 pub mod function_parser;
+pub mod function_parser2;
 pub mod lexer;
 pub mod source_file_parser;
-pub mod statement_parser;
+mod source_file_parser2;
 pub mod type_parser;
 pub mod use_statement_parser;
 pub mod value_parser;
 pub mod val2;
 pub mod type_parser2;
+mod use_statement_parser2;
