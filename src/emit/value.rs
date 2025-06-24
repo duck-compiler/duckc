@@ -2,9 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     parse::{
-        assignment_and_declaration_parser::{Assignment, Declaration},
-        function_parser::LambdaFunctionExpr,
-        value_parser::ValueExpr,
+        assignment_and_declaration_parser::{Assignment, Declaration}, function_parser::LambdaFunctionExpr, type_parser::TypeExpr, value_parser::ValueExpr
     },
     semantics::typechecker::TypeEnv,
 };
@@ -183,7 +181,7 @@ impl EmitEnvironment {
 }
 
 pub fn emit(
-    x: ValueExpr,
+    value_expr: ValueExpr,
     env: EmitEnvironment,
     type_env: &mut TypeEnv,
 ) -> (Vec<String>, Option<String>) {
@@ -200,7 +198,8 @@ pub fn emit(
 
     let no_var = |instr: &str| (vec![instr.to_owned()], None);
 
-    match x {
+    let value_expr_clone = value_expr.clone();
+    match value_expr {
         ValueExpr::Lambda(expr) => {
             let LambdaFunctionExpr {
                 params,
@@ -208,7 +207,7 @@ pub fn emit(
                 value_expr,
             } = *expr;
             for param in &params {
-                param.1.as_go_implementation(type_env);
+                param.1.as_go_type_annotation(type_env);
             }
             let (mut v_instr, res_name) = emit(value_expr, env.clone(), type_env);
             if let Some(res_name) = res_name {
@@ -287,7 +286,7 @@ pub fn emit(
         ValueExpr::VarDecl(b) => {
             let Declaration {
                 name,
-                type_expr: t,
+                type_expr,
                 initializer,
             } = *b;
             if let Some(initializer) = initializer {
@@ -296,10 +295,10 @@ pub fn emit(
                 };
                 let mut res = Vec::new();
                 res.extend(instr);
-                res.push(format!("{name} := {res_var}\n"));
+                res.push(format!("var {name} {} = {res_var}\n", type_expr.as_go_type_annotation(type_env)));
                 (res, Some(name))
             } else {
-                (vec![format!("var {name} {}\n", t.emit().0)], Some(name))
+                (vec![format!("var {name} {}\n", type_expr.as_go_type_annotation(type_env))], Some(name))
             }
         }
         ValueExpr::VarAssign(b) => {
@@ -482,66 +481,28 @@ pub fn emit(
             let mut field_instr = Vec::new();
             let mut field_res = Vec::new();
 
-            let mut type_fields = Vec::new();
-            let mut go_type_name = "Struct".to_string();
-
-            let mut methods = Vec::new();
-
-            for (field_name, field_init) in fields {
+            for (_, field_init) in fields {
                 let (this_field_instr, Some(this_field_res)) =
                     emit(field_init, env.clone(), type_env)
                 else {
                     panic!("No result provided")
                 };
+
                 field_instr.extend(this_field_instr.into_iter());
                 field_res.push(this_field_res);
-                let go_type_name = "interface{}".to_string(); // TODO: resolved type
-                type_fields.push((field_name.clone(), go_type_name.clone()));
-                methods.push(GoMethodDef {
-                    name: format!("Duck_Get{field_name}"),
-                    body: vec![format!("return self.{field_name}")],
-                    params: vec![],
-                    return_type: Some(go_type_name.clone()),
-                });
             }
-
-            for (field_name, field_type) in &type_fields {
-                go_type_name.push_str(&format!(
-                    "_Has{field_name}_{}",
-                    field_type.replace("interface{}", "Any")
-                ));
-            }
-
-            let mut go_interface_name = "Duck".to_string();
-
-            let mut cloned_type_fields = type_fields.clone();
-            cloned_type_fields.sort();
-            for (field_name, field_type) in &type_fields {
-                go_interface_name.push_str(&format!(
-                    "_Has{field_name}_{}",
-                    field_type.replace("interface{}", "Any")
-                ));
-            }
-
-            let go_struct = GoTypeDef::Struct {
-                name: go_type_name.clone(),
-                fields: type_fields,
-                methods: methods.clone(),
-            };
-            let go_interface = GoTypeDef::Interface {
-                name: go_interface_name,
-                methods: methods.clone(),
-            };
-
-            env.push_types([go_struct, go_interface].into_iter());
 
             let res_name = new_var();
 
+            let type_annotation = TypeExpr::from_value_expr(&value_expr_clone, type_env).as_go_type_annotation(type_env);
             field_instr.extend([format!(
-                "{res_name} := {go_type_name}{}{}{}\n",
-                "{",
-                field_res.join(", "),
-                "}"
+                "{res_name} := {} {{\n{}\n}}\n",
+                type_annotation,
+                field_res
+                    .iter()
+                    .map(|field_res| format!("  {field_res}"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
             )]);
 
             (field_instr, Some(res_name))
@@ -550,11 +511,6 @@ pub fn emit(
             let mut field_instr = Vec::new();
             let mut field_res = Vec::new();
 
-            let mut type_fields = Vec::new();
-            let mut go_type_name = "Duck".to_string();
-
-            let mut methods = Vec::new();
-
             for (field_name, field_init) in fields {
                 let (this_field_instr, Some(this_field_res)) =
                     emit(field_init, env.clone(), type_env)
@@ -562,49 +518,20 @@ pub fn emit(
                     panic!("No result provided")
                 };
                 field_instr.extend(this_field_instr.into_iter());
-                field_res.push(this_field_res);
-                let go_type_name = "interface{}".to_string();
-                type_fields.push((field_name.clone(), go_type_name.clone()));
-                // TODO: types
-                methods.push(GoMethodDef {
-                    name: format!("Duck_Get{field_name}"),
-                    body: vec![format!("return self.{field_name}")],
-                    params: vec![],
-                    return_type: Some(go_type_name.clone()),
-                });
+                field_res.push(format!("{field_name}: {this_field_res}"));
             }
-
-            type_fields.sort();
-
-            for (field_name, field_type) in &type_fields {
-                go_type_name.push_str(&format!(
-                    "_Has{field_name}_{}",
-                    field_type.replace("interface{}", "Any")
-                ));
-            }
-
-            let go_interface_name = go_type_name.clone();
-            go_type_name.push_str("_Struct");
-
-            let go_struct = GoTypeDef::Struct {
-                name: go_type_name.clone(),
-                fields: type_fields,
-                methods: methods.clone(),
-            };
-            let go_interface = GoTypeDef::Interface {
-                name: go_interface_name,
-                methods: methods.clone(),
-            };
-
-            env.push_types([go_struct, go_interface].into_iter());
 
             let res_name = new_var();
 
+            let type_annotation = TypeExpr::from_value_expr(&value_expr_clone, type_env).as_go_concrete_annotation(type_env);
             field_instr.extend([format!(
-                "{res_name} := {go_type_name}{}{}{}\n",
-                "{",
-                field_res.join(", "),
-                "}"
+                "{res_name} := {} {{\n{}\n}}\n",
+                type_annotation,
+                field_res
+                    .iter()
+                    .map(|f| format!("    {f},"))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
             )]);
 
             (field_instr, Some(res_name))
@@ -624,7 +551,6 @@ pub fn emit(
                     .map(Clone::clone)
                     .collect::<Vec<_>>();
             }
-            dbg!(&exprs);
 
             let mut instrs = Vec::new();
             let mut res = Vec::new();
