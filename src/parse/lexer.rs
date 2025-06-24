@@ -34,32 +34,55 @@ pub enum Token {
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        let t = match self {
+            Token::Use => "use",
+            Token::Type => "type",
+            Token::Go => "go",
+            Token::Struct => "struct",
+            Token::Duck => "duck",
+            Token::Function => "fun",
+            Token::Return => "return",
+            Token::Ident(_) => "identifier",
+            Token::ControlChar(c) => &format!("{c}"),
+            Token::StringLiteral(s) => &format!("string {s}"),
+            Token::IntLiteral(_) => "int",
+            Token::BoolLiteral(_) => "bool",
+            Token::CharLiteral(_) => "char",
+            Token::FloatLiteral(_) => "float",
+            Token::Equals => "equals",
+            Token::If => "if",
+            Token::Else => "else",
+            Token::Let => "let",
+            Token::While => "while",
+            Token::Break => "break",
+            Token::Continue => "continue",
+            Token::As => "as",
+            Token::InlineGo(_) => "inline go",
+            Token::Module => "module",
+        };
+        write!(f, "{t}")
     }
 }
 
 pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> {
-    let keyword_or_ident = just("@")
-        .or_not()
-        .then(text::ident())
-        .map(|(x, str)| match str {
-            "module" => Token::Module,
-            "use" => Token::Use,
-            "type" => Token::Type,
-            "duck" => Token::Duck,
-            "go" => Token::Go,
-            "struct" => Token::Struct,
-            "fun" => Token::Function,
-            "return" => Token::Return,
-            "let" => Token::Let,
-            "if" => Token::If,
-            "else" => Token::Else,
-            "while" => Token::While,
-            "break" => Token::Break,
-            "continue" => Token::Continue,
-            "as" => Token::As,
-            _ => Token::Ident(format!("{}{str}", x.unwrap_or(""))),
-        });
+    let keyword_or_ident = text::ident().map(|str| match str {
+        "module" => Token::Module,
+        "use" => Token::Use,
+        "type" => Token::Type,
+        "duck" => Token::Duck,
+        "go" => Token::Go,
+        "struct" => Token::Struct,
+        "fun" => Token::Function,
+        "return" => Token::Return,
+        "let" => Token::Let,
+        "if" => Token::If,
+        "else" => Token::Else,
+        "while" => Token::While,
+        "break" => Token::Break,
+        "continue" => Token::Continue,
+        "as" => Token::As,
+        _ => Token::Ident(str.to_string()),
+    });
 
     let ctrl = one_of("!=:{};,&()->.+-*/%").map(Token::ControlChar);
 
@@ -84,7 +107,9 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<R
 
     token
         .map_with(|t, e| (t, e.span()))
-        .padded().repeated().collect::<Vec<Spanned<Token>>>()
+        .padded()
+        .repeated()
+        .collect::<Vec<Spanned<Token>>>()
 }
 
 fn go_text_parser<'src>() -> impl Parser<'src, &'src str, String, extra::Err<Rich<'src, char>>> {

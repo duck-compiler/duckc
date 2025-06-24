@@ -435,6 +435,7 @@ where
                     .map(|x: Option<ValueExpr>| ValueExpr::Return(x.map(Box::new))),
                 atom,
             ))
+            .labelled("expression")
             .boxed()
         },
     )
