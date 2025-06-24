@@ -16,8 +16,14 @@ pub struct TypeEnv {
 
 impl Default for TypeEnv {
     fn default() -> Self {
+        let mut identifier_type_map = HashMap::<String, TypeExpr>::new();
+
+        identifier_type_map.insert("@println".to_string(), TypeExpr::Fun(vec![(None, TypeExpr::String)], None));
+
+        let identifier_types = vec![identifier_type_map];
+
         Self {
-            identifier_types: vec![HashMap::new()],
+            identifier_types,
             type_aliases: vec![HashMap::new()],
             all_types: vec![],
         }
@@ -258,6 +264,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     .for_each(|param| typeresolve_value_expr(param, type_env));
             }
             ValueExpr::Variable(identifier, type_expr_opt) => {
+                println!("try resolving identifier {identifier}");
                 let type_expr = type_env
                     .get_identifier_type(identifier.clone())
                     .expect("Couldn't resolve type of identifier {identifier}");
