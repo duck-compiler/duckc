@@ -103,7 +103,6 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
                 )
             })
             .fold(SourceFile::default(), |mut acc, (i, x)| {
-                dbg!(&x);
                 if i {
                     acc.function_definitions.extend(x.function_definitions);
                     acc.type_definitions.extend(x.type_definitions);
@@ -114,7 +113,7 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
             })
     } else {
         let src_text =
-            std::fs::read_to_string(dbg!(format!("{}.duck", joined.to_str().unwrap()))).unwrap();
+            std::fs::read_to_string(format!("{}.duck", joined.to_str().unwrap())).unwrap();
         let (lex, lex_errors) = lexer().parse(&src_text).into_output_errors();
 
         let target_path = joined.to_string_lossy();
