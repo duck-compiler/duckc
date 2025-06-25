@@ -252,7 +252,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 .unwrap_or(&Vec::new())
                 .iter()
                 .map(|(identifier, type_expr)| {
-                    type_env.insert_identifier_type(identifier.clone(), type_expr.clone());
+                    type_env.insert_identifier_type(identifier.clone(), type_expr.0.clone());
                     (Some(identifier.clone()), type_expr.clone())
                 })
                 .collect::<Vec<_>>(),
