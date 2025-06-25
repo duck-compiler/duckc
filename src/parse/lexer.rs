@@ -158,10 +158,15 @@ fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'s
 
 fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> {
     just("'")
-        .ignore_then(choice((
-            just('\\').ignore_then(choice((just('\''), just('t').to('\t'), just('n').to('\n')))),
-            any().filter(|c| *c != '\''),
-        )))
+        .ignore_then(
+            none_of("\\\n\t'")
+                .or(choice((
+                    just("\\\\").to('\\'),
+                    just("\\n").to('\n'),
+                    just("\\t").to('\t'),
+                    just("\\'").to('\''),
+                )))
+        )
         .then_ignore(just("'"))
         .map(Token::CharLiteral)
 }
