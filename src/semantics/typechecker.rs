@@ -1,7 +1,6 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    assignment_and_declaration_parser::Declaration,
     function_parser::FunctionDefintion,
     source_file_parser::SourceFile,
     type_parser::{Duck, Field, Struct, TypeExpr},
