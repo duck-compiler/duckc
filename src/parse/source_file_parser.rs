@@ -207,7 +207,10 @@ mod tests {
         source_file_parser::{SourceFile, source_file_parser},
         type_parser::{Duck, Field, TypeDefinition, TypeExpr},
         use_statement_parser::{Indicator, UseStatement},
-        value_parser::{Combi, IntoBlock, IntoEmptySpan, ValueExpr, all_into_empty_range},
+        value_parser::{
+            Combi, IntoBlock, IntoEmptySpan, ValueExpr, all_into_empty_range,
+            source_file_into_empty_range,
+        },
     };
 
     #[test]
@@ -348,10 +351,11 @@ mod tests {
 
         for (src, exp) in test_cases {
             let lex = lexer().parse(src).into_result().expect(src);
-            let parse = source_file_parser(PathBuf::from("test_files"), make_input)
+            let mut parse = source_file_parser(PathBuf::from("test_files"), make_input)
                 .parse(make_input((1..10).into(), &lex))
                 .into_result()
                 .expect(src);
+            source_file_into_empty_range(&mut parse);
             assert_eq!(parse, exp, "{src}");
         }
     }
@@ -610,7 +614,7 @@ mod tests {
             let mut got = source_file_parser(dir.clone(), make_input)
                 .parse(make_input((1..10).into(), &lex))
                 .unwrap();
-
+            source_file_into_empty_range(&mut got);
             fn sort_all(x: &mut SourceFile) {
                 x.function_definitions.sort_by_key(|x| x.name.clone());
                 for (_, s) in x.sub_modules.iter_mut() {
@@ -828,6 +832,7 @@ mod tests {
                     sort_all(s);
                 }
             }
+            source_file_into_empty_range(&mut original);
 
             sort_all(&mut expected);
             sort_all(&mut original);
