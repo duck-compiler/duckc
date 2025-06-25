@@ -9,6 +9,7 @@
 use std::{error::Error, ffi::OsString, io::Write, path::PathBuf, process::Command};
 
 use chumsky::Parser;
+use clap::{Parser as CliParser, arg, command};
 use parse::lexer::lexer;
 use semantics::typechecker::{self, TypeEnv};
 use tempfile::Builder;
@@ -23,6 +24,22 @@ pub mod parse;
 pub mod semantics;
 
 use emit::value::{EmitEnvironment, GoImport};
+
+#[derive(CliParser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct CompilerArgs {
+    // input_files: Vec<PathBuf>,
+    input_file: PathBuf,
+    #[arg(short)]
+    o: Option<String>,
+
+    #[arg(long)]
+    lex: bool,
+    #[arg(long)]
+    parse: bool,
+    #[arg(long)]
+    emit_go: bool,
+}
 
 fn test_error_messages() {
     let src = "if (1";
@@ -42,46 +59,26 @@ fn main() -> Result<(), Box<dyn Error>> {
         test_error_messages();
         return Ok(());
     }
-    let mut keep_go = false;
-    let mut custom_out_name = None::<String>;
-    let mut file_name = None::<String>;
 
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    let compiler_args = CompilerArgs::parse();
 
-    let mut i = 0;
-    while i < args.len() {
-        let arg = &args[i];
-        if arg == "--keep-go" {
-            keep_go = true;
-        } else if arg == "-o" {
-            custom_out_name = Some(
-                args.get(i + 1)
-                    .expect("Did provide argument for -o")
-                    .clone(),
-            );
-            i += 1;
-        } else {
-            if file_name.is_some() {
-                panic!("Error: reprovided file name");
-            }
-            file_name = Some(arg.to_owned());
-        }
-        i += 1;
-    }
+    let target_path = compiler_args.input_file;
+    let target_path_name = target_path
+        .file_name()
+        .expect("couldn't read file name")
+        .to_str()
+        .expect("invalid utf-8 string");
 
-    let target_path = file_name.expect("No file name provided");
-    let p = PathBuf::from(&target_path);
-    let src = std::fs::read_to_string(&p).expect("Could not read file");
+    let src = std::fs::read_to_string(&target_path).expect("Could not read file");
     let (lex, lex_errors) = lexer().parse(&src).into_output_errors();
     lex_errors.into_iter().for_each(|e| {
-        parse_failure(&target_path, &e, &src);
+        parse_failure(target_path_name, &e, &src);
     });
 
     let lex = lex.unwrap();
-
     let (src_file, parse_errors) = source_file_parser(
         {
-            let mut p = p.clone();
+            let mut p = target_path.clone();
             p.pop();
             p
         },
@@ -91,7 +88,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .into_output_errors();
 
     parse_errors.into_iter().for_each(|e| {
-        parse_failure(&target_path, &e, &src);
+        parse_failure(target_path_name, &e, &src);
     });
 
     let mut source_file = src_file.unwrap();
@@ -121,9 +118,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let out_text = source_file.emit("main".into(), &mut type_env);
 
     let mut tmp_file = Builder::new()
-        .rand_bytes(0)
+        .rand_bytes(3)
         .prefix(
-            p.file_name()
+            target_path
+                .file_name()
                 .expect("didnt provide file name")
                 .to_str()
                 .expect("not valid utf 8"),
@@ -132,23 +130,30 @@ fn main() -> Result<(), Box<dyn Error>> {
         .tempfile_in(".")
         .expect("Could not create tempfile");
 
-    if keep_go {
-        tmp_file.disable_cleanup(true);
-    }
+    tmp_file.disable_cleanup(!compiler_args.emit_go);
 
     write!(tmp_file, "{out_text}").expect("Could not write tmp file");
     tmp_file.flush().expect("Could not flush tmp file");
+
+    let out_file = compiler_args
+        .o
+        .map(OsString::from)
+        .unwrap_or(OsString::from("duck_out"));
 
     Command::new("go")
         .args([
             OsString::from("build"),
             OsString::from("-o"),
-            custom_out_name
-                .map(OsString::from)
-                .unwrap_or(OsString::from("duck_out")),
+            out_file.clone(),
             tmp_file.path().as_os_str().to_owned(),
         ])
         .spawn()?
         .wait()?;
+
+    println!(
+        "Successfully compiled binary {}",
+        out_file.to_str().expect("Output File String is weird")
+    );
+
     Ok(())
 }
