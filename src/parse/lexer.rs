@@ -130,12 +130,6 @@ fn go_text_parser<'src>() -> impl Parser<'src, &'src str, String, extra::Err<Ric
 }
 
 fn inline_go_parser<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> {
-    // just("go").ignore_then(whitespace().at_least(1))
-    //     .ignore_then(just("{"))
-    //     .ignore_then(any().filter(|x| *x != '}').repeated().collect::<String>())
-    //     .ignore_then(just("}"))
-    //     .map(|x| Token::InlineGo(Default::default()))
-
     just("go")
         .ignore_then(whitespace().at_least(1))
         .ignore_then(just("{").rewind())
@@ -144,7 +138,10 @@ fn inline_go_parser<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Ri
 }
 
 fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> {
-    let pre = text::int(10).map(|s: &str| s.parse::<i64>().unwrap());
+    let pre = text::int(10).try_map(|s: &str, span| {
+        s.parse::<i64>()
+            .map_err(|_| Rich::custom(span, "Invalid integer"))
+    });
     let frac = just('.').ignore_then(text::digits(10)).to_slice();
     pre.then(frac.or_not()).map(|(pre, frac)| {
         if let Some(frac) = frac {
@@ -158,15 +155,12 @@ fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'s
 
 fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> {
     just("'")
-        .ignore_then(
-            none_of("\\\n\t'")
-                .or(choice((
-                    just("\\\\").to('\\'),
-                    just("\\n").to('\n'),
-                    just("\\t").to('\t'),
-                    just("\\'").to('\''),
-                )))
-        )
+        .ignore_then(none_of("\\\n\t'").or(choice((
+            just("\\\\").to('\\'),
+            just("\\n").to('\n'),
+            just("\\t").to('\t'),
+            just("\\'").to('\''),
+        ))))
         .then_ignore(just("'"))
         .map(Token::CharLiteral)
 }
