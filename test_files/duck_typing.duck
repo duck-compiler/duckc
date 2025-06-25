@@ -1,0 +1,10 @@
+type Alias = { x: String };
+
+fun yolo(x: { x: String }) {
+    println(x.x);
+}
+
+fun main() {
+    let y: Alias = { x: "Hallo, Welt" };
+    yolo(y);
+}
