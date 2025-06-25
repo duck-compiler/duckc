@@ -71,7 +71,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let src = std::fs::read_to_string(&target_path).expect("Could not read file");
     let (lex, lex_errors) = lexer().parse(&src).into_output_errors();
     lex_errors.into_iter().for_each(|e| {
-        parse_failure(&target_path_name, &e, &src);
+        parse_failure(target_path_name, &e, &src);
     });
 
     let lex = lex.unwrap();
@@ -87,7 +87,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .into_output_errors();
 
     parse_errors.into_iter().for_each(|e| {
-        parse_failure(&target_path_name, &e, &src);
+        parse_failure(target_path_name, &e, &src);
     });
 
     let mut source_file = src_file.unwrap();
