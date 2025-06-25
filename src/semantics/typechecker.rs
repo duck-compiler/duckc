@@ -1,6 +1,7 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
+    Spanned,
     function_parser::FunctionDefintion,
     source_file_parser::SourceFile,
     type_parser::{Duck, Field, Struct, TypeExpr},
@@ -20,7 +21,7 @@ impl Default for TypeEnv {
 
         identifier_type_map.insert(
             "println".to_string(),
-            TypeExpr::Fun(vec![(None, TypeExpr::String)], None),
+            TypeExpr::Fun(vec![(None, TypeExpr::String.into_empty_span())], None),
         );
 
         let identifier_types = vec![identifier_type_map];
@@ -139,44 +140,50 @@ impl TypeEnv {
         match type_expr {
             TypeExpr::Duck(duck) => duck.fields.iter_mut().for_each(|field| {
                 param_names_used.push(field.name.clone());
-                if !field.type_expr.is_object_like() {
-                    found.push(field.type_expr.clone());
+                if !field.type_expr.0.is_object_like() {
+                    found.push(field.type_expr.0.clone());
                     return;
                 }
 
-                let mut clone = field.type_expr.clone();
+                let mut clone = field.type_expr.0.clone();
                 let mut flattens_from_clone = self.flatten_types(&mut clone, param_names_used);
 
                 found.push(clone);
                 found.append(&mut flattens_from_clone);
 
-                field.type_expr = TypeExpr::TypeName(field.type_expr.as_clean_go_type_name(self));
+                field.type_expr = (
+                    TypeExpr::TypeName(field.type_expr.0.as_clean_go_type_name(self)),
+                    field.type_expr.1.clone(),
+                );
             }),
             TypeExpr::Struct(duck) => duck.fields.iter_mut().for_each(|field| {
                 param_names_used.push(field.name.clone());
-                if !field.type_expr.is_object_like() {
-                    found.push(field.type_expr.clone());
+                if !field.type_expr.0.is_object_like() {
+                    found.push(field.type_expr.0.clone());
                     return;
                 }
 
-                let mut clone = field.type_expr.clone();
+                let mut clone = field.type_expr.0.clone();
                 let mut flattens_from_clone = self.flatten_types(&mut clone, param_names_used);
 
                 found.push(clone);
                 found.append(&mut flattens_from_clone);
 
-                field.type_expr = TypeExpr::TypeName(field.type_expr.as_clean_go_type_name(self));
+                field.type_expr = (
+                    TypeExpr::TypeName(field.type_expr.0.as_clean_go_type_name(self)),
+                    field.type_expr.1.clone(),
+                );
             }),
             TypeExpr::Tuple(types) => types.iter_mut().for_each(|type_expr| {
-                found.extend(self.flatten_types(type_expr, param_names_used));
+                found.extend(self.flatten_types(&mut type_expr.0, param_names_used));
             }),
             TypeExpr::Fun(params, return_type) => {
                 params.iter_mut().for_each(|param| {
-                    found.extend(self.flatten_types(&mut param.1, param_names_used))
+                    found.extend(self.flatten_types(&mut param.1.0, param_names_used))
                 });
 
                 if let Some(type_expr) = return_type.as_mut() {
-                    found.extend(self.flatten_types(type_expr, param_names_used));
+                    found.extend(self.flatten_types(&mut (*type_expr).0, param_names_used));
                 }
             }
             _ => {
@@ -221,7 +228,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .for_each(|type_definition| {
             type_env.insert_type_alias(
                 type_definition.name.clone(),
-                type_definition.type_expression.clone(),
+                type_definition.type_expression.0.clone(),
             )
         });
 
@@ -330,15 +337,15 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ValueExpr::VarDecl(declaration) => {
                 let declaration = &mut declaration.0;
 
-                if let TypeExpr::TypeName(type_name) = &declaration.type_expr {
+                if let (TypeExpr::TypeName(type_name), span) = &declaration.type_expr {
                     let type_expr = type_env.resolve_type_alias(type_name);
                     // mutate
-                    declaration.type_expr = type_expr;
+                    declaration.type_expr = (type_expr, span.clone());
                 }
 
                 type_env.insert_identifier_type(
                     declaration.name.clone(),
-                    declaration.type_expr.clone(),
+                    declaration.type_expr.0.clone(),
                 );
 
                 if let Some(type_expr) = &mut declaration.initializer {
@@ -401,7 +408,7 @@ impl TypeExpr {
                     .map(|field| {
                         Field::new(
                             field.0.to_string(),
-                            TypeExpr::from_value_expr(value_expr, type_env),
+                            TypeExpr::from_value_expr(value_expr, type_env).into_empty_span(),
                         )
                     })
                     .collect::<Vec<Field>>();
@@ -411,8 +418,10 @@ impl TypeExpr {
             ValueExpr::Tuple(fields) => {
                 let types = fields
                     .iter()
-                    .map(|value_expr| TypeExpr::from_value_expr(&value_expr.0, type_env))
-                    .collect::<Vec<TypeExpr>>();
+                    .map(|value_expr| {
+                        TypeExpr::from_value_expr(&value_expr.0, type_env).into_empty_span()
+                    })
+                    .collect::<Vec<Spanned<TypeExpr>>>();
 
                 TypeExpr::Tuple(types)
             }
@@ -422,7 +431,7 @@ impl TypeExpr {
                     .map(|(name, value_expr)| {
                         Field::new(
                             name.to_string(),
-                            TypeExpr::from_value_expr(&value_expr.0, type_env),
+                            TypeExpr::from_value_expr(&value_expr.0, type_env).into_empty_span(),
                         )
                     })
                     .collect::<Vec<Field>>();
@@ -581,6 +590,7 @@ impl TypeExpr {
                 .find(|struct_field| *struct_field.name == field_name)
                 .expect("Tried to access field that doesn't exist")
                 .type_expr
+                .0
                 .clone(),
             Self::Duck(duck) => duck
                 .fields
@@ -588,6 +598,7 @@ impl TypeExpr {
                 .find(|struct_field| *struct_field.name == field_name)
                 .expect("Tried to access field that doesn't exist")
                 .type_expr
+                .0
                 .clone(),
             _ => panic!("Tried to access field on non object-like type."),
         }
@@ -650,7 +661,10 @@ mod test {
             (
                 "{ x: \"hallo\", }",
                 TypeExpr::Duck(Duck {
-                    fields: vec![Field::new("x".to_string(), TypeExpr::String)],
+                    fields: vec![Field::new(
+                        "x".to_string(),
+                        TypeExpr::String.into_empty_span(),
+                    )],
                 }),
             ),
             ("0.5", TypeExpr::Float),
@@ -659,24 +673,38 @@ mod test {
             ("0.4 + 0", TypeExpr::Float),
             (
                 "(0, 2)",
-                TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Int]),
+                TypeExpr::Tuple(vec![
+                    TypeExpr::Int.into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
+                ]),
             ),
             (
                 "(0, 2 + 2)",
-                TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Int]),
+                TypeExpr::Tuple(vec![
+                    TypeExpr::Int.into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
+                ]),
             ),
             (
                 "(0, (2 + 2, 5))",
                 TypeExpr::Tuple(vec![
-                    TypeExpr::Int,
-                    TypeExpr::Tuple(vec![TypeExpr::Int, TypeExpr::Int]),
+                    TypeExpr::Int.into_empty_span(),
+                    TypeExpr::Tuple(vec![
+                        TypeExpr::Int.into_empty_span(),
+                        TypeExpr::Int.into_empty_span(),
+                    ])
+                    .into_empty_span(),
                 ]),
             ),
             (
                 "(0, (\"Hallo, Welt\", 5))",
                 TypeExpr::Tuple(vec![
-                    TypeExpr::Int,
-                    TypeExpr::Tuple(vec![TypeExpr::String, TypeExpr::Int]),
+                    TypeExpr::Int.into_empty_span(),
+                    TypeExpr::Tuple(vec![
+                        TypeExpr::String.into_empty_span(),
+                        TypeExpr::Int.into_empty_span(),
+                    ])
+                    .into_empty_span(),
                 ]),
             ),
             ("{ 5 }", TypeExpr::Int),

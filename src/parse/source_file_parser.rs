@@ -227,8 +227,8 @@ mod tests {
         type_parser::{Duck, Field, TypeDefinition, TypeExpr},
         use_statement_parser::{Indicator, UseStatement},
         value_parser::{
-            Combi, IntoBlock, IntoEmptySpan, ValueExpr, all_into_empty_range, empty_range,
-            source_file_into_empty_range,
+            IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
+            value_expr_into_empty_range,
         },
     };
 
@@ -276,8 +276,12 @@ mod tests {
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
                         type_expression: TypeExpr::Duck(Duck {
-                            fields: vec![Field::new("x".into(), TypeExpr::String)],
-                        }),
+                            fields: vec![Field::new(
+                                "x".into(),
+                                TypeExpr::String.into_empty_span(),
+                            )],
+                        })
+                        .into_empty_span(),
                     }],
                     ..Default::default()
                 },
@@ -346,7 +350,7 @@ mod tests {
                     function_definitions: vec![
                         FunctionDefintion {
                             name: "abc".into(),
-                            return_type: Some(TypeExpr::String),
+                            return_type: Some(TypeExpr::String.into_empty_span()),
                             ..Default::default()
                         },
                         FunctionDefintion {
@@ -360,8 +364,12 @@ mod tests {
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
                         type_expression: TypeExpr::Duck(Duck {
-                            fields: vec![Field::new("x".into(), TypeExpr::String)],
-                        }),
+                            fields: vec![Field::new(
+                                "x".into(),
+                                TypeExpr::String.into_empty_span(),
+                            )],
+                        })
+                        .into_empty_span(),
                     }],
                     ..Default::default()
                 },
@@ -859,7 +867,7 @@ mod tests {
             let mut original = original.flatten();
 
             for func in original.function_definitions.iter_mut() {
-                all_into_empty_range(&mut func.value_expr);
+                value_expr_into_empty_range(&mut func.value_expr);
             }
 
             assert_eq!(expected, original.flatten(), "{i}");

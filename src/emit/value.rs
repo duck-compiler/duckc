@@ -210,7 +210,7 @@ pub fn emit(
                 value_expr,
             } = *expr;
             for param in &params {
-                param.1.as_go_type_annotation(type_env);
+                param.1.0.as_go_type_annotation(type_env);
             }
             let (mut v_instr, res_name) = emit(value_expr.0, env.clone(), type_env);
             if let Some(res_name) = res_name {
@@ -223,10 +223,10 @@ pub fn emit(
                 "{res_var} := func({}) {} {}\n",
                 params
                     .iter()
-                    .map(|(name, t)| format!("{name} {}", t.emit().0))
+                    .map(|(name, t)| format!("{name} {}", t.0.emit().0))
                     .collect::<Vec<_>>()
                     .join(", "),
-                return_type.map(|t| t.emit().0).unwrap_or_default(),
+                return_type.map(|t| t.0.emit().0).unwrap_or_default(),
                 "{"
             );
 
@@ -306,7 +306,7 @@ pub fn emit(
 
                 res.push(format!(
                     "var {name} {} = {res_var}\n",
-                    type_expr.as_clean_go_type_name(type_env)
+                    type_expr.0.as_clean_go_type_name(type_env)
                 ));
 
                 (res, Some(name))
@@ -314,7 +314,7 @@ pub fn emit(
                 (
                     vec![format!(
                         "var {name} {}\n",
-                        type_expr.as_go_concrete_annotation(type_env)
+                        type_expr.0.as_go_concrete_annotation(type_env)
                     )],
                     Some(name),
                 )

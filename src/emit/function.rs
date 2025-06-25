@@ -23,14 +23,14 @@ impl FunctionDefintion {
                         .map(|(name, type_expr)| format!(
                             "{} {}",
                             name,
-                            type_expr.as_go_type_annotation(type_env)
+                            type_expr.0.as_go_type_annotation(type_env)
                         ))
                         .collect::<Vec<_>>()
                         .join(", "))
                     .unwrap_or_default(),
                 self.return_type
                     .as_ref()
-                    .map(|x| x.emit().0)
+                    .map(|x| x.0.emit().0)
                     .unwrap_or_default(),
                 "{"
             ),

@@ -2,24 +2,24 @@ use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
-use crate::parse::SS;
+use crate::parse::{SS, Spanned, value_parser::empty_range};
 
 use super::lexer::Token;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeDefinition {
     pub name: String,
-    pub type_expression: TypeExpr,
+    pub type_expression: Spanned<TypeExpr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Field {
     pub name: String,
-    pub type_expr: TypeExpr,
+    pub type_expr: Spanned<TypeExpr>,
 }
 
 impl Field {
-    pub fn new(name: String, type_expr: TypeExpr) -> Self {
+    pub fn new(name: String, type_expr: Spanned<TypeExpr>) -> Self {
         return Self { name, type_expr };
     }
 }
@@ -40,108 +40,122 @@ pub enum TypeExpr {
     Struct(Struct),
     Go(String),
     Duck(Duck),
-    Tuple(Vec<TypeExpr>),
+    Tuple(Vec<Spanned<TypeExpr>>),
     TypeName(String),
     String,
     Int,
     Bool,
     Char,
     Float,
-    Or(Vec<TypeExpr>),
-    Fun(Vec<(Option<String>, TypeExpr)>, Option<Box<TypeExpr>>),
+    Or(Vec<Spanned<TypeExpr>>),
+    Fun(
+        Vec<(Option<String>, Spanned<TypeExpr>)>,
+        Option<Box<Spanned<TypeExpr>>>,
+    ),
 }
 
-impl TypeExpr {}
+impl TypeExpr {
+    pub fn into_empty_span(self) -> Spanned<TypeExpr> {
+        (self, empty_range())
+    }
+}
 
 pub fn type_expression_parser<'src, I>()
--> impl Parser<'src, I, TypeExpr, extra::Err<Rich<'src, Token, SS>>> + Clone
+-> impl Parser<'src, I, Spanned<TypeExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
 {
-    recursive(|p| {
-        let field = select_ref! { Token::Ident(identifier) => identifier.to_string() }
-            .then_ignore(just(Token::ControlChar(':')))
-            .then(p.clone());
+    recursive(
+        |p: Recursive<dyn Parser<'_, _, Spanned<TypeExpr>, extra::Err<Rich<'src, Token, SS>>>>| {
+            let field = select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                .then_ignore(just(Token::ControlChar(':')))
+                .then(p.clone());
 
-        let duck_fields = field
-            .clone()
-            .separated_by(just(Token::ControlChar(',')))
-            .allow_trailing()
-            .collect::<Vec<(String, TypeExpr)>>();
+            let duck_fields = field
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<(String, Spanned<TypeExpr>)>>();
 
-        let struct_fields = field
-            .separated_by(just(Token::ControlChar(',')))
-            .at_least(1)
-            .allow_trailing()
-            .collect::<Vec<(String, TypeExpr)>>();
-
-        let go_type_identifier: impl Parser<'src, I, String, extra::Err<Rich<'src, Token, SS>>> =
-            select_ref! { Token::Ident(identifier) => identifier.to_string() }
-                .separated_by(just(Token::ControlChar('.')))
+            let struct_fields = field
+                .separated_by(just(Token::ControlChar(',')))
                 .at_least(1)
-                .at_most(2)
-                .collect::<Vec<String>>()
-                .map(|str| str.join("."));
+                .allow_trailing()
+                .collect::<Vec<(String, Spanned<TypeExpr>)>>();
 
-        let go_type = just(Token::Go)
-            .ignore_then(go_type_identifier)
-            .map(TypeExpr::Go);
+            let go_type_identifier: impl Parser<'src, I, String, extra::Err<Rich<'src, Token, SS>>> =
+                select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                    .separated_by(just(Token::ControlChar('.')))
+                    .at_least(1)
+                    .at_most(2)
+                    .collect::<Vec<String>>()
+                    .map(|str| str.join("."));
 
-        let r#struct = just(Token::Struct)
-            .ignore_then(just(Token::ControlChar('{')))
-            .ignore_then(struct_fields)
-            .then_ignore(just(Token::ControlChar('}')))
-            .map(|fields| {
-                TypeExpr::Struct(Struct {
-                    fields: fields
-                        .iter()
-                        .cloned()
-                        .map(|(name, type_expr)| Field { name, type_expr })
-                        .collect(),
-                })
-            });
+            let go_type = just(Token::Go)
+                .ignore_then(go_type_identifier)
+                .map(TypeExpr::Go);
 
-        let duck = just(Token::Duck)
-            .or_not()
-            .ignore_then(just(Token::ControlChar('{')))
-            .ignore_then(duck_fields.or_not())
-            .then_ignore(just(Token::ControlChar('}')))
-            .map(|fields| match fields {
-                Some(mut fields) => {
-                    fields.sort_by_key(|x| x.0.clone());
-                    TypeExpr::Duck(Duck {
+            let r#struct = just(Token::Struct)
+                .ignore_then(just(Token::ControlChar('{')))
+                .ignore_then(struct_fields)
+                .then_ignore(just(Token::ControlChar('}')))
+                .map(|fields| {
+                    TypeExpr::Struct(Struct {
                         fields: fields
                             .iter()
                             .cloned()
-                            .map(|(name, type_expr)| Field { name, type_expr })
+                            .map(|(name, (type_expr, e))| Field {
+                                name,
+                                type_expr: (type_expr, e.clone()),
+                            })
                             .collect(),
                     })
-                }
-                None => TypeExpr::Any,
-            });
+                });
 
-        let tuple = p
-            .clone()
-            .separated_by(just(Token::ControlChar(',')))
-            .allow_trailing()
-            .collect::<Vec<_>>()
-            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-            .map(TypeExpr::Tuple);
+            let duck = just(Token::Duck)
+                .or_not()
+                .ignore_then(just(Token::ControlChar('{')))
+                .ignore_then(duck_fields.or_not())
+                .then_ignore(just(Token::ControlChar('}')))
+                .map(|fields| match fields {
+                    Some(mut fields) => {
+                        fields.sort_by_key(|x| x.0.clone());
+                        TypeExpr::Duck(Duck {
+                            fields: fields
+                                .iter()
+                                .cloned()
+                                .map(|(name, (type_expr, e))| Field {
+                                    name,
+                                    type_expr: (type_expr, e.clone()),
+                                })
+                                .collect(),
+                        })
+                    }
+                    None => TypeExpr::Any,
+                });
 
-        let type_name =
-            select_ref! { Token::Ident(identifier) => identifier.to_string() }.map(|identifier| {
-                match identifier.as_str() {
+            let tuple = p
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                .map(TypeExpr::Tuple);
+
+            let type_name = select_ref! { Token::Ident(identifier) => identifier.to_string() }.map(
+                |identifier| match identifier.as_str() {
                     "Int" => TypeExpr::Int,
                     "Float" => TypeExpr::Float,
                     "Bool" => TypeExpr::Bool,
                     "String" => TypeExpr::String,
                     "Char" => TypeExpr::Char,
                     _ => TypeExpr::TypeName(identifier),
-                }
-            });
+                },
+            );
 
-        choice((go_type, type_name, r#struct, duck, tuple))
-    })
+            choice((go_type, type_name, r#struct, duck, tuple)).map_with(|x, e| (x, e.span()))
+        },
+    )
 }
 
 pub fn type_definition_parser<'src, I>()
