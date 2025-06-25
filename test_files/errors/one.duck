@@ -1,5 +1,5 @@
 fun main() {
-    if () {
-    } else {}
+    let x: String = "a
 
+    ;
 }

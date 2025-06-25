@@ -169,12 +169,15 @@ fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'sr
 fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, char>>> {
     just('"')
         .ignore_then(
-            choice((
-                just('\\').ignore_then(choice((just('"'), just('t').to('\t'), just('n').to('\n')))),
-                any().filter(|c| *c != '"'),
-            ))
-            .repeated()
-            .collect::<String>(),
+            none_of("\\\n\t\"")
+                .or(choice((
+                    just("\\\\").to('\\'),
+                    just("\\n").to('\n'),
+                    just("\\t").to('\t'),
+                    just("\\\"").to('"'),
+                )))
+                .repeated()
+                .collect::<String>(),
         )
         .then_ignore(just('"'))
         .map(Token::StringLiteral)
