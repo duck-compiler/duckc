@@ -202,7 +202,7 @@ pub mod tests {
 
         for valid_type_definition in valid_type_definitions {
             println!("lexing {valid_type_definition}");
-            let lexer_parse_result = lexer("test").parse(valid_type_definition);
+            let lexer_parse_result = lexer("test", "").parse(valid_type_definition);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -237,7 +237,7 @@ pub mod tests {
 
         for valid_type_expression in valid_type_expressions {
             println!("lexing {valid_type_expression}");
-            let lexer_parse_result = lexer("test").parse(valid_type_expression);
+            let lexer_parse_result = lexer("test", "").parse(valid_type_expression);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -269,7 +269,7 @@ pub mod tests {
 
         for invalid_type_expression in invalid_type_expressions {
             println!("lexing {invalid_type_expression}");
-            let lexer_parse_result = lexer("test").parse(invalid_type_expression);
+            let lexer_parse_result = lexer("test", "").parse(invalid_type_expression);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 

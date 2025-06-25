@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use chumsky::{prelude::*, text::whitespace};
 
-use crate::parse::{SS, Spanned};
+use crate::parse::{Context, Spanned, SS};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Token {
@@ -65,7 +65,8 @@ impl Display for Token {
 }
 
 pub fn lexer<'a>(
-    f: &'static str,
+    file_name: &'static str,
+    file_contents: &'static str,
 ) -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> {
     let keyword_or_ident = text::ident().map(|str| match str {
         "module" => Token::Module,
@@ -114,7 +115,10 @@ pub fn lexer<'a>(
                 SS {
                     start: e.span().start,
                     end: e.span().end,
-                    context: f,
+                    context: Context {
+                        file_name,
+                        file_contents
+                    },
                 },
             )
         })
@@ -345,7 +349,7 @@ mod tests {
         ];
 
         for (src, expected_tokens) in test_cases {
-            let parse_result = lexer("test").parse(src);
+            let parse_result = lexer("test", src).parse(src);
 
             assert_eq!(parse_result.has_errors(), false, "{}", src);
             assert_eq!(parse_result.has_output(), true, "{}", src);

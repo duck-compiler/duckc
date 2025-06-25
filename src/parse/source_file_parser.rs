@@ -3,7 +3,7 @@ use std::{fs::File, path::PathBuf};
 use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::parse::{
-    SS, Spanned,
+    Context, SS, Spanned,
     function_parser::{FunctionDefintion, function_definition_parser},
     lexer::{Token, lexer},
     make_input, parse_failure,
@@ -112,12 +112,14 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
                 acc
             })
     } else {
-        let src_text =
-            std::fs::read_to_string(format!("{}.duck", joined.to_str().unwrap())).unwrap();
-        let (lex, lex_errors) = lexer("test").parse(&src_text).into_output_errors();
-
+        let src_text = std::fs::read_to_string(format!("{}.duck", joined.to_str().unwrap()))
+            .unwrap()
+            .leak() as &'static str;
         let target_path = joined.to_string_lossy();
         let target_path_leaked = target_path.to_string().leak() as &str;
+        let (lex, lex_errors) = lexer(target_path_leaked, src_text)
+            .parse(src_text)
+            .into_output_errors();
 
         lex_errors.into_iter().for_each(|e| {
             parse_failure(
@@ -126,7 +128,10 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
                     SS {
                         start: e.span().start,
                         end: e.span().end,
-                        context: target_path_leaked,
+                        context: Context {
+                            file_name: target_path_leaked,
+                            file_contents: src_text,
+                        },
                     },
                     "Lex Error",
                 ),
@@ -140,7 +145,10 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
                 SS {
                     start: 0,
                     end: src_text.len(),
-                    context: target_path_leaked,
+                    context: Context {
+                        file_name: target_path_leaked,
+                        file_contents: src_text,
+                    },
                 },
                 &lex,
             ))
@@ -377,7 +385,7 @@ mod tests {
         ];
 
         for (src, exp) in test_cases {
-            let lex = lexer("test").parse(src).into_result().expect(src);
+            let lex = lexer("test", "").parse(src).into_result().expect(src);
             let mut parse = source_file_parser(PathBuf::from("test_files"), make_input)
                 .parse(make_input(empty_range(), &lex))
                 .into_result()
@@ -637,7 +645,7 @@ mod tests {
 
         for (main_file, mut expected) in test_cases {
             let src = std::fs::read_to_string(dir.join(main_file)).unwrap();
-            let lex = lexer("test").parse(&src).unwrap();
+            let lex = lexer("test", "").parse(&src).unwrap();
             let mut got = source_file_parser(dir.clone(), make_input)
                 .parse(make_input(empty_range(), &lex))
                 .unwrap();

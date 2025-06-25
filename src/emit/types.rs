@@ -369,7 +369,7 @@ mod tests {
         ];
 
         for (src, exp) in test_cases {
-            let lex = lexer("test").parse(src).unwrap();
+            let lex = lexer("test", src).parse(src).unwrap();
             let parse = type_expression_parser()
                 .parse(make_input(empty_range(), &lex))
                 .unwrap()

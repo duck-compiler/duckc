@@ -15,10 +15,7 @@ use semantics::typechecker::{self, TypeEnv};
 use tempfile::Builder;
 
 use crate::parse::{
-    SS, make_input, parse_failure,
-    source_file_parser::source_file_parser,
-    use_statement_parser::UseStatement,
-    value_parser::{empty_range, value_expr_parser},
+    make_input, parse_failure, source_file_parser::source_file_parser, use_statement_parser::UseStatement, value_parser::{empty_range, value_expr_parser}, Context, SS
 };
 
 pub mod emit;
@@ -46,7 +43,7 @@ struct CompilerArgs {
 fn test_error_messages() {
     let src = "if (1";
 
-    let out = lexer("test").parse(src).into_result().unwrap();
+    let out = lexer("test", src).parse(src).into_result().unwrap();
     let (_out, errors) = value_expr_parser(make_input)
         .parse(make_input(empty_range(), &out))
         .into_output_errors();
@@ -71,9 +68,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .to_str()
         .expect("invalid utf-8 string");
 
-    let src = std::fs::read_to_string(&target_path).expect("Could not read file");
+    let src = std::fs::read_to_string(&target_path).expect("Could not read file").to_string().leak() as &'static str;
     let target_path_name = String::from(target_path_name).leak() as &'static str;
-    let (lex, lex_errors) = lexer(target_path_name).parse(&src).into_output_errors();
+    let (lex, lex_errors) = lexer(target_path_name, src).parse(&src).into_output_errors();
     lex_errors.into_iter().for_each(|e| {
         parse_failure(
             target_path_name,
@@ -81,7 +78,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 SS {
                     start: e.span().start,
                     end: e.span().end,
-                    context: target_path_name,
+                    context: crate::parse::Context {
+                        file_name: target_path_name,
+                        file_contents: src,
+                    },
                 },
                 "Lex Error",
             ),
@@ -102,7 +102,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         SS {
             start: 0,
             end: src.len(),
-            context: target_path_name,
+            context: Context {
+                file_name: target_path_name,
+                file_contents: src,
+            },
         },
         &lex,
     ))
