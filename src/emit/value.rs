@@ -370,7 +370,7 @@ mod tests {
         ];
 
         for (src, exp) in test_cases {
-            let lexed = lexer("test").parse(src).unwrap();
+            let lexed = lexer("test", src).parse(src).unwrap();
             let parsed = value_expr_parser(make_input)
                 .parse(make_input(empty_range(), &lexed))
                 .unwrap()
