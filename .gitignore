@@ -3,3 +3,4 @@ duck_out
 .DS_Store
 duck_gen*.go
 *.duck.go
+*duck*.go

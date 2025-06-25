@@ -2,6 +2,8 @@ use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
+use crate::parse::SS;
+
 use super::lexer::Token;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,9 +54,9 @@ pub enum TypeExpr {
 impl TypeExpr {}
 
 pub fn type_expression_parser<'src, I>()
--> impl Parser<'src, I, TypeExpr, extra::Err<Rich<'src, Token>>> + Clone
+-> impl Parser<'src, I, TypeExpr, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
-    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
+    I: BorrowInput<'src, Token = Token, Span = SS>,
 {
     recursive(|p| {
         let field = select_ref! { Token::Ident(identifier) => identifier.to_string() }
@@ -73,7 +75,7 @@ where
             .allow_trailing()
             .collect::<Vec<(String, TypeExpr)>>();
 
-        let go_type_identifier: impl Parser<'src, I, String, extra::Err<Rich<'src, Token>>> =
+        let go_type_identifier: impl Parser<'src, I, String, extra::Err<Rich<'src, Token, SS>>> =
             select_ref! { Token::Ident(identifier) => identifier.to_string() }
                 .separated_by(just(Token::ControlChar('.')))
                 .at_least(1)
@@ -143,9 +145,9 @@ where
 }
 
 pub fn type_definition_parser<'src, I>()
--> impl Parser<'src, I, TypeDefinition, extra::Err<Rich<'src, Token>>> + Clone
+-> impl Parser<'src, I, TypeDefinition, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
-    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
+    I: BorrowInput<'src, Token = Token, Span = SS>,
 {
     just(Token::Type)
         .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
@@ -160,7 +162,7 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::{lexer::lexer, make_input};
+    use crate::parse::{lexer::lexer, make_input, value_parser::empty_range};
     use chumsky::Parser;
 
     use super::*;
@@ -186,7 +188,7 @@ pub mod tests {
 
         for valid_type_definition in valid_type_definitions {
             println!("lexing {valid_type_definition}");
-            let lexer_parse_result = lexer().parse(valid_type_definition);
+            let lexer_parse_result = lexer("test").parse(valid_type_definition);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -196,7 +198,7 @@ pub mod tests {
 
             println!("typedef_parsing {valid_type_definition}");
             let typedef_parse_result =
-                type_definition_parser().parse(make_input((1..10).into(), tokens.as_slice()));
+                type_definition_parser().parse(make_input(empty_range(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -221,7 +223,7 @@ pub mod tests {
 
         for valid_type_expression in valid_type_expressions {
             println!("lexing {valid_type_expression}");
-            let lexer_parse_result = lexer().parse(valid_type_expression);
+            let lexer_parse_result = lexer("test").parse(valid_type_expression);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -231,7 +233,7 @@ pub mod tests {
 
             println!("typedef_parsing {valid_type_expression}");
             let typedef_parse_result =
-                type_expression_parser().parse(make_input((1..10).into(), tokens.as_slice()));
+                type_expression_parser().parse(make_input(empty_range(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -253,7 +255,7 @@ pub mod tests {
 
         for invalid_type_expression in invalid_type_expressions {
             println!("lexing {invalid_type_expression}");
-            let lexer_parse_result = lexer().parse(invalid_type_expression);
+            let lexer_parse_result = lexer("test").parse(invalid_type_expression);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -263,7 +265,7 @@ pub mod tests {
 
             println!("typedef_parsing {invalid_type_expression}");
             let typedef_parse_result =
-                type_expression_parser().parse(make_input((1..10).into(), tokens.as_slice()));
+                type_expression_parser().parse(make_input(empty_range(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), true);
             assert_eq!(typedef_parse_result.has_output(), false);
         }

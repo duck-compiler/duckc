@@ -1,7 +1,8 @@
 use crate::parse::{
-    Spanned,
+    SS, Spanned,
     assignment_and_declaration_parser::{Assignment, Declaration},
     function_parser::{LambdaFunctionExpr, Param},
+    source_file_parser::SourceFile,
     type_parser::type_expression_parser,
 };
 
@@ -56,7 +57,7 @@ pub trait IntoEmptySpan {
 
 impl IntoEmptySpan for ValueExpr {
     fn into_empty_span(self) -> Spanned<ValueExpr> {
-        (self, (0..1).into())
+        (self, empty_range())
     }
 }
 
@@ -105,14 +106,14 @@ impl ValueExpr {
 
 pub fn value_expr_parser<'src, I, M>(
     make_input: M,
-) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token>>> + Clone
+) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
-    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
-    M: Fn(SimpleSpan, &'src [Spanned<Token>]) -> I + Clone + 'src,
+    I: BorrowInput<'src, Token = Token, Span = SS>,
+    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'src,
 {
     recursive(
         |value_expr_parser: Recursive<
-            dyn Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token>>>,
+            dyn Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>>,
         >| {
             let lambda_parser = {
                 let param_parser =
@@ -175,7 +176,7 @@ where
                     .collect::<Vec<_>>()
                     .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                     .map(ValueExpr::Tuple)))
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
 
             let initializer = just(Token::ControlChar('='))
@@ -204,7 +205,7 @@ where
                             .into(),
                     )
                 })
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
 
             let struct_expression = just(Token::ControlChar('.'))
@@ -218,7 +219,7 @@ where
                         .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
                         .map(ValueExpr::Struct),
                 )
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
 
             let duck_expression = select_ref! { Token::Ident(ident) => ident.to_owned() }
@@ -232,7 +233,7 @@ where
                     x.sort_by_key(|(name, _)| name.clone());
                     ValueExpr::Duck(x)
                 })
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
 
             let block_expression = value_expr_parser
@@ -245,7 +246,7 @@ where
                     todo!()
                 })
                 .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
-                .map(|mut exprs| {
+                .map_with(|mut exprs, e| {
                     if exprs.len() >= 2 {
                         for (expr, has_semi) in &exprs[..exprs.len() - 1] {
                             if expr.0.needs_semicolon() && has_semi.is_none() {
@@ -258,8 +259,10 @@ where
                         exprs.push((empty_tuple().into_empty_span(), None));
                     }
 
-                    ValueExpr::Block(exprs.into_iter().map(|(expr, _)| expr).collect())
-                        .into_empty_span()
+                    (
+                        ValueExpr::Block(exprs.into_iter().map(|(expr, _)| expr).collect()),
+                        e.span(),
+                    )
                 })
                 .boxed();
 
@@ -282,6 +285,7 @@ where
 
             let field_access = any_ref()
                 .filter(|t| !matches!(t, Token::ControlChar('.')))
+                .map_with(|x, e| (x, e.span()))
                 .repeated()
                 .at_least(1)
                 .collect::<Vec<_>>()
@@ -300,14 +304,22 @@ where
                         let base_expr = base_expr
                             .clone()
                             .into_iter()
-                            .map(|x| {
-                                (x.to_owned(), SimpleSpan::from(0_usize..10_usize))
-                                    as Spanned<Token>
-                            })
+                            .map(|x| (x.0.to_owned(), x.1) as Spanned<Token>)
                             .collect::<Vec<_>>()
                             .leak() as &[Spanned<Token>];
 
-                        let base = e.parse(make_input((1..10).into(), base_expr)).unwrap();
+                        let range =
+                            base_expr.first().unwrap().1.start..base_expr.last().unwrap().1.end;
+                        let base = e
+                            .parse(make_input(
+                                SS {
+                                    start: range.start,
+                                    end: range.end,
+                                    context: "",
+                                },
+                                base_expr,
+                            ))
+                            .unwrap();
 
                         field_accesses.into_iter().fold(base, |acc, x| {
                             (
@@ -320,22 +332,23 @@ where
                         })
                     }
                 })
+                .map_with(|x, e| (x.0, e.span()))
                 .boxed();
 
             let int = select_ref! { Token::IntLiteral(i) => *i }
                 .map(ValueExpr::Int)
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
             let bool_val = select_ref! { Token::BoolLiteral(b) => *b }
                 .map(ValueExpr::Bool)
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
             let string_val = select_ref! { Token::StringLiteral(s) => s.to_owned() }
                 .map(ValueExpr::String)
-                .map(IntoEmptySpan::into_empty_span);
+                .map_with(|x, e| (x, e.span()));
             let var_expr = select_ref! { Token::Ident(ident) => ident.to_owned() }
                 .map(|ident| ValueExpr::Variable(ident, None))
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
             let if_expr = if_with_condition_and_body
                 .clone()
@@ -363,15 +376,15 @@ where
                         },
                     ),
                 })
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
             let char_expr = select_ref! { Token::CharLiteral(c) => *c }
                 .map(ValueExpr::Char)
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
             let float_expr = select_ref! { Token::FloatLiteral(num) => *num }
                 .map(ValueExpr::Float)
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
 
             let atom = just(Token::ControlChar('!'))
@@ -396,17 +409,17 @@ where
                             block_expression,
                             just(Token::Break)
                                 .to(ValueExpr::Break)
-                                .map(IntoEmptySpan::into_empty_span),
+                                .map_with(|x, e| (x, e.span())),
                             just(Token::Continue)
                                 .to(ValueExpr::Continue)
-                                .map(IntoEmptySpan::into_empty_span),
-                            while_with_condition_and_body.clone().map(|(cond, body)| {
-                                ValueExpr::While {
+                                .map_with(|x, e| (x, e.span())),
+                            while_with_condition_and_body
+                                .clone()
+                                .map(|(cond, body)| ValueExpr::While {
                                     condition: Box::new(cond),
                                     body: Box::new(body),
-                                }
-                                .into_empty_span()
-                            }),
+                                })
+                                .map_with(|x, e| (x, e.span())),
                         )))),
                 )
                 .then(params.clone().or_not())
@@ -424,25 +437,25 @@ where
                         ValueExpr::BoolNegate(acc.into_empty_span().into())
                     })
                 })
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
 
             let assignment = select_ref! { Token::Ident(identifier) => identifier.to_string() }
                 .then_ignore(just(Token::ControlChar('=')))
                 .then(value_expr_parser.clone())
-                .map(|(identifier, value_expr)| {
+                .map_with(|(identifier, value_expr), e| {
                     ValueExpr::VarAssign(
                         (
                             Assignment {
                                 name: identifier,
-                                value_expr,
+                                value_expr: value_expr.clone(),
                             },
-                            (0..1).into(),
+                            e.span(),
                         )
                             .into(),
                     )
                 })
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
 
             //
@@ -457,9 +470,10 @@ where
                 )
                 .map(|(init, additional)| {
                     additional.into_iter().fold(init, |acc, x| {
-                        ValueExpr::Mul(acc.into(), x.into()).into_empty_span()
+                        (ValueExpr::Mul(acc.into(), x.clone().into()), x.1)
                     })
                 })
+                .map_with(|x, e| (x.0, e.span()))
                 .boxed();
 
             let add = prod
@@ -472,9 +486,10 @@ where
                 )
                 .map(|(init, additional)| {
                     additional.into_iter().fold(init, |acc, x| {
-                        ValueExpr::Add(acc.into(), x.into()).into_empty_span()
+                        (ValueExpr::Add(acc.into(), x.clone().into()), x.1)
                     })
                 })
+                .map_with(|x, e| (x.0, e.span()))
                 .boxed();
 
             let equals = add
@@ -482,12 +497,12 @@ where
                 .then_ignore(just(Token::Equals))
                 .then(add.clone())
                 .map(|(x, y)| ValueExpr::Equals(x.into(), y.into()))
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
 
             let inline_go = select_ref! { Token::InlineGo(x) => x.to_owned() }
                 .map(ValueExpr::InlineGo)
-                .map(IntoEmptySpan::into_empty_span)
+                .map_with(|x, e| (x, e.span()))
                 .boxed();
 
             choice((
@@ -498,8 +513,8 @@ where
                 declaration,
                 just(Token::Return)
                     .ignore_then(value_expr_parser.clone().or_not())
-                    .map(|x: Option<Spanned<ValueExpr>>| {
-                        ValueExpr::Return(x.map(Box::new)).into_empty_span()
+                    .map_with(|x: Option<Spanned<ValueExpr>>, e| {
+                        (ValueExpr::Return(x.map(Box::new)), e.span())
                     }),
                 atom,
             ))
@@ -518,8 +533,21 @@ fn empty_duck() -> ValueExpr {
     ValueExpr::Duck(Vec::new())
 }
 
-pub fn empty_range() -> SimpleSpan {
-    (0..1).into()
+pub fn empty_range() -> SS {
+    SS {
+        start: 0,
+        end: 1,
+        context: "",
+    }
+}
+
+pub fn source_file_into_empty_range(v: &mut SourceFile) {
+    for x in &mut v.function_definitions {
+        all_into_empty_range(&mut x.value_expr);
+    }
+    for x in &mut v.sub_modules {
+        source_file_into_empty_range(&mut x.1);
+    }
 }
 
 pub fn all_into_empty_range(v: &mut Spanned<ValueExpr>) {
@@ -611,7 +639,8 @@ mod tests {
         make_input,
         type_parser::{Duck, Field, TypeExpr},
         value_parser::{
-            Combi, IntoEmptySpan, all_into_empty_range, empty_duck, empty_tuple, value_expr_parser,
+            Combi, IntoEmptySpan, all_into_empty_range, empty_duck, empty_range, empty_tuple,
+            value_expr_parser,
         },
     };
 
@@ -1133,7 +1162,7 @@ mod tests {
                             initializer: None,
                             type_expr: TypeExpr::String,
                         },
-                        (0..1).into(),
+                        empty_range(),
                     )
                         .into(),
                 ),
@@ -1407,9 +1436,9 @@ mod tests {
         ];
 
         for (i, (src, expected_tokens)) in test_cases.into_iter().enumerate() {
-            let lex_result = lexer().parse(src).into_result().expect(&src);
+            let lex_result = lexer("test").parse(src).into_result().expect(&src);
             let parse_result =
-                value_expr_parser(make_input).parse(make_input((0..src.len()).into(), &lex_result));
+                value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
 
             assert_eq!(parse_result.has_errors(), false, "{i}: {}", src);
             assert_eq!(parse_result.has_output(), true, "{i}: {}", src);
@@ -1453,7 +1482,7 @@ mod tests {
         ];
 
         for (input, expected_output) in inputs_and_expected_outputs {
-            let lexer_parse_result = lexer().parse(input);
+            let lexer_parse_result = lexer("test").parse(input);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -1462,14 +1491,20 @@ mod tests {
             };
 
             let declaration_parse_result =
-                value_expr_parser(make_input).parse(make_input((1..10).into(), tokens.as_slice()));
+                value_expr_parser(make_input).parse(make_input(empty_range(), tokens.as_slice()));
             assert_eq!(declaration_parse_result.has_errors(), false);
             assert_eq!(declaration_parse_result.has_output(), true);
 
-            let Some((ValueExpr::VarDecl(declaration), _)) = declaration_parse_result.into_output()
+            let Some((ValueExpr::VarDecl(mut declaration), _)) =
+                declaration_parse_result.into_output()
             else {
                 unreachable!()
             };
+
+            declaration.0.initializer.as_mut().map(|x| {
+                all_into_empty_range(x);
+                x
+            });
 
             assert_eq!(declaration.0, expected_output.into());
         }
@@ -1490,7 +1525,7 @@ mod tests {
 
         for valid_declaration in valid_declarations {
             println!("lexing {valid_declaration}");
-            let lexer_parse_result = lexer().parse(valid_declaration);
+            let lexer_parse_result = lexer("test").parse(valid_declaration);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -1500,7 +1535,7 @@ mod tests {
 
             println!("declaration parsing {valid_declaration}");
             let typedef_parse_result =
-                value_expr_parser(make_input).parse(make_input((1..10).into(), tokens.as_slice()));
+                value_expr_parser(make_input).parse(make_input(empty_range(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -1522,7 +1557,7 @@ mod tests {
         ];
 
         for valid_assignment in valid_assignments {
-            let lexer_parse_result = lexer().parse(valid_assignment);
+            let lexer_parse_result = lexer("test").parse(valid_assignment);
             assert_eq!(lexer_parse_result.has_errors(), false, "{valid_assignment}");
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -1532,7 +1567,7 @@ mod tests {
 
             println!("typedef_parsing {valid_assignment}");
             let typedef_parse_result =
-                value_expr_parser(make_input).parse(make_input((1..10).into(), tokens.as_slice()));
+                value_expr_parser(make_input).parse(make_input(empty_range(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }

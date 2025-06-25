@@ -8,15 +8,17 @@
 
 use std::{error::Error, ffi::OsString, io::Write, path::PathBuf, process::Command};
 
-use chumsky::Parser;
+use chumsky::{Parser, error::Rich};
 use clap::{Parser as CliParser, arg, command};
 use parse::lexer::lexer;
 use semantics::typechecker::{self, TypeEnv};
 use tempfile::Builder;
 
 use crate::parse::{
-    make_input, parse_failure, source_file_parser::source_file_parser,
-    use_statement_parser::UseStatement, value_parser::value_expr_parser,
+    SS, make_input, parse_failure,
+    source_file_parser::source_file_parser,
+    use_statement_parser::UseStatement,
+    value_parser::{empty_range, value_expr_parser},
 };
 
 pub mod emit;
@@ -44,9 +46,9 @@ struct CompilerArgs {
 fn test_error_messages() {
     let src = "if (1";
 
-    let out = lexer().parse(src).into_result().unwrap();
+    let out = lexer("test").parse(src).into_result().unwrap();
     let (_out, errors) = value_expr_parser(make_input)
-        .parse(make_input((0..src.len()).into(), &out))
+        .parse(make_input(empty_range(), &out))
         .into_output_errors();
 
     errors.into_iter().for_each(|e| {
@@ -70,9 +72,21 @@ fn main() -> Result<(), Box<dyn Error>> {
         .expect("invalid utf-8 string");
 
     let src = std::fs::read_to_string(&target_path).expect("Could not read file");
-    let (lex, lex_errors) = lexer().parse(&src).into_output_errors();
+    let target_path_name = String::from(target_path_name).leak() as &'static str;
+    let (lex, lex_errors) = lexer(target_path_name).parse(&src).into_output_errors();
     lex_errors.into_iter().for_each(|e| {
-        parse_failure(target_path_name, &e, &src);
+        parse_failure(
+            target_path_name,
+            &Rich::<&str, SS>::custom(
+                SS {
+                    start: e.span().start,
+                    end: e.span().end,
+                    context: target_path_name,
+                },
+                "Lex Error",
+            ),
+            &src,
+        );
     });
 
     let lex = lex.unwrap();
@@ -84,14 +98,25 @@ fn main() -> Result<(), Box<dyn Error>> {
         },
         make_input,
     )
-    .parse(make_input((0..src.len()).into(), &lex))
+    .parse(make_input(
+        SS {
+            start: 0,
+            end: src.len(),
+            context: target_path_name,
+        },
+        &lex,
+    ))
     .into_output_errors();
 
     parse_errors.into_iter().for_each(|e| {
         parse_failure(target_path_name, &e, &src);
     });
 
-    let mut source_file = src_file.unwrap();
+    let mut source_file = dbg!(src_file.unwrap());
+    source_file = source_file.flatten();
+    for f in &source_file.function_definitions {
+        dbg!(f.value_expr.1.context);
+    }
 
     let mut type_env = TypeEnv::default();
     typechecker::typeresolve_source_file(&mut source_file, &mut type_env);

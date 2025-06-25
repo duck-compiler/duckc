@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use chumsky::{prelude::*, text::whitespace};
 
-use crate::parse::Spanned;
+use crate::parse::{SS, Spanned};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Token {
@@ -64,7 +64,9 @@ impl Display for Token {
     }
 }
 
-pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> {
+pub fn lexer<'a>(
+    f: &'static str,
+) -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> {
     let keyword_or_ident = text::ident().map(|str| match str {
         "module" => Token::Module,
         "use" => Token::Use,
@@ -106,7 +108,16 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<R
         .or(r#char);
 
     token
-        .map_with(|t, e| (t, e.span()))
+        .map_with(move |t, e| {
+            (
+                t,
+                SS {
+                    start: e.span().start,
+                    end: e.span().end,
+                    context: f,
+                },
+            )
+        })
         .padded()
         .repeated()
         .collect::<Vec<Spanned<Token>>>()
@@ -130,12 +141,6 @@ fn go_text_parser<'src>() -> impl Parser<'src, &'src str, String, extra::Err<Ric
 }
 
 fn inline_go_parser<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> {
-    // just("go").ignore_then(whitespace().at_least(1))
-    //     .ignore_then(just("{"))
-    //     .ignore_then(any().filter(|x| *x != '}').repeated().collect::<String>())
-    //     .ignore_then(just("}"))
-    //     .map(|x| Token::InlineGo(Default::default()))
-
     just("go")
         .ignore_then(whitespace().at_least(1))
         .ignore_then(just("{").rewind())
@@ -144,7 +149,10 @@ fn inline_go_parser<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Ri
 }
 
 fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> {
-    let pre = text::int(10).map(|s: &str| s.parse::<i64>().unwrap());
+    let pre = text::int(10).try_map(|s: &str, span| {
+        s.parse::<i64>()
+            .map_err(|_| Rich::custom(span, "Invalid integer"))
+    });
     let frac = just('.').ignore_then(text::digits(10)).to_slice();
     pre.then(frac.or_not()).map(|(pre, frac)| {
         if let Some(frac) = frac {
@@ -158,10 +166,12 @@ fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'s
 
 fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> {
     just("'")
-        .ignore_then(choice((
-            just('\\').ignore_then(choice((just('\''), just('t').to('\t'), just('n').to('\n')))),
-            any().filter(|c| *c != '\''),
-        )))
+        .ignore_then(none_of("\\\n\t'").or(choice((
+            just("\\\\").to('\\'),
+            just("\\n").to('\n'),
+            just("\\t").to('\t'),
+            just("\\'").to('\''),
+        ))))
         .then_ignore(just("'"))
         .map(Token::CharLiteral)
 }
@@ -169,12 +179,15 @@ fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'sr
 fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, char>>> {
     just('"')
         .ignore_then(
-            choice((
-                just('\\').ignore_then(choice((just('"'), just('t').to('\t'), just('n').to('\n')))),
-                any().filter(|c| *c != '"'),
-            ))
-            .repeated()
-            .collect::<String>(),
+            none_of("\\\n\t\"")
+                .or(choice((
+                    just("\\\\").to('\\'),
+                    just("\\n").to('\n'),
+                    just("\\t").to('\t'),
+                    just("\\\"").to('"'),
+                )))
+                .repeated()
+                .collect::<String>(),
         )
         .then_ignore(just('"'))
         .map(Token::StringLiteral)
@@ -332,7 +345,7 @@ mod tests {
         ];
 
         for (src, expected_tokens) in test_cases {
-            let parse_result = lexer().parse(src);
+            let parse_result = lexer("test").parse(src);
 
             assert_eq!(parse_result.has_errors(), false, "{}", src);
             assert_eq!(parse_result.has_output(), true, "{}", src);

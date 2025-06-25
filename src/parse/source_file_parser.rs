@@ -3,7 +3,7 @@ use std::{fs::File, path::PathBuf};
 use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::parse::{
-    Spanned,
+    SS, Spanned,
     function_parser::{FunctionDefintion, function_definition_parser},
     lexer::{Token, lexer},
     make_input, parse_failure,
@@ -114,17 +114,36 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
     } else {
         let src_text =
             std::fs::read_to_string(format!("{}.duck", joined.to_str().unwrap())).unwrap();
-        let (lex, lex_errors) = lexer().parse(&src_text).into_output_errors();
+        let (lex, lex_errors) = lexer("test").parse(&src_text).into_output_errors();
 
         let target_path = joined.to_string_lossy();
+        let target_path_leaked = target_path.to_string().leak() as &str;
 
         lex_errors.into_iter().for_each(|e| {
-            parse_failure(&target_path, &e, &src_text);
+            parse_failure(
+                &target_path,
+                &Rich::<&str, SS>::custom(
+                    SS {
+                        start: e.span().start,
+                        end: e.span().end,
+                        context: target_path_leaked,
+                    },
+                    "Lex Error",
+                ),
+                &src_text,
+            );
         });
 
         let lex = lex.unwrap();
         let (parse, parse_errors) = source_file_parser(current_dir.clone(), make_input)
-            .parse(make_input((0..src_text.len()).into(), &lex))
+            .parse(make_input(
+                SS {
+                    start: 0,
+                    end: src_text.len(),
+                    context: target_path_leaked,
+                },
+                &lex,
+            ))
             .into_output_errors();
 
         parse_errors.into_iter().for_each(|e| {
@@ -138,10 +157,10 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
 pub fn source_file_parser<'src, I, M>(
     p: PathBuf,
     make_input: M,
-) -> impl Parser<'src, I, SourceFile, extra::Err<Rich<'src, Token>>>
+) -> impl Parser<'src, I, SourceFile, extra::Err<Rich<'src, Token, SS>>>
 where
-    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
-    M: Fn(SimpleSpan, &'src [Spanned<Token>]) -> I + Clone + 'src,
+    I: BorrowInput<'src, Token = Token, Span = SS>,
+    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'src,
 {
     let p = Box::leak(Box::new(p));
     recursive(|e| {
@@ -207,7 +226,10 @@ mod tests {
         source_file_parser::{SourceFile, source_file_parser},
         type_parser::{Duck, Field, TypeDefinition, TypeExpr},
         use_statement_parser::{Indicator, UseStatement},
-        value_parser::{Combi, IntoBlock, IntoEmptySpan, ValueExpr, all_into_empty_range},
+        value_parser::{
+            Combi, IntoBlock, IntoEmptySpan, ValueExpr, all_into_empty_range, empty_range,
+            source_file_into_empty_range,
+        },
     };
 
     #[test]
@@ -347,11 +369,12 @@ mod tests {
         ];
 
         for (src, exp) in test_cases {
-            let lex = lexer().parse(src).into_result().expect(src);
-            let parse = source_file_parser(PathBuf::from("test_files"), make_input)
-                .parse(make_input((1..10).into(), &lex))
+            let lex = lexer("test").parse(src).into_result().expect(src);
+            let mut parse = source_file_parser(PathBuf::from("test_files"), make_input)
+                .parse(make_input(empty_range(), &lex))
                 .into_result()
                 .expect(src);
+            source_file_into_empty_range(&mut parse);
             assert_eq!(parse, exp, "{src}");
         }
     }
@@ -606,11 +629,11 @@ mod tests {
 
         for (main_file, mut expected) in test_cases {
             let src = std::fs::read_to_string(dir.join(main_file)).unwrap();
-            let lex = lexer().parse(&src).unwrap();
+            let lex = lexer("test").parse(&src).unwrap();
             let mut got = source_file_parser(dir.clone(), make_input)
-                .parse(make_input((1..10).into(), &lex))
+                .parse(make_input(empty_range(), &lex))
                 .unwrap();
-
+            source_file_into_empty_range(&mut got);
             fn sort_all(x: &mut SourceFile) {
                 x.function_definitions.sort_by_key(|x| x.name.clone());
                 for (_, s) in x.sub_modules.iter_mut() {
@@ -828,6 +851,7 @@ mod tests {
                     sort_all(s);
                 }
             }
+            source_file_into_empty_range(&mut original);
 
             sort_all(&mut expected);
             sort_all(&mut original);

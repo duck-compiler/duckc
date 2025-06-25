@@ -1,7 +1,7 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::parse::{
-    Spanned,
+    SS, Spanned,
     value_parser::{Combi, IntoBlock},
 };
 
@@ -42,10 +42,10 @@ pub struct LambdaFunctionExpr {
 
 pub fn function_definition_parser<'src, I, M>(
     make_input: M,
-) -> impl Parser<'src, I, FunctionDefintion, extra::Err<Rich<'src, Token>>> + Clone
+) -> impl Parser<'src, I, FunctionDefintion, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
-    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
-    M: Fn(SimpleSpan, &'src [Spanned<Token>]) -> I + Clone + 'src,
+    I: BorrowInput<'src, Token = Token, Span = SS>,
+    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'src,
 {
     let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
         .then_ignore(just(Token::ControlChar(':')))
@@ -88,7 +88,7 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::{lexer::lexer, make_input};
+    use crate::parse::{lexer::lexer, make_input, value_parser::empty_range};
 
     use super::*;
 
@@ -106,7 +106,7 @@ pub mod tests {
 
         for valid_function_definition in valid_function_definitions {
             println!("lexing {valid_function_definition}");
-            let lexer_parse_result = lexer().parse(valid_function_definition);
+            let lexer_parse_result = lexer("test").parse(valid_function_definition);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -116,7 +116,7 @@ pub mod tests {
 
             println!("typedef_parsing {valid_function_definition}");
             let typedef_parse_result =
-                function_definition_parser(make_input).parse(make_input((1..10).into(), &tokens));
+                function_definition_parser(make_input).parse(make_input(empty_range(), &tokens));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -125,7 +125,7 @@ pub mod tests {
 
         for invalid_function_definition in invalid_function_definitions {
             println!("lexing {invalid_function_definition}");
-            let lexer_parse_result = lexer().parse(invalid_function_definition);
+            let lexer_parse_result = lexer("test").parse(invalid_function_definition);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -135,7 +135,7 @@ pub mod tests {
 
             println!("typedef_parsing {invalid_function_definition}");
             let typedef_parse_result = function_definition_parser(make_input)
-                .parse(make_input((1..10).into(), tokens.as_slice()));
+                .parse(make_input(empty_range(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), true);
             assert_eq!(typedef_parse_result.has_output(), false);
         }

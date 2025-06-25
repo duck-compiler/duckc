@@ -17,20 +17,21 @@ pub mod type_parser;
 pub mod use_statement_parser;
 pub mod value_parser;
 
-pub type Spanned<T> = (T, SimpleSpan);
+pub type SS = SimpleSpan<usize, &'static str>;
+pub type Spanned<T> = (T, SS);
 
 pub fn make_input<'src>(
-    eoi: SimpleSpan,
+    eoi: SS,
     toks: &'src [Spanned<Token>],
-) -> impl BorrowInput<'src, Token = Token, Span = SimpleSpan> {
+) -> impl BorrowInput<'src, Token = Token, Span = SS> {
     toks.map(eoi, |(t, s)| (t, s))
 }
 
 pub fn failure(
     file_name: &'static str,
     msg: String,
-    label: (String, SimpleSpan),
-    extra_labels: impl IntoIterator<Item = (String, SimpleSpan)>,
+    label: (String, SS),
+    extra_labels: impl IntoIterator<Item = (String, SS)>,
     src: &str,
 ) -> ! {
     Report::build(ReportKind::Error, (file_name, label.1.into_range()))
@@ -52,7 +53,7 @@ pub fn failure(
     std::process::exit(1)
 }
 
-pub fn parse_failure(file_name: &str, err: &Rich<impl fmt::Display>, src: &str) -> ! {
+pub fn parse_failure(file_name: &str, err: &Rich<impl fmt::Display, SS>, src: &str) -> ! {
     failure(
         file_name.to_string().leak(),
         err.reason().to_string(),
