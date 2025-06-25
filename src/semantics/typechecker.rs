@@ -1,11 +1,7 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    Spanned,
-    function_parser::FunctionDefintion,
-    source_file_parser::SourceFile,
-    type_parser::{Duck, Field, Struct, TypeExpr},
-    value_parser::ValueExpr,
+    function_parser::FunctionDefintion, source_file_parser::SourceFile, type_parser::{Duck, Field, Struct, TypeExpr}, value_parser::ValueExpr, Spanned
 };
 
 #[derive(Debug, Clone)]
@@ -450,7 +446,8 @@ impl TypeExpr {
                         right_type_expr.as_go_type_annotation(type_env)
                     ),
                 );
-                check_type_compatability(&left_type_expr, &right_type_expr, type_env);
+
+                check_type_compatability(&(left_type_expr.clone(), left.as_ref().1), &(right_type_expr, right.as_ref().1), type_env);
 
                 left_type_expr
             }
@@ -458,7 +455,7 @@ impl TypeExpr {
                 let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&left.0, type_env);
                 let right_type_expr: TypeExpr = TypeExpr::from_value_expr(&right.0, type_env);
 
-                check_type_compatability(&left_type_expr, &right_type_expr, type_env);
+                check_type_compatability(&(left_type_expr.clone(), left.1), &(right_type_expr, right.1), type_env);
 
                 left_type_expr
             }
@@ -474,7 +471,8 @@ impl TypeExpr {
                         right_type_expr.as_go_type_annotation(type_env)
                     ),
                 );
-                check_type_compatability(&left_type_expr, &right_type_expr, type_env);
+
+                check_type_compatability(&(left_type_expr.clone(), left.1), &(right_type_expr, right.1), type_env);
 
                 left_type_expr
             }
@@ -485,15 +483,14 @@ impl TypeExpr {
                 .last()
                 .map(|value_expr| TypeExpr::from_value_expr(&value_expr.0, type_env))
                 .expect("Block Expressions must be at least one expression long."),
-
             ValueExpr::Variable(.., type_expr) => type_expr
                 .as_ref()
                 .expect("Expected type but didn't get one")
                 .clone(),
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(
-                    &TypeExpr::from_value_expr(&bool_expr.0, type_env),
-                    &TypeExpr::Bool,
+                    &(TypeExpr::from_value_expr(&bool_expr.0, type_env), bool_expr.1),
+                    &TypeExpr::Bool.into_empty_span(),
                     type_env,
                 );
                 TypeExpr::Bool
@@ -504,7 +501,7 @@ impl TypeExpr {
                 r#else,
             } => {
                 let condition_type_expr = TypeExpr::from_value_expr(&condition.0, type_env);
-                check_type_compatability(&condition_type_expr, &TypeExpr::Bool, type_env);
+                check_type_compatability(&(condition_type_expr, condition.1), &TypeExpr::Bool.into_empty_span(), type_env);
 
                 let _then_type_expr = TypeExpr::from_value_expr(&then.0, type_env);
                 if let Some(r#else) = r#else {
@@ -540,7 +537,7 @@ impl TypeExpr {
             }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(&condition.0, type_env);
-                check_type_compatability(&condition_type_expr, &TypeExpr::Bool, type_env);
+                check_type_compatability(&(condition_type_expr, condition.1), &TypeExpr::Bool.into_empty_span(), type_env);
 
                 let _body_type_expr = TypeExpr::from_value_expr(&body.0, type_env);
 
@@ -616,15 +613,14 @@ fn require(condition: bool, fail_message: String) {
     }
 }
 
-fn check_type_compatability(one: &TypeExpr, two: &TypeExpr, type_env: &mut TypeEnv) {
-    if one.is_number() {
-        if !two.is_number() {
+fn check_type_compatability(one: &Spanned<TypeExpr>, two: &Spanned<TypeExpr>, type_env: &mut TypeEnv) {
+    if one.0.is_number() {
+        if !two.0.is_number() {
             println!(
                 "Types {} and {} are not compatible.",
-                one.as_go_type_annotation(type_env),
-                two.clone().as_go_type_annotation(type_env)
+                one.0.as_go_type_annotation(type_env),
+                two.clone().0.as_go_type_annotation(type_env)
             );
-            process::exit(2);
         }
 
         return;
@@ -633,8 +629,8 @@ fn check_type_compatability(one: &TypeExpr, two: &TypeExpr, type_env: &mut TypeE
     if *one != *two {
         println!(
             "Types {} and {} are not compatible.",
-            one.as_go_type_annotation(type_env),
-            two.as_go_type_annotation(type_env)
+            one.0.as_go_type_annotation(type_env),
+            two.0.as_go_type_annotation(type_env)
         );
         process::exit(2);
     }
