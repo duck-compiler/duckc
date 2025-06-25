@@ -18,7 +18,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> String {
                 ))
                 .collect::<Vec<_>>()
                 .join("\n"),
-            TypeExpr::Struct(r#struct) => todo!(),
+            TypeExpr::Struct(r#_struct) => todo!(),
             _ => "".to_string()
         }
     }
@@ -67,7 +67,7 @@ impl TypeExpr {
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeName(name) => name.to_string(),
+            TypeExpr::TypeName(name) => type_env.resolve_type_alias(name).as_go_type_annotation(type_env),
             TypeExpr::Fun(params, return_type) => format!(
                 "func({}) {}",
                 params
@@ -137,7 +137,7 @@ impl TypeExpr {
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeName(name) => name.to_string(),
+            TypeExpr::TypeName(name) => type_env.resolve_type_alias(name).as_go_concrete_annotation(type_env),
             TypeExpr::Fun(params, return_type) => format!(
                 "func({}) {}",
                 params
