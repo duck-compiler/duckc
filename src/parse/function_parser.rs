@@ -1,9 +1,6 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
-use crate::parse::{
-    SS, Spanned,
-    value_parser::{Combi, IntoBlock},
-};
+use crate::parse::{SS, Spanned, value_parser::IntoBlock};
 
 use super::{
     lexer::Token,
@@ -11,13 +8,13 @@ use super::{
     value_parser::{ValueExpr, value_expr_parser},
 };
 
-pub type Param = (String, TypeExpr);
+pub type Param = (String, Spanned<TypeExpr>);
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDefintion {
     pub name: String,
-    pub return_type: Option<TypeExpr>,
+    pub return_type: Option<Spanned<TypeExpr>>,
     pub params: Option<Vec<Param>>,
     pub value_expr: Spanned<ValueExpr>,
 }
@@ -36,7 +33,7 @@ impl Default for FunctionDefintion {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LambdaFunctionExpr {
     pub params: Vec<Param>,
-    pub return_type: Option<TypeExpr>,
+    pub return_type: Option<Spanned<TypeExpr>>,
     pub value_expr: Spanned<ValueExpr>,
 }
 

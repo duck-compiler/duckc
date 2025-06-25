@@ -51,16 +51,6 @@ pub enum ValueExpr {
     Lambda(Box<LambdaFunctionExpr>),
 }
 
-pub trait IntoEmptySpan {
-    fn into_empty_span(self) -> Spanned<ValueExpr>;
-}
-
-impl IntoEmptySpan for ValueExpr {
-    fn into_empty_span(self) -> Spanned<ValueExpr> {
-        (self, empty_range())
-    }
-}
-
 pub trait IntoBlock {
     fn into_block(self) -> Spanned<ValueExpr>;
 }
@@ -72,20 +62,13 @@ impl IntoBlock for Spanned<ValueExpr> {
     }
 }
 
-pub trait Combi {
-    fn into_empty_span_and_block(self) -> Spanned<ValueExpr>;
-}
-
-impl<T> Combi for T
-where
-    T: IntoEmptySpan,
-{
-    fn into_empty_span_and_block(self) -> Spanned<ValueExpr> {
+impl ValueExpr {
+    pub fn into_empty_span(self) -> Spanned<ValueExpr> {
+        (self, empty_range())
+    }
+    pub fn into_empty_span_and_block(self) -> Spanned<ValueExpr> {
         self.into_empty_span().into_block()
     }
-}
-
-impl ValueExpr {
     pub fn needs_semicolon(&self) -> bool {
         match self {
             ValueExpr::If {
@@ -543,85 +526,141 @@ pub fn empty_range() -> SS {
 
 pub fn source_file_into_empty_range(v: &mut SourceFile) {
     for x in &mut v.function_definitions {
-        all_into_empty_range(&mut x.value_expr);
+        value_expr_into_empty_range(&mut x.value_expr);
+        x.return_type
+            .as_mut()
+            .map(|x| type_expr_into_empty_range(x));
+        if let Some(params) = &mut x.params {
+            for (_, p) in params {
+                type_expr_into_empty_range(p);
+            }
+        }
+    }
+    for x in &mut v.type_definitions {
+        type_expr_into_empty_range(&mut x.type_expression);
     }
     for x in &mut v.sub_modules {
         source_file_into_empty_range(&mut x.1);
     }
 }
 
-pub fn all_into_empty_range(v: &mut Spanned<ValueExpr>) {
+pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
+    t.1 = empty_range();
+    match &mut t.0 {
+        TypeExpr::Duck(d) => {
+            for f in &mut d.fields {
+                type_expr_into_empty_range(&mut f.type_expr);
+            }
+        }
+        TypeExpr::Tuple(fields) => {
+            for f in fields {
+                type_expr_into_empty_range(f);
+            }
+        }
+        TypeExpr::Or(types) => {
+            for t in types {
+                type_expr_into_empty_range(t);
+            }
+        }
+        TypeExpr::Fun(params, return_type) => {
+            return_type
+                .as_mut()
+                .map(|x| type_expr_into_empty_range(&mut *x));
+            for (_, p) in params {
+                type_expr_into_empty_range(p);
+            }
+        }
+        TypeExpr::Struct(s) => {
+            for f in &mut s.fields {
+                type_expr_into_empty_range(&mut f.type_expr);
+            }
+        }
+        _ => {}
+    }
+}
+
+pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
     v.1 = empty_range();
     match &mut v.0 {
         ValueExpr::FunctionCall { target, params } => {
-            all_into_empty_range(target);
+            value_expr_into_empty_range(target);
             for p in params {
-                all_into_empty_range(p);
+                value_expr_into_empty_range(p);
             }
         }
         ValueExpr::Add(v1, v2) => {
-            all_into_empty_range(v1);
-            all_into_empty_range(v2);
+            value_expr_into_empty_range(v1);
+            value_expr_into_empty_range(v2);
         }
         ValueExpr::If {
             condition,
             then,
             r#else,
         } => {
-            all_into_empty_range(condition);
-            all_into_empty_range(then);
+            value_expr_into_empty_range(condition);
+            value_expr_into_empty_range(then);
             if let Some(r#else) = r#else {
-                all_into_empty_range(r#else);
+                value_expr_into_empty_range(r#else);
             }
         }
         ValueExpr::Mul(v1, v2) => {
-            all_into_empty_range(v1);
-            all_into_empty_range(v2);
+            value_expr_into_empty_range(v1);
+            value_expr_into_empty_range(v2);
         }
         ValueExpr::Duck(fields) => {
             for field in fields {
-                all_into_empty_range(&mut field.1);
+                value_expr_into_empty_range(&mut field.1);
             }
         }
         ValueExpr::Block(exprs) => {
             for expr in exprs {
-                all_into_empty_range(expr);
+                value_expr_into_empty_range(expr);
             }
         }
         ValueExpr::Tuple(fields) => {
             for field in fields {
-                all_into_empty_range(field);
+                value_expr_into_empty_range(field);
             }
         }
         ValueExpr::Equals(v1, v2) => {
-            all_into_empty_range(v1);
-            all_into_empty_range(v2);
+            value_expr_into_empty_range(v1);
+            value_expr_into_empty_range(v2);
         }
         ValueExpr::Lambda(b) => {
-            all_into_empty_range(&mut b.value_expr);
+            value_expr_into_empty_range(&mut b.value_expr);
+            b.return_type
+                .as_mut()
+                .map(|x| type_expr_into_empty_range(x));
+            for (_, p) in &mut b.params {
+                type_expr_into_empty_range(p);
+            }
         }
-        ValueExpr::Return(Some(v)) => all_into_empty_range(v),
+        ValueExpr::Return(Some(v)) => value_expr_into_empty_range(v),
         ValueExpr::Struct(fields) => {
             for field in fields {
-                all_into_empty_range(&mut field.1);
+                value_expr_into_empty_range(&mut field.1);
             }
         }
         ValueExpr::While { condition, body } => {
-            all_into_empty_range(condition);
-            all_into_empty_range(body);
+            value_expr_into_empty_range(condition);
+            value_expr_into_empty_range(body);
         }
         ValueExpr::VarDecl(b) => {
             b.1 = empty_range();
             if let Some(init) = &mut b.0.initializer {
-                all_into_empty_range(init);
+                value_expr_into_empty_range(init);
             }
+            type_expr_into_empty_range(&mut b.0.type_expr);
         }
-        ValueExpr::BoolNegate(b) => all_into_empty_range(b),
+        ValueExpr::VarAssign(a) => {
+            a.1 = empty_range();
+        }
+        ValueExpr::BoolNegate(b) => value_expr_into_empty_range(b),
         ValueExpr::FieldAccess {
             target_obj,
             field_name: _,
         } => {
-            all_into_empty_range(target_obj);
+            value_expr_into_empty_range(target_obj);
         }
         _ => {}
     }
@@ -639,8 +678,8 @@ mod tests {
         make_input,
         type_parser::{Duck, Field, TypeExpr},
         value_parser::{
-            Combi, IntoEmptySpan, all_into_empty_range, empty_duck, empty_range, empty_tuple,
-            value_expr_parser,
+            empty_duck, empty_range, empty_tuple, type_expr_into_empty_range,
+            value_expr_into_empty_range, value_expr_parser,
         },
     };
 
@@ -1160,7 +1199,7 @@ mod tests {
                         Declaration {
                             name: "x".into(),
                             initializer: None,
-                            type_expr: TypeExpr::String,
+                            type_expr: TypeExpr::String.into_empty_span(),
                         },
                         empty_range(),
                     )
@@ -1387,7 +1426,7 @@ mod tests {
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
                         params: vec![],
-                        return_type: Some(TypeExpr::Int),
+                        return_type: Some(TypeExpr::Int.into_empty_span()),
                         value_expr: ValueExpr::Int(1).into_empty_span(),
                     }
                     .into(),
@@ -1397,8 +1436,8 @@ mod tests {
                 "(x: String) -> Int => 1",
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
-                        params: vec![("x".into(), TypeExpr::String)],
-                        return_type: Some(TypeExpr::Int),
+                        params: vec![("x".into(), TypeExpr::String.into_empty_span())],
+                        return_type: Some(TypeExpr::Int.into_empty_span()),
                         value_expr: ValueExpr::Int(1).into_empty_span(),
                     }
                     .into(),
@@ -1444,7 +1483,7 @@ mod tests {
             assert_eq!(parse_result.has_output(), true, "{i}: {}", src);
 
             let mut output = parse_result.into_result().expect(&src);
-            all_into_empty_range(&mut output);
+            value_expr_into_empty_range(&mut output);
 
             assert_eq!(output.0, expected_tokens, "{i}: {}", src);
         }
@@ -1457,7 +1496,7 @@ mod tests {
                 "let x: String",
                 Declaration {
                     name: "x".to_string(),
-                    type_expr: TypeExpr::String,
+                    type_expr: TypeExpr::String.into_empty_span(),
                     initializer: None,
                 },
             ),
@@ -1466,8 +1505,9 @@ mod tests {
                 Declaration {
                     name: "y".to_string(),
                     type_expr: TypeExpr::Duck(Duck {
-                        fields: vec![Field::new("x".to_string(), TypeExpr::Int)],
-                    }),
+                        fields: vec![Field::new("x".to_string(), TypeExpr::Int.into_empty_span())],
+                    })
+                    .into_empty_span(),
                     initializer: Some(ValueExpr::Duck(vec![]).into_empty_span()),
                 },
             ),
@@ -1475,7 +1515,7 @@ mod tests {
                 "let z: {}",
                 Declaration {
                     name: "z".to_string(),
-                    type_expr: TypeExpr::Duck(Duck { fields: vec![] }),
+                    type_expr: TypeExpr::Duck(Duck { fields: vec![] }).into_empty_span(),
                     initializer: None,
                 },
             ),
@@ -1502,9 +1542,10 @@ mod tests {
             };
 
             declaration.0.initializer.as_mut().map(|x| {
-                all_into_empty_range(x);
+                value_expr_into_empty_range(x);
                 x
             });
+            type_expr_into_empty_range(&mut declaration.0.type_expr);
 
             assert_eq!(declaration.0, expected_output.into());
         }

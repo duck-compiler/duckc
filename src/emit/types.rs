@@ -20,7 +20,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> String {
                         "func (self {0}) Get{1}() {2} {{ return self.{1}; }}",
                         typename,
                         field.name,
-                        field.type_expr.as_go_concrete_annotation(type_env)
+                        field.type_expr.0.as_go_concrete_annotation(type_env)
                     )
                 })
                 .collect::<Vec<_>>()
@@ -83,14 +83,15 @@ impl TypeExpr {
                     .iter()
                     .map(|(name, type_expr)| match name {
                         Some(name) =>
-                            format!("{name}: {}", type_expr.as_go_type_annotation(type_env)),
-                        None => type_expr.as_go_type_annotation(type_env),
+                            format!("{name}: {}", type_expr.0.as_go_type_annotation(type_env)),
+                        None => type_expr.0.as_go_type_annotation(type_env),
                     })
                     .collect::<Vec<_>>()
                     .join(","),
                 return_type
                     .clone()
                     .map_or("".to_string(), |return_type| return_type
+                        .0
                         .as_go_type_annotation(type_env))
             ),
             TypeExpr::Struct(r#struct) => format!(
@@ -101,7 +102,7 @@ impl TypeExpr {
                     .map(|field| format!(
                         "   {} {}",
                         field.name,
-                        field.type_expr.as_go_type_annotation(type_env)
+                        field.type_expr.0.as_go_type_annotation(type_env)
                     ))
                     .collect::<Vec<_>>()
                     .join("\n")
@@ -117,7 +118,7 @@ impl TypeExpr {
                         .map(|field| format!(
                             "   Has{}[{}]",
                             field.name,
-                            field.type_expr.as_go_type_annotation(type_env)
+                            field.type_expr.0.as_go_type_annotation(type_env)
                         ))
                         .collect::<Vec<_>>()
                         .join("\n")
@@ -128,7 +129,7 @@ impl TypeExpr {
                     "struct {{\n{}\n}}",
                     fields
                         .iter()
-                        .map(|type_expr| type_expr.as_go_type_annotation(type_env).to_string())
+                        .map(|type_expr| type_expr.0.as_go_type_annotation(type_env).to_string())
                         .collect::<Vec<_>>()
                         .join("_")
                 )
@@ -155,14 +156,15 @@ impl TypeExpr {
                     .iter()
                     .map(|(name, type_expr)| match name {
                         Some(name) =>
-                            format!("{name}: {}", type_expr.as_go_type_annotation(type_env)),
-                        None => type_expr.as_go_type_annotation(type_env),
+                            format!("{name}: {}", type_expr.0.as_go_type_annotation(type_env)),
+                        None => type_expr.0.as_go_type_annotation(type_env),
                     })
                     .collect::<Vec<_>>()
                     .join(","),
                 return_type
                     .clone()
                     .map_or("".to_string(), |return_type| return_type
+                        .0
                         .as_go_type_annotation(type_env))
             ),
             TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => format!(
@@ -172,7 +174,7 @@ impl TypeExpr {
                     .map(|field| format!(
                         "   {} {}",
                         field.name,
-                        field.type_expr.as_go_type_annotation(type_env)
+                        field.type_expr.0.as_go_type_annotation(type_env)
                     ))
                     .collect::<Vec<_>>()
                     .join("\n")
@@ -182,7 +184,7 @@ impl TypeExpr {
                     "struct {{\n{}\n}}",
                     fields
                         .iter()
-                        .map(|type_expr| type_expr.as_go_type_annotation(type_env).to_string())
+                        .map(|type_expr| type_expr.0.as_go_type_annotation(type_env).to_string())
                         .collect::<Vec<_>>()
                         .join("_")
                 )
@@ -208,13 +210,13 @@ impl TypeExpr {
                     .map(|(name, type_expr)| format!(
                         "{}_{}",
                         name.clone().unwrap_or_else(|| "".to_string()),
-                        type_expr.as_clean_go_type_name(type_env)
+                        type_expr.0.as_clean_go_type_name(type_env)
                     ))
                     .collect::<Vec<_>>()
                     .join("_"),
                 return_type
                     .as_ref()
-                    .map(|type_expr| format!("_To_{}", type_expr.as_clean_go_type_name(type_env)))
+                    .map(|type_expr| format!("_To_{}", type_expr.0.as_clean_go_type_name(type_env)))
                     .unwrap_or_else(|| "".to_string())
             ),
             TypeExpr::Struct(r#struct) if r#struct.fields.is_empty() => "Any".to_string(),
@@ -226,7 +228,7 @@ impl TypeExpr {
                     .map(|field| format!(
                         "{}_{}",
                         field.name,
-                        field.type_expr.as_clean_go_type_name(type_env)
+                        field.type_expr.0.as_clean_go_type_name(type_env)
                     ))
                     .collect::<Vec<_>>()
                     .join("_")
@@ -238,7 +240,7 @@ impl TypeExpr {
                     .map(|field| format!(
                         "{}_{}",
                         field.name,
-                        field.type_expr.as_clean_go_type_name(type_env)
+                        field.type_expr.0.as_clean_go_type_name(type_env)
                     ))
                     .collect::<Vec<_>>()
                     .join("_")
@@ -248,7 +250,7 @@ impl TypeExpr {
                     "struct {{\n{}\n}}",
                     fields
                         .iter()
-                        .map(|type_expr| type_expr.as_go_type_annotation(type_env).to_string())
+                        .map(|type_expr| type_expr.0.as_go_type_annotation(type_env).to_string())
                         .collect::<Vec<_>>()
                         .join("_")
                 )
@@ -267,7 +269,7 @@ impl TypeExpr {
                     &types
                         .iter()
                         .enumerate()
-                        .map(|(i, x)| format!("field_{i} {}\n", x.emit().0))
+                        .map(|(i, x)| format!("field_{i} {}\n", x.0.emit().0))
                         .collect::<Vec<_>>()
                         .join(""),
                     "}",
@@ -277,7 +279,7 @@ impl TypeExpr {
                     "Tup{}",
                     types
                         .iter()
-                        .map(|x| format!("_{}", x.emit().1))
+                        .map(|x| format!("_{}", x.0.emit().1))
                         .collect::<Vec<_>>()
                         .join("")
                 ),
@@ -292,7 +294,7 @@ impl TypeExpr {
                         "Duck{}",
                         fields
                             .into_iter()
-                            .map(|x| format!("_Has{}_{}", x.name, x.type_expr.emit().1))
+                            .map(|x| format!("_Has{}_{}", x.name, x.type_expr.0.emit().1))
                             .collect::<Vec<_>>()
                             .join("")
                     );
@@ -304,13 +306,13 @@ impl TypeExpr {
                     "struct",
                     &fields
                         .iter()
-                        .map(|field| format!("_With{}{}", field.name, field.type_expr.emit().1))
+                        .map(|field| format!("_With{}{}", field.name, field.type_expr.0.emit().1))
                         .collect::<Vec<_>>()
                         .join(""),
                     "{\n",
                     &fields
                         .iter()
-                        .map(|field| format!("   {} {}", field.name, field.type_expr.emit().1))
+                        .map(|field| format!("   {} {}", field.name, field.type_expr.0.emit().1))
                         .collect::<Vec<_>>()
                         .join("\n"),
                     "\n}\n",
@@ -320,7 +322,7 @@ impl TypeExpr {
                     "Struct_{}",
                     fields
                         .iter()
-                        .map(|field| format!("_With{}{}", field.name, field.type_expr.emit().1))
+                        .map(|field| format!("_With{}{}", field.name, field.type_expr.0.emit().1))
                         .collect::<Vec<_>>()
                         .join("")
                 ),
@@ -371,6 +373,7 @@ mod tests {
             let parse = type_expression_parser()
                 .parse(make_input(empty_range(), &lex))
                 .unwrap()
+                .0
                 .emit();
             let exp = (exp.0.to_string(), exp.1.to_string());
             assert_eq!(parse, exp, "{src}");
