@@ -711,7 +711,7 @@ mod test {
 
         for (src, expected_type_expr) in src_and_expected_type_vec {
             println!("lexing {src}");
-            let lexer_parse_result = lexer("test").parse(src);
+            let lexer_parse_result = lexer("test", "").parse(src);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -808,7 +808,7 @@ mod test {
         ];
 
         for (src, summary_check_fun) in src_and_summary_check_funs {
-            let lexer_parse_result = lexer("test").parse(src);
+            let lexer_parse_result = lexer("test", "").parse(src);
             assert_eq!(lexer_parse_result.has_errors(), false, "Couldn't lex {src}");
             assert_eq!(lexer_parse_result.has_output(), true, "Couldn't lex {src}");
 

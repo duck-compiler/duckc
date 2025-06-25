@@ -1,9 +1,5 @@
 use crate::parse::{
-    SS, Spanned,
-    assignment_and_declaration_parser::{Assignment, Declaration},
-    function_parser::{LambdaFunctionExpr, Param},
-    source_file_parser::SourceFile,
-    type_parser::type_expression_parser,
+    assignment_and_declaration_parser::{Assignment, Declaration}, function_parser::{LambdaFunctionExpr, Param}, source_file_parser::SourceFile, type_parser::type_expression_parser, Context, Spanned, SS
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
@@ -298,7 +294,7 @@ where
                                 SS {
                                     start: range.start,
                                     end: range.end,
-                                    context: "",
+                                    context: base_expr[0].1.context,
                                 },
                                 base_expr,
                             ))
@@ -520,7 +516,10 @@ pub fn empty_range() -> SS {
     SS {
         start: 0,
         end: 1,
-        context: "",
+        context: Context {
+            file_name: "",
+            file_contents: "",
+        },
     }
 }
 
@@ -1475,7 +1474,7 @@ mod tests {
         ];
 
         for (i, (src, expected_tokens)) in test_cases.into_iter().enumerate() {
-            let lex_result = lexer("test").parse(src).into_result().expect(&src);
+            let lex_result = lexer("test", "").parse(src).into_result().expect(&src);
             let parse_result =
                 value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
 
@@ -1522,7 +1521,7 @@ mod tests {
         ];
 
         for (input, expected_output) in inputs_and_expected_outputs {
-            let lexer_parse_result = lexer("test").parse(input);
+            let lexer_parse_result = lexer("test", "").parse(input);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -1566,7 +1565,7 @@ mod tests {
 
         for valid_declaration in valid_declarations {
             println!("lexing {valid_declaration}");
-            let lexer_parse_result = lexer("test").parse(valid_declaration);
+            let lexer_parse_result = lexer("test", "").parse(valid_declaration);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -1598,7 +1597,7 @@ mod tests {
         ];
 
         for valid_assignment in valid_assignments {
-            let lexer_parse_result = lexer("test").parse(valid_assignment);
+            let lexer_parse_result = lexer("test", "").parse(valid_assignment);
             assert_eq!(lexer_parse_result.has_errors(), false, "{valid_assignment}");
             assert_eq!(lexer_parse_result.has_output(), true);
 

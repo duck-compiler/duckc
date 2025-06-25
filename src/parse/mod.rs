@@ -17,7 +17,13 @@ pub mod type_parser;
 pub mod use_statement_parser;
 pub mod value_parser;
 
-pub type SS = SimpleSpan<usize, &'static str>;
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Context {
+   pub file_name: &'static str,
+   pub file_contents: &'static str,
+}
+
+pub type SS = SimpleSpan<usize, Context>;
 pub type Spanned<T> = (T, SS);
 
 pub fn make_input<'src>(
