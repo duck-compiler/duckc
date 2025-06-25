@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use chumsky::{prelude::*, text::whitespace};
 
-use crate::parse::Spanned;
+use crate::parse::{SS, Spanned};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Token {
@@ -64,7 +64,9 @@ impl Display for Token {
     }
 }
 
-pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> {
+pub fn lexer<'a>(
+    f: &'static str,
+) -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> {
     let keyword_or_ident = text::ident().map(|str| match str {
         "module" => Token::Module,
         "use" => Token::Use,
@@ -106,7 +108,16 @@ pub fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<R
         .or(r#char);
 
     token
-        .map_with(|t, e| (t, e.span()))
+        .map_with(move |t, e| {
+            (
+                t,
+                SS {
+                    start: e.span().start,
+                    end: e.span().end,
+                    context: f,
+                },
+            )
+        })
         .padded()
         .repeated()
         .collect::<Vec<Spanned<Token>>>()
@@ -334,7 +345,7 @@ mod tests {
         ];
 
         for (src, expected_tokens) in test_cases {
-            let parse_result = lexer().parse(src);
+            let parse_result = lexer("test").parse(src);
 
             assert_eq!(parse_result.has_errors(), false, "{}", src);
             assert_eq!(parse_result.has_output(), true, "{}", src);

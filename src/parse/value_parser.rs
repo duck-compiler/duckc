@@ -1,5 +1,5 @@
 use crate::parse::{
-    Spanned,
+    SS, Spanned,
     assignment_and_declaration_parser::{Assignment, Declaration},
     function_parser::{LambdaFunctionExpr, Param},
     source_file_parser::SourceFile,
@@ -57,7 +57,7 @@ pub trait IntoEmptySpan {
 
 impl IntoEmptySpan for ValueExpr {
     fn into_empty_span(self) -> Spanned<ValueExpr> {
-        (self, (0..1).into())
+        (self, empty_range())
     }
 }
 
@@ -106,14 +106,14 @@ impl ValueExpr {
 
 pub fn value_expr_parser<'src, I, M>(
     make_input: M,
-) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token>>> + Clone
+) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
-    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
-    M: Fn(SimpleSpan, &'src [Spanned<Token>]) -> I + Clone + 'src,
+    I: BorrowInput<'src, Token = Token, Span = SS>,
+    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'src,
 {
     recursive(
         |value_expr_parser: Recursive<
-            dyn Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token>>>,
+            dyn Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>>,
         >| {
             let lambda_parser = {
                 let param_parser =
@@ -308,11 +308,15 @@ where
                             .collect::<Vec<_>>()
                             .leak() as &[Spanned<Token>];
 
+                        let range =
+                            base_expr.first().unwrap().1.start..base_expr.last().unwrap().1.end;
                         let base = e
                             .parse(make_input(
-                                (base_expr.first().unwrap().1.start
-                                    ..base_expr.last().unwrap().1.end)
-                                    .into(),
+                                SS {
+                                    start: range.start,
+                                    end: range.end,
+                                    context: "",
+                                },
                                 base_expr,
                             ))
                             .unwrap();
@@ -439,14 +443,14 @@ where
             let assignment = select_ref! { Token::Ident(identifier) => identifier.to_string() }
                 .then_ignore(just(Token::ControlChar('=')))
                 .then(value_expr_parser.clone())
-                .map(|(identifier, value_expr)| {
+                .map_with(|(identifier, value_expr), e| {
                     ValueExpr::VarAssign(
                         (
                             Assignment {
                                 name: identifier,
-                                value_expr,
+                                value_expr: value_expr.clone(),
                             },
-                            (0..1).into(),
+                            e.span(),
                         )
                             .into(),
                     )
@@ -529,8 +533,12 @@ fn empty_duck() -> ValueExpr {
     ValueExpr::Duck(Vec::new())
 }
 
-pub fn empty_range() -> SimpleSpan {
-    (0..1).into()
+pub fn empty_range() -> SS {
+    SS {
+        start: 0,
+        end: 1,
+        context: "",
+    }
 }
 
 pub fn source_file_into_empty_range(v: &mut SourceFile) {
@@ -631,7 +639,8 @@ mod tests {
         make_input,
         type_parser::{Duck, Field, TypeExpr},
         value_parser::{
-            Combi, IntoEmptySpan, all_into_empty_range, empty_duck, empty_tuple, value_expr_parser,
+            Combi, IntoEmptySpan, all_into_empty_range, empty_duck, empty_range, empty_tuple,
+            value_expr_parser,
         },
     };
 
@@ -1153,7 +1162,7 @@ mod tests {
                             initializer: None,
                             type_expr: TypeExpr::String,
                         },
-                        (0..1).into(),
+                        empty_range(),
                     )
                         .into(),
                 ),
@@ -1427,9 +1436,9 @@ mod tests {
         ];
 
         for (i, (src, expected_tokens)) in test_cases.into_iter().enumerate() {
-            let lex_result = lexer().parse(src).into_result().expect(&src);
+            let lex_result = lexer("test").parse(src).into_result().expect(&src);
             let parse_result =
-                value_expr_parser(make_input).parse(make_input((0..src.len()).into(), &lex_result));
+                value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
 
             assert_eq!(parse_result.has_errors(), false, "{i}: {}", src);
             assert_eq!(parse_result.has_output(), true, "{i}: {}", src);
@@ -1473,7 +1482,7 @@ mod tests {
         ];
 
         for (input, expected_output) in inputs_and_expected_outputs {
-            let lexer_parse_result = lexer().parse(input);
+            let lexer_parse_result = lexer("test").parse(input);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -1482,7 +1491,7 @@ mod tests {
             };
 
             let declaration_parse_result =
-                value_expr_parser(make_input).parse(make_input((1..10).into(), tokens.as_slice()));
+                value_expr_parser(make_input).parse(make_input(empty_range(), tokens.as_slice()));
             assert_eq!(declaration_parse_result.has_errors(), false);
             assert_eq!(declaration_parse_result.has_output(), true);
 
@@ -1516,7 +1525,7 @@ mod tests {
 
         for valid_declaration in valid_declarations {
             println!("lexing {valid_declaration}");
-            let lexer_parse_result = lexer().parse(valid_declaration);
+            let lexer_parse_result = lexer("test").parse(valid_declaration);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -1526,7 +1535,7 @@ mod tests {
 
             println!("declaration parsing {valid_declaration}");
             let typedef_parse_result =
-                value_expr_parser(make_input).parse(make_input((1..10).into(), tokens.as_slice()));
+                value_expr_parser(make_input).parse(make_input(empty_range(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
@@ -1548,7 +1557,7 @@ mod tests {
         ];
 
         for valid_assignment in valid_assignments {
-            let lexer_parse_result = lexer().parse(valid_assignment);
+            let lexer_parse_result = lexer("test").parse(valid_assignment);
             assert_eq!(lexer_parse_result.has_errors(), false, "{valid_assignment}");
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -1558,7 +1567,7 @@ mod tests {
 
             println!("typedef_parsing {valid_assignment}");
             let typedef_parse_result =
-                value_expr_parser(make_input).parse(make_input((1..10).into(), tokens.as_slice()));
+                value_expr_parser(make_input).parse(make_input(empty_range(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
         }
