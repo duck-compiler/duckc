@@ -303,10 +303,12 @@ pub fn emit(
                 };
                 let mut res = Vec::new();
                 res.extend(instr);
+
                 res.push(format!(
                     "var {name} {} = {res_var}\n",
-                    type_expr.as_go_concrete_annotation(type_env)
+                    type_expr.as_clean_go_type_name(type_env)
                 ));
+
                 (res, Some(name))
             } else {
                 (
@@ -439,62 +441,68 @@ pub fn emit(
             let mut res = Vec::new();
             let mut target = target.as_ref().0.clone();
 
-            let mut with_result = true;
-            if let ValueExpr::Variable(x, ..) = &mut target
-                && x == "println"
-            {
-                // TODO: adds fmt import
-                let package_name = env
-                    .push_import(GoImport {
-                        alias: None,
-                        path: "fmt".into(),
-                    })
-                    .unwrap_or("fmt".into());
-                *x = format!("{package_name}.Println").to_string();
-                with_result = false;
-            }
+            let target_type_expr = TypeExpr::from_value_expr(&target, type_env);
+            if let TypeExpr::Fun(_target_params, return_type) = target_type_expr {
+                let mut with_result = return_type.is_some();
+                if let ValueExpr::Variable(x, ..) = &mut target
+                    && x == "println"
+                {
+                    // TODO: adds fmt import
+                    let package_name = env
+                        .push_import(GoImport {
+                            alias: None,
+                            path: "fmt".into(),
+                        })
+                        .unwrap_or("fmt".into());
+                    *x = format!("{package_name}.Println").to_string();
+                    with_result = false;
+                }
 
-            let (target_instr, Some(target_res_name)) = emit(target, env.clone(), type_env) else {
-                panic!("No result provided")
-            };
-            res.extend(target_instr);
-
-            let mut params_instructions = Vec::new();
-            let mut param_results = Vec::new();
-
-            for expr in params.into_iter() {
-                let (instr, Some(res)) = emit(expr.0.clone(), env.clone(), type_env) else {
+                let (target_instr, Some(target_res_name)) = emit(target, env.clone(), type_env)
+                else {
                     panic!("No result provided")
                 };
-                params_instructions.extend(instr.into_iter());
+                res.extend(target_instr);
 
-                param_results.push(res);
-            }
+                let mut params_instructions = Vec::new();
+                let mut param_results = Vec::new();
 
-            let result = new_var();
+                for expr in params.into_iter() {
+                    let (instr, Some(res)) = emit(expr.0.clone(), env.clone(), type_env) else {
+                        panic!("No result provided")
+                    };
+                    params_instructions.extend(instr.into_iter());
 
-            let final_instr = format!(
-                "{}{target_res_name}({})\n",
+                    param_results.push(res);
+                }
+
+                let result = new_var();
+
+                let final_instr = format!(
+                    "{}{target_res_name}({})\n",
+                    if with_result {
+                        format!("{result} := ")
+                    } else {
+                        "".to_string()
+                    },
+                    param_results
+                        .clone()
+                        .into_iter()
+                        .reduce(|acc, x| format!("{acc}, {x}"))
+                        .unwrap_or(String::new())
+                );
+
+                res.extend(params_instructions);
+                res.push(final_instr);
+
                 if with_result {
-                    format!("{result} := ")
-                } else {
-                    "".to_string()
-                },
-                param_results
-                    .clone()
-                    .into_iter()
-                    .reduce(|acc, x| format!("{acc}, {x}"))
-                    .unwrap_or(String::new())
-            );
+                    res.push(format!("_ = {result}\n"));
+                }
 
-            res.extend(params_instructions);
-            res.push(final_instr);
-
-            if with_result {
-                res.push(format!("_ = {result}\n"));
+                (res, Some(result))
+            } else {
+                panic!("Function Call target needs to be of type function");
             }
-
-            (res, Some(result))
         }
         ValueExpr::Struct(fields) => {
             let mut field_instr = Vec::new();

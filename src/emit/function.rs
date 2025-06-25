@@ -8,13 +8,6 @@ impl FunctionDefintion {
     pub fn emit(&self, env: EmitEnvironment, type_env: &mut TypeEnv) -> String {
         let (mut emitted_body, res_name) = emit(self.value_expr.clone().0, env.clone(), type_env);
 
-        // TODO: remove this as this should be located in the typechecking
-        if let Some(params) = &self.params {
-            for p in params {
-                p.1.as_go_type_annotation(type_env);
-            }
-        }
-
         if let Some(res_name) = res_name {
             emitted_body.push(format!("_ = {res_name}\n"));
         }
@@ -27,7 +20,11 @@ impl FunctionDefintion {
                     .as_ref()
                     .map(|x| x
                         .iter()
-                        .map(|x| format!("{} {}", x.0, x.1.emit().0))
+                        .map(|(name, type_expr)| format!(
+                            "{} {}",
+                            name,
+                            type_expr.as_go_type_annotation(type_env)
+                        ))
                         .collect::<Vec<_>>()
                         .join(", "))
                     .unwrap_or_default(),

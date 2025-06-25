@@ -99,9 +99,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut type_env = TypeEnv::default();
     typechecker::typeresolve_source_file(&mut source_file, &mut type_env);
 
-    println!("after resolve");
-    source_file = dbg!(source_file);
-
     let env = EmitEnvironment::new();
     source_file
         .use_statements

@@ -116,7 +116,7 @@ impl TypeEnv {
             .insert(alias, type_expr);
     }
 
-    pub fn resolve_type_alias(&mut self, alias: String) -> TypeExpr {
+    pub fn resolve_type_alias(&mut self, alias: &String) -> TypeExpr {
         let type_aliases = self
             .type_aliases
             .last()
@@ -124,7 +124,7 @@ impl TypeEnv {
 
         println!("Try to resolve type alias {alias}");
         type_aliases
-            .get(&alias)
+            .get(alias)
             .expect("Couldn't resolve type alias {alias}")
             .clone()
     }
@@ -326,10 +326,18 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             }
             ValueExpr::VarDecl(declaration) => {
                 let declaration = &mut declaration.0;
+
+                if let TypeExpr::TypeName(type_name) = &declaration.type_expr {
+                    let type_expr = type_env.resolve_type_alias(type_name);
+                    // mutate
+                    declaration.type_expr = type_expr;
+                }
+
                 type_env.insert_identifier_type(
                     declaration.name.clone(),
                     declaration.type_expr.clone(),
                 );
+
                 if let Some(type_expr) = &mut declaration.initializer {
                     typeresolve_value_expr(&mut type_expr.0, type_env);
                 }
