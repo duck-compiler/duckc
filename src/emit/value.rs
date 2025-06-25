@@ -458,7 +458,8 @@ pub fn emit(
                     with_result = false;
                 }
 
-                let (target_instr, Some(target_res_name)) = emit(target, env.clone(), type_env) else {
+                let (target_instr, Some(target_res_name)) = emit(target, env.clone(), type_env)
+                else {
                     panic!("No result provided")
                 };
                 res.extend(target_instr);

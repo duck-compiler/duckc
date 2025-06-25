@@ -20,7 +20,11 @@ impl FunctionDefintion {
                     .as_ref()
                     .map(|x| x
                         .iter()
-                        .map(|(name, type_expr)| format!("{} {}", name, type_expr.as_go_type_annotation(type_env)))
+                        .map(|(name, type_expr)| format!(
+                            "{} {}",
+                            name,
+                            type_expr.as_go_type_annotation(type_env)
+                        ))
                         .collect::<Vec<_>>()
                         .join(", "))
                     .unwrap_or_default(),

@@ -6,21 +6,28 @@ use crate::{
 pub fn emit_type_definitions(type_env: &mut TypeEnv) -> String {
     let summary = type_env.summarize();
 
-    fn interface_implementations(typename: String, type_expr: &TypeExpr, type_env: &mut TypeEnv) -> String {
+    fn interface_implementations(
+        typename: String,
+        type_expr: &TypeExpr,
+        type_env: &mut TypeEnv,
+    ) -> String {
         return match type_expr {
-            TypeExpr::Duck(duck) => duck.fields
+            TypeExpr::Duck(duck) => duck
+                .fields
                 .iter()
-                .map(|field| format!(
-                    "func (self {0}) Get{1}() {2} {{ return self.{1}; }}",
-                    typename,
-                    field.name,
-                    field.type_expr.as_go_concrete_annotation(type_env)
-                ))
+                .map(|field| {
+                    format!(
+                        "func (self {0}) Get{1}() {2} {{ return self.{1}; }}",
+                        typename,
+                        field.name,
+                        field.type_expr.as_go_concrete_annotation(type_env)
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join("\n"),
             TypeExpr::Struct(r#_struct) => todo!(),
-            _ => "".to_string()
-        }
+            _ => "".to_string(),
+        };
     }
 
     let interface_defs = summary
@@ -67,7 +74,9 @@ impl TypeExpr {
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeName(name) => type_env.resolve_type_alias(name).as_go_type_annotation(type_env),
+            TypeExpr::TypeName(name) => type_env
+                .resolve_type_alias(name)
+                .as_go_type_annotation(type_env),
             TypeExpr::Fun(params, return_type) => format!(
                 "func({}) {}",
                 params
@@ -137,7 +146,9 @@ impl TypeExpr {
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeName(name) => type_env.resolve_type_alias(name).as_go_concrete_annotation(type_env),
+            TypeExpr::TypeName(name) => type_env
+                .resolve_type_alias(name)
+                .as_go_concrete_annotation(type_env),
             TypeExpr::Fun(params, return_type) => format!(
                 "func({}) {}",
                 params

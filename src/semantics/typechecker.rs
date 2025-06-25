@@ -1,7 +1,11 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    assignment_and_declaration_parser::Declaration, function_parser::FunctionDefintion, source_file_parser::SourceFile, type_parser::{Duck, Field, Struct, TypeExpr}, value_parser::ValueExpr
+    assignment_and_declaration_parser::Declaration,
+    function_parser::FunctionDefintion,
+    source_file_parser::SourceFile,
+    type_parser::{Duck, Field, Struct, TypeExpr},
+    value_parser::ValueExpr,
 };
 
 #[derive(Debug, Clone)]
@@ -175,7 +179,7 @@ impl TypeEnv {
                 if let Some(type_expr) = return_type.as_mut() {
                     found.extend(self.flatten_types(type_expr, param_names_used));
                 }
-            },
+            }
             _ => {
                 found.push(type_expr.clone());
             }
