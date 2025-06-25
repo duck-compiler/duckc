@@ -9,10 +9,10 @@
 use std::{error::Error, ffi::OsString, io::Write, path::PathBuf, process::Command};
 
 use chumsky::Parser;
+use clap::{Parser as CliParser, arg, command};
 use parse::lexer::lexer;
 use semantics::typechecker::{self, TypeEnv};
 use tempfile::Builder;
-use clap::{Parser as CliParser, command, arg};
 
 use crate::parse::{
     make_input, parse_failure, source_file_parser::source_file_parser,
@@ -63,7 +63,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let compiler_args = CompilerArgs::parse();
 
     let target_path = compiler_args.input_file;
-    let target_path_name = target_path.file_name()
+    let target_path_name = target_path
+        .file_name()
         .expect("couldn't read file name")
         .to_str()
         .expect("invalid utf-8 string");
@@ -119,7 +120,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut tmp_file = Builder::new()
         .rand_bytes(3)
         .prefix(
-            target_path.file_name()
+            target_path
+                .file_name()
                 .expect("didnt provide file name")
                 .to_str()
                 .expect("not valid utf 8"),
@@ -134,9 +136,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     tmp_file.flush().expect("Could not flush tmp file");
 
     let out_file = compiler_args
-                    .o
-                    .map(OsString::from)
-                    .unwrap_or(OsString::from("duck_out"));
+        .o
+        .map(OsString::from)
+        .unwrap_or(OsString::from("duck_out"));
 
     Command::new("go")
         .args([
@@ -148,7 +150,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         .spawn()?
         .wait()?;
 
-    println!("Successfully compiled binary {}", out_file.to_str().expect("Output File String is weird"));
+    println!(
+        "Successfully compiled binary {}",
+        out_file.to_str().expect("Output File String is weird")
+    );
 
     Ok(())
 }
