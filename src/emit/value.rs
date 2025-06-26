@@ -213,7 +213,7 @@ pub enum IrValue {
     String(String),
     Bool(bool),
     Char(char),
-    Lambda(Vec<(String, String)>, Option<String>),
+    Lambda(Vec<(String, String)>, Option<String>, Vec<IrInstruction>),
     Tuple(Vec<IrValue>),
     Duck(String, Vec<IrValue>),
     Struct(String, Vec<IrValue>),
@@ -248,7 +248,7 @@ pub fn as_var(s: impl Into<String>) -> IrValue {
 }
 
 impl ValueExpr {
-    pub fn direct_emit(&self, type_env: &mut TypeEnv) -> Option<IrValue> {
+    pub fn direct_emit(&self, type_env: &mut TypeEnv, env: &mut ToIr) -> Option<IrValue> {
         match self {
             ValueExpr::Bool(b) => Some(IrValue::Bool(*b)),
             ValueExpr::Char(c) => Some(IrValue::Char(*c)),
@@ -259,21 +259,20 @@ impl ValueExpr {
                 let LambdaFunctionExpr {
                     params,
                     return_type,
-                    ..
+                    value_expr,
                 } = &**b;
 
-                let mut res_params = Vec::new();
+                let mut rparams = Vec::new();
                 for p in params {
-                    res_params.push((p.0.clone(), p.1.0.as_clean_go_type_name(type_env)))
+                    rparams.push((p.0.clone(), p.1.0.as_clean_go_type_name(type_env)));
                 }
 
-                Some(IrValue::Lambda(
-                    res_params,
-                    return_type
-                        .as_ref()
-                        .cloned()
-                        .map(|x| x.0.as_clean_go_type_name(type_env)),
-                ))
+                let return_type = return_type
+                    .as_ref()
+                    .map(|(x, _)| x.as_clean_go_type_name(type_env));
+
+                let (b_instr, _) = value_expr.0.emit(type_env, env);
+                Some(IrValue::Lambda(rparams, return_type, b_instr))
             }
             _ => None,
         }
@@ -284,7 +283,7 @@ impl ValueExpr {
         type_env: &mut TypeEnv,
         env: &mut ToIr,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
-        if let Some(v) = self.direct_emit(type_env) {
+        if let Some(v) = self.direct_emit(type_env, env) {
             (Vec::new(), Some(v))
         } else {
             let (instr, res) = self.emit(type_env, env);
@@ -467,7 +466,7 @@ impl ValueExpr {
                 }
             }
             _ => {
-                if let Some(d) = self.direct_emit(type_env) {
+                if let Some(d) = self.direct_emit(type_env, env) {
                     let res_var = env.new_var();
                     (
                         vec![IrInstruction::VarAssignment(res_var.clone(), d)],
@@ -622,6 +621,31 @@ mod tests {
                         IrValue::FieldAccess(as_var("x").into(), "z".into()).into(),
                         "ww".into(),
                     ),
+                )],
+            ),
+            (
+                "(() => x(1,2,3)) == (() => true)",
+                vec![IrInstruction::Equals(
+                    "var_2".into(),
+                    IrValue::Lambda(
+                        vec![],
+                        None,
+                        vec![IrInstruction::FunCall(
+                            "var_0".into(),
+                            "x".into(),
+                            vec![IrValue::Int(1), IrValue::Int(2), IrValue::Int(3)],
+                        )],
+                    )
+                    .into(),
+                    IrValue::Lambda(
+                        vec![],
+                        None,
+                        vec![IrInstruction::VarAssignment(
+                            "var_1".into(),
+                            IrValue::Bool(true),
+                        )],
+                    )
+                    .into(),
                 )],
             ),
         ];
