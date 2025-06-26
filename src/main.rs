@@ -14,16 +14,19 @@ use parse::lexer::lexer;
 use semantics::typechecker::{self, TypeEnv};
 use tempfile::Builder;
 
-use crate::parse::{
-    make_input, parse_failure, source_file_parser::source_file_parser, use_statement_parser::UseStatement, value_parser::{empty_range, value_expr_parser}, Context, SS
+use crate::{
+    emit::ir::join_ir,
+    parse::{
+        Context, SS, make_input, parse_failure,
+        source_file_parser::source_file_parser,
+        value_parser::{empty_range, value_expr_parser},
+    },
 };
 
 pub mod emit;
+pub mod fixup;
 pub mod parse;
 pub mod semantics;
-pub mod fixup;
-
-use emit::value::{EmitEnvironment, GoImport};
 
 #[derive(CliParser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -69,9 +72,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .to_str()
         .expect("invalid utf-8 string");
 
-    let src = std::fs::read_to_string(&target_path).expect("Could not read file").to_string().leak() as &'static str;
+    let src = std::fs::read_to_string(&target_path)
+        .expect("Could not read file")
+        .to_string()
+        .leak() as &'static str;
     let target_path_name = String::from(target_path_name).leak() as &'static str;
-    let (lex, lex_errors) = lexer(target_path_name, src).parse(&src).into_output_errors();
+    let (lex, lex_errors) = lexer(target_path_name, src)
+        .parse(&src)
+        .into_output_errors();
     lex_errors.into_iter().for_each(|e| {
         parse_failure(
             target_path_name,
@@ -125,26 +133,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut type_env = TypeEnv::default();
     typechecker::typeresolve_source_file(&mut source_file, &mut type_env);
 
-    let env = EmitEnvironment::new();
-    source_file
-        .use_statements
-        .iter()
-        .filter_map(|x| match x.to_owned() {
-            UseStatement::Go(path, alias) => Some(GoImport { path, alias }),
-            _ => None,
-        })
-        .for_each(|x| {
-            env.push_import(x);
-        });
-
-    let _functions = source_file
-        .function_definitions
-        .iter()
-        .map(|x| x.emit(env.clone(), &mut type_env))
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    let out_text = source_file.emit("main".into(), &mut type_env);
+    let out_text = join_ir(&source_file.emit("main".into(), &mut type_env));
 
     let mut tmp_file = Builder::new()
         .rand_bytes(3)

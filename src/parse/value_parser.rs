@@ -1,5 +1,9 @@
 use crate::parse::{
-    assignment_and_declaration_parser::{Assignment, Declaration}, function_parser::{LambdaFunctionExpr, Param}, source_file_parser::SourceFile, type_parser::type_expression_parser, Context, Spanned, SS
+    Context, SS, Spanned,
+    assignment_and_declaration_parser::{Assignment, Declaration},
+    function_parser::{LambdaFunctionExpr, Param},
+    source_file_parser::SourceFile,
+    type_parser::type_expression_parser,
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
@@ -1469,6 +1473,28 @@ mod tests {
                     .into_empty_span()
                     .into(),
                     field_name: "0".into(),
+                },
+            ),
+            (
+                "{go {} 1;2}",
+                ValueExpr::Block(vec![
+                    ValueExpr::InlineGo("".into()).into_empty_span(),
+                    ValueExpr::Int(1).into_empty_span(),
+                    ValueExpr::Int(2).into_empty_span(),
+                ]),
+            ),
+            (
+                "if (true) {go {} 1;2}",
+                ValueExpr::If {
+                    condition: ValueExpr::Bool(true).into_empty_span().into(),
+                    then: ValueExpr::Block(vec![
+                        ValueExpr::InlineGo("".into()).into_empty_span(),
+                        ValueExpr::Int(1).into_empty_span(),
+                        ValueExpr::Int(2).into_empty_span(),
+                    ])
+                    .into_empty_span()
+                    .into(),
+                    r#else: None,
                 },
             ),
         ];

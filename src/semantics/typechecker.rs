@@ -122,7 +122,7 @@ impl TypeEnv {
         println!("Try to resolve type alias {alias}");
         type_aliases
             .get(alias)
-            .expect("Couldn't resolve type alias {alias}")
+            .expect(&format!("Couldn't resolve type alias {alias}"))
             .clone()
     }
 
@@ -400,7 +400,7 @@ impl TypeExpr {
                     .collect(),
                 lambda_expr.return_type.clone().map(Box::new),
             ),
-            ValueExpr::InlineGo(..) => todo!("type for inline go"),
+            ValueExpr::InlineGo(..) => TypeExpr::InlineGo,
             ValueExpr::Int(..) => TypeExpr::Int,
             ValueExpr::Bool(..) => TypeExpr::Bool,
             ValueExpr::Char(..) => TypeExpr::Char,
@@ -426,9 +426,9 @@ impl TypeExpr {
             ValueExpr::Struct(fields) => {
                 let types = fields
                     .iter()
-                    .map(|field| {
+                    .map(|(name, (value_expr, _))| {
                         Field::new(
-                            field.0.to_string(),
+                            name.to_string(),
                             TypeExpr::from_value_expr(value_expr, type_env).into_empty_span(),
                         )
                     })
@@ -482,7 +482,7 @@ impl TypeExpr {
 
                 check_type_compatability(&(left_type_expr.clone(), left.1), &(right_type_expr, right.1), type_env);
 
-                left_type_expr
+                TypeExpr::Bool
             }
             ValueExpr::Mul(left, right) => {
                 let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&left.0, type_env);
@@ -527,15 +527,17 @@ impl TypeExpr {
                 )
             },
             ValueExpr::Block(value_exprs) => {
+                let mut ty = TypeExpr::Tuple(vec![]);
                 value_exprs
                     .iter()
                     .for_each(|value_expr| {
-                        TypeExpr::from_value_expr(&value_expr.0, type_env);
+                        ty = TypeExpr::from_value_expr(&value_expr.0, type_env);
                     });
 
                 // TODO: add correct return type of block
+                // 26.06.2025: Return type of last expression as type of block?
 
-                return TypeExpr::Any
+                return ty;
             },
             ValueExpr::Variable(.., type_expr) => type_expr
                 .as_ref()
@@ -564,7 +566,9 @@ impl TypeExpr {
 
                 // let x: TypeExpression = combine_types(vec![else_type_expr, then]);
 
-                todo!("combine then and else, then return combined type");
+                // todo!("combine then and else, then return combined type");
+
+                _then_type_expr
             }
             ValueExpr::FieldAccess {
                 target_obj,
@@ -776,9 +780,9 @@ mod test {
                     .into_empty_span(),
                 ]),
             ),
-            ("{ let x: Int = 5; 5 }", TypeExpr::Any), // TODO: Make the block return int here
-            ("{ let x: Int = 5; x }", TypeExpr::Any),
-            ("{ let x: Int = 5; x * x }", TypeExpr::Any),
+            ("{ let x: Int = 5; 5 }", TypeExpr::Int), // TODO: Make the block return int here. 26.06.2025: block returns last expr. Done?
+            ("{ let x: Int = 5; x }", TypeExpr::Int),
+            ("{ let x: Int = 5; x * x }", TypeExpr::Int),
         ];
 
         for (src, expected_type_expr) in src_and_expected_type_vec {

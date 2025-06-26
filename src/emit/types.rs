@@ -1,32 +1,36 @@
 use crate::{
-    parse::type_parser::{Duck, Struct, TypeExpr},
+    emit::value::{IrInstruction, IrValue},
+    parse::type_parser::{Duck, Field, Struct, TypeExpr},
     semantics::typechecker::TypeEnv,
 };
 
-pub fn emit_type_definitions(type_env: &mut TypeEnv) -> String {
+pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
     let summary = type_env.summarize();
 
     fn interface_implementations(
         typename: String,
         type_expr: &TypeExpr,
         type_env: &mut TypeEnv,
-    ) -> String {
+    ) -> Vec<IrInstruction> {
         return match type_expr {
             TypeExpr::Duck(duck) => duck
                 .fields
                 .iter()
                 .map(|field| {
-                    format!(
-                        "func (self {0}) Get{1}() {2} {{ return self.{1}; }}",
-                        typename,
-                        field.name,
-                        field.type_expr.0.as_go_concrete_annotation(type_env)
+                    IrInstruction::FunDef(
+                        format!("Get{}", field.name),
+                        Some(("self".into(), typename.clone())),
+                        vec![],
+                        Some(field.type_expr.0.as_go_concrete_annotation(type_env)),
+                        vec![IrInstruction::Return(Some(IrValue::FieldAccess(
+                            IrValue::Var("self".into()).into(),
+                            field.name.clone(),
+                        )))],
                     )
                 })
-                .collect::<Vec<_>>()
-                .join("\n"),
+                .collect::<Vec<_>>(),
             TypeExpr::Struct(r#_struct) => todo!(),
-            _ => "".to_string(),
+            _ => vec![],
         };
     }
 
@@ -34,34 +38,56 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> String {
         .param_names_used
         .iter()
         .map(|param_name| {
-            [
-                format!("type Has{param_name}[T any] interface {{"),
-                format!("   Get{param_name}() T"),
-                "}".to_string(),
-            ]
-            .join("\n")
+            IrInstruction::InterfaceDef(
+                format!("Has{param_name}"),
+                vec![("T".into(), "any".into())],
+                vec![(format!("Get{param_name}"), "T".into())],
+            )
         })
-        .collect::<Vec<_>>()
-        .join("\n");
+        .collect::<Vec<_>>();
 
-    let type_defs = summary
+    summary
         .types_used
         .iter()
         .filter(|type_expr| type_expr.is_object_like())
         .map(|type_expr| {
             let type_name = type_expr.as_clean_go_type_name(type_env);
 
-            format!(
-                "type {} {}\n{};",
-                type_name.clone(),
-                type_expr.as_go_concrete_annotation(type_env),
-                interface_implementations(type_name, type_expr, type_env),
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+            let mut i = interface_implementations(type_name.clone(), type_expr, type_env);
 
-    return format!("{interface_defs}\n{type_defs}");
+            i.push(match type_expr {
+                TypeExpr::Tuple(t) => IrInstruction::StructDef(
+                    type_name,
+                    t.iter()
+                        .enumerate()
+                        .map(|(i, x)| (format!("field_{i}"), x.0.as_clean_go_type_name(type_env)))
+                        .collect::<Vec<_>>(),
+                ),
+                TypeExpr::Struct(Struct { fields }) | TypeExpr::Duck(Duck { fields }) => {
+                    IrInstruction::StructDef(
+                        type_name,
+                        fields
+                            .iter()
+                            .map(
+                                |Field {
+                                     name,
+                                     type_expr: (type_expr, _),
+                                 }| {
+                                    (name.clone(), type_expr.as_clean_go_type_name(type_env))
+                                },
+                            )
+                            .collect::<Vec<_>>(),
+                    )
+                }
+                _ => panic!("cant create for {type_name}"),
+            });
+            i
+        })
+        .chain(vec![interface_defs].into_iter())
+        .fold(Vec::new(), |mut acc, x| {
+            acc.extend(x);
+            acc
+        })
 }
 
 impl TypeExpr {
@@ -69,6 +95,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Bool => "bool".to_string(),
+            TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Int => "int".to_string(),
             TypeExpr::Float => "float32".to_string(),
             TypeExpr::Char => "rune".to_string(),
@@ -147,6 +174,7 @@ impl TypeExpr {
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
+            TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::TypeName(name) => type_env
                 .resolve_type_alias(name)
                 .as_go_concrete_annotation(type_env),
@@ -203,6 +231,7 @@ impl TypeExpr {
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeName(name) => name.clone(),
+            TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type) => format!(
                 "Fun_From_{}{}",
                 params
@@ -247,10 +276,10 @@ impl TypeExpr {
             ),
             TypeExpr::Tuple(fields) => {
                 format!(
-                    "struct {{\n{}\n}}",
+                    "Tuple_{}",
                     fields
                         .iter()
-                        .map(|type_expr| type_expr.0.as_go_type_annotation(type_env).to_string())
+                        .map(|type_expr| type_expr.0.as_clean_go_type_name(type_env).to_string())
                         .collect::<Vec<_>>()
                         .join("_")
                 )
