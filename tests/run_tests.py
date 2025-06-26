@@ -1,9 +1,11 @@
+import sys
 import os
 import subprocess
 import shutil
 import argparse
 
 VERBOSE = False
+CICD = False
 
 COLOR_RED = "\033[91m"
 COLOR_GREEN = "\033[92m"
@@ -113,14 +115,22 @@ def build_and_move_cargo_binary(project_name, build_type="debug"):
 
     except FileNotFoundError as e:
         print(f"{CROSS}{COLOR_RED}Error{COLOR_RESET}: {e}{COLOR_RESET}")
+        if CICD:
+            sys.exit(-1)
     except subprocess.CalledProcessError as e:
         print(f"{CROSS}{COLOR_RED}Error{COLOR_RESET}: 'cargo build' failed with exit code {e.returncode}.{COLOR_RESET}")
         print(f"    {COLOR_GREEN}STDOUT{COLOR_RESET}:\n{e.stdout}{COLOR_RESET}")
         print(f"    {COLOR_RED}STDERR{COLOR_RESET}:\n{e.stderr}{COLOR_RESET}")
+        if CICD:
+            sys.exit(-1)
     except shutil.Error as e:
         print(f"{CROSS} {COLOR_RED}Error moving binary{COLOR_RESET}: {e}{COLOR_RESET}")
+        if CICD:
+            sys.exit(-1)
     except Exception as e:
         print(f"{CROSS} {COLOR_RED}An unexpected error occurred{COLOR_RESET}: {e}{COLOR_RESET}")
+        if CICD:
+            sys.exit(-1)
     finally:
         os.chdir(original_cwd)
         print(f"{CHECK} {COLOR_YELLOW}Returned to original directory{COLOR_RESET}: {os.getcwd()}{COLOR_RESET}")
@@ -130,7 +140,7 @@ def build_and_move_cargo_binary(project_name, build_type="debug"):
 
 def compile_failure(compiler_path, invalid_program):
     if VERBOSE:
-        print(f"{COLOR_YELLOW} compile_failure {COLOR_RESET}'{invalid_program}'")
+        print(f"{COLOR_YELLOW}compile_failure {COLOR_RESET}'{invalid_program}'")
 
     try:
         command = [compiler_path] + [invalid_program];
@@ -147,6 +157,8 @@ def compile_failure(compiler_path, invalid_program):
             print(f"{CHECK} {COLOR_YELLOW}test {COLOR_RESET}{invalid_program}")
         else:
             print(f"{CROSS} {COLOR_YELLOW}test {COLOR_RESET}{invalid_program}")
+            if CICD:
+                sys.exit(-1)
     except FileNotFoundError:
         print(f"Error: Program not found at '{compiler_path}'")
     except Exception as exception:
@@ -156,7 +168,7 @@ def compile_failure(compiler_path, invalid_program):
 
 def compile_valid(compiler_path, valid_program):
     if VERBOSE:
-        print(f"{COLOR_YELLOW} compile_valid {COLOR_RESET}'{valid_program}'")
+        print(f"{COLOR_YELLOW}compile_valid {COLOR_RESET}'{valid_program}'")
 
     try:
         command = [compiler_path] + [valid_program];
@@ -173,6 +185,8 @@ def compile_valid(compiler_path, valid_program):
             print(f"{CHECK} {COLOR_YELLOW}test {COLOR_RESET}{valid_program}")
         else:
             print(f"{CROSS} {COLOR_YELLOW}test {COLOR_RESET}{valid_program}")
+            if CICD:
+                sys.exit(-1)
     except FileNotFoundError:
         print(f"Error: Program not found at '{compiler_path}'")
     except Exception as exception:
@@ -189,10 +203,14 @@ def read_meta_file(file_name):
 
     if not os.path.exists(meta_file_path):
         print(f"{CROSS} {COLOR_RED}Error{COLOR_RESET}: {COLOR_RED}Meta file {COLOR_RESET}'{meta_file_path}' {COLOR_RED}does not exist.")
+        if CICD:
+            sys.exit(-1)
         return {}
 
     if not os.path.isfile(meta_file_path):
         print(f"{CROSS} Error: '{meta_file_path}' exists but is not a file (it might be a directory).")
+        if CICD:
+            sys.exit(-1)
         return {}
 
     try:
@@ -225,7 +243,7 @@ def read_meta_file(file_name):
 
 def compile_valid_with_assert(compiler_path, valid_program):
     if VERBOSE:
-        print(f"{COLOR_YELLOW} compile_valid_with_assert {COLOR_RESET}'{valid_program}'")
+        print(f"{COLOR_YELLOW}compile_valid_with_assert {COLOR_RESET}'{valid_program}'")
 
     try:
         command = [compiler_path] + [valid_program];
@@ -255,6 +273,8 @@ def compile_valid_with_assert(compiler_path, valid_program):
 
         if actual_return_code != expected_return_code:
             print(f"{CROSS} {COLOR_YELLOW}test {COLOR_RESET}{valid_program} {COLOR_RESET}")
+            if CICD:
+                sys.exit(-1)
             print(f"    {COLOR_GRAY}-> {COLOR_RED} Expected return code to be {expected_return_code} but got {actual_return_code}")
         else:
             print(f"{CHECK} {COLOR_YELLOW}test {COLOR_RESET}{valid_program} {COLOR_RESET}")
@@ -290,7 +310,7 @@ def perform_tests():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Builds a Rust project in the parent directory and moves the binary to the current directory."
+        description="Test runner for the duck compiler"
     )
 
     parser.add_argument(
@@ -299,9 +319,19 @@ if __name__ == "__main__":
         help='Enable verbose output for cargo build details and errors.'
     )
 
+    parser.add_argument(
+        '--cicd',
+        action='store_true',
+        help='Run script in cicd mode'
+    )
+
     args = parser.parse_args()
 
     VERBOSE = args.verbose
     if VERBOSE:
-        print("Verbose output is enabled.")
+        print(f"{COLOR_YELLOW}Verbose output is enabled.{COLOR_RESET}")
+
+    CICD = args.cicd
+    if CICD:
+        print(f"{COLOR_YELLOW}Running the script in CICD Mode.{COLOR_RESET}")
     perform_tests()
