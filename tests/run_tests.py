@@ -1,8 +1,9 @@
 import os
 import subprocess
 import shutil
+import argparse
 
-VERBOSE = True
+VERBOSE = False
 
 COLOR_RED = "\033[91m"
 COLOR_GREEN = "\033[92m"
@@ -166,4 +167,19 @@ def perform_tests():
     pass
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Builds a Rust project in the parent directory and moves the binary to the current directory."
+    )
+
+    parser.add_argument(
+        '--verbose',
+        action='store_true',
+        help='Enable verbose output for cargo build details and errors.'
+    )
+
+    args = parser.parse_args()
+
+    VERBOSE = args.verbose
+    if VERBOSE:
+        print("Verbose output is enabled.")
     perform_tests()
