@@ -4,3 +4,4 @@ duck_out
 duck_gen*.go
 *.duck.go
 *duck*.go
+.duck/
