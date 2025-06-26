@@ -260,6 +260,19 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 }),
         );
 
+        if function_definition.name == "main" && !matches!(function_definition.return_type, Some((TypeExpr::Int, ..))) {
+            let span = function_definition.return_type.as_ref().unwrap().1;
+            failure(
+                function_definition.value_expr.1.context.file_name,
+                "Tried to return non-int value from main function".to_string(),
+                (format!("This is the type you've declared the main function to return"), span),
+                vec![
+                    (format!("The main function can only return either Nothing or Int"), function_definition.value_expr.1),
+                ],
+                function_definition.value_expr.1.context.file_contents,
+            )
+        }
+
         type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
         type_env.push_identifier_types();
 
