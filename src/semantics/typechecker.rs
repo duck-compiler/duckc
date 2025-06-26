@@ -865,7 +865,8 @@ mod test {
                 unreachable!()
             };
 
-            let value_expr_parse_result = value_expr_parser(make_input).parse(make_input(empty_range(), tokens.as_slice()));
+            let value_expr_parse_result = value_expr_parser(make_input)
+                .parse(make_input(empty_range(), tokens.as_slice()));
 
             assert_eq!(
                 value_expr_parse_result.has_errors(),
