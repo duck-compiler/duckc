@@ -1,0 +1,6 @@
+fun x(y: String) {
+}
+
+fun main() {
+    x(5);
+}
