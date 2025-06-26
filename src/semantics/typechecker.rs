@@ -49,7 +49,6 @@ pub enum GoTypeDefinition {
 
 #[derive(Clone, Debug)]
 pub struct TypesSummary {
-    // these are primitive types filtered
     pub types_used: Vec<TypeExpr>,
     pub param_names_used: Vec<String>,
 }
