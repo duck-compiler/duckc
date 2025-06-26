@@ -260,7 +260,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 }),
         );
 
-        if function_definition.name == "main" && !matches!(function_definition.return_type, Some((TypeExpr::Int, ..))) {
+        if function_definition.name == "main" && !matches!(function_definition.return_type, Some((TypeExpr::Int, ..)) | None) {
             let span = function_definition.return_type.as_ref().unwrap().1;
             failure(
                 function_definition.value_expr.1.context.file_name,
