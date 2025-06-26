@@ -199,6 +199,8 @@ pub enum IrInstruction {
     VarAssignment(IrRes, IrValue),
     FunCall(IrRes, String, Vec<IrValue>),
     Plus(IrRes, IrValue, IrValue),
+    Mul(IrRes, IrValue, IrValue),
+    Equals(IrRes, IrValue, IrValue),
     Break,
     Continue,
     Return(Option<IrValue>),
@@ -218,6 +220,7 @@ pub enum IrValue {
     Var(String),
     BoolNegate(Box<IrValue>),
     Equals(Box<IrValue>, Box<IrValue>),
+    FieldAccess(Box<IrValue>, String),
 }
 
 pub fn emit(
@@ -319,6 +322,29 @@ impl ValueExpr {
 
                 (ir, as_rvar(var))
             }
+            ValueExpr::Mul(v1, v2) => {
+                let mut ir = Vec::new();
+
+                let (v1_instr, v1_res) = v1.0.direct_or_with_instr(type_env, env);
+                ir.extend(v1_instr);
+                if v1_res.is_none() {
+                    return (ir, None);
+                }
+                let (v2_instr, v2_res) = v2.0.direct_or_with_instr(type_env, env);
+                ir.extend(v2_instr);
+                if v2_res.is_none() {
+                    return (ir, None);
+                }
+
+                let var = env.new_var();
+                ir.push(IrInstruction::Mul(
+                    var.clone(),
+                    v1_res.unwrap(),
+                    v2_res.unwrap(),
+                ));
+
+                (ir, as_rvar(var))
+            }
             ValueExpr::Block(block_exprs) => {
                 let mut res = Vec::new();
                 let mut res_var = None;
@@ -403,6 +429,43 @@ impl ValueExpr {
                 }
             }
             ValueExpr::Variable(x, _) => (vec![], as_rvar(x.to_owned())),
+            ValueExpr::Equals(v1, v2) => {
+                let mut ir = Vec::new();
+
+                let (v1_instr, v1_res) = v1.0.direct_or_with_instr(type_env, env);
+                ir.extend(v1_instr);
+                if v1_res.is_none() {
+                    return (ir, None);
+                }
+                let (v2_instr, v2_res) = v2.0.direct_or_with_instr(type_env, env);
+                ir.extend(v2_instr);
+                if v2_res.is_none() {
+                    return (ir, None);
+                }
+
+                let var = env.new_var();
+                ir.push(IrInstruction::Equals(
+                    var.clone(),
+                    v1_res.unwrap(),
+                    v2_res.unwrap(),
+                ));
+
+                (ir, as_rvar(var))
+            }
+            ValueExpr::FieldAccess {
+                target_obj,
+                field_name,
+            } => {
+                let (i, t_res) = target_obj.0.emit(type_env, env);
+                if let Some(t_res) = t_res {
+                    (
+                        i,
+                        Some(IrValue::FieldAccess(t_res.into(), field_name.clone())),
+                    )
+                } else {
+                    return (i, None);
+                }
+            }
             _ => {
                 if let Some(d) = self.direct_emit(type_env) {
                     let res_var = env.new_var();
@@ -439,6 +502,14 @@ mod tests {
             (
                 "1 + 1",
                 vec![IrInstruction::Plus(
+                    "var_0".into(),
+                    IrValue::Int(1),
+                    IrValue::Int(1),
+                )],
+            ),
+            (
+                "1 * 1",
+                vec![IrInstruction::Mul(
                     "var_0".into(),
                     IrValue::Int(1),
                     IrValue::Int(1),
@@ -514,6 +585,44 @@ mod tests {
                         vec![as_var("var_0"), as_var("var_1")],
                     ),
                 ],
+            ),
+            (
+                "1 == 2",
+                vec![IrInstruction::Equals(
+                    "var_0".into(),
+                    IrValue::Int(1),
+                    IrValue::Int(2),
+                )],
+            ),
+            (
+                "x() == y()",
+                vec![
+                    IrInstruction::FunCall("var_0".into(), "x".into(), vec![]),
+                    IrInstruction::FunCall("var_1".into(), "y".into(), vec![]),
+                    IrInstruction::Equals("var_2".into(), as_var("var_0"), as_var("var_1")),
+                ],
+            ),
+            (
+                "x.y == x.z",
+                vec![IrInstruction::Equals(
+                    "var_0".into(),
+                    IrValue::FieldAccess(as_var("x").into(), "y".into()),
+                    IrValue::FieldAccess(as_var("x").into(), "z".into()),
+                )],
+            ),
+            (
+                "x.y.z == x.z.ww",
+                vec![IrInstruction::Equals(
+                    "var_0".into(),
+                    IrValue::FieldAccess(
+                        IrValue::FieldAccess(as_var("x").into(), "y".into()).into(),
+                        "z".into(),
+                    ),
+                    IrValue::FieldAccess(
+                        IrValue::FieldAccess(as_var("x").into(), "z".into()).into(),
+                        "ww".into(),
+                    ),
+                )],
             ),
         ];
 
