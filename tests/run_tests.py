@@ -35,7 +35,7 @@ def find_duck_files_in_directory(base_directory):
         print(f"{COLOR_RED}Error: Base directory '{base_directory}' does not exist or is not a directory.{COLOR_RESET}")
         return []
 
-    print(f"{COLOR_YELLOW}Searching for .duck files in: {base_directory} and its subdirectories...{COLOR_RESET}")
+    print(f"\n{COLOR_YELLOW}Searching for .duck files in: {base_directory} and its subdirectories...{COLOR_RESET}")
 
     try:
         for root, _, files in os.walk(base_directory):
