@@ -396,7 +396,7 @@ impl TypeExpr {
                 TypeExpr::from_value_expr(&value_expr.0, type_env)
             }
             ValueExpr::Return(None) => TypeExpr::Any, // TODO return never !
-            ValueExpr::VarAssign(assignment) => {
+            ValueExpr::VarAssign(_assignment) => {
                 TypeExpr::Tuple(vec![])
             },
             ValueExpr::VarDecl(decl) => {
