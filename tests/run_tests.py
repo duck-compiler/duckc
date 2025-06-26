@@ -55,9 +55,6 @@ def find_duck_files_in_directory(base_directory):
 
     return duck_files
 
-def perform_tests():
-    invalid_program_files = find_duck_files_in_directory("./invalid_programs")
-    pass
 def build_and_move_cargo_binary(project_name, build_type="debug"):
     original_cwd = os.getcwd()
     parent_dir = os.path.abspath(os.path.join(original_cwd, os.pardir))
