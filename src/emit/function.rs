@@ -30,7 +30,7 @@ impl FunctionDefintion {
                     .unwrap_or_default(),
                 self.return_type
                     .as_ref()
-                    .map(|x| x.0.emit().0)
+                    .map(|x| x.0.as_go_concrete_annotation(type_env))
                     .unwrap_or_default(),
                 "{"
             ),

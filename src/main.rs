@@ -21,6 +21,7 @@ use crate::parse::{
 pub mod emit;
 pub mod parse;
 pub mod semantics;
+pub mod fixup;
 
 use emit::value::{EmitEnvironment, GoImport};
 

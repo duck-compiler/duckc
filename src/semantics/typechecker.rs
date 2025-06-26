@@ -254,8 +254,24 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             function_definition
                 .return_type
                 .as_ref()
-                .map(|x| Box::new(x.clone())),
+                .map(|spanned_type_expr| {
+                    type_env.insert_type(spanned_type_expr.0.clone());
+                    Box::new(spanned_type_expr.clone())
+                }),
         );
+
+        if function_definition.name == "main" && !matches!(function_definition.return_type, Some((TypeExpr::Int, ..)) | None) {
+            let span = function_definition.return_type.as_ref().unwrap().1;
+            failure(
+                function_definition.value_expr.1.context.file_name,
+                "Tried to return non-int value from main function".to_string(),
+                (format!("This is the type you've declared the main function to return"), span),
+                vec![
+                    (format!("The main function can only return either Nothing or Int"), function_definition.value_expr.1),
+                ],
+                function_definition.value_expr.1.context.file_contents,
+            )
+        }
 
         type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
         type_env.push_identifier_types();
@@ -865,13 +881,15 @@ mod test {
                 unreachable!()
             };
 
-            let value_expr_parse_result =
-                value_expr_parser(make_input).parse(make_input(empty_range(), tokens.as_slice()));
+            let value_expr_parse_result = value_expr_parser(make_input)
+                .parse(make_input(empty_range(), tokens.as_slice()));
+
             assert_eq!(
                 value_expr_parse_result.has_errors(),
                 false,
                 "Couldn't parse value expr {src}"
             );
+
             assert_eq!(
                 value_expr_parse_result.has_output(),
                 true,
