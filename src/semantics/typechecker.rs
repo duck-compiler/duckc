@@ -254,7 +254,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             function_definition
                 .return_type
                 .as_ref()
-                .map(|x| Box::new(x.clone())),
+                .map(|spanned_type_expr| {
+                    type_env.insert_type(spanned_type_expr.0.clone());
+                    Box::new(spanned_type_expr.clone())
+                }),
         );
 
         type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
