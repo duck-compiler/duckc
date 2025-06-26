@@ -1,10 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    parse::{
-        function_parser::LambdaFunctionExpr,
-        value_parser::ValueExpr,
-    },
+    parse::{function_parser::LambdaFunctionExpr, value_parser::ValueExpr},
     semantics::typechecker::TypeEnv,
 };
 
@@ -203,6 +200,8 @@ pub enum IrInstruction {
     FunCall(IrRes, String, Vec<IrValue>),
     Plus(IrRes, IrValue, IrValue),
     Break,
+    Continue,
+    Return(Option<IrValue>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -213,10 +212,12 @@ pub enum IrValue {
     Bool(bool),
     Char(char),
     Lambda(Vec<(String, String)>, Option<String>),
-    Tuple(Vec<String>),
-    Duck(String, Vec<String>),
-    Struct(String, Vec<String>),
+    Tuple(Vec<IrValue>),
+    Duck(String, Vec<IrValue>),
+    Struct(String, Vec<IrValue>),
     Var(String),
+    BoolNegate(Box<IrValue>),
+    Equals(Box<IrValue>, Box<IrValue>),
 }
 
 pub fn emit(
@@ -226,12 +227,21 @@ pub fn emit(
 ) -> (Vec<String>, Option<String>) {
     todo!()
 }
+
 impl ToIr {
     pub fn new_var(&mut self) -> String {
         let var_name = format!("var_{}", self.var_counter);
         self.var_counter += 1;
         var_name
     }
+}
+
+pub fn as_rvar(s: impl Into<String>) -> Option<IrValue> {
+    Some(IrValue::Var(s.into()))
+}
+
+pub fn as_var(s: impl Into<String>) -> IrValue {
+    IrValue::Var(s.into())
 }
 
 impl ValueExpr {
@@ -275,7 +285,7 @@ impl ValueExpr {
             (Vec::new(), Some(v))
         } else {
             let (instr, res) = self.emit(type_env, env);
-            (instr, res.map(IrValue::Var))
+            (instr, res)
         }
     }
 
@@ -283,16 +293,22 @@ impl ValueExpr {
         &self,
         type_env: &mut TypeEnv,
         env: &mut ToIr,
-    ) -> (Vec<IrInstruction>, Option<String>) {
+    ) -> (Vec<IrInstruction>, Option<IrValue>) {
+        dbg!(self);
         match self {
             ValueExpr::Add(v1, v2) => {
                 let mut ir = Vec::new();
 
                 let (v1_instr, v1_res) = v1.0.direct_or_with_instr(type_env, env);
-                let (v2_instr, v2_res) = v2.0.direct_or_with_instr(type_env, env);
-
                 ir.extend(v1_instr);
+                if v1_res.is_none() {
+                    return (ir, None);
+                }
+                let (v2_instr, v2_res) = v2.0.direct_or_with_instr(type_env, env);
                 ir.extend(v2_instr);
+                if v2_res.is_none() {
+                    return (ir, None);
+                }
 
                 let var = env.new_var();
                 ir.push(IrInstruction::Plus(
@@ -301,11 +317,103 @@ impl ValueExpr {
                     v2_res.unwrap(),
                 ));
 
-                (ir, Some(var))
+                (ir, as_rvar(var))
             }
-            ValueExpr::Variable(x, _) => (vec![], Some(x.to_owned())),
+            ValueExpr::Block(block_exprs) => {
+                let mut res = Vec::new();
+                let mut res_var = None;
+                for (block_expr, _) in block_exprs {
+                    let (block_instr, block_res) = block_expr.direct_or_with_instr(type_env, env);
+                    res.extend(block_instr);
+                    if block_res.is_none() {
+                        return (res, None);
+                    }
+                    res_var = block_res;
+                }
+                (res, res_var)
+            }
+            ValueExpr::Tuple(fields) => {
+                let mut res = Vec::new();
+                let mut res_vars = Vec::new();
+                for (field_expr, _) in fields {
+                    let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, env);
+                    res.extend(field_instr);
+                    if let Some(field_res) = field_res {
+                        res_vars.push(field_res);
+                    } else {
+                        return (res, None);
+                    }
+                }
+
+                let res_var = env.new_var();
+                res.push(IrInstruction::VarAssignment(
+                    res_var.clone(),
+                    IrValue::Tuple(res_vars),
+                ));
+
+                (res, as_rvar(res_var))
+            }
+            ValueExpr::BoolNegate(expr) => {
+                let (mut instr, e_res_var) = expr.0.direct_or_with_instr(type_env, env);
+                if let Some(e_res_var) = e_res_var {
+                    let res = env.new_var();
+                    instr.push(IrInstruction::VarAssignment(
+                        res.clone(),
+                        IrValue::BoolNegate(e_res_var.into()),
+                    ));
+                    (instr, as_rvar(res))
+                } else {
+                    (instr, None)
+                }
+            }
+            ValueExpr::Break => (vec![IrInstruction::Break], None),
+            ValueExpr::Continue => (vec![IrInstruction::Continue], None),
+            ValueExpr::Return(expr) => {
+                if let Some(expr) = expr {
+                    let (expr, _) = &**expr;
+                    let (mut instr, res) = expr.direct_or_with_instr(type_env, env);
+                    instr.push(IrInstruction::Return(res));
+                    (instr, None)
+                } else {
+                    (vec![IrInstruction::Return(None)], None)
+                }
+            }
+            ValueExpr::FunctionCall { target, params } => {
+                let (mut instr, target) = target.0.emit(type_env, env);
+                if let Some(target) = target {
+                    let IrValue::Var(x) = target else {
+                        panic!("can only call var")
+                    };
+
+                    let mut v_p_res = Vec::new();
+                    for (p, _) in params {
+                        let (p_instr, p_res) = p.direct_or_with_instr(type_env, env);
+                        instr.extend(p_instr);
+                        if let Some(p_res) = p_res {
+                            v_p_res.push(p_res);
+                        } else {
+                            return (instr, None);
+                        }
+                    }
+                    let res = env.new_var();
+                    instr.push(IrInstruction::FunCall(res.clone(), x, v_p_res));
+                    (instr, Some(IrValue::Var(res)))
+                } else {
+                    (instr, None)
+                }
+            }
+            ValueExpr::Variable(x, _) => (vec![], as_rvar(x.to_owned())),
             _ => {
-                todo!()
+                if let Some(d) = self.direct_emit(type_env) {
+                    let res_var = env.new_var();
+                    (
+                        vec![IrInstruction::VarAssignment(res_var.clone(), d)],
+                        Some(IrValue::Var(res_var)),
+                    )
+                } else {
+                    dbg!(self);
+                    todo!()
+                }
             }
         }
     }
@@ -316,7 +424,7 @@ mod tests {
     use chumsky::Parser;
 
     use crate::{
-        emit::value::{IrInstruction, IrValue, ToIr},
+        emit::value::{IrInstruction, IrValue, ToIr, as_var},
         parse::{
             lexer::lexer,
             make_input,
@@ -364,6 +472,46 @@ mod tests {
                         "var_1".into(),
                         IrValue::Var("var_0".into()),
                         IrValue::Var("c".into()),
+                    ),
+                ],
+            ),
+            (
+                "{1;}",
+                vec![IrInstruction::VarAssignment(
+                    "var_0".into(),
+                    IrValue::Tuple(vec![]),
+                )],
+            ),
+            (
+                "!true",
+                vec![IrInstruction::VarAssignment(
+                    "var_0".into(),
+                    IrValue::BoolNegate(IrValue::Bool(true).into()),
+                )],
+            ),
+            ("(true, break, x)", vec![IrInstruction::Break]),
+            ("(true, return, 2)", vec![IrInstruction::Return(None)]),
+            ("(true, continue, 3)", vec![IrInstruction::Continue]),
+            (
+                "x()",
+                vec![IrInstruction::FunCall("var_0".into(), "x".into(), vec![])],
+            ),
+            (
+                "x(y())",
+                vec![
+                    IrInstruction::FunCall("var_0".into(), "y".into(), vec![]),
+                    IrInstruction::FunCall("var_1".into(), "x".into(), vec![as_var("var_0")]),
+                ],
+            ),
+            (
+                "x(y(), z())",
+                vec![
+                    IrInstruction::FunCall("var_0".into(), "y".into(), vec![]),
+                    IrInstruction::FunCall("var_1".into(), "z".into(), vec![]),
+                    IrInstruction::FunCall(
+                        "var_2".into(),
+                        "x".into(),
+                        vec![as_var("var_0"), as_var("var_1")],
                     ),
                 ],
             ),

@@ -247,10 +247,10 @@ impl TypeExpr {
             ),
             TypeExpr::Tuple(fields) => {
                 format!(
-                    "struct {{\n{}\n}}",
+                    "Tuple_{}",
                     fields
                         .iter()
-                        .map(|type_expr| type_expr.0.as_go_type_annotation(type_env).to_string())
+                        .map(|type_expr| type_expr.0.as_clean_go_type_name(type_env).to_string())
                         .collect::<Vec<_>>()
                         .join("_")
                 )
