@@ -1,15 +1,12 @@
 use crate::{
-    emit::{types::emit_type_definitions, value::EmitEnvironment},
+    emit::{types::emit_type_definitions, value::{EmitEnvironment, IrInstruction}},
     parse::{source_file_parser::SourceFile, use_statement_parser::UseStatement},
     semantics::typechecker::TypeEnv,
 };
 
 impl SourceFile {
-    pub fn emit(mut self, pkg_name: String, type_env: &mut TypeEnv) -> String {
+    pub fn emit(mut self, pkg_name: String, type_env: &mut TypeEnv) -> Vec<IrInstruction> {
         let emit_env = EmitEnvironment::new();
-
-        emit_env.emit_imports_and_types();
-
         let type_definitions = emit_type_definitions(type_env);
 
         let functions = self

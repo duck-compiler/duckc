@@ -1,7 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    parse::{assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr, type_parser::TypeExpr, value_parser::ValueExpr},
+    parse::{
+        assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr,
+        type_parser::TypeExpr, value_parser::ValueExpr,
+    },
     semantics::typechecker::TypeEnv,
 };
 
@@ -183,22 +186,17 @@ pub struct ToIr {
     pub var_counter: usize,
 }
 
-// var_0 := fmt.Println
-// var_1 := other_func
-// var_2 := var_1()
-// var_0(var_2)
-//
-
 /// Expression further down should use this
 /// if they want the result
 type IrRes = String;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrInstruction {
+    // Code Statements
     VarDecl(String, String),
     VarAssignment(IrRes, IrValue),
     FunCall(IrRes, String, Vec<IrValue>),
-    Plus(IrRes, IrValue, IrValue),
+    Add(IrRes, IrValue, IrValue),
     Mul(IrRes, IrValue, IrValue),
     Equals(IrRes, IrValue, IrValue),
     Break,
@@ -207,6 +205,18 @@ pub enum IrInstruction {
     InlineGo(String),
     If(IrValue, Vec<IrInstruction>, Option<Vec<IrInstruction>>),
     Loop(Vec<IrInstruction>),
+
+    // Top-Level Statements
+    GoPaackage(String),
+    GoImports(Vec<(Option<String>, String)>),
+    FunDef(
+        String,
+        Vec<(String, String)>,
+        Option<String>,
+        Vec<IrInstruction>,
+    ),
+    StructDef(String, Vec<(String, String)>),
+    InterfaceDef(String, Vec<(String, String)>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -217,13 +227,22 @@ pub enum IrValue {
     Bool(bool),
     Char(char),
     Lambda(Vec<(String, String)>, Option<String>, Vec<IrInstruction>),
-    Tuple(Vec<IrValue>),
+    Tuple(String, Vec<IrValue>),
     Duck(String, Vec<(String, IrValue)>),
     Struct(String, Vec<(String, IrValue)>),
     Var(String),
     BoolNegate(Box<IrValue>),
-    Equals(Box<IrValue>, Box<IrValue>),
     FieldAccess(Box<IrValue>, String),
+}
+
+impl IrValue {
+    pub fn empty_tuple() -> Self {
+        Self::Tuple(
+            TypeExpr::from_value_expr(&ValueExpr::Tuple(vec![]), &mut TypeEnv::default())
+                .as_go_concrete_annotation(&mut TypeEnv::default()),
+            vec![],
+        )
+    }
 }
 
 pub fn emit(
@@ -302,7 +321,11 @@ impl ValueExpr {
         dbg!(self);
         match self {
             ValueExpr::VarDecl(b) => {
-                let Declaration { name, type_expr, initializer } = &b.0;
+                let Declaration {
+                    name,
+                    type_expr,
+                    initializer,
+                } = &b.0;
                 let ty = type_expr.0.as_go_concrete_annotation(type_env);
                 let mut v = Vec::new();
                 v.push(IrInstruction::VarDecl(name.clone(), ty));
@@ -313,7 +336,7 @@ impl ValueExpr {
                         v.push(IrInstruction::VarAssignment(name.clone(), init_r_res));
                     }
                 }
-                (v, Some(IrValue::Tuple(vec![])))
+                (v, Some(IrValue::empty_tuple()))
             }
             ValueExpr::InlineGo(s) => (vec![IrInstruction::InlineGo(s.clone())], None),
             ValueExpr::While { condition, body } => {
@@ -337,8 +360,10 @@ impl ValueExpr {
                 then,
                 r#else,
             } => {
-                let res_type =
-                    TypeExpr::from_value_expr(self, type_env).as_go_concrete_annotation(type_env);
+                // TODO:
+                // let res_type =
+                //     TypeExpr::from_value_expr(self, type_env).as_go_concrete_annotation(type_env);
+                let res_type = "interface{}".to_string();
                 let (mut i, cond_res) = condition.0.direct_or_with_instr(type_env, env);
                 if cond_res.is_none() {
                     return (i, None);
@@ -391,7 +416,7 @@ impl ValueExpr {
                 }
 
                 let var = env.new_var();
-                ir.push(IrInstruction::Plus(
+                ir.push(IrInstruction::Add(
                     var.clone(),
                     v1_res.unwrap(),
                     v2_res.unwrap(),
@@ -438,6 +463,8 @@ impl ValueExpr {
             ValueExpr::Tuple(fields) => {
                 let mut res = Vec::new();
                 let mut res_vars = Vec::new();
+                let name =
+                    TypeExpr::from_value_expr(self, type_env).as_go_concrete_annotation(type_env);
                 for (field_expr, _) in fields {
                     let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, env);
                     res.extend(field_instr);
@@ -451,7 +478,7 @@ impl ValueExpr {
                 let res_var = env.new_var();
                 res.push(IrInstruction::VarAssignment(
                     res_var.clone(),
-                    IrValue::Tuple(res_vars),
+                    IrValue::Tuple(name, res_vars),
                 ));
 
                 (res, as_rvar(res_var))
@@ -631,7 +658,7 @@ mod tests {
         let test_cases = vec![
             (
                 "1 + 1",
-                vec![IrInstruction::Plus(
+                vec![IrInstruction::Add(
                     "var_0".into(),
                     IrValue::Int(1),
                     IrValue::Int(1),
@@ -647,7 +674,7 @@ mod tests {
             ),
             (
                 "a + 1",
-                vec![IrInstruction::Plus(
+                vec![IrInstruction::Add(
                     "var_0".into(),
                     IrValue::Var("a".into()),
                     IrValue::Int(1),
@@ -655,25 +682,28 @@ mod tests {
             ),
             (
                 "a + b",
-                vec![IrInstruction::Plus(
+                vec![IrInstruction::Add(
                     "var_0".into(),
                     IrValue::Var("a".into()),
                     IrValue::Var("b".into()),
                 )],
             ),
-            ("let a: String = \"A\"", vec![
-                IrInstruction::VarDecl("a".into(), "string".into()),
-                IrInstruction::VarAssignment("a".into(), IrValue::String("A".into())),
-            ]),
+            (
+                "let a: String = \"A\"",
+                vec![
+                    IrInstruction::VarDecl("a".into(), "string".into()),
+                    IrInstruction::VarAssignment("a".into(), IrValue::String("A".into())),
+                ],
+            ),
             (
                 "a + b + c",
                 vec![
-                    IrInstruction::Plus(
+                    IrInstruction::Add(
                         "var_0".into(),
                         IrValue::Var("a".into()),
                         IrValue::Var("b".into()),
                     ),
-                    IrInstruction::Plus(
+                    IrInstruction::Add(
                         "var_1".into(),
                         IrValue::Var("var_0".into()),
                         IrValue::Var("c".into()),
@@ -684,7 +714,7 @@ mod tests {
                 "{1;}",
                 vec![IrInstruction::VarAssignment(
                     "var_0".into(),
-                    IrValue::Tuple(vec![]),
+                    IrValue::empty_tuple(),
                 )],
             ),
             (
@@ -694,7 +724,7 @@ mod tests {
                     IrValue::BoolNegate(IrValue::Bool(true).into()),
                 )],
             ),
-            ("(true, break, x)", vec![IrInstruction::Break]),
+            ("(true, break, 2)", vec![IrInstruction::Break]),
             ("(true, return, 2)", vec![IrInstruction::Return(None)]),
             ("(true, continue, 3)", vec![IrInstruction::Continue]),
             (
@@ -778,7 +808,7 @@ mod tests {
                     IrValue::Bool(true),
                     vec![IrInstruction::VarAssignment(
                         "var_0".into(),
-                        IrValue::Tuple(vec![]),
+                        IrValue::empty_tuple(),
                     )],
                     Some(vec![IrInstruction::Break]),
                 )])],
