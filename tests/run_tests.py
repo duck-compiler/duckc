@@ -6,6 +6,7 @@ COLOR_GREEN = "\033[92m"
 COLOR_YELLOW = "\033[93m"
 COLOR_BLUE = "\033[94m"
 COLOR_CYAN = "\033[96m"
+COLOR_GRAY = "\033[90m"
 COLOR_RESET = "\033[0m"
 
 def find_duck_files_in_directory(base_directory):
