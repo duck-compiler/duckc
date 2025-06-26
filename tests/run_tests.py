@@ -156,5 +156,17 @@ def compile_failure(compiler_path, invalid_program):
     pass
 
 
+def perform_tests():
+    compiler_path = build_and_move_cargo_binary("duck-lang");
+
+    print(f"{COLOR_YELLOW}Duck Compiler is located at {COLOR_RESET}{compiler_path}{COLOR_RESET}")
+
+    invalid_program_files = find_duck_files_in_directory("./invalid_programs")
+    print(f"\n{COLOR_YELLOW}Starting the evaluation of the invalid test cases...")
+    for invalid_program in invalid_program_files:
+        compile_failure(compiler_path, invalid_program)
+        pass
+    pass
+
 if __name__ == "__main__":
     perform_tests()
