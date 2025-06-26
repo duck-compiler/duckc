@@ -28,6 +28,22 @@ pub mod fixup;
 pub mod parse;
 pub mod semantics;
 
+lazy_static! {
+    static ref DOT_DUCK_DIR: PathBuf = {
+        let duck_dir = Path::new("./.duck");
+        if duck_dir.exists() {
+            return duck_dir.to_path_buf();
+        }
+
+        if let Err(err) = fs::create_dir(duck_dir) {
+            dbg!(err);
+            println!("Couldn't create .duck dir");
+        }
+
+        return duck_dir.to_path_buf();
+    };
+}
+
 #[derive(CliParser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct CompilerArgs {
@@ -112,22 +128,6 @@ fn typecheck(src_file_ast: &mut SourceFile) -> TypeEnv {
     typechecker::typeresolve_source_file(src_file_ast, &mut type_env);
 
     type_env
-}
-
-lazy_static! {
-    static ref DOT_DUCK_DIR: PathBuf = {
-        let duck_dir = Path::new("./.duck");
-        if duck_dir.exists() {
-            return duck_dir.to_path_buf();
-        }
-
-        if let Err(err) = fs::create_dir(duck_dir) {
-            dbg!(err);
-            println!("Couldn't create .duck dir");
-        }
-
-        return duck_dir.to_path_buf();
-    };
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
