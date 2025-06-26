@@ -426,9 +426,9 @@ impl TypeExpr {
             ValueExpr::Struct(fields) => {
                 let types = fields
                     .iter()
-                    .map(|field| {
+                    .map(|(name, (value_expr, _))| {
                         Field::new(
-                            field.0.to_string(),
+                            name.to_string(),
                             TypeExpr::from_value_expr(value_expr, type_env).into_empty_span(),
                         )
                     })
