@@ -15,6 +15,7 @@ COLOR_RESET = "\033[0m"
 
 CHECK = f"{COLOR_GRAY}[{COLOR_GREEN}✔{COLOR_GRAY}]{COLOR_RESET}"
 CROSS = f"{COLOR_GRAY}[{COLOR_RED}✗{COLOR_GRAY}]{COLOR_RESET}"
+SKIP = f"{COLOR_GRAY}[{COLOR_YELLOW}~{COLOR_GRAY}]{COLOR_RESET}"
 
 def indent_all_lines_with_tab(input_string):
     if not isinstance(input_string, str):
@@ -153,6 +154,116 @@ def compile_failure(compiler_path, invalid_program):
         return None
     pass
 
+def compile_valid(compiler_path, valid_program):
+    if VERBOSE:
+        print(f"{COLOR_YELLOW} compile_valid {COLOR_RESET}'{valid_program}'")
+
+    try:
+        command = [compiler_path] + [valid_program];
+
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+
+        if VERBOSE:
+            if len(result.stdout) > 1:
+                print(f"{COLOR_YELLOW}  captured output of stdout{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stdout)}'")
+            if len(result.stderr) > 1:
+                print(f"{COLOR_RED}  captured output of stderr{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stderr)}'")
+
+        if result.returncode == 0:
+            print(f"{CHECK} {COLOR_YELLOW}test {COLOR_RESET}{valid_program}")
+        else:
+            print(f"{CROSS} {COLOR_YELLOW}test {COLOR_RESET}{valid_program}")
+    except FileNotFoundError:
+        print(f"Error: Program not found at '{compiler_path}'")
+    except Exception as exception:
+        print(f"An unexpected error occured for file : {exception}")
+        return None
+    pass
+
+def read_meta_file(file_name):
+    meta_file_path = f"{file_name}.meta"
+    meta_data = {}
+
+    if VERBOSE:
+        print(f"{COLOR_YELLOW}attempting to read meta file for {file_name}{COLOR_RESET}: {meta_file_path}")
+
+    if not os.path.exists(meta_file_path):
+        print(f"{CROSS} {COLOR_RED}Error{COLOR_RESET}: {COLOR_RED}Meta file {COLOR_RESET}'{meta_file_path}' {COLOR_RED}does not exist.")
+        return {}
+
+    if not os.path.isfile(meta_file_path):
+        print(f"{CROSS} Error: '{meta_file_path}' exists but is not a file (it might be a directory).")
+        return {}
+
+    try:
+        with open(meta_file_path, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip() # Remove leading/trailing whitespace, including newline
+                if not line or line.startswith('#'): # Skip empty lines and comments
+                    continue
+
+                if '=' in line:
+                    key, value = line.split('=', 1) # Split only on the first '='
+                    meta_data[key.strip()] = value.strip()
+                else:
+                    print(f"{COLOR_YELLOW}Warning{COLOR_RESET}: {COLOR_YELLOW}Line {line_num} in '{meta_file_path}' is not in 'key=value' format: '{line}'")
+
+        if not meta_data and VERBOSE:
+            print(f"{COLOR_YELLOW}Info{COLOR_RESET}: Meta file '{meta_file_path}' was empty or contained no valid key-value pairs.")
+
+        if VERBOSE:
+            print(f"{COLOR_YELLOW} Successfully read meta data from '{meta_file_path}'.")
+
+        return meta_data
+
+    except PermissionError:
+        print(f"{COLOR_RED}Error{COLOR_RESET}: Permission denied to read meta file '{meta_file_path}'.")
+        return {}
+    except Exception as e:
+        print(f"{COLOR_RED}An unexpected error occurred while reading '{meta_file_path}': {e}")
+        return {}
+
+def compile_valid_with_assert(compiler_path, valid_program):
+    if VERBOSE:
+        print(f"{COLOR_YELLOW} compile_valid_with_assert {COLOR_RESET}'{valid_program}'")
+
+    try:
+        command = [compiler_path] + [valid_program];
+
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+
+        if VERBOSE:
+            if len(result.stdout) > 1:
+                print(f"{COLOR_YELLOW}  captured output of stdout{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stdout)}'")
+            if len(result.stderr) > 1:
+                print(f"{COLOR_RED}  captured output of stderr{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stderr)}'")
+
+        if result.returncode != 0:
+            print(f"{SKIP} {COLOR_YELLOW}test {COLOR_RESET}{valid_program} {COLOR_GRAY}-> {COLOR_RED}compilation failed")
+            return
+
+        meta = read_meta_file(valid_program)
+        expected_return_code = meta["expected_return_code"];
+        if expected_return_code == None:
+            print(f"{SKIP} {COLOR_YELLOW}test {COLOR_RESET}{valid_program} {COLOR_GRAY}-> {COLOR_RED}no expected return code defined in metadata")
+            return
+
+        expected_return_code = int(expected_return_code)
+
+        duck_execute_result = subprocess.run("./duck_out", capture_output=True, text=True, check=False)
+        actual_return_code = duck_execute_result.returncode
+
+        if actual_return_code != expected_return_code:
+            print(f"{CROSS} {COLOR_YELLOW}test {COLOR_RESET}{valid_program} {COLOR_RESET}")
+            print(f"    {COLOR_GRAY}-> {COLOR_RED} Expected return code to be {expected_return_code} but got {actual_return_code}")
+        else:
+            print(f"{CHECK} {COLOR_YELLOW}test {COLOR_RESET}{valid_program} {COLOR_RESET}")
+    except FileNotFoundError:
+        print(f"Error: Program not found at '{compiler_path}'")
+    except Exception as exception:
+        print(f"An unexpected error occured for file : {exception}")
+        return None
+    pass
 
 def perform_tests():
     compiler_path = build_and_move_cargo_binary("duck-lang");
@@ -164,7 +275,18 @@ def perform_tests():
     for invalid_program in invalid_program_files:
         compile_failure(compiler_path, invalid_program)
         pass
-    pass
+
+    valid_program_files = find_duck_files_in_directory("./valid_programs")
+    print(f"\n{COLOR_YELLOW}Starting the evaluation of the valid test cases...")
+    for valid_program in valid_program_files:
+        compile_valid(compiler_path, valid_program)
+        pass
+
+    valid_program_files_with_assert = find_duck_files_in_directory("./valid_programs_with_assert")
+    print(f"\n{COLOR_YELLOW}Starting the evaluation of the valid test cases with assertions...")
+    for valid_program in valid_program_files_with_assert:
+        compile_valid_with_assert(compiler_path, valid_program)
+        pass
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
