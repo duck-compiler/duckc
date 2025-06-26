@@ -149,7 +149,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tokens = lex(src_file_name, src_file_file_contents);
     let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
     let mut type_env = typecheck(&mut src_file_ast);
-    let go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env));
+    let _go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env));
 
     let out_file = compiler_args
         .o
