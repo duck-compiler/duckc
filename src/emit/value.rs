@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    parse::{function_parser::LambdaFunctionExpr, value_parser::ValueExpr},
+    parse::{function_parser::LambdaFunctionExpr, type_parser::TypeExpr, value_parser::ValueExpr},
     semantics::typechecker::TypeEnv,
 };
 
@@ -195,7 +195,6 @@ type IrRes = String;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrInstruction {
-    FunDef(),
     VarAssignment(IrRes, IrValue),
     FunCall(IrRes, String, Vec<IrValue>),
     Plus(IrRes, IrValue, IrValue),
@@ -215,8 +214,8 @@ pub enum IrValue {
     Char(char),
     Lambda(Vec<(String, String)>, Option<String>, Vec<IrInstruction>),
     Tuple(Vec<IrValue>),
-    Duck(String, Vec<IrValue>),
-    Struct(String, Vec<IrValue>),
+    Duck(String, Vec<(String, IrValue)>),
+    Struct(String, Vec<(String, IrValue)>),
     Var(String),
     BoolNegate(Box<IrValue>),
     Equals(Box<IrValue>, Box<IrValue>),
@@ -464,6 +463,54 @@ impl ValueExpr {
                 } else {
                     return (i, None);
                 }
+            }
+            ValueExpr::Duck(fields) => {
+                let name =
+                    TypeExpr::from_value_expr(self, type_env).as_clean_go_type_name(type_env);
+
+                let mut res = Vec::new();
+                let mut res_vars = Vec::new();
+                for (field_name, (field_expr, _)) in fields {
+                    let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, env);
+                    res.extend(field_instr);
+                    if let Some(field_res) = field_res {
+                        res_vars.push((field_name.clone(), field_res));
+                    } else {
+                        return (res, None);
+                    }
+                }
+
+                let res_var = env.new_var();
+                res.push(IrInstruction::VarAssignment(
+                    res_var.clone(),
+                    IrValue::Duck(name, res_vars),
+                ));
+
+                (res, as_rvar(res_var))
+            }
+            ValueExpr::Struct(fields) => {
+                let name =
+                    TypeExpr::from_value_expr(self, type_env).as_clean_go_type_name(type_env);
+
+                let mut res = Vec::new();
+                let mut res_vars = Vec::new();
+                for (field_name, (field_expr, _)) in fields {
+                    let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, env);
+                    res.extend(field_instr);
+                    if let Some(field_res) = field_res {
+                        res_vars.push((field_name.clone(), field_res));
+                    } else {
+                        return (res, None);
+                    }
+                }
+
+                let res_var = env.new_var();
+                res.push(IrInstruction::VarAssignment(
+                    res_var.clone(),
+                    IrValue::Struct(name, res_vars),
+                ));
+
+                (res, as_rvar(res_var))
             }
             _ => {
                 if let Some(d) = self.direct_emit(type_env, env) {
