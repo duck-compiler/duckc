@@ -396,8 +396,17 @@ impl TypeExpr {
                 TypeExpr::from_value_expr(&value_expr.0, type_env)
             }
             ValueExpr::Return(None) => TypeExpr::Any, // TODO return never !
-            ValueExpr::VarAssign(..) => TypeExpr::Tuple(vec![]),
-            ValueExpr::VarDecl(..) => TypeExpr::Tuple(vec![]),
+            ValueExpr::VarAssign(assignment) => {
+                TypeExpr::Tuple(vec![])
+            },
+            ValueExpr::VarDecl(decl) => {
+                let decl = decl.as_ref();
+                if let Some(init) = &decl.0.initializer {
+                    check_type_compatability(&decl.0.type_expr, &(TypeExpr::from_value_expr(&init.0, type_env), init.1), type_env);
+                }
+
+                TypeExpr::Tuple(vec![])
+            },
             ValueExpr::Struct(fields) => {
                 let types = fields
                     .iter()
@@ -666,7 +675,10 @@ fn check_type_compatability(one: &Spanned<TypeExpr>, two: &Spanned<TypeExpr>, ty
     }
 
     if one.0.as_clean_go_type_name(type_env) != two.0.as_clean_go_type_name(type_env) {
-        let combined_span = SS { start: two.1.start, end: one.1.end, context: one.1.context };
+        let smaller = if one.1.start > two.1.start { two.1 } else { one.1 };
+        let larger = if one.1.start < two.1.start { two.1 } else { one.1 };
+
+        let combined_span = SS { start: smaller.start, end: larger.end, context: one.1.context };
 
         failure(
             one.1.context.file_name,
