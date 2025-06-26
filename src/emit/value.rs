@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    parse::{function_parser::LambdaFunctionExpr, type_parser::TypeExpr, value_parser::ValueExpr},
+    parse::{assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr, type_parser::TypeExpr, value_parser::ValueExpr},
     semantics::typechecker::TypeEnv,
 };
 
@@ -206,6 +206,7 @@ pub enum IrInstruction {
     Return(Option<IrValue>),
     InlineGo(String),
     If(IrValue, Vec<IrInstruction>, Option<Vec<IrInstruction>>),
+    Loop(Vec<IrInstruction>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -300,7 +301,37 @@ impl ValueExpr {
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         dbg!(self);
         match self {
+            ValueExpr::VarDecl(b) => {
+                let Declaration { name, type_expr, initializer } = &b.0;
+                let ty = type_expr.0.as_go_concrete_annotation(type_env);
+                let mut v = Vec::new();
+                v.push(IrInstruction::VarDecl(name.clone(), ty));
+                if let Some(initializer) = initializer {
+                    let (init_r, inti_r_res) = initializer.0.direct_or_with_instr(type_env, env);
+                    v.extend(init_r);
+                    if let Some(init_r_res) = inti_r_res {
+                        v.push(IrInstruction::VarAssignment(name.clone(), init_r_res));
+                    }
+                }
+                (v, Some(IrValue::Tuple(vec![])))
+            }
             ValueExpr::InlineGo(s) => (vec![IrInstruction::InlineGo(s.clone())], None),
+            ValueExpr::While { condition, body } => {
+                let (mut cond_instr, cond_res) = condition.0.direct_or_with_instr(type_env, env);
+                if cond_res.is_none() {
+                    return (cond_instr, None);
+                }
+
+                let (body, _) = body.0.direct_or_with_instr(type_env, env);
+                let cond_res = cond_res.unwrap();
+                cond_instr.push(IrInstruction::If(
+                    cond_res,
+                    body,
+                    Some(vec![IrInstruction::Break]),
+                ));
+
+                (vec![IrInstruction::Loop(cond_instr)], None)
+            }
             ValueExpr::If {
                 condition,
                 then,
@@ -321,15 +352,15 @@ impl ValueExpr {
                     then_instr.push(IrInstruction::VarAssignment(res_var_name.clone(), then_res));
                 }
 
-                let r#else =
-                    r#else.clone()
-                        .map(|x| x.0.direct_or_with_instr(type_env, env))
-                        .map(|mut x| {
-                            if let Some(o) = x.1 {
-                                x.0.push(IrInstruction::VarAssignment(res_var_name.clone(), o));
-                            }
-                            x.0
-                        });
+                let r#else = r#else
+                    .clone()
+                    .map(|x| x.0.direct_or_with_instr(type_env, env))
+                    .map(|mut x| {
+                        if let Some(o) = x.1 {
+                            x.0.push(IrInstruction::VarAssignment(res_var_name.clone(), o));
+                        }
+                        x.0
+                    });
 
                 i.push(IrInstruction::If(cond_res.unwrap(), then_instr, r#else));
 
@@ -577,7 +608,6 @@ impl ValueExpr {
                     todo!()
                 }
             }
-            _ => todo!()
         }
     }
 }
@@ -631,6 +661,10 @@ mod tests {
                     IrValue::Var("b".into()),
                 )],
             ),
+            ("let a: String = \"A\"", vec![
+                IrInstruction::VarDecl("a".into(), "string".into()),
+                IrInstruction::VarAssignment("a".into(), IrValue::String("A".into())),
+            ]),
             (
                 "a + b + c",
                 vec![
@@ -737,6 +771,17 @@ mod tests {
                     "var_0".into(),
                     IrValue::Duck("Duck_x_int".into(), vec![("x".into(), IrValue::Int(123))]),
                 )],
+            ),
+            (
+                "while (true) {}",
+                vec![IrInstruction::Loop(vec![IrInstruction::If(
+                    IrValue::Bool(true),
+                    vec![IrInstruction::VarAssignment(
+                        "var_0".into(),
+                        IrValue::Tuple(vec![]),
+                    )],
+                    Some(vec![IrInstruction::Break]),
+                )])],
             ),
             (
                 "(() => x(1,2,3)) == (() => true)",
