@@ -110,9 +110,9 @@ impl IrInstruction {
                             .collect::<Vec<String>>()
                             .join(", ");
                         if !generics.is_empty() {
-                            &format!("[{generics}]")
+                            format!("[{generics}]")
                         } else {
-                            ""
+                            "".to_string()
                         }
                     },
                     fields
