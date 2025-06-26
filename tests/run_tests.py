@@ -128,16 +128,33 @@ def build_and_move_cargo_binary(project_name, build_type="debug"):
         print(f"{CHECK} {COLOR_GREEN}Finished Cargo Build and Move {COLOR_RESET}")
 
     return moved_binary_path
-        result = subprocess.run(command, capture_output=True, text=True, check=False)
-        print(f"test ")
 
-        print("Expect")
+def compile_failure(compiler_path, invalid_program):
+    if VERBOSE:
+        print(f"{COLOR_YELLOW} compile_failure {COLOR_RESET}'{invalid_program}'")
+
+    try:
+        command = [compiler_path] + [invalid_program];
+
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+
+        if VERBOSE:
+            if len(result.stdout) > 1:
+                print(f"{COLOR_YELLOW}  captured output of stdout{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stdout)}'")
+            if len(result.stderr) > 1:
+                print(f"{COLOR_RED}  captured output of stderr{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stderr)}'")
+
+        if result.returncode != 0:
+            print(f"{CHECK} {COLOR_YELLOW}test {COLOR_RESET}{invalid_program}")
+        else:
+            print(f"{CROSS} {COLOR_YELLOW}test {COLOR_RESET}{invalid_program}")
     except FileNotFoundError:
-        print(f"Error: Program not found at '{program_path}'")
+        print(f"Error: Program not found at '{compiler_path}'")
     except Exception as exception:
-        print(f"An unexpected error occured: {exception}")
+        print(f"An unexpected error occured for file : {exception}")
         return None
     pass
+
 
 if __name__ == "__main__":
     perform_tests()
