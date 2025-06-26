@@ -1,7 +1,7 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    failure, function_parser::FunctionDefintion, source_file_parser::SourceFile, type_parser::{Duck, Field, Struct, TypeExpr}, value_parser::ValueExpr, Spanned
+    failure, function_parser::FunctionDefintion, source_file_parser::SourceFile, type_parser::{Duck, Field, Struct, TypeExpr}, value_parser::ValueExpr, Spanned, SS
 };
 
 #[derive(Debug, Clone)]
@@ -486,10 +486,20 @@ impl TypeExpr {
                     param_types.iter()
                         .enumerate()
                         .for_each(|(index, param_type)| check_type_compatability(&in_param_types.get(index).unwrap(), &param_type.1, type_env));
+
+                    return return_type.map_or(TypeExpr::Tuple(vec![]), |x| x.as_ref().0.clone())
                 }
 
-                // typecheck compare with target
-                TypeExpr::Any
+                failure(
+                    target.as_ref().1.context.file_name,
+                    "Tried to invoke a non-function value".to_string(),
+                    (format!("This is the value you tried to invoke as a function."), target.as_ref().1),
+                    vec![
+                        (format!("the thing you tried to invoke is of type {}", TypeExpr::from_value_expr(&target.as_ref().0, type_env).as_clean_go_type_name(type_env)), target.as_ref().1),
+                        (format!("{} cannot be called as it's not of type function!", TypeExpr::from_value_expr(&target.as_ref().0, type_env).as_clean_go_type_name(type_env)), target.as_ref().1),
+                    ],
+                    target.as_ref().1.context.file_contents,
+                )
             },
             ValueExpr::Block(value_exprs) => {
                 value_exprs
@@ -655,13 +665,19 @@ fn check_type_compatability(one: &Spanned<TypeExpr>, two: &Spanned<TypeExpr>, ty
         return;
     }
 
-    if *one != *two {
-        println!(
-            "Types {} and {} are not compatible.",
-            one.0.as_go_type_annotation(type_env),
-            two.0.as_go_type_annotation(type_env)
+    if one.0.as_clean_go_type_name(type_env) != two.0.as_clean_go_type_name(type_env) {
+        let combined_span = SS { start: two.1.start, end: one.1.end, context: one.1.context };
+
+        failure(
+            one.1.context.file_name,
+            "Incompatible Types".to_string(),
+            (format!("this is of type {}", one.0.as_go_type_annotation(type_env)), one.1),
+            vec![
+                (format!("this is of type {}", two.0.as_go_type_annotation(type_env)), two.1),
+                ("These two types are not not compatible".to_string(), combined_span),
+            ],
+            one.1.context.file_contents
         );
-        process::exit(2);
     }
 }
 
