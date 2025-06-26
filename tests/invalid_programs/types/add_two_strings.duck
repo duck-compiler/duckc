@@ -1,5 +1,5 @@
 fun x() {
-    let x: String = 5;
-    let y: String = 5;
+    let x: String = "Hallo";
+    let y: String = "Hallo";
     x + y;
 }
