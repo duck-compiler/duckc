@@ -1,5 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
-
 use crate::{
     parse::{
         assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr,
@@ -7,179 +5,6 @@ use crate::{
     },
     semantics::typechecker::TypeEnv,
 };
-
-#[derive(Clone, Debug)]
-pub struct GoMethodDef {
-    pub name: String,
-    pub return_type: Option<String>,
-    pub params: Vec<(String, String)>,
-    pub body: Vec<String>,
-}
-
-impl GoMethodDef {
-    pub fn emit(&self, receiver: Option<String>, interface_style: bool) -> Vec<String> {
-        let name_param_return_type = format!(
-            "{}({}) {}",
-            self.name,
-            self.params
-                .iter()
-                .map(|(name, data_type)| format!("{name} {data_type}"))
-                .reduce(|acc, x| format!("{acc}, {x}"))
-                .unwrap_or(String::new()),
-            self.return_type.as_ref().unwrap_or(&String::new())
-        );
-        if interface_style {
-            vec![name_param_return_type, "\n".to_string()]
-        } else {
-            vec![
-                format!(
-                    "func {} {} {}\n",
-                    receiver.unwrap_or_default(),
-                    name_param_return_type,
-                    "{"
-                ),
-                self.body
-                    .iter()
-                    .map(ToOwned::to_owned)
-                    .reduce(|acc, x| format!("{acc}{x}\n"))
-                    .unwrap_or_default(),
-                "\n}".to_string(),
-                "\n".to_string(),
-            ]
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum GoTypeDef {
-    Struct {
-        name: String,
-        fields: Vec<(String, String)>,
-        methods: Vec<GoMethodDef>,
-    },
-    Interface {
-        name: String,
-        methods: Vec<GoMethodDef>,
-    },
-}
-
-impl GoTypeDef {
-    pub fn name(&self) -> &str {
-        match self {
-            GoTypeDef::Struct {
-                name,
-                fields: _,
-                methods: _,
-            } => name,
-            GoTypeDef::Interface { name, methods: _ } => name,
-        }
-    }
-    pub fn emit(&self) -> Vec<String> {
-        match self {
-            GoTypeDef::Struct {
-                name,
-                fields,
-                methods,
-            } => {
-                let mut res = Vec::new();
-                res.push(format!("type {} struct {}\n", name, "{"));
-                for (name, field_type) in fields {
-                    res.push(format!("{name} {field_type}\n"));
-                }
-                res.push("}\n".to_string());
-                for method in methods {
-                    res.extend(method.emit(Some(format!("(self {name})")), false));
-                }
-                res
-            }
-            GoTypeDef::Interface { name, methods } => {
-                let mut res = Vec::new();
-                res.push(format!("type {} interface {}\n", name, "{"));
-                for method in methods {
-                    res.extend(method.emit(None, true).into_iter());
-                }
-                res.push("}\n".to_string());
-                res
-            }
-        }
-    }
-}
-
-#[derive(PartialEq, Clone, Debug, Default)]
-pub struct GoImport {
-    pub path: String,
-    pub alias: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub struct EmitEnvironment {
-    pub imports: Rc<RefCell<Vec<GoImport>>>,
-    pub types: Rc<RefCell<Vec<GoTypeDef>>>,
-    pub var_counter: Rc<RefCell<usize>>,
-}
-
-impl Default for EmitEnvironment {
-    fn default() -> Self {
-        EmitEnvironment {
-            imports: Rc::new(RefCell::new(Vec::new())),
-            types: Rc::new(RefCell::new(Vec::new())),
-            var_counter: Rc::new(RefCell::new(0)),
-        }
-    }
-}
-
-impl EmitEnvironment {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn push_types(&self, types: impl Iterator<Item = GoTypeDef>) {
-        let mut x = self.types.borrow_mut();
-        for type_def in types {
-            if !x.iter().any(|e| e.name() == type_def.name()) {
-                x.push(type_def);
-            }
-        }
-    }
-
-    pub fn push_import(&self, import: impl Into<GoImport>) -> Option<String> {
-        let mut imports = self.imports.borrow_mut();
-        let import = import.into();
-        for i in imports.iter() {
-            if i.path == import.path {
-                return i.alias.clone();
-            }
-        }
-        imports.push(import);
-        None
-    }
-
-    pub fn emit_types(&self) -> String {
-        self.types
-            .borrow()
-            .iter()
-            .map(|x| x.emit().join(""))
-            .collect::<Vec<_>>()
-            .join("")
-    }
-
-    pub fn emit_imports_and_types(&self) -> String {
-        format!(
-            "import (\n{}\n)\n{}",
-            self.imports
-                .borrow()
-                .iter()
-                .map(|x| format!(
-                    "{} \"{}\"",
-                    x.alias.as_ref().unwrap_or(&String::new()),
-                    x.path
-                ))
-                .collect::<Vec<_>>()
-                .join("\n"),
-            self.emit_types()
-        )
-    }
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct ToIr {
@@ -207,16 +32,21 @@ pub enum IrInstruction {
     Loop(Vec<IrInstruction>),
 
     // Top-Level Statements
-    GoPaackage(String),
+    GoPackage(String),
     GoImports(Vec<(Option<String>, String)>),
     FunDef(
-        String,
-        Vec<(String, String)>,
-        Option<String>,
-        Vec<IrInstruction>,
+        String, // Name
+        Option<(String, String)>, // Receiver
+        Vec<(String, String)>, // Params
+        Option<String>, // Return Type
+        Vec<IrInstruction>, // Body
     ),
     StructDef(String, Vec<(String, String)>),
-    InterfaceDef(String, Vec<(String, String)>),
+    InterfaceDef(
+        String, // Name
+        Vec<(String, String)>, // Generics
+        Vec<(String, String)>, // Methods
+    ),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -243,14 +73,6 @@ impl IrValue {
             vec![],
         )
     }
-}
-
-pub fn emit(
-    _value_expr: ValueExpr,
-    _env: EmitEnvironment,
-    _type_env: &mut TypeEnv,
-) -> (Vec<String>, Option<String>) {
-    todo!()
 }
 
 impl ToIr {

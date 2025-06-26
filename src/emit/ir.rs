@@ -3,7 +3,7 @@ use crate::emit::value::{IrInstruction, IrValue};
 impl IrInstruction {
     fn emit_as_go(&self) -> String {
         match self {
-            IrInstruction::GoPaackage(s) => format!("package {s}"),
+            IrInstruction::GoPackage(s) => format!("package {s}"),
             IrInstruction::Add(r, v1, v2) => {
                 format!("{r} = {} + {}", v1.emit_as_go(), v2.emit_as_go())
             }
@@ -54,7 +54,7 @@ impl IrInstruction {
                 )
             }
             IrInstruction::Loop(v) => {
-                format!("for {{\n{}\n}}", join_instr(v))
+                format!("for {{\n{}\n}}", join_ir(v))
             }
             IrInstruction::InlineGo(t) => {
                 format!("{t}")
@@ -72,16 +72,20 @@ impl IrInstruction {
                         .join("\n")
                 )
             }
-            IrInstruction::FunDef(name, params, return_type, body) => {
+            IrInstruction::FunDef(name, receiver, params, return_type, body) => {
                 format!(
-                    "func {name}({}) {} {{\n{}\n}}",
+                    "func {} {name}({}) {} {{\n{}\n}}",
+                    receiver
+                        .as_ref()
+                        .map(|(self_name, recv_type)| format!("({self_name} {recv_type})"))
+                        .unwrap_or_default(),
                     params
                         .iter()
                         .map(|(n, ty)| format!("{} {}", n, ty))
                         .collect::<Vec<_>>()
                         .join(", "),
                     return_type.as_ref().unwrap_or(&String::new()),
-                    join_instr(body),
+                    join_ir(body),
                 )
             }
             IrInstruction::StructDef(name, fields) => {
@@ -94,9 +98,23 @@ impl IrInstruction {
                         .join(", "),
                 )
             }
-            IrInstruction::InterfaceDef(name, fields) => {
+            IrInstruction::InterfaceDef(name, generics, fields) => {
                 format!(
-                    "type {name} interface {{\n{}\n}}",
+                    "type {name}{} interface {{\n{}\n}}",
+                    {
+                        let generics = generics
+                            .iter()
+                            .map(|(type_param_name, type_name)| {
+                                format!("{type_param_name} {type_name}")
+                            })
+                            .collect::<Vec<String>>()
+                            .join(", ");
+                        if !generics.is_empty() {
+                            &format!("[{generics}]")
+                        } else {
+                            ""
+                        }
+                    },
                     fields
                         .iter()
                         .map(|(n, ty)| format!("{} {}", n, ty))
@@ -108,7 +126,7 @@ impl IrInstruction {
     }
 }
 
-pub fn join_instr(v: &Vec<IrInstruction>) -> String {
+pub fn join_ir(v: &Vec<IrInstruction>) -> String {
     v.iter()
         .map(IrInstruction::emit_as_go)
         .collect::<Vec<_>>()
