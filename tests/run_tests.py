@@ -58,13 +58,76 @@ def find_duck_files_in_directory(base_directory):
 def perform_tests():
     invalid_program_files = find_duck_files_in_directory("./invalid_programs")
     pass
+def build_and_move_cargo_binary(project_name, build_type="debug"):
+    original_cwd = os.getcwd()
+    parent_dir = os.path.abspath(os.path.join(original_cwd, os.pardir))
+    binary_path_in_target = None
+    moved_binary_path = None
 
-def execute_with_expected_exit_code(expected_exit_code: int):
-    program_path = ""
+    target_subdir = f"target/{build_type}"
+    binary_name = project_name
+    # windows target
+    if os.name == 'nt':
+        binary_name += ".exe"
+
+    print(f"{COLOR_GRAY}--- {COLOR_CYAN} Starting Cargo Build for {COLOR_RESET}'{COLOR_YELLOW}{project_name}{COLOR_RESET}' ({COLOR_YELLOW}{build_type}{COLOR_RESET}) {COLOR_GRAY}---{COLOR_RESET}")
+    print(f"{COLOR_YELLOW}Original directory{COLOR_RESET}: {original_cwd}")
+    print(f"{COLOR_YELLOW}Target build directory{COLOR_RESET}: {parent_dir}")
 
     try:
-        command = [program_path];
+        print(f"{COLOR_YELLOW}Changing directory to{COLOR_RESET}: {parent_dir}{COLOR_RESET}")
+        os.chdir(parent_dir)
 
+        print(f"{COLOR_YELLOW}Executing {COLOR_RESET}'{COLOR_GREEN}cargo build{COLOR_RESET}' {COLOR_YELLOW}for project {COLOR_RESET}'{COLOR_YELLOW}{project_name}{COLOR_RESET}'{COLOR_GRAY}...{COLOR_RESET}")
+        cargo_command = ["cargo", "build"]
+        if build_type == "release":
+            cargo_command.append("--release")
+
+        build_result = subprocess.run(
+            cargo_command,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        print(f"\n{COLOR_GRAY}--- {COLOR_GREEN}Cargo Build Output {COLOR_RESET}({COLOR_YELLOW}STDOUT{COLOR_RESET}) {COLOR_GRAY}---{COLOR_RESET}")
+        print(build_result.stdout)
+        if build_result.stderr:
+            print(f"\n{COLOR_GRAY}--- {COLOR_RED}Cargo Build Output {COLOR_RESET}({COLOR_YELLOW}STDERR{COLOR_RESET}) {COLOR_GRAY}---{COLOR_RESET}")
+            print(build_result.stderr)
+        print(f"{CHECK} {COLOR_YELLOW}Cargo build was successful.{COLOR_RESET}")
+
+        expected_binary_dir = os.path.join(parent_dir, target_subdir)
+        binary_path_in_target = os.path.join(expected_binary_dir, binary_name)
+
+        if not os.path.exists(binary_path_in_target):
+            raise FileNotFoundError(
+                f"{CROSS} {COLOR_RED}Binary not found at expected path{COLOR_RESET}: {binary_path_in_target}. "
+                f"{COLOR_YELLOW}Make sure {COLOR_RESET}'{COLOR_YELLOW}project_name{COLOR_RESET}' {COLOR_YELLOW}matches your Cargo.toml package name."
+            )
+        print(f"{CHECK} {COLOR_YELLOW}Found binary{COLOR_RESET}: {binary_path_in_target}{COLOR_RESET}")
+
+
+        destination_path = os.path.join(original_cwd, binary_name)
+        shutil.move(binary_path_in_target, destination_path)
+        moved_binary_path = destination_path
+        print(f"{CHECK} {COLOR_YELLOW}Binary moved successfully to{COLOR_RESET}: {moved_binary_path}{COLOR_RESET}")
+
+    except FileNotFoundError as e:
+        print(f"{CROSS}{COLOR_RED}Error{COLOR_RESET}: {e}{COLOR_RESET}")
+    except subprocess.CalledProcessError as e:
+        print(f"{CROSS}{COLOR_RED}Error{COLOR_RESET}: 'cargo build' failed with exit code {e.returncode}.{COLOR_RESET}")
+        print(f"    {COLOR_GREEN}STDOUT{COLOR_RESET}:\n{e.stdout}{COLOR_RESET}")
+        print(f"    {COLOR_RED}STDERR{COLOR_RESET}:\n{e.stderr}{COLOR_RESET}")
+    except shutil.Error as e:
+        print(f"{CROSS} {COLOR_RED}Error moving binary{COLOR_RESET}: {e}{COLOR_RESET}")
+    except Exception as e:
+        print(f"{CROSS} {COLOR_RED}An unexpected error occurred{COLOR_RESET}: {e}{COLOR_RESET}")
+    finally:
+        os.chdir(original_cwd)
+        print(f"{CHECK} {COLOR_YELLOW}Returned to original directory{COLOR_RESET}: {os.getcwd()}{COLOR_RESET}")
+        print(f"{CHECK} {COLOR_GREEN}Finished Cargo Build and Move {COLOR_RESET}")
+
+    return moved_binary_path
         result = subprocess.run(command, capture_output=True, text=True, check=False)
         print(f"test ")
 
