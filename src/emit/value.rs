@@ -671,6 +671,20 @@ mod tests {
                 )],
             ),
             (
+                ".{ x: 123 }",
+                vec![IrInstruction::VarAssignment(
+                    "var_0".into(),
+                    IrValue::Struct("Struct_x_int".into(), vec![("x".into(), IrValue::Int(123))]),
+                )],
+            ),
+            (
+                "{ x: 123 }",
+                vec![IrInstruction::VarAssignment(
+                    "var_0".into(),
+                    IrValue::Duck("Duck_x_int".into(), vec![("x".into(), IrValue::Int(123))]),
+                )],
+            ),
+            (
                 "(() => x(1,2,3)) == (() => true)",
                 vec![IrInstruction::Equals(
                     "var_2".into(),
