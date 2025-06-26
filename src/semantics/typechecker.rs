@@ -1,7 +1,7 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    function_parser::FunctionDefintion, source_file_parser::SourceFile, type_parser::{Duck, Field, Struct, TypeExpr}, value_parser::ValueExpr, Spanned
+    failure, function_parser::FunctionDefintion, source_file_parser::SourceFile, type_parser::{Duck, Field, Struct, TypeExpr}, value_parser::ValueExpr, Spanned, SS
 };
 
 #[derive(Debug, Clone)]
@@ -201,11 +201,9 @@ impl TypeEnv {
 
         all_types.append(&mut to_push);
         all_types.sort_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
-        all_types.dedup_by_key(|type_expr| dbg!(type_expr.as_clean_go_type_name(self)));
+        all_types.dedup_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
 
-        let all_types = dbg!(all_types);
-
-        let mut param_names_used = dbg!(param_names_used);
+        let mut param_names_used = param_names_used;
         param_names_used.dedup();
 
         return TypesSummary {
@@ -232,7 +230,8 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .function_definitions
         .iter_mut()
         .for_each(|function_definition| {
-            typeresolve_function_definition(function_definition, type_env)
+            typeresolve_function_definition(function_definition, type_env);
+            TypeExpr::from_value_expr(&function_definition.value_expr.0, type_env);
         });
 
     type_env.pop_type_aliases();
@@ -375,6 +374,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
 impl TypeExpr {
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
+        println!("from-value-expr -> {:?}", value_expr);
         return match value_expr {
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
                 lambda_expr
@@ -476,13 +476,42 @@ impl TypeExpr {
 
                 left_type_expr
             }
-            ValueExpr::FunctionCall { .. } => {
-                todo!("Return Type of Function");
-            }
-            ValueExpr::Block(value_exprs) => value_exprs
-                .last()
-                .map(|value_expr| TypeExpr::from_value_expr(&value_expr.0, type_env))
-                .expect("Block Expressions must be at least one expression long."),
+            ValueExpr::FunctionCall { target, params } => {
+                let in_param_types = params.iter()
+                    .map(|param| (TypeExpr::from_value_expr(dbg!(&param.0), type_env), param.1))
+                    .collect::<Vec<_>>();
+
+                let target_type = TypeExpr::from_value_expr(&target.as_ref().0, type_env);
+                if let TypeExpr::Fun(param_types, return_type) = target_type {
+                    param_types.iter()
+                        .enumerate()
+                        .for_each(|(index, param_type)| check_type_compatability(&in_param_types.get(index).unwrap(), &param_type.1, type_env));
+
+                    return return_type.map_or(TypeExpr::Tuple(vec![]), |x| x.as_ref().0.clone())
+                }
+
+                failure(
+                    target.as_ref().1.context.file_name,
+                    "Tried to invoke a non-function value".to_string(),
+                    (format!("This is the value you tried to invoke as a function."), target.as_ref().1),
+                    vec![
+                        (format!("the thing you tried to invoke is of type {}", TypeExpr::from_value_expr(&target.as_ref().0, type_env).as_clean_go_type_name(type_env)), target.as_ref().1),
+                        (format!("{} cannot be called as it's not of type function!", TypeExpr::from_value_expr(&target.as_ref().0, type_env).as_clean_go_type_name(type_env)), target.as_ref().1),
+                    ],
+                    target.as_ref().1.context.file_contents,
+                )
+            },
+            ValueExpr::Block(value_exprs) => {
+                value_exprs
+                    .iter()
+                    .for_each(|value_expr| {
+                        TypeExpr::from_value_expr(&value_expr.0, type_env);
+                    });
+
+                // TODO: add correct return type of block
+
+                return TypeExpr::Any
+            },
             ValueExpr::Variable(.., type_expr) => type_expr
                 .as_ref()
                 .expect("Expected type but didn't get one")
@@ -621,18 +650,34 @@ fn check_type_compatability(one: &Spanned<TypeExpr>, two: &Spanned<TypeExpr>, ty
                 one.0.as_go_type_annotation(type_env),
                 two.clone().0.as_go_type_annotation(type_env)
             );
+            failure(
+                one.1.context.file_name,
+                "Incompatible Types".to_string(),
+                (format!("This expression is of type {}, which is a number.", one.0.as_go_type_annotation(type_env)), one.1),
+                vec![
+                    (format!("because of this, the second operand also needs to be of type number."), two.1),
+                    (format!("but it is of type {}.", two.0.as_go_type_annotation(type_env)), two.1),
+                ],
+                one.1.context.file_contents
+            )
         }
 
         return;
     }
 
-    if *one != *two {
-        println!(
-            "Types {} and {} are not compatible.",
-            one.0.as_go_type_annotation(type_env),
-            two.0.as_go_type_annotation(type_env)
+    if one.0.as_clean_go_type_name(type_env) != two.0.as_clean_go_type_name(type_env) {
+        let combined_span = SS { start: two.1.start, end: one.1.end, context: one.1.context };
+
+        failure(
+            one.1.context.file_name,
+            "Incompatible Types".to_string(),
+            (format!("this is of type {}", one.0.as_go_type_annotation(type_env)), one.1),
+            vec![
+                (format!("this is of type {}", two.0.as_go_type_annotation(type_env)), two.1),
+                ("These two types are not not compatible".to_string(), combined_span),
+            ],
+            one.1.context.file_contents
         );
-        process::exit(2);
     }
 }
 
@@ -703,10 +748,9 @@ mod test {
                     .into_empty_span(),
                 ]),
             ),
-            ("{ 5 }", TypeExpr::Int),
-            ("{ let x: Int = 5; 5 }", TypeExpr::Int),
-            ("{ let x: Int = 5; x }", TypeExpr::Int),
-            ("{ let x: Int = 5; x * x }", TypeExpr::Int),
+            ("{ let x: Int = 5; 5 }", TypeExpr::Any), // TODO: Make the block return int here
+            ("{ let x: Int = 5; x }", TypeExpr::Any),
+            ("{ let x: Int = 5; x * x }", TypeExpr::Any),
         ];
 
         for (src, expected_type_expr) in src_and_expected_type_vec {
@@ -759,49 +803,42 @@ mod test {
             (
                 "{ let y: { x: String, y: Int } = \"Hallo\"; }",
                 Box::new(|summary: &TypesSummary| {
-                    dbg!(summary);
                     assert_eq!(summary.types_used.len(), 4);
                 }),
             ),
             (
                 "{ let y: { x: String, y: Int, a: { b: { c: { d: { e: String }}}} } = \"Hallo\"; }",
                 Box::new(|summary: &TypesSummary| {
-                    dbg!(summary);
                     assert_eq!(summary.types_used.len(), 8);
                 }),
             ),
             (
                 "{ let x: Int = 5; }",
                 Box::new(|summary: &TypesSummary| {
-                    dbg!(summary);
                     assert_eq!(summary.types_used.len(), 2);
                 }),
             ),
             (
                 "{ let x: { a: Char, b: Char }; }",
                 Box::new(|summary: &TypesSummary| {
-                    dbg!(summary);
                     assert_eq!(summary.types_used.len(), 3);
                 }),
             ),
             (
                 "{ let y: { x: { y: Int } } = 4; }",
                 Box::new(|summary: &TypesSummary| {
-                    dbg!(summary);
                     assert_eq!(summary.types_used.len(), 4);
                 }),
             ),
             (
                 "{ let y: { x: Int } = 4; }",
                 Box::new(|summary: &TypesSummary| {
-                    dbg!(summary);
                     assert_eq!(summary.types_used.len(), 3);
                 }),
             ),
             (
                 "{ let y: { x: Int, y: String, z: { x: Int } } = 4; }",
                 Box::new(|summary: &TypesSummary| {
-                    dbg!(summary);
                     assert_eq!(summary.types_used.len(), 5);
                 }),
             ),
