@@ -195,6 +195,7 @@ type IrRes = String;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrInstruction {
+    VarDecl(String, String),
     VarAssignment(IrRes, IrValue),
     FunCall(IrRes, String, Vec<IrValue>),
     Plus(IrRes, IrValue, IrValue),
@@ -203,6 +204,8 @@ pub enum IrInstruction {
     Break,
     Continue,
     Return(Option<IrValue>),
+    InlineGo(String),
+    If(IrValue, Vec<IrInstruction>, Option<Vec<IrInstruction>>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -297,6 +300,51 @@ impl ValueExpr {
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         dbg!(self);
         match self {
+            ValueExpr::InlineGo(s) => (vec![IrInstruction::InlineGo(s.clone())], None),
+            ValueExpr::If {
+                condition,
+                then,
+                r#else,
+            } => {
+                let res_type =
+                    TypeExpr::from_value_expr(self, type_env).as_go_concrete_annotation(type_env);
+                let (mut i, cond_res) = condition.0.direct_or_with_instr(type_env, env);
+                if cond_res.is_none() {
+                    return (i, None);
+                }
+
+                let res_var_name = env.new_var();
+                i.push(IrInstruction::VarDecl(res_var_name.clone(), res_type));
+
+                let (mut then_instr, then_res) = then.0.direct_or_with_instr(type_env, env);
+                if let Some(then_res) = then_res {
+                    then_instr.push(IrInstruction::VarAssignment(res_var_name.clone(), then_res));
+                }
+
+                let r#else =
+                    r#else.clone()
+                        .map(|x| x.0.direct_or_with_instr(type_env, env))
+                        .map(|mut x| {
+                            if let Some(o) = x.1 {
+                                x.0.push(IrInstruction::VarAssignment(res_var_name.clone(), o));
+                            }
+                            x.0
+                        });
+
+                i.push(IrInstruction::If(cond_res.unwrap(), then_instr, r#else));
+
+                (i, Some(as_var(res_var_name)))
+            }
+            ValueExpr::VarAssign(b) => {
+                let assign = &b.0;
+                let (mut i, res) = assign.value_expr.0.direct_or_with_instr(type_env, env);
+                if let Some(res) = res {
+                    i.push(IrInstruction::VarAssignment(assign.name.clone(), res));
+                    (i, Some(as_var(&assign.name)))
+                } else {
+                    (i, None)
+                }
+            }
             ValueExpr::Add(v1, v2) => {
                 let mut ir = Vec::new();
 
@@ -512,7 +560,12 @@ impl ValueExpr {
 
                 (res, as_rvar(res_var))
             }
-            _ => {
+            ValueExpr::Int(..)
+            | ValueExpr::Char(..)
+            | ValueExpr::Lambda(..)
+            | ValueExpr::Bool(..)
+            | ValueExpr::Float(..)
+            | ValueExpr::String(..) => {
                 if let Some(d) = self.direct_emit(type_env, env) {
                     let res_var = env.new_var();
                     (
@@ -524,6 +577,7 @@ impl ValueExpr {
                     todo!()
                 }
             }
+            _ => todo!()
         }
     }
 }
