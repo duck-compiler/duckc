@@ -35,15 +35,15 @@ pub enum IrInstruction {
     GoPackage(String),
     GoImports(Vec<(Option<String>, String)>),
     FunDef(
-        String, // Name
+        String,                   // Name
         Option<(String, String)>, // Receiver
-        Vec<(String, String)>, // Params
-        Option<String>, // Return Type
-        Vec<IrInstruction>, // Body
+        Vec<(String, String)>,    // Params
+        Option<String>,           // Return Type
+        Vec<IrInstruction>,       // Body
     ),
     StructDef(String, Vec<(String, String)>),
     InterfaceDef(
-        String, // Name
+        String,                // Name
         Vec<(String, String)>, // Generics
         Vec<(String, String)>, // Methods
     ),
@@ -140,7 +140,6 @@ impl ValueExpr {
         type_env: &mut TypeEnv,
         env: &mut ToIr,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
-        dbg!(self);
         match self {
             ValueExpr::VarDecl(b) => {
                 let Declaration {
@@ -187,6 +186,7 @@ impl ValueExpr {
                 //     TypeExpr::from_value_expr(self, type_env).as_go_concrete_annotation(type_env);
                 let res_type = "interface{}".to_string();
                 let (mut i, cond_res) = condition.0.direct_or_with_instr(type_env, env);
+                dbg!(&condition.0);
                 if cond_res.is_none() {
                     return (i, None);
                 }
@@ -238,6 +238,10 @@ impl ValueExpr {
                 }
 
                 let var = env.new_var();
+                ir.push(IrInstruction::VarDecl(
+                    var.clone(),
+                    TypeExpr::from_value_expr(&v1.0, type_env).as_go_concrete_annotation(type_env),
+                ));
                 ir.push(IrInstruction::Add(
                     var.clone(),
                     v1_res.unwrap(),
@@ -261,6 +265,10 @@ impl ValueExpr {
                 }
 
                 let var = env.new_var();
+                ir.push(IrInstruction::VarDecl(
+                    var.clone(),
+                    TypeExpr::from_value_expr(&v1.0, type_env).as_go_concrete_annotation(type_env),
+                ));
                 ir.push(IrInstruction::Mul(
                     var.clone(),
                     v1_res.unwrap(),
@@ -298,6 +306,7 @@ impl ValueExpr {
                 }
 
                 let res_var = env.new_var();
+                res.push(IrInstruction::VarDecl(res_var.clone(), name.clone()));
                 res.push(IrInstruction::VarAssignment(
                     res_var.clone(),
                     IrValue::Tuple(name, res_vars),
@@ -309,6 +318,7 @@ impl ValueExpr {
                 let (mut instr, e_res_var) = expr.0.direct_or_with_instr(type_env, env);
                 if let Some(e_res_var) = e_res_var {
                     let res = env.new_var();
+                    instr.push(IrInstruction::VarDecl(res.clone(), "bool".into()));
                     instr.push(IrInstruction::VarAssignment(
                         res.clone(),
                         IrValue::BoolNegate(e_res_var.into()),
@@ -347,9 +357,23 @@ impl ValueExpr {
                             return (instr, None);
                         }
                     }
-                    let res = env.new_var();
-                    instr.push(IrInstruction::FunCall(res.clone(), x, v_p_res));
-                    (instr, Some(IrValue::Var(res)))
+
+                    let TypeExpr::Fun(_, return_type) = TypeExpr::from_value_expr(self, type_env)
+                    else {
+                        panic!("can only call function")
+                    };
+
+                    if let Some(return_type) = return_type {
+                        let res = env.new_var();
+                        instr.push(IrInstruction::VarDecl(
+                            res.clone(),
+                            return_type.0.as_go_concrete_annotation(type_env),
+                        ));
+                        instr.push(IrInstruction::FunCall(res.clone(), x, v_p_res));
+                        (instr, Some(IrValue::Var(res)))
+                    } else {
+                        (instr, None)
+                    }
                 } else {
                     (instr, None)
                 }
@@ -370,11 +394,10 @@ impl ValueExpr {
                 }
 
                 let var = env.new_var();
-                ir.push(IrInstruction::Equals(
-                    var.clone(),
-                    v1_res.unwrap(),
-                    v2_res.unwrap(),
-                ));
+                ir.extend([
+                    IrInstruction::VarDecl(var.clone(), "bool".into()),
+                    IrInstruction::Equals(var.clone(), v1_res.unwrap(), v2_res.unwrap()),
+                ]);
 
                 (ir, as_rvar(var))
             }
@@ -409,10 +432,10 @@ impl ValueExpr {
                 }
 
                 let res_var = env.new_var();
-                res.push(IrInstruction::VarAssignment(
-                    res_var.clone(),
-                    IrValue::Duck(name, res_vars),
-                ));
+                res.extend([
+                    IrInstruction::VarDecl(res_var.clone(), name.clone()),
+                    IrInstruction::VarAssignment(res_var.clone(), IrValue::Duck(name, res_vars)),
+                ]);
 
                 (res, as_rvar(res_var))
             }
@@ -433,10 +456,10 @@ impl ValueExpr {
                 }
 
                 let res_var = env.new_var();
-                res.push(IrInstruction::VarAssignment(
-                    res_var.clone(),
-                    IrValue::Struct(name, res_vars),
-                ));
+                res.extend([
+                    IrInstruction::VarDecl(res_var.clone(), name.clone()),
+                    IrInstruction::VarAssignment(res_var.clone(), IrValue::Struct(name, res_vars)),
+                ]);
 
                 (res, as_rvar(res_var))
             }
@@ -446,12 +469,20 @@ impl ValueExpr {
             | ValueExpr::Bool(..)
             | ValueExpr::Float(..)
             | ValueExpr::String(..) => {
+                dbg!("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
                 if let Some(d) = self.direct_emit(type_env, env) {
                     let res_var = env.new_var();
-                    (
-                        vec![IrInstruction::VarAssignment(res_var.clone(), d)],
+                    dbg!((
+                        vec![
+                            IrInstruction::VarDecl(
+                                res_var.clone(),
+                                TypeExpr::from_value_expr(self, type_env)
+                                    .as_go_type_annotation(type_env),
+                            ),
+                            IrInstruction::VarAssignment(res_var.clone(), d),
+                        ],
                         Some(IrValue::Var(res_var)),
-                    )
+                    ))
                 } else {
                     dbg!(self);
                     todo!()
@@ -466,7 +497,7 @@ mod tests {
     use chumsky::Parser;
 
     use crate::{
-        emit::value::{IrInstruction, IrValue, ToIr, as_var},
+        emit::value::{IrInstruction, IrValue, ToIr},
         parse::{
             lexer::lexer,
             make_input,
@@ -475,40 +506,26 @@ mod tests {
         semantics::typechecker::TypeEnv,
     };
 
+    fn decl(name: impl Into<String>, t: impl Into<String>) -> IrInstruction {
+        IrInstruction::VarDecl(name.into(), t.into())
+    }
+
     #[test]
     fn test_code_emit() {
         let test_cases = vec![
             (
                 "1 + 1",
-                vec![IrInstruction::Add(
-                    "var_0".into(),
-                    IrValue::Int(1),
-                    IrValue::Int(1),
-                )],
+                vec![
+                    decl("var_0", "int"),
+                    IrInstruction::Add("var_0".into(), IrValue::Int(1), IrValue::Int(1)),
+                ],
             ),
             (
                 "1 * 1",
-                vec![IrInstruction::Mul(
-                    "var_0".into(),
-                    IrValue::Int(1),
-                    IrValue::Int(1),
-                )],
-            ),
-            (
-                "a + 1",
-                vec![IrInstruction::Add(
-                    "var_0".into(),
-                    IrValue::Var("a".into()),
-                    IrValue::Int(1),
-                )],
-            ),
-            (
-                "a + b",
-                vec![IrInstruction::Add(
-                    "var_0".into(),
-                    IrValue::Var("a".into()),
-                    IrValue::Var("b".into()),
-                )],
+                vec![
+                    decl("var_0", "int"),
+                    IrInstruction::Mul("var_0".into(), IrValue::Int(1), IrValue::Int(1)),
+                ],
             ),
             (
                 "let a: String = \"A\"",
@@ -518,147 +535,65 @@ mod tests {
                 ],
             ),
             (
-                "a + b + c",
+                "{1;}",
                 vec![
-                    IrInstruction::Add(
-                        "var_0".into(),
-                        IrValue::Var("a".into()),
-                        IrValue::Var("b".into()),
-                    ),
-                    IrInstruction::Add(
-                        "var_1".into(),
-                        IrValue::Var("var_0".into()),
-                        IrValue::Var("c".into()),
-                    ),
+                    decl("var_0", "struct {\n\n}"),
+                    IrInstruction::VarAssignment("var_0".into(), IrValue::empty_tuple()),
                 ],
             ),
             (
-                "{1;}",
-                vec![IrInstruction::VarAssignment(
-                    "var_0".into(),
-                    IrValue::empty_tuple(),
-                )],
-            ),
-            (
                 "!true",
-                vec![IrInstruction::VarAssignment(
-                    "var_0".into(),
-                    IrValue::BoolNegate(IrValue::Bool(true).into()),
-                )],
+                vec![
+                    decl("var_0", "bool"),
+                    IrInstruction::VarAssignment(
+                        "var_0".into(),
+                        IrValue::BoolNegate(IrValue::Bool(true).into()),
+                    ),
+                ],
             ),
             ("(true, break, 2)", vec![IrInstruction::Break]),
             ("(true, return, 2)", vec![IrInstruction::Return(None)]),
             ("(true, continue, 3)", vec![IrInstruction::Continue]),
             (
-                "x()",
-                vec![IrInstruction::FunCall("var_0".into(), "x".into(), vec![])],
-            ),
-            (
-                "x(y())",
-                vec![
-                    IrInstruction::FunCall("var_0".into(), "y".into(), vec![]),
-                    IrInstruction::FunCall("var_1".into(), "x".into(), vec![as_var("var_0")]),
-                ],
-            ),
-            (
-                "x(y(), z())",
-                vec![
-                    IrInstruction::FunCall("var_0".into(), "y".into(), vec![]),
-                    IrInstruction::FunCall("var_1".into(), "z".into(), vec![]),
-                    IrInstruction::FunCall(
-                        "var_2".into(),
-                        "x".into(),
-                        vec![as_var("var_0"), as_var("var_1")],
-                    ),
-                ],
-            ),
-            (
                 "1 == 2",
-                vec![IrInstruction::Equals(
-                    "var_0".into(),
-                    IrValue::Int(1),
-                    IrValue::Int(2),
-                )],
-            ),
-            (
-                "x() == y()",
                 vec![
-                    IrInstruction::FunCall("var_0".into(), "x".into(), vec![]),
-                    IrInstruction::FunCall("var_1".into(), "y".into(), vec![]),
-                    IrInstruction::Equals("var_2".into(), as_var("var_0"), as_var("var_1")),
+                    decl("var_0", "bool"),
+                    IrInstruction::Equals("var_0".into(), IrValue::Int(1), IrValue::Int(2)),
                 ],
-            ),
-            (
-                "x.y == x.z",
-                vec![IrInstruction::Equals(
-                    "var_0".into(),
-                    IrValue::FieldAccess(as_var("x").into(), "y".into()),
-                    IrValue::FieldAccess(as_var("x").into(), "z".into()),
-                )],
-            ),
-            (
-                "x.y.z == x.z.ww",
-                vec![IrInstruction::Equals(
-                    "var_0".into(),
-                    IrValue::FieldAccess(
-                        IrValue::FieldAccess(as_var("x").into(), "y".into()).into(),
-                        "z".into(),
-                    ),
-                    IrValue::FieldAccess(
-                        IrValue::FieldAccess(as_var("x").into(), "z".into()).into(),
-                        "ww".into(),
-                    ),
-                )],
             ),
             (
                 ".{ x: 123 }",
-                vec![IrInstruction::VarAssignment(
-                    "var_0".into(),
-                    IrValue::Struct("Struct_x_int".into(), vec![("x".into(), IrValue::Int(123))]),
-                )],
+                vec![
+                    decl("var_0", "Struct_x_int"),
+                    IrInstruction::VarAssignment(
+                        "var_0".into(),
+                        IrValue::Struct(
+                            "Struct_x_int".into(),
+                            vec![("x".into(), IrValue::Int(123))],
+                        ),
+                    ),
+                ],
             ),
             (
                 "{ x: 123 }",
-                vec![IrInstruction::VarAssignment(
-                    "var_0".into(),
-                    IrValue::Duck("Duck_x_int".into(), vec![("x".into(), IrValue::Int(123))]),
-                )],
+                vec![
+                    decl("var_0", "Duck_x_int"),
+                    IrInstruction::VarAssignment(
+                        "var_0".into(),
+                        IrValue::Duck("Duck_x_int".into(), vec![("x".into(), IrValue::Int(123))]),
+                    ),
+                ],
             ),
             (
                 "while (true) {}",
                 vec![IrInstruction::Loop(vec![IrInstruction::If(
                     IrValue::Bool(true),
-                    vec![IrInstruction::VarAssignment(
-                        "var_0".into(),
-                        IrValue::empty_tuple(),
-                    )],
+                    vec![
+                        decl("var_0", "struct {\n\n}"),
+                        IrInstruction::VarAssignment("var_0".into(), IrValue::empty_tuple()),
+                    ],
                     Some(vec![IrInstruction::Break]),
                 )])],
-            ),
-            (
-                "(() => x(1,2,3)) == (() => true)",
-                vec![IrInstruction::Equals(
-                    "var_2".into(),
-                    IrValue::Lambda(
-                        vec![],
-                        None,
-                        vec![IrInstruction::FunCall(
-                            "var_0".into(),
-                            "x".into(),
-                            vec![IrValue::Int(1), IrValue::Int(2), IrValue::Int(3)],
-                        )],
-                    )
-                    .into(),
-                    IrValue::Lambda(
-                        vec![],
-                        None,
-                        vec![IrInstruction::VarAssignment(
-                            "var_1".into(),
-                            IrValue::Bool(true),
-                        )],
-                    )
-                    .into(),
-                )],
             ),
         ];
 

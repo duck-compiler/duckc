@@ -30,7 +30,7 @@ impl IrInstruction {
                         .join(", ")
                 )
             }
-            IrInstruction::VarDecl(name, ty) => format!("var {name} {ty}\n_ = name"),
+            IrInstruction::VarDecl(name, ty) => format!("var {name} {ty}\n_ = {name}"),
             IrInstruction::VarAssignment(name, v) => format!("{name} = {}", v.emit_as_go()),
             IrInstruction::If(cond, then, els) => {
                 format!(
@@ -43,7 +43,7 @@ impl IrInstruction {
                     els.as_ref()
                         .map(|x| {
                             format!(
-                                "\nelse {{\n{}\n}} ",
+                                "else {{\n{}\n}} ",
                                 x.iter()
                                     .map(IrInstruction::emit_as_go)
                                     .collect::<Vec<_>>()
@@ -130,7 +130,7 @@ pub fn join_ir(v: &Vec<IrInstruction>) -> String {
     v.iter()
         .map(IrInstruction::emit_as_go)
         .collect::<Vec<_>>()
-        .join("")
+        .join("\n")
 }
 
 impl IrValue {

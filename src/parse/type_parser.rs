@@ -37,6 +37,7 @@ pub struct Struct {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeExpr {
     Any,
+    InlineGo,
     Struct(Struct),
     Go(String),
     Duck(Duck),

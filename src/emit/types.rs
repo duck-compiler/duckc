@@ -95,6 +95,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Bool => "bool".to_string(),
+            TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Int => "int".to_string(),
             TypeExpr::Float => "float32".to_string(),
             TypeExpr::Char => "rune".to_string(),
@@ -173,6 +174,7 @@ impl TypeExpr {
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
+            TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::TypeName(name) => type_env
                 .resolve_type_alias(name)
                 .as_go_concrete_annotation(type_env),
@@ -229,6 +231,7 @@ impl TypeExpr {
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeName(name) => name.clone(),
+            TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type) => format!(
                 "Fun_From_{}{}",
                 params
