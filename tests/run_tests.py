@@ -268,7 +268,7 @@ def compile_valid_with_assert(compiler_path, valid_program):
 
         expected_return_code = int(expected_return_code)
 
-        duck_execute_result = subprocess.run("./duck_out", capture_output=True, text=True, check=False)
+        duck_execute_result = subprocess.run("./.duck/duck_out", capture_output=True, text=True, check=False)
         actual_return_code = duck_execute_result.returncode
 
         if actual_return_code != expected_return_code:
