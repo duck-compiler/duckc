@@ -6,7 +6,7 @@
     clippy::only_used_in_recursion
 )]
 
-use std::{error::Error, ffi::OsString, fs, path::{Path, PathBuf}};
+use std::{error::Error, ffi::OsString, fs::{self, File}, io::Write, path::{Path, PathBuf}, process::Command};
 
 use chumsky::{error::Rich, Parser};
 use clap::{Parser as CliParser, arg, command};
@@ -130,6 +130,21 @@ fn typecheck(src_file_ast: &mut SourceFile) -> TypeEnv {
     type_env
 }
 
+fn write_in_duck_dotdir(file_name: &str, content: &str) -> PathBuf {
+    let target_file = {
+        let mut target_file_path = DOT_DUCK_DIR.clone();
+        target_file_path.push(file_name);
+        target_file_path
+    };
+
+    let mut file = File::create(target_file.clone())
+        .expect("couldn't create file in duck dot dir"); // TODO error handling
+    file.write_all(content.as_bytes())
+        .expect("couldn't write file in duck dot dir"); // TODO error handling
+
+    target_file
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let compiler_args = CompilerArgs::parse();
 
@@ -149,26 +164,35 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tokens = lex(src_file_name, src_file_file_contents);
     let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
     let mut type_env = typecheck(&mut src_file_ast);
-    let _go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env));
+    let go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env));
 
-    let out_file = compiler_args
-        .o
-        .map(OsString::from)
-        .unwrap_or(OsString::from("duck_out"));
+    let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.go").as_str(), &go_code);
 
-    // Command::new("go")
-    //     .args([
-    //         OsString::from("build"),
-    //         OsString::from("-o"),
-    //         out_file.clone(),
-    //         tmp_file.path().as_os_str().to_owned(),
-    //     ])
-    //     .spawn()?
-    //     .wait()?;
+    let compile_output_target = {
+        let mut target_file = DOT_DUCK_DIR.clone();
+        target_file.push(
+            compiler_args
+                .o
+                .map(OsString::from)
+                .unwrap_or(OsString::from("duck_out"))
+        );
+
+        target_file
+    };
+
+    Command::new("go")
+        .args([
+            OsString::from("build"),
+            OsString::from("-o"),
+            compile_output_target.as_os_str().to_owned(),
+            go_output_file.as_os_str().to_owned(),
+        ])
+        .spawn()?
+        .wait()?;
 
     println!(
         "Successfully compiled binary {}",
-        out_file.to_str().expect("Output File String is weird")
+        go_output_file.to_str().expect("Output File String is weird")
     );
 
     Ok(())
