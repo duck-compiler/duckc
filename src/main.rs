@@ -6,11 +6,11 @@
     clippy::only_used_in_recursion
 )]
 
-use std::{error::Error, ffi::OsString, fs, io::{self, Write}, path::{Path, PathBuf}, process::Command};
+use std::{error::Error, ffi::OsString, fs, path::{Path, PathBuf}};
 
-use chumsky::{Parser, error::Rich};
+use chumsky::{error::Rich, Parser};
 use clap::{Parser as CliParser, arg, command};
-use parse::{lexer::{self, lexer, Token}, source_file_parser::SourceFile, Spanned};
+use parse::{lexer::{lexer, Token}, source_file_parser::SourceFile, Spanned};
 use semantics::typechecker::{self, TypeEnv};
 
 use crate::{
@@ -18,9 +18,9 @@ use crate::{
     parse::{
         Context, SS, make_input, parse_failure,
         source_file_parser::source_file_parser,
-        value_parser::{empty_range, value_expr_parser},
     },
 };
+
 use lazy_static::lazy_static;
 
 pub mod emit;
@@ -52,51 +52,23 @@ fn lex(
         .parse(file_contents)
         .into_output_errors();
 
-    errors.into_iter().for_each(|e| {
-        parse_failure("test.duck", &e, src);
-    });
-}
-
-fn main() -> Result<(), Box<dyn Error>> {
-    if false {
-        test_error_messages();
-        return Ok(());
-    }
-
-    let compiler_args = CompilerArgs::parse();
-
-    let target_path = compiler_args.input_file;
-    let target_path_name = target_path
-        .file_name()
-        .expect("couldn't read file name")
-        .to_str()
-        .expect("invalid utf-8 string");
-
-    let src = std::fs::read_to_string(&target_path)
-        .expect("Could not read file")
-        .to_string()
-        .leak() as &'static str;
-    let target_path_name = String::from(target_path_name).leak() as &'static str;
-    let (lex, lex_errors) = lexer(target_path_name, src)
-        .parse(&src)
-        .into_output_errors();
     lex_errors.into_iter().for_each(|e| {
-        parse_failure(
-            file_name,
-            &Rich::<&str, SS>::custom(
-                SS {
-                    start: e.span().start,
-                    end: e.span().end,
-                    context: crate::parse::Context {
-                        file_name,
-                        file_contents,
+            parse_failure(
+                file_name,
+                &Rich::<&str, SS>::custom(
+                    SS {
+                        start: e.span().start,
+                        end: e.span().end,
+                        context: crate::parse::Context {
+                            file_name,
+                            file_contents,
+                        },
                     },
-                },
-                "Lex Error",
-            ),
-            file_contents,
-        );
-    });
+                    "Lex Error",
+                ),
+                &file_contents,
+            );
+        });
 
     lex.unwrap()
 }
@@ -142,32 +114,6 @@ fn typecheck(src_file_ast: &mut SourceFile) -> TypeEnv {
     type_env
 }
 
-fn emit_go_code(src_file_ast: &mut SourceFile, type_env: &mut TypeEnv) -> String {
-    let out_text = join_ir(&source_file.emit("main".into(), &mut type_env));
-    let env = EmitEnvironment::new();
-    src_file_ast
-        .use_statements
-        .iter()
-        .filter_map(|x| match x.to_owned() {
-            UseStatement::Go(path, alias) => Some(GoImport { path, alias }),
-            _ => None,
-        })
-        .for_each(|x| {
-            env.push_import(x);
-        });
-
-    let _functions = src_file_ast
-        .function_definitions
-        .iter()
-        .map(|x| x.emit(env.clone(), type_env))
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    let generated_go_src_str = src_file_ast.clone().emit("main".into(), type_env);
-
-    generated_go_src_str
-}
-
 lazy_static! {
     static ref DOT_DUCK_DIR: PathBuf = {
         let duck_dir = Path::new("./.duck");
@@ -185,8 +131,6 @@ lazy_static! {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    ensure_duck_dir_exists()?;
-
     let compiler_args = CompilerArgs::parse();
 
     let src_file: PathBuf = compiler_args.input_file;
@@ -205,7 +149,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tokens = lex(src_file_name, src_file_file_contents);
     let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
     let mut type_env = typecheck(&mut src_file_ast);
-    let go_code = emit_go_code(&mut src_file_ast, &mut type_env);
+    let go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env));
 
     let out_file = compiler_args
         .o
