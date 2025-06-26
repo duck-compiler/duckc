@@ -9,6 +9,9 @@ COLOR_CYAN = "\033[96m"
 COLOR_GRAY = "\033[90m"
 COLOR_RESET = "\033[0m"
 
+CHECK = f"{COLOR_GRAY}[{COLOR_GREEN}✔{COLOR_GRAY}]{COLOR_RESET}"
+CROSS = f"{COLOR_GRAY}[{COLOR_RED}✗{COLOR_GRAY}]{COLOR_RESET}"
+
 def find_duck_files_in_directory(base_directory):
     duck_files = []
 
