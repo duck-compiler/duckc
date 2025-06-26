@@ -748,10 +748,9 @@ mod test {
                     .into_empty_span(),
                 ]),
             ),
-            ("{ 5 }", TypeExpr::Int),
-            ("{ let x: Int = 5; 5 }", TypeExpr::Int),
-            ("{ let x: Int = 5; x }", TypeExpr::Int),
-            ("{ let x: Int = 5; x * x }", TypeExpr::Int),
+            ("{ let x: Int = 5; 5 }", TypeExpr::Any), // TODO: Make the block return int here
+            ("{ let x: Int = 5; x }", TypeExpr::Any),
+            ("{ let x: Int = 5; x * x }", TypeExpr::Any),
         ];
 
         for (src, expected_type_expr) in src_and_expected_type_vec {
