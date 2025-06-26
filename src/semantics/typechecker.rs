@@ -813,13 +813,13 @@ mod test {
         // the summary always holds the type of main function
         let src_and_summary_check_funs: Vec<(&str, Box<dyn FnOnce(&TypesSummary)>)> = vec![
             (
-                "{ let y: { x: String, y: Int } = \"Hallo\"; }",
+                "{ let y: { x: String, y: Int }; }",
                 Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 4);
                 }),
             ),
             (
-                "{ let y: { x: String, y: Int, a: { b: { c: { d: { e: String }}}} } = \"Hallo\"; }",
+                "{ let y: { x: String, y: Int, a: { b: { c: { d: { e: String }}}} }; }",
                 Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 8);
                 }),
@@ -837,19 +837,19 @@ mod test {
                 }),
             ),
             (
-                "{ let y: { x: { y: Int } } = 4; }",
+                "{ let y: { x: { y: Int } }; }",
                 Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 4);
                 }),
             ),
             (
-                "{ let y: { x: Int } = 4; }",
+                "{ let y: { x: Int }; }",
                 Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 3);
                 }),
             ),
             (
-                "{ let y: { x: Int, y: String, z: { x: Int } } = 4; }",
+                "{ let y: { x: Int, y: String, z: { x: Int } }; }",
                 Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 5);
                 }),
