@@ -2,6 +2,8 @@ import os
 import subprocess
 import shutil
 
+VERBOSE = True
+
 COLOR_RED = "\033[91m"
 COLOR_GREEN = "\033[92m"
 COLOR_YELLOW = "\033[93m"
