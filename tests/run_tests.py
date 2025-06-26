@@ -1,5 +1,6 @@
 import os
 import subprocess
+import shutil
 
 COLOR_RED = "\033[91m"
 COLOR_GREEN = "\033[92m"
@@ -11,6 +12,19 @@ COLOR_RESET = "\033[0m"
 
 CHECK = f"{COLOR_GRAY}[{COLOR_GREEN}✔{COLOR_GRAY}]{COLOR_RESET}"
 CROSS = f"{COLOR_GRAY}[{COLOR_RED}✗{COLOR_GRAY}]{COLOR_RESET}"
+
+def indent_all_lines_with_tab(input_string):
+    if not isinstance(input_string, str):
+        raise TypeError("Input must be a string.")
+
+    if not input_string:
+        return ""
+
+    lines = input_string.splitlines(keepends=True)
+    indented_lines = ["\t" + line for line in lines]
+    modified_string = "".join(indented_lines)
+
+    return modified_string
 
 def find_duck_files_in_directory(base_directory):
     duck_files = []
