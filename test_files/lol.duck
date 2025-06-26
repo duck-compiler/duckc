@@ -1,7 +1,10 @@
+use go "fmt";
 fun main() {
     let x: Int = 0;
     while (!(x == 5)) {
-        x = x + 1;
+        go {
+            fmt.Println(x)
+        }
         x = x + 1;
     }
 }

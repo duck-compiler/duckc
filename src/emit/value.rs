@@ -159,7 +159,10 @@ impl ValueExpr {
                 }
                 (v, Some(IrValue::empty_tuple()))
             }
-            ValueExpr::InlineGo(s) => (vec![IrInstruction::InlineGo(s.clone())], None),
+            ValueExpr::InlineGo(s) => (
+                vec![IrInstruction::InlineGo(s.clone())],
+                Some(IrValue::Tuple("struct {\n\n}".into(), vec![])),
+            ),
             ValueExpr::While { condition, body } => {
                 let (mut cond_instr, cond_res) = condition.0.direct_or_with_instr(type_env, env);
                 if cond_res.is_none() {
