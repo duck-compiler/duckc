@@ -20,7 +20,7 @@ pub enum IrInstruction {
     // Code Statements
     VarDecl(String, String),
     VarAssignment(IrRes, IrValue),
-    FunCall(IrRes, String, Vec<IrValue>),
+    FunCall(Option<IrRes>, IrValue, Vec<IrValue>),
     Add(IrRes, IrValue, IrValue),
     Mul(IrRes, IrValue, IrValue),
     Equals(IrRes, IrValue, IrValue),
@@ -115,7 +115,12 @@ impl ValueExpr {
                     .as_ref()
                     .map(|(x, _)| x.as_clean_go_type_name(type_env));
 
-                let (b_instr, _) = value_expr.0.emit(type_env, env);
+                let (mut b_instr, b_res) = value_expr.0.emit(type_env, env);
+                if return_type.is_some()
+                    && let Some(b_res) = b_res
+                {
+                    b_instr.push(IrInstruction::Return(b_res.into()));
+                }
                 Some(IrValue::Lambda(rparams, return_type, b_instr))
             }
             _ => None,
@@ -343,13 +348,12 @@ impl ValueExpr {
                     (vec![IrInstruction::Return(None)], None)
                 }
             }
-            ValueExpr::FunctionCall { target, params } => {
-                let (mut instr, target) = target.0.emit(type_env, env);
+            ValueExpr::FunctionCall {
+                target: v_target,
+                params,
+            } => {
+                let (mut instr, target) = v_target.0.direct_or_with_instr(type_env, env);
                 if let Some(target) = target {
-                    let IrValue::Var(x) = target else {
-                        panic!("can only call var")
-                    };
-
                     let mut v_p_res = Vec::new();
                     for (p, _) in params {
                         let (p_instr, p_res) = p.direct_or_with_instr(type_env, env);
@@ -361,7 +365,8 @@ impl ValueExpr {
                         }
                     }
 
-                    let TypeExpr::Fun(_, return_type) = TypeExpr::from_value_expr(self, type_env)
+                    let TypeExpr::Fun(_, return_type) =
+                        TypeExpr::from_value_expr(&v_target.0, type_env)
                     else {
                         panic!("can only call function")
                     };
@@ -372,9 +377,10 @@ impl ValueExpr {
                             res.clone(),
                             return_type.0.as_go_concrete_annotation(type_env),
                         ));
-                        instr.push(IrInstruction::FunCall(res.clone(), x, v_p_res));
+                        instr.push(IrInstruction::FunCall(Some(res.clone()), target, v_p_res));
                         (instr, Some(IrValue::Var(res)))
                     } else {
+                        instr.push(IrInstruction::FunCall(None, target, v_p_res));
                         (instr, None)
                     }
                 } else {
@@ -472,7 +478,6 @@ impl ValueExpr {
             | ValueExpr::Bool(..)
             | ValueExpr::Float(..)
             | ValueExpr::String(..) => {
-                dbg!("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
                 if let Some(d) = self.direct_emit(type_env, env) {
                     let res_var = env.new_var();
                     dbg!((
