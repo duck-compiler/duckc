@@ -117,7 +117,7 @@ impl IrInstruction {
                     },
                     fields
                         .iter()
-                        .map(|(n, ty)| format!("{} {}", n, ty))
+                        .map(|(n, ty)| format!("{}() {}", n, ty))
                         .collect::<Vec<_>>()
                         .join(", "),
                 )

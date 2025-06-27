@@ -343,8 +343,11 @@ impl ValueExpr {
                     (vec![IrInstruction::Return(None)], None)
                 }
             }
-            ValueExpr::FunctionCall { target, params } => {
-                let (mut instr, target) = target.0.emit(type_env, env);
+            ValueExpr::FunctionCall {
+                target: v_target,
+                params,
+            } => {
+                let (mut instr, target) = v_target.0.emit(type_env, env);
                 if let Some(target) = target {
                     let IrValue::Var(x) = target else {
                         panic!("can only call var")
@@ -361,7 +364,8 @@ impl ValueExpr {
                         }
                     }
 
-                    let TypeExpr::Fun(_, return_type) = TypeExpr::from_value_expr(self, type_env)
+                    let TypeExpr::Fun(_, return_type) =
+                        TypeExpr::from_value_expr(&v_target.0, type_env)
                     else {
                         panic!("can only call function")
                     };
