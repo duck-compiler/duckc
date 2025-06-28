@@ -96,16 +96,16 @@ impl TypeEnv {
         self.all_types.push(type_expr);
     }
 
-    pub fn is_top_level(&self, identifier: String) -> bool {
+    pub fn is_top_level(&self, identifier: &str) -> bool {
         for i in 1..self.identifier_types.len() {
-            if self.identifier_types[i].contains_key(&identifier) {
+            if self.identifier_types[i].contains_key(identifier) {
                 return false;
             }
         }
 
         self.identifier_types
             .first()
-            .map(|x| x.contains_key(&identifier))
+            .map(|x| x.contains_key(identifier))
             .unwrap_or(false)
     }
 

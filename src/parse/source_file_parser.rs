@@ -2,13 +2,16 @@ use std::{fs::File, path::PathBuf};
 
 use chumsky::{input::BorrowInput, prelude::*};
 
-use crate::parse::{
-    Context, SS, Spanned,
-    function_parser::{FunctionDefintion, function_definition_parser},
-    lexer::{Token, lexer},
-    make_input, parse_failure,
-    type_parser::{TypeDefinition, type_definition_parser},
-    use_statement_parser::{UseStatement, use_statement_parser},
+use crate::{
+    parse::{
+        Context, SS, Spanned,
+        function_parser::{FunctionDefintion, function_definition_parser},
+        lexer::{Token, lexer},
+        make_input, parse_failure,
+        type_parser::{TypeDefinition, type_definition_parser},
+        use_statement_parser::{UseStatement, use_statement_parser},
+    },
+    semantics::ident_mangler::{MangleEnv, mangle_type_expression, mangle_value_expr},
 };
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -35,21 +38,23 @@ impl SourceFile {
     }
 
     pub fn flatten(&self) -> SourceFile {
-        let mut res = SourceFile::default();
+        fn flatten0(s: &SourceFile, prefix: &str) -> SourceFile {
+            let mut mangle_env = MangleEnv {
+                names: vec![
+                    s.function_definitions
+                        .iter()
+                        .map(|x| x.name.clone())
+                        .collect::<Vec<_>>(),
+                ],
+                types: vec![
+                    s.type_definitions
+                        .iter()
+                        .map(|x| x.name.clone())
+                        .collect::<Vec<_>>(),
+                ],
+            };
 
-        fn flatten0(s: &SourceFile, result: &mut SourceFile, prefix: &str) {
-            for func in &s.function_definitions {
-                let mut f = func.clone();
-                f.name = format!("{prefix}{}", f.name);
-                result.function_definitions.push(f);
-            }
-
-            for t in &s.type_definitions {
-                result.type_definitions.push(TypeDefinition {
-                    name: format!("{prefix}_{}", t.name),
-                    ..t.clone()
-                });
-            }
+            let mut result = SourceFile::default();
 
             for u in &s.use_statements {
                 if matches!(u, UseStatement::Go(..)) {
@@ -57,14 +62,39 @@ impl SourceFile {
                 }
             }
 
-            for (name, sub_module) in &s.sub_modules {
-                flatten0(sub_module, result, &format!("{prefix}{name}_"));
+            for func in &s.function_definitions {
+                let mut f = func.clone();
+                f.name = format!("{prefix}{}", f.name);
+                mangle_value_expr(&mut f.value_expr.0, prefix, &mut mangle_env);
+                result.function_definitions.push(f);
             }
+
+            for t in &s.type_definitions {
+                let mut ty = t.clone();
+                ty.name = format!("{prefix}{}", ty.name);
+                mangle_type_expression(&mut ty.type_expression.0, prefix, &mut mangle_env);
+                result.type_definitions.push(ty);
+            }
+
+            for (name, sub_module) in &s.sub_modules {
+                let src = flatten0(sub_module, &format!("{prefix}{name}_"));
+                for f in src.function_definitions {
+                    result.function_definitions.push(f);
+                }
+                for f in src.type_definitions {
+                    result.type_definitions.push(f);
+                }
+                for u in &src.use_statements {
+                    if matches!(u, UseStatement::Go(..)) {
+                        result.push_use(u);
+                    }
+                }
+            }
+
+            result
         }
 
-        flatten0(self, &mut res, "");
-
-        res
+        flatten0(self, "")
     }
 }
 
@@ -231,7 +261,7 @@ mod tests {
         lexer::lexer,
         make_input,
         source_file_parser::{SourceFile, source_file_parser},
-        type_parser::{Duck, Field, TypeDefinition, TypeExpr},
+        type_parser::{Duck, Field, Struct, TypeDefinition, TypeExpr},
         use_statement_parser::{Indicator, UseStatement},
         value_parser::{
             IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
@@ -678,13 +708,110 @@ mod tests {
                 },
             ),
             (
-                SourceFile::default(),
+                SourceFile {
+                    type_definitions: vec![TypeDefinition {
+                        name: "abc_TestStruct".into(),
+                        type_expression: TypeExpr::Struct(Struct {
+                            fields: vec![Field {
+                                name: "recv".into(),
+                                type_expr: TypeExpr::TypeName("abc_TestStruct".into())
+                                    .into_empty_span(),
+                            }],
+                        })
+                        .into_empty_span(),
+                    }],
+                    use_statements: vec![UseStatement::Go("fmt".into(), None)],
+                    function_definitions: vec![
+                        FunctionDefintion {
+                            name: "abc_lol_im_a_func".into(),
+                            value_expr: ValueExpr::Block(vec![
+                                ValueExpr::FunctionCall {
+                                    target: ValueExpr::Variable("abc_lol_called".into(), None)
+                                        .into_empty_span()
+                                        .into(),
+                                    params: vec![],
+                                }
+                                .into_empty_span(),
+                            ])
+                            .into_empty_span(),
+                            ..Default::default()
+                        },
+                        FunctionDefintion {
+                            name: "abc_lol_called".into(),
+                            value_expr: ValueExpr::Block(vec![
+                                ValueExpr::FunctionCall {
+                                    target: ValueExpr::Variable("abc_lol_called".into(), None)
+                                        .into_empty_span()
+                                        .into(),
+                                    params: vec![],
+                                }
+                                .into_empty_span(),
+                            ])
+                            .into_empty_span(),
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                },
                 SourceFile {
                     sub_modules: vec![
                         (
                             "abc".into(),
                             SourceFile {
-                                sub_modules: vec![("lol".into(), SourceFile::default())],
+                                type_definitions: vec![TypeDefinition {
+                                    name: "TestStruct".into(),
+                                    type_expression: TypeExpr::Struct(Struct {
+                                        fields: vec![Field {
+                                            name: "recv".into(),
+                                            type_expr: TypeExpr::TypeName("TestStruct".into())
+                                                .into_empty_span(),
+                                        }],
+                                    })
+                                    .into_empty_span(),
+                                }],
+                                sub_modules: vec![(
+                                    "lol".into(),
+                                    SourceFile {
+                                        use_statements: vec![UseStatement::Go("fmt".into(), None)],
+                                        function_definitions: vec![
+                                            FunctionDefintion {
+                                                name: "im_a_func".into(),
+                                                value_expr: ValueExpr::Block(vec![
+                                                    ValueExpr::FunctionCall {
+                                                        target: ValueExpr::Variable(
+                                                            "called".into(),
+                                                            None,
+                                                        )
+                                                        .into_empty_span()
+                                                        .into(),
+                                                        params: vec![],
+                                                    }
+                                                    .into_empty_span(),
+                                                ])
+                                                .into_empty_span(),
+                                                ..Default::default()
+                                            },
+                                            FunctionDefintion {
+                                                name: "called".into(),
+                                                value_expr: ValueExpr::Block(vec![
+                                                    ValueExpr::FunctionCall {
+                                                        target: ValueExpr::Variable(
+                                                            "called".into(),
+                                                            None,
+                                                        )
+                                                        .into_empty_span()
+                                                        .into(),
+                                                        params: vec![],
+                                                    }
+                                                    .into_empty_span(),
+                                                ])
+                                                .into_empty_span(),
+                                                ..Default::default()
+                                            },
+                                        ],
+                                        ..SourceFile::default()
+                                    },
+                                )],
                                 ..SourceFile::default()
                             },
                         ),

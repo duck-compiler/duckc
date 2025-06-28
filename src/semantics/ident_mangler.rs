@@ -1,0 +1,209 @@
+use crate::parse::{function_parser::LambdaFunctionExpr, type_parser::{Duck, Struct, TypeExpr}, value_parser::ValueExpr};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MangleEnv {
+    pub names: Vec<Vec<String>>,
+    pub types: Vec<Vec<String>>,
+}
+
+impl MangleEnv {
+    pub fn is_top_level_type(&self, ident: &String) -> bool {
+        for i in 1..self.types.len() {
+            if self.types[i].contains(ident) {
+                return false;
+            }
+        }
+
+        self.types
+            .first()
+            .map(|x| x.contains(ident))
+            .unwrap_or(false)
+    }
+
+    pub fn is_top_level_ident(&self, ident: &String) -> bool {
+        for i in 1..self.names.len() {
+            if self.names[i].contains(ident) {
+                return false;
+            }
+        }
+
+        self.names
+            .first()
+            .map(|x| x.contains(ident))
+            .unwrap_or(false)
+    }
+
+    pub fn insert_ident(&mut self, ident: String) {
+        let n = self.names.last_mut().unwrap();
+        if !n.contains(&ident) {
+            n.push(ident);
+        }
+    }
+
+    pub fn insert_type(&mut self, type_name: String) {
+        let t = self.types.last_mut().unwrap();
+        if !t.contains(&type_name) {
+            t.push(type_name);
+        }
+    }
+
+    pub fn push_idents(&mut self) {
+        self.names.push(vec![]);
+    }
+
+    pub fn pop_idents(&mut self) {
+        if self.names.len() == 1 {
+            panic!("Cant pop last env");
+        }
+        self.names.pop();
+    }
+
+    pub fn push_types(&mut self) {
+        self.types.push(vec![]);
+    }
+
+    pub fn pop_types(&mut self) {
+        if self.types.len() == 1 {
+            panic!("Cant pop last env");
+        }
+        self.types.pop();
+    }
+}
+
+pub fn mangle_type_expression(type_expr: &mut TypeExpr, prefix: &str, mangle_env: &mut MangleEnv) {
+    match type_expr {
+        TypeExpr::TypeName(name) => {
+            if mangle_env.is_top_level_type(name) {
+                *name = format!("{prefix}{name}")
+            }
+        }
+        TypeExpr::Struct(Struct { fields }) => {
+            for f in fields {
+                mangle_type_expression(&mut f.type_expr.0, prefix, mangle_env);
+            }
+        }
+        TypeExpr::Duck(Duck { fields }) => {
+            for f in fields {
+                mangle_type_expression(&mut f.type_expr.0, prefix, mangle_env);
+            }
+        }
+        TypeExpr::Tuple(fields) => {
+            for f in fields {
+                mangle_type_expression(&mut f.0, prefix, mangle_env);
+            }
+        }
+        TypeExpr::Fun(params, return_type) => {
+            for (_, param_type) in params {
+                mangle_type_expression(&mut param_type.0, prefix, mangle_env);
+            }
+
+            if let Some(return_type) = return_type {
+                mangle_type_expression(&mut return_type.0, prefix, mangle_env);
+            }
+        }
+        _ => {}
+    }
+}
+
+pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &mut MangleEnv) {
+    match value_expr {
+        ValueExpr::InlineGo(..) => {}
+        ValueExpr::Lambda(lambda_expr) => {
+            let LambdaFunctionExpr { params, return_type, value_expr } = &mut **lambda_expr;
+            for (_, param_type) in params {
+                mangle_type_expression(&mut param_type.0, prefix, mangle_env);
+            }
+            if let Some(return_type) = return_type {
+                mangle_type_expression(&mut return_type.0, prefix, mangle_env);
+            }
+            mangle_value_expr(&mut value_expr.0, prefix, mangle_env);
+        }
+        ValueExpr::FunctionCall { target, params } => {
+            mangle_value_expr(&mut target.0, prefix, mangle_env);
+            params
+                .iter_mut()
+                .for_each(|param| mangle_value_expr(&mut param.0, prefix, mangle_env));
+        }
+        ValueExpr::Variable(identifier, _) => {
+            dbg!(&identifier, &mangle_env);
+            if mangle_env.is_top_level_ident(identifier) {
+                *identifier = format!("{prefix}{identifier}");
+            }
+        }
+        ValueExpr::If {
+            condition,
+            then,
+            r#else,
+        } => {
+            mangle_value_expr(&mut condition.0, prefix, mangle_env);
+
+            mangle_env.push_idents();
+            mangle_value_expr(&mut then.0, prefix, mangle_env);
+            mangle_env.pop_idents();
+
+            if let Some(r#else) = r#else {
+                mangle_value_expr(&mut r#else.0, prefix, mangle_env);
+            }
+        }
+        ValueExpr::While { condition, body } => {
+            mangle_value_expr(&mut condition.0, prefix, mangle_env);
+            mangle_env.push_idents();
+            mangle_value_expr(&mut body.0, prefix, mangle_env);
+            mangle_env.pop_idents();
+        }
+        ValueExpr::Tuple(value_exprs) => value_exprs
+            .iter_mut()
+            .for_each(|value_expr| mangle_value_expr(&mut value_expr.0, prefix, mangle_env)),
+        ValueExpr::Block(value_exprs) => {
+            mangle_env.push_idents();
+            value_exprs
+                .iter_mut()
+                .for_each(|value_expr| mangle_value_expr(&mut value_expr.0, prefix, mangle_env));
+            mangle_env.pop_idents();
+        }
+        ValueExpr::Duck(items) => items
+            .iter_mut()
+            .for_each(|(_, value_expr)| mangle_value_expr(&mut value_expr.0, prefix, mangle_env)),
+        ValueExpr::Struct(items) => items
+            .iter_mut()
+            .for_each(|(_, value_expr)| mangle_value_expr(&mut value_expr.0, prefix, mangle_env)),
+        ValueExpr::FieldAccess { target_obj, .. } => {
+            mangle_value_expr(&mut target_obj.0, prefix, mangle_env);
+        }
+        ValueExpr::Return(Some(value_expr)) => {
+            mangle_value_expr(&mut value_expr.0, prefix, mangle_env)
+        }
+        ValueExpr::VarAssign(assignment) => {
+            mangle_value_expr(&mut assignment.0.value_expr.0, prefix, mangle_env);
+        }
+        ValueExpr::VarDecl(declaration) => {
+            let declaration = &mut declaration.0;
+
+            if let (TypeExpr::TypeName(type_name), _) = &mut declaration.type_expr {
+                *type_name = format!("{prefix}{type_name}");
+            }
+
+            mangle_env.insert_ident(declaration.name.clone());
+
+            if let Some(value_expr) = &mut declaration.initializer {
+                mangle_value_expr(&mut value_expr.0, prefix, mangle_env);
+            }
+        }
+        ValueExpr::Add(lhs, rhs) => {
+            mangle_value_expr(&mut lhs.0, prefix, mangle_env);
+            mangle_value_expr(&mut rhs.0, prefix, mangle_env);
+        }
+        ValueExpr::Mul(lhs, rhs) => {
+            mangle_value_expr(&mut lhs.0, prefix, mangle_env);
+            mangle_value_expr(&mut rhs.0, prefix, mangle_env);
+        }
+        ValueExpr::Equals(lhs, rhs) => {
+            mangle_value_expr(&mut lhs.0, prefix, mangle_env);
+            mangle_value_expr(&mut rhs.0, prefix, mangle_env);
+        }
+        ValueExpr::BoolNegate(value_expr) => {
+            mangle_value_expr(&mut value_expr.0, prefix, mangle_env);
+        }
+        _ => {}
+    }
+}
