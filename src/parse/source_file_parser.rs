@@ -39,10 +39,9 @@ impl SourceFile {
 
         fn flatten0(s: &SourceFile, result: &mut SourceFile, prefix: &str) {
             for func in &s.function_definitions {
-                result.function_definitions.push(FunctionDefintion {
-                    name: format!("{prefix}{}", func.name),
-                    ..func.clone()
-                });
+                let mut f = func.clone();
+                f.name = format!("{prefix}{}", f.name);
+                result.function_definitions.push(f);
             }
 
             for t in &s.type_definitions {
