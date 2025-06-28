@@ -1,8 +1,7 @@
 use std::path::PathBuf;
 use clap::{Parser as CliParser, Subcommand};
-use colored::Colorize;
 
-use crate::project::{self, loader::ProjectConfig};
+use crate::{dargo::{self, compile::CompileErrKind, init::InitErrKind}, tags::Tag};
 
 #[derive(CliParser, Debug)]
 pub struct DuckCliParser {
@@ -17,6 +16,7 @@ pub struct DuckCliParser {
 pub enum Commands {
     Build(BuildArgs),
     Compile(CompileArgs),
+    Init(InitArgs),
 }
 
 #[derive(clap::Args, Debug)]
@@ -33,30 +33,44 @@ pub struct CompileArgs {
     pub file: PathBuf,
 }
 
-pub fn run_cli() {
-    // our ascii duck
-    println!(
-        "{}\n{}{}{}\n{}",
-        " _,".bright_yellow(),
-        "(".bright_yellow(),
-        "o".blue(),
-        "<".yellow(),
-        "<_)".bright_yellow(),
-    );
+#[derive(clap::Args, Debug)]
+pub struct InitArgs {
+    // Examples:
+    // #[arg(long, short = 'o')]
+    // optimize: bool,
+    // #[arg(long, value_parser = ["x86", "arm"])]
+    // arch: Option<String>
+}
+
+#[derive(Debug)]
+pub enum CliErrKind {
+    Init(InitErrKind),
+    Compile(CompileErrKind)
+}
+pub fn run_cli() -> Result<(), (String, CliErrKind)> {
 
     let args = DuckCliParser::parse();
     match args.command {
-        Commands::Build(build_args) => {
-            initiate_build(&build_args);
+        Commands::Build(_build_args) => {
         },
         Commands::Compile(compile_args) => {
-            initiate_compile(&compile_args);
+            dargo::compile::compile(
+                compile_args.file,
+                None,
+            ).map_err(|err| (
+                format!(
+                    "{}{}",
+                    Tag::Dargo,
+                    err.0
+                ),
+                CliErrKind::Compile(err.1)
+            ))?
         },
+        Commands::Init(_init_args) => {
+            dargo::init::init_project(None)
+                .map_err(|err| (format!("{}{}", Tag::Dargo, err.0), CliErrKind::Init(err.1)))?;
+        }
     }
-}
 
-fn initiate_build(build_args: &BuildArgs) {
-    // project::loader::load_project_env()
+    Ok(())
 }
-
-fn initiate_compile(compile_args: &CompileArgs) {}
