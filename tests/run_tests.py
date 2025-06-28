@@ -143,7 +143,7 @@ def compile_failure(compiler_path, invalid_program):
         print(f"{COLOR_YELLOW}compile_failure {COLOR_RESET}'{invalid_program}'")
 
     try:
-        command = [compiler_path] + [invalid_program];
+        command = [compiler_path] + ["compile"] + [invalid_program];
 
         result = subprocess.run(command, capture_output=True, text=True, check=False)
 
@@ -171,7 +171,7 @@ def compile_valid(compiler_path, valid_program):
         print(f"{COLOR_YELLOW}compile_valid {COLOR_RESET}'{valid_program}'")
 
     try:
-        command = [compiler_path] + [valid_program];
+        command = [compiler_path] + ["compile"] +  [valid_program];
 
         result = subprocess.run(command, capture_output=True, text=True, check=False)
 
@@ -246,7 +246,7 @@ def compile_valid_with_assert(compiler_path, valid_program):
         print(f"{COLOR_YELLOW}compile_valid_with_assert {COLOR_RESET}'{valid_program}'")
 
     try:
-        command = [compiler_path] + [valid_program];
+        command = [compiler_path] + ["compile"] + [valid_program];
 
         result = subprocess.run(command, capture_output=True, text=True, check=False)
 
