@@ -57,7 +57,7 @@ pub fn load_dargo_config(custom_toml_path: Option<PathBuf>) -> Result<ProjectCon
                 " Error ".on_red().bright_white(),
             );
 
-            (message, ProjectLoadErrKind::MissingDuckToml)
+            (message, ProjectLoadErrKind::FileRead)
         })?;
 
     let project_config = toml::from_str(&file_content)
@@ -68,7 +68,7 @@ pub fn load_dargo_config(custom_toml_path: Option<PathBuf>) -> Result<ProjectCon
                 " TOML ".on_yellow().bright_white(),
             );
 
-            (message, ProjectLoadErrKind::MissingDuckToml)
+            (message, ProjectLoadErrKind::TomlParse)
         })?;
 
     return Ok(project_config);
@@ -162,7 +162,7 @@ mod tests {
 
         let result = load_dargo_config(Some(file_path.clone()));
         assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = dbg!(result.unwrap_err());
         assert!(matches!(err, (.., ProjectLoadErrKind::TomlParse)));
 
         fs::remove_file(file_path).unwrap();
