@@ -1,10 +1,23 @@
 use go "fmt";
+
+fun abc() -> Int {
+    return 123;
+}
+
+fun xyz() -> String {
+    return "Hallo";
+}
+
+fun foo() -> (Int, String) {
+    return (abc(), xyz());
+}
+
+fun foo2() -> (Bool, Bool, (Int, String)) {
+    return (true, false, foo());
+}
+
 fun main() {
-    let x: Int = 0;
-    while (!(x == 5)) {
-        go {
-            fmt.Println(x)
-        }
-        x = x + 1;
+    go {
+        fmt.Println(foo2())
     }
 }

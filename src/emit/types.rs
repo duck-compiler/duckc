@@ -156,9 +156,13 @@ impl TypeExpr {
                     "struct {{\n{}\n}}",
                     fields
                         .iter()
-                        .map(|type_expr| type_expr.0.as_go_type_annotation(type_env).to_string())
+                        .enumerate()
+                        .map(|(i, type_expr)| format!(
+                            "field_{i} {}",
+                            type_expr.0.as_go_type_annotation(type_env).to_string()
+                        ))
                         .collect::<Vec<_>>()
-                        .join("_")
+                        .join("\n")
                 )
             }
             TypeExpr::Or(_variants) => todo!("implement variants"),
@@ -212,9 +216,13 @@ impl TypeExpr {
                     "struct {{\n{}\n}}",
                     fields
                         .iter()
-                        .map(|type_expr| type_expr.0.as_go_type_annotation(type_env).to_string())
+                        .enumerate()
+                        .map(|(i, type_expr)| format!(
+                            "field_{i} {}",
+                            type_expr.0.as_go_type_annotation(type_env).to_string()
+                        ))
                         .collect::<Vec<_>>()
-                        .join("_")
+                        .join("\n")
                 )
             }
             TypeExpr::Or(_variants) => todo!("implement variants"),

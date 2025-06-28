@@ -23,7 +23,9 @@ impl IrInstruction {
             }
             IrInstruction::FunCall(r, t, p) => {
                 format!(
-                    "{r} = {t}({})",
+                    "{}{}({})",
+                    r.as_ref().map(|x| format!("{x} = ")).unwrap_or_default(),
+                    t.emit_as_go(),
                     p.iter()
                         .map(IrValue::emit_as_go)
                         .collect::<Vec<_>>()
@@ -85,7 +87,15 @@ impl IrInstruction {
                         .collect::<Vec<_>>()
                         .join(", "),
                     return_type.as_ref().unwrap_or(&String::new()),
-                    join_ir(body),
+                    format!(
+                        "{}\n{}",
+                        params
+                            .iter()
+                            .map(|(name, _)| format!("_ = {name}"))
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                        join_ir(body)
+                    ),
                 )
             }
             IrInstruction::StructDef(name, fields) => {
@@ -95,7 +105,7 @@ impl IrInstruction {
                         .iter()
                         .map(|(n, ty)| format!("{} {}", n, ty))
                         .collect::<Vec<_>>()
-                        .join(", "),
+                        .join("\n"),
                 )
             }
             IrInstruction::InterfaceDef(name, generics, fields) => {
@@ -117,9 +127,9 @@ impl IrInstruction {
                     },
                     fields
                         .iter()
-                        .map(|(n, ty)| format!("{} {}", n, ty))
+                        .map(|(n, ty)| format!("{}() {}", n, ty))
                         .collect::<Vec<_>>()
-                        .join(", "),
+                        .join("\n"),
                 )
             }
         }
