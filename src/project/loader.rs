@@ -5,6 +5,8 @@ use colored::Colorize;
 use serde::Deserialize;
 use toml;
 
+use crate::tags::Tag;
+
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct BinaryConfig {
     pub name: String,
@@ -26,26 +28,26 @@ pub struct ProjectConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub enum ProjectLoadErr {
-    FileRead(String),
-    TomlParse(String),
-    MissingDuckToml(String)
+pub enum ProjectLoadErrKind {
+    FileRead,
+    TomlParse,
+    MissingDuckToml
 }
 
 // at the moment the duck_toml_file_name is only for testing purposes
-pub fn load_project_env(duck_toml_file_name: Option<PathBuf>) -> Result<ProjectConfig, ProjectLoadErr> {
+pub fn load_project_env(duck_toml_file_name: Option<PathBuf>) -> Result<ProjectConfig, (String, ProjectLoadErrKind)> {
     let path = duck_toml_file_name
         .unwrap_or(Path::new("duck.toml").to_path_buf());
 
     if !path.exists() {
         let message = [
-            format!("{} {}", " Error ".on_red().bright_white(), "Couldn't locate duck.toml in current directory."),
-            format!("If you feel like this is an error, please reach out to us on one of our official channels or create an issue on our github page."),
-            format!("  {} https://x.com/ducklang", " Twitter ".on_bright_blue().bright_white()),
-            format!("  {} https://github.com/duck-compiler/duckc", " GitHub ".on_bright_black().bright_white()),
+            format!("{} {}", Tag::Err, "Couldn't locate duck.toml in current directory."),
+            format!("{} If you feel like this is an error, please reach out to us on one of our official channels or create an issue on our github page.", Tag::Note),
+            format!("  {} https://x.com/ducklang", Tag::Twitter),
+            format!("  {} https://github.com/duck-compiler/duckc", Tag::GitHub),
             ].join("\n");
 
-        return Err(ProjectLoadErr::MissingDuckToml(message))
+        return Err((message, ProjectLoadErrKind::MissingDuckToml))
     }
 
     let file_content = fs::read_to_string(path)
@@ -55,7 +57,7 @@ pub fn load_project_env(duck_toml_file_name: Option<PathBuf>) -> Result<ProjectC
                 " Error ".on_red().bright_white(),
             );
 
-            ProjectLoadErr::MissingDuckToml(message)
+            (message, ProjectLoadErrKind::MissingDuckToml)
         })?;
 
     let project_config = toml::from_str(&file_content)
@@ -66,7 +68,7 @@ pub fn load_project_env(duck_toml_file_name: Option<PathBuf>) -> Result<ProjectC
                 " TOML ".on_yellow().bright_white(),
             );
 
-            ProjectLoadErr::TomlParse(message)
+            (message, ProjectLoadErrKind::MissingDuckToml)
         })?;
 
     return Ok(project_config);
@@ -160,7 +162,7 @@ mod tests {
         let result = load_project_env(Some(file_path.clone()));
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, ProjectLoadErr::MissingDuckToml(..)));
+        assert!(matches!(err, (.., ProjectLoadErrKind::MissingDuckToml)));
     }
 
     #[test]
@@ -179,7 +181,7 @@ mod tests {
         let result = load_project_env(Some(file_path.clone()));
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, ProjectLoadErr::TomlParse(..)));
+        assert!(matches!(err, (.., ProjectLoadErrKind::TomlParse)));
 
         fs::remove_file(file_path).unwrap();
     }
@@ -209,7 +211,7 @@ mod tests {
         let result = load_project_env(Some(file_path.clone()));
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, ProjectLoadErr::TomlParse(..)));
+        assert!(matches!(err, (.., ProjectLoadErrKind::TomlParse)));
 
         fs::remove_file(file_path).unwrap();
     }
