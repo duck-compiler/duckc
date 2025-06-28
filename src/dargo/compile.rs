@@ -1,0 +1,140 @@
+use std::{ffi::OsString, fs, path::PathBuf, process::Command};
+use colored::Colorize;
+use lazy_static::lazy_static;
+
+use crate::{emit::ir::join_ir, lex, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DOT_DUCK_DIR};
+
+#[derive(Debug)]
+pub enum CompileErrKind {
+    CorruptedFileName,
+    TargetPathIsDirectory,
+    FileNotFound,
+    CannotReadFile,
+    CannotSpawnProcess,
+    CannotWaitForProcess,
+}
+
+lazy_static! {
+    static ref COMPILE_TAG: String = " compile ".on_bright_black().bright_white().to_string();
+}
+
+pub fn compile(
+    src_file: PathBuf,
+    binary_output_name: Option<String>,
+) -> Result<(), (String, CompileErrKind)> {
+    if src_file.is_dir() {
+        let message = format!(
+            "{}{} the path you provided is a directory. You need to provide a .duck file",
+            COMPILE_TAG.to_string(),
+            Tag::Err,
+        );
+
+        return Err((message, CompileErrKind::TargetPathIsDirectory));
+    }
+
+    println!("{:?}", src_file);
+    if src_file.extension()
+        .ok_or_else(|| (
+            format!(
+                "{}{} couldn't extract file extension from provided source file",
+                COMPILE_TAG.to_string(),
+                Tag::Err,
+            )
+        ))
+        .unwrap() != "duck" {
+        let message = format!(
+            "{}{} the path you provided is not a valid duck source file. You need to provide a .duck file",
+            COMPILE_TAG.to_string(),
+            Tag::Err,
+        );
+        return Err((message, CompileErrKind::TargetPathIsDirectory));
+    }
+
+    let src_file_name: &'static str = src_file
+        .file_name()
+        .ok_or_else(|| (
+            format!(
+                "{}{} couldn't get the filename from given ",
+                COMPILE_TAG.to_string(),
+                Tag::Err
+            ),
+            CompileErrKind::CorruptedFileName
+        ))?
+        .to_str()
+        .ok_or_else(|| (
+            format!(
+                "{}{} the filename is an invalid utf-8 string",
+                COMPILE_TAG.to_string(),
+                Tag::Err
+            ),
+            CompileErrKind::CorruptedFileName
+        ))?
+        .to_string()
+        .leak();
+
+    let src_file_file_contents: &'static str = fs::read_to_string(&src_file)
+        .map_err(|err| (
+            format!(
+                "{}{} couldn't read file\n -> {err}",
+                COMPILE_TAG.to_string(),
+                Tag::Err
+            ),
+            CompileErrKind::CannotReadFile
+        ))?
+        .to_string()
+        .leak();
+
+    let tokens = lex(src_file_name, src_file_file_contents);
+    let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
+    let mut type_env = typecheck(&mut src_file_ast);
+    let go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env));
+
+    let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.go").as_str(), &go_code);
+
+    let compile_output_target = {
+        let mut target_file = DOT_DUCK_DIR.clone();
+        target_file.push(
+            binary_output_name
+                .map(OsString::from)
+                .unwrap_or(OsString::from("duck_out"))
+        );
+
+        target_file
+    };
+
+    Command::new("go")
+        .args([
+            OsString::from("build"),
+            OsString::from("-o"),
+            compile_output_target.as_os_str().to_owned(),
+            go_output_file.as_os_str().to_owned(),
+        ])
+        .spawn()
+        .map_err(|err| (
+            format!(
+                "{}{} couldn't spawn go process\n -> {err}",
+                COMPILE_TAG.to_string(),
+                Tag::Err,
+            ),
+            CompileErrKind::CannotReadFile,
+        ))?
+        .wait()
+        .map_err(|err| (
+            format!(
+                "{}{} couldn't wait for go compile process\n -> {err}",
+                COMPILE_TAG.to_string(),
+                Tag::Err,
+            ),
+            CompileErrKind::CannotWaitForProcess
+        ))?;
+
+    println!(
+        "{}{}{} Successfully compiled binary {}",
+        go_output_file.to_str().expect("Output File String is weird"),
+        Tag::Dargo,
+        COMPILE_TAG.to_string(),
+        Tag::Check,
+    );
+
+    return Ok(())
+}

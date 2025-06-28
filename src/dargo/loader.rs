@@ -1,9 +1,10 @@
 use std::path::{Path, PathBuf};
 use std::fs;
-use std::error::Error;
 use colored::Colorize;
 use serde::Deserialize;
 use toml;
+
+use crate::tags::Tag;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct BinaryConfig {
@@ -26,75 +27,58 @@ pub struct ProjectConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub enum ProjectLoadErr {
-    FileRead(String),
-    TomlParse(String),
-    MissingDuckToml(String)
+pub enum ProjectLoadErrKind {
+    FileRead,
+    TomlParse,
+    MissingDuckToml
 }
 
-// at the moment the duck_toml_file_name is only for testing purposes
-pub fn load_project_env(duck_toml_file_name: Option<PathBuf>) -> Result<ProjectConfig, ProjectLoadErr> {
-    let path = duck_toml_file_name
-        .unwrap_or(Path::new("duck.toml").to_path_buf());
+// custom_toml_path is only for testing purposes atm
+pub fn load_dargo_config(custom_toml_path: Option<PathBuf>) -> Result<ProjectConfig, (String, ProjectLoadErrKind)> {
+    let path = custom_toml_path
+        .unwrap_or(Path::new("dargo.toml").to_path_buf());
 
     if !path.exists() {
         let message = [
-            format!("{} {}", " Error ".on_red().bright_white(), "Couldn't locate duck.toml in current directory."),
-            format!("If you feel like this is an error, please reach out to us on one of our official channels or create an issue on our github page."),
-            format!("  {} https://x.com/ducklang", " Twitter ".on_bright_blue().bright_white()),
-            format!("  {} https://github.com/duck-compiler/duckc", " GitHub ".on_bright_black().bright_white()),
+            format!("{} {}", Tag::Err, "Couldn't locate dargo.toml in current directory."),
+
+            format!("\n{} If you feel like this is an bug, please reach out to us on one of our official channels or create an issue on our github page.", Tag::Note),
+            format!("  {} https://x.com/ducklang", Tag::Twitter),
+            format!("  {}  https://github.com/duck-compiler/duckc", Tag::GitHub),
             ].join("\n");
 
-        return Err(ProjectLoadErr::MissingDuckToml(message))
+        return Err((message, ProjectLoadErrKind::MissingDuckToml))
     }
 
     let file_content = fs::read_to_string(path)
         .map_err(|read_error| {
             let message = format!(
-                "{} Couldn't read duck.toml.\n -> {read_error}",
+                "{} Couldn't read dargo.toml.\n -> {read_error}",
                 " Error ".on_red().bright_white(),
             );
 
-            ProjectLoadErr::MissingDuckToml(message)
+            (message, ProjectLoadErrKind::FileRead)
         })?;
 
     let project_config = toml::from_str(&file_content)
         .map_err(|parse_error| {
             let message = format!(
-                "{} {} Couldn't parse duck.toml file.\n -> {parse_error}",
+                "{} {} Couldn't parse dargo.toml file.\n -> {parse_error}",
                 " Error ".on_red().bright_white(),
                 " TOML ".on_yellow().bright_white(),
             );
 
-            ProjectLoadErr::TomlParse(message)
+            (message, ProjectLoadErrKind::TomlParse)
         })?;
 
     return Ok(project_config);
 }
 
-const DEFAULT_DUCK_TOML_CONTENT: &str = r#"
-name="My New Project"
-
-[[bin]]
-name = "my_app"
-version = "0.1.0"
-file = "./src/main.duck"
-
-[[dependencies]]
-git_url = "https://github.com/example/default_dep.git"
-"#;
-
-pub fn bootstrap_default_project_env(config_file_path: PathBuf) -> Result<(), Box<dyn Error>> {
-    fs::write(&config_file_path, DEFAULT_DUCK_TOML_CONTENT)
-        .map_err(|write_error| {
-            let error_message = format!("failed to write default file '{}': {}", config_file_path.display(), write_error);
-            Box::new(std::io::Error::new(write_error.kind(), error_message)) as Box<dyn Error>
-        })?;
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {
+    use crate::dargo::init::init_project;
+
     use super::*;
     use std::io::Write;
 
@@ -127,9 +111,9 @@ mod tests {
             [[dependencies]]
             git_url = "https://github.com/another/dep.git"
         "#;
-        let file_path = create_temp_file("valid_duck.toml", toml_content);
+        let file_path = create_temp_file("valid_dargo.toml", toml_content);
 
-        let result = load_project_env(Some(file_path.clone()));
+        let result = load_dargo_config(Some(file_path.clone()));
         assert!(result.is_ok());
         let config = result.unwrap();
 
@@ -156,11 +140,11 @@ mod tests {
 
     #[test]
     fn test_load_project_env_missing_file() {
-        let file_path = PathBuf::from("non_existent_duck.toml");
-        let result = load_project_env(Some(file_path.clone()));
+        let file_path = PathBuf::from("non_existent_dargo.toml");
+        let result = load_dargo_config(Some(file_path.clone()));
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, ProjectLoadErr::MissingDuckToml(..)));
+        assert!(matches!(err, (.., ProjectLoadErrKind::MissingDuckToml)));
     }
 
     #[test]
@@ -174,12 +158,12 @@ mod tests {
             [dependencies]
             git_url = "x"
         "#.trim();
-        let file_path = create_temp_file("malformed_duck.toml", malformed_content);
+        let file_path = create_temp_file("malformed_dargo.toml", malformed_content);
 
-        let result = load_project_env(Some(file_path.clone()));
+        let result = load_dargo_config(Some(file_path.clone()));
         assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ProjectLoadErr::TomlParse(..)));
+        let err = dbg!(result.unwrap_err());
+        assert!(matches!(err, (.., ProjectLoadErrKind::TomlParse)));
 
         fs::remove_file(file_path).unwrap();
     }
@@ -187,9 +171,9 @@ mod tests {
     #[test]
     fn test_load_project_env_missing_optional_sections() {
         let toml_content = "name=\"My Project Only\"\n";
-        let file_path = create_temp_file("optional_duck.toml", toml_content);
+        let file_path = create_temp_file("optional_dargo.toml", toml_content);
 
-        let result = load_project_env(Some(file_path.clone()));
+        let result = load_dargo_config(Some(file_path.clone()));
         let result = dbg!(result);
         assert!(result.is_ok());
         let config = result.unwrap();
@@ -204,12 +188,12 @@ mod tests {
     #[test]
     fn test_load_project_env_empty_file() {
         let toml_content = r#""#;
-        let file_path = create_temp_file("empty_duck.toml", toml_content);
+        let file_path = create_temp_file("empty_dargo.toml", toml_content);
 
-        let result = load_project_env(Some(file_path.clone()));
+        let result = load_dargo_config(Some(file_path.clone()));
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, ProjectLoadErr::TomlParse(..)));
+        assert!(matches!(err, (.., ProjectLoadErrKind::TomlParse)));
 
         fs::remove_file(file_path).unwrap();
     }
@@ -228,9 +212,9 @@ mod tests {
             [[dependencies]]
             git_url = "git@bitbucket.org:user/project.git"
         "#;
-        let file_path = create_temp_file("complex_deps_duck.toml", toml_content);
+        let file_path = create_temp_file("complex_deps_dargo.toml", toml_content);
 
-        let result = load_project_env(Some(file_path.clone()));
+        let result = load_dargo_config(Some(file_path.clone()));
         assert!(result.is_ok());
         let config = result.unwrap();
 
@@ -250,12 +234,12 @@ mod tests {
 
     #[test]
     fn test_bootstrap_default_project_env() {
-        let file_path = PathBuf::from("default_duck.toml");
+        let file_path = PathBuf::from("default_dargo.toml");
 
-        let bootstrap_result = bootstrap_default_project_env(file_path.clone());
+        let bootstrap_result = init_project(Some(file_path.clone()));
         assert!(bootstrap_result.is_ok());
 
-        let load_result = load_project_env(Some(file_path.clone()));
+        let load_result = load_dargo_config(Some(file_path.clone()));
         assert!(load_result.is_ok());
         let config = load_result.unwrap();
 

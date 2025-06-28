@@ -132,7 +132,7 @@ where
                                 .collect(),
                         })
                     }
-                    None => TypeExpr::Any,
+                    _ => TypeExpr::Any,
                 });
 
             let tuple = p
