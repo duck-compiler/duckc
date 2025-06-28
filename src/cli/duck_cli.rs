@@ -47,6 +47,7 @@ pub enum CliErrKind {
     Init(InitErrKind),
     Compile(CompileErrKind)
 }
+
 pub fn run_cli() -> Result<(), (String, CliErrKind)> {
 
     let args = DuckCliParser::parse();
@@ -68,7 +69,14 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
         },
         Commands::Init(_init_args) => {
             dargo::init::init_project(None)
-                .map_err(|err| (format!("{}{}", Tag::Dargo, err.0), CliErrKind::Init(err.1)))?;
+                .map_err(|err| (
+                    format!(
+                        "{}{}",
+                        Tag::Dargo,
+                        err.0
+                    ),
+                    CliErrKind::Init(err.1)
+                ))?;
         }
     }
 
