@@ -69,7 +69,7 @@ pub fn load_project_env(duck_toml_file_name: Option<PathBuf>) -> Result<ProjectC
             ProjectLoadErr::TomlParse(message)
         })?;
 
-    return project_config;
+    return Ok(project_config);
 }
 
 const DEFAULT_DUCK_TOML_CONTENT: &str = r#"
@@ -190,7 +190,7 @@ mod tests {
         let file_path = create_temp_file("optional_duck.toml", toml_content);
 
         let result = load_project_env(Some(file_path.clone()));
-        let result =dbg!(result);
+        let result = dbg!(result);
         assert!(result.is_ok());
         let config = result.unwrap();
 
