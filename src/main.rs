@@ -6,27 +6,27 @@
     clippy::only_used_in_recursion
 )]
 
-use std::{error::Error, ffi::OsString, fs::{self, File}, io::Write, path::{Path, PathBuf}, process::Command};
+use std::{error::Error, fs::{self, File}, io::Write, path::{Path, PathBuf}};
 
 use chumsky::{error::Rich, Parser};
-use clap::{Parser as CliParser, arg, command};
+use colored::Colorize;
 use parse::{lexer::{lexer, Token}, source_file_parser::SourceFile, Spanned};
 use semantics::typechecker::{self, TypeEnv};
 
-use crate::{
-    emit::ir::join_ir,
-    parse::{
-        Context, SS, make_input, parse_failure,
-        source_file_parser::source_file_parser,
-    },
+use crate::parse::{
+    Context, SS, make_input, parse_failure,
+    source_file_parser::source_file_parser,
 };
 
 use lazy_static::lazy_static;
 
+pub mod cli;
 pub mod emit;
 pub mod fixup;
 pub mod parse;
 pub mod semantics;
+pub mod dargo;
+pub mod tags;
 
 lazy_static! {
     static ref DOT_DUCK_DIR: PathBuf = {
@@ -42,22 +42,6 @@ lazy_static! {
 
         return duck_dir.to_path_buf();
     };
-}
-
-#[derive(CliParser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct CompilerArgs {
-    // input_files: Vec<PathBuf>,
-    input_file: PathBuf,
-    #[arg(short)]
-    o: Option<String>,
-
-    #[arg(long)]
-    lex: bool,
-    #[arg(long)]
-    parse: bool,
-    #[arg(long)]
-    emit_go: bool,
 }
 
 fn lex(
@@ -146,54 +130,19 @@ fn write_in_duck_dotdir(file_name: &str, content: &str) -> PathBuf {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let compiler_args = CompilerArgs::parse();
-
-    let src_file: PathBuf = compiler_args.input_file;
-    let src_file_name: &'static str = src_file
-        .file_name()
-        .expect("couldn't read file name")
-        .to_str()
-        .expect("invalid utf-8 string")
-        .to_string()
-        .leak();
-    let src_file_file_contents: &'static str = fs::read_to_string(&src_file)
-        .expect("couldn't read file")
-        .to_string()
-        .leak();
-
-    let tokens = lex(src_file_name, src_file_file_contents);
-    let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
-    let mut type_env = typecheck(&mut src_file_ast);
-    let go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env));
-
-    let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.go").as_str(), &go_code);
-
-    let compile_output_target = {
-        let mut target_file = DOT_DUCK_DIR.clone();
-        target_file.push(
-            compiler_args
-                .o
-                .map(OsString::from)
-                .unwrap_or(OsString::from("duck_out"))
-        );
-
-        target_file
-    };
-
-    Command::new("go")
-        .args([
-            OsString::from("build"),
-            OsString::from("-o"),
-            compile_output_target.as_os_str().to_owned(),
-            go_output_file.as_os_str().to_owned(),
-        ])
-        .spawn()?
-        .wait()?;
-
     println!(
-        "Successfully compiled binary {}",
-        go_output_file.to_str().expect("Output File String is weird")
+        "{}\n{}{}{}  Oops, seems like there's something wrong!\n{}",
+        " _,".bright_yellow().bold(),
+        "(".bright_yellow().bold(),
+        "o".blue().bold(),
+        "<".yellow().bold(),
+        "<_)".bright_yellow().bold(),
     );
+
+    let cli_result = cli::duck_cli::run_cli();
+    if let Err(err) = cli_result {
+        println!("{}", err.0)
+    }
 
     Ok(())
 }
