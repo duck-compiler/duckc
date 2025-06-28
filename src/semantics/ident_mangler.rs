@@ -1,12 +1,42 @@
-use crate::parse::{function_parser::LambdaFunctionExpr, type_parser::{Duck, Struct, TypeExpr}, value_parser::ValueExpr};
+use std::collections::HashMap;
+
+use crate::parse::{
+    function_parser::LambdaFunctionExpr,
+    type_parser::{Duck, Struct, TypeExpr},
+    value_parser::ValueExpr,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MangleEnv {
+    pub imports: HashMap<String, String>,
     pub names: Vec<Vec<String>>,
     pub types: Vec<Vec<String>>,
 }
 
 impl MangleEnv {
+    pub fn is_imported_name(&self, x: &String) -> bool {
+        self.is_top_level_ident(&x) && self.imports.contains_key(x)
+    }
+
+    pub fn local_defined(&self, n: &String) -> bool {
+        self.names.last().filter(|x| x.contains(n)).is_some()
+    }
+
+    pub fn mangle_ident(&self, prefix: &str, ident: &String) -> Option<String> {
+        if !self.local_defined(ident) {
+            if let Some(import_path) = self.imports.get(ident) {
+                return Some(format!("{prefix}{import_path}_{ident}"));
+            }
+
+            if self.is_top_level_ident(ident) {
+                return Some(format!("{prefix}{ident}"));
+            }
+        }
+
+        None
+
+    }
+
     pub fn is_top_level_type(&self, ident: &String) -> bool {
         for i in 1..self.types.len() {
             if self.types[i].contains(ident) {
@@ -109,7 +139,11 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
     match value_expr {
         ValueExpr::InlineGo(..) => {}
         ValueExpr::Lambda(lambda_expr) => {
-            let LambdaFunctionExpr { params, return_type, value_expr } = &mut **lambda_expr;
+            let LambdaFunctionExpr {
+                params,
+                return_type,
+                value_expr,
+            } = &mut **lambda_expr;
             for (_, param_type) in params {
                 mangle_type_expression(&mut param_type.0, prefix, mangle_env);
             }
@@ -125,9 +159,11 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
                 .for_each(|param| mangle_value_expr(&mut param.0, prefix, mangle_env));
         }
         ValueExpr::Variable(identifier, _) => {
-            dbg!(&identifier, &mangle_env);
-            if mangle_env.is_top_level_ident(identifier) {
-                *identifier = format!("{prefix}{identifier}");
+            if let Some(mangled) = mangle_env.mangle_ident(prefix, identifier) {
+                if prefix == "abc_" && identifier == "called" {
+                    dbg!(prefix, &mangle_env, &mangled);
+                }
+                *identifier = mangled;
             }
         }
         ValueExpr::If {

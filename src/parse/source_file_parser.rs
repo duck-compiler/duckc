@@ -1,4 +1,4 @@
-use std::{fs::File, path::PathBuf};
+use std::{collections::HashMap, fs::File, path::PathBuf};
 
 use chumsky::{input::BorrowInput, prelude::*};
 
@@ -9,7 +9,7 @@ use crate::{
         lexer::{Token, lexer},
         make_input, parse_failure,
         type_parser::{TypeDefinition, type_definition_parser},
-        use_statement_parser::{UseStatement, use_statement_parser},
+        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
     },
     semantics::ident_mangler::{MangleEnv, mangle_type_expression, mangle_value_expr},
 };
@@ -40,6 +40,31 @@ impl SourceFile {
     pub fn flatten(&self) -> SourceFile {
         fn flatten0(s: &SourceFile, prefix: &str) -> SourceFile {
             let mut mangle_env = MangleEnv {
+                imports: {
+                    let mut imports = HashMap::new();
+                    for u in &s.use_statements {
+                        dbg!(&u);
+                        if let UseStatement::Regular(v) = u {
+                            let pre = v
+                                .iter()
+                                .take_while(|x| matches!(x, Indicator::Module(_)))
+                                .map(|x| {
+                                    let Indicator::Module(x) = x else { panic!() };
+                                    x.to_string()
+                                })
+                                .collect::<Vec<_>>()
+                                .join("_");
+                            let last = v.last();
+                            if let Some(Indicator::Symbols(sym)) = last {
+                                for s in sym {
+                                    imports.insert(s.clone(), pre.clone());
+                                }
+                            }
+                        }
+                    }
+
+                    dbg!(imports)
+                },
                 names: vec![
                     s.function_definitions
                         .iter()
@@ -737,6 +762,15 @@ mod tests {
                             ..Default::default()
                         },
                         FunctionDefintion {
+                            name: "abc_im_calling_a_sub_module".into(),
+                            value_expr: ValueExpr::Block(vec![
+                                ValueExpr::Variable("abc_lol_called".into(), None)
+                                    .into_empty_span(),
+                            ])
+                            .into_empty_span(),
+                            ..Default::default()
+                        },
+                        FunctionDefintion {
                             name: "abc_lol_called".into(),
                             value_expr: ValueExpr::Block(vec![
                                 ValueExpr::FunctionCall {
@@ -758,6 +792,10 @@ mod tests {
                         (
                             "abc".into(),
                             SourceFile {
+                                use_statements: vec![UseStatement::Regular(vec![
+                                    Indicator::Module("lol".into()),
+                                    Indicator::Symbols(vec!["called".into()]),
+                                ])],
                                 type_definitions: vec![TypeDefinition {
                                     name: "TestStruct".into(),
                                     type_expression: TypeExpr::Struct(Struct {
@@ -768,6 +806,15 @@ mod tests {
                                         }],
                                     })
                                     .into_empty_span(),
+                                }],
+                                function_definitions: vec![FunctionDefintion {
+                                    name: "im_calling_a_sub_module".into(),
+                                    value_expr: ValueExpr::Block(vec![
+                                        ValueExpr::Variable("called".into(), None)
+                                            .into_empty_span(),
+                                    ])
+                                    .into_empty_span(),
+                                    ..Default::default()
                                 }],
                                 sub_modules: vec![(
                                     "lol".into(),
