@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use colored::Colorize;
+use colored::{Color, Colorize};
 
 #[derive(Debug, Clone)]
 pub enum Tag {
@@ -13,6 +13,8 @@ pub enum Tag {
     Lexer,
     Parser,
     Compiler,
+    Git,
+    Build,
 }
 
 impl Display for Tag {
@@ -27,6 +29,8 @@ impl Display for Tag {
             Self::Lexer => write!(f, "{}", " lexer ".on_bright_white().black()),
             Self::Parser => write!(f, "{}", " parser ".on_white().black()),
             Self::Compiler => write!(f, "{}", " compiler ".on_black().bright_white()),
+            Self::Git => write!(f, "{}", " git ".on_color(Color::TrueColor { r: 243, g: 20, b: 20 }).bright_white()),
+            Self::Build => write!(f, "{}", " build ".on_color(Color::TrueColor { r: 243, g: 20, b: 20 }).bright_white()),
         };
     }
 }
