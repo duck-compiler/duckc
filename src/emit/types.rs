@@ -101,7 +101,7 @@ impl TypeExpr {
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeName(name) => type_env
+            TypeExpr::TypeName(_, name) => type_env
                 .resolve_type_alias(name)
                 .as_go_type_annotation(type_env),
             TypeExpr::Fun(params, return_type) => format!(
@@ -179,7 +179,7 @@ impl TypeExpr {
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
-            TypeExpr::TypeName(name) => type_env
+            TypeExpr::TypeName(_, name) => type_env
                 .resolve_type_alias(name)
                 .as_go_concrete_annotation(type_env),
             TypeExpr::Fun(params, return_type) => format!(
@@ -238,7 +238,7 @@ impl TypeExpr {
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeName(name) => name.clone(),
+            TypeExpr::TypeName(_, name) => name.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type) => format!(
                 "Fun_From_{}{}",
@@ -365,7 +365,7 @@ impl TypeExpr {
                 ),
             ),
             TypeExpr::Go(x) => (x.clone(), format!("Go{}", x.replace(".", "_"))),
-            TypeExpr::TypeName(x) => (x.clone(), x.clone()),
+            TypeExpr::TypeName(_, x) => (x.clone(), x.clone()),
             TypeExpr::Int => ("Int".to_string(), "Int".to_string()),
             TypeExpr::Float => ("Float".to_string(), "Float".to_string()),
             TypeExpr::Bool => ("Bool".to_string(), "Bool".to_string()),

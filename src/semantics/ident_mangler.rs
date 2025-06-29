@@ -102,8 +102,8 @@ impl MangleEnv {
 
 pub fn mangle_type_expression(type_expr: &mut TypeExpr, prefix: &str, mangle_env: &mut MangleEnv) {
     match type_expr {
-        TypeExpr::TypeName(name) => {
-            if mangle_env.is_top_level_type(name) {
+        TypeExpr::TypeName(is_global, name) => {
+            if !*is_global && mangle_env.is_top_level_type(name) {
                 *name = format!("{prefix}{name}")
             }
         }
@@ -212,8 +212,10 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
         ValueExpr::VarDecl(declaration) => {
             let declaration = &mut declaration.0;
 
-            if let (TypeExpr::TypeName(type_name), _) = &mut declaration.type_expr {
-                *type_name = format!("{prefix}{type_name}");
+            if let (TypeExpr::TypeName(is_global, type_name), _) = &mut declaration.type_expr {
+               if !*is_global {
+                   *type_name = format!("{prefix}{type_name}");
+               }
             }
 
             mangle_env.insert_ident(declaration.name.clone());

@@ -90,6 +90,9 @@ impl SourceFile {
             for func in &s.function_definitions {
                 let mut f = func.clone();
                 f.name = format!("{prefix}{}", f.name);
+                if let Some(return_type) = &mut f.return_type {
+                    mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
+                }
                 mangle_value_expr(&mut f.value_expr.0, prefix, &mut mangle_env);
                 result.function_definitions.push(f);
             }
@@ -739,7 +742,7 @@ mod tests {
                         type_expression: TypeExpr::Struct(Struct {
                             fields: vec![Field {
                                 name: "recv".into(),
-                                type_expr: TypeExpr::TypeName("abc_TestStruct".into())
+                                type_expr: TypeExpr::TypeName(false, "abc_TestStruct".into())
                                     .into_empty_span(),
                             }],
                         })
@@ -801,7 +804,7 @@ mod tests {
                                     type_expression: TypeExpr::Struct(Struct {
                                         fields: vec![Field {
                                             name: "recv".into(),
-                                            type_expr: TypeExpr::TypeName("TestStruct".into())
+                                            type_expr: TypeExpr::TypeName(false, "TestStruct".into())
                                                 .into_empty_span(),
                                         }],
                                     })

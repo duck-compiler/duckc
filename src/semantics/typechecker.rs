@@ -92,21 +92,15 @@ impl TypeEnv {
             .insert(identifier, type_expr);
     }
 
-    pub fn insert_type(&mut self, type_expr: TypeExpr) {
-        self.all_types.push(type_expr);
-    }
-
-    pub fn is_top_level(&self, identifier: &str) -> bool {
-        for i in 1..self.identifier_types.len() {
-            if self.identifier_types[i].contains_key(identifier) {
-                return false;
-            }
+    pub fn insert_type(&mut self, type_expr: TypeExpr) -> TypeExpr {
+        if let TypeExpr::TypeName(_, ident) = &type_expr {
+            let resolved = self.resolve_type_alias(ident);
+            self.all_types.push(resolved.clone());
+            resolved
+        } else {
+            self.all_types.push(type_expr.clone());
+            type_expr
         }
-
-        self.identifier_types
-            .first()
-            .map(|x| x.contains_key(identifier))
-            .unwrap_or(false)
     }
 
     pub fn get_identifier_type(&self, identifier: String) -> Option<TypeExpr> {
@@ -136,10 +130,12 @@ impl TypeEnv {
             .expect("At least one type aliases hashmap should exist. :(");
 
         println!("Try to resolve type alias {alias}");
-        type_aliases
-            .get(alias)
-            .expect(&format!("Couldn't resolve type alias {alias}"))
-            .clone()
+        dbg!(
+            type_aliases
+                .get(alias)
+                .expect(&format!("Couldn't resolve type alias {alias}"))
+                .clone()
+        )
     }
 
     fn flatten_types(
@@ -164,7 +160,7 @@ impl TypeEnv {
                 found.append(&mut flattens_from_clone);
 
                 field.type_expr = (
-                    TypeExpr::TypeName(field.type_expr.0.as_clean_go_type_name(self)),
+                    TypeExpr::TypeName(false, field.type_expr.0.as_clean_go_type_name(self)),
                     field.type_expr.1.clone(),
                 );
             }),
@@ -182,7 +178,7 @@ impl TypeEnv {
                 found.append(&mut flattens_from_clone);
 
                 field.type_expr = (
-                    TypeExpr::TypeName(field.type_expr.0.as_clean_go_type_name(self)),
+                    TypeExpr::TypeName(false, field.type_expr.0.as_clean_go_type_name(self)),
                     field.type_expr.1.clone(),
                 );
             }),
@@ -223,7 +219,7 @@ impl TypeEnv {
         param_names_used.dedup();
 
         return TypesSummary {
-            types_used: all_types,
+            types_used: dbg!(all_types),
             param_names_used,
         };
     }
@@ -261,8 +257,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     .return_type
                     .as_ref()
                     .map(|spanned_type_expr| {
-                        type_env.insert_type(spanned_type_expr.0.clone());
-                        Box::new(spanned_type_expr.clone())
+                        Box::new((
+                            type_env.insert_type(spanned_type_expr.0.clone()),
+                            spanned_type_expr.1.clone(),
+                        ))
                     }),
             );
             type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
@@ -283,7 +281,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         function_definition: &mut FunctionDefintion,
         type_env: &mut TypeEnv,
     ) {
-
         if function_definition.name == "main"
             && !matches!(
                 function_definition.return_type,
@@ -304,6 +301,11 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 )],
                 function_definition.value_expr.1.context.file_contents,
             )
+        }
+
+        if let Some((return_type, _)) = &mut function_definition.return_type {
+            *return_type = type_env.insert_type(return_type.clone());
+            dbg!(return_type);
         }
 
         type_env.push_identifier_types();
@@ -381,7 +383,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ValueExpr::VarDecl(declaration) => {
                 let declaration = &mut declaration.0;
 
-                if let (TypeExpr::TypeName(type_name), span) = &declaration.type_expr {
+                if let (TypeExpr::TypeName(_, type_name), span) = &declaration.type_expr {
                     let type_expr = type_env.resolve_type_alias(type_name);
                     // mutate
                     declaration.type_expr = (type_expr, span.clone());
@@ -411,11 +413,21 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ValueExpr::BoolNegate(value_expr) => {
                 typeresolve_value_expr(&mut value_expr.0, type_env);
             }
-            ValueExpr::String(..) => type_env.insert_type(TypeExpr::String),
-            ValueExpr::Bool(..) => type_env.insert_type(TypeExpr::Bool),
-            ValueExpr::Float(..) => type_env.insert_type(TypeExpr::Float),
-            ValueExpr::Char(..) => type_env.insert_type(TypeExpr::Char),
-            ValueExpr::Int(..) => type_env.insert_type(TypeExpr::Int), // this is so that only the used primitive types are in the type env
+            ValueExpr::String(..) => {
+                type_env.insert_type(TypeExpr::String);
+            }
+            ValueExpr::Bool(..) => {
+                type_env.insert_type(TypeExpr::Bool);
+            }
+            ValueExpr::Float(..) => {
+                type_env.insert_type(TypeExpr::Float);
+            }
+            ValueExpr::Char(..) => {
+                type_env.insert_type(TypeExpr::Char);
+            }
+            ValueExpr::Int(..) => {
+                type_env.insert_type(TypeExpr::Int);
+            } // this is so that only the used primitive types are in the type env
             ValueExpr::Break | ValueExpr::Return(None) | ValueExpr::Continue => {}
         }
     }

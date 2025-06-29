@@ -372,7 +372,7 @@ impl ValueExpr {
                         let res = env.new_var();
                         instr.push(IrInstruction::VarDecl(
                             res.clone(),
-                            return_type.0.as_go_concrete_annotation(type_env),
+                            return_type.0.as_go_type_annotation(type_env),
                         ));
                         instr.push(IrInstruction::FunCall(Some(res.clone()), target, v_p_res));
                         (instr, Some(IrValue::Var(res)))
@@ -439,7 +439,13 @@ impl ValueExpr {
 
                 let res_var = env.new_var();
                 res.extend([
-                    IrInstruction::VarDecl(res_var.clone(), name.clone()),
+                    IrInstruction::VarDecl(
+                        res_var.clone(),
+                        dbg!(
+                            TypeExpr::from_value_expr(self, type_env)
+                                .as_go_type_annotation(type_env)
+                        ),
+                    ),
                     IrInstruction::VarAssignment(res_var.clone(), IrValue::Duck(name, res_vars)),
                 ]);
 
@@ -582,7 +588,7 @@ mod tests {
             (
                 "{ x: 123 }",
                 vec![
-                    decl("var_0", "Duck_x_int"),
+                    decl("var_0", "interface {\n   Hasx[int]\n}"),
                     IrInstruction::VarAssignment(
                         "var_0".into(),
                         IrValue::Duck("Duck_x_int".into(), vec![("x".into(), IrValue::Int(123))]),

@@ -42,7 +42,7 @@ pub enum TypeExpr {
     Go(String),
     Duck(Duck),
     Tuple(Vec<Spanned<TypeExpr>>),
-    TypeName(String),
+    TypeName(bool, String),
     String,
     Int,
     Bool,
@@ -143,16 +143,22 @@ where
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                 .map(TypeExpr::Tuple);
 
-            let type_name = select_ref! { Token::Ident(identifier) => identifier.to_string() }.map(
-                |identifier| match identifier.as_str() {
+            let type_name = just(Token::ScopeRes)
+                .or_not()
+                .then(
+                    select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                        .separated_by(just(Token::ScopeRes))
+                        .at_least(1)
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(is_global, identifier)| match identifier[0].as_str() {
                     "Int" => TypeExpr::Int,
                     "Float" => TypeExpr::Float,
                     "Bool" => TypeExpr::Bool,
                     "String" => TypeExpr::String,
                     "Char" => TypeExpr::Char,
-                    _ => TypeExpr::TypeName(identifier),
-                },
-            );
+                    _ => TypeExpr::TypeName(is_global.is_some(), identifier.join("_")),
+                });
 
             choice((go_type, type_name, r#struct, duck, tuple)).map_with(|x, e| (x, e.span()))
         },
@@ -190,6 +196,7 @@ pub mod tests {
             "type whatEverY = {};",
             "type EmptyTup = ();",
             "type Tup = (Int, String);",
+            "type Tup = (::Int, String);",
             "type Tup = (Int, String,);",
             "type Tup = (Int, String, (Float, {x: String}));",
             "type Tup = (Int, String, (Float, {x: String}),);",
@@ -199,6 +206,9 @@ pub mod tests {
             "type Struct = struct { x: String };",
             "type Struct = struct { x: String, y: String, z: String, };",
             "type Struct = struct { x: String, y: String, z: String, };",
+            "type X = ::String;",
+            "type X = String::ABC::C;",
+            "type X = ::String::ABC::C;",
         ];
 
         for valid_type_definition in valid_type_definitions {
@@ -234,6 +244,9 @@ pub mod tests {
             "duck { x: duck {}, y: duck {}, z: duck {} }",
             "duck { x: String, y: duck {}, z: {}, w: { a: String, b: {}, c: duck { aa: String } } }",
             "go sync.WaitGroup",
+            "::X",
+            "::X::Y",
+            "X::Y::Z",
         ];
 
         for valid_type_expression in valid_type_expressions {
@@ -266,6 +279,9 @@ pub mod tests {
             "{ x: duck { }",
             "struct {}",
             "struct {,}",
+            "::",
+            "X:Y:Z:",
+            "Y::Y::"
         ];
 
         for invalid_type_expression in invalid_type_expressions {

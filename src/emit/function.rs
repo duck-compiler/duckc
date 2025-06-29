@@ -6,7 +6,13 @@ use crate::{
 
 impl FunctionDefintion {
     pub fn emit(&self, type_env: &mut TypeEnv, to_ir: &mut ToIr) -> IrInstruction {
-        let (emitted_body, _) = self.value_expr.0.emit(type_env, to_ir);
+        let (mut emitted_body, r) = self.value_expr.0.emit(type_env, to_ir);
+
+        if self.return_type.is_some() {
+            if !matches!(emitted_body.last(), Some(IrInstruction::Return(_))) {
+                emitted_body.push(IrInstruction::Return(r));
+            }
+        }
 
         IrInstruction::FunDef(
             self.name.clone(),
@@ -15,11 +21,11 @@ impl FunctionDefintion {
                 .as_ref()
                 .unwrap()
                 .iter()
-                .map(|(name, (ty, _))| {
-                    (name.clone(), ty.as_go_type_annotation(type_env))
-                }).
-                collect::<Vec<_>>(),
-            self.return_type.as_ref().map(|x| x.0.as_go_type_annotation(type_env)),
+                .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
+                .collect::<Vec<_>>(),
+            self.return_type
+                .as_ref()
+                .map(|x| x.0.as_go_type_annotation(type_env)),
             emitted_body,
         )
     }
