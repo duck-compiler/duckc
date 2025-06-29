@@ -1,7 +1,7 @@
-use std::path::{Path, PathBuf};
-use std::fs;
 use colored::Colorize;
 use serde::Deserialize;
+use std::fs;
+use std::path::{Path, PathBuf};
 use toml;
 
 use crate::tags::Tag;
@@ -30,13 +30,14 @@ pub struct ProjectConfig {
 pub enum ProjectLoadErrKind {
     FileRead,
     TomlParse,
-    MissingDuckToml
+    MissingDuckToml,
 }
 
 // custom_toml_path is only for testing purposes atm
-pub fn load_dargo_config(custom_toml_path: Option<PathBuf>) -> Result<ProjectConfig, (String, ProjectLoadErrKind)> {
-    let path = custom_toml_path
-        .unwrap_or(Path::new("dargo.toml").to_path_buf());
+pub fn load_dargo_config(
+    custom_toml_path: Option<PathBuf>,
+) -> Result<ProjectConfig, (String, ProjectLoadErrKind)> {
+    let path = custom_toml_path.unwrap_or(Path::new("dargo.toml").to_path_buf());
 
     if !path.exists() {
         let message = [
@@ -47,33 +48,30 @@ pub fn load_dargo_config(custom_toml_path: Option<PathBuf>) -> Result<ProjectCon
             format!("  {}  https://github.com/duck-compiler/duckc", Tag::GitHub),
             ].join("\n");
 
-        return Err((message, ProjectLoadErrKind::MissingDuckToml))
+        return Err((message, ProjectLoadErrKind::MissingDuckToml));
     }
 
-    let file_content = fs::read_to_string(path)
-        .map_err(|read_error| {
-            let message = format!(
-                "{} Couldn't read dargo.toml.\n -> {read_error}",
-                " Error ".on_red().bright_white(),
-            );
+    let file_content = fs::read_to_string(path).map_err(|read_error| {
+        let message = format!(
+            "{} Couldn't read dargo.toml.\n -> {read_error}",
+            " Error ".on_red().bright_white(),
+        );
 
-            (message, ProjectLoadErrKind::FileRead)
-        })?;
+        (message, ProjectLoadErrKind::FileRead)
+    })?;
 
-    let project_config = toml::from_str(&file_content)
-        .map_err(|parse_error| {
-            let message = format!(
-                "{} {} Couldn't parse dargo.toml file.\n -> {parse_error}",
-                " Error ".on_red().bright_white(),
-                " TOML ".on_yellow().bright_white(),
-            );
+    let project_config = toml::from_str(&file_content).map_err(|parse_error| {
+        let message = format!(
+            "{} {} Couldn't parse dargo.toml file.\n -> {parse_error}",
+            " Error ".on_red().bright_white(),
+            " TOML ".on_yellow().bright_white(),
+        );
 
-            (message, ProjectLoadErrKind::TomlParse)
-        })?;
+        (message, ProjectLoadErrKind::TomlParse)
+    })?;
 
     return Ok(project_config);
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -130,7 +128,10 @@ mod tests {
         if let Some(dependencies) = config.dependencies {
             assert_eq!(dependencies.len(), 2);
             assert_eq!(dependencies[0].git_url, "https://github.com/some/fetch.git");
-            assert_eq!(dependencies[1].git_url, "https://github.com/another/dep.git");
+            assert_eq!(
+                dependencies[1].git_url,
+                "https://github.com/another/dep.git"
+            );
         } else {
             panic!("didn't find any dependencies");
         }
@@ -157,7 +158,8 @@ mod tests {
             file = "./src/main.duck"
             [dependencies]
             git_url = "x"
-        "#.trim();
+        "#
+        .trim();
         let file_path = create_temp_file("malformed_dargo.toml", malformed_content);
 
         let result = load_dargo_config(Some(file_path.clone()));
@@ -224,7 +226,10 @@ mod tests {
             assert_eq!(dependencies.len(), 3);
             assert_eq!(dependencies[0].git_url, "ssh://git@github.com/org/repo.git");
             assert_eq!(dependencies[1].git_url, "file:///local/path/to/repo");
-            assert_eq!(dependencies[2].git_url, "git@bitbucket.org:user/project.git");
+            assert_eq!(
+                dependencies[2].git_url,
+                "git@bitbucket.org:user/project.git"
+            );
         } else {
             panic!("didn't have any dependencies")
         }
@@ -251,7 +256,10 @@ mod tests {
 
         if let Some(dependencies) = config.dependencies {
             assert_eq!(dependencies.len(), 1);
-            assert_eq!(dependencies[0].git_url, "https://github.com/example/default_dep.git");
+            assert_eq!(
+                dependencies[0].git_url,
+                "https://github.com/example/default_dep.git"
+            );
         } else {
             panic!("didn't have any deps");
         }

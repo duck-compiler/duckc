@@ -2,6 +2,7 @@ use crate::emit::value::{IrInstruction, IrValue};
 
 impl IrInstruction {
     fn emit_as_go(&self) -> String {
+        #![allow(clippy::format_in_format_args)]
         match self {
             IrInstruction::GoPackage(s) => format!("package {s}"),
             IrInstruction::Add(r, v1, v2) => {
@@ -58,18 +59,13 @@ impl IrInstruction {
             IrInstruction::Loop(v) => {
                 format!("for {{\n{}\n}}", join_ir(v))
             }
-            IrInstruction::InlineGo(t) => {
-                format!("{t}")
-            }
+            IrInstruction::InlineGo(t) => t.to_string(),
             IrInstruction::GoImports(imports) => {
                 format!(
                     "import (\n{}\n)",
                     imports
                         .iter()
-                        .map(|(n, m)| format!(
-                            "{} \"{m}\"",
-                            n.as_ref().map(|x| x.clone()).unwrap_or_default()
-                        ))
+                        .map(|(n, m)| format!("{} \"{m}\"", n.clone().unwrap_or_default()))
                         .collect::<Vec<_>>()
                         .join("\n")
                 )
@@ -83,7 +79,7 @@ impl IrInstruction {
                         .unwrap_or_default(),
                     params
                         .iter()
-                        .map(|(n, ty)| format!("{} {}", n, ty))
+                        .map(|(n, ty)| format!("{n} {ty}"))
                         .collect::<Vec<_>>()
                         .join(", "),
                     return_type.as_ref().unwrap_or(&String::new()),
@@ -103,7 +99,7 @@ impl IrInstruction {
                     "type {name} struct {{\n{}\n}}",
                     fields
                         .iter()
-                        .map(|(n, ty)| format!("{} {}", n, ty))
+                        .map(|(n, ty)| format!("{n} {ty}"))
                         .collect::<Vec<_>>()
                         .join("\n"),
                 )
@@ -127,7 +123,7 @@ impl IrInstruction {
                     },
                     fields
                         .iter()
-                        .map(|(n, ty)| format!("{}() {}", n, ty))
+                        .map(|(n, ty)| format!("{n}() {ty}"))
                         .collect::<Vec<_>>()
                         .join("\n"),
                 )
@@ -136,7 +132,7 @@ impl IrInstruction {
     }
 }
 
-pub fn join_ir(v: &Vec<IrInstruction>) -> String {
+pub fn join_ir(v: &[IrInstruction]) -> String {
     v.iter()
         .map(IrInstruction::emit_as_go)
         .collect::<Vec<_>>()
@@ -151,7 +147,7 @@ impl IrValue {
             IrValue::Float(f) => f.to_string(),
             IrValue::Char(c) => format!("'{c}'"),
             IrValue::String(s) => format!("\"{s}\""),
-            IrValue::Var(v) => format!("{v}"),
+            IrValue::Var(v) => v.to_string(),
             IrValue::Duck(s, fields) | IrValue::Struct(s, fields) => {
                 format!(
                     "{s}{{{}}}",
@@ -183,7 +179,7 @@ impl IrValue {
                     .map(|(name, ty)| format!("{name} {ty}"))
                     .collect::<Vec<_>>()
                     .join(" "),
-                return_type.as_ref().map(|x| x.clone()).unwrap_or_default(),
+                return_type.clone().unwrap_or_default(),
                 body.iter()
                     .map(IrInstruction::emit_as_go)
                     .collect::<Vec<_>>()

@@ -20,7 +20,7 @@ pub enum ValueExpr {
     Bool(bool),
     Float(f64),
     Char(char),
-    Variable(String, Option<TypeExpr>),
+    Variable(bool, String, Option<TypeExpr>),
     If {
         condition: Box<Spanned<ValueExpr>>,
         then: Box<Spanned<ValueExpr>>,
@@ -98,6 +98,24 @@ where
         |value_expr_parser: Recursive<
             dyn Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>>,
         >| {
+            let scope_res_ident = just(Token::ScopeRes)
+                .or_not()
+                .then(select_ref! { Token::Ident(ident) => ident.to_string() })
+                .then(
+                    just(Token::ScopeRes)
+                        .ignore_then(select_ref! { Token::Ident(ident) => ident.to_string() })
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
+                .map(|((is_global, first), path)| {
+                    ValueExpr::Variable(
+                        is_global.is_some(),
+                        path.into_iter().fold(first, |acc, x| format!("{acc}_{x}")),
+                        None,
+                    )
+                })
+                .map_with(|x, e| (x, e.span()));
+
             let lambda_parser = {
                 let param_parser =
                     select_ref! { Token::Ident(identifier) => identifier.to_string() }
@@ -329,10 +347,6 @@ where
             let string_val = select_ref! { Token::StringLiteral(s) => s.to_owned() }
                 .map(ValueExpr::String)
                 .map_with(|x, e| (x, e.span()));
-            let var_expr = select_ref! { Token::Ident(ident) => ident.to_owned() }
-                .map(|ident| ValueExpr::Variable(ident, None))
-                .map_with(|x, e| (x, e.span()))
-                .boxed();
             let if_expr = if_with_condition_and_body
                 .clone()
                 .then(
@@ -382,7 +396,7 @@ where
                             int,
                             bool_val,
                             string_val,
-                            var_expr,
+                            scope_res_ident,
                             if_expr,
                             char_expr,
                             float_expr,
@@ -530,9 +544,7 @@ pub fn empty_range() -> SS {
 pub fn source_file_into_empty_range(v: &mut SourceFile) {
     for x in &mut v.function_definitions {
         value_expr_into_empty_range(&mut x.value_expr);
-        x.return_type
-            .as_mut()
-            .map(|x| type_expr_into_empty_range(x));
+        x.return_type.as_mut().map(type_expr_into_empty_range);
         if let Some(params) = &mut x.params {
             for (_, p) in params {
                 type_expr_into_empty_range(p);
@@ -566,9 +578,9 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
             }
         }
         TypeExpr::Fun(params, return_type) => {
-            return_type
-                .as_mut()
-                .map(|x| type_expr_into_empty_range(&mut *x));
+            if let Some(x) = return_type.as_mut() {
+                type_expr_into_empty_range(&mut *x)
+            }
             for (_, p) in params {
                 type_expr_into_empty_range(p);
             }
@@ -631,9 +643,7 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
         }
         ValueExpr::Lambda(b) => {
             value_expr_into_empty_range(&mut b.value_expr);
-            b.return_type
-                .as_mut()
-                .map(|x| type_expr_into_empty_range(x));
+            b.return_type.as_mut().map(type_expr_into_empty_range);
             for (_, p) in &mut b.params {
                 type_expr_into_empty_range(p);
             }
@@ -689,7 +699,15 @@ mod tests {
     use super::ValueExpr;
 
     fn var(x: impl Into<String>) -> Box<Spanned<ValueExpr>> {
-        ValueExpr::Variable(x.into(), None).into_empty_span().into()
+        ValueExpr::Variable(false, x.into(), None)
+            .into_empty_span()
+            .into()
+    }
+
+    fn gvar(x: impl Into<String>) -> Box<Spanned<ValueExpr>> {
+        ValueExpr::Variable(true, x.into(), None)
+            .into_empty_span()
+            .into()
     }
 
     #[test]
@@ -773,6 +791,34 @@ mod tests {
                 },
             ),
             (
+                "::to_upper ( 1  ,  )",
+                ValueExpr::FunctionCall {
+                    target: gvar("to_upper"),
+                    params: vec![ValueExpr::Int(1).into_empty_span()],
+                },
+            ),
+            (
+                "abc::to_upper ( 1  ,  )",
+                ValueExpr::FunctionCall {
+                    target: var("abc_to_upper"),
+                    params: vec![ValueExpr::Int(1).into_empty_span()],
+                },
+            ),
+            (
+                "abc::xyz::to_upper ( 1  ,  )",
+                ValueExpr::FunctionCall {
+                    target: var("abc_xyz_to_upper"),
+                    params: vec![ValueExpr::Int(1).into_empty_span()],
+                },
+            ),
+            (
+                "::abc::xyz::to_upper ( 1  ,  )",
+                ValueExpr::FunctionCall {
+                    target: gvar("abc_xyz_to_upper"),
+                    params: vec![ValueExpr::Int(1).into_empty_span()],
+                },
+            ),
+            (
                 "to_upper ( 1  ,  )",
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
@@ -815,13 +861,13 @@ mod tests {
                     ],
                 },
             ),
-            ("x", ValueExpr::Variable("x".into(), None)),
+            ("x", ValueExpr::Variable(false, "x".into(), None)),
             (
                 "print(x, true, lol())",
                 ValueExpr::FunctionCall {
                     target: var("print"),
                     params: vec![
-                        ValueExpr::Variable("x".into(), None).into_empty_span(),
+                        ValueExpr::Variable(false, "x".into(), None).into_empty_span(),
                         ValueExpr::Bool(true).into_empty_span(),
                         ValueExpr::FunctionCall {
                             target: var("lol"),
@@ -946,7 +992,7 @@ mod tests {
                             .into_empty_span(),
                         ])
                         .into_empty_span(),
-                        ValueExpr::Variable("lol".into(), None).into_empty_span(),
+                        ValueExpr::Variable(false, "lol".into(), None).into_empty_span(),
                     ],
                 },
             ),
@@ -1068,7 +1114,7 @@ mod tests {
             (
                 "x.y",
                 ValueExpr::FieldAccess {
-                    target_obj: ValueExpr::Variable("x".into(), None)
+                    target_obj: ValueExpr::Variable(false, "x".into(), None)
                         .into_empty_span()
                         .into(),
                     field_name: "y".into(),
@@ -1317,7 +1363,7 @@ mod tests {
                     ValueExpr::BoolNegate(
                         ValueExpr::FieldAccess {
                             target_obj: ValueExpr::FieldAccess {
-                                target_obj: ValueExpr::Variable("x".into(), None)
+                                target_obj: ValueExpr::Variable(false, "x".into(), None)
                                     .into_empty_span()
                                     .into(),
                                 field_name: "y".into(),
@@ -1338,7 +1384,7 @@ mod tests {
                 ValueExpr::BoolNegate(
                     ValueExpr::FieldAccess {
                         target_obj: ValueExpr::FieldAccess {
-                            target_obj: ValueExpr::Variable("x".into(), None)
+                            target_obj: ValueExpr::Variable(false, "x".into(), None)
                                 .into_empty_span()
                                 .into(),
                             field_name: "y".into(),

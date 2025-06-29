@@ -291,12 +291,9 @@ impl ValueExpr {
                 for (block_expr, _) in block_exprs {
                     let (block_instr, block_res) = block_expr.direct_or_with_instr(type_env, env);
                     res.extend(block_instr);
-                    if block_res.is_none() {
-                        return (res, None);
-                    }
                     res_var = block_res;
                 }
-                (res, res_var)
+                (res, res_var.or(Some(IrValue::Tuple("Tup_".into(), vec![]))))
             }
             ValueExpr::Tuple(fields) => {
                 let mut res = Vec::new();
@@ -375,7 +372,7 @@ impl ValueExpr {
                         let res = env.new_var();
                         instr.push(IrInstruction::VarDecl(
                             res.clone(),
-                            return_type.0.as_go_concrete_annotation(type_env),
+                            return_type.0.as_go_type_annotation(type_env),
                         ));
                         instr.push(IrInstruction::FunCall(Some(res.clone()), target, v_p_res));
                         (instr, Some(IrValue::Var(res)))
@@ -387,7 +384,7 @@ impl ValueExpr {
                     (instr, None)
                 }
             }
-            ValueExpr::Variable(x, _) => (vec![], as_rvar(x.to_owned())),
+            ValueExpr::Variable(_, x, _) => (vec![], as_rvar(x.to_owned())),
             ValueExpr::Equals(v1, v2) => {
                 let mut ir = Vec::new();
 
@@ -442,7 +439,13 @@ impl ValueExpr {
 
                 let res_var = env.new_var();
                 res.extend([
-                    IrInstruction::VarDecl(res_var.clone(), name.clone()),
+                    IrInstruction::VarDecl(
+                        res_var.clone(),
+                        dbg!(
+                            TypeExpr::from_value_expr(self, type_env)
+                                .as_go_type_annotation(type_env)
+                        ),
+                    ),
                     IrInstruction::VarAssignment(res_var.clone(), IrValue::Duck(name, res_vars)),
                 ]);
 
@@ -585,7 +588,7 @@ mod tests {
             (
                 "{ x: 123 }",
                 vec![
-                    decl("var_0", "Duck_x_int"),
+                    decl("var_0", "interface {\n   Hasx[int]\n}"),
                     IrInstruction::VarAssignment(
                         "var_0".into(),
                         IrValue::Duck("Duck_x_int".into(), vec![("x".into(), IrValue::Int(123))]),

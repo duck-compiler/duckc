@@ -83,7 +83,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
             });
             i
         })
-        .chain(vec![interface_defs].into_iter())
+        .chain(vec![interface_defs])
         .fold(Vec::new(), |mut acc, x| {
             acc.extend(x);
             acc
@@ -101,7 +101,7 @@ impl TypeExpr {
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeName(name) => type_env
+            TypeExpr::TypeName(_, name) => type_env
                 .resolve_type_alias(name)
                 .as_go_type_annotation(type_env),
             TypeExpr::Fun(params, return_type) => format!(
@@ -159,7 +159,7 @@ impl TypeExpr {
                         .enumerate()
                         .map(|(i, type_expr)| format!(
                             "field_{i} {}",
-                            type_expr.0.as_go_type_annotation(type_env).to_string()
+                            type_expr.0.as_go_type_annotation(type_env)
                         ))
                         .collect::<Vec<_>>()
                         .join("\n")
@@ -179,7 +179,7 @@ impl TypeExpr {
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
-            TypeExpr::TypeName(name) => type_env
+            TypeExpr::TypeName(_, name) => type_env
                 .resolve_type_alias(name)
                 .as_go_concrete_annotation(type_env),
             TypeExpr::Fun(params, return_type) => format!(
@@ -219,7 +219,7 @@ impl TypeExpr {
                         .enumerate()
                         .map(|(i, type_expr)| format!(
                             "field_{i} {}",
-                            type_expr.0.as_go_type_annotation(type_env).to_string()
+                            type_expr.0.as_go_type_annotation(type_env)
                         ))
                         .collect::<Vec<_>>()
                         .join("\n")
@@ -238,7 +238,7 @@ impl TypeExpr {
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeName(name) => name.clone(),
+            TypeExpr::TypeName(_, name) => name.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type) => format!(
                 "Fun_From_{}{}",
@@ -365,7 +365,7 @@ impl TypeExpr {
                 ),
             ),
             TypeExpr::Go(x) => (x.clone(), format!("Go{}", x.replace(".", "_"))),
-            TypeExpr::TypeName(x) => (x.clone(), x.clone()),
+            TypeExpr::TypeName(_, x) => (x.clone(), x.clone()),
             TypeExpr::Int => ("Int".to_string(), "Int".to_string()),
             TypeExpr::Float => ("Float".to_string(), "Float".to_string()),
             TypeExpr::Bool => ("Bool".to_string(), "Bool".to_string()),

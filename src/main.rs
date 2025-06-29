@@ -6,26 +6,34 @@
     clippy::only_used_in_recursion
 )]
 
-use std::{error::Error, fs::{self, File}, io::Write, path::{Path, PathBuf}};
+use std::{
+    error::Error,
+    fs::{self, File},
+    io::Write,
+    path::{Path, PathBuf},
+};
 
-use chumsky::{error::Rich, Parser};
+use chumsky::{Parser, error::Rich};
 use colored::Colorize;
-use parse::{lexer::{lexer, Token}, source_file_parser::SourceFile, Spanned};
+use parse::{
+    Spanned,
+    lexer::{Token, lexer},
+    source_file_parser::SourceFile,
+};
 use semantics::typechecker::{self, TypeEnv};
 
 use crate::parse::{
-    Context, SS, make_input, parse_failure,
-    source_file_parser::source_file_parser,
+    Context, SS, make_input, parse_failure, source_file_parser::source_file_parser,
 };
 
 use lazy_static::lazy_static;
 
 pub mod cli;
+pub mod dargo;
 pub mod emit;
 pub mod fixup;
 pub mod parse;
 pub mod semantics;
-pub mod dargo;
 pub mod tags;
 
 lazy_static! {
@@ -44,65 +52,62 @@ lazy_static! {
     };
 }
 
-fn lex(
-    file_name: &'static str,
-    file_contents: &'static str,
-) -> Vec<Spanned<Token>> {
+fn lex(file_name: &'static str, file_contents: &'static str) -> Vec<Spanned<Token>> {
     let (lex, lex_errors) = lexer(file_name, file_contents)
         .parse(file_contents)
         .into_output_errors();
 
     lex_errors.into_iter().for_each(|e| {
-            parse_failure(
-                file_name,
-                &Rich::<&str, SS>::custom(
-                    SS {
-                        start: e.span().start,
-                        end: e.span().end,
-                        context: crate::parse::Context {
-                            file_name,
-                            file_contents,
-                        },
+        parse_failure(
+            file_name,
+            &Rich::<&str, SS>::custom(
+                SS {
+                    start: e.span().start,
+                    end: e.span().end,
+                    context: crate::parse::Context {
+                        file_name,
+                        file_contents,
                     },
-                    "Lex Error",
-                ),
-                &file_contents,
-            );
-        });
+                },
+                "Lex Error",
+            ),
+            file_contents,
+        );
+    });
 
     lex.unwrap()
 }
 
 fn parse_src_file(
-    src_file: &PathBuf,
+    src_file: &Path,
     src_file_name: &'static str,
     src_file_file_contents: &'static str,
-    tokens: Vec<Spanned<Token>>
+    tokens: Vec<Spanned<Token>>,
 ) -> SourceFile {
     let (src_file, parse_errors) = source_file_parser(
-           {
-               let mut src_file_clone = src_file.clone();
-               src_file_clone.pop();
-               src_file_clone
-           },
-           make_input,
-       )
-       .parse(make_input(
-           SS {
-               start: 0,
-               end: src_file_file_contents.len(),
-               context: Context {
-                   file_name: src_file_name,
-                   file_contents: src_file_file_contents,
-               },
-           },
-           &tokens,
-       ))
-       .into_output_errors();
+        {
+            let mut src_file_clone = src_file.to_path_buf();
+            src_file_clone.pop();
+            src_file_clone
+        },
+        make_input,
+    )
+    .parse(make_input(
+        SS {
+            start: 0,
+            end: src_file_file_contents.len(),
+            context: Context {
+                file_name: src_file_name,
+                file_contents: src_file_file_contents,
+            },
+        },
+        &tokens,
+    ))
+    .into_output_errors();
 
     parse_errors.into_iter().for_each(|e| {
-            parse_failure(src_file_name, &e, &src_file_file_contents);
-        });
+        parse_failure(src_file_name, &e, src_file_file_contents);
+    });
 
     src_file.unwrap().flatten()
 }
@@ -121,8 +126,7 @@ fn write_in_duck_dotdir(file_name: &str, content: &str) -> PathBuf {
         target_file_path
     };
 
-    let mut file = File::create(target_file.clone())
-        .expect("couldn't create file in duck dot dir"); // TODO error handling
+    let mut file = File::create(target_file.clone()).expect("couldn't create file in duck dot dir"); // TODO error handling
     file.write_all(content.as_bytes())
         .expect("couldn't write file in duck dot dir"); // TODO error handling
 
