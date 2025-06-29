@@ -6,3 +6,4 @@ duck_gen*.go
 *duck*.go
 .duck/
 .dargo
+dargo.toml
