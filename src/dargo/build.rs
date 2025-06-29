@@ -127,5 +127,67 @@ pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
         }
     }
 
+    let copy_target = Path::new(".dargo/project/");
+
+    copy_dir_all(Path::new("./src"), copy_target)?;
+
+    Ok(())
+}
+
+fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), (String, BuildErrKind)> {
+    fs::create_dir_all(&dst)
+        .map_err(|err| (
+            format!(
+                "{}{} couldn't copy files - {err}",
+                Tag::IO,
+                Tag::Err,
+            ),
+            BuildErrKind::IOErr(err.kind())
+        ))?;
+
+    let dirs = fs::read_dir(src)
+        .map_err(|err| (
+            format!(
+                "{}{} couldn't read directory files - {err}",
+                Tag::IO,
+                Tag::Err,
+            ),
+            BuildErrKind::IOErr(err.kind())
+        ))?;
+
+    for entry in dirs {
+        let entry = entry.map_err(|err| (
+            format!(
+                "{}{} couldn't read file - {err}",
+                Tag::IO,
+                Tag::Err,
+            ),
+            BuildErrKind::IOErr(err.kind())
+        ))?;
+
+        let file_type = entry.file_type()
+            .map_err(|err| (
+                format!(
+                    "{}{} couldn't read file type - {err}",
+                    Tag::IO,
+                    Tag::Err,
+                ),
+                BuildErrKind::IOErr(err.kind())
+            ))?;
+
+        if file_type.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))
+                .map_err(|err| (
+                    format!(
+                        "{}{} couldn't copy file - {err}",
+                        Tag::IO,
+                        Tag::Err,
+                    ),
+                    BuildErrKind::IOErr(err.kind())
+                ))?;
+        }
+    }
     Ok(())
 }
