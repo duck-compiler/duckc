@@ -1,12 +1,14 @@
 use std::{env, fs, os};
 use std::io::ErrorKind as IOErrKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::cli::git_cli::{self, GitCliErrKind};
+use crate::emit::ir::join_ir;
 use crate::tags::Tag;
-use crate::DARGO_DOT_DIR;
+use crate::{lex, parse_src_file, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR};
 
 use super::cli::BuildArgs;
+use super::compile::{self, CompileErrKind};
 use super::loader::{load_dargo_config, ProjectLoadErrKind};
 
 #[derive(Debug)]
@@ -15,6 +17,7 @@ pub enum BuildErrKind {
     DependencyPull(GitCliErrKind),
     DependencySetup,
     IOErr(IOErrKind),
+    Compile(CompileErrKind),
 }
 
 pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
@@ -130,6 +133,19 @@ pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
     let copy_target = Path::new(".dargo/project/");
 
     copy_dir_all(Path::new("./src"), copy_target)?;
+
+    let mut copy_target_clone = copy_target.to_path_buf();
+    copy_target_clone.push("main.duck");
+    compile::compile(copy_target_clone, None)
+        .map_err(|err| (
+            format!(
+                "{}{} couldn't compile the code\n{}",
+                Tag::Build,
+                Tag::Err,
+                err.0,
+            ),
+            BuildErrKind::Compile(err.1)
+        ))?;
 
     Ok(())
 }
