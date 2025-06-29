@@ -69,11 +69,12 @@ fn lex(file_name: &'static str, file_contents: &'static str) -> Vec<Spanned<Toke
                         file_name,
                         file_contents,
                     },
-                    format!("{}{} {}", Tag::Lexer, Tag::Err, e.reason()),
-                ),
-                &file_contents,
-            );
-        });
+                },
+                format!("{}{} {}", Tag::Lexer, Tag::Err, e.reason()),
+            ),
+            file_contents,
+        );
+    });
 
     lex.unwrap()
 }

@@ -24,6 +24,9 @@ impl Display for Tag {
             Self::GitHub => write!(f, "{}", " GitHub ".on_black().bright_white()),
             Self::Twitter => write!(f, "{}", " Twitter ".on_blue().bright_white()),
             Self::Check => write!(f, "{}", " ✓ ".on_green().bright_white()),
+            Self::Lexer => write!(f, "{}", " lexer ".on_bright_white().black()),
+            Self::Parser => write!(f, "{}", " parser ".on_white().black()),
+            Self::Compiler => write!(f, "{}", " compiler ".on_black().bright_white()),
         };
     }
 }
