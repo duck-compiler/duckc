@@ -88,7 +88,7 @@ impl ValueExpr {
 }
 
 pub fn value_expr_parser<'src, I, M>(
-    make_input: M,
+    _make_input: M,
 ) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
@@ -100,17 +100,18 @@ where
         >| {
             let scope_res_ident = just(Token::ScopeRes)
                 .or_not()
-                .then(select_ref! { Token::Ident(ident) => ident.to_string() })
                 .then(
-                    just(Token::ScopeRes)
-                        .ignore_then(select_ref! { Token::Ident(ident) => ident.to_string() })
-                        .repeated()
+                    select_ref! { Token::Ident(ident) => ident.to_string() }
+                        .separated_by(just(Token::ScopeRes))
+                        .at_least(1)
                         .collect::<Vec<_>>(),
                 )
-                .map(|((is_global, first), path)| {
+                .map(|(is_global, path)| {
                     ValueExpr::Variable(
                         is_global.is_some(),
-                        path.into_iter().fold(first, |acc, x| format!("{acc}_{x}")),
+                        path.into_iter()
+                            .reduce(|acc, x| format!("{acc}_{x}"))
+                            .unwrap(),
                         None,
                     )
                 })
@@ -339,7 +340,7 @@ where
                             int,
                             bool_val,
                             string_val,
-                            scope_res_ident,
+                            scope_res_ident.clone(),
                             if_expr,
                             char_expr,
                             float_expr,
@@ -369,21 +370,25 @@ where
                 )
                 .then(params.clone().repeated().collect::<Vec<_>>())
                 .map(|((neg, target), params)| {
-                    let res = params
-                        .into_iter()
-                        .fold(target.0, |acc, x| ValueExpr::FunctionCall {
-                            target: acc.into_empty_span().into(),
+                    let target = params.into_iter().fold(target, |acc, x| {
+                        ValueExpr::FunctionCall {
+                            target: acc.into(),
                             params: x,
-                        });
-                    neg.into_iter().fold(res, |acc, _| {
-                        ValueExpr::BoolNegate(acc.into_empty_span().into())
+                        }
+                        .into_empty_span()
+                    });
+
+                    neg.into_iter().fold(target, |acc, _| {
+                        ValueExpr::BoolNegate(acc.into()).into_empty_span()
                     })
                 })
-                .map_with(|x, e| (x, e.span()))
+                .map_with(|x, e| (x.0, e.span()))
                 .boxed();
 
-            let field_access = atom
-                .clone()
+            let field_access = just(Token::ControlChar('!'))
+                .repeated()
+                .collect::<Vec<_>>()
+                .then(atom.clone())
                 .then_ignore(just(Token::ControlChar('.')))
                 .then(
                     select_ref! { Token::Ident(field_name) => field_name.to_owned() }
@@ -393,26 +398,53 @@ where
                         .at_least(1)
                         .collect::<Vec<_>>(),
                 )
-                .map(|(base, then): (Spanned<ValueExpr>, Vec<String>)| {
-                    then.iter().fold(base, |acc, x| {
+                .map(|((neg, base), then)| {
+                    let base = then.iter().fold(base, |acc, x| {
                         ValueExpr::FieldAccess {
                             target_obj: acc.into(),
                             field_name: x.clone(),
                         }
                         .into_empty_span()
+                    });
+
+                    neg.into_iter().fold(base, |acc, _| {
+                        ValueExpr::BoolNegate(acc.into()).into_empty_span()
                     })
                 })
                 .map_with(|x, e| (x.0, e.span()))
                 .boxed();
 
-            let assignment = select_ref! { Token::Ident(identifier) => identifier.to_string() }
+            let assignment = scope_res_ident
+                .clone()
+                .rewind()
+                .then(
+                    just(Token::ControlChar('.'))
+                        .ignore_then(field_access.clone())
+                        .or(scope_res_ident.clone()),
+                )
                 .then_ignore(just(Token::ControlChar('=')))
                 .then(value_expr_parser.clone())
-                .map_with(|(identifier, value_expr), e| {
+                .map_with(|((mut t, mut fa), value_expr), e| {
+                    if let Some(fa) = &mut fa {
+                        let mut target = &mut fa.0;
+                        while let ValueExpr::FieldAccess { target_obj, .. } = target {
+                            let target_obj = &mut **target_obj;
+                            target = &mut target_obj.0;
+                        }
+                        let ValueExpr::Variable(false, tt, _) = target.clone() else {
+                            panic!("x")
+                        };
+                        *target = ValueExpr::FieldAccess {
+                            target_obj: t.clone().into(),
+                            field_name: tt,
+                        };
+                        t = fa.clone();
+                    }
+
                     ValueExpr::VarAssign(
                         (
                             Assignment {
-                                name: (ValueExpr::Variable(false, identifier, None), vec![]),
+                                target: t,
                                 value_expr: value_expr.clone(),
                             },
                             e.span(),
@@ -470,8 +502,8 @@ where
 
             choice((
                 inline_go,
-                field_access,
                 assignment,
+                field_access,
                 equals,
                 add,
                 declaration,
@@ -629,6 +661,8 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
         }
         ValueExpr::VarAssign(a) => {
             a.1 = empty_range();
+            value_expr_into_empty_range(&mut a.0.target);
+            value_expr_into_empty_range(&mut a.0.value_expr);
         }
         ValueExpr::BoolNegate(b) => value_expr_into_empty_range(b),
         ValueExpr::FieldAccess {
@@ -648,7 +682,7 @@ mod tests {
     use crate::parse::{
         Spanned,
         assignment_and_declaration_parser::{Assignment, Declaration},
-        function_parser::{FunctionDefintion, LambdaFunctionExpr},
+        function_parser::LambdaFunctionExpr,
         lexer::lexer,
         make_input,
         type_parser::{Duck, Field, TypeExpr},
@@ -882,7 +916,84 @@ mod tests {
                     ValueExpr::String("hallo".into()).into_empty_span(),
                 ]),
             ),
+            (
+                "!std::arch::is_windows()",
+                ValueExpr::BoolNegate(
+                    ValueExpr::FunctionCall {
+                        target: var("std_arch_is_windows"),
+                        params: vec![],
+                    }
+                    .into_empty_span()
+                    .into(),
+                ),
+            ),
+            (
+                "!std::arch::is_windows",
+                ValueExpr::BoolNegate(var("std_arch_is_windows")),
+            ),
+            (
+                "!std::arch",
+                ValueExpr::BoolNegate(var("std_arch")),
+            ),
+            (
+                "x.y = 100",
+                ValueExpr::VarAssign(
+                    (
+                        Assignment {
+                            target: ValueExpr::FieldAccess {
+                                target_obj: var("x"),
+                                field_name: "y".into(),
+                            }
+                            .into_empty_span(),
+                            value_expr: ValueExpr::Int(100).into_empty_span(),
+                        },
+                        empty_range(),
+                    )
+                        .into(),
+                ),
+            ),
+            (
+                "x.y.z = 100",
+                ValueExpr::VarAssign(
+                    (
+                        Assignment {
+                            target: ValueExpr::FieldAccess {
+                                field_name: "z".into(),
+                                target_obj: Box::new(
+                                    ValueExpr::FieldAccess {
+                                        target_obj: var("x"),
+                                        field_name: "y".into(),
+                                    }
+                                    .into_empty_span(),
+                                ),
+                            }
+                            .into_empty_span(),
+                            value_expr: ValueExpr::Int(100).into_empty_span(),
+                        },
+                        empty_range(),
+                    )
+                        .into(),
+                ),
+            ),
             ("{}", empty_duck()),
+            (
+                "{}.x",
+                ValueExpr::FieldAccess {
+                    target_obj: empty_duck().into_empty_span().into(),
+                    field_name: "x".into(),
+                },
+            ),
+            (
+                "!{}.x",
+                ValueExpr::BoolNegate(
+                    ValueExpr::FieldAccess {
+                        target_obj: empty_duck().into_empty_span().into(),
+                        field_name: "x".into(),
+                    }
+                    .into_empty_span()
+                    .into(),
+                ),
+            ),
             (
                 "{1}",
                 ValueExpr::Block(vec![ValueExpr::Int(1).into_empty_span()]),
@@ -1567,7 +1678,14 @@ mod tests {
             let parse_result =
                 value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
 
-            assert_eq!(parse_result.has_errors(), false, "{i}: {}", src);
+            assert_eq!(
+                parse_result.has_errors(),
+                false,
+                "{i}: {} {:?} {:?}",
+                src,
+                lex_result,
+                parse_result
+            );
             assert_eq!(parse_result.has_output(), true, "{i}: {}", src);
 
             let mut output = parse_result.into_result().expect(&src);

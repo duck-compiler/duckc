@@ -21,7 +21,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                         format!("Get{}", field.name),
                         Some(("self".into(), typename.clone())),
                         vec![],
-                        Some(field.type_expr.0.as_go_concrete_annotation(type_env)),
+                        Some(field.type_expr.0.as_go_type_annotation(type_env)),
                         vec![IrInstruction::Return(Some(IrValue::FieldAccess(
                             IrValue::Var("self".into()).into(),
                             field.name.clone(),
@@ -29,7 +29,22 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                     )
                 })
                 .collect::<Vec<_>>(),
-            TypeExpr::Struct(r#_struct) => todo!(),
+            TypeExpr::Struct(r#struct) => r#struct
+                .fields
+                .iter()
+                .map(|field| {
+                    IrInstruction::FunDef(
+                        format!("Get{}", field.name),
+                        Some(("self".into(), typename.clone())),
+                        vec![],
+                        Some(field.type_expr.0.as_go_type_annotation(type_env)),
+                        vec![IrInstruction::Return(Some(IrValue::FieldAccess(
+                            IrValue::Var("self".into()).into(),
+                            field.name.clone(),
+                        )))],
+                    )
+                })
+                .collect::<Vec<_>>(),
             _ => vec![],
         };
     }

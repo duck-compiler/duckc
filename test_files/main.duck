@@ -1,62 +1,13 @@
-use go "fmt" as kek;
-use go "time";
+use go "fmt";
 
-module abc {
-    module cbc {
-        use go "XX";
-
-        fun xx() {
-            go {
-
-            }
-        }
-    }
-}
-
-fun duck_function() {
+fun abc(x: String) {
     go {
-        kek.Println("Hallo aus einer DUCK FUNCTION!")
+        fmt.Println(x)
     }
 }
 
 fun main() {
-    go {
-        go func() {
-            for i:= 0; i < 5; i++ {
-                kek.Println("ich bin in einer goroutine")
-                duck_function()
-                time.Sleep(time.Second * 3)
-            }
-        }()
-    }
-
-    go {
-        time.Sleep(time.Second * 10)
-    }
-
-    let i: int = 0;
-
-    while (!(i == 5)) {
-        println("Outer: ");
-        println(i);
-
-        let j: int = 0;
-        while (!(j == 3)) {
-            println("Inner: ");
-            println(j);
-            j = j + 1;
-        }
-        i = i + 1;
-        println();
-    }
-}
-
-fun abc() -> int {
-    println(123);
-    return 123;
-}
-
-fun xyz() -> int {
-    println(5 + abc());
-    return 10;
+    let x: struct { x: String } = .{ x: "Hallo" };
+    x.x.y = "hello";
+    abc(x.x);
 }
