@@ -34,6 +34,20 @@ module X {
             }
         }
 
+        module XXX {
+            fun zz() {
+                go {
+                    fmt.Println("XXX ZZ")
+                }
+            }
+
+            fun xxx() {
+                go {
+                    fmt.Println("XXX xxx")
+                }
+            }
+        }
+
     }
 
     fun call_c() {
@@ -50,6 +64,7 @@ module X {
 
 use X::Y::ZZ::{zz};
 use X::Y::{ZZ};
+use X::{Y};
 
 fun main() {
     X::a();
@@ -61,6 +76,15 @@ fun main() {
         fmt.Println(1)
     }
     ZZ::zz();
+    Y::XXX::zz();
+    Y::XXX::xxx();
+    xxx();
+}
+
+fun xxx() {
+    go {
+        fmt.Println("main xxx")
+    }
 }
 
 fun abc() {

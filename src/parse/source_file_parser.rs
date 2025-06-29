@@ -1053,16 +1053,18 @@ mod tests {
         for (i, (mut expected, mut original)) in test_cases.into_iter().enumerate() {
             fn sort_all(x: &mut SourceFile) {
                 x.function_definitions.sort_by_key(|x| x.name.clone());
+                x.type_definitions.sort_by_key(|x| x.name.clone());
                 for (_, s) in x.sub_modules.iter_mut() {
                     sort_all(s);
                 }
             }
             source_file_into_empty_range(&mut original);
 
+            let mut original = original.flatten();
+
             sort_all(&mut expected);
             sort_all(&mut original);
 
-            let mut original = original.flatten();
 
             for func in original.function_definitions.iter_mut() {
                 value_expr_into_empty_range(&mut func.value_expr);
