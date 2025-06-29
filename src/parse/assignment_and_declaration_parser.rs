@@ -9,6 +9,6 @@ pub struct Declaration {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assignment {
-    pub name: String,
+    pub target: Spanned<ValueExpr>,
     pub value_expr: Spanned<ValueExpr>,
 }

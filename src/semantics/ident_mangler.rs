@@ -24,6 +24,23 @@ impl MangleEnv {
 
     pub fn mangle_ident(&self, is_global: bool, prefix: &str, ident: &String) -> Option<String> {
         let prefix = if is_global { "" } else { prefix };
+        let starts_with_mangle = ident.split("_").collect::<Vec<_>>();
+        if ident == "Y_XXX_zz" {
+            dbg!(&self.names, ident);
+            dbg!(&starts_with_mangle);
+        }
+
+        if starts_with_mangle.len() > 1 {
+            // let starts_with_mangle = starts_with_mangle[0..starts_with_mangle.len() - 1]
+            //     .iter()
+            //     .map(|x| x.to_owned())
+            //     .collect::<Vec<_>>();
+            // let mangled = starts_with_mangle.join("_");
+            if let Some(import_path) = self.imports.get(&starts_with_mangle[0].to_string()) {
+                return Some(format!("{prefix}{import_path}_{ident}"));
+            }
+        }
+
         if !self.local_defined(ident) {
             if let Some(import_path) = self.imports.get(ident) {
                 return Some(format!("{prefix}{import_path}_{ident}"));
