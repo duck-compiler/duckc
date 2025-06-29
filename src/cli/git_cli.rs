@@ -4,6 +4,7 @@ use std::io::ErrorKind as IOErrKind;
 
 use crate::tags::Tag;
 
+#[derive(Debug)]
 pub enum GitCliErrKind {
     IOErr(IOErrKind),
     CannotPullRepo,
