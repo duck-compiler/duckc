@@ -8,10 +8,10 @@ impl FunctionDefintion {
     pub fn emit(&self, type_env: &mut TypeEnv, to_ir: &mut ToIr) -> IrInstruction {
         let (mut emitted_body, r) = self.value_expr.0.emit(type_env, to_ir);
 
-        if self.return_type.is_some() {
-            if !matches!(emitted_body.last(), Some(IrInstruction::Return(_))) {
-                emitted_body.push(IrInstruction::Return(r));
-            }
+        if self.return_type.is_some()
+            && !matches!(emitted_body.last(), Some(IrInstruction::Return(_)))
+        {
+            emitted_body.push(IrInstruction::Return(r));
         }
 
         IrInstruction::FunDef(

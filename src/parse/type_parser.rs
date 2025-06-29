@@ -107,7 +107,7 @@ where
                             .cloned()
                             .map(|(name, (type_expr, e))| Field {
                                 name,
-                                type_expr: (type_expr, e.clone()),
+                                type_expr: (type_expr, e),
                             })
                             .collect(),
                     })
@@ -127,7 +127,7 @@ where
                                 .cloned()
                                 .map(|(name, (type_expr, e))| Field {
                                     name,
-                                    type_expr: (type_expr, e.clone()),
+                                    type_expr: (type_expr, e),
                                 })
                                 .collect(),
                         })
@@ -281,7 +281,7 @@ pub mod tests {
             "struct {,}",
             "::",
             "X:Y:Z:",
-            "Y::Y::"
+            "Y::Y::",
         ];
 
         for invalid_type_expression in invalid_type_expressions {

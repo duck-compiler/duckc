@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use chumsky::{prelude::*, text::whitespace};
 
-use crate::parse::{Context, Spanned, SS};
+use crate::parse::{Context, SS, Spanned};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Token {
@@ -121,7 +121,7 @@ pub fn lexer<'a>(
                     end: e.span().end,
                     context: Context {
                         file_name,
-                        file_contents
+                        file_contents,
                     },
                 },
             )

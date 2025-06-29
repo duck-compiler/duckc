@@ -19,8 +19,8 @@ pub mod value_parser;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Context {
-   pub file_name: &'static str,
-   pub file_contents: &'static str,
+    pub file_name: &'static str,
+    pub file_contents: &'static str,
 }
 
 pub type SS = SimpleSpan<usize, Context>;

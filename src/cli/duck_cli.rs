@@ -1,7 +1,10 @@
-use std::path::PathBuf;
 use clap::{Parser as CliParser, Subcommand};
+use std::path::PathBuf;
 
-use crate::{dargo::{self, compile::CompileErrKind, init::InitErrKind}, tags::Tag};
+use crate::{
+    dargo::{self, compile::CompileErrKind, init::InitErrKind},
+    tags::Tag,
+};
 
 #[derive(CliParser, Debug)]
 pub struct DuckCliParser {
@@ -45,38 +48,23 @@ pub struct InitArgs {
 #[derive(Debug)]
 pub enum CliErrKind {
     Init(InitErrKind),
-    Compile(CompileErrKind)
+    Compile(CompileErrKind),
 }
 
 pub fn run_cli() -> Result<(), (String, CliErrKind)> {
-
     let args = DuckCliParser::parse();
     match args.command {
-        Commands::Build(_build_args) => {
-        },
-        Commands::Compile(compile_args) => {
-            dargo::compile::compile(
-                compile_args.file,
-                None,
-            ).map_err(|err| (
-                format!(
-                    "{}{}",
-                    Tag::Dargo,
-                    err.0
-                ),
-                CliErrKind::Compile(err.1)
-            ))?
-        },
+        Commands::Build(_build_args) => {}
+        Commands::Compile(compile_args) => dargo::compile::compile(compile_args.file, None)
+            .map_err(|err| {
+                (
+                    format!("{}{}", Tag::Dargo, err.0),
+                    CliErrKind::Compile(err.1),
+                )
+            })?,
         Commands::Init(_init_args) => {
             dargo::init::init_project(None)
-                .map_err(|err| (
-                    format!(
-                        "{}{}",
-                        Tag::Dargo,
-                        err.0
-                    ),
-                    CliErrKind::Init(err.1)
-                ))?;
+                .map_err(|err| (format!("{}{}", Tag::Dargo, err.0), CliErrKind::Init(err.1)))?;
         }
     }
 

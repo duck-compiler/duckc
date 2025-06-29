@@ -83,7 +83,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
             });
             i
         })
-        .chain(vec![interface_defs].into_iter())
+        .chain(vec![interface_defs])
         .fold(Vec::new(), |mut acc, x| {
             acc.extend(x);
             acc
@@ -159,7 +159,7 @@ impl TypeExpr {
                         .enumerate()
                         .map(|(i, type_expr)| format!(
                             "field_{i} {}",
-                            type_expr.0.as_go_type_annotation(type_env).to_string()
+                            type_expr.0.as_go_type_annotation(type_env)
                         ))
                         .collect::<Vec<_>>()
                         .join("\n")
@@ -219,7 +219,7 @@ impl TypeExpr {
                         .enumerate()
                         .map(|(i, type_expr)| format!(
                             "field_{i} {}",
-                            type_expr.0.as_go_type_annotation(type_env).to_string()
+                            type_expr.0.as_go_type_annotation(type_env)
                         ))
                         .collect::<Vec<_>>()
                         .join("\n")

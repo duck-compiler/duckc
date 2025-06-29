@@ -15,7 +15,7 @@ pub struct MangleEnv {
 
 impl MangleEnv {
     pub fn is_imported_name(&self, x: &String) -> bool {
-        self.is_top_level_ident(&x) && self.imports.contains_key(x)
+        self.is_top_level_ident(x) && self.imports.contains_key(x)
     }
 
     pub fn local_defined(&self, n: &String) -> bool {
@@ -212,10 +212,10 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
         ValueExpr::VarDecl(declaration) => {
             let declaration = &mut declaration.0;
 
-            if let (TypeExpr::TypeName(is_global, type_name), _) = &mut declaration.type_expr {
-               if !*is_global {
-                   *type_name = format!("{prefix}{type_name}");
-               }
+            if let (TypeExpr::TypeName(is_global, type_name), _) = &mut declaration.type_expr
+                && !*is_global
+            {
+                *type_name = format!("{prefix}{type_name}");
             }
 
             mangle_env.insert_ident(declaration.name.clone());

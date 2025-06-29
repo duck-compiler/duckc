@@ -192,7 +192,7 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
                     },
                     "Lex Error",
                 ),
-                &src_text,
+                src_text,
             );
         });
 
@@ -212,7 +212,7 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
             .into_output_errors();
 
         parse_errors.into_iter().for_each(|e| {
-            parse_failure(&target_path, &e, &src_text);
+            parse_failure(&target_path, &e, src_text);
         });
 
         parse.unwrap()
@@ -754,9 +754,13 @@ mod tests {
                             name: "abc_lol_im_a_func".into(),
                             value_expr: ValueExpr::Block(vec![
                                 ValueExpr::FunctionCall {
-                                    target: ValueExpr::Variable(false, "abc_lol_called".into(), None)
-                                        .into_empty_span()
-                                        .into(),
+                                    target: ValueExpr::Variable(
+                                        false,
+                                        "abc_lol_called".into(),
+                                        None,
+                                    )
+                                    .into_empty_span()
+                                    .into(),
                                     params: vec![],
                                 }
                                 .into_empty_span(),
@@ -777,9 +781,13 @@ mod tests {
                             name: "abc_lol_called".into(),
                             value_expr: ValueExpr::Block(vec![
                                 ValueExpr::FunctionCall {
-                                    target: ValueExpr::Variable(false, "abc_lol_called".into(), None)
-                                        .into_empty_span()
-                                        .into(),
+                                    target: ValueExpr::Variable(
+                                        false,
+                                        "abc_lol_called".into(),
+                                        None,
+                                    )
+                                    .into_empty_span()
+                                    .into(),
                                     params: vec![],
                                 }
                                 .into_empty_span(),
@@ -804,8 +812,11 @@ mod tests {
                                     type_expression: TypeExpr::Struct(Struct {
                                         fields: vec![Field {
                                             name: "recv".into(),
-                                            type_expr: TypeExpr::TypeName(false, "TestStruct".into())
-                                                .into_empty_span(),
+                                            type_expr: TypeExpr::TypeName(
+                                                false,
+                                                "TestStruct".into(),
+                                            )
+                                            .into_empty_span(),
                                         }],
                                     })
                                     .into_empty_span(),

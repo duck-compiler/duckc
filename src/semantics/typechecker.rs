@@ -133,7 +133,7 @@ impl TypeEnv {
         dbg!(
             type_aliases
                 .get(alias)
-                .expect(&format!("Couldn't resolve type alias {alias}"))
+                .unwrap_or_else(|| panic!("Couldn't resolve type alias {alias}"))
                 .clone()
         )
     }
@@ -161,7 +161,7 @@ impl TypeEnv {
 
                 field.type_expr = (
                     TypeExpr::TypeName(false, field.type_expr.0.as_clean_go_type_name(self)),
-                    field.type_expr.1.clone(),
+                    field.type_expr.1,
                 );
             }),
             TypeExpr::Struct(duck) => duck.fields.iter_mut().for_each(|field| {
@@ -179,7 +179,7 @@ impl TypeEnv {
 
                 field.type_expr = (
                     TypeExpr::TypeName(false, field.type_expr.0.as_clean_go_type_name(self)),
-                    field.type_expr.1.clone(),
+                    field.type_expr.1,
                 );
             }),
             TypeExpr::Tuple(types) => types.iter_mut().for_each(|type_expr| {
@@ -191,7 +191,7 @@ impl TypeEnv {
                 });
 
                 if let Some(type_expr) = return_type.as_mut() {
-                    found.extend(self.flatten_types(&mut (*type_expr).0, param_names_used));
+                    found.extend(self.flatten_types(&mut type_expr.0, param_names_used));
                 }
             }
             _ => {
@@ -215,7 +215,6 @@ impl TypeEnv {
         all_types.sort_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
         all_types.dedup_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
 
-        let mut param_names_used = param_names_used;
         param_names_used.dedup();
 
         return TypesSummary {
@@ -259,7 +258,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     .map(|spanned_type_expr| {
                         Box::new((
                             type_env.insert_type(spanned_type_expr.0.clone()),
-                            spanned_type_expr.1.clone(),
+                            spanned_type_expr.1,
                         ))
                     }),
             );
@@ -292,11 +291,11 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 function_definition.value_expr.1.context.file_name,
                 "Tried to return non-int value from main function".to_string(),
                 (
-                    format!("This is the type you've declared the main function to return"),
+                    "This is the type you've declared the main function to return".to_string(),
                     span,
                 ),
                 vec![(
-                    format!("The main function can only return either Nothing or Int"),
+                    "The main function can only return either Nothing or Int".to_string(),
                     function_definition.value_expr.1,
                 )],
                 function_definition.value_expr.1.context.file_contents,
@@ -330,7 +329,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 println!("try resolving identifier {identifier}");
                 let type_expr = dbg!(type_env)
                     .get_identifier_type(identifier.clone())
-                    .expect(&format!("Couldn't resolve type of identifier {identifier}"));
+                    .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));
 
                 *type_expr_opt = Some(type_expr)
             }
@@ -386,7 +385,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 if let (TypeExpr::TypeName(_, type_name), span) = &declaration.type_expr {
                     let type_expr = type_env.resolve_type_alias(type_name);
                     // mutate
-                    declaration.type_expr = (type_expr, span.clone());
+                    declaration.type_expr = (type_expr, *span);
                 }
 
                 type_env.insert_identifier_type(
@@ -435,7 +434,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
 impl TypeExpr {
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
-        println!("from-value-expr -> {:?}", value_expr);
+        println!("from-value-expr -> {value_expr:?}");
         return match value_expr {
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
                 lambda_expr
@@ -573,7 +572,7 @@ impl TypeExpr {
                         .enumerate()
                         .for_each(|(index, param_type)| {
                             check_type_compatability(
-                                &in_param_types.get(index).unwrap(),
+                                in_param_types.get(index).unwrap(),
                                 &param_type.1,
                                 type_env,
                             )
@@ -586,7 +585,7 @@ impl TypeExpr {
                     target.as_ref().1.context.file_name,
                     "Tried to invoke a non-function value".to_string(),
                     (
-                        format!("This is the value you tried to invoke as a function."),
+                        "This is the value you tried to invoke as a function.".to_string(),
                         target.as_ref().1,
                     ),
                     vec![
@@ -788,9 +787,8 @@ fn check_type_compatability(
                 ),
                 vec![
                     (
-                        format!(
-                            "because of this, the second operand also needs to be of type number."
-                        ),
+                        "because of this, the second operand also needs to be of type number."
+                            .to_string(),
                         two.1,
                     ),
                     (

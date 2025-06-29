@@ -544,9 +544,7 @@ pub fn empty_range() -> SS {
 pub fn source_file_into_empty_range(v: &mut SourceFile) {
     for x in &mut v.function_definitions {
         value_expr_into_empty_range(&mut x.value_expr);
-        x.return_type
-            .as_mut()
-            .map(|x| type_expr_into_empty_range(x));
+        x.return_type.as_mut().map(type_expr_into_empty_range);
         if let Some(params) = &mut x.params {
             for (_, p) in params {
                 type_expr_into_empty_range(p);
@@ -580,9 +578,9 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
             }
         }
         TypeExpr::Fun(params, return_type) => {
-            return_type
-                .as_mut()
-                .map(|x| type_expr_into_empty_range(&mut *x));
+            if let Some(x) = return_type.as_mut() {
+                type_expr_into_empty_range(&mut *x)
+            }
             for (_, p) in params {
                 type_expr_into_empty_range(p);
             }
@@ -645,9 +643,7 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
         }
         ValueExpr::Lambda(b) => {
             value_expr_into_empty_range(&mut b.value_expr);
-            b.return_type
-                .as_mut()
-                .map(|x| type_expr_into_empty_range(x));
+            b.return_type.as_mut().map(type_expr_into_empty_range);
             for (_, p) in &mut b.params {
                 type_expr_into_empty_range(p);
             }
@@ -703,11 +699,15 @@ mod tests {
     use super::ValueExpr;
 
     fn var(x: impl Into<String>) -> Box<Spanned<ValueExpr>> {
-        ValueExpr::Variable(false, x.into(), None).into_empty_span().into()
+        ValueExpr::Variable(false, x.into(), None)
+            .into_empty_span()
+            .into()
     }
 
     fn gvar(x: impl Into<String>) -> Box<Spanned<ValueExpr>> {
-        ValueExpr::Variable(true, x.into(), None).into_empty_span().into()
+        ValueExpr::Variable(true, x.into(), None)
+            .into_empty_span()
+            .into()
     }
 
     #[test]
