@@ -168,7 +168,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "duck-lang"
+name = "dargo"
 version = "0.1.0"
 dependencies = [
  "ariadne",
