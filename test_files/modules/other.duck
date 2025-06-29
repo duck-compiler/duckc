@@ -1,0 +1,6 @@
+use go "fmt";
+fun my_func() {
+    go {
+        fmt.Println("yo moin servus von my_func")
+    }
+}
