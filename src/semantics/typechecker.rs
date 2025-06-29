@@ -152,16 +152,19 @@ impl TypeEnv {
                     return;
                 }
 
-                let mut clone = field.type_expr.0.clone();
-                let mut flattens_from_clone = self.flatten_types(&mut clone, param_names_used);
+                let mut type_expr = field.type_expr.0.clone();
+                let mut flattened_types_from_type_expr = self.flatten_types(&mut type_expr, param_names_used);
 
-                found.push(clone);
-                found.append(&mut flattens_from_clone);
+                found.push(type_expr.clone());
+                found.append(&mut flattened_types_from_type_expr);
 
-                field.type_expr = (
-                    TypeExpr::TypeName(false, field.type_expr.0.as_clean_go_type_name(self)),
-                    field.type_expr.1,
-                );
+                if type_expr.is_object_like() {
+                    let type_name = type_expr.as_clean_go_type_name(self);
+                    field.type_expr = (
+                        TypeExpr::TypeNameInternal(type_name),
+                        field.type_expr.1,
+                    );
+                }
             }),
             TypeExpr::Struct(duck) => duck.fields.iter_mut().for_each(|field| {
                 param_names_used.push(field.name.clone());
@@ -272,7 +275,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             TypeExpr::from_value_expr(&function_definition.value_expr.0, type_env);
         });
 
-    type_env.pop_type_aliases();
+    // type_env.pop_type_aliases();
 
     fn typeresolve_function_definition(
         function_definition: &mut FunctionDefintion,

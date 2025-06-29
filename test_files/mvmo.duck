@@ -1,0 +1,16 @@
+type MyDuck = duck {
+    to_string: (self) -> String => {
+        console.log(self);
+    }
+}
+
+MyDuck
+
+fun gen_str(x: { to_string: fun() -> String | Option<String> }) {
+    **()* ()*()()*SDAF()*F
+}
+
+fun main() {
+    const x: {} = {};
+    gen<typeof x>(x);
+}

@@ -43,6 +43,7 @@ pub enum TypeExpr {
     Duck(Duck),
     Tuple(Vec<Spanned<TypeExpr>>),
     TypeName(bool, String),
+    TypeNameInternal(String),
     String,
     Int,
     Bool,
