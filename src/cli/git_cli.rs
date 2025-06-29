@@ -24,7 +24,11 @@ pub fn pull_repository(
             .current_dir(target_dir_path)
             .output()
             .map_err(|err| (
-                format!("YLO"),
+                format!(
+                    "{}{} couldn't get output of git pull command - {err}",
+                    Tag::IO,
+                    Tag::Err,
+                ),
                 GitCliErrKind::IOErr(err.kind())
             ))?;
 

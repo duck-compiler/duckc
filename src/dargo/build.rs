@@ -1,11 +1,10 @@
 use std::{env, fs, os};
 use std::io::ErrorKind as IOErrKind;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::cli::git_cli::{self, GitCliErrKind};
-use crate::emit::ir::join_ir;
 use crate::tags::Tag;
-use crate::{lex, parse_src_file, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR};
+use crate::DARGO_DOT_DIR;
 
 use super::cli::BuildArgs;
 use super::compile::{self, CompileErrKind};
@@ -87,7 +86,7 @@ pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
                     BuildErrKind::IOErr(err.kind())
                 ))?;
 
-            current_dir.push(&format!(".dargo/project/{module_name}"));
+            current_dir.push(format!(".dargo/project/{module_name}"));
 
             let target_dir = dbg!(current_dir);
 
