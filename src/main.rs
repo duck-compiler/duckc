@@ -144,7 +144,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         "<_)".bright_yellow().bold(),
     );
 
-    let cli_result = cli::duck_cli_interpreter::run_cli();
+    let cli_result = dargo::cli::run_cli();
     if let Err(err) = cli_result {
         println!("{}", err.0)
     }
