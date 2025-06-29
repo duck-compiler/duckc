@@ -12,6 +12,7 @@ use chumsky::{error::Rich, Parser};
 use colored::Colorize;
 use parse::{lexer::{lexer, Token}, source_file_parser::SourceFile, Spanned};
 use semantics::typechecker::{self, TypeEnv};
+use tags::Tag;
 
 use crate::parse::{
     Context, SS, make_input, parse_failure,
@@ -64,7 +65,7 @@ fn lex(
                             file_contents,
                         },
                     },
-                    "Lex Error",
+                    format!("{}{} {}", Tag::Lexer, Tag::Err, e.reason()),
                 ),
                 &file_contents,
             );
