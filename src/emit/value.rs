@@ -224,8 +224,10 @@ impl ValueExpr {
                 let assign = &b.0;
                 let (mut i, res) = assign.value_expr.0.direct_or_with_instr(type_env, env);
                 if let Some(res) = res {
-                    i.push(IrInstruction::VarAssignment(assign.name.clone(), res));
-                    (i, Some(as_var(&assign.name)))
+                    let (target_instr, Some(IrValue::Var(target_res))) = assign.name.0.emit(type_env, env) else { panic!() };
+                    i.extend(target_instr);
+                    i.push(IrInstruction::VarAssignment(target_res, res));
+                    (i, None)
                 } else {
                     (i, None)
                 }

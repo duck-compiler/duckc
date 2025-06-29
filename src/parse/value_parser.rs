@@ -242,9 +242,6 @@ where
                 .then(just(Token::ControlChar(';')).or_not())
                 .repeated()
                 .collect::<Vec<_>>()
-                .map_err(|_| {
-                    todo!()
-                })
                 .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
                 .map_with(|mut exprs, e| {
                     if exprs.len() >= 2 {
@@ -391,7 +388,6 @@ where
                         .clone()
                         .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                         .or(choice((
-                            field_access.clone(),
                             int,
                             bool_val,
                             string_val,
@@ -416,19 +412,21 @@ where
                                     body: Box::new(body),
                                 })
                                 .map_with(|x, e| (x, e.span())),
+                            just(Token::Return)
+                                .ignore_then(value_expr_parser.clone().or_not())
+                                .map_with(|x: Option<Spanned<ValueExpr>>, e| {
+                                    (ValueExpr::Return(x.map(Box::new)), e.span())
+                                }),
                         )))),
                 )
-                .then(params.clone().or_not())
+                .then(params.clone().repeated().collect::<Vec<_>>())
                 .map(|((neg, target), params)| {
-                    let res = if let Some(params) = params {
-                        ValueExpr::FunctionCall {
-                            target: target.into(),
-                            params,
-                        }
-                    } else {
-                        target.0
-                    };
-
+                    let res = params
+                        .into_iter()
+                        .fold(target.0, |acc, x| ValueExpr::FunctionCall {
+                            target: acc.into_empty_span().into(),
+                            params: x,
+                        });
                     neg.into_iter().fold(res, |acc, _| {
                         ValueExpr::BoolNegate(acc.into_empty_span().into())
                     })
@@ -443,7 +441,7 @@ where
                     ValueExpr::VarAssign(
                         (
                             Assignment {
-                                name: identifier,
+                                name: (ValueExpr::Variable(false, identifier, None), vec![]),
                                 value_expr: value_expr.clone(),
                             },
                             e.span(),
@@ -453,8 +451,6 @@ where
                 })
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
-
-            //
 
             let prod = atom
                 .clone()
@@ -501,21 +497,9 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            choice((
-                inline_go,
-                assignment,
-                equals,
-                add,
-                declaration,
-                just(Token::Return)
-                    .ignore_then(value_expr_parser.clone().or_not())
-                    .map_with(|x: Option<Spanned<ValueExpr>>, e| {
-                        (ValueExpr::Return(x.map(Box::new)), e.span())
-                    }),
-                atom,
-            ))
-            .labelled("expression")
-            .boxed()
+            choice((inline_go, assignment, equals, add, declaration, atom))
+                .labelled("expression")
+                .boxed()
         },
     )
 }
@@ -684,8 +668,8 @@ mod tests {
 
     use crate::parse::{
         Spanned,
-        assignment_and_declaration_parser::Declaration,
-        function_parser::LambdaFunctionExpr,
+        assignment_and_declaration_parser::{Assignment, Declaration},
+        function_parser::{FunctionDefintion, LambdaFunctionExpr},
         lexer::lexer,
         make_input,
         type_parser::{Duck, Field, TypeExpr},
@@ -996,6 +980,41 @@ mod tests {
                 },
             ),
             (
+                "a()()",
+                ValueExpr::FunctionCall {
+                    target: ValueExpr::FunctionCall {
+                        target: var("a"),
+                        params: vec![],
+                    }
+                    .into_empty_span()
+                    .into(),
+                    params: vec![],
+                },
+            ),
+            (
+                "(() => () => {1})()()",
+                ValueExpr::FunctionCall {
+                    target: ValueExpr::FunctionCall {
+                        target: ValueExpr::Lambda(LambdaFunctionExpr {
+                            params: vec![],
+                            return_type: None,
+                            value_expr: ValueExpr::Lambda(LambdaFunctionExpr {
+                                params: vec![],
+                                return_type: None,
+                                value_expr: ValueExpr::Block(vec![
+                                    ValueExpr::Int(1).into_empty_span(),
+                                ])
+                                .into_empty_span(),
+                            }.into()).into_empty_span().into(),
+                        }.into()).into_empty_span().into(),
+                        params: vec![],
+                    }
+                    .into_empty_span()
+                    .into(),
+                    params: vec![],
+                },
+            ),
+            (
                 "while (true) {}",
                 ValueExpr::While {
                     condition: ValueExpr::Bool(true).into_empty_span().into(),
@@ -1098,6 +1117,16 @@ mod tests {
                     ),
                 ]),
             ),
+            // (
+            //     "x.y.z = 1",
+            //     ValueExpr::VarAssign(Box::new((
+            //         Assignment {
+            //             name: (var("x").0, vec!["y".into(), "z".into()]),
+            //             value_expr: ValueExpr::Int(1).into_empty_span(),
+            //         },
+            //         empty_range(),
+            //     ))),
+            // ),
             (
                 "if (true) {{}} else {{x: 1}}",
                 ValueExpr::If {
