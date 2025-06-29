@@ -280,58 +280,6 @@ where
                 .then(while_body.clone())
                 .boxed();
 
-            let field_access = any_ref()
-                .filter(|t| !matches!(t, Token::ControlChar('.')))
-                .map_with(|x, e| (x, e.span()))
-                .repeated()
-                .at_least(1)
-                .collect::<Vec<_>>()
-                .then(
-                    (just(Token::ControlChar('.')).ignore_then(
-                        select_ref! { Token::Ident(field_name) => field_name.to_owned() }
-                            .or(select_ref! { Token::IntLiteral(i) => i.to_string() }),
-                    ))
-                    .repeated()
-                    .at_least(1)
-                    .collect::<Vec<_>>(),
-                )
-                .map({
-                    let e = value_expr_parser.clone();
-                    move |(base_expr, field_accesses)| {
-                        let base_expr = base_expr
-                            .clone()
-                            .into_iter()
-                            .map(|x| (x.0.to_owned(), x.1) as Spanned<Token>)
-                            .collect::<Vec<_>>()
-                            .leak() as &[Spanned<Token>];
-
-                        let range =
-                            base_expr.first().unwrap().1.start..base_expr.last().unwrap().1.end;
-                        let base = e
-                            .parse(make_input(
-                                SS {
-                                    start: range.start,
-                                    end: range.end,
-                                    context: base_expr[0].1.context,
-                                },
-                                base_expr,
-                            ))
-                            .unwrap();
-
-                        field_accesses.into_iter().fold(base, |acc, x| {
-                            (
-                                ValueExpr::FieldAccess {
-                                    target_obj: acc.clone().into(),
-                                    field_name: x,
-                                },
-                                acc.1,
-                            )
-                        })
-                    }
-                })
-                .map_with(|x, e| (x.0, e.span()))
-                .boxed();
-
             let int = select_ref! { Token::IntLiteral(i) => *i }
                 .map(ValueExpr::Int)
                 .map_with(|x, e| (x, e.span()))
@@ -384,7 +332,7 @@ where
                 .repeated()
                 .collect::<Vec<_>>()
                 .then(
-                    field_access.clone().or(value_expr_parser
+                    value_expr_parser
                         .clone()
                         .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                         .or(choice((
@@ -417,7 +365,7 @@ where
                                 .map_with(|x: Option<Spanned<ValueExpr>>, e| {
                                     (ValueExpr::Return(x.map(Box::new)), e.span())
                                 }),
-                        )))),
+                        ))),
                 )
                 .then(params.clone().repeated().collect::<Vec<_>>())
                 .map(|((neg, target), params)| {
@@ -432,6 +380,29 @@ where
                     })
                 })
                 .map_with(|x, e| (x, e.span()))
+                .boxed();
+
+            let field_access = atom
+                .clone()
+                .then_ignore(just(Token::ControlChar('.')))
+                .then(
+                    select_ref! { Token::Ident(field_name) => field_name.to_owned() }
+                        .or(select_ref! { Token::IntLiteral(i) => i.to_string() })
+                        .separated_by(just(Token::ControlChar('.')))
+                        // .repeated()
+                        .at_least(1)
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(base, then): (Spanned<ValueExpr>, Vec<String>)| {
+                    then.iter().fold(base, |acc, x| {
+                        ValueExpr::FieldAccess {
+                            target_obj: acc.into(),
+                            field_name: x.clone(),
+                        }
+                        .into_empty_span()
+                    })
+                })
+                .map_with(|x, e| (x.0, e.span()))
                 .boxed();
 
             let assignment = select_ref! { Token::Ident(identifier) => identifier.to_string() }
@@ -497,9 +468,17 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            choice((inline_go, assignment, equals, add, declaration, atom))
-                .labelled("expression")
-                .boxed()
+            choice((
+                inline_go,
+                field_access,
+                assignment,
+                equals,
+                add,
+                declaration,
+                atom,
+            ))
+            .labelled("expression")
+            .boxed()
         },
     )
 }
@@ -995,18 +974,28 @@ mod tests {
                 "(() => () => {1})()()",
                 ValueExpr::FunctionCall {
                     target: ValueExpr::FunctionCall {
-                        target: ValueExpr::Lambda(LambdaFunctionExpr {
-                            params: vec![],
-                            return_type: None,
-                            value_expr: ValueExpr::Lambda(LambdaFunctionExpr {
+                        target: ValueExpr::Lambda(
+                            LambdaFunctionExpr {
                                 params: vec![],
                                 return_type: None,
-                                value_expr: ValueExpr::Block(vec![
-                                    ValueExpr::Int(1).into_empty_span(),
-                                ])
-                                .into_empty_span(),
-                            }.into()).into_empty_span().into(),
-                        }.into()).into_empty_span().into(),
+                                value_expr: ValueExpr::Lambda(
+                                    LambdaFunctionExpr {
+                                        params: vec![],
+                                        return_type: None,
+                                        value_expr: ValueExpr::Block(vec![
+                                            ValueExpr::Int(1).into_empty_span(),
+                                        ])
+                                        .into_empty_span(),
+                                    }
+                                    .into(),
+                                )
+                                .into_empty_span()
+                                .into(),
+                            }
+                            .into(),
+                        )
+                        .into_empty_span()
+                        .into(),
                         params: vec![],
                     }
                     .into_empty_span()
