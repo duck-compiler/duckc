@@ -3,7 +3,7 @@ use std::io::ErrorKind as IOErrKind;
 use std::path::Path;
 
 use crate::cli::git_cli::{self, GitCliErrKind};
-use crate::tags::{self, Tag};
+use crate::tags::Tag;
 use crate::DARGO_DOT_DIR;
 
 use super::cli::BuildArgs;
