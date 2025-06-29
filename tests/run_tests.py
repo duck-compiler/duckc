@@ -286,7 +286,7 @@ def compile_valid_with_assert(compiler_path, valid_program):
     pass
 
 def perform_tests():
-    compiler_path = build_and_move_cargo_binary("duck-lang");
+    compiler_path = build_and_move_cargo_binary("dargo");
 
     print(f"{COLOR_YELLOW}Duck Compiler is located at {COLOR_RESET}{compiler_path}{COLOR_RESET}")
 
