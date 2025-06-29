@@ -54,15 +54,11 @@ pub fn load_dargo_config(
         return Err((message, ProjectLoadErrKind::MissingDuckToml));
     }
 
-    let file_content = fs::read_to_string(path)
-        .map_err(|read_error| {
-            let message = format!(
-                "{} Couldn't read dargo.toml.\n -> {read_error}",
-                Tag::Err,
-            );
+    let file_content = fs::read_to_string(path).map_err(|read_error| {
+        let message = format!("{} Couldn't read dargo.toml.\n -> {read_error}", Tag::Err,);
 
-            (message, ProjectLoadErrKind::FileRead)
-        })?;
+        (message, ProjectLoadErrKind::FileRead)
+    })?;
 
     let project_config = toml::from_str(&file_content).map_err(|parse_error| {
         let message = format!(
@@ -82,7 +78,11 @@ mod tests {
     use super::*;
     use std::io::Write;
 
-    fn assert_dependency_with_version(dependencies: &HashMap<String, Dependency>, name: &str, version: &str) {
+    fn assert_dependency_with_version(
+        dependencies: &HashMap<String, Dependency>,
+        name: &str,
+        version: &str,
+    ) {
         assert!(dependencies.contains_key(name));
         let dep = dependencies.get(name).unwrap();
         assert!(matches!(dep, Dependency::WithVersion(..)));
@@ -133,7 +133,9 @@ mod tests {
         assert_eq!(config.binaries[1].file, PathBuf::from("./src/another.duck"));
 
         assert!(matches!(config.dependencies, Some(..)));
-        let Some(dependencies) = config.dependencies else { unreachable!() };
+        let Some(dependencies) = config.dependencies else {
+            unreachable!()
+        };
 
         assert_eq!(dependencies.len(), 1);
 
@@ -162,7 +164,7 @@ mod tests {
             [dependencies]
             test
             "#
-            .trim();
+        .trim();
         let file_path = create_temp_file("malformed_dargo.toml", malformed_content);
 
         let result = load_dargo_config(Some(file_path.clone()));
@@ -222,8 +224,9 @@ mod tests {
 
         assert_eq!(config.name, "Project With Complex Dependencies");
 
-
-        let Some(dependencies) = config.dependencies else {unreachable!()};
+        let Some(dependencies) = config.dependencies else {
+            unreachable!()
+        };
         assert_eq!(dependencies.len(), 3);
 
         assert_dependency_with_version(&dependencies, "first/fetch", "3.0.0");

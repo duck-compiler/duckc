@@ -7,7 +7,11 @@
 )]
 
 use std::{
-    env, error::Error, fs::{self, File}, io::Write, path::{Path, PathBuf}
+    env,
+    error::Error,
+    fs::{self, File},
+    io::Write,
+    path::{Path, PathBuf},
 };
 
 use chumsky::{Parser, error::Rich};
@@ -38,11 +42,7 @@ lazy_static! {
     static ref DARGO_DOT_DIR: PathBuf = {
         fn require_sub_dir(str: &str) {
             let Ok(current_dir) = env::current_dir() else {
-                println!(
-                    "{}{} coulnd't read current dir",
-                    Tag::Dargo,
-                    Tag::Err,
-                );
+                println!("{}{} coulnd't read current dir", Tag::Dargo, Tag::Err,);
                 panic!()
             };
 

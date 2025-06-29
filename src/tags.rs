@@ -33,11 +33,61 @@ impl Display for Tag {
             Self::Lexer => write!(f, "{}", " lexer ".on_bright_white().black()),
             Self::Parser => write!(f, "{}", " parser ".on_white().black()),
             Self::Compiler => write!(f, "{}", " compiler ".on_black().bright_white()),
-            Self::Git => write!(f, "{}", " git ".on_color(Color::TrueColor { r: 243, g: 20, b: 20 }).bright_white()),
-            Self::Build => write!(f, "{}", " build ".on_color(Color::TrueColor { r: 43, g: 20, b: 20 }).bright_white()),
-            Self::Dependency => write!(f, "{}", " dependency ".on_color(Color::TrueColor { r: 23, g: 10, b: 120 }).bright_white()),
-            Self::Setup => write!(f, "{}", " setup ".on_color(Color::TrueColor { r: 23, g: 120, b: 20 }).bright_white()),
-            Self::IO => write!(f, "{}", " IO ".on_color(Color::TrueColor { r: 23, g: 120, b: 20 }).bright_white()),
+            Self::Git => write!(
+                f,
+                "{}",
+                " git "
+                    .on_color(Color::TrueColor {
+                        r: 243,
+                        g: 20,
+                        b: 20
+                    })
+                    .bright_white()
+            ),
+            Self::Build => write!(
+                f,
+                "{}",
+                " build "
+                    .on_color(Color::TrueColor {
+                        r: 43,
+                        g: 20,
+                        b: 20
+                    })
+                    .bright_white()
+            ),
+            Self::Dependency => write!(
+                f,
+                "{}",
+                " dependency "
+                    .on_color(Color::TrueColor {
+                        r: 23,
+                        g: 10,
+                        b: 120
+                    })
+                    .bright_white()
+            ),
+            Self::Setup => write!(
+                f,
+                "{}",
+                " setup "
+                    .on_color(Color::TrueColor {
+                        r: 23,
+                        g: 120,
+                        b: 20
+                    })
+                    .bright_white()
+            ),
+            Self::IO => write!(
+                f,
+                "{}",
+                " IO "
+                    .on_color(Color::TrueColor {
+                        r: 23,
+                        g: 120,
+                        b: 20
+                    })
+                    .bright_white()
+            ),
             Self::Clean => write!(f, "{}", " clean ".on_bright_magenta().bright_white()),
         };
     }

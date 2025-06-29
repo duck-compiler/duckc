@@ -6,7 +6,10 @@ use crate::{
     tags::Tag,
 };
 
-use super::{build::{self, BuildErrKind}, clean::CleanErrKind};
+use super::{
+    build::{self, BuildErrKind},
+    clean::CleanErrKind,
+};
 
 #[derive(CliParser, Debug)]
 pub struct DargoCliParser {
@@ -60,16 +63,12 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
     let args = DargoCliParser::parse();
     match args.command {
         Commands::Build(build_args) => {
-            build::build(&build_args)
-                .map_err(|err| (
-                    format!(
-                        "{}{}{}",
-                        Tag::Dargo,
-                        Tag::Build,
-                        err.0,
-                    ),
+            build::build(&build_args).map_err(|err| {
+                (
+                    format!("{}{}{}", Tag::Dargo, Tag::Build, err.0,),
                     CliErrKind::Build(err.1),
-                ))?;
+                )
+            })?;
         }
         Commands::Compile(compile_args) => dargo::compile::compile(compile_args.file, None)
             .map_err(|err| {
@@ -81,19 +80,15 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
         Commands::Init(_init_args) => {
             dargo::init::init_project(None)
                 .map_err(|err| (format!("{}{}", Tag::Dargo, err.0), CliErrKind::Init(err.1)))?;
-        },
+        }
         Commands::Clean => {
-            dargo::clean::clean()
-                .map_err(|err| (
-                    format!(
-                        "{}{} {}",
-                        Tag::Dargo,
-                        Tag::Clean,
-                        err.0,
-                    ),
-                    CliErrKind::Clean(err.1)
-                ))?;
-        },
+            dargo::clean::clean().map_err(|err| {
+                (
+                    format!("{}{} {}", Tag::Dargo, Tag::Clean, err.0,),
+                    CliErrKind::Clean(err.1),
+                )
+            })?;
+        }
     }
 
     Ok(())
