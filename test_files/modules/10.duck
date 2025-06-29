@@ -1,0 +1,7 @@
+module other;
+
+use other::{my_func};
+
+fun main() {
+    my_func();
+}
