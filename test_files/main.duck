@@ -6,8 +6,16 @@ fun abc(x: String) {
     }
 }
 
+fun xyz(x: { x: String }) {
+    let y: String = x.x;
+    go {
+        fmt.Println(y);
+    }
+}
+
 fun main() {
-    let x: struct { x: String } = .{ x: "Hallo" };
-    x.x.y = "hello";
-    abc(x.x);
+    let x: struct { y: String } = .{ y: "Hallo" };
+    let y: { x: { x: String } } = { x: { x: "Hallo" } };
+    abc(y.x.x);
+    xyz(y.x);
 }

@@ -24,6 +24,7 @@ impl MangleEnv {
 
     pub fn mangle_ident(&self, is_global: bool, prefix: &str, ident: &String) -> Option<String> {
         let prefix = if is_global { "" } else { prefix };
+        dbg!(&self.names, ident);
         if !self.local_defined(ident) {
             if let Some(import_path) = self.imports.get(ident) {
                 return Some(format!("{prefix}{import_path}_{ident}"));

@@ -80,6 +80,23 @@ impl SourceFile {
 
             let mut result = SourceFile::default();
 
+            for (name, sub_module) in &s.sub_modules {
+                let src = flatten0(sub_module, &format!("{prefix}{name}_"));
+                for f in src.function_definitions {
+                    mangle_env.insert_ident(f.name[prefix.len()..].to_string());
+                    result.function_definitions.push(f);
+                }
+                for f in src.type_definitions {
+                    mangle_env.insert_type(f.name[prefix.len()..].to_string());
+                    result.type_definitions.push(f);
+                }
+                for u in &src.use_statements {
+                    if matches!(u, UseStatement::Go(..)) {
+                        result.push_use(u);
+                    }
+                }
+            }
+
             for u in &s.use_statements {
                 if matches!(u, UseStatement::Go(..)) {
                     result.push_use(u);
@@ -101,21 +118,6 @@ impl SourceFile {
                 ty.name = format!("{prefix}{}", ty.name);
                 mangle_type_expression(&mut ty.type_expression.0, prefix, &mut mangle_env);
                 result.type_definitions.push(ty);
-            }
-
-            for (name, sub_module) in &s.sub_modules {
-                let src = flatten0(sub_module, &format!("{prefix}{name}_"));
-                for f in src.function_definitions {
-                    result.function_definitions.push(f);
-                }
-                for f in src.type_definitions {
-                    result.type_definitions.push(f);
-                }
-                for u in &src.use_statements {
-                    if matches!(u, UseStatement::Go(..)) {
-                        result.push_use(u);
-                    }
-                }
             }
 
             result

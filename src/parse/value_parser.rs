@@ -417,34 +417,14 @@ where
             let assignment = scope_res_ident
                 .clone()
                 .rewind()
-                .then(
-                    just(Token::ControlChar('.'))
-                        .ignore_then(field_access.clone())
-                        .or(scope_res_ident.clone()),
-                )
+                .ignore_then(field_access.clone().or(scope_res_ident.clone()))
                 .then_ignore(just(Token::ControlChar('=')))
                 .then(value_expr_parser.clone())
-                .map_with(|((mut t, mut fa), value_expr), e| {
-                    if let Some(fa) = &mut fa {
-                        let mut target = &mut fa.0;
-                        while let ValueExpr::FieldAccess { target_obj, .. } = target {
-                            let target_obj = &mut **target_obj;
-                            target = &mut target_obj.0;
-                        }
-                        let ValueExpr::Variable(false, tt, _) = target.clone() else {
-                            panic!("x")
-                        };
-                        *target = ValueExpr::FieldAccess {
-                            target_obj: t.clone().into(),
-                            field_name: tt,
-                        };
-                        t = fa.clone();
-                    }
-
+                .map_with(|(target, value_expr), e| {
                     ValueExpr::VarAssign(
                         (
                             Assignment {
-                                target: t,
+                                target: target,
                                 value_expr: value_expr.clone(),
                             },
                             e.span(),
@@ -931,10 +911,7 @@ mod tests {
                 "!std::arch::is_windows",
                 ValueExpr::BoolNegate(var("std_arch_is_windows")),
             ),
-            (
-                "!std::arch",
-                ValueExpr::BoolNegate(var("std_arch")),
-            ),
+            ("!std::arch", ValueExpr::BoolNegate(var("std_arch"))),
             (
                 "x.y = 100",
                 ValueExpr::VarAssign(
@@ -943,6 +920,29 @@ mod tests {
                             target: ValueExpr::FieldAccess {
                                 target_obj: var("x"),
                                 field_name: "y".into(),
+                            }
+                            .into_empty_span(),
+                            value_expr: ValueExpr::Int(100).into_empty_span(),
+                        },
+                        empty_range(),
+                    )
+                        .into(),
+                ),
+            ),
+            (
+                "std::xs.y.z = 100",
+                ValueExpr::VarAssign(
+                    (
+                        Assignment {
+                            target: ValueExpr::FieldAccess {
+                                field_name: "z".into(),
+                                target_obj: Box::new(
+                                    ValueExpr::FieldAccess {
+                                        target_obj: var("std_xs"),
+                                        field_name: "y".into(),
+                                    }
+                                    .into_empty_span(),
+                                ),
                             }
                             .into_empty_span(),
                             value_expr: ValueExpr::Int(100).into_empty_span(),

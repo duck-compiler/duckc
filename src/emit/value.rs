@@ -1,7 +1,9 @@
 use crate::{
     parse::{
-        assignment_and_declaration_parser::Declaration, function_parser::LambdaFunctionExpr,
-        type_parser::TypeExpr, value_parser::ValueExpr,
+        assignment_and_declaration_parser::Declaration,
+        function_parser::LambdaFunctionExpr,
+        type_parser::{Duck, TypeExpr},
+        value_parser::ValueExpr,
     },
     semantics::typechecker::TypeEnv,
 };
@@ -152,7 +154,7 @@ impl ValueExpr {
                     type_expr,
                     initializer,
                 } = &b.0;
-                let ty = type_expr.0.as_go_concrete_annotation(type_env);
+                let ty = type_expr.0.as_go_type_annotation(type_env);
                 let mut v = Vec::new();
                 v.push(IrInstruction::VarDecl(name.clone(), ty));
                 if let Some(initializer) = initializer {
@@ -225,6 +227,7 @@ impl ValueExpr {
                 dbg!(&assign);
                 let (mut i, res) = assign.value_expr.0.direct_or_with_instr(type_env, env);
                 if let Some(res) = res {
+                    panic!();
                     let (target_instr, Some(IrValue::Var(target_res))) =
                         assign.target.0.emit(type_env, env)
                     else {
@@ -417,8 +420,29 @@ impl ValueExpr {
                 target_obj,
                 field_name,
             } => {
-                let (i, t_res) = target_obj.0.emit(type_env, env);
+                let (mut i, t_res) = target_obj.0.emit(type_env, env);
                 if let Some(t_res) = t_res {
+                    let ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
+                    match ty {
+                        TypeExpr::Duck(Duck { fields }) => {
+                            let f = fields.iter().find(|f| &f.name == field_name).unwrap();
+                            let res = env.new_var();
+                            i.push(IrInstruction::VarDecl(
+                                res.clone(),
+                                f.type_expr.0.as_go_type_annotation(type_env),
+                            ));
+                            i.push(IrInstruction::FunCall(
+                                Some(res.clone()),
+                                IrValue::FieldAccess(
+                                    Box::new(t_res),
+                                    format!("Get{}", field_name.clone()),
+                                ),
+                                vec![],
+                            ));
+                            return (i, Some(IrValue::Var(res)));
+                        }
+                        _ => {}
+                    }
                     (
                         i,
                         Some(IrValue::FieldAccess(t_res.into(), field_name.clone())),

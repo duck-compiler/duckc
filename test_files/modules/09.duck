@@ -19,10 +19,27 @@ module X {
                 fmt.Println("Hallo von c")
             }
         }
+
+        fun testi() {
+            go {
+                fmt.Println("testi")
+            }
+        }
+
+        module ZZ {
+            fun zz() {
+                go {
+                    fmt.Println("ZZ")
+                }
+            }
+        }
+
     }
 
     fun call_c() {
         c();
+        Y::testi();
+        Y::ZZ::zz();
     }
 
     type XDuck = {
@@ -35,6 +52,7 @@ fun main() {
     X::a();
     X::Y::b();
     X::call_c();
+    X::Y::ZZ::zz();
 }
 
 fun abc() {
