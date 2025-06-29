@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use std::{ffi::OsString, fs, path::PathBuf, process::Command};
 
 use crate::{
-    DOT_DUCK_DIR, emit::ir::join_ir, lex, parse_src_file, tags::Tag, typecheck,
+    DARGO_DOT_DIR, emit::ir::join_ir, lex, parse_src_file, tags::Tag, typecheck,
     write_in_duck_dotdir,
 };
 
@@ -100,7 +100,7 @@ pub fn compile(
     let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.go").as_str(), &go_code);
 
     let compile_output_target = {
-        let mut target_file = DOT_DUCK_DIR.clone();
+        let mut target_file = DARGO_DOT_DIR.clone();
         target_file.push(
             binary_output_name
                 .map(OsString::from)

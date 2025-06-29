@@ -7,6 +7,7 @@
 )]
 
 use std::{
+    env,
     error::Error,
     fs::{self, File},
     io::Write,
@@ -38,16 +39,38 @@ pub mod semantics;
 pub mod tags;
 
 lazy_static! {
-    static ref DOT_DUCK_DIR: PathBuf = {
-        let duck_dir = Path::new("./.duck");
-        if duck_dir.exists() {
-            return duck_dir.to_path_buf();
+    static ref DARGO_DOT_DIR: PathBuf = {
+        fn require_sub_dir(str: &str) {
+            let Ok(current_dir) = env::current_dir() else {
+                println!("{}{} coulnd't read current dir", Tag::Dargo, Tag::Err,);
+                panic!()
+            };
+
+            let required_dir = {
+                let mut current_dir_clone = current_dir.clone();
+                current_dir_clone.push(str);
+                current_dir_clone
+            };
+
+            if required_dir.exists() {
+                return;
+            }
+
+            if let Err(err) = fs::create_dir(required_dir.clone()) {
+                println!(
+                    "{}{} Couldn't create {} dot dir in current directory. - {err}",
+                    Tag::Dargo,
+                    Tag::Err,
+                    required_dir.to_string_lossy()
+                );
+            }
         }
 
-        if let Err(err) = fs::create_dir(duck_dir) {
-            dbg!(err);
-            println!("Couldn't create .duck dir");
-        }
+        let duck_dir = Path::new(".dargo");
+
+        require_sub_dir(".dargo");
+        require_sub_dir(".dargo/git");
+        require_sub_dir(".dargo/project");
 
         return duck_dir.to_path_buf();
     };
@@ -122,7 +145,7 @@ fn typecheck(src_file_ast: &mut SourceFile) -> TypeEnv {
 
 fn write_in_duck_dotdir(file_name: &str, content: &str) -> PathBuf {
     let target_file = {
-        let mut target_file_path = DOT_DUCK_DIR.clone();
+        let mut target_file_path = DARGO_DOT_DIR.clone();
         target_file_path.push(file_name);
         target_file_path
     };
@@ -144,7 +167,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         "<_)".bright_yellow().bold(),
     );
 
-    let cli_result = cli::duck_cli::run_cli();
+    let cli_result = dargo::cli::run_cli();
     if let Err(err) = cli_result {
         println!("{}", err.0)
     }

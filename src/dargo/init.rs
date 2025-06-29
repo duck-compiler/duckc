@@ -22,8 +22,7 @@ lazy_static! {
         version = "0.1.0"
         file = "./src/main.duck"
 
-        [[dependencies]]
-        git_url = "https://github.com/example/default_dep.git"
+        [dependencies]
     "#
     .trim();
     static ref INIT_TAG: String = " init ".on_purple().bright_white().to_string();
