@@ -43,7 +43,6 @@ impl SourceFile {
                 imports: {
                     let mut imports = HashMap::new();
                     for u in &s.use_statements {
-                        dbg!(&u);
                         if let UseStatement::Regular(v) = u {
                             let pre = v
                                 .iter()
@@ -63,7 +62,7 @@ impl SourceFile {
                         }
                     }
 
-                    dbg!(imports)
+                    imports
                 },
                 names: vec![
                     s.function_definitions

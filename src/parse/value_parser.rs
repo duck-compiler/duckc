@@ -242,8 +242,7 @@ where
                 .then(just(Token::ControlChar(';')).or_not())
                 .repeated()
                 .collect::<Vec<_>>()
-                .map_err(|error| {
-                    dbg!(error);
+                .map_err(|_| {
                     todo!()
                 })
                 .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))

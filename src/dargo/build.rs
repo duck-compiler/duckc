@@ -77,7 +77,7 @@ pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
 
             current_dir.push(format!(".dargo/project/{module_name}"));
 
-            let target_dir = dbg!(current_dir);
+            let target_dir = current_dir;
 
             if target_dir.is_symlink() {
                 fs::remove_dir_all(target_dir.clone()).map_err(|err| {

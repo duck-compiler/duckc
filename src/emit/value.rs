@@ -194,7 +194,6 @@ impl ValueExpr {
                 //     TypeExpr::from_value_expr(self, type_env).as_go_concrete_annotation(type_env);
                 let res_type = "interface{}".to_string();
                 let (mut i, cond_res) = condition.0.direct_or_with_instr(type_env, env);
-                dbg!(&condition.0);
                 if cond_res.is_none() {
                     return (i, None);
                 }
@@ -441,10 +440,8 @@ impl ValueExpr {
                 res.extend([
                     IrInstruction::VarDecl(
                         res_var.clone(),
-                        dbg!(
-                            TypeExpr::from_value_expr(self, type_env)
-                                .as_go_type_annotation(type_env)
-                        ),
+                        TypeExpr::from_value_expr(self, type_env)
+                            .as_go_type_annotation(type_env),
                     ),
                     IrInstruction::VarAssignment(res_var.clone(), IrValue::Duck(name, res_vars)),
                 ]);
@@ -483,7 +480,7 @@ impl ValueExpr {
             | ValueExpr::String(..) => {
                 if let Some(d) = self.direct_emit(type_env, env) {
                     let res_var = env.new_var();
-                    dbg!((
+                    (
                         vec![
                             IrInstruction::VarDecl(
                                 res_var.clone(),
@@ -493,9 +490,8 @@ impl ValueExpr {
                             IrInstruction::VarAssignment(res_var.clone(), d),
                         ],
                         Some(IrValue::Var(res_var)),
-                    ))
+                    )
                 } else {
-                    dbg!(self);
                     todo!()
                 }
             }

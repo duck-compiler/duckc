@@ -130,12 +130,11 @@ impl TypeEnv {
             .expect("At least one type aliases hashmap should exist. :(");
 
         println!("Try to resolve type alias {alias}");
-        dbg!(
-            type_aliases
-                .get(alias)
-                .unwrap_or_else(|| panic!("Couldn't resolve type alias {alias}"))
-                .clone()
-        )
+
+        type_aliases
+            .get(alias)
+            .unwrap_or_else(|| panic!("Couldn't resolve type alias {alias}"))
+            .clone()
     }
 
     fn flatten_types(
@@ -218,7 +217,7 @@ impl TypeEnv {
         param_names_used.dedup();
 
         return TypesSummary {
-            types_used: dbg!(all_types),
+            types_used: all_types,
             param_names_used,
         };
     }
@@ -269,7 +268,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .function_definitions
         .iter_mut()
         .for_each(|function_definition| {
-            dbg!(&function_definition.name);
             typeresolve_function_definition(function_definition, type_env);
             TypeExpr::from_value_expr(&function_definition.value_expr.0, type_env);
         });
@@ -304,7 +302,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
         if let Some((return_type, _)) = &mut function_definition.return_type {
             *return_type = type_env.insert_type(return_type.clone());
-            dbg!(return_type);
         }
 
         type_env.push_identifier_types();
@@ -327,7 +324,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ValueExpr::Variable(_, identifier, type_expr_opt) => {
                 // TODO: modules
                 println!("try resolving identifier {identifier}");
-                let type_expr = dbg!(type_env)
+                let type_expr = type_env
                     .get_identifier_type(identifier.clone())
                     .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));
 
@@ -562,7 +559,7 @@ impl TypeExpr {
             ValueExpr::FunctionCall { target, params } => {
                 let in_param_types = params
                     .iter()
-                    .map(|param| (TypeExpr::from_value_expr(dbg!(&param.0), type_env), param.1))
+                    .map(|param| (TypeExpr::from_value_expr(&param.0, type_env), param.1))
                     .collect::<Vec<_>>();
 
                 let target_type = TypeExpr::from_value_expr(&target.as_ref().0, type_env);

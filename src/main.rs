@@ -46,20 +46,19 @@ lazy_static! {
                 panic!()
             };
 
-            let required_dir = dbg!({
+            let required_dir = {
                 let mut current_dir_clone = current_dir.clone();
                 current_dir_clone.push(str);
                 current_dir_clone
-            });
+            };
 
             if required_dir.exists() {
                 return;
             }
 
             if let Err(err) = fs::create_dir(required_dir.clone()) {
-                dbg!(err);
                 println!(
-                    "{}{} Couldn't create {} dot dir in current directory.",
+                    "{}{} Couldn't create {} dot dir in current directory. - {err}",
                     Tag::Dargo,
                     Tag::Err,
                     required_dir.to_string_lossy()

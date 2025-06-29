@@ -169,7 +169,7 @@ mod tests {
 
         let result = load_dargo_config(Some(file_path.clone()));
         assert!(result.is_err());
-        let err = dbg!(result.unwrap_err());
+        let err = result.unwrap_err();
         assert!(matches!(err, (.., ProjectLoadErrKind::TomlParse)));
 
         fs::remove_file(file_path).unwrap();
@@ -181,7 +181,7 @@ mod tests {
         let file_path = create_temp_file("optional_dargo.toml", toml_content);
 
         let result = load_dargo_config(Some(file_path.clone()));
-        let result = dbg!(result);
+        let result = result;
         assert!(result.is_ok());
         let config = result.unwrap();
 
