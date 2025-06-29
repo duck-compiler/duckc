@@ -22,7 +22,8 @@ impl MangleEnv {
         self.names.last().filter(|x| x.contains(n)).is_some()
     }
 
-    pub fn mangle_ident(&self, prefix: &str, ident: &String) -> Option<String> {
+    pub fn mangle_ident(&self, is_global: bool, prefix: &str, ident: &String) -> Option<String> {
+        let prefix = if is_global { "" } else { prefix };
         if !self.local_defined(ident) {
             if let Some(import_path) = self.imports.get(ident) {
                 return Some(format!("{prefix}{import_path}_{ident}"));
@@ -34,7 +35,6 @@ impl MangleEnv {
         }
 
         None
-
     }
 
     pub fn is_top_level_type(&self, ident: &String) -> bool {
@@ -158,11 +158,8 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
                 .iter_mut()
                 .for_each(|param| mangle_value_expr(&mut param.0, prefix, mangle_env));
         }
-        ValueExpr::Variable(identifier, _) => {
-            if let Some(mangled) = mangle_env.mangle_ident(prefix, identifier) {
-                if prefix == "abc_" && identifier == "called" {
-                    dbg!(prefix, &mangle_env, &mangled);
-                }
+        ValueExpr::Variable(is_global, identifier, _) => {
+            if let Some(mangled) = mangle_env.mangle_ident(*is_global, prefix, identifier) {
                 *identifier = mangled;
             }
         }

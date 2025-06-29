@@ -30,11 +30,13 @@ pub enum Token {
     As,
     InlineGo(String),
     Module,
+    ScopeRes,
 }
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = match self {
+            Token::ScopeRes => "::",
             Token::Use => "use",
             Token::Type => "type",
             Token::Go => "go",
@@ -98,8 +100,10 @@ pub fn lexer<'a>(
     let num = num_literal();
 
     let equals = just("==").to(Token::Equals);
+    let scope_res = just("::").to(Token::ScopeRes);
 
     let token = inline_go_parser()
+        .or(scope_res)
         .or(r#bool)
         .or(equals)
         .or(keyword_or_ident)

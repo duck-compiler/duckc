@@ -291,12 +291,9 @@ impl ValueExpr {
                 for (block_expr, _) in block_exprs {
                     let (block_instr, block_res) = block_expr.direct_or_with_instr(type_env, env);
                     res.extend(block_instr);
-                    if block_res.is_none() {
-                        return (res, None);
-                    }
                     res_var = block_res;
                 }
-                (res, res_var)
+                (res, res_var.or(Some(IrValue::Tuple("Tup_".into(), vec![]))))
             }
             ValueExpr::Tuple(fields) => {
                 let mut res = Vec::new();
@@ -387,7 +384,7 @@ impl ValueExpr {
                     (instr, None)
                 }
             }
-            ValueExpr::Variable(x, _) => (vec![], as_rvar(x.to_owned())),
+            ValueExpr::Variable(_, x, _) => (vec![], as_rvar(x.to_owned())),
             ValueExpr::Equals(v1, v2) => {
                 let mut ir = Vec::new();
 

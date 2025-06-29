@@ -1,0 +1,23 @@
+use go "fmt";
+
+module X {
+    fun a() {
+        ::abc();
+    }
+    module Y {
+        fun b() {
+            ::X::a();
+        }
+    }
+}
+
+fun main() {
+    X::a();
+    X::Y::b();
+}
+
+fun abc() {
+    go {
+        fmt.Println("hell from abc")
+    }
+}

@@ -42,9 +42,7 @@ where
             module_indicator_parser
                 .or(symbols_indicator_parser)
                 .or(wildcard_indicator_parser)
-                .separated_by(
-                    just(Token::ControlChar(':')).ignore_then(just(Token::ControlChar(':'))),
-                )
+                .separated_by(just(Token::ScopeRes))
                 .at_least(1)
                 .collect::<Vec<Indicator>>(),
         )
@@ -162,6 +160,7 @@ mod tests {
         for invalid_use_statement in invalid_use_statements {
             println!("lexing {invalid_use_statement}");
             let lexer_parse_result = lexer("test", "").parse(invalid_use_statement);
+
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 

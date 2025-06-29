@@ -751,7 +751,7 @@ mod tests {
                             name: "abc_lol_im_a_func".into(),
                             value_expr: ValueExpr::Block(vec![
                                 ValueExpr::FunctionCall {
-                                    target: ValueExpr::Variable("abc_lol_called".into(), None)
+                                    target: ValueExpr::Variable(false, "abc_lol_called".into(), None)
                                         .into_empty_span()
                                         .into(),
                                     params: vec![],
@@ -764,7 +764,7 @@ mod tests {
                         FunctionDefintion {
                             name: "abc_im_calling_a_sub_module".into(),
                             value_expr: ValueExpr::Block(vec![
-                                ValueExpr::Variable("abc_lol_called".into(), None)
+                                ValueExpr::Variable(false, "abc_lol_called".into(), None)
                                     .into_empty_span(),
                             ])
                             .into_empty_span(),
@@ -774,7 +774,7 @@ mod tests {
                             name: "abc_lol_called".into(),
                             value_expr: ValueExpr::Block(vec![
                                 ValueExpr::FunctionCall {
-                                    target: ValueExpr::Variable("abc_lol_called".into(), None)
+                                    target: ValueExpr::Variable(false, "abc_lol_called".into(), None)
                                         .into_empty_span()
                                         .into(),
                                     params: vec![],
@@ -810,7 +810,7 @@ mod tests {
                                 function_definitions: vec![FunctionDefintion {
                                     name: "im_calling_a_sub_module".into(),
                                     value_expr: ValueExpr::Block(vec![
-                                        ValueExpr::Variable("called".into(), None)
+                                        ValueExpr::Variable(false, "called".into(), None)
                                             .into_empty_span(),
                                     ])
                                     .into_empty_span(),
@@ -826,6 +826,7 @@ mod tests {
                                                 value_expr: ValueExpr::Block(vec![
                                                     ValueExpr::FunctionCall {
                                                         target: ValueExpr::Variable(
+                                                            false,
                                                             "called".into(),
                                                             None,
                                                         )
@@ -843,6 +844,7 @@ mod tests {
                                                 value_expr: ValueExpr::Block(vec![
                                                     ValueExpr::FunctionCall {
                                                         target: ValueExpr::Variable(
+                                                            false,
                                                             "called".into(),
                                                             None,
                                                         )

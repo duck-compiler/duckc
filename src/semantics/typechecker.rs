@@ -246,6 +246,33 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .function_definitions
         .iter_mut()
         .for_each(|function_definition| {
+            let fn_type_expr = TypeExpr::Fun(
+                function_definition
+                    .params
+                    .as_ref()
+                    .unwrap_or(&Vec::new())
+                    .iter()
+                    .map(|(identifier, type_expr)| {
+                        type_env.insert_identifier_type(identifier.clone(), type_expr.0.clone());
+                        (Some(identifier.clone()), type_expr.clone())
+                    })
+                    .collect::<Vec<_>>(),
+                function_definition
+                    .return_type
+                    .as_ref()
+                    .map(|spanned_type_expr| {
+                        type_env.insert_type(spanned_type_expr.0.clone());
+                        Box::new(spanned_type_expr.clone())
+                    }),
+            );
+            type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
+        });
+
+    source_file
+        .function_definitions
+        .iter_mut()
+        .for_each(|function_definition| {
+            dbg!(&function_definition.name);
             typeresolve_function_definition(function_definition, type_env);
             TypeExpr::from_value_expr(&function_definition.value_expr.0, type_env);
         });
@@ -256,25 +283,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         function_definition: &mut FunctionDefintion,
         type_env: &mut TypeEnv,
     ) {
-        let fn_type_expr = TypeExpr::Fun(
-            function_definition
-                .params
-                .as_ref()
-                .unwrap_or(&Vec::new())
-                .iter()
-                .map(|(identifier, type_expr)| {
-                    type_env.insert_identifier_type(identifier.clone(), type_expr.0.clone());
-                    (Some(identifier.clone()), type_expr.clone())
-                })
-                .collect::<Vec<_>>(),
-            function_definition
-                .return_type
-                .as_ref()
-                .map(|spanned_type_expr| {
-                    type_env.insert_type(spanned_type_expr.0.clone());
-                    Box::new(spanned_type_expr.clone())
-                }),
-        );
 
         if function_definition.name == "main"
             && !matches!(
@@ -298,7 +306,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             )
         }
 
-        type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
         type_env.push_identifier_types();
         typeresolve_value_expr(&mut function_definition.value_expr.0, type_env);
         type_env.pop_identifier_types();
@@ -316,11 +323,12 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     .iter_mut()
                     .for_each(|param| typeresolve_value_expr(&mut param.0, type_env));
             }
-            ValueExpr::Variable(identifier, type_expr_opt) => {
+            ValueExpr::Variable(_, identifier, type_expr_opt) => {
+                // TODO: modules
                 println!("try resolving identifier {identifier}");
-                let type_expr = type_env
+                let type_expr = dbg!(type_env)
                     .get_identifier_type(identifier.clone())
-                    .expect("Couldn't resolve type of identifier {identifier}");
+                    .expect(&format!("Couldn't resolve type of identifier {identifier}"));
 
                 *type_expr_opt = Some(type_expr)
             }
