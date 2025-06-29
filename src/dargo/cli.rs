@@ -1,4 +1,5 @@
 use clap::{Parser as CliParser, Subcommand};
+use toml::map::Keys;
 use std::path::PathBuf;
 
 use crate::{
@@ -6,7 +7,7 @@ use crate::{
     tags::Tag,
 };
 
-use super::build::{self, BuildErrKind};
+use super::{build::{self, BuildErrKind}, clean::CleanErrKind};
 
 #[derive(CliParser, Debug)]
 pub struct DargoCliParser {
@@ -22,6 +23,7 @@ pub enum Commands {
     Build(BuildArgs),
     Compile(CompileArgs),
     Init(InitArgs),
+    Clean,
 }
 
 #[derive(clap::Args, Debug)]
@@ -51,7 +53,8 @@ pub struct InitArgs {
 pub enum CliErrKind {
     Init(InitErrKind),
     Compile(CompileErrKind),
-    Build(BuildErrKind)
+    Build(BuildErrKind),
+    Clean(CleanErrKind),
 }
 
 pub fn run_cli() -> Result<(), (String, CliErrKind)> {
@@ -79,7 +82,19 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
         Commands::Init(_init_args) => {
             dargo::init::init_project(None)
                 .map_err(|err| (format!("{}{}", Tag::Dargo, err.0), CliErrKind::Init(err.1)))?;
-        }
+        },
+        Commands::Clean => {
+            dargo::clean::clean()
+                .map_err(|err| (
+                    format!(
+                        "{}{} {}",
+                        Tag::Dargo,
+                        Tag::Clean,
+                        err.0,
+                    ),
+                    CliErrKind::Clean(err.1)
+                ))?;
+        },
     }
 
     Ok(())
