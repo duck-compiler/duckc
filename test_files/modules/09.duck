@@ -1,6 +1,8 @@
 use go "fmt";
 
 module X {
+    use Y::{c};
+
     fun a() -> XDuck {
         ::abc();
         {
@@ -11,6 +13,16 @@ module X {
         fun b() {
             ::X::a();
         }
+
+        fun c() {
+            go {
+                fmt.Println("Hallo von c")
+            }
+        }
+    }
+
+    fun call_c() {
+        c();
     }
 
     type XDuck = {
@@ -22,6 +34,7 @@ module X {
 fun main() {
     X::a();
     X::Y::b();
+    X::call_c();
 }
 
 fun abc() {
