@@ -770,11 +770,6 @@ fn check_type_compatability(
 ) {
     if one.0.is_number() {
         if !two.0.is_number() {
-            println!(
-                "Types {} and {} are not compatible.",
-                one.0.as_go_type_annotation(type_env),
-                two.clone().0.as_go_type_annotation(type_env)
-            );
             failure(
                 one.1.context.file_name,
                 "Incompatible Types".to_string(),

@@ -10,6 +10,9 @@ pub enum Tag {
     GitHub,
     Twitter,
     Check,
+    Lexer,
+    Parser,
+    Compiler,
 }
 
 impl Display for Tag {

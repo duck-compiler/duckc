@@ -21,6 +21,7 @@ use parse::{
     source_file_parser::SourceFile,
 };
 use semantics::typechecker::{self, TypeEnv};
+use tags::Tag;
 
 use crate::parse::{
     Context, SS, make_input, parse_failure, source_file_parser::source_file_parser,
@@ -68,12 +69,11 @@ fn lex(file_name: &'static str, file_contents: &'static str) -> Vec<Spanned<Toke
                         file_name,
                         file_contents,
                     },
-                },
-                "Lex Error",
-            ),
-            file_contents,
-        );
-    });
+                    format!("{}{} {}", Tag::Lexer, Tag::Err, e.reason()),
+                ),
+                &file_contents,
+            );
+        });
 
     lex.unwrap()
 }
