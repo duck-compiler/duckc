@@ -160,8 +160,9 @@ impl TypeEnv {
 
                 if type_expr.is_object_like() {
                     let type_name = type_expr.as_clean_go_type_name(self);
+                    let is_duck = matches!(type_expr, TypeExpr::Duck(_));
                     field.type_expr = (
-                        TypeExpr::TypeNameInternal(type_name),
+                        if is_duck { type_expr } else { TypeExpr::TypeNameInternal(type_name) },
                         field.type_expr.1,
                     );
                 }
@@ -173,16 +174,20 @@ impl TypeEnv {
                     return;
                 }
 
-                let mut clone = field.type_expr.0.clone();
-                let mut flattens_from_clone = self.flatten_types(&mut clone, param_names_used);
+                let mut type_expr = field.type_expr.0.clone();
+                let mut flattened_types_from_type_expr = self.flatten_types(&mut type_expr, param_names_used);
 
-                found.push(clone);
-                found.append(&mut flattens_from_clone);
+                found.push(type_expr.clone());
+                found.append(&mut flattened_types_from_type_expr);
 
-                field.type_expr = (
-                    TypeExpr::TypeName(false, field.type_expr.0.as_clean_go_type_name(self)),
-                    field.type_expr.1,
-                );
+                if type_expr.is_object_like() {
+                    let type_name = type_expr.as_clean_go_type_name(self);
+                    let is_duck = matches!(type_expr, TypeExpr::Duck(_));
+                    field.type_expr = (
+                        if is_duck { type_expr } else { TypeExpr::TypeNameInternal(type_name) },
+                        field.type_expr.1,
+                    );
+                }
             }),
             TypeExpr::Tuple(types) => types.iter_mut().for_each(|type_expr| {
                 found.extend(self.flatten_types(&mut type_expr.0, param_names_used));

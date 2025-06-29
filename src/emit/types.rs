@@ -75,7 +75,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                     type_name,
                     t.iter()
                         .enumerate()
-                        .map(|(i, x)| (format!("field_{i}"), x.0.as_clean_go_type_name(type_env)))
+                        .map(|(i, x)| (format!("field_{i}"), x.0.as_go_type_annotation(type_env)))
                         .collect::<Vec<_>>(),
                 ),
                 TypeExpr::Struct(Struct { fields }) | TypeExpr::Duck(Duck { fields }) => {
@@ -88,7 +88,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                                      name,
                                      type_expr: (type_expr, _),
                                  }| {
-                                    (name.clone(), type_expr.as_clean_go_type_name(type_env))
+                                    (name.clone(), type_expr.as_go_type_annotation(type_env))
                                 },
                             )
                             .collect::<Vec<_>>(),
@@ -100,7 +100,11 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
         })
         .chain(vec![interface_defs])
         .fold(Vec::new(), |mut acc, x| {
-            acc.extend(x);
+            for y in x {
+                if !acc.contains(&y) {
+                    acc.push(y);
+                }
+            }
             acc
         })
 }
