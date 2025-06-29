@@ -48,11 +48,19 @@ module X {
 
 }
 
+use X::Y::ZZ::{zz};
+use X::Y::{ZZ};
+
 fun main() {
     X::a();
     X::Y::b();
     X::call_c();
     X::Y::ZZ::zz();
+    zz();
+    go {
+        fmt.Println(1)
+    }
+    ZZ::zz();
 }
 
 fun abc() {
