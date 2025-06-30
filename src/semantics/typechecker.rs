@@ -21,7 +21,7 @@ impl Default for TypeEnv {
 
         identifier_type_map.insert(
             "println".to_string(),
-            TypeExpr::Fun(vec![(None, TypeExpr::String.into_empty_span())], None),
+            TypeExpr::Fun(vec![(None, TypeExpr::Any.into_empty_span())], None),
         );
 
         let identifier_types = vec![identifier_type_map];
@@ -576,6 +576,10 @@ impl TypeExpr {
                         .iter()
                         .enumerate()
                         .for_each(|(index, param_type)| {
+                            if matches!(param_type.1.0, TypeExpr::Any) {
+                                return
+                            }
+
                             check_type_compatability(
                                 in_param_types.get(index).unwrap(),
                                 &param_type.1,
