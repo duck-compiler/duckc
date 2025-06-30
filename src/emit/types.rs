@@ -393,7 +393,11 @@ impl TypeExpr {
             TypeExpr::Bool => ("Bool".to_string(), "Bool".to_string()),
             TypeExpr::String => ("String".to_string(), "String".to_string()),
             TypeExpr::Char => ("Char".to_string(), "Char".to_string()),
-            _ => todo!(),
+            TypeExpr::Any => ("interface{}".to_string(), "Any".to_string()), // TODO: check if this is correct and expected output
+            TypeExpr::InlineGo => todo!(),
+            TypeExpr::TypeNameInternal(_) => todo!(),
+            TypeExpr::Or(..) => todo!(),
+            TypeExpr::Fun(..) => todo!(),
         }
     }
 }

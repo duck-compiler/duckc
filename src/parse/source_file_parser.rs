@@ -1065,7 +1065,6 @@ mod tests {
             sort_all(&mut expected);
             sort_all(&mut original);
 
-
             for func in original.function_definitions.iter_mut() {
                 value_expr_into_empty_range(&mut func.value_expr);
             }
