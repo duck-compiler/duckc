@@ -459,7 +459,7 @@ pub mod tests {
         assert_type_expression(
             "duck { age: Int, active: Bool }",
             TypeExpr::Duck(Duck {
-                fields: vec![ // Fields are sorted by key in the parser's map function for consistency
+                fields: vec![
                     Field::new("active".to_string(), TypeExpr::Bool.into_empty_span()),
                     Field::new("age".to_string(), TypeExpr::Int.into_empty_span()),
                 ],
