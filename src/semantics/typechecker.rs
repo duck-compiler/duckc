@@ -153,7 +153,8 @@ impl TypeEnv {
                 }
 
                 let mut type_expr = field.type_expr.0.clone();
-                let mut flattened_types_from_type_expr = self.flatten_types(&mut type_expr, param_names_used);
+                let mut flattened_types_from_type_expr =
+                    self.flatten_types(&mut type_expr, param_names_used);
 
                 found.push(type_expr.clone());
                 found.append(&mut flattened_types_from_type_expr);
@@ -162,7 +163,11 @@ impl TypeEnv {
                     let type_name = type_expr.as_clean_go_type_name(self);
                     let is_duck = matches!(type_expr, TypeExpr::Duck(_));
                     field.type_expr = (
-                        if is_duck { type_expr } else { TypeExpr::TypeNameInternal(type_name) },
+                        if is_duck {
+                            type_expr
+                        } else {
+                            TypeExpr::TypeNameInternal(type_name)
+                        },
                         field.type_expr.1,
                     );
                 }
@@ -175,7 +180,8 @@ impl TypeEnv {
                 }
 
                 let mut type_expr = field.type_expr.0.clone();
-                let mut flattened_types_from_type_expr = self.flatten_types(&mut type_expr, param_names_used);
+                let mut flattened_types_from_type_expr =
+                    self.flatten_types(&mut type_expr, param_names_used);
 
                 found.push(type_expr.clone());
                 found.append(&mut flattened_types_from_type_expr);
@@ -184,7 +190,11 @@ impl TypeEnv {
                     let type_name = type_expr.as_clean_go_type_name(self);
                     let is_duck = matches!(type_expr, TypeExpr::Duck(_));
                     field.type_expr = (
-                        if is_duck { type_expr } else { TypeExpr::TypeNameInternal(type_name) },
+                        if is_duck {
+                            type_expr
+                        } else {
+                            TypeExpr::TypeNameInternal(type_name)
+                        },
                         field.type_expr.1,
                     );
                 }
@@ -577,7 +587,7 @@ impl TypeExpr {
                         .enumerate()
                         .for_each(|(index, param_type)| {
                             if matches!(param_type.1.0, TypeExpr::Any) {
-                                return
+                                return;
                             }
 
                             check_type_compatability(

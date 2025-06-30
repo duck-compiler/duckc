@@ -471,8 +471,7 @@ impl ValueExpr {
                 res.extend([
                     IrInstruction::VarDecl(
                         res_var.clone(),
-                        TypeExpr::from_value_expr(self, type_env)
-                            .as_go_type_annotation(type_env),
+                        TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env),
                     ),
                     IrInstruction::VarAssignment(res_var.clone(), IrValue::Duck(name, res_vars)),
                 ]);

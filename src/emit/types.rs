@@ -323,69 +323,69 @@ impl TypeExpr {
     pub fn emit(&self) -> (String, String) {
         match self {
             TypeExpr::Tuple(types) => (
-                        [
-                            "struct {\n",
-                            &types
-                                .iter()
-                                .enumerate()
-                                .map(|(i, x)| format!("field_{i} {}\n", x.0.emit().0))
-                                .collect::<Vec<_>>()
-                                .join(""),
-                            "}",
-                        ]
+                [
+                    "struct {\n",
+                    &types
+                        .iter()
+                        .enumerate()
+                        .map(|(i, x)| format!("field_{i} {}\n", x.0.emit().0))
+                        .collect::<Vec<_>>()
                         .join(""),
-                        format!(
-                            "Tup{}",
-                            types
-                                .iter()
-                                .map(|x| format!("_{}", x.0.emit().1))
-                                .collect::<Vec<_>>()
-                                .join("")
-                        ),
-                    ),
+                    "}",
+                ]
+                .join(""),
+                format!(
+                    "Tup{}",
+                    types
+                        .iter()
+                        .map(|x| format!("_{}", x.0.emit().1))
+                        .collect::<Vec<_>>()
+                        .join("")
+                ),
+            ),
             TypeExpr::Duck(Duck { fields }) => {
-                        let mut fields = fields.clone();
-                        fields.sort_by_key(|x| x.name.clone());
-                        if fields.is_empty() {
-                            ("interface{}".to_string(), "Any".to_string())
-                        } else {
-                            let name = format!(
-                                "Duck{}",
-                                fields
-                                    .into_iter()
-                                    .map(|x| format!("_Has{}_{}", x.name, x.type_expr.0.emit().1))
-                                    .collect::<Vec<_>>()
-                                    .join("")
-                            );
-                            (name.clone(), name)
-                        }
-                    }
+                let mut fields = fields.clone();
+                fields.sort_by_key(|x| x.name.clone());
+                if fields.is_empty() {
+                    ("interface{}".to_string(), "Any".to_string())
+                } else {
+                    let name = format!(
+                        "Duck{}",
+                        fields
+                            .into_iter()
+                            .map(|x| format!("_Has{}_{}", x.name, x.type_expr.0.emit().1))
+                            .collect::<Vec<_>>()
+                            .join("")
+                    );
+                    (name.clone(), name)
+                }
+            }
             TypeExpr::Struct(Struct { fields }) => (
-                        [
-                            "struct",
-                            &fields
-                                .iter()
-                                .map(|field| format!("_With{}{}", field.name, field.type_expr.0.emit().1))
-                                .collect::<Vec<_>>()
-                                .join(""),
-                            "{\n",
-                            &fields
-                                .iter()
-                                .map(|field| format!("   {} {}", field.name, field.type_expr.0.emit().1))
-                                .collect::<Vec<_>>()
-                                .join("\n"),
-                            "\n}\n",
-                        ]
+                [
+                    "struct",
+                    &fields
+                        .iter()
+                        .map(|field| format!("_With{}{}", field.name, field.type_expr.0.emit().1))
+                        .collect::<Vec<_>>()
                         .join(""),
-                        format!(
-                            "Struct_{}",
-                            fields
-                                .iter()
-                                .map(|field| format!("_With{}{}", field.name, field.type_expr.0.emit().1))
-                                .collect::<Vec<_>>()
-                                .join("")
-                        ),
-                    ),
+                    "{\n",
+                    &fields
+                        .iter()
+                        .map(|field| format!("   {} {}", field.name, field.type_expr.0.emit().1))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                    "\n}\n",
+                ]
+                .join(""),
+                format!(
+                    "Struct_{}",
+                    fields
+                        .iter()
+                        .map(|field| format!("_With{}{}", field.name, field.type_expr.0.emit().1))
+                        .collect::<Vec<_>>()
+                        .join("")
+                ),
+            ),
             TypeExpr::Go(x) => (x.clone(), format!("Go{}", x.replace(".", "_"))),
             TypeExpr::TypeName(_, x) => (x.clone(), x.clone()),
             TypeExpr::Int => ("Int".to_string(), "Int".to_string()),
