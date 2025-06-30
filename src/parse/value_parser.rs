@@ -1721,7 +1721,7 @@ mod tests {
                 "let z: {}",
                 Declaration {
                     name: "z".to_string(),
-                    type_expr: TypeExpr::Duck(Duck { fields: vec![] }).into_empty_span(),
+                    type_expr: TypeExpr::Any.into_empty_span(),
                     initializer: None,
                 },
             ),
