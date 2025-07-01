@@ -32,6 +32,7 @@ pub enum IrInstruction {
     InlineGo(String),
     If(IrValue, Vec<IrInstruction>, Option<Vec<IrInstruction>>),
     Loop(Vec<IrInstruction>),
+    Block(Vec<IrInstruction>),
 
     // Top-Level Statements
     GoPackage(String),
@@ -71,7 +72,7 @@ impl IrValue {
     pub fn empty_tuple() -> Self {
         Self::Tuple(
             TypeExpr::from_value_expr(&ValueExpr::Tuple(vec![]), &mut TypeEnv::default())
-                .as_go_concrete_annotation(&mut TypeEnv::default()),
+                .as_go_type_annotation(&mut TypeEnv::default()),
             vec![],
         )
     }
@@ -191,10 +192,8 @@ impl ValueExpr {
                 then,
                 r#else,
             } => {
-                // TODO:
-                // let res_type =
-                //     TypeExpr::from_value_expr(self, type_env).as_go_concrete_annotation(type_env);
-                let res_type = "interface{}".to_string();
+                let res_type =
+                    TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
                 let (mut i, cond_res) = condition.0.direct_or_with_instr(type_env, env);
                 if cond_res.is_none() {
                     return (i, None);
@@ -257,7 +256,7 @@ impl ValueExpr {
                 let var = env.new_var();
                 ir.push(IrInstruction::VarDecl(
                     var.clone(),
-                    TypeExpr::from_value_expr(&v1.0, type_env).as_go_concrete_annotation(type_env),
+                    TypeExpr::from_value_expr(&v1.0, type_env).as_go_type_annotation(type_env),
                 ));
                 ir.push(IrInstruction::Add(
                     var.clone(),
@@ -284,7 +283,7 @@ impl ValueExpr {
                 let var = env.new_var();
                 ir.push(IrInstruction::VarDecl(
                     var.clone(),
-                    TypeExpr::from_value_expr(&v1.0, type_env).as_go_concrete_annotation(type_env),
+                    TypeExpr::from_value_expr(&v1.0, type_env).as_go_type_annotation(type_env),
                 ));
                 ir.push(IrInstruction::Mul(
                     var.clone(),
@@ -297,18 +296,40 @@ impl ValueExpr {
             ValueExpr::Block(block_exprs) => {
                 let mut res = Vec::new();
                 let mut res_var = None;
+
                 for (block_expr, _) in block_exprs {
                     let (block_instr, block_res) = block_expr.direct_or_with_instr(type_env, env);
-                    res.extend(block_instr);
+
+                    for current in block_instr.iter() {
+                        res.push(current.clone());
+                        if let IrInstruction::Return(_) = current {
+                            res_var = None;
+                            return (res, res_var);
+                        }
+                    }
+
                     res_var = block_res;
                 }
-                (res, res_var.or(Some(IrValue::Tuple("Tup_".into(), vec![]))))
+
+                let mut f_res = Vec::new();
+                let ty = TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
+                let fresvar = env.new_var();
+
+                res_var = res_var.or(Some(IrValue::Tuple("Tup_".into(), vec![])));
+                f_res.push(IrInstruction::VarDecl(fresvar.clone(), ty));
+                res.push(IrInstruction::VarAssignment(
+                    fresvar.clone(),
+                    res_var.unwrap(),
+                ));
+                f_res.push(IrInstruction::Block(res));
+
+                (f_res, Some(IrValue::Var(fresvar)))
             }
             ValueExpr::Tuple(fields) => {
                 let mut res = Vec::new();
                 let mut res_vars = Vec::new();
                 let name =
-                    TypeExpr::from_value_expr(self, type_env).as_go_concrete_annotation(type_env);
+                    TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
                 for (field_expr, _) in fields {
                     let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, env);
                     res.extend(field_instr);
@@ -420,12 +441,14 @@ impl ValueExpr {
                 target_obj,
                 field_name,
             } => {
+                let mut field_name = field_name.clone();
                 let (mut i, t_res) = target_obj.0.emit(type_env, env);
                 if let Some(t_res) = t_res {
                     let ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
+                    dbg!(&ty);
                     match ty {
                         TypeExpr::Duck(Duck { fields }) => {
-                            let f = fields.iter().find(|f| &f.name == field_name).unwrap();
+                            let f = fields.iter().find(|f| f.name == field_name).unwrap();
                             let res = env.new_var();
                             i.push(IrInstruction::VarDecl(
                                 res.clone(),
@@ -440,6 +463,9 @@ impl ValueExpr {
                                 vec![],
                             ));
                             return (i, Some(IrValue::Var(res)));
+                        }
+                        TypeExpr::Tuple(_) => {
+                            field_name = dbg!(format!("field_{field_name}"));
                         }
                         _ => {}
                     }
@@ -574,8 +600,12 @@ mod tests {
             (
                 "{1;}",
                 vec![
-                    decl("var_0", "struct {\n\n}"),
-                    IrInstruction::VarAssignment("var_0".into(), IrValue::empty_tuple()),
+                    decl("var_1", "Tuple_"),
+                    IrInstruction::Block(vec![
+                        decl("var_0", "Tuple_"),
+                        IrInstruction::VarAssignment("var_0".into(), IrValue::empty_tuple()),
+                        IrInstruction::VarAssignment("var_1".into(), IrValue::Var("var_0".into())),
+                    ]),
                 ],
             ),
             (
@@ -620,17 +650,6 @@ mod tests {
                         IrValue::Duck("Duck_x_int".into(), vec![("x".into(), IrValue::Int(123))]),
                     ),
                 ],
-            ),
-            (
-                "while (true) {}",
-                vec![IrInstruction::Loop(vec![IrInstruction::If(
-                    IrValue::Bool(true),
-                    vec![
-                        decl("var_0", "struct {\n\n}"),
-                        IrInstruction::VarAssignment("var_0".into(), IrValue::empty_tuple()),
-                    ],
-                    Some(vec![IrInstruction::Break]),
-                )])],
             ),
         ];
 

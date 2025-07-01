@@ -36,6 +36,10 @@ module X {
 
         module XXX {
             fun zz() {
+                let x: go any;
+                go {
+                    x = xxx;
+                }
                 go {
                     fmt.Println("XXX ZZ")
                 }

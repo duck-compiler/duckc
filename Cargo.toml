@@ -12,3 +12,5 @@ lazy_static = "1.5.0"
 serde = { version = "1.0.219", features = ["derive"] }
 toml = "0.8.23"
 colored = "3.0.0"
+tree-sitter = "0.25.6"
+tree-sitter-go = "0.23.4"

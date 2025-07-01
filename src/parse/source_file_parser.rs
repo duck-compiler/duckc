@@ -109,7 +109,14 @@ impl SourceFile {
                 if let Some(return_type) = &mut f.return_type {
                     mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
                 }
+                mangle_env.push_idents();
+                if let Some(params) = &f.params {
+                    for (name, _) in params {
+                        mangle_env.insert_ident(name.clone());
+                    }
+                }
                 mangle_value_expr(&mut f.value_expr.0, prefix, &mut mangle_env);
+                mangle_env.pop_idents();
                 result.function_definitions.push(f);
             }
 

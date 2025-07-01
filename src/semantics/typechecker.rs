@@ -368,9 +368,13 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 typeresolve_value_expr(&mut body.0, type_env);
                 type_env.pop_identifier_types();
             }
-            ValueExpr::Tuple(value_exprs) => value_exprs
-                .iter_mut()
-                .for_each(|value_expr| typeresolve_value_expr(&mut value_expr.0, type_env)),
+            ValueExpr::Tuple(value_exprs) => {
+                value_exprs
+                    .iter_mut()
+                    .for_each(|value_expr| typeresolve_value_expr(&mut value_expr.0, type_env));
+                let ty = TypeExpr::from_value_expr(value_expr as &ValueExpr, type_env);
+                type_env.insert_type(ty);
+            }
             ValueExpr::Block(value_exprs) => {
                 type_env.push_identifier_types();
                 value_exprs
@@ -378,12 +382,20 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     .for_each(|value_expr| typeresolve_value_expr(&mut value_expr.0, type_env));
                 type_env.pop_identifier_types();
             }
-            ValueExpr::Duck(items) => items
-                .iter_mut()
-                .for_each(|(_, value_expr)| typeresolve_value_expr(&mut value_expr.0, type_env)),
-            ValueExpr::Struct(items) => items
-                .iter_mut()
-                .for_each(|(_, value_expr)| typeresolve_value_expr(&mut value_expr.0, type_env)),
+            ValueExpr::Duck(items) => {
+                items.iter_mut().for_each(|(_, value_expr)| {
+                    typeresolve_value_expr(&mut value_expr.0, type_env)
+                });
+                let ty = TypeExpr::from_value_expr(value_expr as &ValueExpr, type_env);
+                type_env.insert_type(ty);
+            }
+            ValueExpr::Struct(items) => {
+                items.iter_mut().for_each(|(_, value_expr)| {
+                    typeresolve_value_expr(&mut value_expr.0, type_env)
+                });
+                let ty = TypeExpr::from_value_expr(value_expr as &ValueExpr, type_env);
+                type_env.insert_type(ty);
+            }
             ValueExpr::FieldAccess { target_obj, .. } => {
                 typeresolve_value_expr(&mut target_obj.0, type_env);
             }
@@ -691,7 +703,8 @@ impl TypeExpr {
                 require(
                     target_obj_type_expr.has_field_by_name(field_name.clone()),
                     format!(
-                        "{} doesn't have a field with name {}",
+                        "{:?} {} doesn't have a field with name {}",
+                        &target_obj_type_expr,
                         target_obj_type_expr.as_go_type_annotation(type_env),
                         field_name
                     ),
@@ -724,7 +737,7 @@ impl TypeExpr {
     #[allow(dead_code)]
     pub fn has_field(&self, field: Field) -> bool {
         match self {
-            Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
+            Self::Tuple(fields) => fields.len() > field.name.parse::<usize>().unwrap(),
             Self::Struct(r#struct) => r#struct.fields.contains(&field),
             Self::Duck(duck) => duck.fields.contains(&field),
             _ => false,
@@ -733,7 +746,7 @@ impl TypeExpr {
 
     fn has_field_by_name(&self, name: String) -> bool {
         match self {
-            Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
+            Self::Tuple(fields) => fields.len() > name.parse::<usize>().unwrap(),
             Self::Struct(r#struct) => r#struct
                 .fields
                 .iter()
@@ -748,7 +761,7 @@ impl TypeExpr {
 
     fn typeof_field(&self, field_name: String) -> TypeExpr {
         match self {
-            Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
+            Self::Tuple(fields) => fields[field_name.parse::<usize>().unwrap()].0.clone(),
             Self::Struct(r#struct) => r#struct
                 .fields
                 .iter()
@@ -981,43 +994,49 @@ mod test {
             (
                 "{ let y: { x: String, y: Int }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 4);
+                    assert_eq!(summary.types_used.len(), 5);
                 }),
             ),
             (
                 "{ let y: { x: String, y: Int, a: { b: { c: { d: { e: String }}}} }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 8);
+                    assert_eq!(summary.types_used.len(), 9);
                 }),
             ),
             (
                 "{ let x: Int = 5; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 2);
+                    assert_eq!(summary.types_used.len(), 3);
                 }),
             ),
             (
                 "{ let x: { a: Char, b: Char }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 3);
+                    assert_eq!(summary.types_used.len(), 4);
                 }),
             ),
             (
                 "{ let y: { x: { y: Int } }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 4);
+                    assert_eq!(summary.types_used.len(), 5);
                 }),
             ),
             (
                 "{ let y: { x: Int }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 3);
+                    assert_eq!(summary.types_used.len(), 4);
                 }),
             ),
             (
                 "{ let y: { x: Int, y: String, z: { x: Int } }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 5);
+                    assert_eq!(summary.types_used.len(), 6);
+                }),
+            ),
+            (
+                "{ let y: { x: Int, y: String, z: { x: Int }, w: () }; }",
+                Box::new(|summary: &TypesSummary| {
+                    assert_eq!(summary.types_used.len(), 6);
                 }),
             ),
         ];

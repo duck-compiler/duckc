@@ -114,7 +114,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Bool => "bool".to_string(),
-            TypeExpr::InlineGo => "InlineGo".to_string(),
+            TypeExpr::InlineGo => "any".to_string(),
             TypeExpr::Int => "int".to_string(),
             TypeExpr::Float => "float32".to_string(),
             TypeExpr::Char => "rune".to_string(),
@@ -141,19 +141,7 @@ impl TypeExpr {
                         .0
                         .as_go_type_annotation(type_env))
             ),
-            TypeExpr::Struct(r#struct) => format!(
-                "struct {{\n{}\n}}",
-                r#struct
-                    .fields
-                    .iter()
-                    .map(|field| format!(
-                        "   {} {}",
-                        field.name,
-                        field.type_expr.0.as_go_type_annotation(type_env)
-                    ))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ),
+            TypeExpr::Struct(_struct) => self.as_clean_go_type_name(type_env),
             TypeExpr::Duck(duck) => {
                 let mut fields = duck.fields.clone();
                 fields.sort_by_key(|field| field.name.clone());
@@ -171,20 +159,7 @@ impl TypeExpr {
                         .join("\n")
                 )
             }
-            TypeExpr::Tuple(fields) => {
-                format!(
-                    "struct {{\n{}\n}}",
-                    fields
-                        .iter()
-                        .enumerate()
-                        .map(|(i, type_expr)| format!(
-                            "field_{i} {}",
-                            type_expr.0.as_go_type_annotation(type_env)
-                        ))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                )
-            }
+            TypeExpr::Tuple(_fields) => self.as_clean_go_type_name(type_env),
             TypeExpr::Or(_variants) => todo!("implement variants"),
         };
     }
@@ -316,130 +291,5 @@ impl TypeExpr {
             }
             TypeExpr::Or(_variants) => todo!("implement variants"),
         };
-    }
-
-    /// First return is go code repr, second is id
-    /// First go code and second is identifier of self
-    pub fn emit(&self) -> (String, String) {
-        match self {
-            TypeExpr::Tuple(types) => (
-                [
-                    "struct {\n",
-                    &types
-                        .iter()
-                        .enumerate()
-                        .map(|(i, x)| format!("field_{i} {}\n", x.0.emit().0))
-                        .collect::<Vec<_>>()
-                        .join(""),
-                    "}",
-                ]
-                .join(""),
-                format!(
-                    "Tup{}",
-                    types
-                        .iter()
-                        .map(|x| format!("_{}", x.0.emit().1))
-                        .collect::<Vec<_>>()
-                        .join("")
-                ),
-            ),
-            TypeExpr::Duck(Duck { fields }) => {
-                let mut fields = fields.clone();
-                fields.sort_by_key(|x| x.name.clone());
-                if fields.is_empty() {
-                    ("interface{}".to_string(), "Any".to_string())
-                } else {
-                    let name = format!(
-                        "Duck{}",
-                        fields
-                            .into_iter()
-                            .map(|x| format!("_Has{}_{}", x.name, x.type_expr.0.emit().1))
-                            .collect::<Vec<_>>()
-                            .join("")
-                    );
-                    (name.clone(), name)
-                }
-            }
-            TypeExpr::Struct(Struct { fields }) => (
-                [
-                    "struct",
-                    &fields
-                        .iter()
-                        .map(|field| format!("_With{}{}", field.name, field.type_expr.0.emit().1))
-                        .collect::<Vec<_>>()
-                        .join(""),
-                    "{\n",
-                    &fields
-                        .iter()
-                        .map(|field| format!("   {} {}", field.name, field.type_expr.0.emit().1))
-                        .collect::<Vec<_>>()
-                        .join("\n"),
-                    "\n}\n",
-                ]
-                .join(""),
-                format!(
-                    "Struct_{}",
-                    fields
-                        .iter()
-                        .map(|field| format!("_With{}{}", field.name, field.type_expr.0.emit().1))
-                        .collect::<Vec<_>>()
-                        .join("")
-                ),
-            ),
-            TypeExpr::Go(x) => (x.clone(), format!("Go{}", x.replace(".", "_"))),
-            TypeExpr::TypeName(_, x) => (x.clone(), x.clone()),
-            TypeExpr::Int => ("Int".to_string(), "Int".to_string()),
-            TypeExpr::Float => ("Float".to_string(), "Float".to_string()),
-            TypeExpr::Bool => ("Bool".to_string(), "Bool".to_string()),
-            TypeExpr::String => ("String".to_string(), "String".to_string()),
-            TypeExpr::Char => ("Char".to_string(), "Char".to_string()),
-            TypeExpr::Any => ("interface{}".to_string(), "Any".to_string()), // TODO: check if this is correct and expected output
-            TypeExpr::InlineGo => todo!(),
-            TypeExpr::TypeNameInternal(_) => todo!(),
-            TypeExpr::Or(..) => todo!(),
-            TypeExpr::Fun(..) => todo!(),
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::parse::{
-        lexer::lexer, make_input, type_parser::type_expression_parser, value_parser::empty_range,
-    };
-    use chumsky::prelude::*;
-
-    #[test]
-    fn test_emit() {
-        let test_cases = vec![
-            ("()", ("struct {\n}", "Tup")),
-            (
-                "((), {})",
-                (
-                    "struct {\nfield_0 struct {\n}\nfield_1 interface{}\n}",
-                    "Tup_Tup_Any",
-                ),
-            ),
-            ("{}", ("interface{}", "Any")),
-            ("({})", ("struct {\nfield_0 interface{}\n}", "Tup_Any")),
-            (
-                "{x: String, y: ({}, Int)}",
-                (
-                    "Duck_Hasx_String_Hasy_Tup_Any_Int",
-                    "Duck_Hasx_String_Hasy_Tup_Any_Int",
-                ),
-            ),
-        ];
-
-        for (src, exp) in test_cases {
-            let lex = lexer("test", src).parse(src).unwrap();
-            let parse = type_expression_parser()
-                .parse(make_input(empty_range(), &lex))
-                .unwrap()
-                .0
-                .emit();
-            let exp = (exp.0.to_string(), exp.1.to_string());
-            assert_eq!(parse, exp, "{src}");
-        }
     }
 }

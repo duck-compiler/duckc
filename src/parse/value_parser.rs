@@ -144,7 +144,13 @@ where
                     .then_ignore(just(Token::ControlChar('=')))
                     .then_ignore(just(Token::ControlChar('>')))
                     .then(value_expr_parser.clone())
-                    .map(|((params, return_type), value_expr)| {
+                    .map(|((params, return_type), mut value_expr)| {
+                        value_expr = match value_expr {
+                            (ValueExpr::Duck(x), loc) if x.is_empty() => {
+                                (ValueExpr::Tuple(vec![]), loc).into_block()
+                            }
+                            _ => value_expr,
+                        };
                         ValueExpr::Lambda(
                             LambdaFunctionExpr {
                                 params: params.unwrap_or_default(),
@@ -435,11 +441,11 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            let prod = atom
+            let prod = field_access.clone().or(atom.clone())
                 .clone()
                 .then(
                     just(Token::ControlChar('*'))
-                        .ignore_then(atom.clone())
+                        .ignore_then(field_access.clone().or(atom.clone()).clone())
                         .repeated()
                         .collect::<Vec<_>>(),
                 )
@@ -483,8 +489,8 @@ where
             choice((
                 inline_go,
                 assignment,
-                field_access,
                 equals,
+                field_access,
                 add,
                 declaration,
                 atom,
@@ -1313,6 +1319,37 @@ mod tests {
                 },
             ),
             (
+                "x.y.z == z.w.a",
+                ValueExpr::Equals(
+                    ValueExpr::FieldAccess {
+                        target_obj: ValueExpr::FieldAccess {
+                            target_obj: ValueExpr::Variable(false, "x".into(), None)
+                                .into_empty_span()
+                                .into(),
+                            field_name: "y".into(),
+                        }
+                        .into_empty_span()
+                        .into(),
+                        field_name: "z".into(),
+                    }
+                    .into_empty_span()
+                    .into(),
+                    ValueExpr::FieldAccess {
+                        target_obj: ValueExpr::FieldAccess {
+                            target_obj: ValueExpr::Variable(false, "z".into(), None)
+                                .into_empty_span()
+                                .into(),
+                            field_name: "w".into(),
+                        }
+                        .into_empty_span()
+                        .into(),
+                        field_name: "a".into(),
+                    }
+                    .into_empty_span()
+                    .into(),
+                ),
+            ),
+            (
                 "x.y.z.w",
                 ValueExpr::FieldAccess {
                     target_obj: ValueExpr::FieldAccess {
@@ -1582,7 +1619,10 @@ mod tests {
                     LambdaFunctionExpr {
                         params: vec![],
                         return_type: None,
-                        value_expr: ValueExpr::Duck(vec![]).into_empty_span(),
+                        value_expr: ValueExpr::Block(vec![
+                            ValueExpr::Tuple(vec![]).into_empty_span(),
+                        ])
+                        .into_empty_span(),
                     }
                     .into(),
                 ),

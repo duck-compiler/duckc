@@ -1,0 +1,9 @@
+use go "fmt";
+fun main() {
+    let x: struct {x: {x: Int}} = .{x: { x: 10 }};
+    let y: struct {x: {x: struct { x: Int }}} = .{x: { x: .{x: 10} }};
+    go {
+        fmt.Println(x)
+        fmt.Println(y)
+    }
+}
