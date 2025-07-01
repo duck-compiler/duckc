@@ -1,22 +1,22 @@
 use go "fmt";
 
-fun abc() -> Int {
+fn abc() -> Int {
     return 123;
 }
 
-fun xyz() -> String {
+fn xyz() -> String {
     return "Hallo";
 }
 
-fun foo() -> (Int, String) {
+fn foo() -> (Int, String) {
     return (abc(), xyz());
 }
 
-fun foo2() -> (Bool, Bool, (Int, String)) {
+fn foo2() -> (Bool, Bool, (Int, String)) {
     return (true, false, foo());
 }
 
-fun main() {
+fn main() {
     go {
         fmt.Println(foo2())
     }

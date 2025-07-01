@@ -92,13 +92,13 @@ pub mod tests {
     #[test]
     fn test_function_parser() {
         let valid_function_definitions = vec![
-            "fun x(){}",
-            "fun x(x: String){}",
-            "fun x(x: { hallo: String, x: { y: {} }}){}",
-            "fun x() -> String {}",
-            "fun x() -> {x: String} {}",
-            "fun x() -> {x: String} { 5; }",
-            "fun x() -> {x: String} { 5; }",
+            "fn x(){}",
+            "fn x(x: String){}",
+            "fn x(x: { hallo: String, x: { y: {} }}){}",
+            "fn x() -> String {}",
+            "fn x() -> {x: String} {}",
+            "fn x() -> {x: String} { 5; }",
+            "fn x() -> {x: String} { 5; }",
         ];
 
         for valid_function_definition in valid_function_definitions {

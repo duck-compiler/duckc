@@ -1,4 +1,4 @@
-fun x() {
+fn x() {
     let x: String = "Hallo";
     let y: String = "Hallo";
     x + y;

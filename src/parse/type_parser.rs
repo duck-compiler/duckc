@@ -350,6 +350,7 @@ pub mod tests {
             ),
         );
 
+        // TODO
         assert_type_expression(
             "(data: duck { name: String, age: Int }) -> ::MyResult",
             TypeExpr::Fun(

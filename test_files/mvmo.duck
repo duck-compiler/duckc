@@ -6,7 +6,7 @@ type MyDuck = duck {
 
 MyDuck
 
-fun gen_str(x: { to_string: fun() -> String | Option<String> }) {
+fn gen_str(x: { to_string: fun() -> String | Option<String> }) {
     **()* ()*()()*SDAF()*F
 }
 

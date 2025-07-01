@@ -1,5 +1,5 @@
 use go "fmt";
-fun main() {
+fn main() {
     let x: (Int, String, (Int, Int)) = (1, "hallo", (30, 50));
     let y: (Int, { x: String }, (Int, Int)) = (1, { x: "hallo" }, (30, 50));
     let xxx: (Int, { x: String, y: (Int, struct {x: String}) }, (Int, Int))

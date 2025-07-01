@@ -1,13 +1,13 @@
 module long_mod_name {
     use go "fmt";
 
-    fun i_am_long() {
+    fn i_am_long() {
         go {
             fmt.Println("i am long")
         }
     }
 
-    fun zzABC(xxy: String) {
+    fn zzABC(xxy: String) {
         let local_str: String = "hallo";
         go {
             fmt.Println("zz abc")
@@ -18,13 +18,13 @@ module long_mod_name {
         }
     }
 
-    fun xx() {}
+    fn xx() {}
 
-    fun gets_str() -> String {
+    fn gets_str() -> String {
         return "String";
     }
 
-    fun y() {
+    fn y() {
         go {
             i_am_long()
             fmt.Println("abc")
@@ -33,6 +33,6 @@ module long_mod_name {
     }
 }
 
-fun main() {
+fn main() {
     long_mod_name::y();
 }

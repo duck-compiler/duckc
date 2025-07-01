@@ -2,6 +2,6 @@ module other;
 
 use other::{my_func};
 
-fun main() {
+fn main() {
     my_func();
 }

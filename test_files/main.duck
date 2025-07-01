@@ -1,19 +1,19 @@
 use go "fmt";
 
-fun abc(x: Int) {
+fn abc(x: Int) {
     go {
         fmt.Println(x)
     }
 }
 
-fun xyz(x: { x: Int }) {
+fn xyz(x: { x: Int }) {
     let y: Int = x.x;
     go {
         fmt.Println(y);
     }
 }
 
-fun main() {
+fn main() {
     let x: struct { y: Int } = .{ y: 10 };
     let y: { x: { x: Int } } = { x: { x: 20 } };
     abc(y.x.x);

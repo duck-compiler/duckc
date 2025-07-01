@@ -1,6 +1,6 @@
 use go "fmt";
 
-fun main() {
+fn main() {
     let a: Int = ((x: Int) -> Int => {
         go {
             fmt.Println(x)
@@ -24,8 +24,8 @@ fun main() {
     }
 }
 
-fun cc() {}
+fn cc() {}
 
-fun abc(x: {z: String}) {
+fn abc(x: {z: String}) {
 
 }

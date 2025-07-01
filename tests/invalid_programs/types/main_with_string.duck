@@ -1,3 +1,3 @@
-fun main() -> String {
+fn main() -> String {
     return "Hallo, Welt";
 }

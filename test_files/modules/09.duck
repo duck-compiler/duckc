@@ -3,31 +3,31 @@ use go "fmt";
 module X {
     use Y::{c};
 
-    fun a() -> XDuck {
+    fn a() -> XDuck {
         ::abc();
         {
             x: 10,
         }
     }
     module Y {
-        fun b() {
+        fn b() {
             ::X::a();
         }
 
-        fun c() {
+        fn c() {
             go {
                 fmt.Println("Hallo von c")
             }
         }
 
-        fun testi() {
+        fn testi() {
             go {
                 fmt.Println("testi")
             }
         }
 
         module ZZ {
-            fun zz() {
+            fn zz() {
                 go {
                     fmt.Println("ZZ")
                 }
@@ -35,7 +35,7 @@ module X {
         }
 
         module XXX {
-            fun zz() {
+            fn zz() {
                 let x: go any;
                 go {
                     x = xxx;
@@ -45,7 +45,7 @@ module X {
                 }
             }
 
-            fun xxx() {
+            fn xxx() {
                 go {
                     fmt.Println("XXX xxx")
                 }
@@ -54,7 +54,7 @@ module X {
 
     }
 
-    fun call_c() {
+    fn call_c() {
         c();
         Y::testi();
         Y::ZZ::zz();
@@ -70,7 +70,7 @@ use X::Y::ZZ::{zz};
 use X::Y::{ZZ};
 use X::{Y};
 
-fun main() {
+fn main() {
     X::a();
     X::Y::b();
     X::call_c();
@@ -85,13 +85,13 @@ fun main() {
     xxx();
 }
 
-fun xxx() {
+fn xxx() {
     go {
         fmt.Println("main xxx")
     }
 }
 
-fun abc() {
+fn abc() {
     go {
         fmt.Println("hell from abc")
     }

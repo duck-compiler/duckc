@@ -1,1 +1,1 @@
-fun my_single_fun() {}
+fn my_single_fun() {}

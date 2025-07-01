@@ -309,7 +309,7 @@ mod tests {
     fn do_test() {
         let test_cases = vec![
             (
-                "fun abc(){}",
+                "fn abc(){}",
                 SourceFile {
                     function_definitions: vec![FunctionDefintion {
                         name: "abc".into(),
@@ -319,7 +319,7 @@ mod tests {
                 },
             ),
             (
-                "fun abc(){}fun xyz(){}",
+                "fn abc(){}fn xyz(){}",
                 SourceFile {
                     function_definitions: vec![
                         FunctionDefintion {
@@ -390,7 +390,7 @@ mod tests {
                 },
             ),
             (
-                "module abc {use test; module xyz { use lol; } fun abc() {} }",
+                "module abc {use test; module xyz { use lol; } fn abc() {} }",
                 SourceFile {
                     sub_modules: vec![(
                         "abc".into(),
@@ -418,7 +418,7 @@ mod tests {
                 },
             ),
             (
-                "use x;fun abc() -> String {}type X = {x: String};fun xyz(){}",
+                "use x;fn abc() -> String {}type X = {x: String};fn xyz(){}",
                 SourceFile {
                     function_definitions: vec![
                         FunctionDefintion {

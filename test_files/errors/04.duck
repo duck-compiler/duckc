@@ -1,4 +1,4 @@
 module abc {
 
 module xyz {
-fun abc() {}
+fn abc() {}

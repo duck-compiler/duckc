@@ -1,2 +1,2 @@
-fun this_is_a_func() {}
-fun this_is_another_func() {}
+fn this_is_a_func() {}
+fn this_is_another_func() {}

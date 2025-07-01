@@ -1,1 +1,1 @@
-fun yet_another() {}
+fn yet_another() {}

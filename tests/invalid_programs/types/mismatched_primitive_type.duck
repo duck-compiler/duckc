@@ -1,6 +1,6 @@
-fun x(y: String) {
+fn x(y: String) {
 }
 
-fun main() {
+fn main() {
     x(5);
 }

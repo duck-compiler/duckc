@@ -1,6 +1,6 @@
 use go "fmt";
 
-fun main() {
+fn main() {
     if (true) {
         go {
             fmt.Println("kek")

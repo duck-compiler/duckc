@@ -1,6 +1,6 @@
 use go "fmt";
 
-fun main() {
+fn main() {
     let x: Int = 1;
 
     let y: Bool = if (x == 1) { true } else { false };
