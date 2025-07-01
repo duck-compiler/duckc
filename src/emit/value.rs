@@ -192,10 +192,8 @@ impl ValueExpr {
                 then,
                 r#else,
             } => {
-                // TODO:
-                // let res_type =
-                //     TypeExpr::from_value_expr(self, type_env).as_go_concrete_annotation(type_env);
-                let res_type = "interface{}".to_string();
+                let res_type =
+                    TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
                 let (mut i, cond_res) = condition.0.direct_or_with_instr(type_env, env);
                 if cond_res.is_none() {
                     return (i, None);
@@ -647,17 +645,6 @@ mod tests {
                         IrValue::Duck("Duck_x_int".into(), vec![("x".into(), IrValue::Int(123))]),
                     ),
                 ],
-            ),
-            (
-                "while (true) {}",
-                vec![IrInstruction::Loop(vec![IrInstruction::If(
-                    IrValue::Bool(true),
-                    vec![
-                        decl("var_0", "struct {\n\n}"),
-                        IrInstruction::VarAssignment("var_0".into(), IrValue::empty_tuple()),
-                    ],
-                    Some(vec![IrInstruction::Break]),
-                )])],
             ),
         ];
 

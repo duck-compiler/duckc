@@ -17,6 +17,8 @@ fun main() {
 
     let c: () -> go any = () -> go any => {};
 
+    c();
+
     go {
         fmt.Println("Got from lambda", a, b)
     }
