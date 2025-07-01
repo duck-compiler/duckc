@@ -340,7 +340,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     .for_each(|param| typeresolve_value_expr(&mut param.0, type_env));
             }
             ValueExpr::Variable(_, identifier, type_expr_opt) => {
-                // TODO: modules
                 println!("try resolving identifier {identifier}");
                 let type_expr = type_env
                     .get_identifier_type(identifier.clone())
@@ -927,7 +926,7 @@ mod test {
                     .into_empty_span(),
                 ]),
             ),
-            ("{ let x: Int = 5; 5 }", TypeExpr::Int), // TODO: Make the block return int here. 26.06.2025: block returns last expr. Done?
+            ("{ let x: Int = 5; 5 }", TypeExpr::Int),
             ("{ let x: Int = 5; x }", TypeExpr::Int),
             ("{ let x: Int = 5; x * x }", TypeExpr::Int),
         ];
