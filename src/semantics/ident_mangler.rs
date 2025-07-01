@@ -201,7 +201,6 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
                     _ => None,
                 };
 
-                dbg!(s.to_sexp());
                 if s.grammar_name() == "expression_statement" {
                     let i = extract_all_ident(t, s);
                     out.extend(i);
