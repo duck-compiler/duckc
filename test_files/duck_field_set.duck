@@ -1,0 +1,4 @@
+fun main() {
+    let x: { y: String } = { y: "hallo" };
+    x.y = "kek";
+}

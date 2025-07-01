@@ -224,17 +224,47 @@ impl ValueExpr {
             ValueExpr::VarAssign(b) => {
                 let assign = &b.0;
                 dbg!(&assign);
-                let (i, res) = assign.value_expr.0.direct_or_with_instr(type_env, env);
-                if let Some(_res) = res {
-                    // panic!();
-                    // let (target_instr, Some(IrValue::Var(target_res))) =
-                    //     assign.target.0.emit(type_env, env)
-                    // else {
-                    //     panic!()
-                    // };
-                    // i.extend(target_instr);
-                    // i.push(IrInstruction::VarAssignment(target_res, res));
-                    (i, None)
+                let (i, res) = dbg!(assign.value_expr.0.direct_or_with_instr(type_env, env));
+                if let Some(a_res) = res {
+                    let target = &assign.target.0;
+                    // let ty = TypeExpr::from_value_expr(&assign.value_expr.0, type_env);
+                    let mut res = Vec::new();
+                    match target {
+                        ValueExpr::FieldAccess {
+                            target_obj,
+                            field_name,
+                        } => {
+                            dbg!("YOO");
+                            let (mut target_instr, Some(IrValue::Var(target_res))) =
+                                target_obj.0.emit(type_env, env)
+                            else {
+                                panic!("no var")
+                            };
+                            dbg!("fisch");
+                            dbg!(&type_env);
+                            let target_ty = TypeExpr::from_value_expr(dbg!(&target_obj.0), type_env);
+                            dbg!("fisch2");
+
+                            res.extend(target_instr);
+
+                            dbg!("rest2");
+                            match target_ty {
+                                TypeExpr::Duck(_) => {
+                                    res.push(IrInstruction::FunCall(
+                                        None,
+                                        IrValue::Var(format!("{target_res}.Set{field_name}")),
+                                        vec![a_res],
+                                    ));
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+
+                    res.extend(i);
+                    dbg!("rest");
+                    (res, None)
                 } else {
                     (i, None)
                 }
@@ -297,6 +327,7 @@ impl ValueExpr {
                 let mut res = Vec::new();
                 let mut res_var = None;
 
+                dbg!(block_exprs);
                 for (block_expr, _) in block_exprs {
                     let (block_instr, block_res) = block_expr.direct_or_with_instr(type_env, env);
 

@@ -281,7 +281,7 @@ impl TypeExpr {
             ),
             TypeExpr::Tuple(fields) => {
                 format!(
-                    "Tuple_{}",
+                    "Tup_{}",
                     fields
                         .iter()
                         .map(|type_expr| type_expr.0.as_clean_go_type_name(type_env).to_string())

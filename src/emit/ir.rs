@@ -23,10 +23,7 @@ impl IrInstruction {
                 format!("{r} = {} == {}", v1.emit_as_go(), v2.emit_as_go())
             }
             IrInstruction::Block(block_instr) => {
-                dbg!(format!(
-                    "{{\n{}\n}}",
-                    join_ir(block_instr)
-                ))
+                dbg!(format!("{{\n{}\n}}", join_ir(block_instr)))
             }
             IrInstruction::FunCall(r, t, p) => {
                 format!(

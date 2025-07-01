@@ -650,8 +650,10 @@ impl TypeExpr {
 
                 return ty;
             }
-            ValueExpr::Variable(.., type_expr) => type_expr
+            ValueExpr::Variable(_, ident, type_expr) => type_expr
                 .as_ref()
+                .cloned()
+                .or(type_env.get_identifier_type(ident.clone()))
                 .expect("Expected type but didn't get one")
                 .clone(),
             ValueExpr::BoolNegate(bool_expr) => {
