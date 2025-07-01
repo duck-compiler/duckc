@@ -2,13 +2,10 @@ package main
 
 import "fmt"
 
+type Tup struct {
+	0 int
+}
+
 func main() {
-	{
-		x := 1
-		fmt.Println(x)
-	}
-	{
-		x := 1
-		fmt.Println(x)
-	}
+
 }

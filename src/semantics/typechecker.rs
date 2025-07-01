@@ -703,7 +703,8 @@ impl TypeExpr {
                 require(
                     target_obj_type_expr.has_field_by_name(field_name.clone()),
                     format!(
-                        "{} doesn't have a field with name {}",
+                        "{:?} {} doesn't have a field with name {}",
+                        &target_obj_type_expr,
                         target_obj_type_expr.as_go_type_annotation(type_env),
                         field_name
                     ),
@@ -736,7 +737,7 @@ impl TypeExpr {
     #[allow(dead_code)]
     pub fn has_field(&self, field: Field) -> bool {
         match self {
-            Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
+            Self::Tuple(fields) => fields.len() > field.name.parse::<usize>().unwrap(),
             Self::Struct(r#struct) => r#struct.fields.contains(&field),
             Self::Duck(duck) => duck.fields.contains(&field),
             _ => false,
@@ -745,7 +746,7 @@ impl TypeExpr {
 
     fn has_field_by_name(&self, name: String) -> bool {
         match self {
-            Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
+            Self::Tuple(fields) => fields.len() > name.parse::<usize>().unwrap(),
             Self::Struct(r#struct) => r#struct
                 .fields
                 .iter()
@@ -760,7 +761,7 @@ impl TypeExpr {
 
     fn typeof_field(&self, field_name: String) -> TypeExpr {
         match self {
-            Self::Tuple(..) => todo!("Waiting for field access to have numbers available."),
+            Self::Tuple(fields) => fields[field_name.parse::<usize>().unwrap()].0.clone(),
             Self::Struct(r#struct) => r#struct
                 .fields
                 .iter()

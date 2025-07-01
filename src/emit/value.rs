@@ -441,12 +441,14 @@ impl ValueExpr {
                 target_obj,
                 field_name,
             } => {
+                let mut field_name = field_name.clone();
                 let (mut i, t_res) = target_obj.0.emit(type_env, env);
                 if let Some(t_res) = t_res {
                     let ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
+                    dbg!(&ty);
                     match ty {
                         TypeExpr::Duck(Duck { fields }) => {
-                            let f = fields.iter().find(|f| &f.name == field_name).unwrap();
+                            let f = fields.iter().find(|f| f.name == field_name).unwrap();
                             let res = env.new_var();
                             i.push(IrInstruction::VarDecl(
                                 res.clone(),
@@ -461,6 +463,9 @@ impl ValueExpr {
                                 vec![],
                             ));
                             return (i, Some(IrValue::Var(res)));
+                        }
+                        TypeExpr::Tuple(_) => {
+                            field_name = dbg!(format!("field_{field_name}"));
                         }
                         _ => {}
                     }
