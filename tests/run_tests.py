@@ -39,7 +39,7 @@ def find_duck_files_in_directory(base_directory):
         print(f"{COLOR_RED}Error: Base directory '{base_directory}' does not exist or is not a directory.{COLOR_RESET}")
         return []
 
-    print(f"\n{COLOR_YELLOW}Searching for .duck files in: {base_directory} and its subdirectories...{COLOR_RESET}")
+    print(f"\n{COLOR_YELLOW}Searching for .dargo files in: {base_directory} and its subdirectories...{COLOR_RESET}")
 
     try:
         for root, _, files in os.walk(base_directory):
@@ -67,6 +67,7 @@ def build_and_move_cargo_binary(project_name, build_type="debug"):
 
     target_subdir = f"target/{build_type}"
     binary_name = project_name
+
     # windows target
     if os.name == 'nt':
         binary_name += ".exe"
@@ -90,11 +91,14 @@ def build_and_move_cargo_binary(project_name, build_type="debug"):
             text=True,
             check=True
         )
+
         print(f"\n{COLOR_GRAY}--- {COLOR_GREEN}Cargo Build Output {COLOR_RESET}({COLOR_YELLOW}STDOUT{COLOR_RESET}) {COLOR_GRAY}---{COLOR_RESET}")
         print(build_result.stdout)
+
         if build_result.stderr:
             print(f"\n{COLOR_GRAY}--- {COLOR_RED}Cargo Build Output {COLOR_RESET}({COLOR_YELLOW}STDERR{COLOR_RESET}) {COLOR_GRAY}---{COLOR_RESET}")
             print(build_result.stderr)
+
         print(f"{CHECK} {COLOR_YELLOW}Cargo build was successful.{COLOR_RESET}")
 
         expected_binary_dir = os.path.join(parent_dir, target_subdir)
@@ -105,34 +109,39 @@ def build_and_move_cargo_binary(project_name, build_type="debug"):
                 f"{CROSS} {COLOR_RED}Binary not found at expected path{COLOR_RESET}: {binary_path_in_target}. "
                 f"{COLOR_YELLOW}Make sure {COLOR_RESET}'{COLOR_YELLOW}project_name{COLOR_RESET}' {COLOR_YELLOW}matches your Cargo.toml package name."
             )
-        print(f"{CHECK} {COLOR_YELLOW}Found binary{COLOR_RESET}: {binary_path_in_target}{COLOR_RESET}")
 
+        print(f"{CHECK} {COLOR_YELLOW}Found binary{COLOR_RESET}: {binary_path_in_target}{COLOR_RESET}")
 
         destination_path = os.path.join(original_cwd, binary_name)
         shutil.move(binary_path_in_target, destination_path)
         moved_binary_path = destination_path
-        print(f"{CHECK} {COLOR_YELLOW}Binary moved successfully to{COLOR_RESET}: {moved_binary_path}{COLOR_RESET}")
 
+        print(f"{CHECK} {COLOR_YELLOW}Binary moved successfully to{COLOR_RESET}: {moved_binary_path}{COLOR_RESET}")
     except FileNotFoundError as e:
         print(f"{CROSS}{COLOR_RED}Error{COLOR_RESET}: {e}{COLOR_RESET}")
+
         if CICD:
             sys.exit(-1)
     except subprocess.CalledProcessError as e:
         print(f"{CROSS}{COLOR_RED}Error{COLOR_RESET}: 'cargo build' failed with exit code {e.returncode}.{COLOR_RESET}")
         print(f"    {COLOR_GREEN}STDOUT{COLOR_RESET}:\n{e.stdout}{COLOR_RESET}")
         print(f"    {COLOR_RED}STDERR{COLOR_RESET}:\n{e.stderr}{COLOR_RESET}")
+
         if CICD:
             sys.exit(-1)
     except shutil.Error as e:
         print(f"{CROSS} {COLOR_RED}Error moving binary{COLOR_RESET}: {e}{COLOR_RESET}")
+
         if CICD:
             sys.exit(-1)
     except Exception as e:
         print(f"{CROSS} {COLOR_RED}An unexpected error occurred{COLOR_RESET}: {e}{COLOR_RESET}")
+
         if CICD:
             sys.exit(-1)
     finally:
         os.chdir(original_cwd)
+
         print(f"{CHECK} {COLOR_YELLOW}Returned to original directory{COLOR_RESET}: {os.getcwd()}{COLOR_RESET}")
         print(f"{CHECK} {COLOR_GREEN}Finished Cargo Build and Move {COLOR_RESET}")
 
@@ -268,7 +277,7 @@ def compile_valid_with_assert(compiler_path, valid_program):
 
         expected_return_code = int(expected_return_code)
 
-        duck_execute_result = subprocess.run("./.duck/duck_out", capture_output=True, text=True, check=False)
+        duck_execute_result = subprocess.run("./.dargo/duck_out", capture_output=True, text=True, check=False)
         actual_return_code = duck_execute_result.returncode
 
         if actual_return_code != expected_return_code:
