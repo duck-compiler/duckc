@@ -72,7 +72,7 @@ impl IrValue {
     pub fn empty_tuple() -> Self {
         Self::Tuple(
             TypeExpr::from_value_expr(&ValueExpr::Tuple(vec![]), &mut TypeEnv::default())
-                .as_go_concrete_annotation(&mut TypeEnv::default()),
+                .as_go_type_annotation(&mut TypeEnv::default()),
             vec![],
         )
     }
@@ -256,7 +256,7 @@ impl ValueExpr {
                 let var = env.new_var();
                 ir.push(IrInstruction::VarDecl(
                     var.clone(),
-                    TypeExpr::from_value_expr(&v1.0, type_env).as_go_concrete_annotation(type_env),
+                    TypeExpr::from_value_expr(&v1.0, type_env).as_go_type_annotation(type_env),
                 ));
                 ir.push(IrInstruction::Add(
                     var.clone(),
@@ -283,7 +283,7 @@ impl ValueExpr {
                 let var = env.new_var();
                 ir.push(IrInstruction::VarDecl(
                     var.clone(),
-                    TypeExpr::from_value_expr(&v1.0, type_env).as_go_concrete_annotation(type_env),
+                    TypeExpr::from_value_expr(&v1.0, type_env).as_go_type_annotation(type_env),
                 ));
                 ir.push(IrInstruction::Mul(
                     var.clone(),
@@ -329,7 +329,7 @@ impl ValueExpr {
                 let mut res = Vec::new();
                 let mut res_vars = Vec::new();
                 let name =
-                    TypeExpr::from_value_expr(self, type_env).as_go_concrete_annotation(type_env);
+                    TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
                 for (field_expr, _) in fields {
                     let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, env);
                     res.extend(field_instr);
@@ -600,9 +600,9 @@ mod tests {
             (
                 "{1;}",
                 vec![
-                    decl("var_1", "struct {\n\n}"),
+                    decl("var_1", "Tuple_"),
                     IrInstruction::Block(vec![
-                        decl("var_0", "struct {\n\n}"),
+                        decl("var_0", "Tuple_"),
                         IrInstruction::VarAssignment("var_0".into(), IrValue::empty_tuple()),
                         IrInstruction::VarAssignment("var_1".into(), IrValue::Var("var_0".into())),
                     ]),
