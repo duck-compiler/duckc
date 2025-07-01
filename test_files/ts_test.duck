@@ -12,7 +12,8 @@ module long_mod_name {
         go {
             fmt.Println("zz abc")
             fmt.Println("local:", local_str)
-            fmt.Println("param:", xx)
+            fmt.Println("param:", xxy)
+            fmt.Println("param2:", xxy)
             fmt.Println("in mod func:", gets_str())
         }
     }

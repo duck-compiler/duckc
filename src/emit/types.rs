@@ -114,7 +114,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Bool => "bool".to_string(),
-            TypeExpr::InlineGo => "InlineGo".to_string(),
+            TypeExpr::InlineGo => "any".to_string(),
             TypeExpr::Int => "int".to_string(),
             TypeExpr::Float => "float32".to_string(),
             TypeExpr::Char => "rune".to_string(),

@@ -32,6 +32,7 @@ pub enum IrInstruction {
     InlineGo(String),
     If(IrValue, Vec<IrInstruction>, Option<Vec<IrInstruction>>),
     Loop(Vec<IrInstruction>),
+    Block(Vec<IrInstruction>),
 
     // Top-Level Statements
     GoPackage(String),
@@ -298,6 +299,8 @@ impl ValueExpr {
                 let mut res = Vec::new();
                 let mut res_var = None;
 
+
+
                 for (block_expr, _) in block_exprs {
                     let (block_instr, block_res) = block_expr.direct_or_with_instr(type_env, env);
 
@@ -312,7 +315,19 @@ impl ValueExpr {
                     res_var = block_res;
                 }
 
-                (res, res_var.or(Some(IrValue::Tuple("Tup_".into(), vec![]))))
+                let mut f_res = Vec::new();
+                let ty = TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
+                let fresvar = env.new_var();
+
+                res_var = res_var.or(Some(IrValue::Tuple("Tup_".into(), vec![])));
+                f_res.push(IrInstruction::VarDecl(fresvar.clone(), ty));
+                res.push(IrInstruction::VarAssignment(fresvar.clone(), res_var.unwrap()));
+                f_res.push(IrInstruction::Block(res));
+
+                (
+                    f_res,
+                    Some(IrValue::Var(fresvar))
+                )
             }
             ValueExpr::Tuple(fields) => {
                 let mut res = Vec::new();
