@@ -299,8 +299,6 @@ impl ValueExpr {
                 let mut res = Vec::new();
                 let mut res_var = None;
 
-
-
                 for (block_expr, _) in block_exprs {
                     let (block_instr, block_res) = block_expr.direct_or_with_instr(type_env, env);
 
@@ -321,13 +319,13 @@ impl ValueExpr {
 
                 res_var = res_var.or(Some(IrValue::Tuple("Tup_".into(), vec![])));
                 f_res.push(IrInstruction::VarDecl(fresvar.clone(), ty));
-                res.push(IrInstruction::VarAssignment(fresvar.clone(), res_var.unwrap()));
+                res.push(IrInstruction::VarAssignment(
+                    fresvar.clone(),
+                    res_var.unwrap(),
+                ));
                 f_res.push(IrInstruction::Block(res));
 
-                (
-                    f_res,
-                    Some(IrValue::Var(fresvar))
-                )
+                (f_res, Some(IrValue::Var(fresvar)))
             }
             ValueExpr::Tuple(fields) => {
                 let mut res = Vec::new();
@@ -599,8 +597,12 @@ mod tests {
             (
                 "{1;}",
                 vec![
-                    decl("var_0", "struct {\n\n}"),
-                    IrInstruction::VarAssignment("var_0".into(), IrValue::empty_tuple()),
+                    decl("var_1", "struct {\n\n}"),
+                    IrInstruction::Block(vec![
+                        decl("var_0", "struct {\n\n}"),
+                        IrInstruction::VarAssignment("var_0".into(), IrValue::empty_tuple()),
+                        IrInstruction::VarAssignment("var_1".into(), IrValue::Var("var_0".into())),
+                    ]),
                 ],
             ),
             (

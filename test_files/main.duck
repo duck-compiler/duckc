@@ -1,21 +1,31 @@
 use go "fmt";
 
-fun abc(x: String) {
+fun abc(x: Int) {
     go {
         fmt.Println(x)
     }
 }
 
-fun xyz(x: { x: String }) {
-    let y: String = x.x;
+fun xyz(x: { x: Int }) {
+    let y: Int = x.x;
     go {
         fmt.Println(y);
     }
 }
 
 fun main() {
-    let x: struct { y: String } = .{ y: "Hallo" };
-    let y: { x: { x: String } } = { x: { x: "Hallo" } };
+    let x: struct { y: Int } = .{ y: 10 };
+    let y: { x: { x: Int } } = { x: { x: 20 } };
     abc(y.x.x);
     xyz(y.x);
+
+    if (y.x.x == y.x.x) {
+        go {
+            fmt.Println("equal")
+        }
+    } else {
+        go {
+            fmt.Println("not equal")
+        }
+    }
 }

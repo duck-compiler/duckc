@@ -441,11 +441,11 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            let prod = atom
+            let prod = field_access.clone().or(atom.clone())
                 .clone()
                 .then(
                     just(Token::ControlChar('*'))
-                        .ignore_then(atom.clone())
+                        .ignore_then(field_access.clone().or(atom.clone()).clone())
                         .repeated()
                         .collect::<Vec<_>>(),
                 )
@@ -489,8 +489,8 @@ where
             choice((
                 inline_go,
                 assignment,
-                field_access,
                 equals,
+                field_access,
                 add,
                 declaration,
                 atom,
@@ -1317,6 +1317,37 @@ mod tests {
                     .into(),
                     params: vec![],
                 },
+            ),
+            (
+                "x.y.z == z.w.a",
+                ValueExpr::Equals(
+                    ValueExpr::FieldAccess {
+                        target_obj: ValueExpr::FieldAccess {
+                            target_obj: ValueExpr::Variable(false, "x".into(), None)
+                                .into_empty_span()
+                                .into(),
+                            field_name: "y".into(),
+                        }
+                        .into_empty_span()
+                        .into(),
+                        field_name: "z".into(),
+                    }
+                    .into_empty_span()
+                    .into(),
+                    ValueExpr::FieldAccess {
+                        target_obj: ValueExpr::FieldAccess {
+                            target_obj: ValueExpr::Variable(false, "z".into(), None)
+                                .into_empty_span()
+                                .into(),
+                            field_name: "w".into(),
+                        }
+                        .into_empty_span()
+                        .into(),
+                        field_name: "a".into(),
+                    }
+                    .into_empty_span()
+                    .into(),
+                ),
             ),
             (
                 "x.y.z.w",
