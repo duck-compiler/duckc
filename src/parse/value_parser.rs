@@ -144,7 +144,13 @@ where
                     .then_ignore(just(Token::ControlChar('=')))
                     .then_ignore(just(Token::ControlChar('>')))
                     .then(value_expr_parser.clone())
-                    .map(|((params, return_type), value_expr)| {
+                    .map(|((params, return_type), mut value_expr)| {
+                        value_expr = match value_expr {
+                            (ValueExpr::Duck(x), loc) if x.is_empty() => {
+                                (ValueExpr::Tuple(vec![]), loc).into_block()
+                            }
+                            _ => value_expr,
+                        };
                         ValueExpr::Lambda(
                             LambdaFunctionExpr {
                                 params: params.unwrap_or_default(),

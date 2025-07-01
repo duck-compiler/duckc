@@ -15,10 +15,14 @@ fun main() {
         return 1;
     })(1);
 
+    let c: () -> go any = () -> go any => {};
+
     go {
         fmt.Println("Got from lambda", a, b)
     }
 }
+
+fun cc() {}
 
 fun abc(x: {z: String}) {
 
