@@ -1,0 +1,37 @@
+module long_mod_name {
+    use go "fmt";
+
+    fun i_am_long() {
+        go {
+            fmt.Println("i am long")
+        }
+    }
+
+    fun zzABC(xxy: String) {
+        let local_str: String = "hallo";
+        go {
+            fmt.Println("zz abc")
+            fmt.Println("local:", local_str)
+            fmt.Println("param:", xx)
+            fmt.Println("in mod func:", gets_str())
+        }
+    }
+
+    fun xx() {}
+
+    fun gets_str() -> String {
+        return "String";
+    }
+
+    fun y() {
+        go {
+            i_am_long()
+            fmt.Println("abc")
+            zzABC("i am an argument")
+        }
+    }
+}
+
+fun main() {
+    long_mod_name::y();
+}
