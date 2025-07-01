@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use tree_sitter::{Node, Parser};
+
 use crate::parse::{
     function_parser::LambdaFunctionExpr,
     type_parser::{Duck, Struct, TypeExpr},
@@ -154,7 +156,82 @@ pub fn mangle_type_expression(type_expr: &mut TypeExpr, prefix: &str, mangle_env
 
 pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &mut MangleEnv) {
     match value_expr {
-        ValueExpr::InlineGo(..) => {}
+        ValueExpr::InlineGo(t) => {
+            let mut parser = Parser::new();
+            parser
+                .set_language(&tree_sitter_go::LANGUAGE.into())
+                .expect("Couldn't set go grammar");
+
+            let src = parser.parse(t.as_bytes(), None).unwrap();
+            let root_node = src.root_node();
+
+            fn trav(
+                s: &Node,
+                t: &[u8],
+                e: &mut MangleEnv,
+                out: &mut Vec<(tree_sitter::Range, String)>,
+            ) {
+                fn extract_all_ident(t: &[u8], n: &Node) -> Vec<(tree_sitter::Range, String)> {
+                    if n.grammar_name() == "identifier" {
+                        return vec![(n.range(), n.utf8_text(t).unwrap().to_string())];
+                    }
+
+                    let mut res = Vec::new();
+                    for i in 0..n.child_count() {
+                        let x = extract_all_ident(t, &n.child(i).unwrap().clone());
+                        res.extend(x);
+                    }
+
+                    res
+                }
+
+                let declared_var_ident = match s.grammar_name() {
+                    "short_var_declaration" => {
+                        Some(s.child(0).unwrap().utf8_text(t).unwrap().to_string())
+                    }
+                    "var_declaration" => Some(
+                        s.child(1)
+                            .unwrap()
+                            .child(0)
+                            .unwrap()
+                            .utf8_text(t)
+                            .unwrap()
+                            .to_string(),
+                    ),
+                    _ => None,
+                };
+
+                if s.grammar_name() == "expression_statement" {
+                    let i = extract_all_ident(t, s);
+                    out.extend(i);
+                }
+
+                if let Some(i) = declared_var_ident {
+                    e.insert_ident(i);
+                }
+
+                for i in 0..s.child_count() {
+                    trav(&s.child(i).unwrap(), t, e, out);
+                }
+            }
+
+            let mut o = Vec::new();
+            trav(&root_node, t.as_bytes(), mangle_env, &mut o);
+
+            let mut translation = 0;
+            for (range, ident) in o {
+                let mangled_ident = mangle_env.mangle_ident(false, prefix, &ident);
+
+                if let Some(mangled_ident) = mangled_ident {
+                    let size_diff = mangled_ident.len() - ident.len();
+
+                    t.drain((range.start_byte + translation)..(range.end_byte + translation));
+                    t.insert_str(range.start_byte + translation, &mangled_ident);
+
+                    translation += size_diff;
+                }
+            }
+        }
         ValueExpr::Lambda(lambda_expr) => {
             let LambdaFunctionExpr {
                 params,
@@ -167,7 +244,9 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
             if let Some(return_type) = return_type {
                 mangle_type_expression(&mut return_type.0, prefix, mangle_env);
             }
+            mangle_env.push_idents();
             mangle_value_expr(&mut value_expr.0, prefix, mangle_env);
+            mangle_env.pop_idents();
         }
         ValueExpr::FunctionCall { target, params } => {
             mangle_value_expr(&mut target.0, prefix, mangle_env);
@@ -192,6 +271,7 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
             mangle_env.pop_idents();
 
             if let Some(r#else) = r#else {
+                mangle_env.push_idents();
                 mangle_value_expr(&mut r#else.0, prefix, mangle_env);
             }
         }

@@ -114,7 +114,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Bool => "bool".to_string(),
-            TypeExpr::InlineGo => "InlineGo".to_string(),
+            TypeExpr::InlineGo => "any".to_string(),
             TypeExpr::Int => "int".to_string(),
             TypeExpr::Float => "float32".to_string(),
             TypeExpr::Char => "rune".to_string(),
@@ -141,19 +141,23 @@ impl TypeExpr {
                         .0
                         .as_go_type_annotation(type_env))
             ),
-            TypeExpr::Struct(r#struct) => format!(
-                "struct {{\n{}\n}}",
-                r#struct
-                    .fields
-                    .iter()
-                    .map(|field| format!(
-                        "   {} {}",
-                        field.name,
-                        field.type_expr.0.as_go_type_annotation(type_env)
-                    ))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ),
+            TypeExpr::Struct(_struct) => {
+                self.as_clean_go_type_name(type_env)
+            // format!(
+            //     "struct {{\n{}\n}}",
+            //     r#struct
+            //         .fields
+            //         .iter()
+            //         .map(|field| format!(
+            //             "   {} {}",
+            //             field.name,
+            //             field.type_expr.0.as_go_type_annotation(type_env)
+            //         ))
+            //         .collect::<Vec<_>>()
+            //         .join("\n")
+            // )
+
+            }
             TypeExpr::Duck(duck) => {
                 let mut fields = duck.fields.clone();
                 fields.sort_by_key(|field| field.name.clone());

@@ -1,0 +1,46 @@
+use go "fmt";
+
+fun main() {
+    let x: { x: { x: { x: { x: { x: { x: Int } } } } } } = {
+        x: {
+            x: {
+                x: {
+                    x: {
+                        x: {
+                            x: 10,
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    let xx: struct {
+        x: {
+            x: struct {
+                x: {
+                    x: struct {
+                        x: Int
+                    }
+                }
+            }
+        }
+    } = .{
+        x: {
+            x: .{
+                x: {
+                    x: .{
+                        x: 1
+                    }
+                }
+            }
+        }
+    };
+
+    let y: Int = x.x.x.x.x.x.x;
+    let z: Int = xx.x.x.x.x.x;
+    go {
+        fmt.Println(y)
+        fmt.Println(z)
+    }
+}
