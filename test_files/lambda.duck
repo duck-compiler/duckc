@@ -1,8 +1,23 @@
+use go "fmt";
+
 fun main() {
-    ((x: {x: string, y: (string, string)}) => {
-        println("kek");
-        1
-    })({x: {x: "hallo", y: (1, 2)}})
+    let a: Int = ((x: Int) -> Int => {
+        go {
+            fmt.Println(x)
+        }
+        return 1;
+    })(1);
+
+    let b: Int = ((x: Int) -> Int => {
+        go {
+            fmt.Println(x)
+        }
+        return 1;
+    })(1);
+
+    go {
+        fmt.Println("Got from lambda", a, b)
+    }
 }
 
 fun abc(x: {z: String}) {

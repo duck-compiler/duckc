@@ -297,11 +297,21 @@ impl ValueExpr {
             ValueExpr::Block(block_exprs) => {
                 let mut res = Vec::new();
                 let mut res_var = None;
+
                 for (block_expr, _) in block_exprs {
                     let (block_instr, block_res) = block_expr.direct_or_with_instr(type_env, env);
-                    res.extend(block_instr);
+
+                    for current in block_instr.iter() {
+                        res.push(current.clone());
+                        if let IrInstruction::Return(_) = current {
+                            res_var = None;
+                            return (res, res_var);
+                        }
+                    }
+
                     res_var = block_res;
                 }
+
                 (res, res_var.or(Some(IrValue::Tuple("Tup_".into(), vec![]))))
             }
             ValueExpr::Tuple(fields) => {
