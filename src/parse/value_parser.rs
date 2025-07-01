@@ -1588,7 +1588,10 @@ mod tests {
                     LambdaFunctionExpr {
                         params: vec![],
                         return_type: None,
-                        value_expr: ValueExpr::Duck(vec![]).into_empty_span(),
+                        value_expr: ValueExpr::Block(vec![
+                            ValueExpr::Tuple(vec![]).into_empty_span(),
+                        ])
+                        .into_empty_span(),
                     }
                     .into(),
                 ),
