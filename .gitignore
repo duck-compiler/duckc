@@ -1,5 +1,6 @@
 /target
 duck_out
+duck_out.exe
 .DS_Store
 duck_gen*.go
 *.duck.go
@@ -7,3 +8,5 @@ duck_gen*.go
 .duck/
 .dargo
 dargo.toml
+tests/dargo
+tests/dargo.exe
