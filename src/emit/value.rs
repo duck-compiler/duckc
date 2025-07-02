@@ -2,7 +2,7 @@ use crate::{
     parse::{
         assignment_and_declaration_parser::Declaration,
         function_parser::LambdaFunctionExpr,
-        type_parser::{Duck, TypeExpr},
+        type_parser::{Duck, Struct, TypeExpr},
         value_parser::ValueExpr,
     },
     semantics::typechecker::TypeEnv,
@@ -236,7 +236,7 @@ impl ValueExpr {
                             let (target_instr, Some(IrValue::Var(target_res))) =
                                 target_obj.0.emit(type_env, env)
                             else {
-                                panic!("no var")
+                                panic!("no var {:?}", target_obj);
                             };
                             let target_ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
                             res.extend(target_instr);
@@ -475,11 +475,10 @@ impl ValueExpr {
                 target_obj,
                 field_name,
             } => {
-                let mut field_name = field_name.clone();
+                let field_name = field_name.clone();
                 let (mut i, t_res) = target_obj.0.emit(type_env, env);
                 if let Some(t_res) = t_res {
                     let ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
-                    dbg!(&ty);
                     match ty {
                         TypeExpr::Duck(Duck { fields }) => {
                             let f = fields.iter().find(|f| f.name == field_name).unwrap();
@@ -498,15 +497,37 @@ impl ValueExpr {
                             ));
                             return (i, Some(IrValue::Var(res)));
                         }
-                        TypeExpr::Tuple(_) => {
-                            field_name = dbg!(format!("field_{field_name}"));
+                        TypeExpr::Tuple(fields) => {
+                            let field_as_idx = field_name
+                                .parse::<usize>()
+                                .expect("non numeric tuple index");
+                            let field_name = format!("field_{field_name}");
+                            let res = env.new_var();
+                            i.push(IrInstruction::VarDecl(
+                                res.clone(),
+                                fields[field_as_idx].0.as_go_type_annotation(type_env),
+                            ));
+                            i.push(IrInstruction::VarAssignment(
+                                res.clone(),
+                                IrValue::FieldAccess(Box::new(t_res), field_name.clone()),
+                            ));
+                            return (i, Some(IrValue::Var(res)));
                         }
-                        _ => {}
+                        TypeExpr::Struct(Struct { fields }) => {
+                            let f = fields.iter().find(|f| f.name == field_name).unwrap();
+                            let res = env.new_var();
+                            i.push(IrInstruction::VarDecl(
+                                res.clone(),
+                                f.type_expr.0.as_go_type_annotation(type_env),
+                            ));
+                            i.push(IrInstruction::VarAssignment(
+                                res.clone(),
+                                IrValue::FieldAccess(Box::new(t_res), field_name.clone()),
+                            ));
+                            return (i, Some(IrValue::Var(res)));
+                        }
+                        _ => panic!("can only access object like"),
                     }
-                    (
-                        i,
-                        Some(IrValue::FieldAccess(t_res.into(), field_name.clone())),
-                    )
                 } else {
                     return (i, None);
                 }

@@ -16,4 +16,15 @@ fn main() {
         fmt.Println(x)
         fmt.Println(y)
     }
+
+    let xx: Int = 10;
+    xx = 20;
+
+    let z: (Int, { x: String }) = (10, { x: "Hallo" });
+    z.1.x = "ööö";
+    go {
+        fmt.Println(z)
+        fmt.Println(z.field_1.Getx())
+    }
+
 }
