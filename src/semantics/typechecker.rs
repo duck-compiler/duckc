@@ -346,6 +346,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         match value_expr {
+            ValueExpr::Array(_) => todo!(),
             ValueExpr::InlineGo(..) => {}
             ValueExpr::Lambda(_lambda_expr) => {
                 // typeresolve_value_expr(lambda_expr., type_env);
@@ -479,6 +480,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 impl TypeExpr {
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
+            ValueExpr::Array(_) => todo!(),
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
                 lambda_expr
                     .params

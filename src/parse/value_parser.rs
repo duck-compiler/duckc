@@ -40,6 +40,7 @@ pub enum ValueExpr {
         target_obj: Box<Spanned<ValueExpr>>,
         field_name: String,
     },
+    Array(Vec<Spanned<ValueExpr>>),
     Return(Option<Box<Spanned<ValueExpr>>>),
     VarAssign(Box<Spanned<Assignment>>),
     VarDecl(Box<Spanned<Declaration>>),
@@ -488,9 +489,25 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
+            // let array = equals
+            //     .clone()
+            //     .or(field_access.clone())
+            //     .or(atom.clone())
+            //     .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')));
+
+            let array = value_expr_parser
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
+                .map(|elems| ValueExpr::Array(elems))
+                .map_with(|x, e| (x, e.span()));
+
             choice((
                 inline_go,
                 assignment,
+                array,
                 equals,
                 field_access,
                 add,
@@ -583,6 +600,11 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
 pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
     v.1 = empty_range();
     match &mut v.0 {
+        ValueExpr::Array(elems) => {
+            for elem in elems {
+                value_expr_into_empty_range(elem);
+            }
+        }
         ValueExpr::FunctionCall { target, params } => {
             value_expr_into_empty_range(target);
             for p in params {
@@ -701,6 +723,57 @@ mod tests {
     #[test]
     fn test_value_expression_parser() {
         let test_cases = vec![
+            ("[]", ValueExpr::Array(vec![])),
+            (
+                "[1]",
+                ValueExpr::Array(vec![ValueExpr::Int(1).into_empty_span()]),
+            ),
+            (
+                "[1,]",
+                ValueExpr::Array(vec![ValueExpr::Int(1).into_empty_span()]),
+            ),
+            (
+                "[1,]",
+                ValueExpr::Array(vec![ValueExpr::Int(1).into_empty_span()]),
+            ),
+            (
+                "[1,2]",
+                ValueExpr::Array(vec![
+                    ValueExpr::Int(1).into_empty_span(),
+                    ValueExpr::Int(2).into_empty_span(),
+                ]),
+            ),
+            (
+                "[1 == 2, 2]",
+                ValueExpr::Array(vec![
+                    ValueExpr::Equals(
+                        Box::new(ValueExpr::Int(1).into_empty_span()),
+                        Box::new(ValueExpr::Int(2).into_empty_span()),
+                    )
+                    .into_empty_span(),
+                    ValueExpr::Int(2).into_empty_span(),
+                ]),
+            ),
+            (
+                "[a(), b(), (1,2)]",
+                ValueExpr::Array(vec![
+                    ValueExpr::FunctionCall {
+                        target: var("a"),
+                        params: vec![],
+                    }
+                    .into_empty_span(),
+                    ValueExpr::FunctionCall {
+                        target: var("b"),
+                        params: vec![],
+                    }
+                    .into_empty_span(),
+                    ValueExpr::Tuple(vec![
+                        ValueExpr::Int(1).into_empty_span(),
+                        ValueExpr::Int(2).into_empty_span(),
+                    ])
+                    .into_empty_span(),
+                ]),
+            ),
             ("true", ValueExpr::Bool(true)),
             ("false", ValueExpr::Bool(false)),
             (
