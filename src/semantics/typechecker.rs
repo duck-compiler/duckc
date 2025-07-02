@@ -872,6 +872,9 @@ fn resolve_implicit_function_return_type(fun_def: &FunctionDefintion, type_env: 
     let mut return_types_found = Vec::new();
     flatten_returns(&fun_def.value_expr.0, &mut return_types_found, type_env);
 
+    return_types_found.sort_by_key(|type_expr| type_expr.as_clean_go_type_name(type_env));
+    return_types_found.dedup();
+
     if return_types_found.is_empty() {
         return Ok(TypeExpr::Tuple(vec![]));
     }
