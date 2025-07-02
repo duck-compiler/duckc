@@ -6,11 +6,11 @@ type MyDuck = duck {
 
 MyDuck
 
-fn gen_str(x: { to_string: fun() -> String | Option<String> }) {
+fn gen_str(x: { to_string: fn() -> String | Option<String> }) {
     **()* ()*()()*SDAF()*F
 }
 
-fun main() {
+fn main() {
     const x: {} = {};
     gen<typeof x>(x);
 }

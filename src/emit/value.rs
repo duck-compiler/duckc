@@ -46,9 +46,9 @@ pub enum IrInstruction {
     ),
     StructDef(String, Vec<(String, String)>),
     InterfaceDef(
-        String,                // Name
-        Vec<(String, String)>, // Generics
-        Vec<(String, String)>, // Methods
+        String,                                               // Name
+        Vec<(String, String)>,                                // Generics
+        Vec<(String, Vec<(String, String)>, Option<String>)>, // Methods
     ),
 }
 
@@ -224,17 +224,50 @@ impl ValueExpr {
             ValueExpr::VarAssign(b) => {
                 let assign = &b.0;
                 dbg!(&assign);
-                let (i, res) = assign.value_expr.0.direct_or_with_instr(type_env, env);
-                if let Some(_res) = res {
-                    // panic!();
-                    // let (target_instr, Some(IrValue::Var(target_res))) =
-                    //     assign.target.0.emit(type_env, env)
-                    // else {
-                    //     panic!()
-                    // };
-                    // i.extend(target_instr);
-                    // i.push(IrInstruction::VarAssignment(target_res, res));
-                    (i, None)
+                let (i, res) = dbg!(assign.value_expr.0.direct_or_with_instr(type_env, env));
+                if let Some(a_res) = res {
+                    let target = &assign.target.0;
+                    let mut res = Vec::new();
+                    match target {
+                        ValueExpr::FieldAccess {
+                            target_obj,
+                            field_name,
+                        } => {
+                            let (target_instr, Some(IrValue::Var(target_res))) =
+                                target_obj.0.emit(type_env, env)
+                            else {
+                                panic!("no var")
+                            };
+                            let target_ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
+                            res.extend(target_instr);
+                            match target_ty {
+                                TypeExpr::Duck(_) => {
+                                    res.push(IrInstruction::FunCall(
+                                        None,
+                                        IrValue::Var(format!("{target_res}.Set{field_name}")),
+                                        vec![a_res],
+                                    ));
+                                }
+                                TypeExpr::Tuple(_) => {
+                                    res.push(IrInstruction::VarAssignment(
+                                        format!("{target_res}.field_{field_name}"),
+                                        a_res,
+                                    ));
+                                }
+                                TypeExpr::Struct(_) => {
+                                    res.push(IrInstruction::VarAssignment(
+                                        format!("{target_res}.{field_name}"),
+                                        a_res,
+                                    ));
+                                }
+                                _ => panic!("can't set field on non object"),
+                            }
+                        }
+                        _ => {}
+                    }
+
+                    res.extend(i);
+                    (res, None)
                 } else {
                     (i, None)
                 }
@@ -297,6 +330,7 @@ impl ValueExpr {
                 let mut res = Vec::new();
                 let mut res_var = None;
 
+                dbg!(block_exprs);
                 for (block_expr, _) in block_exprs {
                     let (block_instr, block_res) = block_expr.direct_or_with_instr(type_env, env);
 
@@ -600,9 +634,9 @@ mod tests {
             (
                 "{1;}",
                 vec![
-                    decl("var_1", "Tuple_"),
+                    decl("var_1", "Tup_"),
                     IrInstruction::Block(vec![
-                        decl("var_0", "Tuple_"),
+                        decl("var_0", "Tup_"),
                         IrInstruction::VarAssignment("var_0".into(), IrValue::empty_tuple()),
                         IrInstruction::VarAssignment("var_1".into(), IrValue::Var("var_0".into())),
                     ]),

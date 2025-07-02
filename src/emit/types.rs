@@ -17,17 +17,34 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                 .fields
                 .iter()
                 .map(|field| {
-                    IrInstruction::FunDef(
-                        format!("Get{}", field.name),
-                        Some(("self".into(), typename.clone())),
-                        vec![],
-                        Some(field.type_expr.0.as_go_type_annotation(type_env)),
-                        vec![IrInstruction::Return(Some(IrValue::FieldAccess(
-                            IrValue::Var("self".into()).into(),
-                            field.name.clone(),
-                        )))],
-                    )
+                    vec![
+                        IrInstruction::FunDef(
+                            format!("Get{}", field.name),
+                            Some(("self".into(), format!("*{}", typename.clone()))),
+                            vec![],
+                            Some(field.type_expr.0.as_go_type_annotation(type_env)),
+                            vec![IrInstruction::Return(Some(IrValue::FieldAccess(
+                                IrValue::Var("self".into()).into(),
+                                field.name.clone(),
+                            )))],
+                        ),
+                        IrInstruction::FunDef(
+                            format!("Set{}", field.name),
+                            Some(("self".into(), format!("*{}", typename.clone()))),
+                            vec![(
+                                "param".into(),
+                                field.type_expr.0.as_go_type_annotation(type_env),
+                            )],
+                            None,
+                            vec![IrInstruction::VarAssignment(
+                                format!("self.{}", field.name),
+                                IrValue::Var("param".into()),
+                            )],
+                        ),
+                    ]
+                    .into_iter()
                 })
+                .flatten()
                 .collect::<Vec<_>>(),
             TypeExpr::Struct(r#struct) => r#struct
                 .fields
@@ -56,7 +73,14 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
             IrInstruction::InterfaceDef(
                 format!("Has{param_name}"),
                 vec![("T".into(), "any".into())],
-                vec![(format!("Get{param_name}"), "T".into())],
+                vec![
+                    (format!("Get{param_name}"), vec![], Some("T".into())),
+                    (
+                        format!("Set{param_name}"),
+                        vec![("param".into(), "T".into())],
+                        None,
+                    ),
+                ],
             )
         })
         .collect::<Vec<_>>();
@@ -281,7 +305,7 @@ impl TypeExpr {
             ),
             TypeExpr::Tuple(fields) => {
                 format!(
-                    "Tuple_{}",
+                    "Tup_{}",
                     fields
                         .iter()
                         .map(|type_expr| type_expr.0.as_clean_go_type_name(type_env).to_string())

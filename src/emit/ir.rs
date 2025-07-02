@@ -23,10 +23,7 @@ impl IrInstruction {
                 format!("{r} = {} == {}", v1.emit_as_go(), v2.emit_as_go())
             }
             IrInstruction::Block(block_instr) => {
-                dbg!(format!(
-                    "{{\n{}\n}}",
-                    join_ir(block_instr)
-                ))
+                dbg!(format!("{{\n{}\n}}", join_ir(block_instr)))
             }
             IrInstruction::FunCall(r, t, p) => {
                 format!(
@@ -129,7 +126,17 @@ impl IrInstruction {
                     },
                     fields
                         .iter()
-                        .map(|(n, ty)| format!("{n}() {ty}"))
+                        .map(|(n, params, ty)| format!(
+                            "{n}({}) {}",
+                            params
+                                .iter()
+                                .map(|(param_name, param_type)| format!(
+                                    "{param_name} {param_type}"
+                                ))
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                            ty.as_ref().unwrap_or(&String::new())
+                        ))
                         .collect::<Vec<_>>()
                         .join("\n"),
                 )
@@ -156,7 +163,7 @@ impl IrValue {
             IrValue::Var(v) => v.to_string(),
             IrValue::Duck(s, fields) | IrValue::Struct(s, fields) => {
                 format!(
-                    "{s}{{{}}}",
+                    "&{s}{{{}}}",
                     fields
                         .iter()
                         .map(|x| format!("{}: {}", x.0, x.1.emit_as_go()))

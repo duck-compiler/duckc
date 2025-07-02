@@ -403,6 +403,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 typeresolve_value_expr(&mut value_expr.0, type_env)
             }
             ValueExpr::VarAssign(assignment) => {
+                typeresolve_value_expr(&mut assignment.0.target.0, type_env);
                 typeresolve_value_expr(&mut assignment.0.value_expr.0, type_env);
             }
             ValueExpr::VarDecl(declaration) => {
@@ -650,8 +651,10 @@ impl TypeExpr {
 
                 return ty;
             }
-            ValueExpr::Variable(.., type_expr) => type_expr
+            ValueExpr::Variable(_, ident, type_expr) => type_expr
                 .as_ref()
+                .cloned()
+                .or(type_env.get_identifier_type(ident.clone()))
                 .expect("Expected type but didn't get one")
                 .clone(),
             ValueExpr::BoolNegate(bool_expr) => {
