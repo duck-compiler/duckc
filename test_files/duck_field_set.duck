@@ -1,4 +1,19 @@
+use go "fmt";
+
 fun main() {
     let x: { y: String } = { y: "hallo" };
+    let y: (Int, String) = (10, "abc");
+
+    go {
+        fmt.Println(x)
+        fmt.Println(y)
+    }
+
     x.y = "kek";
+    y.0 = 100;
+
+    go {
+        fmt.Println(x)
+        fmt.Println(y)
+    }
 }

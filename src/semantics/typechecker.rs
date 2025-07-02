@@ -403,6 +403,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 typeresolve_value_expr(&mut value_expr.0, type_env)
             }
             ValueExpr::VarAssign(assignment) => {
+                typeresolve_value_expr(&mut assignment.0.target.0, type_env);
                 typeresolve_value_expr(&mut assignment.0.value_expr.0, type_env);
             }
             ValueExpr::VarDecl(declaration) => {

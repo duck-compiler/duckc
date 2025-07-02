@@ -46,9 +46,9 @@ pub enum IrInstruction {
     ),
     StructDef(String, Vec<(String, String)>),
     InterfaceDef(
-        String,                // Name
-        Vec<(String, String)>, // Generics
-        Vec<(String, String)>, // Methods
+        String,                                               // Name
+        Vec<(String, String)>,                                // Generics
+        Vec<(String, Vec<(String, String)>, Option<String>)>, // Methods
     ),
 }
 
@@ -227,27 +227,19 @@ impl ValueExpr {
                 let (i, res) = dbg!(assign.value_expr.0.direct_or_with_instr(type_env, env));
                 if let Some(a_res) = res {
                     let target = &assign.target.0;
-                    // let ty = TypeExpr::from_value_expr(&assign.value_expr.0, type_env);
                     let mut res = Vec::new();
                     match target {
                         ValueExpr::FieldAccess {
                             target_obj,
                             field_name,
                         } => {
-                            dbg!("YOO");
-                            let (mut target_instr, Some(IrValue::Var(target_res))) =
+                            let (target_instr, Some(IrValue::Var(target_res))) =
                                 target_obj.0.emit(type_env, env)
                             else {
                                 panic!("no var")
                             };
-                            dbg!("fisch");
-                            dbg!(&type_env);
-                            let target_ty = TypeExpr::from_value_expr(dbg!(&target_obj.0), type_env);
-                            dbg!("fisch2");
-
+                            let target_ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
                             res.extend(target_instr);
-
-                            dbg!("rest2");
                             match target_ty {
                                 TypeExpr::Duck(_) => {
                                     res.push(IrInstruction::FunCall(
@@ -256,14 +248,25 @@ impl ValueExpr {
                                         vec![a_res],
                                     ));
                                 }
-                                _ => {}
+                                TypeExpr::Tuple(_) => {
+                                    res.push(IrInstruction::VarAssignment(
+                                        format!("{target_res}.field_{field_name}"),
+                                        a_res,
+                                    ));
+                                }
+                                TypeExpr::Struct(_) => {
+                                    res.push(IrInstruction::VarAssignment(
+                                        format!("{target_res}.{field_name}"),
+                                        a_res,
+                                    ));
+                                }
+                                _ => panic!("can't set field on non object"),
                             }
                         }
                         _ => {}
                     }
 
                     res.extend(i);
-                    dbg!("rest");
                     (res, None)
                 } else {
                     (i, None)
