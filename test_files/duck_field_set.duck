@@ -1,6 +1,6 @@
 use go "fmt";
 
-fun main() {
+fn main() {
     let x: { y: String } = { y: "hallo" };
     let y: (Int, String) = (10, "abc");
 
