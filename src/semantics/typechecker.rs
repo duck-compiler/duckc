@@ -287,6 +287,8 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .iter_mut()
         .for_each(|function_definition| {
             typeresolve_function_definition(function_definition, type_env);
+            let implicit_return_type = resolve_implicit_function_return_type(function_definition, type_env).unwrap();
+            dbg!(implicit_return_type);
             TypeExpr::from_value_expr(&function_definition.value_expr.0, type_env);
         });
 
@@ -796,6 +798,94 @@ impl TypeExpr {
     pub fn is_number(&self) -> bool {
         return *self == TypeExpr::Int || *self == TypeExpr::Float;
     }
+}
+
+#[derive(Debug)]
+enum TypeCheckErrKind {
+    TypeResolve
+}
+
+fn resolve_implicit_function_return_type(fun_def: &FunctionDefintion, type_env: &mut TypeEnv) -> Result<TypeExpr, String> {
+    // check against annotated return type
+    fn flatten_returns(value_expr: &ValueExpr, return_types_found: &mut Vec<TypeExpr>, type_env: &mut TypeEnv) {
+        match value_expr {
+            ValueExpr::FunctionCall {..}
+            | ValueExpr::Int(..)
+            | ValueExpr::InlineGo(..)
+            | ValueExpr::String(..)
+            | ValueExpr::Bool(..)
+            | ValueExpr::Float(..)
+            | ValueExpr::Char(..)
+            | ValueExpr::Tuple(..)
+            | ValueExpr::Break
+            | ValueExpr::Continue
+            | ValueExpr::Duck(..)
+            | ValueExpr::Struct(..)
+            | ValueExpr::FieldAccess { .. }
+            | ValueExpr::Lambda(..)
+            | ValueExpr::Variable(..) => {}
+            ValueExpr::If { condition, then, r#else } => {
+                flatten_returns(&condition.as_ref().0, return_types_found, type_env);
+                flatten_returns(&then.as_ref().0, return_types_found, type_env);
+                r#else.as_ref().inspect(|r#else| {
+                    flatten_returns(&r#else.as_ref().0, return_types_found, type_env);
+                });
+            },
+            ValueExpr::While { condition, body } => {
+                flatten_returns(&condition.as_ref().0, return_types_found, type_env);
+                flatten_returns(&body.as_ref().0, return_types_found, type_env)
+            },
+            ValueExpr::Block(items) => items.iter().for_each(|item| flatten_returns(&item.0, return_types_found, type_env)),
+            ValueExpr::Return(Some(value_expr)) => {
+                return_types_found.push(TypeExpr::from_value_expr(&value_expr.0, type_env));
+            },
+            ValueExpr::Return(None) => {
+                return_types_found.push(TypeExpr::Tuple(vec![]));
+            },
+            ValueExpr::VarAssign(assignment) => {
+                flatten_returns(&assignment.as_ref().0.value_expr.0, return_types_found, type_env);
+            },
+            ValueExpr::VarDecl(declaration) => {
+                declaration.as_ref().0.initializer.as_ref().inspect(|initializer| {
+                    flatten_returns(&initializer.0, return_types_found, type_env);
+                });
+                flatten_returns(value_expr, return_types_found, type_env);
+            },
+            ValueExpr::Add(left, right) => {
+                flatten_returns(&left.as_ref().0, return_types_found, type_env);
+                flatten_returns(&right.as_ref().0, return_types_found, type_env);
+            },
+            ValueExpr::Mul(left, right) => {
+                flatten_returns(&left.as_ref().0, return_types_found, type_env);
+                flatten_returns(&right.as_ref().0, return_types_found, type_env);
+            },
+            ValueExpr::BoolNegate(value_expr) => {
+                flatten_returns(&value_expr.as_ref().0, return_types_found, type_env);
+            },
+            ValueExpr::Equals(left, right) => {
+                flatten_returns(&left.as_ref().0, return_types_found, type_env);
+                flatten_returns(&right.as_ref().0, return_types_found, type_env);
+            },
+        }
+    }
+
+    let mut return_types_found = Vec::new();
+    flatten_returns(&fun_def.value_expr.0, &mut return_types_found, type_env);
+
+    if return_types_found.is_empty() {
+        return Ok(TypeExpr::Tuple(vec![]));
+    }
+
+    if return_types_found.len() == 1 {
+        return Ok(return_types_found.first().unwrap().clone())
+    }
+
+    // TODO add spans
+    return Ok(TypeExpr::Or(return_types_found
+        .iter()
+        .map(|type_expr| type_expr.clone().into_empty_span())
+        .collect::<Vec<_>>()
+    ))
 }
 
 fn require(condition: bool, fail_message: String) {
