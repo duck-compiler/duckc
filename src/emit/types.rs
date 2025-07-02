@@ -209,6 +209,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Array(t) => format!("[]{}", t.0.as_go_type_annotation(type_env)),
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Bool => "DuckBool".to_string(),
             TypeExpr::InlineGo => "any".to_string(),
@@ -263,6 +264,7 @@ impl TypeExpr {
 
     pub fn as_go_concrete_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Array(t) => format!("[]{}", t.0.as_go_concrete_annotation(type_env)),
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Bool => "DuckBool".to_string(),
             TypeExpr::Int => "DuckInt".to_string(),
@@ -336,6 +338,7 @@ impl TypeExpr {
 
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Array(t) => format!("Array_{}", t.0.as_clean_go_type_name(type_env)),
             TypeExpr::Any => "Any".to_string(),
             TypeExpr::Bool => "DuckBool".to_string(),
             TypeExpr::Int => "DuckInt".to_string(),

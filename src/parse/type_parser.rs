@@ -54,6 +54,7 @@ pub enum TypeExpr {
         Vec<(Option<String>, Spanned<TypeExpr>)>,
         Option<Box<Spanned<TypeExpr>>>,
     ),
+    Array(Box<Spanned<TypeExpr>>),
 }
 
 impl TypeExpr {
@@ -193,10 +194,29 @@ where
                     _ => TypeExpr::TypeName(is_global.is_some(), identifier.join("_")),
                 });
 
-            let term_type_expr = choice((go_type, type_name, r#struct, duck, function, tuple))
+            let term_type_expr = p
+                .clone()
+                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                .or(
+                    choice((go_type, type_name, r#struct, duck, function, tuple))
+                        .map_with(|x, e| (x, e.span())),
+                );
+
+            let array = term_type_expr
+                .clone()
+                .then(
+                    (just(Token::ControlChar('[')).then(just(Token::ControlChar(']'))))
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
+                .map(|((x, _), is_array)| {
+                    is_array
+                        .iter()
+                        .fold(x, |acc, _| TypeExpr::Array(acc.into_empty_span().into()))
+                })
                 .map_with(|x, e| (x, e.span()));
 
-            term_type_expr
+            array
                 .separated_by(just(Token::ControlChar('|')))
                 .at_least(1)
                 .collect::<Vec<Spanned<TypeExpr>>>()
@@ -229,7 +249,11 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::{lexer::lexer, make_input, value_parser::empty_range};
+    use crate::parse::{
+        lexer::lexer,
+        make_input,
+        value_parser::{empty_range, type_expr_into_empty_range},
+    };
     use chumsky::Parser;
 
     use super::*;
@@ -312,7 +336,8 @@ pub mod tests {
             input_str
         );
 
-        let parsed = parse_result.into_output().unwrap();
+        let mut parsed = parse_result.into_output().unwrap();
+        type_expr_into_empty_range(&mut parsed);
 
         let stripped_parsed = strip_spans(parsed);
 
@@ -391,6 +416,66 @@ pub mod tests {
                     ])
                     .into_empty_span(),
                 )),
+            ),
+        );
+
+        assert_type_expression(
+            "Int[]",
+            TypeExpr::Array(TypeExpr::Int.into_empty_span().into()),
+        );
+
+        assert_type_expression(
+            "Int[][]",
+            TypeExpr::Array(
+                TypeExpr::Array(TypeExpr::Int.into_empty_span().into())
+                    .into_empty_span()
+                    .into(),
+            ),
+        );
+        assert_type_expression(
+            "Int[][][]",
+            TypeExpr::Array(
+                TypeExpr::Array(
+                    TypeExpr::Array(TypeExpr::Int.into_empty_span().into())
+                        .into_empty_span()
+                        .into(),
+                )
+                .into_empty_span()
+                .into(),
+            ),
+        );
+
+        assert_type_expression(
+            "(Int,)[]",
+            TypeExpr::Array(
+                TypeExpr::Tuple(vec![TypeExpr::Int.into_empty_span()])
+                    .into_empty_span()
+                    .into(),
+            ),
+        );
+
+        assert_type_expression(
+            "String[] | Int[][]",
+            TypeExpr::Or(vec![
+                TypeExpr::Array(TypeExpr::String.into_empty_span().into()).into_empty_span(),
+                TypeExpr::Array(
+                    TypeExpr::Array(TypeExpr::Int.into_empty_span().into())
+                        .into_empty_span()
+                        .into(),
+                )
+                .into_empty_span(),
+            ]),
+        );
+
+        assert_type_expression(
+            "(String[] | Int[])[]",
+            TypeExpr::Array(
+                TypeExpr::Or(vec![
+                    TypeExpr::Array(TypeExpr::String.into_empty_span().into()).into_empty_span(),
+                    TypeExpr::Array(TypeExpr::Int.into_empty_span().into()).into_empty_span(),
+                ])
+                .into_empty_span()
+                .into(),
             ),
         );
 
@@ -552,7 +637,7 @@ pub mod tests {
 
         assert_type_expression("()", TypeExpr::Tuple(vec![]));
         assert_type_expression(
-            "(Int)",
+            "(Int,)",
             TypeExpr::Tuple(vec![TypeExpr::Int.into_empty_span()]),
         );
         assert_type_expression(
@@ -640,7 +725,7 @@ pub mod tests {
         );
 
         assert_type_expression(
-            "Int | (String | Bool)",
+            "Int | (String | Bool,)",
             TypeExpr::Or(vec![
                 TypeExpr::Int.into_empty_span(),
                 TypeExpr::Tuple(vec![

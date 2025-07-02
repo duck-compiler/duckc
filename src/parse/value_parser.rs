@@ -549,6 +549,10 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
                 type_expr_into_empty_range(&mut f.type_expr);
             }
         }
+        TypeExpr::Array(t) => {
+            t.1 = empty_range();
+            type_expr_into_empty_range(&mut **t);
+        }
         TypeExpr::Tuple(fields) => {
             for f in fields {
                 type_expr_into_empty_range(f);
