@@ -333,7 +333,6 @@ impl ValueExpr {
                 let mut res = Vec::new();
                 let mut res_var = None;
 
-                dbg!(block_exprs);
                 for (block_expr, _) in block_exprs {
                     let (block_instr, block_res) = block_expr.direct_or_with_instr(type_env, env);
 

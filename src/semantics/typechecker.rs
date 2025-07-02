@@ -292,6 +292,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             TypeExpr::from_value_expr(&function_definition.value_expr.0, type_env);
         });
 
+    // is this required? If not we should remove the type aliases stack at all
     // type_env.pop_type_aliases();
 
     fn typeresolve_function_definition(
@@ -471,7 +472,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
 impl TypeExpr {
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
-        println!("from-value-expr -> {value_expr:?}");
         return match value_expr {
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
                 lambda_expr
