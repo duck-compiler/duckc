@@ -634,9 +634,9 @@ mod tests {
             (
                 "{1;}",
                 vec![
-                    decl("var_1", "Tuple_"),
+                    decl("var_1", "Tup_"),
                     IrInstruction::Block(vec![
-                        decl("var_0", "Tuple_"),
+                        decl("var_0", "Tup_"),
                         IrInstruction::VarAssignment("var_0".into(), IrValue::empty_tuple()),
                         IrInstruction::VarAssignment("var_1".into(), IrValue::Var("var_0".into())),
                     ]),
