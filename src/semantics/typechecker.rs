@@ -296,26 +296,34 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         function_definition: &mut FunctionDefintion,
         type_env: &mut TypeEnv,
     ) {
-        if function_definition.name == "main"
-            && !matches!(
-                function_definition.return_type,
-                Some((TypeExpr::Int, ..)) | None
-            )
-        {
-            let span = function_definition.return_type.as_ref().unwrap().1;
-            failure(
-                function_definition.value_expr.1.context.file_name,
-                "Tried to return non-int value from main function".to_string(),
-                (
-                    "This is the type you've declared the main function to return".to_string(),
-                    span,
-                ),
-                vec![(
-                    "The main function can only return either Nothing or Int".to_string(),
-                    function_definition.value_expr.1,
-                )],
-                function_definition.value_expr.1.context.file_contents,
-            )
+        if function_definition.name == "main" {
+            let valid_return_type = match function_definition
+                .return_type
+                .clone()
+                .map(|return_type| return_type.0)
+            {
+                Some(TypeExpr::Int) => true,
+                Some(TypeExpr::Tuple(types)) if types.is_empty() => true,
+                None => true,
+                _ => false,
+            };
+
+            if !valid_return_type {
+                let span = function_definition.return_type.as_ref().unwrap().1;
+                failure(
+                    function_definition.value_expr.1.context.file_name,
+                    "Tried to return non-int value from main function".to_string(),
+                    (
+                        "This is the type you've declared the main function to return".to_string(),
+                        span,
+                    ),
+                    vec![(
+                        "The main function can only return either Nothing or Int".to_string(),
+                        function_definition.value_expr.1,
+                    )],
+                    function_definition.value_expr.1.context.file_contents,
+                )
+            }
         }
 
         if let Some((return_type, _)) = &mut function_definition.return_type {

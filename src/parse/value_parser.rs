@@ -430,7 +430,7 @@ where
                     ValueExpr::VarAssign(
                         (
                             Assignment {
-                                target: target,
+                                target,
                                 value_expr: value_expr.clone(),
                             },
                             e.span(),
@@ -441,7 +441,9 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            let prod = field_access.clone().or(atom.clone())
+            let prod = field_access
+                .clone()
+                .or(atom.clone())
                 .clone()
                 .then(
                     just(Token::ControlChar('*'))

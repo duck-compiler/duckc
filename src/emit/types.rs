@@ -16,7 +16,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
             TypeExpr::Duck(duck) => duck
                 .fields
                 .iter()
-                .map(|field| {
+                .flat_map(|field| {
                     vec![
                         IrInstruction::FunDef(
                             format!("Get{}", field.name),
@@ -44,7 +44,6 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                     ]
                     .into_iter()
                 })
-                .flatten()
                 .collect::<Vec<_>>(),
             TypeExpr::Struct(r#struct) => r#struct
                 .fields

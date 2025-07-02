@@ -17,6 +17,10 @@ pub struct ToIr {
 /// if they want the result
 type IrRes = String;
 
+type Identifier = String;
+type Param = (String, String);
+type ReturnType = Option<String>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrInstruction {
     // Code Statements
@@ -46,9 +50,9 @@ pub enum IrInstruction {
     ),
     StructDef(String, Vec<(String, String)>),
     InterfaceDef(
-        String,                                               // Name
-        Vec<(String, String)>,                                // Generics
-        Vec<(String, Vec<(String, String)>, Option<String>)>, // Methods
+        Identifier,                                // Name
+        Vec<(String, String)>,                     // Generics
+        Vec<(Identifier, Vec<Param>, ReturnType)>, // Methods
     ),
 }
 
@@ -228,42 +232,41 @@ impl ValueExpr {
                 if let Some(a_res) = res {
                     let target = &assign.target.0;
                     let mut res = Vec::new();
-                    match target {
-                        ValueExpr::FieldAccess {
-                            target_obj,
-                            field_name,
-                        } => {
-                            let (target_instr, Some(IrValue::Var(target_res))) =
-                                target_obj.0.emit(type_env, env)
-                            else {
-                                panic!("no var {:?}", target_obj);
-                            };
-                            let target_ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
-                            res.extend(target_instr);
-                            match target_ty {
-                                TypeExpr::Duck(_) => {
-                                    res.push(IrInstruction::FunCall(
-                                        None,
-                                        IrValue::Var(format!("{target_res}.Set{field_name}")),
-                                        vec![a_res],
-                                    ));
-                                }
-                                TypeExpr::Tuple(_) => {
-                                    res.push(IrInstruction::VarAssignment(
-                                        format!("{target_res}.field_{field_name}"),
-                                        a_res,
-                                    ));
-                                }
-                                TypeExpr::Struct(_) => {
-                                    res.push(IrInstruction::VarAssignment(
-                                        format!("{target_res}.{field_name}"),
-                                        a_res,
-                                    ));
-                                }
-                                _ => panic!("can't set field on non object"),
+
+                    if let ValueExpr::FieldAccess {
+                        target_obj,
+                        field_name,
+                    } = target
+                    {
+                        let (target_instr, Some(IrValue::Var(target_res))) =
+                            target_obj.0.emit(type_env, env)
+                        else {
+                            panic!("no var {:?}", target_obj);
+                        };
+                        let target_ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
+                        res.extend(target_instr);
+                        match target_ty {
+                            TypeExpr::Duck(_) => {
+                                res.push(IrInstruction::FunCall(
+                                    None,
+                                    IrValue::Var(format!("{target_res}.Set{field_name}")),
+                                    vec![a_res],
+                                ));
                             }
+                            TypeExpr::Tuple(_) => {
+                                res.push(IrInstruction::VarAssignment(
+                                    format!("{target_res}.field_{field_name}"),
+                                    a_res,
+                                ));
+                            }
+                            TypeExpr::Struct(_) => {
+                                res.push(IrInstruction::VarAssignment(
+                                    format!("{target_res}.{field_name}"),
+                                    a_res,
+                                ));
+                            }
+                            _ => panic!("can't set field on non object"),
                         }
-                        _ => {}
                     }
 
                     res.extend(i);
