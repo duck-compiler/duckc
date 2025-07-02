@@ -70,14 +70,15 @@ where
             value_expr = match value_expr {
                 (ValueExpr::Duck(x), loc) if x.is_empty() => {
                     (ValueExpr::Tuple(vec![]), loc).into_block()
-                },
+                }
                 x @ (ValueExpr::Block(_), _) => x,
                 _ => panic!("Function must be block"),
             };
 
             FunctionDefintion {
                 name: identifier,
-                return_type: return_type.or_else(|| Some(TypeExpr::Tuple(vec![]).into_empty_span())),
+                return_type: return_type
+                    .or_else(|| Some(TypeExpr::Tuple(vec![]).into_empty_span())),
                 params,
                 value_expr,
             }

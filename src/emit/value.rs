@@ -233,12 +233,16 @@ impl ValueExpr {
                     let target = &assign.target.0;
                     let mut res = Vec::new();
 
-                    if let ValueExpr::FieldAccess { target_obj, field_name } = target {
+                    if let ValueExpr::FieldAccess {
+                        target_obj,
+                        field_name,
+                    } = target
+                    {
                         let (target_instr, Some(IrValue::Var(target_res))) =
                             target_obj.0.emit(type_env, env)
-                            else {
-                                panic!("no var {:?}", target_obj);
-                            };
+                        else {
+                            panic!("no var {:?}", target_obj);
+                        };
                         let target_ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
                         res.extend(target_instr);
                         match target_ty {

@@ -297,11 +297,15 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         type_env: &mut TypeEnv,
     ) {
         if function_definition.name == "main" {
-            let valid_return_type = match function_definition.return_type.clone().map(|return_type| return_type.0) {
+            let valid_return_type = match function_definition
+                .return_type
+                .clone()
+                .map(|return_type| return_type.0)
+            {
                 Some(TypeExpr::Int) => true,
                 Some(TypeExpr::Tuple(types)) if types.is_empty() => true,
                 None => true,
-                _ => false
+                _ => false,
             };
 
             if !valid_return_type {
