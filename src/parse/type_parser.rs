@@ -123,7 +123,7 @@ where
                 .then_ignore(just(Token::ControlChar('}')))
                 .map(|fields| match fields {
                     Some(mut fields) => {
-                        if fields.len() == 0 {
+                        if fields.is_empty() {
                             return TypeExpr::Any;
                         }
 

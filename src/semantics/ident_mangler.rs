@@ -38,7 +38,7 @@ impl MangleEnv {
             //     .map(|x| x.to_owned())
             //     .collect::<Vec<_>>();
             // let mangled = starts_with_mangle.join("_");
-            if let Some(import_path) = self.imports.get(&starts_with_mangle[0].to_string()) {
+            if let Some(import_path) = self.imports.get(starts_with_mangle[0]) {
                 return Some(format!("{prefix}{import_path}_{ident}"));
             }
         }

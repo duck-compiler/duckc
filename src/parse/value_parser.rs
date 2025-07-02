@@ -430,7 +430,7 @@ where
                     ValueExpr::VarAssign(
                         (
                             Assignment {
-                                target: target,
+                                target,
                                 value_expr: value_expr.clone(),
                             },
                             e.span(),
