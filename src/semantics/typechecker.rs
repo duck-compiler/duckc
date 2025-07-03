@@ -803,6 +803,17 @@ impl TypeExpr {
     pub fn is_number(&self) -> bool {
         return *self == TypeExpr::Int || *self == TypeExpr::Float;
     }
+
+    pub fn is_primitive(&self) -> bool {
+        return match *self {
+            TypeExpr::Int
+            | TypeExpr::Float
+            | TypeExpr::String
+            | TypeExpr::Char
+            | TypeExpr::Bool => true,
+            _ => false
+        }
+    }
 }
 
 #[derive(Debug)]
