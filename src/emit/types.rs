@@ -183,7 +183,7 @@ impl TypeExpr {
                 )
             }
             TypeExpr::Tuple(_fields) => self.as_clean_go_type_name(type_env),
-            TypeExpr::Or(_variants) => todo!("implement variants"),
+            TypeExpr::Or(_variants) => self.as_clean_go_type_name(type_env),
         };
     }
 
@@ -244,7 +244,19 @@ impl TypeExpr {
                         .join("\n")
                 )
             }
-            TypeExpr::Or(_variants) => todo!("implement variants"),
+            TypeExpr::Or(variants) => {
+                format!(
+                    "struct {{\n{}\n}}",
+                    variants
+                        .iter()
+                        .map(|type_expr| format!(
+                            "{}",
+                            type_expr.0.as_go_type_annotation(type_env)
+                        ))
+                        .collect::<Vec<_>>()
+                        .join("_")
+                )
+            },
         };
     }
 
@@ -312,7 +324,17 @@ impl TypeExpr {
                         .join("_")
                 )
             }
-            TypeExpr::Or(_variants) => todo!("implement variants"),
+            TypeExpr::Or(variants) => {
+                // mvmo 03.07.25: Check for double sort
+                let mut variants = variants.clone()
+                    .iter()
+                    .map(|variant| variant.0.as_go_type_annotation(type_env))
+                    .collect::<Vec<_>>();
+
+                variants.sort();
+
+                return format!("Union_{}", variants.join("_or_"));
+            },
         };
     }
 }
