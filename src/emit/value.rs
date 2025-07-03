@@ -227,8 +227,7 @@ impl ValueExpr {
             }
             ValueExpr::VarAssign(b) => {
                 let assign = &b.0;
-                dbg!(&assign);
-                let (i, res) = dbg!(assign.value_expr.0.direct_or_with_instr(type_env, env));
+                let (i, res) = assign.value_expr.0.direct_or_with_instr(type_env, env);
                 if let Some(a_res) = res {
                     let target = &assign.target.0;
                     let mut res = Vec::new();

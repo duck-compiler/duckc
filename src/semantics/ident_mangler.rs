@@ -27,9 +27,10 @@ impl MangleEnv {
     pub fn mangle_ident(&self, is_global: bool, prefix: &str, ident: &String) -> Option<String> {
         let prefix = if is_global { "" } else { prefix };
         let starts_with_mangle = ident.split("_").collect::<Vec<_>>();
+        // mvmo 04.07.25: can we remove this?
         if ident == "Y_XXX_zz" {
-            dbg!(&self.names, ident);
-            dbg!(&starts_with_mangle);
+            // dbg!(&self.names, ident);
+            // dbg!(&starts_with_mangle);
         }
 
         if starts_with_mangle.len() > 1 {

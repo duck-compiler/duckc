@@ -23,7 +23,7 @@ impl IrInstruction {
                 format!("{r} = {} == {}", v1.emit_as_go(), v2.emit_as_go())
             }
             IrInstruction::Block(block_instr) => {
-                dbg!(format!("{{\n{}\n}}", join_ir(block_instr)))
+                format!("{{\n{}\n}}", join_ir(block_instr))
             }
             IrInstruction::FunCall(r, t, p) => {
                 format!(
@@ -85,9 +85,9 @@ impl IrInstruction {
                         .map(|(n, ty)| format!("{n} {ty}"))
                         .collect::<Vec<_>>()
                         .join(", "),
-                    dbg!(return_type.as_ref()
+                    return_type.as_ref()
                         .map(|return_type| if name == "main" { String::new() } else { return_type.clone() })
-                        .unwrap_or(String::new())),
+                        .unwrap_or(String::new()),
                     format!(
                         "{}\n{}",
                         params

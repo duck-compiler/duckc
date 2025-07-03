@@ -288,7 +288,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .for_each(|function_definition| {
             typeresolve_function_definition(function_definition, type_env);
 
-            let function_definition = dbg!(function_definition);
+            let function_definition = function_definition;
             let explicit_return_type = function_definition.return_type.clone()
                 .unwrap_or_else(|| TypeExpr::Tuple(vec![]).into_empty_span());
 
@@ -816,7 +816,7 @@ fn resolve_implicit_function_return_type(
 ) -> Result<TypeExpr, String> {
     // check against annotated return type
     fn flatten_returns(value_expr: &ValueExpr, return_types_found: &mut Vec<TypeExpr>, type_env: &mut TypeEnv) {
-        let value_expr = dbg!(value_expr);
+        let value_expr = value_expr;
         match value_expr {
             ValueExpr::FunctionCall {..}
             | ValueExpr::Int(..)
