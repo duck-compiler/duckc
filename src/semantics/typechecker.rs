@@ -287,12 +287,17 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .iter_mut()
         .for_each(|function_definition| {
             typeresolve_function_definition(function_definition, type_env);
-            let implicit_return_type = resolve_implicit_function_return_type(function_definition, type_env).unwrap();
-            dbg!(implicit_return_type);
-            TypeExpr::from_value_expr(&function_definition.value_expr.0, type_env);
+
+            let function_definition = dbg!(function_definition);
+            let explicit_return_type = function_definition.return_type.clone()
+                .unwrap_or_else(|| TypeExpr::Tuple(vec![]).into_empty_span());
+
+            let implicit_return_type = resolve_implicit_function_return_type(&function_definition, type_env).unwrap();
+
+            check_type_compatability(&explicit_return_type, &implicit_return_type.into_empty_span(), type_env);
         });
 
-    // is this required? If not we should remove the type aliases stack at all
+    // mvmo - 03.07.2025: is this required? If not we should remove the type aliases stack at all
     // type_env.pop_type_aliases();
 
     fn typeresolve_function_definition(
@@ -805,7 +810,6 @@ enum TypeCheckErrKind {
     TypeResolve
 }
 
-fn resolve_implicit_function_return_type(fun_def: &FunctionDefintion, type_env: &mut TypeEnv) -> Result<TypeExpr, String> {
 fn resolve_implicit_function_return_type(
     fun_def: &FunctionDefintion,
     type_env: &mut TypeEnv
