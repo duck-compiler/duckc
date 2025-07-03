@@ -806,8 +806,13 @@ enum TypeCheckErrKind {
 }
 
 fn resolve_implicit_function_return_type(fun_def: &FunctionDefintion, type_env: &mut TypeEnv) -> Result<TypeExpr, String> {
+fn resolve_implicit_function_return_type(
+    fun_def: &FunctionDefintion,
+    type_env: &mut TypeEnv
+) -> Result<TypeExpr, String> {
     // check against annotated return type
     fn flatten_returns(value_expr: &ValueExpr, return_types_found: &mut Vec<TypeExpr>, type_env: &mut TypeEnv) {
+        let value_expr = dbg!(value_expr);
         match value_expr {
             ValueExpr::FunctionCall {..}
             | ValueExpr::Int(..)
@@ -849,7 +854,6 @@ fn resolve_implicit_function_return_type(fun_def: &FunctionDefintion, type_env: 
                 declaration.as_ref().0.initializer.as_ref().inspect(|initializer| {
                     flatten_returns(&initializer.0, return_types_found, type_env);
                 });
-                flatten_returns(value_expr, return_types_found, type_env);
             },
             ValueExpr::Add(left, right) => {
                 flatten_returns(&left.as_ref().0, return_types_found, type_env);
