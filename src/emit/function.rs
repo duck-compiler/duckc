@@ -7,7 +7,7 @@ use crate::{
 impl FunctionDefintion {
     pub fn emit(&self, type_env: &mut TypeEnv, to_ir: &mut ToIr) -> IrInstruction {
         // what's r?
-        let (mut emitted_body, r) = self.value_expr.0.emit(type_env, to_ir);
+        let (emitted_body, _r) = self.value_expr.0.emit(type_env, to_ir);
 
         // TODO mvmo - 03.07.2025: this should check if the last is without a semicolon
         if self.return_type.is_some()
