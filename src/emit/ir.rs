@@ -85,7 +85,9 @@ impl IrInstruction {
                         .map(|(n, ty)| format!("{n} {ty}"))
                         .collect::<Vec<_>>()
                         .join(", "),
-                    return_type.as_ref().unwrap_or(&String::new()),
+                    dbg!(return_type.as_ref()
+                        .map(|return_type| if name == "main" { String::new() } else { return_type.clone() })
+                        .unwrap_or(String::new())),
                     format!(
                         "{}\n{}",
                         params
