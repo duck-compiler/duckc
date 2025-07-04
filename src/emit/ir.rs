@@ -1,15 +1,16 @@
-use crate::emit::value::{IrInstruction, IrValue};
+use crate::{emit::{types::primitive_type_name, value::{IrInstruction, IrValue}}, parse::type_parser::TypeExpr};
 
 impl IrInstruction {
     fn emit_as_go(&self) -> String {
         #![allow(clippy::format_in_format_args)]
         match self {
             IrInstruction::GoPackage(s) => format!("package {s}"),
-            IrInstruction::Add(r, v1, v2) => {
-                format!("{r} = {} + {}", v1.emit_as_go(), v2.emit_as_go())
+            // TODO: resolve correct outcoming type
+            IrInstruction::Add(r, left, right, type_expr) => {
+                format!("{r} = {} {{ value: {}.value + {}.value }}", primitive_type_name(type_expr), left.emit_as_go(), right.emit_as_go())
             }
-            IrInstruction::Mul(r, v1, v2) => {
-                format!("{r} = {} * {}", v1.emit_as_go(), v2.emit_as_go())
+            IrInstruction::Mul(r, v1, v2, type_expr) => {
+                format!("{r} = {} {{ {}.value * {}.value }}", primitive_type_name(type_expr), v1.emit_as_go(), v2.emit_as_go())
             }
             IrInstruction::Continue => "continue".to_string(),
             IrInstruction::Break => "break".to_string(),
@@ -157,11 +158,11 @@ pub fn join_ir(v: &[IrInstruction]) -> String {
 impl IrValue {
     pub fn emit_as_go(&self) -> String {
         match self {
-            IrValue::Bool(b) => b.to_string(),
-            IrValue::Int(i) => i.to_string(),
-            IrValue::Float(f) => f.to_string(),
-            IrValue::Char(c) => format!("'{c}'"),
-            IrValue::String(s) => format!("\"{s}\""),
+            IrValue::Bool(b) => format!("DuckBool {{ value: {} }}", b.to_string()),
+            IrValue::Int(i) => format!("DuckInt {{ value: {} }}", i.to_string()),
+            IrValue::Float(f) => format!("DuckFloat {{ value: {} }}", f.to_string()),
+            IrValue::Char(c) => format!("DuckChar {{ value: '{c}' }}"),
+            IrValue::String(s) => format!("DuckString {{ \"{s}\" }}"),
             IrValue::Var(v) => v.to_string(),
             IrValue::Duck(s, fields) | IrValue::Struct(s, fields) => {
                 format!(

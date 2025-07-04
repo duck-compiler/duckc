@@ -27,8 +27,8 @@ pub enum IrInstruction {
     VarDecl(String, String),
     VarAssignment(IrRes, IrValue),
     FunCall(Option<IrRes>, IrValue, Vec<IrValue>),
-    Add(IrRes, IrValue, IrValue),
-    Mul(IrRes, IrValue, IrValue),
+    Add(IrRes, IrValue, IrValue, TypeExpr),
+    Mul(IrRes, IrValue, IrValue, TypeExpr),
     Equals(IrRes, IrValue, IrValue),
     Break,
     Continue,
@@ -288,15 +288,19 @@ impl ValueExpr {
                     return (ir, None);
                 }
 
+                let type_expr = TypeExpr::from_value_expr(&v1.0, type_env);
+
                 let var = env.new_var();
                 ir.push(IrInstruction::VarDecl(
                     var.clone(),
-                    TypeExpr::from_value_expr(&v1.0, type_env).as_go_type_annotation(type_env),
+                    type_expr.as_go_type_annotation(type_env),
                 ));
+
                 ir.push(IrInstruction::Add(
                     var.clone(),
                     v1_res.unwrap(),
                     v2_res.unwrap(),
+                    type_expr
                 ));
 
                 (ir, as_rvar(var))
@@ -315,15 +319,19 @@ impl ValueExpr {
                     return (ir, None);
                 }
 
+                let type_expr = TypeExpr::from_value_expr(&v1.0, type_env);
+
                 let var = env.new_var();
                 ir.push(IrInstruction::VarDecl(
                     var.clone(),
-                    TypeExpr::from_value_expr(&v1.0, type_env).as_go_type_annotation(type_env),
+                    type_expr.as_go_type_annotation(type_env),
                 ));
+
                 ir.push(IrInstruction::Mul(
                     var.clone(),
                     v1_res.unwrap(),
                     v2_res.unwrap(),
+                    type_expr
                 ));
 
                 (ir, as_rvar(var))
@@ -417,8 +425,8 @@ impl ValueExpr {
                 let (mut instr, target) = v_target.0.direct_or_with_instr(type_env, env);
                 if let Some(target) = target {
                     let mut v_p_res = Vec::new();
-                    for (p, _) in params {
-                        let (p_instr, p_res) = p.direct_or_with_instr(type_env, env);
+                    for (param, _) in params {
+                        let (p_instr, p_res) = param.direct_or_with_instr(type_env, env);
                         instr.extend(p_instr);
                         if let Some(p_res) = p_res {
                             v_p_res.push(p_res);
@@ -618,9 +626,7 @@ mod tests {
     use crate::{
         emit::value::{IrInstruction, IrValue, ToIr},
         parse::{
-            lexer::lexer,
-            make_input,
-            value_parser::{empty_range, value_expr_parser},
+            lexer::lexer, make_input, type_parser::TypeExpr, value_parser::{empty_range, value_expr_parser}
         },
         semantics::typechecker::TypeEnv,
     };
@@ -636,14 +642,14 @@ mod tests {
                 "1 + 1",
                 vec![
                     decl("var_0", "DuckInt"),
-                    IrInstruction::Add("var_0".into(), IrValue::Int(1), IrValue::Int(1)),
+                    IrInstruction::Add("var_0".into(), IrValue::Int(1), IrValue::Int(1), TypeExpr::Int),
                 ],
             ),
             (
                 "1 * 1",
                 vec![
                     decl("var_0", "DuckInt"),
-                    IrInstruction::Mul("var_0".into(), IrValue::Int(1), IrValue::Int(1)),
+                    IrInstruction::Mul("var_0".into(), IrValue::Int(1), IrValue::Int(1), TypeExpr::Int),
                 ],
             ),
             (
