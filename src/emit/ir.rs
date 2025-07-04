@@ -5,11 +5,12 @@ impl IrInstruction {
         #![allow(clippy::format_in_format_args)]
         match self {
             IrInstruction::GoPackage(s) => format!("package {s}"),
-            // TODO: resolve correct outcoming type
             IrInstruction::Add(r, left, right, type_expr) => {
+                // TODO: check if this is correct
                 format!("{r} = {} {{ value: {}.value + {}.value }}", primitive_type_name(type_expr), left.emit_as_go(), right.emit_as_go())
             }
             IrInstruction::Mul(r, v1, v2, type_expr) => {
+                // TODO: check if this is correct
                 format!("{r} = {} {{ {}.value * {}.value }}", primitive_type_name(type_expr), v1.emit_as_go(), v2.emit_as_go())
             }
             IrInstruction::Continue => "continue".to_string(),
