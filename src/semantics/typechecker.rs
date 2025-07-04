@@ -221,6 +221,7 @@ impl TypeEnv {
 
     pub fn summarize(&mut self) -> TypesSummary {
         let mut all_types = self.all_types.clone();
+        all_types.extend(TypeExpr::primitives());
         let mut param_names_used = Vec::new();
 
         let mut to_push = Vec::new();

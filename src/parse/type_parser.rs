@@ -60,6 +60,16 @@ impl TypeExpr {
     pub fn into_empty_span(self) -> Spanned<TypeExpr> {
         (self, empty_range())
     }
+
+    pub fn primitives() -> Vec<TypeExpr> {
+        return vec![
+            TypeExpr::Int,
+            TypeExpr::Float,
+            TypeExpr::Bool,
+            TypeExpr::String,
+            TypeExpr::Char,
+        ]
+    }
 }
 
 pub fn type_expression_parser<'src, I>()
