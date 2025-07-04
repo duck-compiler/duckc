@@ -50,6 +50,7 @@ pub enum ValueExpr {
     Equals(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
     InlineGo(String),
     Lambda(Box<LambdaFunctionExpr>),
+    ArrayAccess(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
 }
 
 pub trait IntoBlock {
@@ -336,6 +337,11 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
+            enum AtomPostParseUnit {
+                IsFunc(Vec<Spanned<ValueExpr>>),
+                IsArrayAccess(Spanned<ValueExpr>),
+            }
+
             let atom = just(Token::ControlChar('!'))
                 .repeated()
                 .collect::<Vec<_>>()
@@ -375,14 +381,34 @@ where
                                 }),
                         ))),
                 )
-                .then(params.clone().repeated().collect::<Vec<_>>())
+                .then(
+                    choice((
+                        value_expr_parser
+                            .clone()
+                            .repeated()
+                            .at_least(1)
+                            .at_most(1)
+                            .collect::<Vec<_>>()
+                            .delimited_by(
+                                just(Token::ControlChar('[')),
+                                just(Token::ControlChar(']')),
+                            )
+                            .map(|x| AtomPostParseUnit::IsArrayAccess(x[0].clone())),
+                        params.clone().map(AtomPostParseUnit::IsFunc),
+                    ))
+                    .repeated()
+                    .collect::<Vec<_>>(),
+                )
                 .map(|((neg, target), params)| {
-                    let target = params.into_iter().fold(target, |acc, x| {
-                        ValueExpr::FunctionCall {
-                            target: acc.into(),
-                            params: x,
+                    let target = params.into_iter().fold(target, |acc, x| match x {
+                        AtomPostParseUnit::IsArrayAccess(idx_expr) => {
+                            ValueExpr::ArrayAccess(acc.into(), idx_expr.into()).into_empty_span()
                         }
-                        .into_empty_span()
+                        AtomPostParseUnit::IsFunc(params) => ValueExpr::FunctionCall {
+                            target: acc.into(),
+                            params: params,
+                        }
+                        .into_empty_span(),
                     });
 
                     neg.into_iter().fold(target, |acc, _| {
@@ -600,6 +626,10 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
 pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
     v.1 = empty_range();
     match &mut v.0 {
+        ValueExpr::ArrayAccess(target, idx_expr) => {
+            value_expr_into_empty_range(&mut **target);
+            value_expr_into_empty_range(&mut **idx_expr);
+        }
         ValueExpr::Array(elems) => {
             for elem in elems {
                 value_expr_into_empty_range(elem);
@@ -753,6 +783,58 @@ mod tests {
                     .into_empty_span(),
                     ValueExpr::Int(2).into_empty_span(),
                 ]),
+            ),
+            (
+                "a[0]",
+                ValueExpr::ArrayAccess(var("a"), ValueExpr::Int(0).into_empty_span().into()),
+            ),
+            (
+                "a[0][0]",
+                ValueExpr::ArrayAccess(
+                    ValueExpr::ArrayAccess(var("a"), ValueExpr::Int(0).into_empty_span().into())
+                        .into_empty_span()
+                        .into(),
+                    ValueExpr::Int(0).into_empty_span().into(),
+                ),
+            ),
+            (
+                "a()[0]()",
+                ValueExpr::FunctionCall {
+                    target: ValueExpr::ArrayAccess(
+                        ValueExpr::FunctionCall {
+                            target: var("a"),
+                            params: vec![],
+                        }
+                        .into_empty_span()
+                        .into(),
+                        ValueExpr::Int(0).into_empty_span().into(),
+                    )
+                    .into_empty_span()
+                    .into(),
+                    params: vec![],
+                },
+            ),
+            (
+                "a()[0][0]()",
+                ValueExpr::FunctionCall {
+                    target: ValueExpr::ArrayAccess(
+                        ValueExpr::ArrayAccess(
+                            ValueExpr::FunctionCall {
+                                target: var("a"),
+                                params: vec![],
+                            }
+                            .into_empty_span()
+                            .into(),
+                            ValueExpr::Int(0).into_empty_span().into(),
+                        )
+                        .into_empty_span()
+                        .into(),
+                        ValueExpr::Int(0).into_empty_span().into(),
+                    )
+                    .into_empty_span()
+                    .into(),
+                    params: vec![],
+                },
             ),
             (
                 "[a(), b(), (1,2)]",

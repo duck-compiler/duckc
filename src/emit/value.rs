@@ -153,6 +153,7 @@ impl ValueExpr {
         env: &mut ToIr,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
+            ValueExpr::ArrayAccess(_, _) => todo!(),
             ValueExpr::Array(_) => todo!(),
             ValueExpr::VarDecl(b) => {
                 let Declaration {
