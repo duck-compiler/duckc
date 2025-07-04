@@ -821,7 +821,6 @@ impl TypeExpr {
     }
 }
 
-
 fn resolve_implicit_function_return_type(
     fun_def: &FunctionDefintion,
     type_env: &mut TypeEnv
@@ -918,11 +917,103 @@ fn require(condition: bool, fail_message: String) {
     }
 }
 
+fn types_are_compatible(one: &TypeExpr, two: &TypeExpr, _type_env: &mut TypeEnv) -> bool {
+    if one.is_number() && two.is_number() {
+        return true;
+    }
+
+    if one.is_number() || two.is_number() {
+        return false;
+    }
+
+    one == two
+}
+
+fn is_non_variant_type_in_variant(
+    non_variant_type: &Spanned<TypeExpr>,
+    variant: &[Spanned<TypeExpr>],
+    type_env: &mut TypeEnv,
+) -> bool {
+    variant
+        .iter()
+        .any(|(haystack_member, _)| types_are_compatible(&haystack_member, &non_variant_type.0, type_env))
+}
+
+fn is_subset_of_variant_type(
+    variant_type: &Spanned<TypeExpr>,
+    other: &Spanned<TypeExpr>,
+    type_env: &mut TypeEnv,
+) {
+    let variant_members = match &variant_type.0 {
+        TypeExpr::Or(members) => members,
+        _ => {
+            panic!("is_subset_of_variant_type called with a non-variant type");
+        }
+    };
+
+    match &other.0 {
+        TypeExpr::Or(other_members) => {
+            for other_member in other_members {
+                if !is_non_variant_type_in_variant(other_member, variant_members, type_env) {
+                    failure(
+                        variant_type.1.context.file_name,
+                        "Incompatible Variant Types".to_string(),
+                        (
+                            format!(
+                                "The type `{}` is not compatible with the target variant.",
+                                other_member.0.as_go_type_annotation(type_env)
+                            ),
+                            other_member.1,
+                        ),
+                        vec![(
+                            format!(
+                                "The target variant only allows the following types: `{}`.",
+                                variant_type.0.as_go_type_annotation(type_env)
+                            ),
+                            variant_type.1,
+                        )],
+                        variant_type.1.context.file_contents,
+                    );
+                }
+            }
+        }
+
+        _ => {
+            if !is_non_variant_type_in_variant(other, variant_members, type_env) {
+                failure(
+                    other.1.context.file_name,
+                    "Incompatible Types".to_string(),
+                    (
+                        format!(
+                            "This expression is of type `{}`.",
+                            other.0.as_go_type_annotation(type_env)
+                        ),
+                        other.1,
+                    ),
+                    vec![(
+                        format!(
+                            "But it needs to be compatible with one of the types in the variant: `{}`.",
+                            variant_type.0.as_go_type_annotation(type_env)
+                        ),
+                        variant_type.1,
+                    )],
+                    other.1.context.file_contents,
+                );
+            }
+        }
+    }
+}
+
 fn check_type_compatability(
     one: &Spanned<TypeExpr>,
     two: &Spanned<TypeExpr>,
     type_env: &mut TypeEnv,
 ) {
+    if one.0.is_variant() {
+        is_subset_of_variant_type(one, two, type_env);
+        return;
+    }
+
     if one.0.is_number() {
         if !two.0.is_number() {
             failure(
