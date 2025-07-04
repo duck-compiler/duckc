@@ -1199,54 +1199,55 @@ mod test {
 
     #[test]
     fn test_type_summary() {
-        // the summary always holds the type of main function
+        // the summary always holds the type of main and it's return type and all the primitives
+        let primitive_and_main_len = TypeExpr::primitives().len() + 1 /* main fn type */ + 1 /* main fn return type -> () */;
         let src_and_summary_check_funs: Vec<(&str, Box<dyn FnOnce(&TypesSummary)>)> = vec![
             (
                 "{ let y: { x: String, y: Int }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 5);
+                    assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: String, y: Int, a: { b: { c: { d: { e: String }}}} }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 9);
+                    assert_eq!(summary.types_used.len(), 5 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let x: Int = 5; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 3);
+                    assert_eq!(summary.types_used.len(), 0 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let x: { a: Char, b: Char }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 4);
+                    assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: { y: Int } }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 5);
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: Int }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 4);
+                    assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: Int, y: String, z: { x: Int } }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 6);
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: Int, y: String, z: { x: Int }, w: () }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 6);
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
         ];
