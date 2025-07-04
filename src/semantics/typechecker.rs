@@ -1048,15 +1048,10 @@ fn check_type_compatability(
     }
 
     if one.0.as_clean_go_type_name(type_env) != two.0.as_clean_go_type_name(type_env) {
-        let smaller = if one.1.start > two.1.start {
-            two.1
+        let (smaller, larger) = if one.1.start <= two.1.start {
+            (one.1, two.1)
         } else {
-            one.1
-        };
-        let larger = if one.1.start < two.1.start {
-            two.1
-        } else {
-            one.1
+            (two.1, one.1)
         };
 
         let combined_span = SS {
