@@ -517,8 +517,8 @@ pub fn empty_range() -> SS {
         start: 0,
         end: 1,
         context: Context {
-            file_name: "",
-            file_contents: "",
+            file_name: "TODO: Empty Range",
+            file_contents: "TODO: PLEASE DONT",
         },
     }
 }
