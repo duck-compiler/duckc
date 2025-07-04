@@ -805,6 +805,10 @@ impl TypeExpr {
         return *self == TypeExpr::Int || *self == TypeExpr::Float;
     }
 
+    pub fn is_variant(&self) -> bool {
+        return matches!(&self, TypeExpr::Or(..));
+    }
+
     pub fn is_primitive(&self) -> bool {
         return match *self {
             TypeExpr::Int
