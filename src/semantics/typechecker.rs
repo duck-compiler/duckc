@@ -816,10 +816,6 @@ impl TypeExpr {
     }
 }
 
-#[derive(Debug)]
-enum TypeCheckErrKind {
-    TypeResolve
-}
 
 fn resolve_implicit_function_return_type(
     fun_def: &FunctionDefintion,

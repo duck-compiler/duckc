@@ -1,4 +1,4 @@
-use crate::{emit::{types::primitive_type_name, value::{IrInstruction, IrValue}}, parse::type_parser::TypeExpr};
+use crate::emit::{types::primitive_type_name, value::{IrInstruction, IrValue}};
 
 impl IrInstruction {
     fn emit_as_go(&self) -> String {
