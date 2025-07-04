@@ -15,6 +15,17 @@ pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str
     }
 }
 
+pub fn primitive_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
+    match primitive_type_expr {
+        TypeExpr::String => "DuckString",
+        TypeExpr::Int => "DuckInt",
+        TypeExpr::Float => "DuckFloat",
+        TypeExpr::Bool => "DuckBool",
+        TypeExpr::Char => "Char",
+        _ => panic!("That's not a primitive")
+    }
+}
+
 pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
     let summary = type_env.summarize();
 
