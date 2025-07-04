@@ -1,4 +1,3 @@
-#![feature(let_chains)]
 #![feature(impl_trait_in_bindings)]
 #![allow(
     clippy::needless_return,
