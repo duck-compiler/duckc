@@ -242,7 +242,7 @@ impl ValueExpr {
                         let (target_instr, Some(IrValue::Var(target_res))) =
                             target_obj.0.emit(type_env, env)
                         else {
-                            panic!("no var {:?}", target_obj);
+                            panic!("no var {target_obj:?}");
                         };
                         let target_ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
                         res.extend(target_instr);

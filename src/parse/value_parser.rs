@@ -339,9 +339,9 @@ where
 
             #[derive(Debug, PartialEq, Clone)]
             enum AtomPostParseUnit {
-                IsFunc(Vec<Spanned<ValueExpr>>),
-                IsArrayAccess(Spanned<ValueExpr>),
-                IsFieldAccess(String),
+                FuncCall(Vec<Spanned<ValueExpr>>),
+                ArrayAccess(Spanned<ValueExpr>),
+                FieldAccess(String),
             }
 
             let atom = just(Token::ControlChar('!'))
@@ -395,31 +395,31 @@ where
                                 just(Token::ControlChar('[')),
                                 just(Token::ControlChar(']')),
                             )
-                            .map(|x| AtomPostParseUnit::IsArrayAccess(x[0].clone())),
-                        params.clone().map(AtomPostParseUnit::IsFunc),
+                            .map(|x| AtomPostParseUnit::ArrayAccess(x[0].clone())),
+                        params.clone().map(AtomPostParseUnit::FuncCall),
                         just(Token::ControlChar('.'))
                             .ignore_then(
                                 select_ref! { Token::Ident(s) => s.to_string() }
                                     .or(select_ref! { Token::IntLiteral(i) => i.to_string() }),
                             )
-                            .map(AtomPostParseUnit::IsFieldAccess),
+                            .map(AtomPostParseUnit::FieldAccess),
                     ))
                     .repeated()
                     .collect::<Vec<_>>(),
                 )
                 .map(|((neg, target), params)| {
                     let target = params.into_iter().fold(target, |acc, x| match x {
-                        AtomPostParseUnit::IsArrayAccess(idx_expr) => {
+                        AtomPostParseUnit::ArrayAccess(idx_expr) => {
                             ValueExpr::ArrayAccess(acc.into(), idx_expr.into()).into_empty_span()
                         }
-                        AtomPostParseUnit::IsFunc(params) => ValueExpr::FunctionCall {
+                        AtomPostParseUnit::FuncCall(params) => ValueExpr::FunctionCall {
                             target: acc.into(),
-                            params: params,
+                            params,
                         }
                         .into_empty_span(),
-                        AtomPostParseUnit::IsFieldAccess(field_name) => ValueExpr::FieldAccess {
+                        AtomPostParseUnit::FieldAccess(field_name) => ValueExpr::FieldAccess {
                             target_obj: acc.into(),
-                            field_name: field_name,
+                            field_name,
                         }
                         .into_empty_span(),
                     });
@@ -503,7 +503,7 @@ where
                 .allow_trailing()
                 .collect::<Vec<_>>()
                 .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
-                .map(|elems| ValueExpr::Array(elems))
+                .map(ValueExpr::Array)
                 .map_with(|x, e| (x, e.span()));
 
             choice((inline_go, assignment, array, equals, add, declaration, atom))
@@ -561,7 +561,7 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
         }
         TypeExpr::Array(t) => {
             t.1 = empty_range();
-            type_expr_into_empty_range(&mut **t);
+            type_expr_into_empty_range(t);
         }
         TypeExpr::Tuple(fields) => {
             for f in fields {
@@ -594,8 +594,8 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
     v.1 = empty_range();
     match &mut v.0 {
         ValueExpr::ArrayAccess(target, idx_expr) => {
-            value_expr_into_empty_range(&mut **target);
-            value_expr_into_empty_range(&mut **idx_expr);
+            value_expr_into_empty_range(target);
+            value_expr_into_empty_range(idx_expr);
         }
         ValueExpr::Array(elems) => {
             for elem in elems {
@@ -689,7 +689,6 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
 #[cfg(test)]
 mod tests {
     use chumsky::prelude::*;
-    use toml::Value;
 
     use crate::parse::{
         Spanned,
