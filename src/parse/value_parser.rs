@@ -337,9 +337,11 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
+            #[derive(Debug, PartialEq, Clone)]
             enum AtomPostParseUnit {
                 IsFunc(Vec<Spanned<ValueExpr>>),
                 IsArrayAccess(Spanned<ValueExpr>),
+                IsFieldAccess(String),
             }
 
             let atom = just(Token::ControlChar('!'))
@@ -395,6 +397,12 @@ where
                             )
                             .map(|x| AtomPostParseUnit::IsArrayAccess(x[0].clone())),
                         params.clone().map(AtomPostParseUnit::IsFunc),
+                        just(Token::ControlChar('.'))
+                            .ignore_then(
+                                select_ref! { Token::Ident(s) => s.to_string() }
+                                    .or(select_ref! { Token::IntLiteral(i) => i.to_string() }),
+                            )
+                            .map(AtomPostParseUnit::IsFieldAccess),
                     ))
                     .repeated()
                     .collect::<Vec<_>>(),
@@ -409,6 +417,11 @@ where
                             params: params,
                         }
                         .into_empty_span(),
+                        AtomPostParseUnit::IsFieldAccess(field_name) => ValueExpr::FieldAccess {
+                            target_obj: acc.into(),
+                            field_name: field_name,
+                        }
+                        .into_empty_span(),
                     });
 
                     neg.into_iter().fold(target, |acc, _| {
@@ -418,39 +431,10 @@ where
                 .map_with(|x, e| (x.0, e.span()))
                 .boxed();
 
-            let field_access = just(Token::ControlChar('!'))
-                .repeated()
-                .collect::<Vec<_>>()
-                .then(atom.clone())
-                .then_ignore(just(Token::ControlChar('.')))
-                .then(
-                    select_ref! { Token::Ident(field_name) => field_name.to_owned() }
-                        .or(select_ref! { Token::IntLiteral(i) => i.to_string() })
-                        .separated_by(just(Token::ControlChar('.')))
-                        // .repeated()
-                        .at_least(1)
-                        .collect::<Vec<_>>(),
-                )
-                .map(|((neg, base), then)| {
-                    let base = then.iter().fold(base, |acc, x| {
-                        ValueExpr::FieldAccess {
-                            target_obj: acc.into(),
-                            field_name: x.clone(),
-                        }
-                        .into_empty_span()
-                    });
-
-                    neg.into_iter().fold(base, |acc, _| {
-                        ValueExpr::BoolNegate(acc.into()).into_empty_span()
-                    })
-                })
-                .map_with(|x, e| (x.0, e.span()))
-                .boxed();
-
             let assignment = scope_res_ident
                 .clone()
                 .rewind()
-                .ignore_then(field_access.clone().or(scope_res_ident.clone()))
+                .ignore_then(atom.clone())
                 .then_ignore(just(Token::ControlChar('=')))
                 .then(value_expr_parser.clone())
                 .map_with(|(target, value_expr), e| {
@@ -468,13 +452,11 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            let prod = field_access
-                .clone()
-                .or(atom.clone())
+            let prod = atom
                 .clone()
                 .then(
                     just(Token::ControlChar('*'))
-                        .ignore_then(field_access.clone().or(atom.clone()).clone())
+                        .ignore_then(atom.clone())
                         .repeated()
                         .collect::<Vec<_>>(),
                 )
@@ -515,12 +497,6 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            // let array = equals
-            //     .clone()
-            //     .or(field_access.clone())
-            //     .or(atom.clone())
-            //     .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')));
-
             let array = value_expr_parser
                 .clone()
                 .separated_by(just(Token::ControlChar(',')))
@@ -530,18 +506,9 @@ where
                 .map(|elems| ValueExpr::Array(elems))
                 .map_with(|x, e| (x, e.span()));
 
-            choice((
-                inline_go,
-                assignment,
-                array,
-                equals,
-                field_access,
-                add,
-                declaration,
-                atom,
-            ))
-            .labelled("expression")
-            .boxed()
+            choice((inline_go, assignment, array, equals, add, declaration, atom))
+                .labelled("expression")
+                .boxed()
         },
     )
 }
@@ -722,6 +689,7 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
 #[cfg(test)]
 mod tests {
     use chumsky::prelude::*;
+    use toml::Value;
 
     use crate::parse::{
         Spanned,
@@ -783,6 +751,65 @@ mod tests {
                     .into_empty_span(),
                     ValueExpr::Int(2).into_empty_span(),
                 ]),
+            ),
+            (
+                "[[1,2,3], []]",
+                ValueExpr::Array(vec![
+                    ValueExpr::Array(vec![
+                        ValueExpr::Int(1).into_empty_span(),
+                        ValueExpr::Int(2).into_empty_span(),
+                        ValueExpr::Int(3).into_empty_span(),
+                    ])
+                    .into_empty_span(),
+                    ValueExpr::Array(vec![]).into_empty_span(),
+                ]),
+            ),
+            (
+                "a.y[0]",
+                ValueExpr::ArrayAccess(
+                    ValueExpr::FieldAccess {
+                        target_obj: var("a"),
+                        field_name: "y".into(),
+                    }
+                    .into_empty_span()
+                    .into(),
+                    ValueExpr::Int(0).into_empty_span().into(),
+                ),
+            ),
+            (
+                "a.y()",
+                ValueExpr::FunctionCall {
+                    target: ValueExpr::FieldAccess {
+                        target_obj: var("a"),
+                        field_name: "y".into(),
+                    }
+                    .into_empty_span()
+                    .into(),
+                    params: vec![],
+                },
+            ),
+            (
+                "a.y[0] = 5",
+                ValueExpr::VarAssign(
+                    (
+                        Assignment {
+                            target: ValueExpr::ArrayAccess(
+                                ValueExpr::FieldAccess {
+                                    target_obj: var("a"),
+                                    field_name: "y".into(),
+                                }
+                                .into_empty_span()
+                                .into(),
+                                ValueExpr::Int(0).into_empty_span().into(),
+                            )
+                            .into_empty_span()
+                            .into(),
+                            value_expr: ValueExpr::Int(5).into_empty_span().into(),
+                        },
+                        empty_range(),
+                    )
+                        .into(),
+                ),
             ),
             (
                 "a[0]",
