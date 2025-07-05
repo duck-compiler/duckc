@@ -1238,6 +1238,7 @@ mod test {
                     assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
+            // TODO: The inner types are not resolved yet, because they're not pushed into the all_types
             (
                 "{ let y: { x: Int, y: String, z: { x: Int } }; }",
                 Box::new(|summary: &TypesSummary| {
@@ -1247,7 +1248,21 @@ mod test {
             (
                 "{ let y: { x: Int, y: String, z: { x: Int }, w: () }; }",
                 Box::new(|summary: &TypesSummary| {
+                    dbg!(&summary.types_used);
                     assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
+                }),
+            ),
+            (
+                "{ let y: { x: String } | { y: String }; }",
+                Box::new(|summary: &TypesSummary| {
+                    dbg!(&summary.types_used);
+                    assert_eq!(summary.types_used.len(), 3 + primitive_and_main_len);
+                }),
+            ),
+            (
+                "{ let y: { x: String } | { y: String } | { z: String }; }",
+                Box::new(|summary: &TypesSummary| {
+                    assert_eq!(summary.types_used.len(), 4 + primitive_and_main_len);
                 }),
             ),
         ];
