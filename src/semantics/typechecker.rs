@@ -1,11 +1,7 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    SS, Spanned, failure,
-    function_parser::FunctionDefintion,
-    source_file_parser::SourceFile,
-    type_parser::{Duck, Field, Struct, TypeExpr},
-    value_parser::ValueExpr,
+    failure, function_parser::FunctionDefintion, source_file_parser::SourceFile, type_parser::{Duck, Field, Struct, TypeExpr}, value_parser::{empty_range, ValueExpr}, Spanned, SS
 };
 
 #[derive(Debug, Clone)]
@@ -346,8 +342,17 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         match value_expr {
-            ValueExpr::ArrayAccess(_, _) => todo!(),
-            ValueExpr::Array(_) => todo!(),
+            ValueExpr::ArrayAccess(target, idx) => {
+                typeresolve_value_expr(&mut target.0, type_env);
+                typeresolve_value_expr(&mut idx.0, type_env);
+            }
+            ValueExpr::Array(_, exprs) => {
+                for expr in exprs {
+                    typeresolve_value_expr(&mut expr.0, type_env);
+                }
+                let ty = TypeExpr::from_value_expr(value_expr as &ValueExpr, type_env);
+                type_env.insert_type(ty);
+            },
             ValueExpr::InlineGo(..) => {}
             ValueExpr::Lambda(_lambda_expr) => {
                 // typeresolve_value_expr(lambda_expr., type_env);
@@ -481,8 +486,36 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 impl TypeExpr {
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
-            ValueExpr::ArrayAccess(_, _) => todo!(),
-            ValueExpr::Array(_) => todo!(),
+            ValueExpr::ArrayAccess(target, idx) => {
+                let target_type = TypeExpr::from_value_expr(&target.0, type_env);
+                let idx_type = TypeExpr::from_value_expr(&idx.0, type_env);
+
+                require(matches!(&target_type, TypeExpr::Array(_)), "Needs to be array".into());
+                require(matches!(&idx_type, TypeExpr::Int), "Needs to be int".into());
+
+                let TypeExpr::Array(array_type) = target_type else {
+                    panic!()
+                };
+
+                array_type.0.clone()
+            },
+            ValueExpr::Array(ty, exprs) => {
+                let mut ty = ty.clone().map(|(ty, _)| ty);
+                for expr in exprs {
+                    let expr_type = TypeExpr::from_value_expr(&expr.0, type_env);
+                    match ty.as_ref() {
+                        Some(expected) => {
+                            check_type_compatability(
+                                &(expr_type, expr.1.clone()),
+                                &(expected.clone(), empty_range()),
+                                type_env
+                            );
+                        }
+                        None => ty = Some(expr_type),
+                    }
+                }
+                TypeExpr::Array(ty.unwrap().into_empty_span().into())
+            },
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
                 lambda_expr
                     .params
@@ -833,6 +866,11 @@ fn resolve_implicit_function_return_type(
     fn flatten_returns(value_expr: &ValueExpr, return_types_found: &mut Vec<TypeExpr>, type_env: &mut TypeEnv) {
         let value_expr = value_expr;
         match value_expr {
+            ValueExpr::Array(_, exprs) => {
+                for expr in exprs {
+                    flatten_returns(&expr.0, return_types_found, type_env);
+                }
+            }
             ValueExpr::FunctionCall {..}
             | ValueExpr::Int(..)
             | ValueExpr::InlineGo(..)
@@ -847,7 +885,8 @@ fn resolve_implicit_function_return_type(
             | ValueExpr::Struct(..)
             | ValueExpr::FieldAccess { .. }
             | ValueExpr::Lambda(..)
-            | ValueExpr::Variable(..) => {}
+            | ValueExpr::Variable(..)
+            | ValueExpr::ArrayAccess(..) => {}
             ValueExpr::If { condition, then, r#else } => {
                 flatten_returns(&condition.as_ref().0, return_types_found, type_env);
                 flatten_returns(&then.as_ref().0, return_types_found, type_env);
@@ -1016,6 +1055,14 @@ fn check_type_compatability(
     if one.0.is_variant() {
         is_subset_of_variant_type(one, two, type_env);
         return;
+    }
+
+    if let TypeExpr::Array(ty_1) = &one.0 && let TypeExpr::Array(ty_2) = &two.0 {
+        let first_coerce = if let TypeExpr::InlineGo = &ty_1.0 { true } else { false };
+        let two_coerce = if let TypeExpr::InlineGo = &ty_2.0 { true } else { false };
+        if first_coerce || two_coerce {
+            return;
+        }
     }
 
     if one.0.is_number() {

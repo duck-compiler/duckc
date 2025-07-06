@@ -73,6 +73,150 @@ impl TypeExpr {
     }
 }
 
+pub fn type_expression_parser_without_array<'src, I>()
+-> impl Parser<'src, I, Spanned<TypeExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone
+where
+    I: BorrowInput<'src, Token = Token, Span = SS>,
+{
+    recursive(
+        |p: Recursive<dyn Parser<'_, _, Spanned<TypeExpr>, extra::Err<Rich<'src, Token, SS>>>>| {
+            let field = select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                .then_ignore(just(Token::ControlChar(':')))
+                .then(p.clone());
+
+            let duck_fields = field
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<(String, Spanned<TypeExpr>)>>();
+
+            let struct_fields = field
+                .separated_by(just(Token::ControlChar(',')))
+                .at_least(1)
+                .allow_trailing()
+                .collect::<Vec<(String, Spanned<TypeExpr>)>>();
+
+            let function_fields = duck_fields.clone();
+
+            let go_type_identifier: impl Parser<'src, I, String, extra::Err<Rich<'src, Token, SS>>> =
+                select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                    .separated_by(just(Token::ControlChar('.')))
+                    .at_least(1)
+                    .at_most(2)
+                    .collect::<Vec<String>>()
+                    .map(|str| str.join("."));
+
+            let go_type = just(Token::Go)
+                .ignore_then(go_type_identifier)
+                .map(TypeExpr::Go);
+
+            let r#struct = just(Token::Struct)
+                .ignore_then(just(Token::ControlChar('{')))
+                .ignore_then(struct_fields)
+                .then_ignore(just(Token::ControlChar('}')))
+                .map(|fields| {
+                    TypeExpr::Struct(Struct {
+                        fields: fields
+                            .iter()
+                            .cloned()
+                            .map(|(name, (type_expr, e))| Field {
+                                name,
+                                type_expr: (type_expr, e),
+                            })
+                            .collect(),
+                    })
+                });
+
+            let duck = just(Token::Duck)
+                .or_not()
+                .ignore_then(just(Token::ControlChar('{')))
+                .ignore_then(duck_fields.or_not())
+                .then_ignore(just(Token::ControlChar('}')))
+                .map(|fields| match fields {
+                    Some(mut fields) => {
+                        if fields.is_empty() {
+                            return TypeExpr::Any;
+                        }
+
+                        fields.sort_by_key(|x| x.0.clone());
+                        TypeExpr::Duck(Duck {
+                            fields: fields
+                                .iter()
+                                .cloned()
+                                .map(|(name, (type_expr, e))| Field {
+                                    name,
+                                    type_expr: (type_expr, e),
+                                })
+                                .collect(),
+                        })
+                    }
+                    _ => TypeExpr::Any,
+                });
+
+            let function = just(Token::ControlChar('('))
+                .ignore_then(function_fields)
+                .then_ignore(just(Token::ControlChar(')')))
+                .then_ignore(just(Token::ControlChar('-')))
+                .then_ignore(just(Token::ControlChar('>')))
+                .then(p.clone())
+                .map(|(fields, return_type)| {
+                    TypeExpr::Fun(
+                        fields
+                            .iter()
+                            .map(|field| (Some(field.0.clone()), field.1.clone()))
+                            .collect::<Vec<_>>(),
+                        Some(Box::new(return_type.clone())),
+                    )
+                });
+
+            let tuple = p
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                .map(TypeExpr::Tuple);
+
+            let type_name = just(Token::ScopeRes)
+                .or_not()
+                .then(
+                    select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                        .separated_by(just(Token::ScopeRes))
+                        .at_least(1)
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(is_global, identifier)| match identifier[0].as_str() {
+                    "Int" => TypeExpr::Int,
+                    "Float" => TypeExpr::Float,
+                    "Bool" => TypeExpr::Bool,
+                    "String" => TypeExpr::String,
+                    "Char" => TypeExpr::Char,
+                    _ => TypeExpr::TypeName(is_global.is_some(), identifier.join("_")),
+                });
+
+            let term_type_expr = p
+                .clone()
+                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                .or(
+                    choice((go_type, type_name, r#struct, duck, function, tuple))
+                        .map_with(|x, e| (x, e.span())),
+                );
+
+            term_type_expr
+                .separated_by(just(Token::ControlChar('|')))
+                .at_least(1)
+                .collect::<Vec<Spanned<TypeExpr>>>()
+                .map_with(|elements, e| {
+                    if elements.len() == 1 {
+                        elements.into_iter().next().unwrap()
+                    } else {
+                        (TypeExpr::Or(elements), e.span())
+                    }
+                })
+        },
+    )
+}
+
 pub fn type_expression_parser<'src, I>()
 -> impl Parser<'src, I, Spanned<TypeExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone
 where

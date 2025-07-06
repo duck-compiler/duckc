@@ -63,6 +63,7 @@ pub enum IrValue {
     String(String),
     Bool(bool),
     Char(char),
+    Array(String, Vec<IrValue>),
     Lambda(Vec<(String, String)>, Option<String>, Vec<IrInstruction>),
     Tuple(String, Vec<IrValue>),
     Duck(String, Vec<(String, IrValue)>),
@@ -70,6 +71,7 @@ pub enum IrValue {
     Var(String),
     BoolNegate(Box<IrValue>),
     FieldAccess(Box<IrValue>, String),
+    ArrayAccess(Box<IrValue>, Box<IrValue>),
 }
 
 impl IrValue {
@@ -153,8 +155,68 @@ impl ValueExpr {
         env: &mut ToIr,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
-            ValueExpr::ArrayAccess(_, _) => todo!(),
-            ValueExpr::Array(_) => todo!(),
+            ValueExpr::ArrayAccess(target, idx) => {
+                let (target_instr, target_res) = target.0.direct_or_with_instr(type_env, env);
+
+                if target_res.is_none() {
+                    return (target_instr, None);
+                }
+
+                let (idx_instr, idx_res) = idx.0.direct_or_with_instr(type_env, env);
+
+                if idx_res.is_none() {
+                    let mut v = Vec::new();
+                    v.extend(target_instr);
+                    v.extend(idx_instr);
+                    return (v, None);
+                }
+
+                let mut res_instr = Vec::new();
+                res_instr.extend(target_instr);
+                res_instr.extend(idx_instr);
+
+                let res_type =
+                    TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
+                let res_var_name = env.new_var();
+
+                res_instr.push(IrInstruction::VarDecl(res_var_name.clone(), res_type));
+                res_instr.push(IrInstruction::VarAssignment(
+                    res_var_name.clone(),
+                    IrValue::ArrayAccess(target_res.unwrap().into(), idx_res.unwrap().into()),
+                ));
+
+                (res_instr, Some(IrValue::Var(res_var_name)))
+            }
+            ValueExpr::Array(_, exprs) => {
+                let mut total_instr = Vec::new();
+                let mut array_contents = Vec::new();
+
+                for expr in exprs {
+                    let (expr_instr, expr_res) = expr.0.direct_or_with_instr(type_env, env);
+                    total_instr.extend(expr_instr);
+                    if let Some(expr_res) = expr_res {
+                        array_contents.push(expr_res);
+                    } else {
+                        return (total_instr, None);
+                    }
+                }
+
+                let arr_type = TypeExpr::from_value_expr(self, type_env);
+
+                let res_var_name = env.new_var();
+                total_instr.extend([
+                    IrInstruction::VarDecl(
+                        res_var_name.clone(),
+                        arr_type.as_go_type_annotation(type_env),
+                    ),
+                    IrInstruction::VarAssignment(
+                        res_var_name.clone(),
+                        IrValue::Array(arr_type.as_go_type_annotation(type_env), array_contents),
+                    ),
+                ]);
+
+                (total_instr, Some(IrValue::Var(res_var_name)))
+            }
             ValueExpr::VarDecl(b) => {
                 let Declaration {
                     name,
@@ -302,7 +364,7 @@ impl ValueExpr {
                     var.clone(),
                     v1_res.unwrap(),
                     v2_res.unwrap(),
-                    type_expr
+                    type_expr,
                 ));
 
                 (ir, as_rvar(var))
@@ -333,7 +395,7 @@ impl ValueExpr {
                     var.clone(),
                     v1_res.unwrap(),
                     v2_res.unwrap(),
-                    type_expr
+                    type_expr,
                 ));
 
                 (ir, as_rvar(var))
@@ -628,7 +690,10 @@ mod tests {
     use crate::{
         emit::value::{IrInstruction, IrValue, ToIr},
         parse::{
-            lexer::lexer, make_input, type_parser::TypeExpr, value_parser::{empty_range, value_expr_parser}
+            lexer::lexer,
+            make_input,
+            type_parser::TypeExpr,
+            value_parser::{empty_range, value_expr_parser},
         },
         semantics::typechecker::TypeEnv,
     };
@@ -644,14 +709,24 @@ mod tests {
                 "1 + 1",
                 vec![
                     decl("var_0", "DuckInt"),
-                    IrInstruction::Add("var_0".into(), IrValue::Int(1), IrValue::Int(1), TypeExpr::Int),
+                    IrInstruction::Add(
+                        "var_0".into(),
+                        IrValue::Int(1),
+                        IrValue::Int(1),
+                        TypeExpr::Int,
+                    ),
                 ],
             ),
             (
                 "1 * 1",
                 vec![
                     decl("var_0", "DuckInt"),
-                    IrInstruction::Mul("var_0".into(), IrValue::Int(1), IrValue::Int(1), TypeExpr::Int),
+                    IrInstruction::Mul(
+                        "var_0".into(),
+                        IrValue::Int(1),
+                        IrValue::Int(1),
+                        TypeExpr::Int,
+                    ),
                 ],
             ),
             (
@@ -706,12 +781,45 @@ mod tests {
                 ],
             ),
             (
+                "[]",
+                vec![
+                    IrInstruction::VarDecl("var_0".into(), "[]interface{}".into()),
+                    IrInstruction::VarAssignment(
+                        "var_0".into(),
+                        IrValue::Array("[]interface{}".into(), vec![]),
+                    ),
+                ],
+            ),
+            (
+                "[[]]",
+                vec![
+                    IrInstruction::VarDecl("var_0".into(), "[]DuckInt".into()),
+                    IrInstruction::VarAssignment(
+                        "var_0".into(),
+                        IrValue::Array("[]DuckInt".into(), vec![IrValue::Int(1)]),
+                    ),
+                ],
+            ),
+            (
+                "[1]",
+                vec![
+                    IrInstruction::VarDecl("var_0".into(), "[]DuckInt".into()),
+                    IrInstruction::VarAssignment(
+                        "var_0".into(),
+                        IrValue::Array("[]DuckInt".into(), vec![IrValue::Int(1)]),
+                    ),
+                ],
+            ),
+            (
                 "{ x: 123 }",
                 vec![
                     decl("var_0", "interface {\n   Hasx[DuckInt]\n}"),
                     IrInstruction::VarAssignment(
                         "var_0".into(),
-                        IrValue::Duck("Duck_x_DuckInt".into(), vec![("x".into(), IrValue::Int(123))]),
+                        IrValue::Duck(
+                            "Duck_x_DuckInt".into(),
+                            vec![("x".into(), IrValue::Int(123))],
+                        ),
                     ),
                 ],
             ),

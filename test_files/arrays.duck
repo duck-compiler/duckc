@@ -1,0 +1,15 @@
+use go "fmt";
+
+fn lol() -> Int {
+    return 3;
+}
+
+fn main() {
+    let a: Int[] = [1, 2, 3, 10];
+    let b: Int = a[0] + a[1] + a[lol()];
+    let c: Int = ([1])[0];
+    go {
+        fmt.Println(b)
+        fmt.Println(c)
+    }
+}
