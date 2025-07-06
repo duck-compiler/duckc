@@ -402,7 +402,7 @@ impl TypeExpr {
                 // mvmo 03.07.25: Check for double sort
                 let mut variants = variants.clone()
                     .iter()
-                    .map(|variant| variant.0.as_go_type_annotation(type_env))
+                    .map(|variant| variant.0.as_clean_go_type_name(type_env))
                     .collect::<Vec<_>>();
 
                 variants.sort();
