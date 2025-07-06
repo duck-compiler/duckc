@@ -56,7 +56,7 @@ pub fn failure(
         .finish()
         .print(sources([(file_name, src)]))
         .unwrap();
-    std::process::exit(1)
+    panic!("{}", msg)
 }
 
 pub fn parse_failure(file_name: &str, err: &Rich<impl fmt::Display, SS>, src: &str) -> ! {

@@ -188,9 +188,9 @@ impl IrValue {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            IrValue::Bool(b) => format!("DuckBool {{ value: {} }}", b.to_string()),
-            IrValue::Int(i) => format!("DuckInt {{ value: {} }}", i.to_string()),
-            IrValue::Float(f) => format!("DuckFloat {{ value: {} }}", f.to_string()),
+            IrValue::Bool(b) => format!("DuckBool {{ value: {} }}", b),
+            IrValue::Int(i) => format!("DuckInt {{ value: {} }}", i),
+            IrValue::Float(f) => format!("DuckFloat {{ value: {} }}", f),
             IrValue::Char(c) => format!("DuckChar {{ value: '{c}' }}"),
             IrValue::String(s) => format!("DuckString {{ \"{s}\" }}"),
             IrValue::Var(v) => v.to_string(),

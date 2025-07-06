@@ -26,7 +26,9 @@ impl FunctionDefintion {
                 .iter()
                 .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
                 .collect::<Vec<_>>(),
-            if self.name == "main" { None } else {
+            if self.name == "main" {
+                None
+            } else {
                 self.return_type
                     .as_ref()
                     .map(|x| x.0.as_go_type_annotation(type_env))
