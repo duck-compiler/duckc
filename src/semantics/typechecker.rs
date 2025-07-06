@@ -215,11 +215,12 @@ impl TypeEnv {
                 }
             }
             TypeExpr::Or(types) => {
-                found.extend(
                     types
-                        .iter()
-                        .map(|(type_expr, ..)| type_expr.clone())
-                );
+                        .iter_mut()
+                        .for_each(|(type_expr, ..)| {
+                            found.push(type_expr.clone());
+                            found.extend(self.flatten_types(type_expr, param_names_used));
+                        })
             },
             _ => {
                 found.push(type_expr.clone());
@@ -1213,68 +1214,84 @@ mod test {
     fn test_type_summary() {
         // the summary always holds the type of main and it's return type and all the primitives
         let primitive_and_main_len = TypeExpr::primitives().len() + 1 /* main fn type */ + 1 /* main fn return type -> () */;
-        let src_and_summary_check_funs: Vec<(&str, Box<dyn FnOnce(&TypesSummary)>)> = vec![
+        let src_and_summary_check_funs: Vec<(&str, Box<dyn FnOnce(&TypesSummary, &mut TypeEnv)>)> = vec![
             (
                 "{ let y: { x: String, y: Int }; }",
-                Box::new(|summary: &TypesSummary| {
+                Box::new(|summary: &TypesSummary, env| {
                     assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: String, y: Int, a: { b: { c: { d: { e: String }}}} }; }",
-                Box::new(|summary: &TypesSummary| {
+                Box::new(|summary: &TypesSummary, env| {
                     assert_eq!(summary.types_used.len(), 5 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let x: Int = 5; }",
-                Box::new(|summary: &TypesSummary| {
+                Box::new(|summary: &TypesSummary, env| {
                     assert_eq!(summary.types_used.len(), 0 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let x: { a: Char, b: Char }; }",
-                Box::new(|summary: &TypesSummary| {
+                Box::new(|summary: &TypesSummary, env| {
                     assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: { y: Int } }; }",
-                Box::new(|summary: &TypesSummary| {
+                Box::new(|summary: &TypesSummary, env| {
                     assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: Int }; }",
-                Box::new(|summary: &TypesSummary| {
+                Box::new(|summary: &TypesSummary, env| {
                     assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
             // TODO: The inner types are not resolved yet, because they're not pushed into the all_types
             (
                 "{ let y: { x: Int, y: String, z: { x: Int } }; }",
-                Box::new(|summary: &TypesSummary| {
+                Box::new(|summary: &TypesSummary, env| {
                     assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: Int, y: String, z: { x: Int }, w: () }; }",
-                Box::new(|summary: &TypesSummary| {
-                    dbg!(&summary.types_used);
+                Box::new(|summary: &TypesSummary, env| {
                     assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
+                "{ let a: { b: { c: { d: { e: { f: { a: Int }}}}}}; }",
+                Box::new(|summary: &TypesSummary, env| {
+                    assert_eq!(summary.types_used.len() - primitive_and_main_len, 6);
+                }),
+            ),
+            (
                 "{ let y: { x: String } | { y: String }; }",
-                Box::new(|summary: &TypesSummary| {
-                    dbg!(&summary.types_used);
+                Box::new(|summary: &TypesSummary, env| {
                     assert_eq!(summary.types_used.len(), 3 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: String } | { y: String } | { z: String }; }",
-                Box::new(|summary: &TypesSummary| {
+                Box::new(|summary: &TypesSummary, env| {
                     assert_eq!(summary.types_used.len(), 4 + primitive_and_main_len);
+                }),
+            ),
+            (
+                "{ let y: { x: { x: String } | { y: String } | { z: String } } }",
+                Box::new(|summary: &TypesSummary, env| {
+                    assert_eq!(summary.types_used.len() - primitive_and_main_len, 5);
+                }),
+            ),
+            (
+                "{ let y: { x: String } | { y: String } | { z: String } | { x: String } | { y: String } | { z: String }; }",
+                Box::new(|summary: &TypesSummary, env| {
+                    assert_eq!(summary.types_used.len(), 5 + primitive_and_main_len);
                 }),
             ),
         ];
@@ -1319,7 +1336,16 @@ mod test {
 
             let summary = type_env.summarize();
 
-            summary_check_fun(&summary);
+            println!("----------- ---------------------- ---");
+            println!("source: \n{src}");
+            println!("types used:");
+            summary.types_used.iter()
+                .map(|type_expr| type_expr.as_clean_go_type_name(&mut type_env))
+                .for_each(|type_name| println!("\t{type_name}"));
+
+            println!("----------- ---------------------- ---");
+
+            summary_check_fun(&summary, &mut type_env);
         }
     }
 }
