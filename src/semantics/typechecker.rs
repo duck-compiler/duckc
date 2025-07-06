@@ -295,14 +295,13 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .for_each(|function_definition| {
             typeresolve_function_definition(function_definition, type_env);
 
-            let function_definition = function_definition;
             let explicit_return_type = function_definition
                 .return_type
                 .clone()
                 .unwrap_or_else(|| TypeExpr::Tuple(vec![]).into_empty_span());
 
             let implicit_return_type =
-                resolve_implicit_function_return_type(&function_definition, type_env).unwrap();
+                resolve_implicit_function_return_type(function_definition, type_env).unwrap();
 
             check_type_compatability(
                 &explicit_return_type,
@@ -851,7 +850,6 @@ fn resolve_implicit_function_return_type(
         return_types_found: &mut Vec<TypeExpr>,
         type_env: &mut TypeEnv,
     ) {
-        let value_expr = value_expr;
         match value_expr {
             ValueExpr::FunctionCall { .. }
             | ValueExpr::Int(..)
@@ -975,7 +973,7 @@ fn is_non_variant_type_in_variant(
     type_env: &mut TypeEnv,
 ) -> bool {
     variant.iter().any(|(haystack_member, _)| {
-        types_are_compatible(&haystack_member, &non_variant_type.0, type_env)
+        types_are_compatible(haystack_member, &non_variant_type.0, type_env)
     })
 }
 
