@@ -148,7 +148,7 @@ impl TypeEnv {
             TypeExpr::Duck(duck) => duck.fields.iter_mut().for_each(|field| {
                 param_names_used.push(field.name.clone());
                 // here
-                if !field.type_expr.0.is_object_like() {
+                if !field.type_expr.0.has_subtypes() {
                     found.push(field.type_expr.0.clone());
                     return;
                 }
@@ -763,6 +763,13 @@ impl TypeExpr {
     pub fn is_object_like(&self) -> bool {
         match self {
             Self::Tuple(..) | Self::Duck(..) | Self::Struct(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn has_subtypes(&self) -> bool {
+        match self {
+            Self::Or(..) | Self::Tuple(..) | Self::Duck(..) | Self::Struct(..) => true,
             _ => false,
         }
     }
