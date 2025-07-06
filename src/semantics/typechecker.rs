@@ -1373,7 +1373,7 @@ mod test {
 
             let summary = type_env.summarize();
 
-            println!("----------- ---------------------- ---");
+            println!("------------------------------------");
             println!("source: \n{src}");
             println!("types used:");
             summary
@@ -1382,7 +1382,7 @@ mod test {
                 .map(|type_expr| type_expr.as_clean_go_type_name(&mut type_env))
                 .for_each(|type_name| println!("\t{type_name}"));
 
-            println!("----------- ---------------------- ---");
+            println!("------------------------------------");
 
             summary_check_fun(&summary, &mut type_env);
         }
