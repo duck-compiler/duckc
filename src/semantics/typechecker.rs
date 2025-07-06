@@ -208,9 +208,18 @@ impl TypeEnv {
                 });
 
                 if let Some(type_expr) = return_type.as_mut() {
-                    found.extend(self.flatten_types(&mut type_expr.0, param_names_used));
+                    found.extend(
+                        self.flatten_types(&mut type_expr.0, param_names_used)
+                    );
                 }
             }
+            TypeExpr::Or(types) => {
+                found.extend(
+                    types
+                        .iter()
+                        .map(|(type_expr, ..)| type_expr.clone())
+                );
+            },
             _ => {
                 found.push(type_expr.clone());
             }
@@ -225,9 +234,11 @@ impl TypeEnv {
         let mut param_names_used = Vec::new();
 
         let mut to_push = Vec::new();
-        all_types.iter_mut().for_each(|type_expr| {
-            to_push.append(&mut self.flatten_types(type_expr, &mut param_names_used));
-        });
+        all_types
+            .iter_mut()
+            .for_each(|type_expr| {
+                to_push.append(&mut self.flatten_types(type_expr, &mut param_names_used));
+            });
 
         all_types.append(&mut to_push);
         all_types.sort_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
