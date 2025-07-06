@@ -54,6 +54,7 @@ pub enum TypeExpr {
         Vec<(Option<String>, Spanned<TypeExpr>)>,
         Option<Box<Spanned<TypeExpr>>>,
     ),
+    Array(Box<Spanned<TypeExpr>>),
 }
 
 impl TypeExpr {
@@ -70,6 +71,150 @@ impl TypeExpr {
             TypeExpr::Char,
         ];
     }
+}
+
+pub fn type_expression_parser_without_array<'src, I>()
+-> impl Parser<'src, I, Spanned<TypeExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone
+where
+    I: BorrowInput<'src, Token = Token, Span = SS>,
+{
+    recursive(
+        |p: Recursive<dyn Parser<'_, _, Spanned<TypeExpr>, extra::Err<Rich<'src, Token, SS>>>>| {
+            let field = select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                .then_ignore(just(Token::ControlChar(':')))
+                .then(p.clone());
+
+            let duck_fields = field
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<(String, Spanned<TypeExpr>)>>();
+
+            let struct_fields = field
+                .separated_by(just(Token::ControlChar(',')))
+                .at_least(1)
+                .allow_trailing()
+                .collect::<Vec<(String, Spanned<TypeExpr>)>>();
+
+            let function_fields = duck_fields.clone();
+
+            let go_type_identifier: impl Parser<'src, I, String, extra::Err<Rich<'src, Token, SS>>> =
+                select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                    .separated_by(just(Token::ControlChar('.')))
+                    .at_least(1)
+                    .at_most(2)
+                    .collect::<Vec<String>>()
+                    .map(|str| str.join("."));
+
+            let go_type = just(Token::Go)
+                .ignore_then(go_type_identifier)
+                .map(TypeExpr::Go);
+
+            let r#struct = just(Token::Struct)
+                .ignore_then(just(Token::ControlChar('{')))
+                .ignore_then(struct_fields)
+                .then_ignore(just(Token::ControlChar('}')))
+                .map(|fields| {
+                    TypeExpr::Struct(Struct {
+                        fields: fields
+                            .iter()
+                            .cloned()
+                            .map(|(name, (type_expr, e))| Field {
+                                name,
+                                type_expr: (type_expr, e),
+                            })
+                            .collect(),
+                    })
+                });
+
+            let duck = just(Token::Duck)
+                .or_not()
+                .ignore_then(just(Token::ControlChar('{')))
+                .ignore_then(duck_fields.or_not())
+                .then_ignore(just(Token::ControlChar('}')))
+                .map(|fields| match fields {
+                    Some(mut fields) => {
+                        if fields.is_empty() {
+                            return TypeExpr::Any;
+                        }
+
+                        fields.sort_by_key(|x| x.0.clone());
+                        TypeExpr::Duck(Duck {
+                            fields: fields
+                                .iter()
+                                .cloned()
+                                .map(|(name, (type_expr, e))| Field {
+                                    name,
+                                    type_expr: (type_expr, e),
+                                })
+                                .collect(),
+                        })
+                    }
+                    _ => TypeExpr::Any,
+                });
+
+            let function = just(Token::ControlChar('('))
+                .ignore_then(function_fields)
+                .then_ignore(just(Token::ControlChar(')')))
+                .then_ignore(just(Token::ControlChar('-')))
+                .then_ignore(just(Token::ControlChar('>')))
+                .then(p.clone())
+                .map(|(fields, return_type)| {
+                    TypeExpr::Fun(
+                        fields
+                            .iter()
+                            .map(|field| (Some(field.0.clone()), field.1.clone()))
+                            .collect::<Vec<_>>(),
+                        Some(Box::new(return_type.clone())),
+                    )
+                });
+
+            let tuple = p
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                .map(TypeExpr::Tuple);
+
+            let type_name = just(Token::ScopeRes)
+                .or_not()
+                .then(
+                    select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                        .separated_by(just(Token::ScopeRes))
+                        .at_least(1)
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(is_global, identifier)| match identifier[0].as_str() {
+                    "Int" => TypeExpr::Int,
+                    "Float" => TypeExpr::Float,
+                    "Bool" => TypeExpr::Bool,
+                    "String" => TypeExpr::String,
+                    "Char" => TypeExpr::Char,
+                    _ => TypeExpr::TypeName(is_global.is_some(), identifier.join("_")),
+                });
+
+            let term_type_expr = p
+                .clone()
+                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                .or(
+                    choice((go_type, type_name, r#struct, duck, function, tuple))
+                        .map_with(|x, e| (x, e.span())),
+                );
+
+            term_type_expr
+                .separated_by(just(Token::ControlChar('|')))
+                .at_least(1)
+                .collect::<Vec<Spanned<TypeExpr>>>()
+                .map_with(|elements, e| {
+                    if elements.len() == 1 {
+                        elements.into_iter().next().unwrap()
+                    } else {
+                        (TypeExpr::Or(elements), e.span())
+                    }
+                })
+        },
+    )
 }
 
 pub fn type_expression_parser<'src, I>()
@@ -193,10 +338,29 @@ where
                     _ => TypeExpr::TypeName(is_global.is_some(), identifier.join("_")),
                 });
 
-            let term_type_expr = choice((go_type, type_name, r#struct, duck, function, tuple))
+            let term_type_expr = p
+                .clone()
+                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                .or(
+                    choice((go_type, type_name, r#struct, duck, function, tuple))
+                        .map_with(|x, e| (x, e.span())),
+                );
+
+            let array = term_type_expr
+                .clone()
+                .then(
+                    (just(Token::ControlChar('[')).then(just(Token::ControlChar(']'))))
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
+                .map(|((x, _), is_array)| {
+                    is_array
+                        .iter()
+                        .fold(x, |acc, _| TypeExpr::Array(acc.into_empty_span().into()))
+                })
                 .map_with(|x, e| (x, e.span()));
 
-            term_type_expr
+            array
                 .separated_by(just(Token::ControlChar('|')))
                 .at_least(1)
                 .collect::<Vec<Spanned<TypeExpr>>>()
@@ -229,7 +393,11 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::{lexer::lexer, make_input, value_parser::empty_range};
+    use crate::parse::{
+        lexer::lexer,
+        make_input,
+        value_parser::{empty_range, type_expr_into_empty_range},
+    };
     use chumsky::Parser;
 
     use super::*;
@@ -312,7 +480,8 @@ pub mod tests {
             input_str
         );
 
-        let parsed = parse_result.into_output().unwrap();
+        let mut parsed = parse_result.into_output().unwrap();
+        type_expr_into_empty_range(&mut parsed);
 
         let stripped_parsed = strip_spans(parsed);
 
@@ -391,6 +560,66 @@ pub mod tests {
                     ])
                     .into_empty_span(),
                 )),
+            ),
+        );
+
+        assert_type_expression(
+            "Int[]",
+            TypeExpr::Array(TypeExpr::Int.into_empty_span().into()),
+        );
+
+        assert_type_expression(
+            "Int[][]",
+            TypeExpr::Array(
+                TypeExpr::Array(TypeExpr::Int.into_empty_span().into())
+                    .into_empty_span()
+                    .into(),
+            ),
+        );
+        assert_type_expression(
+            "Int[][][]",
+            TypeExpr::Array(
+                TypeExpr::Array(
+                    TypeExpr::Array(TypeExpr::Int.into_empty_span().into())
+                        .into_empty_span()
+                        .into(),
+                )
+                .into_empty_span()
+                .into(),
+            ),
+        );
+
+        assert_type_expression(
+            "(Int,)[]",
+            TypeExpr::Array(
+                TypeExpr::Tuple(vec![TypeExpr::Int.into_empty_span()])
+                    .into_empty_span()
+                    .into(),
+            ),
+        );
+
+        assert_type_expression(
+            "String[] | Int[][]",
+            TypeExpr::Or(vec![
+                TypeExpr::Array(TypeExpr::String.into_empty_span().into()).into_empty_span(),
+                TypeExpr::Array(
+                    TypeExpr::Array(TypeExpr::Int.into_empty_span().into())
+                        .into_empty_span()
+                        .into(),
+                )
+                .into_empty_span(),
+            ]),
+        );
+
+        assert_type_expression(
+            "(String[] | Int[])[]",
+            TypeExpr::Array(
+                TypeExpr::Or(vec![
+                    TypeExpr::Array(TypeExpr::String.into_empty_span().into()).into_empty_span(),
+                    TypeExpr::Array(TypeExpr::Int.into_empty_span().into()).into_empty_span(),
+                ])
+                .into_empty_span()
+                .into(),
             ),
         );
 
@@ -552,7 +781,7 @@ pub mod tests {
 
         assert_type_expression("()", TypeExpr::Tuple(vec![]));
         assert_type_expression(
-            "(Int)",
+            "(Int,)",
             TypeExpr::Tuple(vec![TypeExpr::Int.into_empty_span()]),
         );
         assert_type_expression(
@@ -640,7 +869,7 @@ pub mod tests {
         );
 
         assert_type_expression(
-            "Int | (String | Bool)",
+            "Int | (String | Bool,)",
             TypeExpr::Or(vec![
                 TypeExpr::Int.into_empty_span(),
                 TypeExpr::Tuple(vec![

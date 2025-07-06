@@ -19,8 +19,7 @@ pub fn pull_repository(
     if target_dir_path.exists() && target_dir_path.join(".git").is_dir() {
         // verbose
         println!(
-            "Directory {:?} already exists and appears to be a Git repository. Performing 'git pull'...",
-            target_dir_path
+            "Directory {target_dir_path:?} already exists and appears to be a Git repository. Performing 'git pull'..."
         );
         let output = Command::new("git")
             .arg("pull")
@@ -43,8 +42,7 @@ pub fn pull_repository(
     if target_dir_path.exists() && !target_dir_path.is_dir() {
         return Err((
             format!(
-                "Target path {:?} exists but is not a directory.",
-                target_dir_path
+                "Target path {target_dir_path:?} exists but is not a directory."
             ),
             GitCliErrKind::IOErr(IOErrKind::AlreadyExists),
         ));
@@ -52,8 +50,7 @@ pub fn pull_repository(
 
     // verbose
     println!(
-        "Directory {:?} does not exist or is not a Git repository. Performing 'git clone'...",
-        target_dir_path
+        "Directory {target_dir_path:?} does not exist or is not a Git repository. Performing 'git clone'..."
     );
     let parent_dir = target_dir_path.parent().unwrap_or_else(|| Path::new("."));
 

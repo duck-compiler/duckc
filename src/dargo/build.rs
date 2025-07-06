@@ -29,7 +29,7 @@ pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
     if let Some(dependencies) = dargo_config.dependencies {
         for (git_uri, _) in dependencies.iter() {
             let module_name = git_uri.split("/").collect::<Vec<_>>()[1];
-            let git_dir_path = Path::new(&format!("./.dargo/git/{}", module_name)).to_path_buf();
+            let git_dir_path = Path::new(&format!("./.dargo/git/{module_name}")).to_path_buf();
 
             git_cli::pull_repository(&format!("https://github.com/{git_uri}"), &git_dir_path)
                 .map_err(|err| (err.0, BuildErrKind::DependencyPull(err.1)))?;

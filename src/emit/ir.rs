@@ -177,6 +177,17 @@ pub fn join_ir(v: &[IrInstruction]) -> String {
 impl IrValue {
     pub fn emit_as_go(&self) -> String {
         match self {
+            IrValue::ArrayAccess(target, idx) => {
+                format!("{}[{}.value]", target.emit_as_go(), idx.emit_as_go())
+            }
+            IrValue::Array(arr_type, contents) => format!(
+                "{arr_type}{{{}}}",
+                contents
+                    .iter()
+                    .map(|x| x.emit_as_go())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             IrValue::Bool(b) => format!("DuckBool {{ value: {} }}", b),
             IrValue::Int(i) => format!("DuckInt {{ value: {} }}", i),
             IrValue::Float(f) => format!("DuckFloat {{ value: {} }}", f),
