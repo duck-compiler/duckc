@@ -209,19 +209,13 @@ impl TypeEnv {
                 });
 
                 if let Some(type_expr) = return_type.as_mut() {
-                    found.extend(
-                        self.flatten_types(&mut type_expr.0, param_names_used)
-                    );
+                    found.extend(self.flatten_types(&mut type_expr.0, param_names_used));
                 }
             }
-            TypeExpr::Or(types) => {
-                    types
-                        .iter_mut()
-                        .for_each(|(type_expr, ..)| {
-                            found.push(type_expr.clone());
-                            found.extend(self.flatten_types(type_expr, param_names_used));
-                        })
-            },
+            TypeExpr::Or(types) => types.iter_mut().for_each(|(type_expr, ..)| {
+                found.push(type_expr.clone());
+                found.extend(self.flatten_types(type_expr, param_names_used));
+            }),
             _ => {
                 found.push(type_expr.clone());
             }
@@ -237,11 +231,9 @@ impl TypeEnv {
         let mut param_names_used = Vec::new();
 
         let mut to_push = Vec::new();
-        all_types
-            .iter_mut()
-            .for_each(|type_expr| {
-                to_push.append(&mut self.flatten_types(type_expr, &mut param_names_used));
-            });
+        all_types.iter_mut().for_each(|type_expr| {
+            to_push.append(&mut self.flatten_types(type_expr, &mut param_names_used));
+        });
 
         all_types.append(&mut to_push);
         all_types.sort_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
@@ -304,12 +296,19 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             typeresolve_function_definition(function_definition, type_env);
 
             let function_definition = function_definition;
-            let explicit_return_type = function_definition.return_type.clone()
+            let explicit_return_type = function_definition
+                .return_type
+                .clone()
                 .unwrap_or_else(|| TypeExpr::Tuple(vec![]).into_empty_span());
 
-            let implicit_return_type = resolve_implicit_function_return_type(&function_definition, type_env).unwrap();
+            let implicit_return_type =
+                resolve_implicit_function_return_type(&function_definition, type_env).unwrap();
 
-            check_type_compatability(&explicit_return_type, &implicit_return_type.into_empty_span(), type_env);
+            check_type_compatability(
+                &explicit_return_type,
+                &implicit_return_type.into_empty_span(),
+                type_env,
+            );
         });
 
     // mvmo - 03.07.2025: is this required? If not we should remove the type aliases stack at all
@@ -837,20 +836,24 @@ impl TypeExpr {
             | TypeExpr::String
             | TypeExpr::Char
             | TypeExpr::Bool => true,
-            _ => false
-        }
+            _ => false,
+        };
     }
 }
 
 fn resolve_implicit_function_return_type(
     fun_def: &FunctionDefintion,
-    type_env: &mut TypeEnv
+    type_env: &mut TypeEnv,
 ) -> Result<TypeExpr, String> {
     // check against annotated return type
-    fn flatten_returns(value_expr: &ValueExpr, return_types_found: &mut Vec<TypeExpr>, type_env: &mut TypeEnv) {
+    fn flatten_returns(
+        value_expr: &ValueExpr,
+        return_types_found: &mut Vec<TypeExpr>,
+        type_env: &mut TypeEnv,
+    ) {
         let value_expr = value_expr;
         match value_expr {
-            ValueExpr::FunctionCall {..}
+            ValueExpr::FunctionCall { .. }
             | ValueExpr::Int(..)
             | ValueExpr::InlineGo(..)
             | ValueExpr::String(..)
@@ -865,47 +868,62 @@ fn resolve_implicit_function_return_type(
             | ValueExpr::FieldAccess { .. }
             | ValueExpr::Lambda(..)
             | ValueExpr::Variable(..) => {}
-            ValueExpr::If { condition, then, r#else } => {
+            ValueExpr::If {
+                condition,
+                then,
+                r#else,
+            } => {
                 flatten_returns(&condition.as_ref().0, return_types_found, type_env);
                 flatten_returns(&then.as_ref().0, return_types_found, type_env);
                 r#else.as_ref().inspect(|r#else| {
                     flatten_returns(&r#else.as_ref().0, return_types_found, type_env);
                 });
-            },
+            }
             ValueExpr::While { condition, body } => {
                 flatten_returns(&condition.as_ref().0, return_types_found, type_env);
                 flatten_returns(&body.as_ref().0, return_types_found, type_env)
-            },
-            ValueExpr::Block(items) => items.iter().for_each(|item| flatten_returns(&item.0, return_types_found, type_env)),
+            }
+            ValueExpr::Block(items) => items
+                .iter()
+                .for_each(|item| flatten_returns(&item.0, return_types_found, type_env)),
             ValueExpr::Return(Some(value_expr)) => {
                 return_types_found.push(TypeExpr::from_value_expr(&value_expr.0, type_env));
-            },
+            }
             ValueExpr::Return(None) => {
                 return_types_found.push(TypeExpr::Tuple(vec![]));
-            },
+            }
             ValueExpr::VarAssign(assignment) => {
-                flatten_returns(&assignment.as_ref().0.value_expr.0, return_types_found, type_env);
-            },
+                flatten_returns(
+                    &assignment.as_ref().0.value_expr.0,
+                    return_types_found,
+                    type_env,
+                );
+            }
             ValueExpr::VarDecl(declaration) => {
-                declaration.as_ref().0.initializer.as_ref().inspect(|initializer| {
-                    flatten_returns(&initializer.0, return_types_found, type_env);
-                });
-            },
+                declaration
+                    .as_ref()
+                    .0
+                    .initializer
+                    .as_ref()
+                    .inspect(|initializer| {
+                        flatten_returns(&initializer.0, return_types_found, type_env);
+                    });
+            }
             ValueExpr::Add(left, right) => {
                 flatten_returns(&left.as_ref().0, return_types_found, type_env);
                 flatten_returns(&right.as_ref().0, return_types_found, type_env);
-            },
+            }
             ValueExpr::Mul(left, right) => {
                 flatten_returns(&left.as_ref().0, return_types_found, type_env);
                 flatten_returns(&right.as_ref().0, return_types_found, type_env);
-            },
+            }
             ValueExpr::BoolNegate(value_expr) => {
                 flatten_returns(&value_expr.as_ref().0, return_types_found, type_env);
-            },
+            }
             ValueExpr::Equals(left, right) => {
                 flatten_returns(&left.as_ref().0, return_types_found, type_env);
                 flatten_returns(&right.as_ref().0, return_types_found, type_env);
-            },
+            }
         }
     }
 
@@ -920,15 +938,16 @@ fn resolve_implicit_function_return_type(
     }
 
     if return_types_found.len() == 1 {
-        return Ok(return_types_found.first().unwrap().clone())
+        return Ok(return_types_found.first().unwrap().clone());
     }
 
     // TODO add spans
-    return Ok(TypeExpr::Or(return_types_found
-        .iter()
-        .map(|type_expr| type_expr.clone().into_empty_span())
-        .collect::<Vec<_>>()
-    ))
+    return Ok(TypeExpr::Or(
+        return_types_found
+            .iter()
+            .map(|type_expr| type_expr.clone().into_empty_span())
+            .collect::<Vec<_>>(),
+    ));
 }
 
 fn require(condition: bool, fail_message: String) {
@@ -955,9 +974,9 @@ fn is_non_variant_type_in_variant(
     variant: &[Spanned<TypeExpr>],
     type_env: &mut TypeEnv,
 ) -> bool {
-    variant
-        .iter()
-        .any(|(haystack_member, _)| types_are_compatible(&haystack_member, &non_variant_type.0, type_env))
+    variant.iter().any(|(haystack_member, _)| {
+        types_are_compatible(&haystack_member, &non_variant_type.0, type_env)
+    })
 }
 
 fn is_subset_of_variant_type(
@@ -1359,7 +1378,9 @@ mod test {
             println!("----------- ---------------------- ---");
             println!("source: \n{src}");
             println!("types used:");
-            summary.types_used.iter()
+            summary
+                .types_used
+                .iter()
                 .map(|type_expr| type_expr.as_clean_go_type_name(&mut type_env))
                 .for_each(|type_name| println!("\t{type_name}"));
 

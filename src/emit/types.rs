@@ -11,7 +11,7 @@ pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str
         TypeExpr::Float => "float32",
         TypeExpr::Bool => "bool",
         TypeExpr::Char => "rune",
-        _ => panic!("That's not a primitive")
+        _ => panic!("That's not a primitive"),
     }
 }
 
@@ -22,7 +22,7 @@ pub fn primitive_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
         TypeExpr::Float => "DuckFloat",
         TypeExpr::Bool => "DuckBool",
         TypeExpr::Char => "Char",
-        _ => panic!("That's not a primitive")
+        _ => panic!("That's not a primitive"),
     }
 }
 
@@ -110,100 +110,109 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
         })
         .collect::<Vec<_>>();
 
-
-   let mut primitive_types_instructions = summary
+    let mut primitive_types_instructions = summary
         .types_used
         .iter()
         .filter(|type_expr| type_expr.is_primitive())
         .map(|primitive_type_expr| {
             IrInstruction::StructDef(
                 primitive_type_expr.as_clean_go_type_name(type_env),
-                vec![("value".to_string(), primitive_native_type_name(primitive_type_expr).to_string())]
+                vec![(
+                    "value".to_string(),
+                    primitive_native_type_name(primitive_type_expr).to_string(),
+                )],
             )
         })
         .collect::<Vec<_>>();
 
-   instructions.append(&mut primitive_types_instructions);
+    instructions.append(&mut primitive_types_instructions);
 
-   let mut variant_instructions = summary
-       .types_used
-       .iter()
-       .filter(|type_expr| matches!(type_expr, TypeExpr::Or(..)))
-       .flat_map(|variant_type_expr| {
-           let TypeExpr::Or(variants) = variant_type_expr else { unreachable!() };
-           let variant_type_name = variant_type_expr.as_clean_go_type_name(type_env);
-           let variant_seal_fn_name = format!("Seal_{}", variant_type_name);
+    let mut variant_instructions = summary
+        .types_used
+        .iter()
+        .filter(|type_expr| matches!(type_expr, TypeExpr::Or(..)))
+        .flat_map(|variant_type_expr| {
+            let TypeExpr::Or(variants) = variant_type_expr else {
+                unreachable!()
+            };
+            let variant_type_name = variant_type_expr.as_clean_go_type_name(type_env);
+            let variant_seal_fn_name = format!("Seal_{}", variant_type_name);
 
-           let mut sealing_fn_instructions = variants.iter()
-               .map(|variant| IrInstruction::FunDef(
-                   variant_seal_fn_name.clone(),
-                   Some(("self".to_string(), variant.0.as_clean_go_type_name(type_env))),
-                   vec![],
-                   None,
-                   vec![],
-               ))
-               .collect::<Vec<_>>();
+            let mut sealing_fn_instructions = variants
+                .iter()
+                .map(|variant| {
+                    IrInstruction::FunDef(
+                        variant_seal_fn_name.clone(),
+                        Some((
+                            "self".to_string(),
+                            variant.0.as_clean_go_type_name(type_env),
+                        )),
+                        vec![],
+                        None,
+                        vec![],
+                    )
+                })
+                .collect::<Vec<_>>();
 
-           sealing_fn_instructions.push(IrInstruction::InterfaceDef(
-               variant_type_name,
-               vec![],
-               vec![
-                   (variant_seal_fn_name.to_string(), vec![], None)
-               ]
-           ));
+            sealing_fn_instructions.push(IrInstruction::InterfaceDef(
+                variant_type_name,
+                vec![],
+                vec![(variant_seal_fn_name.to_string(), vec![], None)],
+            ));
 
-           sealing_fn_instructions
-       })
-       .collect::<Vec<_>>();
+            sealing_fn_instructions
+        })
+        .collect::<Vec<_>>();
 
-   instructions.append(&mut variant_instructions);
+    instructions.append(&mut variant_instructions);
 
-   summary
-       .types_used
-       .iter()
-       .filter(|type_expr| type_expr.is_object_like())
-       .map(|type_expr| {
-           let type_name = type_expr.as_clean_go_type_name(type_env);
+    summary
+        .types_used
+        .iter()
+        .filter(|type_expr| type_expr.is_object_like())
+        .map(|type_expr| {
+            let type_name = type_expr.as_clean_go_type_name(type_env);
 
-           let mut instructions = interface_implementations(type_name.clone(), type_expr, type_env);
+            let mut instructions =
+                interface_implementations(type_name.clone(), type_expr, type_env);
 
-           instructions.push(match type_expr {
-               TypeExpr::Tuple(t) => IrInstruction::StructDef(
-                   type_name,
-                   t.iter()
-                       .enumerate()
-                       .map(|(i, x)| (format!("field_{i}"), x.0.as_go_type_annotation(type_env)))
-                       .collect::<Vec<_>>(),
-               ),
-               TypeExpr::Struct(Struct { fields }) | TypeExpr::Duck(Duck { fields }) => {
-                   IrInstruction::StructDef(
-                       type_name,
-                       fields
-                           .iter()
-                           .map(
-                               |Field {
-                                   name,
-                                   type_expr: (type_expr, _),
-                               }| {
-                                   (name.clone(), type_expr.as_go_type_annotation(type_env))
-                               },
-                           )
-                           .collect::<Vec<_>>(),
-                   )
-               }
-               _ => panic!("cant create for {type_name}"),
-           });
-           instructions
-       })
-       .chain(vec![instructions])
-       .fold(Vec::new(), |mut instructions_acc, instructions| {
-           for instruction in instructions {
-               if !instructions_acc.contains(&instruction) {
-                   instructions_acc.push(instruction);
-               }
-           }
-           instructions_acc
-       })
+            instructions.push(match type_expr {
+                TypeExpr::Tuple(t) => IrInstruction::StructDef(
+                    type_name,
+                    t.iter()
+                        .enumerate()
+                        .map(|(i, x)| (format!("field_{i}"), x.0.as_go_type_annotation(type_env)))
+                        .collect::<Vec<_>>(),
+                ),
+                TypeExpr::Struct(Struct { fields }) | TypeExpr::Duck(Duck { fields }) => {
+                    IrInstruction::StructDef(
+                        type_name,
+                        fields
+                            .iter()
+                            .map(
+                                |Field {
+                                     name,
+                                     type_expr: (type_expr, _),
+                                 }| {
+                                    (name.clone(), type_expr.as_go_type_annotation(type_env))
+                                },
+                            )
+                            .collect::<Vec<_>>(),
+                    )
+                }
+                _ => panic!("cant create for {type_name}"),
+            });
+            instructions
+        })
+        .chain(vec![instructions])
+        .fold(Vec::new(), |mut instructions_acc, instructions| {
+            for instruction in instructions {
+                if !instructions_acc.contains(&instruction) {
+                    instructions_acc.push(instruction);
+                }
+            }
+            instructions_acc
+        })
 }
 
 impl TypeExpr {
@@ -323,14 +332,11 @@ impl TypeExpr {
                     "struct {{\n{}\n}}",
                     variants
                         .iter()
-                        .map(|type_expr| format!(
-                            "{}",
-                            type_expr.0.as_go_type_annotation(type_env)
-                        ))
+                        .map(|type_expr| format!("{}", type_expr.0.as_go_type_annotation(type_env)))
                         .collect::<Vec<_>>()
                         .join("_")
                 )
-            },
+            }
         };
     }
 
@@ -400,7 +406,8 @@ impl TypeExpr {
             }
             TypeExpr::Or(variants) => {
                 // mvmo 03.07.25: Check for double sort
-                let mut variants = variants.clone()
+                let mut variants = variants
+                    .clone()
                     .iter()
                     .map(|variant| variant.0.as_clean_go_type_name(type_env))
                     .collect::<Vec<_>>();
@@ -408,7 +415,7 @@ impl TypeExpr {
                 variants.sort();
 
                 return format!("Union_{}", variants.join("_or_"));
-            },
+            }
         };
     }
 }

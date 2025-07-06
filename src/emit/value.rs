@@ -300,7 +300,7 @@ impl ValueExpr {
                     var.clone(),
                     v1_res.unwrap(),
                     v2_res.unwrap(),
-                    type_expr
+                    type_expr,
                 ));
 
                 (ir, as_rvar(var))
@@ -331,7 +331,7 @@ impl ValueExpr {
                     var.clone(),
                     v1_res.unwrap(),
                     v2_res.unwrap(),
-                    type_expr
+                    type_expr,
                 ));
 
                 (ir, as_rvar(var))
@@ -626,7 +626,10 @@ mod tests {
     use crate::{
         emit::value::{IrInstruction, IrValue, ToIr},
         parse::{
-            lexer::lexer, make_input, type_parser::TypeExpr, value_parser::{empty_range, value_expr_parser}
+            lexer::lexer,
+            make_input,
+            type_parser::TypeExpr,
+            value_parser::{empty_range, value_expr_parser},
         },
         semantics::typechecker::TypeEnv,
     };
@@ -642,14 +645,24 @@ mod tests {
                 "1 + 1",
                 vec![
                     decl("var_0", "DuckInt"),
-                    IrInstruction::Add("var_0".into(), IrValue::Int(1), IrValue::Int(1), TypeExpr::Int),
+                    IrInstruction::Add(
+                        "var_0".into(),
+                        IrValue::Int(1),
+                        IrValue::Int(1),
+                        TypeExpr::Int,
+                    ),
                 ],
             ),
             (
                 "1 * 1",
                 vec![
                     decl("var_0", "DuckInt"),
-                    IrInstruction::Mul("var_0".into(), IrValue::Int(1), IrValue::Int(1), TypeExpr::Int),
+                    IrInstruction::Mul(
+                        "var_0".into(),
+                        IrValue::Int(1),
+                        IrValue::Int(1),
+                        TypeExpr::Int,
+                    ),
                 ],
             ),
             (
@@ -709,7 +722,10 @@ mod tests {
                     decl("var_0", "interface {\n   Hasx[DuckInt]\n}"),
                     IrInstruction::VarAssignment(
                         "var_0".into(),
-                        IrValue::Duck("Duck_x_DuckInt".into(), vec![("x".into(), IrValue::Int(123))]),
+                        IrValue::Duck(
+                            "Duck_x_DuckInt".into(),
+                            vec![("x".into(), IrValue::Int(123))],
+                        ),
                     ),
                 ],
             ),

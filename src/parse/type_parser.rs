@@ -68,7 +68,7 @@ impl TypeExpr {
             TypeExpr::Bool,
             TypeExpr::String,
             TypeExpr::Char,
-        ]
+        ];
     }
 }
 

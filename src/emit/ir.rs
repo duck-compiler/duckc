@@ -1,4 +1,7 @@
-use crate::emit::{types::primitive_type_name, value::{IrInstruction, IrValue}};
+use crate::emit::{
+    types::primitive_type_name,
+    value::{IrInstruction, IrValue},
+};
 
 impl IrInstruction {
     fn emit_as_go(&self) -> String {
@@ -7,11 +10,21 @@ impl IrInstruction {
             IrInstruction::GoPackage(s) => format!("package {s}"),
             IrInstruction::Add(r, left, right, type_expr) => {
                 // TODO: check if this is correct
-                format!("{r} = {} {{ value: {}.value + {}.value }}", primitive_type_name(type_expr), left.emit_as_go(), right.emit_as_go())
+                format!(
+                    "{r} = {} {{ value: {}.value + {}.value }}",
+                    primitive_type_name(type_expr),
+                    left.emit_as_go(),
+                    right.emit_as_go()
+                )
             }
             IrInstruction::Mul(r, v1, v2, type_expr) => {
                 // TODO: check if this is correct
-                format!("{r} = {} {{ {}.value * {}.value }}", primitive_type_name(type_expr), v1.emit_as_go(), v2.emit_as_go())
+                format!(
+                    "{r} = {} {{ {}.value * {}.value }}",
+                    primitive_type_name(type_expr),
+                    v1.emit_as_go(),
+                    v2.emit_as_go()
+                )
             }
             IrInstruction::Continue => "continue".to_string(),
             IrInstruction::Break => "break".to_string(),
@@ -87,8 +100,13 @@ impl IrInstruction {
                         .map(|(n, ty)| format!("{n} {ty}"))
                         .collect::<Vec<_>>()
                         .join(", "),
-                    return_type.as_ref()
-                        .map(|return_type| if name == "main" { String::new() } else { return_type.clone() })
+                    return_type
+                        .as_ref()
+                        .map(|return_type| if name == "main" {
+                            String::new()
+                        } else {
+                            return_type.clone()
+                        })
                         .unwrap_or(String::new()),
                     format!(
                         "{}\n{}",
