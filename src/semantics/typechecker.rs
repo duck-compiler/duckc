@@ -1,7 +1,7 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    Context as SourceFileContext, SS, Spanned, failure,
+     SS, Spanned, failure,
     function_parser::FunctionDefintion,
     source_file_parser::SourceFile,
     type_parser::{Duck, Field, Struct, TypeExpr},
@@ -1514,6 +1514,8 @@ mod test {
     }
 
     fn empty_spanned<T>(item: T) -> Spanned<T> {
+        use crate::parse::Context as SourceFileContext;
+
         let context = SourceFileContext {
             file_name: "test",
             file_contents: "",
