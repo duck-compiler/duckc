@@ -6,11 +6,35 @@ fn lol() -> Int {
 
 fn main() {
     let a: Int[] = [1, 2, 3, 10];
+
+    a[0] = 99;
+
+    go {
+        fmt.Println(a)
+    }
+
     let b: Int = a[0] + a[1] + a[lol()];
     let c: Int = [[[[1]]]][0][0][0][0];
     let d: Int = [[[[1, 2]]]][0][0][0][1];
     go {
         fmt.Println(b)
         fmt.Println(c, d)
+    }
+
+    let z: { x: Int[] } = { x: [123] };
+    go {
+        fmt.Println(z)
+    }
+
+    z.x[0] = 7;
+
+    go {
+        fmt.Println(z)
+    }
+
+    z.x = [70];
+
+    go {
+        fmt.Println(z)
     }
 }

@@ -296,6 +296,8 @@ impl ValueExpr {
                     let target = &assign.target.0;
                     let mut res = Vec::new();
 
+                    res.extend(i);
+
                     if let ValueExpr::FieldAccess {
                         target_obj,
                         field_name,
@@ -330,12 +332,30 @@ impl ValueExpr {
                             }
                             _ => panic!("can't set field on non object"),
                         }
+                    } else if let ValueExpr::ArrayAccess(target, idx) = target {
+                        let (target_instr, Some(IrValue::Var(target_res))) =
+                            target.0.emit(type_env, env)
+                        else {
+                            panic!("no var {target:?}");
+                        };
+
+                        let (idx_instr, Some(IrValue::Var(idx_res))) = idx.0.emit(type_env, env)
+                        else {
+                            panic!("no var: {idx:?}")
+                        };
+
+                        res.extend(target_instr);
+                        res.extend(idx_instr);
+
+                        res.push(IrInstruction::VarAssignment(
+                            format!("{target_res}[{idx_res}.value]"),
+                            a_res,
+                        ));
                     }
 
-                    res.extend(i);
-                    (res, None)
+                    (res, Some(IrValue::empty_tuple()))
                 } else {
-                    (i, None)
+                    (i, Some(IrValue::empty_tuple()))
                 }
             }
             ValueExpr::Add(v1, v2) => {
