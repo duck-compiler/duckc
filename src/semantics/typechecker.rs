@@ -147,6 +147,7 @@ impl TypeEnv {
         match type_expr {
             TypeExpr::Duck(duck) => duck.fields.iter_mut().for_each(|field| {
                 param_names_used.push(field.name.clone());
+                // here
                 if !field.type_expr.0.is_object_like() {
                     found.push(field.type_expr.0.clone());
                     return;
