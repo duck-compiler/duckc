@@ -344,6 +344,47 @@ where
                 FieldAccess(String),
             }
 
+            let array_with_type = (just(Token::ControlChar('.'))
+                .ignore_then(type_expression_parser_without_array())
+                .or_not())
+            .then(
+                (value_expr_parser
+                    .clone()
+                    .separated_by(just(Token::ControlChar(',')))
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']'))))
+                .repeated()
+                .at_least(1)
+                .collect::<Vec<_>>(),
+            )
+            .map(|(ty, exprs)| {
+                if ty.is_none() && exprs.is_empty() {
+                    panic!("error: empty array must provide type");
+                }
+
+                let mut fty = ty.clone();
+
+                if ty.is_some() {
+                    for _ in 0..exprs.len() - 1 {
+                        fty = Some(TypeExpr::Array(Box::new(fty.unwrap())).into_empty_span())
+                    }
+                }
+
+                ValueExpr::Array(fty, exprs.last().unwrap().clone())
+            })
+            .map_with(|x, e| (x, e.span()));
+
+            let array = value_expr_parser
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .at_least(1)
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
+                .map(|exprs| ValueExpr::Array(None, exprs))
+                .map_with(|x, e| (x, e.span()));
+
             let atom = just(Token::ControlChar('!'))
                 .repeated()
                 .collect::<Vec<_>>()
@@ -352,6 +393,7 @@ where
                         .clone()
                         .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                         .or(choice((
+                            choice((array.clone(), array_with_type.clone())),
                             int,
                             bool_val,
                             string_val,
@@ -497,38 +539,7 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            let array = (just(Token::ControlChar('.'))
-                .ignore_then(type_expression_parser_without_array())
-                .or_not())
-            .then(
-                (value_expr_parser
-                    .clone()
-                    .separated_by(just(Token::ControlChar(',')))
-                    .allow_trailing()
-                    .collect::<Vec<_>>()
-                    .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']'))))
-                .repeated()
-                .at_least(1)
-                .collect::<Vec<_>>(),
-            )
-            .map(|(ty, exprs)| {
-                if ty.is_none() && exprs.is_empty() {
-                    panic!("error: empty array must provide type");
-                }
-
-                let mut fty = ty.clone();
-
-                if ty.is_some() {
-                    for _ in 0..exprs.len() - 1 {
-                        fty = Some(TypeExpr::Array(Box::new(fty.unwrap())).into_empty_span())
-                    }
-                }
-
-                ValueExpr::Array(fty, exprs.last().unwrap().clone())
-            })
-            .map_with(|x, e| (x, e.span()));
-
-            choice((inline_go, assignment, array, equals, add, declaration, atom))
+            choice((inline_go, assignment, equals, add, declaration, atom))
                 .labelled("expression")
                 .boxed()
         },
@@ -816,6 +827,7 @@ mod tests {
                     ValueExpr::Int(0).into_empty_span().into(),
                 ),
             ),
+            ("[1][0]", empty_tuple()),
             (
                 "a.y()",
                 ValueExpr::FunctionCall {
@@ -1468,16 +1480,6 @@ mod tests {
                     ),
                 ]),
             ),
-            // (
-            //     "x.y.z = 1",
-            //     ValueExpr::VarAssign(Box::new((
-            //         Assignment {
-            //             name: (var("x").0, vec!["y".into(), "z".into()]),
-            //             value_expr: ValueExpr::Int(1).into_empty_span(),
-            //         },
-            //         empty_range(),
-            //     ))),
-            // ),
             (
                 "if (true) {{}} else {{x: 1}}",
                 ValueExpr::If {

@@ -7,9 +7,10 @@ fn lol() -> Int {
 fn main() {
     let a: Int[] = [1, 2, 3, 10];
     let b: Int = a[0] + a[1] + a[lol()];
-    let c: Int = ([1])[0];
+    let c: Int = [[[[1]]]][0][0][0][0];
+    let d: Int = [[[[1, 2]]]][0][0][0][1];
     go {
         fmt.Println(b)
-        fmt.Println(c)
+        fmt.Println(c, d)
     }
 }
