@@ -1,7 +1,7 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    SS, Spanned, failure,
+    Context as SourceFileContext, SS, Spanned, failure,
     function_parser::FunctionDefintion,
     source_file_parser::SourceFile,
     type_parser::{Duck, Field, Struct, TypeExpr},
@@ -1239,95 +1239,94 @@ mod test {
     fn test_type_summary() {
         // the summary always holds the type of main and it's return type and all the primitives
         let primitive_and_main_len = TypeExpr::primitives().len() + 1 /* main fn type */ + 1 /* main fn return type -> () */;
-        let src_and_summary_check_funs: Vec<(&str, Box<dyn FnOnce(&TypesSummary, &mut TypeEnv)>)> = vec![
+        let src_and_summary_check_funs: Vec<(&str, Box<dyn FnOnce(&TypesSummary)>)> = vec![
             (
                 "{ let y: { x: String, y: Int }; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: String, y: Int, a: { b: { c: { d: { e: String }}}} }; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 5 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let x: Int = 5; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 0 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let x: { a: Char, b: Char }; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: { y: Int } }; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: Int }; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
-            // TODO: The inner types are not resolved yet, because they're not pushed into the all_types
             (
                 "{ let y: { x: Int, y: String, z: { x: Int } }; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: Int, y: String, z: { x: Int }, w: () }; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let a: { b: { c: { d: { e: { f: { a: Int }}}}}}; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len() - primitive_and_main_len, 6);
                 }),
             ),
             (
                 "{ let y: { x: String } | { y: String }; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 3 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: String } | { y: String } | { z: String }; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 4 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: { x: String } | { y: String } | { z: String } } }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len() - primitive_and_main_len, 5);
                 }),
             ),
             (
                 "{ let y: { x: String } | { y: String } | { z: String } | { u: String } | { v: String } | { w: String }; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 7 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: String } | { x: String } | { x: String } | { x: String } | { x: String } | { x: String }; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { abc: { x: String, y: String }, abc2: { x: String, y: String } }; }",
-                Box::new(|summary: &TypesSummary, env| {
+                Box::new(|summary: &TypesSummary| {
                     assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
@@ -1384,7 +1383,143 @@ mod test {
 
             println!("------------------------------------");
 
-            summary_check_fun(&summary, &mut type_env);
+            summary_check_fun(&summary);
         }
     }
+
+    #[test]
+    fn test_type_compatibility_success() {
+        let mut type_env = TypeEnv::default();
+
+        let success_cases = vec![
+            (TypeExpr::Int, TypeExpr::Int),
+            (TypeExpr::String, TypeExpr::String),
+            (TypeExpr::Int, TypeExpr::Float),
+            (TypeExpr::Float, TypeExpr::Int),
+            (
+                TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]),
+                TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]),
+            ),
+            (
+                TypeExpr::Duck(Duck {
+                    fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::Int))],
+                }),
+                TypeExpr::Duck(Duck {
+                    fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::Int))],
+                }),
+            ),
+            (
+                TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]),
+                TypeExpr::Int,
+            ),
+            (
+                TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String), empty_spanned(TypeExpr::Bool)]),
+                TypeExpr::Or(vec![empty_spanned(TypeExpr::String), empty_spanned(TypeExpr::Int)]),
+            ),
+        ];
+
+        for (one, two) in success_cases {
+            check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_incompatible_primitives() {
+        let mut type_env = TypeEnv::default();
+        check_type_compatability(&empty_spanned(TypeExpr::Int), &empty_spanned(TypeExpr::String), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_incompatible_number_and_string() {
+        let mut type_env = TypeEnv::default();
+        check_type_compatability(&empty_spanned(TypeExpr::Float), &empty_spanned(TypeExpr::String), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_incompatible_tuples_different_types() {
+        let mut type_env = TypeEnv::default();
+
+        let one = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int)]);
+        let two = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::String)]);
+
+        check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_incompatible_tuples_different_length() {
+        let mut type_env = TypeEnv::default();
+
+        let one = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int)]);
+        let two = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::Int)]);
+
+        check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_incompatible_ducks_different_field_names() {
+        let mut type_env = TypeEnv::default();
+
+        let one = TypeExpr::Duck(Duck {
+            fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::Int))],
+        });
+
+        let two = TypeExpr::Duck(Duck {
+            fields: vec![Field::new("y".to_string(), empty_spanned(TypeExpr::Int))],
+        });
+
+        check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_incompatible_ducks_different_field_types() {
+        let mut type_env = TypeEnv::default();
+
+        let one = TypeExpr::Duck(Duck {
+            fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::Int))],
+        });
+
+        let two = TypeExpr::Duck(Duck {
+            fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::String))],
+        });
+
+        check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_type_not_in_variant() {
+        let mut type_env = TypeEnv::default();
+
+        let variant = TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]);
+        let a_bool = TypeExpr::Bool;
+
+        check_type_compatability(&empty_spanned(variant), &empty_spanned(a_bool), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Variant Types")]
+    fn test_variant_not_subset_of_variant() {
+        let mut type_env = TypeEnv::default();
+
+        let super_variant = TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]);
+        let sub_variant = TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::Bool)]);
+
+        check_type_compatability(&empty_spanned(super_variant), &empty_spanned(sub_variant), &mut type_env);
+    }
+
+    fn empty_spanned<T>(item: T) -> Spanned<T> {
+        let context = SourceFileContext {
+            file_name: "test",
+            file_contents: "",
+        };
+
+        return (item, SS { start: 0, end: 0, context });
+    }
+
 }
