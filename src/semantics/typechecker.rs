@@ -1,7 +1,7 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    SS, Spanned, failure,
+     SS, Spanned, failure,
     function_parser::FunctionDefintion,
     source_file_parser::SourceFile,
     type_parser::{Duck, Field, Struct, TypeExpr},
@@ -147,7 +147,8 @@ impl TypeEnv {
         match type_expr {
             TypeExpr::Duck(duck) => duck.fields.iter_mut().for_each(|field| {
                 param_names_used.push(field.name.clone());
-                if !field.type_expr.0.is_object_like() {
+                // here
+                if !field.type_expr.0.has_subtypes() {
                     found.push(field.type_expr.0.clone());
                     return;
                 }
@@ -211,6 +212,10 @@ impl TypeEnv {
                     found.extend(self.flatten_types(&mut type_expr.0, param_names_used));
                 }
             }
+            TypeExpr::Or(types) => types.iter_mut().for_each(|(type_expr, ..)| {
+                found.push(type_expr.clone());
+                found.extend(self.flatten_types(type_expr, param_names_used));
+            }),
             _ => {
                 found.push(type_expr.clone());
             }
@@ -221,6 +226,8 @@ impl TypeEnv {
 
     pub fn summarize(&mut self) -> TypesSummary {
         let mut all_types = self.all_types.clone();
+        all_types.extend(TypeExpr::primitives());
+        all_types.push(TypeExpr::Tuple(vec![]));
         let mut param_names_used = Vec::new();
 
         let mut to_push = Vec::new();
@@ -287,9 +294,23 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .iter_mut()
         .for_each(|function_definition| {
             typeresolve_function_definition(function_definition, type_env);
-            TypeExpr::from_value_expr(&function_definition.value_expr.0, type_env);
+
+            let explicit_return_type = function_definition
+                .return_type
+                .clone()
+                .unwrap_or_else(|| TypeExpr::Tuple(vec![]).into_empty_span());
+
+            let implicit_return_type =
+                resolve_implicit_function_return_type(function_definition, type_env).unwrap();
+
+            check_type_compatability(
+                &explicit_return_type,
+                &implicit_return_type.into_empty_span(),
+                type_env,
+            );
         });
 
+    // mvmo - 03.07.2025: is this required? If not we should remove the type aliases stack at all
     // type_env.pop_type_aliases();
 
     fn typeresolve_function_definition(
@@ -469,7 +490,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
 impl TypeExpr {
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
-        println!("from-value-expr -> {value_expr:?}");
         return match value_expr {
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
                 lambda_expr
@@ -745,6 +765,13 @@ impl TypeExpr {
         }
     }
 
+    pub fn has_subtypes(&self) -> bool {
+        match self {
+            Self::Or(..) | Self::Tuple(..) | Self::Duck(..) | Self::Struct(..) => true,
+            _ => false,
+        }
+    }
+
     #[allow(dead_code)]
     pub fn has_field(&self, field: Field) -> bool {
         match self {
@@ -796,6 +823,129 @@ impl TypeExpr {
     pub fn is_number(&self) -> bool {
         return *self == TypeExpr::Int || *self == TypeExpr::Float;
     }
+
+    pub fn is_variant(&self) -> bool {
+        return matches!(&self, TypeExpr::Or(..));
+    }
+
+    pub fn is_primitive(&self) -> bool {
+        return match *self {
+            TypeExpr::Int
+            | TypeExpr::Float
+            | TypeExpr::String
+            | TypeExpr::Char
+            | TypeExpr::Bool => true,
+            _ => false,
+        };
+    }
+}
+
+fn resolve_implicit_function_return_type(
+    fun_def: &FunctionDefintion,
+    type_env: &mut TypeEnv,
+) -> Result<TypeExpr, String> {
+    // check against annotated return type
+    fn flatten_returns(
+        value_expr: &ValueExpr,
+        return_types_found: &mut Vec<TypeExpr>,
+        type_env: &mut TypeEnv,
+    ) {
+        match value_expr {
+            ValueExpr::FunctionCall { .. }
+            | ValueExpr::Int(..)
+            | ValueExpr::InlineGo(..)
+            | ValueExpr::String(..)
+            | ValueExpr::Bool(..)
+            | ValueExpr::Float(..)
+            | ValueExpr::Char(..)
+            | ValueExpr::Tuple(..)
+            | ValueExpr::Break
+            | ValueExpr::Continue
+            | ValueExpr::Duck(..)
+            | ValueExpr::Struct(..)
+            | ValueExpr::FieldAccess { .. }
+            | ValueExpr::Lambda(..)
+            | ValueExpr::Variable(..) => {}
+            ValueExpr::If {
+                condition,
+                then,
+                r#else,
+            } => {
+                flatten_returns(&condition.as_ref().0, return_types_found, type_env);
+                flatten_returns(&then.as_ref().0, return_types_found, type_env);
+                r#else.as_ref().inspect(|r#else| {
+                    flatten_returns(&r#else.as_ref().0, return_types_found, type_env);
+                });
+            }
+            ValueExpr::While { condition, body } => {
+                flatten_returns(&condition.as_ref().0, return_types_found, type_env);
+                flatten_returns(&body.as_ref().0, return_types_found, type_env)
+            }
+            ValueExpr::Block(items) => items
+                .iter()
+                .for_each(|item| flatten_returns(&item.0, return_types_found, type_env)),
+            ValueExpr::Return(Some(value_expr)) => {
+                return_types_found.push(TypeExpr::from_value_expr(&value_expr.0, type_env));
+            }
+            ValueExpr::Return(None) => {
+                return_types_found.push(TypeExpr::Tuple(vec![]));
+            }
+            ValueExpr::VarAssign(assignment) => {
+                flatten_returns(
+                    &assignment.as_ref().0.value_expr.0,
+                    return_types_found,
+                    type_env,
+                );
+            }
+            ValueExpr::VarDecl(declaration) => {
+                declaration
+                    .as_ref()
+                    .0
+                    .initializer
+                    .as_ref()
+                    .inspect(|initializer| {
+                        flatten_returns(&initializer.0, return_types_found, type_env);
+                    });
+            }
+            ValueExpr::Add(left, right) => {
+                flatten_returns(&left.as_ref().0, return_types_found, type_env);
+                flatten_returns(&right.as_ref().0, return_types_found, type_env);
+            }
+            ValueExpr::Mul(left, right) => {
+                flatten_returns(&left.as_ref().0, return_types_found, type_env);
+                flatten_returns(&right.as_ref().0, return_types_found, type_env);
+            }
+            ValueExpr::BoolNegate(value_expr) => {
+                flatten_returns(&value_expr.as_ref().0, return_types_found, type_env);
+            }
+            ValueExpr::Equals(left, right) => {
+                flatten_returns(&left.as_ref().0, return_types_found, type_env);
+                flatten_returns(&right.as_ref().0, return_types_found, type_env);
+            }
+        }
+    }
+
+    let mut return_types_found = Vec::new();
+    flatten_returns(&fun_def.value_expr.0, &mut return_types_found, type_env);
+
+    return_types_found.sort_by_key(|type_expr| type_expr.as_clean_go_type_name(type_env));
+    return_types_found.dedup();
+
+    if return_types_found.is_empty() {
+        return Ok(TypeExpr::Tuple(vec![]));
+    }
+
+    if return_types_found.len() == 1 {
+        return Ok(return_types_found.first().unwrap().clone());
+    }
+
+    // TODO add spans
+    return Ok(TypeExpr::Or(
+        return_types_found
+            .iter()
+            .map(|type_expr| type_expr.clone().into_empty_span())
+            .collect::<Vec<_>>(),
+    ));
 }
 
 fn require(condition: bool, fail_message: String) {
@@ -805,11 +955,103 @@ fn require(condition: bool, fail_message: String) {
     }
 }
 
+fn types_are_compatible(one: &TypeExpr, two: &TypeExpr, _type_env: &mut TypeEnv) -> bool {
+    if one.is_number() && two.is_number() {
+        return true;
+    }
+
+    if one.is_number() || two.is_number() {
+        return false;
+    }
+
+    one == two
+}
+
+fn is_non_variant_type_in_variant(
+    non_variant_type: &Spanned<TypeExpr>,
+    variant: &[Spanned<TypeExpr>],
+    type_env: &mut TypeEnv,
+) -> bool {
+    variant.iter().any(|(haystack_member, _)| {
+        types_are_compatible(haystack_member, &non_variant_type.0, type_env)
+    })
+}
+
+fn is_subset_of_variant_type(
+    variant_type: &Spanned<TypeExpr>,
+    other: &Spanned<TypeExpr>,
+    type_env: &mut TypeEnv,
+) {
+    let variant_members = match &variant_type.0 {
+        TypeExpr::Or(members) => members,
+        _ => {
+            panic!("is_subset_of_variant_type called with a non-variant type");
+        }
+    };
+
+    match &other.0 {
+        TypeExpr::Or(other_members) => {
+            for other_member in other_members {
+                if !is_non_variant_type_in_variant(other_member, variant_members, type_env) {
+                    failure(
+                        variant_type.1.context.file_name,
+                        "Incompatible Variant Types".to_string(),
+                        (
+                            format!(
+                                "The type `{}` is not compatible with the target variant.",
+                                other_member.0.as_go_type_annotation(type_env)
+                            ),
+                            other_member.1,
+                        ),
+                        vec![(
+                            format!(
+                                "The target variant only allows the following types: `{}`.",
+                                variant_type.0.as_go_type_annotation(type_env)
+                            ),
+                            variant_type.1,
+                        )],
+                        variant_type.1.context.file_contents,
+                    );
+                }
+            }
+        }
+
+        _ => {
+            if !is_non_variant_type_in_variant(other, variant_members, type_env) {
+                failure(
+                    other.1.context.file_name,
+                    "Incompatible Types".to_string(),
+                    (
+                        format!(
+                            "This expression is of type `{}`.",
+                            other.0.as_go_type_annotation(type_env)
+                        ),
+                        other.1,
+                    ),
+                    vec![(
+                        format!(
+                            "But it needs to be compatible with one of the types in the variant: `{}`.",
+                            variant_type.0.as_go_type_annotation(type_env)
+                        ),
+                        variant_type.1,
+                    )],
+                    other.1.context.file_contents,
+                );
+            }
+        }
+    }
+}
+
 fn check_type_compatability(
     one: &Spanned<TypeExpr>,
     two: &Spanned<TypeExpr>,
     type_env: &mut TypeEnv,
 ) {
+    if one.0.is_variant() {
+        is_subset_of_variant_type(one, two, type_env);
+        return;
+    }
+
     if one.0.is_number() {
         if !two.0.is_number() {
             failure(
@@ -844,15 +1086,10 @@ fn check_type_compatability(
     }
 
     if one.0.as_clean_go_type_name(type_env) != two.0.as_clean_go_type_name(type_env) {
-        let smaller = if one.1.start > two.1.start {
-            two.1
+        let (smaller, larger) = if one.1.start <= two.1.start {
+            (one.1, two.1)
         } else {
-            one.1
-        };
-        let larger = if one.1.start < two.1.start {
-            two.1
-        } else {
-            one.1
+            (two.1, one.1)
         };
 
         let combined_span = SS {
@@ -1000,54 +1237,97 @@ mod test {
 
     #[test]
     fn test_type_summary() {
-        // the summary always holds the type of main function
+        // the summary always holds the type of main and it's return type and all the primitives
+        let primitive_and_main_len = TypeExpr::primitives().len() + 1 /* main fn type */ + 1 /* main fn return type -> () */;
         let src_and_summary_check_funs: Vec<(&str, Box<dyn FnOnce(&TypesSummary)>)> = vec![
             (
                 "{ let y: { x: String, y: Int }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 5);
+                    assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: String, y: Int, a: { b: { c: { d: { e: String }}}} }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 9);
+                    assert_eq!(summary.types_used.len(), 5 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let x: Int = 5; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 3);
+                    assert_eq!(summary.types_used.len(), 0 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let x: { a: Char, b: Char }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 4);
+                    assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: { y: Int } }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 5);
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: Int }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 4);
+                    assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: Int, y: String, z: { x: Int } }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 6);
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: Int, y: String, z: { x: Int }, w: () }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 6);
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
+                }),
+            ),
+            (
+                "{ let a: { b: { c: { d: { e: { f: { a: Int }}}}}}; }",
+                Box::new(|summary: &TypesSummary| {
+                    assert_eq!(summary.types_used.len() - primitive_and_main_len, 6);
+                }),
+            ),
+            (
+                "{ let y: { x: String } | { y: String }; }",
+                Box::new(|summary: &TypesSummary| {
+                    assert_eq!(summary.types_used.len(), 3 + primitive_and_main_len);
+                }),
+            ),
+            (
+                "{ let y: { x: String } | { y: String } | { z: String }; }",
+                Box::new(|summary: &TypesSummary| {
+                    assert_eq!(summary.types_used.len(), 4 + primitive_and_main_len);
+                }),
+            ),
+            (
+                "{ let y: { x: { x: String } | { y: String } | { z: String } } }",
+                Box::new(|summary: &TypesSummary| {
+                    assert_eq!(summary.types_used.len() - primitive_and_main_len, 5);
+                }),
+            ),
+            (
+                "{ let y: { x: String } | { y: String } | { z: String } | { u: String } | { v: String } | { w: String }; }",
+                Box::new(|summary: &TypesSummary| {
+                    assert_eq!(summary.types_used.len(), 7 + primitive_and_main_len);
+                }),
+            ),
+            (
+                "{ let y: { x: String } | { x: String } | { x: String } | { x: String } | { x: String } | { x: String }; }",
+                Box::new(|summary: &TypesSummary| {
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
+                }),
+            ),
+            (
+                "{ let y: { abc: { x: String, y: String }, abc2: { x: String, y: String } }; }",
+                Box::new(|summary: &TypesSummary| {
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
         ];
@@ -1092,7 +1372,156 @@ mod test {
 
             let summary = type_env.summarize();
 
+            println!("------------------------------------");
+            println!("source: \n{src}");
+            println!("types used:");
+            summary
+                .types_used
+                .iter()
+                .map(|type_expr| type_expr.as_clean_go_type_name(&mut type_env))
+                .for_each(|type_name| println!("\t{type_name}"));
+
+            println!("------------------------------------");
+
             summary_check_fun(&summary);
         }
     }
+
+    #[test]
+    fn test_type_compatibility_success() {
+        let mut type_env = TypeEnv::default();
+
+        let success_cases = vec![
+            (TypeExpr::Int, TypeExpr::Int),
+            (TypeExpr::String, TypeExpr::String),
+            (TypeExpr::Int, TypeExpr::Float),
+            (TypeExpr::Float, TypeExpr::Int),
+            (
+                TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]),
+                TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]),
+            ),
+            (
+                TypeExpr::Duck(Duck {
+                    fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::Int))],
+                }),
+                TypeExpr::Duck(Duck {
+                    fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::Int))],
+                }),
+            ),
+            (
+                TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]),
+                TypeExpr::Int,
+            ),
+            (
+                TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String), empty_spanned(TypeExpr::Bool)]),
+                TypeExpr::Or(vec![empty_spanned(TypeExpr::String), empty_spanned(TypeExpr::Int)]),
+            ),
+        ];
+
+        for (one, two) in success_cases {
+            check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_incompatible_primitives() {
+        let mut type_env = TypeEnv::default();
+        check_type_compatability(&empty_spanned(TypeExpr::Int), &empty_spanned(TypeExpr::String), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_incompatible_number_and_string() {
+        let mut type_env = TypeEnv::default();
+        check_type_compatability(&empty_spanned(TypeExpr::Float), &empty_spanned(TypeExpr::String), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_incompatible_tuples_different_types() {
+        let mut type_env = TypeEnv::default();
+
+        let one = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int)]);
+        let two = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::String)]);
+
+        check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_incompatible_tuples_different_length() {
+        let mut type_env = TypeEnv::default();
+
+        let one = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int)]);
+        let two = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::Int)]);
+
+        check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_incompatible_ducks_different_field_names() {
+        let mut type_env = TypeEnv::default();
+
+        let one = TypeExpr::Duck(Duck {
+            fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::Int))],
+        });
+
+        let two = TypeExpr::Duck(Duck {
+            fields: vec![Field::new("y".to_string(), empty_spanned(TypeExpr::Int))],
+        });
+
+        check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_incompatible_ducks_different_field_types() {
+        let mut type_env = TypeEnv::default();
+
+        let one = TypeExpr::Duck(Duck {
+            fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::Int))],
+        });
+
+        let two = TypeExpr::Duck(Duck {
+            fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::String))],
+        });
+
+        check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Types")]
+    fn test_type_not_in_variant() {
+        let mut type_env = TypeEnv::default();
+
+        let variant = TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]);
+        let a_bool = TypeExpr::Bool;
+
+        check_type_compatability(&empty_spanned(variant), &empty_spanned(a_bool), &mut type_env);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible Variant Types")]
+    fn test_variant_not_subset_of_variant() {
+        let mut type_env = TypeEnv::default();
+
+        let super_variant = TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]);
+        let sub_variant = TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::Bool)]);
+
+        check_type_compatability(&empty_spanned(super_variant), &empty_spanned(sub_variant), &mut type_env);
+    }
+
+    fn empty_spanned<T>(item: T) -> Spanned<T> {
+        use crate::parse::Context as SourceFileContext;
+
+        let context = SourceFileContext {
+            file_name: "test",
+            file_contents: "",
+        };
+
+        return (item, SS { start: 0, end: 0, context });
+    }
+
 }

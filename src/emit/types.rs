@@ -4,6 +4,28 @@ use crate::{
     semantics::typechecker::TypeEnv,
 };
 
+pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
+    match primitive_type_expr {
+        TypeExpr::String => "string",
+        TypeExpr::Int => "int",
+        TypeExpr::Float => "float32",
+        TypeExpr::Bool => "bool",
+        TypeExpr::Char => "rune",
+        _ => panic!("That's not a primitive"),
+    }
+}
+
+pub fn primitive_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
+    match primitive_type_expr {
+        TypeExpr::String => "DuckString",
+        TypeExpr::Int => "DuckInt",
+        TypeExpr::Float => "DuckFloat",
+        TypeExpr::Bool => "DuckBool",
+        TypeExpr::Char => "Char",
+        _ => panic!("That's not a primitive"),
+    }
+}
+
 pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
     let summary = type_env.summarize();
 
@@ -61,11 +83,15 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                     )
                 })
                 .collect::<Vec<_>>(),
-            _ => vec![],
+            // TypeExpr::Or(variants)  |
+            v => {
+                dbg!(&v);
+                vec![]
+            }
         };
     }
 
-    let interface_defs = summary
+    let mut instructions = summary
         .param_names_used
         .iter()
         .map(|param_name| {
@@ -84,6 +110,62 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
         })
         .collect::<Vec<_>>();
 
+    let mut primitive_types_instructions = summary
+        .types_used
+        .iter()
+        .filter(|type_expr| type_expr.is_primitive())
+        .map(|primitive_type_expr| {
+            IrInstruction::StructDef(
+                primitive_type_expr.as_clean_go_type_name(type_env),
+                vec![(
+                    "value".to_string(),
+                    primitive_native_type_name(primitive_type_expr).to_string(),
+                )],
+            )
+        })
+        .collect::<Vec<_>>();
+
+    instructions.append(&mut primitive_types_instructions);
+
+    let mut variant_instructions = summary
+        .types_used
+        .iter()
+        .filter(|type_expr| matches!(type_expr, TypeExpr::Or(..)))
+        .flat_map(|variant_type_expr| {
+            let TypeExpr::Or(variants) = variant_type_expr else {
+                unreachable!()
+            };
+            let variant_type_name = variant_type_expr.as_clean_go_type_name(type_env);
+            let variant_seal_fn_name = format!("Seal_{}", variant_type_name);
+
+            let mut sealing_fn_instructions = variants
+                .iter()
+                .map(|variant| {
+                    IrInstruction::FunDef(
+                        variant_seal_fn_name.clone(),
+                        Some((
+                            "self".to_string(),
+                            variant.0.as_clean_go_type_name(type_env),
+                        )),
+                        vec![],
+                        None,
+                        vec![],
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            sealing_fn_instructions.push(IrInstruction::InterfaceDef(
+                variant_type_name,
+                vec![],
+                vec![(variant_seal_fn_name.to_string(), vec![], None)],
+            ));
+
+            sealing_fn_instructions
+        })
+        .collect::<Vec<_>>();
+
+    instructions.append(&mut variant_instructions);
+
     summary
         .types_used
         .iter()
@@ -91,9 +173,10 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
         .map(|type_expr| {
             let type_name = type_expr.as_clean_go_type_name(type_env);
 
-            let mut i = interface_implementations(type_name.clone(), type_expr, type_env);
+            let mut instructions =
+                interface_implementations(type_name.clone(), type_expr, type_env);
 
-            i.push(match type_expr {
+            instructions.push(match type_expr {
                 TypeExpr::Tuple(t) => IrInstruction::StructDef(
                     type_name,
                     t.iter()
@@ -119,16 +202,16 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                 }
                 _ => panic!("cant create for {type_name}"),
             });
-            i
+            instructions
         })
-        .chain(vec![interface_defs])
-        .fold(Vec::new(), |mut acc, x| {
-            for y in x {
-                if !acc.contains(&y) {
-                    acc.push(y);
+        .chain(vec![instructions])
+        .fold(Vec::new(), |mut instructions_acc, instructions| {
+            for instruction in instructions {
+                if !instructions_acc.contains(&instruction) {
+                    instructions_acc.push(instruction);
                 }
             }
-            acc
+            instructions_acc
         })
 }
 
@@ -136,12 +219,12 @@ impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::Any => "interface{}".to_string(),
-            TypeExpr::Bool => "bool".to_string(),
+            TypeExpr::Bool => "DuckBool".to_string(),
             TypeExpr::InlineGo => "any".to_string(),
-            TypeExpr::Int => "int".to_string(),
-            TypeExpr::Float => "float32".to_string(),
-            TypeExpr::Char => "rune".to_string(),
-            TypeExpr::String => "string".to_string(),
+            TypeExpr::Int => "DuckInt".to_string(),
+            TypeExpr::Float => "DuckFloat".to_string(),
+            TypeExpr::Char => "DuckChar".to_string(),
+            TypeExpr::String => "DuckString".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeNameInternal(name) => name.clone(),
             TypeExpr::TypeName(_, name) => type_env
@@ -183,18 +266,18 @@ impl TypeExpr {
                 )
             }
             TypeExpr::Tuple(_fields) => self.as_clean_go_type_name(type_env),
-            TypeExpr::Or(_variants) => todo!("implement variants"),
+            TypeExpr::Or(_variants) => self.as_clean_go_type_name(type_env),
         };
     }
 
     pub fn as_go_concrete_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::Any => "interface{}".to_string(),
-            TypeExpr::Bool => "bool".to_string(),
-            TypeExpr::Int => "int".to_string(),
-            TypeExpr::Float => "float32".to_string(),
-            TypeExpr::Char => "rune".to_string(),
-            TypeExpr::String => "string".to_string(),
+            TypeExpr::Bool => "DuckBool".to_string(),
+            TypeExpr::Int => "DuckInt".to_string(),
+            TypeExpr::Float => "DuckFloat".to_string(),
+            TypeExpr::Char => "Char".to_string(),
+            TypeExpr::String => "String".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::TypeNameInternal(name) => name.clone(),
@@ -244,18 +327,27 @@ impl TypeExpr {
                         .join("\n")
                 )
             }
-            TypeExpr::Or(_variants) => todo!("implement variants"),
+            TypeExpr::Or(variants) => {
+                format!(
+                    "struct {{\n{}\n}}",
+                    variants
+                        .iter()
+                        .map(|type_expr| type_expr.0.as_go_type_annotation(type_env).to_string())
+                        .collect::<Vec<_>>()
+                        .join("_")
+                )
+            }
         };
     }
 
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::Any => "Any".to_string(),
-            TypeExpr::Bool => "bool".to_string(),
-            TypeExpr::Int => "int".to_string(),
-            TypeExpr::Float => "float32".to_string(),
-            TypeExpr::Char => "rune".to_string(),
-            TypeExpr::String => "string".to_string(),
+            TypeExpr::Bool => "DuckBool".to_string(),
+            TypeExpr::Int => "DuckInt".to_string(),
+            TypeExpr::Float => "DuckFloat".to_string(),
+            TypeExpr::Char => "DuckChar".to_string(),
+            TypeExpr::String => "DuckString".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeName(_, name) => name.clone(),
             TypeExpr::TypeNameInternal(name) => name.clone(),
@@ -312,7 +404,18 @@ impl TypeExpr {
                         .join("_")
                 )
             }
-            TypeExpr::Or(_variants) => todo!("implement variants"),
+            TypeExpr::Or(variants) => {
+                // mvmo 03.07.25: Check for double sort
+                let mut variants = variants
+                    .clone()
+                    .iter()
+                    .map(|variant| variant.0.as_clean_go_type_name(type_env))
+                    .collect::<Vec<_>>();
+
+                variants.sort();
+
+                return format!("Union_{}", variants.join("_or_"));
+            }
         };
     }
 }
