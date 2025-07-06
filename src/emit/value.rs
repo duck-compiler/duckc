@@ -781,7 +781,7 @@ mod tests {
                 ],
             ),
             (
-                "[]",
+                ".{}[]",
                 vec![
                     IrInstruction::VarDecl("var_0".into(), "[]interface{}".into()),
                     IrInstruction::VarAssignment(
@@ -791,12 +791,17 @@ mod tests {
                 ],
             ),
             (
-                "[[]]",
+                ".Int[][.Int[]]",
                 vec![
                     IrInstruction::VarDecl("var_0".into(), "[]DuckInt".into()),
                     IrInstruction::VarAssignment(
                         "var_0".into(),
-                        IrValue::Array("[]DuckInt".into(), vec![IrValue::Int(1)]),
+                        IrValue::Array("[]DuckInt".into(), vec![]),
+                    ),
+                    IrInstruction::VarDecl("var_1".into(), "[][]DuckInt".into()),
+                    IrInstruction::VarAssignment(
+                        "var_1".into(),
+                        IrValue::Array("[][]DuckInt".into(), vec![IrValue::Var("var_0".into())]),
                     ),
                 ],
             ),

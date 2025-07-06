@@ -827,7 +827,15 @@ mod tests {
                     ValueExpr::Int(0).into_empty_span().into(),
                 ),
             ),
-            ("[1][0]", empty_tuple()),
+            (
+                "[1][0]",
+                ValueExpr::ArrayAccess(
+                    ValueExpr::Array(None, vec![ValueExpr::Int(1).into_empty_span()])
+                        .into_empty_span()
+                        .into(),
+                    ValueExpr::Int(0).into_empty_span().into(),
+                ),
+            ),
             (
                 "a.y()",
                 ValueExpr::FunctionCall {
