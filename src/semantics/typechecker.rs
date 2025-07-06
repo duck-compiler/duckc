@@ -1308,6 +1308,12 @@ mod test {
                     assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
+            (
+                "{ let y: { abc: { x: String, y: String }, abc2: { x: String, y: String } }; }",
+                Box::new(|summary: &TypesSummary, env| {
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
+                }),
+            ),
         ];
 
         for (src, summary_check_fun) in src_and_summary_check_funs {
