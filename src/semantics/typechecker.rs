@@ -1297,9 +1297,15 @@ mod test {
                 }),
             ),
             (
-                "{ let y: { x: String } | { y: String } | { z: String } | { x: String } | { y: String } | { z: String }; }",
+                "{ let y: { x: String } | { y: String } | { z: String } | { u: String } | { v: String } | { w: String }; }",
                 Box::new(|summary: &TypesSummary, env| {
-                    assert_eq!(summary.types_used.len(), 5 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 7 + primitive_and_main_len);
+                }),
+            ),
+            (
+                "{ let y: { x: String } | { x: String } | { x: String } | { x: String } | { x: String } | { x: String }; }",
+                Box::new(|summary: &TypesSummary, env| {
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
         ];
