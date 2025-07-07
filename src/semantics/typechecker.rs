@@ -489,7 +489,16 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ValueExpr::Int(..) => {
                 type_env.insert_type(TypeExpr::Int);
             } // this is so that only the used primitive types are in the type env
-            ValueExpr::Match {..} => todo!(),
+            ValueExpr::Match {
+                value_expr,
+                arms,
+            } => {
+                typeresolve_value_expr(&mut value_expr.0, type_env);
+                arms.iter_mut()
+                    .for_each(|arm| {
+                        typeresolve_value_expr(&mut arm.value_expr.0, type_env);
+                    });
+            },
             ValueExpr::Break | ValueExpr::Return(None) | ValueExpr::Continue => {}
         }
     }
@@ -792,7 +801,13 @@ impl TypeExpr {
 
                 return TypeExpr::Tuple(vec![]);
             },
-            ValueExpr::Match {..} => todo!()
+            // TODO: Match Expressions need to be type resolved just as the function defs
+            ValueExpr::Match {
+                value_expr,
+                arms
+            } => {
+                return TypeExpr::Tuple(vec![])
+            },
         };
     }
 
@@ -1183,10 +1198,11 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_typechecking() {
+    fn test_typeresolve() {
         let src_and_expected_type_vec = vec![
             ("4 + 4", TypeExpr::Int),
             ("\"Hallo\"", TypeExpr::String),
+            ("match () {}", TypeExpr::String),
             (
                 "{ x: \"hallo\", }",
                 TypeExpr::Duck(Duck {
