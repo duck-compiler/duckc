@@ -8,10 +8,12 @@ impl IrInstruction {
         #![allow(clippy::format_in_format_args)]
         match self {
             IrInstruction::SwitchType(against, type_cases) => {
-                fn emit_case_go(case: &Case) -> String {
+                // TODO: should this be mangled???? LOLOLOLO I DON"T THINK SO
+                fn emit_case_go(case: &Case, actual: &str) -> String {
                     format!(
-                        "case {}:\n{}",
+                        "case {}:\n{}\n{}",
                         case.type_name,
+                        format!("var {} {} = {}.({})\n_={}\n", case.bound_to_identifier, case.type_name, actual, case.type_name, case.bound_to_identifier),
                         case.instrs.iter()
                             .map(IrInstruction::emit_as_go)
                             .collect::<Vec<_>>()
@@ -23,7 +25,7 @@ impl IrInstruction {
                     "switch {}.(type) {{\n{}\n}}",
                     against.emit_as_go(),
                     type_cases.iter()
-                        .map(emit_case_go)
+                        .map(|case| emit_case_go(case, &against.emit_as_go()))
                         .collect::<Vec<_>>()
                         .join("\n"),
                 )
