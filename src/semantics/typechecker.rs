@@ -496,7 +496,12 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 typeresolve_value_expr(&mut value_expr.0, type_env);
                 arms.iter_mut()
                     .for_each(|arm| {
+                        type_env.push_identifier_types();
+
+                        type_env.insert_identifier_type(arm.bound_to_identifier.clone(), arm.type_case.0.clone());
                         typeresolve_value_expr(&mut arm.value_expr.0, type_env);
+
+                        type_env.pop_identifier_types();
                     });
             },
             ValueExpr::Break | ValueExpr::Return(None) | ValueExpr::Continue => {}
@@ -725,12 +730,15 @@ impl TypeExpr {
 
                 return ty;
             }
-            ValueExpr::Variable(_, ident, type_expr) => type_expr
-                .as_ref()
-                .cloned()
-                .or(type_env.get_identifier_type(ident.clone()))
-                .expect("Expected type but didn't get one")
-                .clone(),
+            ValueExpr::Variable(_, ident, type_expr) => {
+                dbg!(&ident);
+                type_expr
+                    .as_ref()
+                    .cloned()
+                    .or(type_env.get_identifier_type(ident.clone()))
+                    .expect("Expected type but didn't get one")
+                    .clone()
+            },
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(
                     &(
