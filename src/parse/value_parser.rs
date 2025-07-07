@@ -139,7 +139,8 @@ where
                     .ignore_then(type_expression_parser())
                     .boxed();
 
-                just(Token::ControlChar('('))
+                just(Token::Function)
+                    .ignore_then(just(Token::ControlChar('(')))
                     .ignore_then(params_parser)
                     .then_ignore(just(Token::ControlChar(')')))
                     .then(return_type_parser.or_not())

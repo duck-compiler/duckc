@@ -1,21 +1,21 @@
 use go "fmt";
 
 fn main() {
-    let a: Int = ((x: Int) -> Int => {
+    let a: Int = (fn(x: Int) -> Int => {
         go {
             fmt.Println(x)
         }
         return 1;
     })(1);
 
-    let b: Int = ((x: Int) -> Int => {
+    let b: Int = (fn(x: Int) -> Int => {
         go {
             fmt.Println(x)
         }
         return 1;
     })(1);
 
-    let c: () -> go any = () -> go any => {};
+    let c: fn() -> go any = fn() -> go any => {};
 
     c();
 

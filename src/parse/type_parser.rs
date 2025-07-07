@@ -153,7 +153,8 @@ where
                     _ => TypeExpr::Any,
                 });
 
-            let function = just(Token::ControlChar('('))
+            let function = just(Token::Function)
+                .ignore_then(just(Token::ControlChar('(')))
                 .ignore_then(function_fields)
                 .then_ignore(just(Token::ControlChar(')')))
                 .then_ignore(just(Token::ControlChar('-')))
@@ -297,7 +298,8 @@ where
                     _ => TypeExpr::Any,
                 });
 
-            let function = just(Token::ControlChar('('))
+            let function = just(Token::Function)
+                .ignore_then(just(Token::ControlChar('(')))
                 .ignore_then(function_fields)
                 .then_ignore(just(Token::ControlChar(')')))
                 .then_ignore(just(Token::ControlChar('-')))
