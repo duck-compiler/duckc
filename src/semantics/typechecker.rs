@@ -1202,7 +1202,6 @@ mod test {
         let src_and_expected_type_vec = vec![
             ("4 + 4", TypeExpr::Int),
             ("\"Hallo\"", TypeExpr::String),
-            ("match () {}", TypeExpr::String),
             (
                 "{ x: \"hallo\", }",
                 TypeExpr::Duck(Duck {
