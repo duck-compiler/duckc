@@ -19,6 +19,7 @@ pub enum Tag {
     Dependency,
     Setup,
     IO,
+    Go,
 }
 
 impl Display for Tag {
@@ -89,6 +90,7 @@ impl Display for Tag {
                     .bright_white()
             ),
             Self::Clean => write!(f, "{}", " clean ".on_bright_magenta().bright_white()),
+            Self::Go => write!(f, "{}", " go ".on_bright_blue().bright_white()),
         };
     }
 }
