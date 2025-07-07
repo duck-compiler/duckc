@@ -134,8 +134,7 @@ where
                     .or_not()
                     .boxed();
 
-                let return_type_parser = just(Token::ControlChar('-'))
-                    .ignore_then(just(Token::ControlChar('>')))
+                let return_type_parser = just(Token::ThinArrow)
                     .ignore_then(type_expression_parser())
                     .boxed();
 

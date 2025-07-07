@@ -31,12 +31,14 @@ pub enum Token {
     InlineGo(String),
     Module,
     ScopeRes,
+    ThinArrow,
 }
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = match self {
             Token::ScopeRes => "::",
+            Token::ThinArrow => "->",
             Token::Use => "use",
             Token::Type => "type",
             Token::Go => "go",
@@ -101,9 +103,11 @@ pub fn lexer<'a>(
 
     let equals = just("==").to(Token::Equals);
     let scope_res = just("::").to(Token::ScopeRes);
+    let thin_arrow = just("->").to(Token::ThinArrow);
 
     let token = inline_go_parser()
         .or(scope_res)
+        .or(thin_arrow)
         .or(r#bool)
         .or(equals)
         .or(keyword_or_ident)
@@ -267,7 +271,7 @@ mod tests {
                 ],
             ),
             ("()", vec![Token::ControlChar('('), Token::ControlChar(')')]),
-            ("->", vec![Token::ControlChar('-'), Token::ControlChar('>')]),
+            ("->", vec![Token::ThinArrow]),
             ("fn", vec![Token::Function]),
             ("\"\"", vec![Token::StringLiteral(String::from(""))]),
             ("\"XX\"", vec![Token::StringLiteral(String::from("XX"))]),
