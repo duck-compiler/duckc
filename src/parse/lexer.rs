@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use chumsky::{prelude::*, text::whitespace};
 
-use crate::parse::{value_parser::empty_range, Context, Spanned, SS};
+use crate::parse::{Context, SS, Spanned, value_parser::empty_range};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum FmtStringContents {
@@ -72,16 +72,44 @@ impl Display for Token {
             Token::As => "as",
             Token::InlineGo(_) => "inline go",
             Token::Module => "module",
-            Token::Match => "match"
+            Token::Match => "match",
         };
         write!(f, "{t}")
     }
 }
 
-pub fn lexer<'a>(
+pub fn lex_fstring_tokens<'a>(
+    lexer: impl Parser<'a, &'a str, Spanned<Token>, extra::Err<Rich<'a, char>>> + Clone + 'a,
+) -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> + Clone {
+    recursive(|e| {
+        just("{")
+            .ignore_then(
+                choice((
+                    just("{").rewind().ignore_then(e.clone()),
+                    any()
+                        .filter(|c| *c != '{' && *c != '}')
+                        .rewind()
+                        .ignore_then(lexer.clone())
+                        .map(|x| vec![x]),
+                ))
+                .repeated()
+                .collect::<Vec<_>>(),
+            )
+            .then_ignore(just("}"))
+            .map(|x| {
+                let mut v = Vec::new();
+                v.push((Token::ControlChar('{'), empty_range()));
+                v.extend(x.into_iter().flatten());
+                v.push((Token::ControlChar('}'), empty_range()));
+                v
+            })
+    })
+}
+
+pub fn lex_single<'a>(
     file_name: &'static str,
     file_contents: &'static str,
-) -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> {
+) -> impl Parser<'a, &'a str, Spanned<Token>, extra::Err<Rich<'a, char>>> + Clone {
     recursive(|lexer| {
         let keyword_or_ident = text::ident().map(|str| match str {
             "module" => Token::Module,
@@ -121,10 +149,17 @@ pub fn lexer<'a>(
             .ignore_then(just('"'))
             .ignore_then(
                 choice((
-                    just('{').rewind().ignore_then(lexer
-                        .clone()
-                        .delimited_by(just('{'), just('}'))
-                        .map(|e| FmtStringContents::Tokens(e))),
+                    just("{")
+                        .rewind()
+                        .ignore_then(lex_fstring_tokens(lexer.clone()))
+                        .map(|e| {
+                            FmtStringContents::Tokens(
+                                e[1..e.len() - 1]
+                                    .iter()
+                                    .map(|x| x.clone())
+                                    .collect::<Vec<_>>(),
+                            )
+                        }),
                     none_of("\\\n\t\"")
                         .or(choice((
                             just("\\\\").to('\\'),
@@ -168,9 +203,16 @@ pub fn lexer<'a>(
                 )
             })
             .padded()
-            .repeated()
-            .collect::<Vec<Spanned<Token>>>()
     })
+}
+
+pub fn lexer<'a>(
+    file_name: &'static str,
+    file_contents: &'static str,
+) -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> {
+    lex_single(file_name, file_contents)
+        .repeated()
+        .collect::<Vec<_>>()
 }
 
 fn go_text_parser<'src>()
@@ -255,6 +297,28 @@ mod tests {
     #[test]
     fn test_lex() {
         let test_cases = vec![
+            (
+                "f\"{{{1}}}\"",
+                vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
+                    vec![
+                        (Token::ControlChar('{'), empty_range()),
+                        (Token::ControlChar('{'), empty_range()),
+                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ControlChar('}'), empty_range()),
+                        (Token::ControlChar('}'), empty_range()),
+                    ],
+                )])],
+            ),
+            (
+                "f\"{1}\"",
+                vec![Token::FormatStringLiteral(vec![
+                    FmtStringContents::Char('F'),
+                    FmtStringContents::Char('M'),
+                    FmtStringContents::Char('T'),
+                    FmtStringContents::Char(' '),
+                    FmtStringContents::Tokens(vec![(Token::Ident("var".into()), empty_range())]),
+                ])],
+            ),
             (
                 "type Y = duck {};",
                 vec![
@@ -396,16 +460,6 @@ mod tests {
                     Token::ControlChar('}'),
                     Token::ControlChar(';'),
                 ],
-            ),
-            (
-                "f\"{1}\"",
-                vec![Token::FormatStringLiteral(vec![
-                    FmtStringContents::Char('F'),
-                    FmtStringContents::Char('M'),
-                    FmtStringContents::Char('T'),
-                    FmtStringContents::Char(' '),
-                    FmtStringContents::Tokens(vec![(Token::Ident("var".into()), empty_range())]),
-                ])],
             ),
             (
                 "f\"FMT {var}\"",
