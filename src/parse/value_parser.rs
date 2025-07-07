@@ -139,7 +139,8 @@ where
                     .ignore_then(type_expression_parser())
                     .boxed();
 
-                just(Token::ControlChar('('))
+                just(Token::Function)
+                    .ignore_then(just(Token::ControlChar('(')))
                     .ignore_then(params_parser)
                     .then_ignore(just(Token::ControlChar(')')))
                     .then(return_type_parser.or_not())
@@ -1339,7 +1340,7 @@ mod tests {
                 },
             ),
             (
-                "(() => () => {1})()()",
+                "(fn() => fn() => {1})()()",
                 ValueExpr::FunctionCall {
                     target: ValueExpr::FunctionCall {
                         target: ValueExpr::Lambda(
@@ -1869,7 +1870,7 @@ mod tests {
                 ValueExpr::InlineGo(String::from(" go func() {} ")),
             ),
             (
-                "() => {}",
+                "fn() => {}",
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
                         params: vec![],
@@ -1883,7 +1884,7 @@ mod tests {
                 ),
             ),
             (
-                "() => 1",
+                "fn() => 1",
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
                         params: vec![],
@@ -1894,7 +1895,7 @@ mod tests {
                 ),
             ),
             (
-                "() -> Int => 1",
+                "fn() -> Int => 1",
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
                         params: vec![],
@@ -1905,7 +1906,7 @@ mod tests {
                 ),
             ),
             (
-                "(x: String) -> Int => 1",
+                "fn(x: String) -> Int => 1",
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
                         params: vec![("x".into(), TypeExpr::String.into_empty_span())],
