@@ -157,8 +157,7 @@ where
                 .ignore_then(just(Token::ControlChar('(')))
                 .ignore_then(function_fields)
                 .then_ignore(just(Token::ControlChar(')')))
-                .then_ignore(just(Token::ControlChar('-')))
-                .then_ignore(just(Token::ControlChar('>')))
+                .then_ignore(just(Token::ThinArrow))
                 .then(p.clone())
                 .map(|(fields, return_type)| {
                     TypeExpr::Fun(
@@ -302,8 +301,7 @@ where
                 .ignore_then(just(Token::ControlChar('(')))
                 .ignore_then(function_fields)
                 .then_ignore(just(Token::ControlChar(')')))
-                .then_ignore(just(Token::ControlChar('-')))
-                .then_ignore(just(Token::ControlChar('>')))
+                .then_ignore(just(Token::ThinArrow))
                 .then(p.clone())
                 .map(|(fields, return_type)| {
                     TypeExpr::Fun(

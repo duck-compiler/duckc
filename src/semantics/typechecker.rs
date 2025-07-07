@@ -489,6 +489,21 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ValueExpr::Int(..) => {
                 type_env.insert_type(TypeExpr::Int);
             } // this is so that only the used primitive types are in the type env
+            ValueExpr::Match {
+                value_expr,
+                arms,
+            } => {
+                typeresolve_value_expr(&mut value_expr.0, type_env);
+                arms.iter_mut()
+                    .for_each(|arm| {
+                        type_env.push_identifier_types();
+
+                        type_env.insert_identifier_type(arm.bound_to_identifier.clone(), arm.type_case.0.clone());
+                        typeresolve_value_expr(&mut arm.value_expr.0, type_env);
+
+                        type_env.pop_identifier_types();
+                    });
+            },
             ValueExpr::Break | ValueExpr::Return(None) | ValueExpr::Continue => {}
         }
     }
@@ -715,12 +730,15 @@ impl TypeExpr {
 
                 return ty;
             }
-            ValueExpr::Variable(_, ident, type_expr) => type_expr
-                .as_ref()
-                .cloned()
-                .or(type_env.get_identifier_type(ident.clone()))
-                .expect("Expected type but didn't get one")
-                .clone(),
+            ValueExpr::Variable(_, ident, type_expr) => {
+                dbg!(&ident);
+                type_expr
+                    .as_ref()
+                    .cloned()
+                    .or(type_env.get_identifier_type(ident.clone()))
+                    .expect("Expected type but didn't get one")
+                    .clone()
+            },
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(
                     &(
@@ -790,7 +808,14 @@ impl TypeExpr {
                 let _body_type_expr = TypeExpr::from_value_expr(&body.0, type_env);
 
                 return TypeExpr::Tuple(vec![]);
-            }
+            },
+            // TODO: Match Expressions need to be type resolved just as the function defs
+            ValueExpr::Match {
+                value_expr: _,
+                arms: _
+            } => {
+                return TypeExpr::Tuple(vec![])
+            },
         };
     }
 
@@ -907,6 +932,7 @@ fn resolve_implicit_function_return_type(
             | ValueExpr::FieldAccess { .. }
             | ValueExpr::Lambda(..)
             | ValueExpr::Variable(..)
+            | ValueExpr::Match {..}
             | ValueExpr::ArrayAccess(..) => {}
             ValueExpr::If { condition, then, r#else } => {
                 flatten_returns(&condition.as_ref().0, return_types_found, type_env);
@@ -1180,7 +1206,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_typechecking() {
+    fn test_typeresolve() {
         let src_and_expected_type_vec = vec![
             ("4 + 4", TypeExpr::Int),
             ("\"Hallo\"", TypeExpr::String),

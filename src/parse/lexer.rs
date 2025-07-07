@@ -21,6 +21,7 @@ pub enum Token {
     CharLiteral(char),
     FloatLiteral(f64),
     Equals,
+    Match,
     If,
     Else,
     Let,
@@ -31,12 +32,14 @@ pub enum Token {
     InlineGo(String),
     Module,
     ScopeRes,
+    ThinArrow,
 }
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = match self {
             Token::ScopeRes => "::",
+            Token::ThinArrow => "->",
             Token::Use => "use",
             Token::Type => "type",
             Token::Go => "go",
@@ -61,6 +64,7 @@ impl Display for Token {
             Token::As => "as",
             Token::InlineGo(_) => "inline go",
             Token::Module => "module",
+            Token::Match => "match"
         };
         write!(f, "{t}")
     }
@@ -86,6 +90,7 @@ pub fn lexer<'a>(
         "break" => Token::Break,
         "continue" => Token::Continue,
         "as" => Token::As,
+        "match" => Token::Match,
         _ => Token::Ident(str.to_string()),
     });
 
@@ -101,9 +106,11 @@ pub fn lexer<'a>(
 
     let equals = just("==").to(Token::Equals);
     let scope_res = just("::").to(Token::ScopeRes);
+    let thin_arrow = just("->").to(Token::ThinArrow);
 
     let token = inline_go_parser()
         .or(scope_res)
+        .or(thin_arrow)
         .or(r#bool)
         .or(equals)
         .or(keyword_or_ident)
@@ -267,7 +274,7 @@ mod tests {
                 ],
             ),
             ("()", vec![Token::ControlChar('('), Token::ControlChar(')')]),
-            ("->", vec![Token::ControlChar('-'), Token::ControlChar('>')]),
+            ("->", vec![Token::ThinArrow]),
             ("fn", vec![Token::Function]),
             ("\"\"", vec![Token::StringLiteral(String::from(""))]),
             ("\"XX\"", vec![Token::StringLiteral(String::from("XX"))]),
