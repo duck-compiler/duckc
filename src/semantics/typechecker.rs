@@ -376,7 +376,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     .for_each(|param| typeresolve_value_expr(&mut param.0, type_env));
             }
             ValueExpr::Variable(_, identifier, type_expr_opt) => {
-                println!("try resolving identifier {identifier}");
                 let type_expr = type_env
                     .get_identifier_type(identifier.clone())
                     .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));

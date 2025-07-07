@@ -1,10 +1,9 @@
 use colored::Colorize;
 use lazy_static::lazy_static;
-use std::{ffi::OsString, fs, path::PathBuf, process::Command};
+use std::{ffi::OsString, fs, path::PathBuf};
 
 use crate::{
-    DARGO_DOT_DIR, emit::ir::join_ir, lex, parse_src_file, tags::Tag, typecheck,
-    write_in_duck_dotdir,
+    cli::go_cli::{self, GoCliErrKind}, emit::ir::join_ir, lex, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
 };
 
 #[derive(Debug)]
@@ -13,8 +12,7 @@ pub enum CompileErrKind {
     TargetPathIsDirectory,
     FileNotFound,
     CannotReadFile,
-    CannotSpawnProcess,
-    CannotWaitForProcess,
+    GoCli(GoCliErrKind)
 }
 
 lazy_static! {
@@ -35,7 +33,6 @@ pub fn compile(
         return Err((message, CompileErrKind::TargetPathIsDirectory));
     }
 
-    println!("{src_file:?}");
     if src_file
         .extension()
         .ok_or_else(|| {
@@ -110,41 +107,16 @@ pub fn compile(
         target_file
     };
 
-    Command::new("go")
-        .args([
-            OsString::from("build"),
-            OsString::from("-o"),
-            compile_output_target.as_os_str().to_owned(),
-            go_output_file.as_os_str().to_owned(),
-        ])
-        .spawn()
-        .map_err(|err| {
-            (
-                format!(
-                    "{}{} couldn't spawn go process\n -> {err}",
-                    *COMPILE_TAG,
-                    Tag::Err,
-                ),
-                CompileErrKind::CannotReadFile,
-            )
-        })?
-        .wait()
-        .map_err(|err| {
-            (
-                format!(
-                    "{}{} couldn't wait for go compile process\n -> {err}",
-                    *COMPILE_TAG,
-                    Tag::Err,
-                ),
-                CompileErrKind::CannotWaitForProcess,
-            )
-        })?;
+    go_cli::build(
+        &compile_output_target,
+        &go_output_file
+    ).map_err(|err| (
+        format!("{}{}", *COMPILE_TAG, err.0),
+        CompileErrKind::GoCli(err.1),
+    ))?;
 
     println!(
-        "{}{}{} Successfully compiled binary {}",
-        go_output_file
-            .to_str()
-            .expect("Output File String is weird"),
+        "{}{}{} Successfully compiled binary",
         Tag::Dargo,
         *COMPILE_TAG,
         Tag::Check,

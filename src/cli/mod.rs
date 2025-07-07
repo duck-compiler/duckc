@@ -1,2 +1,2 @@
-pub mod dargo_cli_interpreter;
+pub mod go_cli;
 pub mod git_cli;

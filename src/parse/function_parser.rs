@@ -23,7 +23,7 @@ impl Default for FunctionDefintion {
     fn default() -> Self {
         FunctionDefintion {
             name: Default::default(),
-            return_type: Some(TypeExpr::Tuple(vec![]).into_empty_span()),
+            return_type: None,
             params: Some(Default::default()),
             value_expr: ValueExpr::Tuple(vec![]).into_empty_span_and_block(),
         }
@@ -77,8 +77,7 @@ where
 
             FunctionDefintion {
                 name: identifier,
-                return_type: return_type
-                    .or_else(|| Some(TypeExpr::Tuple(vec![]).into_empty_span())),
+                return_type,
                 params,
                 value_expr,
             }

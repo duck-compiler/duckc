@@ -156,18 +156,21 @@ fn write_in_duck_dotdir(file_name: &str, content: &str) -> PathBuf {
     target_file
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn duck_with_message(msg: &str) {
     println!(
-        "{}\n{}{}{}  Oops, seems like there's something wrong!\n{}",
+        "{}\n{}{}{}  {msg}\n{}",
         " _,".bright_yellow().bold(),
         "(".bright_yellow().bold(),
-        "o".blue().bold(),
+        "~".blue().bold(),
         "<".yellow().bold(),
         "<_)".bright_yellow().bold(),
     );
+}
 
+fn main() -> Result<(), Box<dyn Error>> {
     let cli_result = dargo::cli::run_cli();
     if let Err(err) = cli_result {
+        duck_with_message("Ooops... something went wrong!!");
         println!("{}", err.0)
     }
 
