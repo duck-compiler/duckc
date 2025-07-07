@@ -61,7 +61,8 @@ pub enum IrInstruction {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Case {
     pub type_name: String,
-    pub instrs: Vec<IrInstruction>
+    pub instrs: Vec<IrInstruction>,
+    pub bound_to_identifier: String
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -191,6 +192,7 @@ impl ValueExpr {
                     cases.push(Case {
                         type_name,
                         instrs: arm_instrs,
+                        bound_to_identifier: arm.bound_to_identifier.clone()
                     });
                 }
 
@@ -750,7 +752,7 @@ mod tests {
     use chumsky::Parser;
 
     use crate::{
-        emit::value::{IrInstruction, IrValue, ToIr},
+        emit::value::{Case, IrInstruction, IrValue, ToIr},
         parse::{
             lexer::lexer,
             make_input,
@@ -887,6 +889,47 @@ mod tests {
                             "Duck_x_DuckInt".into(),
                             vec![("x".into(), IrValue::Int(123))],
                         ),
+                    ),
+                ],
+            ),
+            (
+                "match (1) { Int x -> 2 }",
+                vec![
+                    decl("var_0", "Tup_"),
+                    IrInstruction::SwitchType(
+                        IrValue::Int(1),
+                        vec![Case {
+                            type_name: "DuckInt".into(),
+                            instrs: vec![IrInstruction::VarAssignment(
+                                "var_0".into(),
+                                IrValue::Int(2),
+                            )],
+                            bound_to_identifier: "x".into(),
+                        }],
+                    ),
+                ],
+            ),
+            (
+                "match (1 + 1) { Int x -> x }",
+                vec![
+                    decl("var_0", "DuckInt"),
+                    IrInstruction::Add(
+                        "var_0".into(),
+                        IrValue::Int(1),
+                        IrValue::Int(1),
+                        TypeExpr::Int,
+                    ),
+                    decl("var_1", "Tup_"),
+                    IrInstruction::SwitchType(
+                        IrValue::Var("var_0".into()),
+                        vec![Case {
+                            type_name: "DuckInt".into(),
+                            instrs: vec![IrInstruction::VarAssignment(
+                                "var_1".into(),
+                                IrValue::Var("x".into()),
+                            )],
+                            bound_to_identifier: "x".into(),
+                        }],
                     ),
                 ],
             ),
