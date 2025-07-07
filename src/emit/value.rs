@@ -141,8 +141,8 @@ impl ValueExpr {
         type_env: &mut TypeEnv,
         env: &mut ToIr,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
-        if let Some(v) = self.direct_emit(type_env, env) {
-            (Vec::new(), Some(v))
+        if let Some(ir_value) = self.direct_emit(type_env, env) {
+            (Vec::new(), Some(ir_value))
         } else {
             let (instr, res) = self.emit(type_env, env);
             (instr, res)
