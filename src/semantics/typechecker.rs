@@ -811,8 +811,8 @@ impl TypeExpr {
             },
             // TODO: Match Expressions need to be type resolved just as the function defs
             ValueExpr::Match {
-                value_expr,
-                arms
+                value_expr: _,
+                arms: _
             } => {
                 return TypeExpr::Tuple(vec![])
             },
