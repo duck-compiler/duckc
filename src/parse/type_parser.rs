@@ -497,12 +497,12 @@ pub mod tests {
     #[test]
     fn test_assert_type() {
         assert_type_expression(
-            "() -> String",
+            "fn() -> String",
             TypeExpr::Fun(vec![], Some(Box::new(TypeExpr::String.into_empty_span()))),
         );
 
         assert_type_expression(
-            "(x: Int) -> Bool",
+            "fn(x: Int) -> Bool",
             TypeExpr::Fun(
                 vec![("x".to_string().into(), TypeExpr::Int.into_empty_span())],
                 Some(Box::new(TypeExpr::Bool.into_empty_span())),
@@ -510,7 +510,7 @@ pub mod tests {
         );
 
         assert_type_expression(
-            "(a: Float, b: String) -> Char",
+            "fn(a: Float, b: String) -> Char",
             TypeExpr::Fun(
                 vec![
                     ("a".to_string().into(), TypeExpr::Float.into_empty_span()),
@@ -521,7 +521,7 @@ pub mod tests {
         );
 
         assert_type_expression(
-            "(param1: TypeName,) -> ()",
+            "fn(param1: TypeName,) -> ()",
             TypeExpr::Fun(
                 vec![(
                     "param1".to_string().into(),
@@ -533,7 +533,7 @@ pub mod tests {
 
         // TODO
         assert_type_expression(
-            "(data: duck { name: String, age: Int }) -> ::MyResult",
+            "fn(data: duck { name: String, age: Int }) -> ::MyResult",
             TypeExpr::Fun(
                 vec![(
                     "data".to_string().into(),
@@ -552,7 +552,7 @@ pub mod tests {
         );
 
         assert_type_expression(
-            "() -> (Int, String)",
+            "fn() -> (Int, String)",
             TypeExpr::Fun(
                 vec![],
                 Some(Box::new(
@@ -626,7 +626,7 @@ pub mod tests {
         );
 
         assert_type_expression(
-            "(x: Int) -> go fmt.Stringer",
+            "fn(x: Int) -> go fmt.Stringer",
             TypeExpr::Fun(
                 vec![("x".to_string().into(), TypeExpr::Int.into_empty_span())],
                 Some(Box::new(
@@ -636,7 +636,7 @@ pub mod tests {
         );
 
         assert_type_expression(
-            "(input: struct { id: Int }) -> struct { success: Bool }",
+            "fn(input: struct { id: Int }) -> struct { success: Bool }",
             TypeExpr::Fun(
                 vec![(
                     "input".to_string().into(),
@@ -661,7 +661,7 @@ pub mod tests {
         );
 
         assert_type_expression(
-            "() -> (Int, duck { val: Char })",
+            "fn() -> (Int, duck { val: Char })",
             TypeExpr::Fun(
                 vec![],
                 Some(Box::new(
@@ -924,8 +924,8 @@ pub mod tests {
             "type X = ::String;",
             "type X = String::ABC::C;",
             "type X = ::String::ABC::C;",
-            "type X = () -> String;",
-            "type X = () -> String;",
+            "type X = fn() -> String;",
+            "type X = fn() -> String;",
         ];
 
         for valid_type_definition in valid_type_definitions {
