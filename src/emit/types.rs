@@ -85,7 +85,6 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                 .collect::<Vec<_>>(),
             // TypeExpr::Or(variants)  |
             v => {
-                dbg!(&v);
                 vec![]
             }
         };
