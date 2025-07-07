@@ -54,6 +54,14 @@ pub enum IrInstruction {
         Vec<(String, String)>,                     // Generics
         Vec<(Identifier, Vec<Param>, ReturnType)>, // Methods
     ),
+
+    SwitchType(IrValue, Vec<Case>)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Case {
+    pub type_name: String,
+    pub instrs: Vec<IrInstruction>
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -155,7 +163,40 @@ impl ValueExpr {
         env: &mut ToIr,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
-            ValueExpr::Match {..} => todo!(),
+            ValueExpr::Match { value_expr, arms } => {
+                let (mut instructions, match_on_res) = value_expr.0.direct_or_with_instr(type_env, env);
+                let match_on_value = match match_on_res {
+                    Some(v) => v,
+                    None => return (instructions, None),
+                };
+
+                let result_type_annotation = TypeExpr::from_value_expr(self, type_env)
+                    .as_go_type_annotation(type_env);
+
+                let result_var_name = env.new_var();
+                instructions.push(IrInstruction::VarDecl(
+                    result_var_name.clone(),
+                    result_type_annotation,
+                ));
+
+                let mut cases = Vec::new();
+                for arm in arms {
+                    let type_name = arm.type_case.0.as_go_type_annotation(type_env);
+
+                    let (mut arm_instrs, arm_res) = arm.value_expr.0.direct_or_with_instr(type_env, env);
+                    if let Some(res) = arm_res {
+                        arm_instrs.push(IrInstruction::VarAssignment(result_var_name.clone(), res));
+                    }
+
+                    cases.push(Case {
+                        type_name,
+                        instrs: arm_instrs,
+                    });
+                }
+
+                instructions.push(IrInstruction::SwitchType(match_on_value, cases));
+                (instructions, as_rvar(result_var_name))
+            },
             ValueExpr::ArrayAccess(target, idx) => {
                 let (target_instr, target_res) = target.0.direct_or_with_instr(type_env, env);
 
@@ -306,9 +347,9 @@ impl ValueExpr {
                     {
                         let (target_instr, Some(IrValue::Var(target_res))) =
                             target_obj.0.emit(type_env, env)
-                        else {
-                            panic!("no var {target_obj:?}");
-                        };
+                            else {
+                                panic!("no var {target_obj:?}");
+                            };
                         let target_ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
                         res.extend(target_instr);
                         match target_ty {
@@ -336,14 +377,14 @@ impl ValueExpr {
                     } else if let ValueExpr::ArrayAccess(target, idx) = target {
                         let (target_instr, Some(IrValue::Var(target_res))) =
                             target.0.emit(type_env, env)
-                        else {
-                            panic!("no var {target:?}");
-                        };
+                            else {
+                                panic!("no var {target:?}");
+                            };
 
                         let (idx_instr, Some(IrValue::Var(idx_res))) = idx.0.emit(type_env, env)
-                        else {
-                            panic!("no var: {idx:?}")
-                        };
+                            else {
+                                panic!("no var: {idx:?}")
+                            };
 
                         res.extend(target_instr);
                         res.extend(idx_instr);
@@ -522,9 +563,9 @@ impl ValueExpr {
 
                     let TypeExpr::Fun(_, return_type) =
                         TypeExpr::from_value_expr(&v_target.0, type_env)
-                    else {
-                        panic!("can only call function")
-                    };
+                        else {
+                            panic!("can only call function")
+                        };
 
                     if let Some(return_type) = return_type {
                         let res = env.new_var();

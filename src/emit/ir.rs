@@ -1,12 +1,33 @@
 use crate::emit::{
     types::primitive_type_name,
-    value::{IrInstruction, IrValue},
+    value::{Case, IrInstruction, IrValue},
 };
 
 impl IrInstruction {
     fn emit_as_go(&self) -> String {
         #![allow(clippy::format_in_format_args)]
         match self {
+            IrInstruction::SwitchType(against, type_cases) => {
+                fn emit_case_go(case: &Case) -> String {
+                    format!(
+                        "case {}:\n{}",
+                        case.type_name,
+                        case.instrs.iter()
+                            .map(IrInstruction::emit_as_go)
+                            .collect::<Vec<_>>()
+                            .join("\n\t"),
+                    )
+                }
+
+                format!(
+                    "switch {}.(type) {{\n{}\n}}",
+                    against.emit_as_go(),
+                    type_cases.iter()
+                        .map(emit_case_go)
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                )
+            }
             IrInstruction::GoPackage(s) => format!("package {s}"),
             IrInstruction::Add(r, left, right, type_expr) => {
                 // TODO: check if this is correct
