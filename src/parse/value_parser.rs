@@ -11,9 +11,9 @@ use chumsky::{input::BorrowInput, prelude::*};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm {
-    type_case: Spanned<TypeExpr>,
-    bound_to_identifier: String,
-    value_expr: Spanned<ValueExpr>,
+    pub type_case: Spanned<TypeExpr>,
+    pub bound_to_identifier: String,
+    pub value_expr: Spanned<ValueExpr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
