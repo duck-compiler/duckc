@@ -2,9 +2,15 @@ use std::fmt::Display;
 
 use chumsky::{prelude::*, text::whitespace};
 
-use crate::parse::{Context, SS, Spanned};
+use crate::parse::{value_parser::empty_range, Context, Spanned, SS};
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, Clone)]
+pub enum FmtStringContents {
+    Char(char),
+    Tokens(Vec<Spanned<Token>>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Use,
     Type,
@@ -16,6 +22,7 @@ pub enum Token {
     Ident(String),
     ControlChar(char),
     StringLiteral(String),
+    FormatStringLiteral(Vec<FmtStringContents>),
     IntLiteral(i64),
     BoolLiteral(bool),
     CharLiteral(char),
@@ -38,6 +45,7 @@ pub enum Token {
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = match self {
+            Token::FormatStringLiteral(s) => &format!("f-string {s:?}"),
             Token::ScopeRes => "::",
             Token::ThinArrow => "->",
             Token::Use => "use",
@@ -74,71 +82,99 @@ pub fn lexer<'a>(
     file_name: &'static str,
     file_contents: &'static str,
 ) -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> {
-    let keyword_or_ident = text::ident().map(|str| match str {
-        "module" => Token::Module,
-        "use" => Token::Use,
-        "type" => Token::Type,
-        "duck" => Token::Duck,
-        "go" => Token::Go,
-        "struct" => Token::Struct,
-        "fn" => Token::Function,
-        "return" => Token::Return,
-        "let" => Token::Let,
-        "if" => Token::If,
-        "else" => Token::Else,
-        "while" => Token::While,
-        "break" => Token::Break,
-        "continue" => Token::Continue,
-        "as" => Token::As,
-        "match" => Token::Match,
-        _ => Token::Ident(str.to_string()),
-    });
+    recursive(|lexer| {
+        let keyword_or_ident = text::ident().map(|str| match str {
+            "module" => Token::Module,
+            "use" => Token::Use,
+            "type" => Token::Type,
+            "duck" => Token::Duck,
+            "go" => Token::Go,
+            "struct" => Token::Struct,
+            "fn" => Token::Function,
+            "return" => Token::Return,
+            "let" => Token::Let,
+            "if" => Token::If,
+            "else" => Token::Else,
+            "while" => Token::While,
+            "break" => Token::Break,
+            "continue" => Token::Continue,
+            "as" => Token::As,
+            "match" => Token::Match,
+            _ => Token::Ident(str.to_string()),
+        });
 
-    let ctrl = one_of("!=:{};,&()->.+-*/%|[]").map(Token::ControlChar);
+        let ctrl = one_of("!=:{};,&()->.+-*/%|[]").map(Token::ControlChar);
 
-    let string = string_lexer();
-    let r#bool = choice((
-        just("true").to(Token::BoolLiteral(true)),
-        just("false").to(Token::BoolLiteral(false)),
-    ));
-    let r#char = char_lexer();
-    let num = num_literal();
+        let string = string_lexer();
+        let r#bool = choice((
+            just("true").to(Token::BoolLiteral(true)),
+            just("false").to(Token::BoolLiteral(false)),
+        ));
+        let r#char = char_lexer();
+        let num = num_literal();
 
-    let equals = just("==").to(Token::Equals);
-    let scope_res = just("::").to(Token::ScopeRes);
-    let thin_arrow = just("->").to(Token::ThinArrow);
+        let equals = just("==").to(Token::Equals);
+        let scope_res = just("::").to(Token::ScopeRes);
+        let thin_arrow = just("->").to(Token::ThinArrow);
 
-    let token = inline_go_parser()
-        .or(scope_res)
-        .or(thin_arrow)
-        .or(r#bool)
-        .or(equals)
-        .or(keyword_or_ident)
-        .or(ctrl)
-        .or(string)
-        .or(num)
-        .or(r#char);
-
-    token
-        .map_with(move |t, e| {
-            (
-                t,
-                SS {
-                    start: e.span().start,
-                    end: e.span().end,
-                    context: Context {
-                        file_name,
-                        file_contents,
-                    },
-                },
+        let fmt_string = just("f")
+            .ignore_then(just('"'))
+            .ignore_then(
+                choice((
+                    just('{').rewind().ignore_then(lexer
+                        .clone()
+                        .delimited_by(just('{'), just('}'))
+                        .map(|e| FmtStringContents::Tokens(e))),
+                    none_of("\\\n\t\"")
+                        .or(choice((
+                            just("\\\\").to('\\'),
+                            just("\\{").to('{'),
+                            just("\\n").to('\n'),
+                            just("\\t").to('\t'),
+                            just("\\\"").to('"'),
+                        )))
+                        .map(FmtStringContents::Char),
+                ))
+                .repeated()
+                .collect::<Vec<_>>(),
             )
-        })
-        .padded()
-        .repeated()
-        .collect::<Vec<Spanned<Token>>>()
+            .then_ignore(just('"'))
+            .map(|x| Token::FormatStringLiteral(x));
+
+        let token = inline_go_parser()
+            .or(fmt_string)
+            .or(thin_arrow)
+            .or(scope_res)
+            .or(r#bool)
+            .or(equals)
+            .or(keyword_or_ident)
+            .or(ctrl)
+            .or(string)
+            .or(num)
+            .or(r#char);
+
+        token
+            .map_with(move |t, e| {
+                (
+                    t,
+                    SS {
+                        start: e.span().start,
+                        end: e.span().end,
+                        context: Context {
+                            file_name,
+                            file_contents,
+                        },
+                    },
+                )
+            })
+            .padded()
+            .repeated()
+            .collect::<Vec<Spanned<Token>>>()
+    })
 }
 
-fn go_text_parser<'src>() -> impl Parser<'src, &'src str, String, extra::Err<Rich<'src, char>>> {
+fn go_text_parser<'src>()
+-> impl Parser<'src, &'src str, String, extra::Err<Rich<'src, char>>> + Clone {
     recursive(|e| {
         just("{")
             .ignore_then(
@@ -155,7 +191,8 @@ fn go_text_parser<'src>() -> impl Parser<'src, &'src str, String, extra::Err<Ric
     })
 }
 
-fn inline_go_parser<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> {
+fn inline_go_parser<'src>()
+-> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone {
     just("go")
         .ignore_then(whitespace().at_least(1))
         .ignore_then(just("{").rewind())
@@ -163,7 +200,8 @@ fn inline_go_parser<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Ri
         .map(|x| Token::InlineGo(x[1..x.len() - 1].to_owned()))
 }
 
-fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> {
+fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone
+{
     let pre = text::int(10).try_map(|s: &str, span| {
         s.parse::<i64>()
             .map_err(|_| Rich::custom(span, "Invalid integer"))
@@ -179,7 +217,7 @@ fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'s
     })
 }
 
-fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> {
+fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone {
     just("'")
         .ignore_then(none_of("\\\n\t'").or(choice((
             just("\\\\").to('\\'),
@@ -191,7 +229,7 @@ fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'sr
         .map(Token::CharLiteral)
 }
 
-fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, char>>> {
+fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, char>>> + Clone {
     just('"')
         .ignore_then(
             none_of("\\\n\t\"")
@@ -210,6 +248,8 @@ fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, cha
 
 #[cfg(test)]
 mod tests {
+    use crate::parse::value_parser::empty_range;
+
     use super::*;
 
     #[test]
@@ -356,6 +396,26 @@ mod tests {
                     Token::ControlChar('}'),
                     Token::ControlChar(';'),
                 ],
+            ),
+            (
+                "f\"{1}\"",
+                vec![Token::FormatStringLiteral(vec![
+                    FmtStringContents::Char('F'),
+                    FmtStringContents::Char('M'),
+                    FmtStringContents::Char('T'),
+                    FmtStringContents::Char(' '),
+                    FmtStringContents::Tokens(vec![(Token::Ident("var".into()), empty_range())]),
+                ])],
+            ),
+            (
+                "f\"FMT {var}\"",
+                vec![Token::FormatStringLiteral(vec![
+                    FmtStringContents::Char('F'),
+                    FmtStringContents::Char('M'),
+                    FmtStringContents::Char('T'),
+                    FmtStringContents::Char(' '),
+                    FmtStringContents::Tokens(vec![(Token::Ident("var".into()), empty_range())]),
+                ])],
             ),
         ];
 

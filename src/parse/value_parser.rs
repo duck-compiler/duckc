@@ -385,6 +385,27 @@ where
                 FieldAccess(String),
             }
 
+            // let fmt_string = select_ref! { Token::FormatStringLiteral(s) => s.to_string() }
+            //     .map(|s| {
+            //         // let mut targets = Vec::new();
+            //         // let mut byte_counter = 0;
+
+            //         // let chars = s.chars().collect::<Vec<_>>();
+
+            //         // let mut i = 0;
+            //         // while i < chars.len() {
+            //         //     let current = chars[i];
+
+            //         //     if current = '{' {}
+
+            //         //     byte_counter += current.len_utf8();
+            //         //     i += 1;
+            //         // }
+
+            //         empty_tuple()
+            //     })
+            //     .map_with(|x, e| (x, e.span()));
+
             let array_with_type = (just(Token::ControlChar('.'))
                 .ignore_then(type_expression_parser_without_array())
                 .or_not())
@@ -436,6 +457,7 @@ where
                         .or(choice((
                             choice((array.clone(), array_with_type.clone())),
                             int,
+                            // fmt_string,
                             bool_val,
                             string_val,
                             scope_res_ident.clone(),
