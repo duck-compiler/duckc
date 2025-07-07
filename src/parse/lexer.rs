@@ -288,6 +288,25 @@ fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, cha
         .map(Token::StringLiteral)
 }
 
+pub fn token_empty_range(token_span: &mut Spanned<Token>) {
+    token_span.1 = empty_range();
+    match &mut token_span.0 {
+        Token::FormatStringLiteral(contents) => {
+            for content in contents {
+                match content {
+                    FmtStringContents::Tokens(tokens) => {
+                        for token in tokens {
+                            token_empty_range(token);
+                        }
+                    }
+                    FmtStringContents::Char(_) => {}
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::parse::value_parser::empty_range;
@@ -311,13 +330,9 @@ mod tests {
             ),
             (
                 "f\"{1}\"",
-                vec![Token::FormatStringLiteral(vec![
-                    FmtStringContents::Char('F'),
-                    FmtStringContents::Char('M'),
-                    FmtStringContents::Char('T'),
-                    FmtStringContents::Char(' '),
-                    FmtStringContents::Tokens(vec![(Token::Ident("var".into()), empty_range())]),
-                ])],
+                vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
+                    vec![(Token::IntLiteral(1), empty_range())],
+                )])],
             ),
             (
                 "type Y = duck {};",
@@ -483,7 +498,11 @@ mod tests {
                 .output()
                 .expect(&src)
                 .iter()
-                .map(|token| token.0.clone())
+                .map(|token| {
+                    let mut cloned = token.clone();
+                    token_empty_range(&mut cloned);
+                    cloned.0
+                })
                 .collect();
 
             assert_eq!(output, expected_tokens, "{}", src);
