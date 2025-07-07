@@ -489,6 +489,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ValueExpr::Int(..) => {
                 type_env.insert_type(TypeExpr::Int);
             } // this is so that only the used primitive types are in the type env
+            ValueExpr::Match {..} => todo!(),
             ValueExpr::Break | ValueExpr::Return(None) | ValueExpr::Continue => {}
         }
     }
@@ -790,7 +791,8 @@ impl TypeExpr {
                 let _body_type_expr = TypeExpr::from_value_expr(&body.0, type_env);
 
                 return TypeExpr::Tuple(vec![]);
-            }
+            },
+            ValueExpr::Match {..} => todo!()
         };
     }
 
@@ -907,6 +909,7 @@ fn resolve_implicit_function_return_type(
             | ValueExpr::FieldAccess { .. }
             | ValueExpr::Lambda(..)
             | ValueExpr::Variable(..)
+            | ValueExpr::Match {..}
             | ValueExpr::ArrayAccess(..) => {}
             ValueExpr::If { condition, then, r#else } => {
                 flatten_returns(&condition.as_ref().0, return_types_found, type_env);

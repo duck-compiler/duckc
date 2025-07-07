@@ -155,6 +155,7 @@ impl ValueExpr {
         env: &mut ToIr,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
+            ValueExpr::Match {..} => todo!(),
             ValueExpr::ArrayAccess(target, idx) => {
                 let (target_instr, target_res) = target.0.direct_or_with_instr(type_env, env);
 

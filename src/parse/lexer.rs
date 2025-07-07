@@ -21,6 +21,7 @@ pub enum Token {
     CharLiteral(char),
     FloatLiteral(f64),
     Equals,
+    Match,
     If,
     Else,
     Let,
@@ -63,6 +64,7 @@ impl Display for Token {
             Token::As => "as",
             Token::InlineGo(_) => "inline go",
             Token::Module => "module",
+            Token::Match => "match"
         };
         write!(f, "{t}")
     }
@@ -88,6 +90,7 @@ pub fn lexer<'a>(
         "break" => Token::Break,
         "continue" => Token::Continue,
         "as" => Token::As,
+        "match" => Token::Match,
         _ => Token::Ident(str.to_string()),
     });
 
