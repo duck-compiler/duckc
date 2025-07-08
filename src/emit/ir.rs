@@ -8,7 +8,6 @@ impl IrInstruction {
         #![allow(clippy::format_in_format_args)]
         match self {
             IrInstruction::StringConcat(target, v) => {
-                // TODO: adjust to as_dgo_value of string
                 format!(
                     "{target} = ConcDuckString {{ value: {} }}",
                     if v.is_empty() {
