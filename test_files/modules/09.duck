@@ -1,14 +1,17 @@
 use go "fmt";
 
+module std;
+
 module X {
     use Y::{c};
+    use std::{do_io};
 
-    fn a() -> XDuck {
+    fn a() {
         ::abc();
-        {
-            x: 10,
-        }
+        std::do_io();
+        do_io();
     }
+
     module Y {
         fn b() {
             ::X::a();
@@ -59,10 +62,6 @@ module X {
         Y::testi();
         Y::ZZ::zz();
     }
-
-    type XDuck = {
-        x: Int,
-    };
 
 }
 

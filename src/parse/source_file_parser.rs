@@ -42,8 +42,9 @@ impl SourceFile {
             let mut mangle_env = MangleEnv {
                 imports: {
                     let mut imports = HashMap::new();
+                    imports.insert("std".into(), (true, "".into()));
                     for u in &s.use_statements {
-                        if let UseStatement::Regular(v) = u {
+                        if let UseStatement::Regular(glob, v) = u {
                             let pre = v
                                 .iter()
                                 .take_while(|x| matches!(x, Indicator::Module(_)))
@@ -56,7 +57,7 @@ impl SourceFile {
                             let last = v.last();
                             if let Some(Indicator::Symbols(sym)) = last {
                                 for s in sym {
-                                    imports.insert(s.clone(), pre.clone());
+                                    imports.insert(s.clone(), (*glob, format!("{pre}_")));
                                 }
                             }
                         }
@@ -337,9 +338,10 @@ mod tests {
             (
                 "use x;",
                 SourceFile {
-                    use_statements: vec![UseStatement::Regular(vec![Indicator::Module(
-                        "x".into(),
-                    )])],
+                    use_statements: vec![UseStatement::Regular(
+                        false,
+                        vec![Indicator::Module("x".into())],
+                    )],
                     ..Default::default()
                 },
             ),
@@ -398,15 +400,17 @@ mod tests {
                             sub_modules: vec![(
                                 "xyz".into(),
                                 SourceFile {
-                                    use_statements: vec![UseStatement::Regular(vec![
-                                        Indicator::Module("lol".into()),
-                                    ])],
+                                    use_statements: vec![UseStatement::Regular(
+                                        false,
+                                        vec![Indicator::Module("lol".into())],
+                                    )],
                                     ..Default::default()
                                 },
                             )],
-                            use_statements: vec![UseStatement::Regular(vec![Indicator::Module(
-                                "test".into(),
-                            )])],
+                            use_statements: vec![UseStatement::Regular(
+                                false,
+                                vec![Indicator::Module("test".into())],
+                            )],
                             function_definitions: vec![FunctionDefintion {
                                 name: "abc".into(),
                                 ..Default::default()
@@ -431,9 +435,10 @@ mod tests {
                             ..Default::default()
                         },
                     ],
-                    use_statements: vec![UseStatement::Regular(vec![Indicator::Module(
-                        "x".into(),
-                    )])],
+                    use_statements: vec![UseStatement::Regular(
+                        false,
+                        vec![Indicator::Module("x".into())],
+                    )],
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
                         type_expression: TypeExpr::Duck(Duck {
@@ -811,10 +816,13 @@ mod tests {
                         (
                             "abc".into(),
                             SourceFile {
-                                use_statements: vec![UseStatement::Regular(vec![
-                                    Indicator::Module("lol".into()),
-                                    Indicator::Symbols(vec!["called".into()]),
-                                ])],
+                                use_statements: vec![UseStatement::Regular(
+                                    false,
+                                    vec![
+                                        Indicator::Module("lol".into()),
+                                        Indicator::Symbols(vec!["called".into()]),
+                                    ],
+                                )],
                                 type_definitions: vec![TypeDefinition {
                                     name: "TestStruct".into(),
                                     type_expression: TypeExpr::Struct(Struct {
