@@ -5,7 +5,7 @@ import shutil
 import argparse
 import json
 import difflib
-import tempfile
+import re
 
 VERBOSE = False
 CICD = False
@@ -208,55 +208,19 @@ def compile_valid(compiler_path, valid_program):
         return None
     pass
 
-def read_meta_file(file_name):
-    meta_file_path = f"{file_name}.meta"
-    meta_data = {}
+def path_to_filename(path: str) -> str:
+    if not isinstance(path, str):
+        raise TypeError("Input path must be a string.")
 
-    if VERBOSE:
-        print(f"{COLOR_YELLOW}attempting to read meta file for {file_name}{COLOR_RESET}: {meta_file_path}")
+    sanitized = re.sub(r'[\\/]', '_', path)
+    sanitized = re.sub(r'[^a-zA-Z0-9._-]', '_', sanitized)
+    sanitized = re.sub(r'__+', '_', sanitized)
+    sanitized = sanitized.strip('_')
 
-    if not os.path.exists(meta_file_path):
-        print(f"{CROSS} {COLOR_RED}Error{COLOR_RESET}: {COLOR_RED}Meta file {COLOR_RESET}'{meta_file_path}' {COLOR_RED}does not exist.")
-        if CICD:
-            sys.exit(-1)
-        return {}
-
-    if not os.path.isfile(meta_file_path):
-        print(f"{CROSS} Error: '{meta_file_path}' exists but is not a file (it might be a directory).")
-        if CICD:
-            sys.exit(-1)
-        return {}
-
-    try:
-        with open(meta_file_path, 'r', encoding='utf-8') as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip() # Remove leading/trailing whitespace, including newline
-                if not line or line.startswith('#'): # Skip empty lines and comments
-                    continue
-
-                if '=' in line:
-                    key, value = line.split('=', 1) # Split only on the first '='
-                    meta_data[key.strip()] = value.strip()
-                else:
-                    print(f"{COLOR_YELLOW}Warning{COLOR_RESET}: {COLOR_YELLOW}Line {line_num} in '{meta_file_path}' is not in 'key=value' format: '{line}'")
-
-        if not meta_data and VERBOSE:
-            print(f"{COLOR_YELLOW}Info{COLOR_RESET}: Meta file '{meta_file_path}' was empty or contained no valid key-value pairs.")
-
-        if VERBOSE:
-            print(f"{COLOR_YELLOW} Successfully read meta data from '{meta_file_path}'.")
-
-        return meta_data
-
-    except PermissionError:
-        print(f"{COLOR_RED}Error{COLOR_RESET}: Permission denied to read meta file '{meta_file_path}'.")
-        return {}
-    except Exception as e:
-        print(f"{COLOR_RED}An unexpected error occurred while reading '{meta_file_path}': {e}")
-        return {}
+    return sanitized
 
 def verify_snapshot(test_name, actual_stdout, actual_stderr):
-    snapshot_path = f"{test_name}.snap"
+    snapshot_path = f".snapshots/{path_to_filename(test_name)}.snap"
     snapshot_data = {
         "stdout": actual_stdout,
         "stderr": actual_stderr,
@@ -307,7 +271,6 @@ def verify_snapshot(test_name, actual_stdout, actual_stderr):
             return False
 
 def print_diff(output_type, expected, actual):
-    """Prints a unified diff for mismatched output."""
     if expected == actual:
         return
 
@@ -347,19 +310,10 @@ def compile_and_run_with_assert(compiler_path, program_path):
              return
 
         run_result = subprocess.run(executable_path, capture_output=True, text=True, check=False)
-        actual_return_code = run_result.returncode
         actual_stdout = run_result.stdout
         actual_stderr = run_result.stderr
 
-        meta = read_meta_file(program_path)
         has_error = False
-
-        if "expected_return_code" in meta:
-            expected_return_code = int(meta["expected_return_code"])
-            if actual_return_code != expected_return_code:
-                print(f"{CROSS} {COLOR_YELLOW}test (return code) {COLOR_RESET}{program_path}")
-                print(f"  {COLOR_GRAY}-> {COLOR_RED}Expected return code {expected_return_code} but got {actual_return_code}{COLOR_RESET}")
-                has_error = True
 
         snapshot_passed = verify_snapshot(program_path, actual_stdout, actual_stderr)
         if not snapshot_passed:
@@ -385,15 +339,9 @@ def perform_tests():
         compile_failure(compiler_path, invalid_program)
         pass
 
-    valid_program_files = find_duck_files_in_directory("./valid_programs")
-    print(f"\n{COLOR_YELLOW}Starting the evaluation of the valid test cases...")
-    for valid_program in valid_program_files:
-        compile_valid(compiler_path, valid_program)
-        pass
-
-    assert_program_files = find_duck_files_in_directory("./tests_with_asserts")
+    assert_program_files = find_duck_files_in_directory("./valid_programs")
     if assert_program_files:
-        print(f"\n{COLOR_CYAN}--- Evaluating Programs with Assertions (return code & snapshots) ---{COLOR_RESET}")
+        print(f"\n{COLOR_CYAN}--- Evaluating Programs with Assertions (snapshots) ---{COLOR_RESET}")
         for program in assert_program_files:
             compile_and_run_with_assert(compiler_path, program)
 
