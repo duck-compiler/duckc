@@ -23,8 +23,8 @@ pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
     // this is to ensure that the dargo dot dir exists
     _ = DARGO_DOT_DIR.clone();
 
-    let dargo_config =
-        load_dargo_config(None).map_err(|err| (err.0, BuildErrKind::CargoConfigLoad(err.1)))?;
+    let dargo_config = load_dargo_config(None)
+        .map_err(|err| (err.0, BuildErrKind::CargoConfigLoad(err.1)))?;
 
     if let Some(dependencies) = dargo_config.dependencies {
         for (git_uri, _) in dependencies.iter() {
@@ -115,6 +115,18 @@ pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
     }
 
     let copy_target = Path::new(".dargo/project/");
+
+    let std_lib_src = Path::new("/usr/local/lib/duck/std");
+    if std_lib_src.exists() {
+        println!(
+            "{}{}{} Standard library found, copying to build directory...",
+            Tag::Dargo,
+            Tag::Build,
+            Tag::Check,
+        );
+        let std_lib_dest = copy_target.join("std");
+        copy_dir_all(std_lib_src, std_lib_dest)?;
+    }
 
     copy_dir_all(Path::new("./src"), copy_target)?;
 

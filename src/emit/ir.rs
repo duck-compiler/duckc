@@ -9,12 +9,12 @@ impl IrInstruction {
         match self {
             IrInstruction::StringConcat(target, v) => {
                 format!(
-                    "{target} = DuckString {{ value: {} }}",
+                    "{target} = ConcDuckString {{ value: {} }}",
                     if v.is_empty() {
                         String::from("\"\"")
                     } else {
                         v.iter()
-                            .map(|x| format!("{}.value", x.emit_as_go()))
+                            .map(|x| format!("{}.as_dgo_string()", x.emit_as_go()))
                             .collect::<Vec<_>>()
                             .join(" + ")
                     }
@@ -238,11 +238,11 @@ impl IrValue {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            IrValue::Bool(b) => format!("DuckBool {{ value: {b} }}"),
-            IrValue::Int(i) => format!("DuckInt {{ value: {i} }}"),
-            IrValue::Float(f) => format!("DuckFloat {{ value: {f} }}"),
-            IrValue::Char(c) => format!("DuckChar {{ value: '{c}' }}"),
-            IrValue::String(s) => format!("DuckString {{ \"{s}\" }}"),
+            IrValue::Bool(b) => format!("ConcDuckBool {{ value: {b} }}"),
+            IrValue::Int(i) => format!("ConcDuckInt {{ value: {i} }}"),
+            IrValue::Float(f) => format!("ConcDuckFloat {{ value: {f} }}"),
+            IrValue::Char(c) => format!("ConcDuckChar {{ value: '{c}' }}"),
+            IrValue::String(s) => format!("ConcDuckString {{ \"{s}\" }}"),
             IrValue::Var(v) => v.to_string(),
             IrValue::Duck(s, fields) | IrValue::Struct(s, fields) => {
                 format!(
