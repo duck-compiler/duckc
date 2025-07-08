@@ -430,7 +430,7 @@ impl ValueExpr {
                         res.extend(idx_instr);
 
                         res.push(IrInstruction::VarAssignment(
-                            format!("{target_res}[{idx_res}.value]"),
+                            format!("{target_res}[{idx_res}.as_dgo_int()]"),
                             a_res,
                         ));
                     }

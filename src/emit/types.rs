@@ -33,13 +33,30 @@ pub fn escape_string_literal(input_str: &str) -> String {
         .collect()
 }
 
+pub fn primitive_conc_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
+    match primitive_type_expr {
+        TypeExpr::String => "ConcDuckString",
+        TypeExpr::Int => "ConcDuckInt",
+        TypeExpr::Float => "ConcDuckFloat",
+        TypeExpr::Bool => "ConcDuckBool",
+        TypeExpr::Char => "ConcDuckChar",
+        TypeExpr::IntLiteral(int) => Box::leak(Box::new(format!("IntLiteral_{int}"))),
+        TypeExpr::StringLiteral(str) => Box::leak(Box::new(format!(
+            "StringLiteral_{}",
+            escape_string_literal(str)
+        ))),
+        TypeExpr::BoolLiteral(bool) => Box::leak(Box::new(format!("BoolLiteral_{bool}"))),
+        _ => panic!("That's not a primitive"),
+    }
+}
+
 pub fn primitive_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
     match primitive_type_expr {
         TypeExpr::String => "DuckString",
         TypeExpr::Int => "DuckInt",
         TypeExpr::Float => "DuckFloat",
         TypeExpr::Bool => "DuckBool",
-        TypeExpr::Char => "Char",
+        TypeExpr::Char => "DuckChar",
         TypeExpr::IntLiteral(int) => Box::leak(Box::new(format!("IntLiteral_{int}"))),
         TypeExpr::StringLiteral(str) => Box::leak(Box::new(format!(
             "StringLiteral_{}",
@@ -220,7 +237,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                         variant_seal_fn_name.clone(),
                         Some((
                             "self".to_string(),
-                            variant.0.as_clean_go_type_name(type_env),
+                            primitive_conc_type_name(&variant.0).to_string(),
                         )),
                         vec![],
                         None,

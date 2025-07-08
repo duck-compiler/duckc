@@ -3,14 +3,14 @@ use go "strings";
 
 fn fprintln(input: String, args: String[]) -> String {
     go {
-        result := input.value
+        result := input.as_dgo_string()
         for _, arg := range args {
-            arg := arg.value
+            arg := arg.as_dgo_string()
             result = strings.Replace(result, "{}", arg, 1)
         }
         fmt.Println(result);
 
-        return DuckString { value: result };
+        return ConcDuckString { value: result };
     }
 
     return ""
@@ -21,6 +21,7 @@ fn x() -> String | Bool {
 }
 
 fn main() {
+    let zzz: Int = "abc";
     x();
     fprintln("Hello, World", .String[]);
 }

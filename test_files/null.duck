@@ -1,0 +1,13 @@
+use go "fmt";
+
+fn main() {
+    let x: String | () = "";
+    let s: String = "";
+    match (x) {
+        String xx -> s = xx,
+        () xx -> return,
+    }
+    go {
+        fmt.Println(s)
+    }
+}
