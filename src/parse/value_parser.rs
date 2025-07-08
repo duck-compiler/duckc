@@ -103,7 +103,31 @@ impl ValueExpr {
             } => false,
             ValueExpr::Block(_) => false,
             ValueExpr::InlineGo(_) => false,
-            _ => true,
+            ValueExpr::Match { .. } => false,
+            ValueExpr::Add(..)
+            | ValueExpr::Mul(..)
+            | ValueExpr::Duck(..)
+            | ValueExpr::Int(..)
+            | ValueExpr::String(..)
+            | ValueExpr::Float(..)
+            | ValueExpr::Bool(..)
+            | ValueExpr::Char(..)
+            | ValueExpr::FieldAccess { .. }
+            | ValueExpr::Array(..)
+            | ValueExpr::ArrayAccess(..)
+            | ValueExpr::Variable(..)
+            | ValueExpr::Tuple(..)
+            | ValueExpr::Break
+            | ValueExpr::Continue
+            | ValueExpr::Return(..)
+            | ValueExpr::Struct(..)
+            | ValueExpr::VarDecl(..)
+            | ValueExpr::VarAssign(..)
+            | ValueExpr::BoolNegate(..)
+            | ValueExpr::Equals(..)
+            | ValueExpr::Lambda(..)
+            | ValueExpr::FormattedString(..)
+            | ValueExpr::FunctionCall { .. } => true,
         }
     }
 }
