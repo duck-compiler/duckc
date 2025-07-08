@@ -1,4 +1,4 @@
-use std::{ffi::OsString, path::PathBuf, process::Command};
+use std::{ffi::OsString, path::Path, process::Command};
 
 use crate::tags::Tag;
 
@@ -9,8 +9,8 @@ pub enum GoCliErrKind {
 }
 
 pub fn build(
-    compile_output_target: &PathBuf,
-    go_output_file: &PathBuf,
+    compile_output_target: &Path,
+    go_output_file: &Path,
 ) -> Result<(), (String, GoCliErrKind)> {
     Command::new("go")
         .args([
