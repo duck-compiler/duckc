@@ -9,7 +9,6 @@ use chumsky::{
 
 use crate::parse::lexer::Token;
 
-pub mod assignment_and_declaration_parser;
 pub mod function_parser;
 pub mod lexer;
 pub mod source_file_parser;

@@ -1,6 +1,5 @@
 use crate::parse::{
     Context, SS, Spanned,
-    assignment_and_declaration_parser::{Assignment, Declaration},
     function_parser::{LambdaFunctionExpr, Param},
     lexer::FmtStringContents,
     source_file_parser::SourceFile,
@@ -21,6 +20,19 @@ pub struct MatchArm {
 pub enum ValFmtStringContents {
     Char(char),
     Expr(Spanned<ValueExpr>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Declaration {
+    pub name: String,
+    pub type_expr: Spanned<TypeExpr>,
+    pub initializer: Option<Spanned<ValueExpr>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Assignment {
+    pub target: Spanned<ValueExpr>,
+    pub value_expr: Spanned<ValueExpr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -858,16 +870,9 @@ mod tests {
     use chumsky::prelude::*;
 
     use crate::parse::{
-        Spanned,
-        assignment_and_declaration_parser::{Assignment, Declaration},
-        function_parser::LambdaFunctionExpr,
-        lexer::lexer,
-        make_input,
-        type_parser::{Duck, Field, TypeExpr},
-        value_parser::{
-            MatchArm, empty_duck, empty_range, empty_tuple, type_expr_into_empty_range,
-            value_expr_into_empty_range, value_expr_parser,
-        },
+        function_parser::LambdaFunctionExpr, lexer::lexer, make_input, type_parser::{Duck, Field, TypeExpr}, value_parser::{
+            empty_duck, empty_range, empty_tuple, type_expr_into_empty_range, value_expr_into_empty_range, value_expr_parser, Assignment, Declaration, MatchArm
+        }, Spanned
     };
 
     use super::ValueExpr;

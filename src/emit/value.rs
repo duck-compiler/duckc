@@ -1,9 +1,8 @@
 use crate::{
     parse::{
-        assignment_and_declaration_parser::Declaration,
         function_parser::LambdaFunctionExpr,
         type_parser::{Duck, Struct, TypeExpr},
-        value_parser::{ValFmtStringContents, ValueExpr},
+        value_parser::{Declaration, ValFmtStringContents, ValueExpr},
     },
     semantics::typechecker::TypeEnv,
 };
