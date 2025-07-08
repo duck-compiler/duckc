@@ -2,7 +2,7 @@ use std::{collections::HashMap, process};
 
 use crate::parse::{
     SS, Spanned, failure,
-    function_parser::FunctionDefintion,
+    function_parser::{FunctionDefintion, LambdaFunctionExpr},
     source_file_parser::SourceFile,
     type_parser::{Duck, Field, Struct, TypeExpr},
     value_parser::{ValFmtStringContents, ValueExpr, empty_range},
@@ -377,8 +377,16 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 type_env.insert_type(ty);
             }
             ValueExpr::InlineGo(..) => {}
-            ValueExpr::Lambda(_lambda_expr) => {
-                // typeresolve_value_expr(lambda_expr., type_env);
+            ValueExpr::Lambda(b) => {
+                let LambdaFunctionExpr {
+                    params: _,
+                    return_type: _,
+                    value_expr,
+                } = &mut **b;
+
+                type_env.push_identifier_types();
+                typeresolve_value_expr(&mut value_expr.0, type_env);
+                type_env.pop_identifier_types();
             }
             ValueExpr::FunctionCall { target, params } => {
                 typeresolve_value_expr(&mut target.0, type_env);
