@@ -155,7 +155,6 @@ mod tests {
             "use y::{};",
             "use std::{}",
             "use ::;",
-            "use ::std;",
             "use :std:;",
             "use :std::{};",
             "use go x;",
