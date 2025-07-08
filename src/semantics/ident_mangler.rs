@@ -10,7 +10,7 @@ use crate::parse::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MangleEnv {
-    pub imports: HashMap<String, String>,
+    pub imports: HashMap<String, (bool, String)>,
     pub names: Vec<Vec<String>>,
     pub types: Vec<Vec<String>>,
 }
@@ -24,19 +24,41 @@ impl MangleEnv {
         self.names.last().filter(|x| x.contains(n)).is_some()
     }
 
+    pub fn resolve_import(&self, mut sym: String) -> Option<(bool, String)> {
+        let mut result = None;
+
+        while let Some((is_glob, import_path)) = self.imports.get(&sym) {
+            let split = import_path.split("_").collect::<Vec<_>>();
+            sym = split[0].to_owned();
+            result = result
+                .map(|(g, p)| (g || *is_glob, format!("{import_path}{p}")))
+                .or(Some((*is_glob, import_path.to_owned())));
+        }
+
+        result
+    }
+
     pub fn mangle_ident(&self, is_global: bool, prefix: &str, ident: &String) -> Option<String> {
         let prefix = if is_global { "" } else { prefix };
         let starts_with_mangle = ident.split("_").collect::<Vec<_>>();
 
         if starts_with_mangle.len() > 1 {
-            if let Some(import_path) = self.imports.get(starts_with_mangle[0]) {
-                return Some(format!("{prefix}{import_path}_{ident}"));
+            if let Some((is_glob, import_path)) =
+                self.resolve_import(starts_with_mangle[0].to_owned())
+            {
+                return Some(format!(
+                    "{}{import_path}{ident}",
+                    if is_glob { "" } else { prefix }
+                ));
             }
         }
 
         if !self.local_defined(ident) {
-            if let Some(import_path) = self.imports.get(ident) {
-                return Some(format!("{prefix}{import_path}_{ident}"));
+            if let Some((is_glob, import_path)) = self.resolve_import(ident.to_owned()) {
+                return Some(format!(
+                    "{}{import_path}{ident}",
+                    if is_glob { "" } else { prefix }
+                ));
             }
 
             if self.is_top_level_ident(ident) {
