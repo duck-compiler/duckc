@@ -42,7 +42,7 @@ pub fn function_definition_parser<'src, I, M>(
 ) -> impl Parser<'src, I, FunctionDefintion, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
-    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'src,
+    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
 {
     let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
         .then_ignore(just(Token::ControlChar(':')))

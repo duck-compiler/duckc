@@ -5,7 +5,7 @@ use tree_sitter::{Node, Parser};
 use crate::parse::{
     function_parser::LambdaFunctionExpr,
     type_parser::{Duck, Struct, TypeExpr},
-    value_parser::ValueExpr,
+    value_parser::{ValFmtStringContents, ValueExpr},
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -27,18 +27,8 @@ impl MangleEnv {
     pub fn mangle_ident(&self, is_global: bool, prefix: &str, ident: &String) -> Option<String> {
         let prefix = if is_global { "" } else { prefix };
         let starts_with_mangle = ident.split("_").collect::<Vec<_>>();
-        // mvmo 04.07.25: can we remove this?
-        if ident == "Y_XXX_zz" {
-            // dbg!(&self.names, ident);
-            // dbg!(&starts_with_mangle);
-        }
 
         if starts_with_mangle.len() > 1 {
-            // let starts_with_mangle = starts_with_mangle[0..starts_with_mangle.len() - 1]
-            //     .iter()
-            //     .map(|x| x.to_owned())
-            //     .collect::<Vec<_>>();
-            // let mangled = starts_with_mangle.join("_");
             if let Some(import_path) = self.imports.get(starts_with_mangle[0]) {
                 return Some(format!("{prefix}{import_path}_{ident}"));
             }
@@ -157,6 +147,44 @@ pub fn mangle_type_expression(type_expr: &mut TypeExpr, prefix: &str, mangle_env
 
 pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &mut MangleEnv) {
     match value_expr {
+        ValueExpr::Int(..)
+        | ValueExpr::String(..)
+        | ValueExpr::Bool(..)
+        | ValueExpr::Float(..)
+        | ValueExpr::Return(None)
+        | ValueExpr::Char(..) => {}
+        ValueExpr::Continue => {}
+        ValueExpr::Break => {}
+        ValueExpr::ArrayAccess(target, idx) => {
+            mangle_value_expr(&mut target.0, prefix, mangle_env);
+            mangle_value_expr(&mut idx.0, prefix, mangle_env);
+        }
+        ValueExpr::Match { value_expr, arms } => {
+            mangle_value_expr(&mut value_expr.0, prefix, mangle_env);
+            for arm in arms {
+                mangle_type_expression(&mut arm.type_case.0, prefix, mangle_env);
+                mangle_env.push_idents();
+                mangle_env.insert_ident(arm.bound_to_identifier.clone());
+                mangle_value_expr(&mut arm.value_expr.0, prefix, mangle_env);
+                mangle_env.pop_idents();
+            }
+        }
+        ValueExpr::FormattedString(contents) => {
+            for c in contents {
+                if let ValFmtStringContents::Expr(e) = c {
+                    mangle_value_expr(&mut e.0, prefix, mangle_env);
+                }
+            }
+        }
+        ValueExpr::Array(ty, exprs) => {
+            if let Some(ty) = ty {
+                mangle_type_expression(&mut ty.0, prefix, mangle_env);
+            }
+
+            for expr in exprs {
+                mangle_value_expr(&mut expr.0, prefix, mangle_env);
+            }
+        }
         ValueExpr::InlineGo(t) => {
             let mut parser = Parser::new();
             parser
@@ -337,6 +365,5 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
         ValueExpr::BoolNegate(value_expr) => {
             mangle_value_expr(&mut value_expr.0, prefix, mangle_env);
         }
-        _ => {}
     }
 }
