@@ -115,8 +115,8 @@ where
 
             let string_literal = select_ref! { Token::StringLiteral(str) => str.clone() }
                 .map(TypeExpr::StringLiteral);
-            let bool_literal = select_ref! { Token::BoolLiteral(bool) => *bool }
-                .map(TypeExpr::BoolLiteral);
+            let bool_literal =
+                select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::BoolLiteral);
             let int_literal = select_ref! { Token::IntLiteral(int) => *int }
                 .map(|int| TypeExpr::IntLiteral(int.try_into().unwrap())); // TODO: unwrap!
 
@@ -207,20 +207,18 @@ where
             let term_type_expr = p
                 .clone()
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-                .or(
-                    choice((
-                        string_literal,
-                        int_literal,
-                        bool_literal,
-                        go_type,
-                        type_name,
-                        r#struct,
-                        duck,
-                        function,
-                        tuple
-                    ))
-                    .map_with(|x, e| (x, e.span())),
-                );
+                .or(choice((
+                    string_literal,
+                    int_literal,
+                    bool_literal,
+                    go_type,
+                    type_name,
+                    r#struct,
+                    duck,
+                    function,
+                    tuple,
+                ))
+                .map_with(|x, e| (x, e.span())));
 
             term_type_expr
                 .separated_by(just(Token::ControlChar('|')))
@@ -319,8 +317,8 @@ where
 
             let string_literal = select_ref! { Token::StringLiteral(str) => str.clone() }
                 .map(TypeExpr::StringLiteral);
-            let bool_literal = select_ref! { Token::BoolLiteral(bool) => *bool }
-                .map(TypeExpr::BoolLiteral);
+            let bool_literal =
+                select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::BoolLiteral);
             let int_literal = select_ref! { Token::IntLiteral(int) => *int }
                 .map(|int| TypeExpr::IntLiteral(int.try_into().unwrap())); // TODO: unwrap!
 
@@ -368,20 +366,18 @@ where
             let term_type_expr = p
                 .clone()
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-                .or(
-                    choice((
-                        int_literal,
-                        bool_literal,
-                        string_literal,
-                        go_type,
-                        type_name,
-                        r#struct,
-                        duck,
-                        function,
-                        tuple
-                    ))
-                    .map_with(|x, e| (x, e.span())),
-                );
+                .or(choice((
+                    int_literal,
+                    bool_literal,
+                    string_literal,
+                    go_type,
+                    type_name,
+                    r#struct,
+                    duck,
+                    function,
+                    tuple,
+                ))
+                .map_with(|x, e| (x, e.span())));
 
             let array = term_type_expr
                 .clone()
@@ -536,58 +532,43 @@ pub mod tests {
             TypeExpr::Fun(vec![], Some(Box::new(TypeExpr::String.into_empty_span()))),
         );
 
-        assert_type_expression(
-            "true",
-            TypeExpr::BoolLiteral(true)
-        );
+        assert_type_expression("true", TypeExpr::BoolLiteral(true));
 
-        assert_type_expression(
-            "false",
-            TypeExpr::BoolLiteral(false)
-        );
+        assert_type_expression("false", TypeExpr::BoolLiteral(false));
 
         assert_type_expression(
             "true | false",
             TypeExpr::Or(vec![
                 TypeExpr::BoolLiteral(true).into_empty_span(),
-                TypeExpr::BoolLiteral(false).into_empty_span()
-            ])
+                TypeExpr::BoolLiteral(false).into_empty_span(),
+            ]),
         );
 
-        assert_type_expression(
-            "1",
-            TypeExpr::IntLiteral(1)
-        );
+        assert_type_expression("1", TypeExpr::IntLiteral(1));
 
-        assert_type_expression(
-            "555",
-            TypeExpr::IntLiteral(555)
-        );
+        assert_type_expression("555", TypeExpr::IntLiteral(555));
 
         assert_type_expression(
             "555 | 1000",
             TypeExpr::Or(vec![
                 TypeExpr::IntLiteral(555).into_empty_span(),
-                TypeExpr::IntLiteral(1000).into_empty_span()
-            ])
+                TypeExpr::IntLiteral(1000).into_empty_span(),
+            ]),
         );
 
-        assert_type_expression(
-            "\"str\"",
-            TypeExpr::StringLiteral("str".to_string())
-        );
+        assert_type_expression("\"str\"", TypeExpr::StringLiteral("str".to_string()));
 
         assert_type_expression(
             "\"other_str\"",
-            TypeExpr::StringLiteral("other_str".to_string())
+            TypeExpr::StringLiteral("other_str".to_string()),
         );
 
         assert_type_expression(
             "\"str\" | \"other_str\"",
             TypeExpr::Or(vec![
                 TypeExpr::StringLiteral("str".to_string()).into_empty_span(),
-                TypeExpr::StringLiteral("other_str".to_string()).into_empty_span()
-            ])
+                TypeExpr::StringLiteral("other_str".to_string()).into_empty_span(),
+            ]),
         );
 
         assert_type_expression(

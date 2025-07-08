@@ -55,8 +55,7 @@ where
         .collect::<Vec<Param>>()
         .or_not();
 
-    let return_type_parser = just(Token::ThinArrow)
-        .ignore_then(type_expression_parser());
+    let return_type_parser = just(Token::ThinArrow).ignore_then(type_expression_parser());
 
     just(Token::Function)
         .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })

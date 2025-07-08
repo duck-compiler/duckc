@@ -3,7 +3,12 @@ use lazy_static::lazy_static;
 use std::{ffi::OsString, fs, path::PathBuf};
 
 use crate::{
-    cli::go_cli::{self, GoCliErrKind}, emit::ir::join_ir, lex, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
+    DARGO_DOT_DIR,
+    cli::go_cli::{self, GoCliErrKind},
+    emit::ir::join_ir,
+    lex, parse_src_file,
+    tags::Tag,
+    typecheck, write_in_duck_dotdir,
 };
 
 #[derive(Debug)]
@@ -12,7 +17,7 @@ pub enum CompileErrKind {
     TargetPathIsDirectory,
     FileNotFound,
     CannotReadFile,
-    GoCli(GoCliErrKind)
+    GoCli(GoCliErrKind),
 }
 
 lazy_static! {
@@ -107,13 +112,12 @@ pub fn compile(
         target_file
     };
 
-    go_cli::build(
-        &compile_output_target,
-        &go_output_file
-    ).map_err(|err| (
-        format!("{}{}", *COMPILE_TAG, err.0),
-        CompileErrKind::GoCli(err.1),
-    ))?;
+    go_cli::build(&compile_output_target, &go_output_file).map_err(|err| {
+        (
+            format!("{}{}", *COMPILE_TAG, err.0),
+            CompileErrKind::GoCli(err.1),
+        )
+    })?;
 
     println!(
         "{}{}{} Successfully compiled binary",

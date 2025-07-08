@@ -41,9 +41,7 @@ pub fn pull_repository(
 
     if target_dir_path.exists() && !target_dir_path.is_dir() {
         return Err((
-            format!(
-                "Target path {target_dir_path:?} exists but is not a directory."
-            ),
+            format!("Target path {target_dir_path:?} exists but is not a directory."),
             GitCliErrKind::IOErr(IOErrKind::AlreadyExists),
         ));
     }

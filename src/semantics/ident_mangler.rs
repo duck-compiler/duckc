@@ -45,12 +45,12 @@ impl MangleEnv {
         if starts_with_mangle.len() > 1
             && let Some((is_glob, import_path)) =
                 self.resolve_import(starts_with_mangle[0].to_owned())
-            {
-                return Some(format!(
-                    "{}{import_path}{ident}",
-                    if is_glob { "" } else { prefix }
-                ));
-            }
+        {
+            return Some(format!(
+                "{}{import_path}{ident}",
+                if is_glob { "" } else { prefix }
+            ));
+        }
 
         if !self.local_defined(ident) {
             if let Some((is_glob, import_path)) = self.resolve_import(ident.to_owned()) {

@@ -870,9 +870,15 @@ mod tests {
     use chumsky::prelude::*;
 
     use crate::parse::{
-        function_parser::LambdaFunctionExpr, lexer::lexer, make_input, type_parser::{Duck, Field, TypeExpr}, value_parser::{
-            empty_duck, empty_range, empty_tuple, type_expr_into_empty_range, value_expr_into_empty_range, value_expr_parser, Assignment, Declaration, MatchArm
-        }, Spanned
+        Spanned,
+        function_parser::LambdaFunctionExpr,
+        lexer::lexer,
+        make_input,
+        type_parser::{Duck, Field, TypeExpr},
+        value_parser::{
+            Assignment, Declaration, MatchArm, empty_duck, empty_range, empty_tuple,
+            type_expr_into_empty_range, value_expr_into_empty_range, value_expr_parser,
+        },
     };
 
     use super::ValueExpr;

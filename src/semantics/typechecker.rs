@@ -912,11 +912,13 @@ impl TypeExpr {
     }
 
     pub fn is_number(&self) -> bool {
-        return *self == TypeExpr::Int || *self == TypeExpr::Float || matches!(*self, TypeExpr::IntLiteral(..));
+        return *self == TypeExpr::Int
+            || *self == TypeExpr::Float
+            || matches!(*self, TypeExpr::IntLiteral(..));
     }
 
     pub fn is_string(&self) -> bool {
-        return *self == TypeExpr::String || matches!(*self, TypeExpr::StringLiteral(..))
+        return *self == TypeExpr::String || matches!(*self, TypeExpr::StringLiteral(..));
     }
 
     pub fn is_variant(&self) -> bool {
@@ -925,9 +927,9 @@ impl TypeExpr {
 
     pub fn is_literal(&self) -> bool {
         return match *self {
-            TypeExpr::IntLiteral(..)
-            | TypeExpr::BoolLiteral(..)
-            | TypeExpr::StringLiteral(..) => true,
+            TypeExpr::IntLiteral(..) | TypeExpr::BoolLiteral(..) | TypeExpr::StringLiteral(..) => {
+                true
+            }
             _ => false,
         };
     }
@@ -1195,35 +1197,34 @@ fn check_type_compatability(
         }
     }
 
-    if one.0.is_string()
-        && !two.0.is_string() {
-            failure(
-                one.1.context.file_name,
-                "Incompatible Types".to_string(),
+    if one.0.is_string() && !two.0.is_string() {
+        failure(
+            one.1.context.file_name,
+            "Incompatible Types".to_string(),
+            (
+                format!(
+                    "This expression is of type {}, which is a string.",
+                    one.0.as_go_type_annotation(type_env)
+                ),
+                one.1,
+            ),
+            vec![
+                (
+                    "because of this, the second operand also needs to be of type string."
+                        .to_string(),
+                    two.1,
+                ),
                 (
                     format!(
-                        "This expression is of type {}, which is a string.",
-                        one.0.as_go_type_annotation(type_env)
+                        "but it is of type {}.",
+                        two.0.as_go_type_annotation(type_env)
                     ),
-                    one.1,
+                    two.1,
                 ),
-                vec![
-                    (
-                        "because of this, the second operand also needs to be of type string."
-                            .to_string(),
-                        two.1,
-                    ),
-                    (
-                        format!(
-                            "but it is of type {}.",
-                            two.0.as_go_type_annotation(type_env)
-                        ),
-                        two.1,
-                    ),
-                ],
-                one.1.context.file_contents,
-            )
-        }
+            ],
+            one.1.context.file_contents,
+        )
+    }
 
     if one.0.is_number() {
         if !two.0.is_number() {
@@ -1627,7 +1628,11 @@ mod test {
     #[should_panic(expected = "Incompatible Types")]
     fn test_incompatible_str() {
         let mut type_env = TypeEnv::default();
-        check_type_compatability(&empty_spanned(TypeExpr::String), &empty_spanned(TypeExpr::Int), &mut type_env);
+        check_type_compatability(
+            &empty_spanned(TypeExpr::String),
+            &empty_spanned(TypeExpr::Int),
+            &mut type_env,
+        );
     }
 
     #[test]

@@ -152,11 +152,7 @@ pub fn lex_single<'a>(
                     just("{")
                         .rewind()
                         .ignore_then(lex_fstring_tokens(lexer.clone()))
-                        .map(|e| {
-                            FmtStringContents::Tokens(
-                                e[1..e.len() - 1].to_vec(),
-                            )
-                        }),
+                        .map(|e| FmtStringContents::Tokens(e[1..e.len() - 1].to_vec())),
                     none_of("\\\n\t\"")
                         .or(choice((
                             just("\\\\").to('\\'),
