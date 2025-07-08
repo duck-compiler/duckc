@@ -430,27 +430,6 @@ where
                 FieldAccess(String),
             }
 
-            // let fmt_string = select_ref! { Token::FormatStringLiteral(s) => s.to_string() }
-            //     .map(|s| {
-            //         // let mut targets = Vec::new();
-            //         // let mut byte_counter = 0;
-
-            //         // let chars = s.chars().collect::<Vec<_>>();
-
-            //         // let mut i = 0;
-            //         // while i < chars.len() {
-            //         //     let current = chars[i];
-
-            //         //     if current = '{' {}
-
-            //         //     byte_counter += current.len_utf8();
-            //         //     i += 1;
-            //         // }
-
-            //         empty_tuple()
-            //     })
-            //     .map_with(|x, e| (x, e.span()));
-
             let fmt_string =
                 select_ref! { Token::FormatStringLiteral(elements) => elements.clone() }
                     .map({
@@ -609,10 +588,31 @@ where
                 .map_with(|x, e| (x.0, e.span()))
                 .boxed();
 
+            let pen = atom
+                .clone()
+                .separated_by(just(Token::ThinArrow))
+                .at_least(1)
+                .collect::<Vec<_>>()
+                .map(|exprs| {
+                    let first = exprs.first().unwrap().to_owned();
+                    exprs[1..]
+                        .iter()
+                        .map(|expr| expr.to_owned())
+                        .fold(first, |acc, elem| {
+                            let (ValueExpr::FunctionCall { target, mut params }, s) = elem else {
+                                panic!("can only pen functions")
+                            };
+
+                            params.insert(0, acc);
+                            (ValueExpr::FunctionCall { target, params }, s)
+                        })
+                })
+                .map_with(|(x, _), e| (x, e.span()));
+
             let assignment = scope_res_ident
                 .clone()
                 .rewind()
-                .ignore_then(atom.clone())
+                .ignore_then(pen.clone().or(atom.clone()))
                 .then_ignore(just(Token::ControlChar('=')))
                 .then(value_expr_parser.clone())
                 .map_with(|(target, value_expr), e| {
@@ -630,11 +630,13 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            let prod = atom
+            let prod = pen
+                .clone()
+                .or(atom.clone())
                 .clone()
                 .then(
                     just(Token::ControlChar('*'))
-                        .ignore_then(atom.clone())
+                        .ignore_then(pen.clone().or(atom.clone()))
                         .repeated()
                         .collect::<Vec<_>>(),
                 )
@@ -675,7 +677,7 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            choice((inline_go, assignment, equals, add, declaration, atom))
+            choice((inline_go, assignment, equals, add, declaration, pen, atom))
                 .labelled("expression")
                 .boxed()
         },
@@ -898,6 +900,49 @@ mod tests {
     #[test]
     fn test_value_expression_parser() {
         let test_cases = vec![
+            (
+                "a->b() == x->c()",
+                ValueExpr::Equals(
+                    ValueExpr::FunctionCall {
+                        target: var("b"),
+                        params: vec![*var("a")],
+                    }
+                    .into_empty_span()
+                    .into(),
+                    ValueExpr::FunctionCall {
+                        target: var("c"),
+                        params: vec![*var("x")],
+                    }
+                    .into_empty_span()
+                    .into(),
+                ),
+            ),
+            (
+                "a->x.x()->c(1)",
+                ValueExpr::FunctionCall {
+                    target: var("c"),
+                    params: vec![
+                        ValueExpr::FunctionCall {
+                            target: ValueExpr::FieldAccess {
+                                target_obj: var("x"),
+                                field_name: "x".into(),
+                            }
+                            .into_empty_span()
+                            .into(),
+                            params: vec![*var("a")],
+                        }
+                        .into_empty_span(),
+                        ValueExpr::Int(1).into_empty_span(),
+                    ],
+                },
+            ),
+            (
+                "a->b()",
+                ValueExpr::FunctionCall {
+                    target: var("b"),
+                    params: vec![*var("a")],
+                },
+            ),
             (
                 ".Int[]",
                 ValueExpr::Array(Some(TypeExpr::Int.into_empty_span()), vec![]),
