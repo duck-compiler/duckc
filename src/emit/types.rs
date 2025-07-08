@@ -11,6 +11,9 @@ pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str
         TypeExpr::Float => "float32",
         TypeExpr::Bool => "bool",
         TypeExpr::Char => "rune",
+        TypeExpr::IntLiteral(..) => "int",
+        TypeExpr::StringLiteral(..) => "string",
+        TypeExpr::BoolLiteral(..) => "bool",
         _ => panic!("That's not a primitive"),
     }
 }
@@ -34,6 +37,9 @@ pub fn primitive_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
         TypeExpr::Float => "DuckFloat",
         TypeExpr::Bool => "DuckBool",
         TypeExpr::Char => "Char",
+        TypeExpr::IntLiteral(int) => Box::leak(Box::new(format!("IntLiteral_{int}"))),
+        TypeExpr::StringLiteral(str) => Box::leak(Box::new(format!("StringLiteral_{}", escape_string_literal(&str)))),
+        TypeExpr::BoolLiteral(bool) => Box::leak(Box::new(format!("BoolLiteral_{}", bool))),
         _ => panic!("That's not a primitive"),
     }
 }
@@ -124,14 +130,61 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
         .types_used
         .iter()
         .filter(|type_expr| type_expr.is_primitive())
-        .map(|primitive_type_expr| {
-            IrInstruction::StructDef(
-                primitive_type_expr.as_clean_go_type_name(type_env),
-                vec![(
-                    "value".to_string(),
-                    primitive_native_type_name(primitive_type_expr).to_string(),
-                )],
-            )
+        .flat_map(|primitive_type_expr| {
+            if primitive_type_expr.is_literal() {
+                let ir_value = IrValue::Imm(match primitive_type_expr.clone() {
+                    TypeExpr::StringLiteral(value) => format!("\"{}\"", value),
+                    TypeExpr::IntLiteral(int_value) => format!("{int_value}"),
+                    TypeExpr::BoolLiteral(bool_value) => format!("{bool_value}"),
+                    _ => unreachable!()
+                });
+
+                return vec![
+                    IrInstruction::StructDef(
+                        primitive_type_expr.as_go_concrete_annotation(type_env),
+                        vec![],
+                    ),
+                    IrInstruction::FunDef(
+                        format!("as_dgo_{}", primitive_native_type_name(primitive_type_expr)),
+                        Some(("self".to_string(), primitive_type_expr.as_go_concrete_annotation(type_env).to_string())),
+                        vec![],
+                        Some(primitive_native_type_name(primitive_type_expr).to_string()),
+                        vec![
+                            IrInstruction::Return(Some(ir_value))
+                        ]
+                    )
+                ]
+            }
+
+            vec![
+                IrInstruction::InterfaceDef(
+                    primitive_type_expr.as_clean_go_type_name(type_env),
+                    vec![],
+                    vec![
+                        (
+                            format!("as_dgo_{}", primitive_native_type_name(primitive_type_expr)),
+                            vec![],
+                            Some(primitive_native_type_name(primitive_type_expr).to_string())
+                        )
+                    ]
+                ),
+                IrInstruction::StructDef(
+                    primitive_type_expr.as_go_concrete_annotation(type_env),
+                    vec![(
+                        "value".to_string(),
+                        primitive_native_type_name(primitive_type_expr).to_string(),
+                    )],
+                ),
+                IrInstruction::FunDef(
+                    format!("as_dgo_{}", primitive_native_type_name(primitive_type_expr)),
+                    Some(("self".to_string(), primitive_type_expr.as_go_concrete_annotation(type_env).to_string())),
+                    vec![],
+                    Some(primitive_native_type_name(primitive_type_expr).to_string()),
+                    vec![
+                        IrInstruction::Return(Some(IrValue::Var("self.value".to_string())))
+                    ]
+                )
+            ]
         })
         .collect::<Vec<_>>();
 
@@ -230,6 +283,9 @@ impl TypeExpr {
         return match self {
             TypeExpr::Array(t) => format!("[]{}", t.0.as_go_type_annotation(type_env)),
             TypeExpr::Any => "interface{}".to_string(),
+            TypeExpr::IntLiteral(i) => primitive_type_name(&TypeExpr::IntLiteral(*i)).to_string(),
+            TypeExpr::BoolLiteral(b) =>primitive_type_name(&TypeExpr::BoolLiteral(*b)).to_string(),
+            TypeExpr::StringLiteral(str) => primitive_type_name(&TypeExpr::StringLiteral(str.clone())).to_string(),
             TypeExpr::Bool => "DuckBool".to_string(),
             TypeExpr::InlineGo => "any".to_string(),
             TypeExpr::Int => "DuckInt".to_string(),
@@ -278,20 +334,21 @@ impl TypeExpr {
             }
             TypeExpr::Tuple(_fields) => self.as_clean_go_type_name(type_env),
             TypeExpr::Or(_variants) => self.as_clean_go_type_name(type_env),
-            TypeExpr::IntLiteral(..) | TypeExpr::BoolLiteral(..) | TypeExpr::StringLiteral(..) => todo!()
         };
     }
 
     pub fn as_go_concrete_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
-            TypeExpr::IntLiteral(..) | TypeExpr::BoolLiteral(..) | TypeExpr::StringLiteral(..) => todo!(),
+            TypeExpr::IntLiteral(i) => primitive_type_name(&TypeExpr::IntLiteral(*i)).to_string(),
+            TypeExpr::BoolLiteral(b) =>primitive_type_name(&TypeExpr::BoolLiteral(*b)).to_string(),
+            TypeExpr::StringLiteral(str) => primitive_type_name(&TypeExpr::StringLiteral(str.clone())).to_string(),
             TypeExpr::Array(t) => format!("[]{}", t.0.as_go_concrete_annotation(type_env)),
             TypeExpr::Any => "interface{}".to_string(),
-            TypeExpr::Bool => "DuckBool".to_string(),
-            TypeExpr::Int => "DuckInt".to_string(),
-            TypeExpr::Float => "DuckFloat".to_string(),
-            TypeExpr::Char => "Char".to_string(),
-            TypeExpr::String => "String".to_string(),
+            TypeExpr::Bool => "ConcDuckBool".to_string(),
+            TypeExpr::Int => "ConcDuckInt".to_string(),
+            TypeExpr::Float => "ConcDuckFloat".to_string(),
+            TypeExpr::Char => "ConcDuckChar".to_string(),
+            TypeExpr::String => "ConcDuckString".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::TypeNameInternal(name) => name.clone(),
@@ -356,7 +413,9 @@ impl TypeExpr {
 
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
-            TypeExpr::IntLiteral(..) | TypeExpr::BoolLiteral(..) | TypeExpr::StringLiteral(..) => todo!(),
+            TypeExpr::IntLiteral(i) => primitive_type_name(&TypeExpr::IntLiteral(*i)).to_string(),
+            TypeExpr::BoolLiteral(b) =>primitive_type_name(&TypeExpr::BoolLiteral(*b)).to_string(),
+            TypeExpr::StringLiteral(str) => primitive_type_name(&TypeExpr::StringLiteral(str.clone())).to_string(),
             TypeExpr::Array(t) => format!("Array_{}", t.0.as_clean_go_type_name(type_env)),
             TypeExpr::Any => "Any".to_string(),
             TypeExpr::Bool => "DuckBool".to_string(),
