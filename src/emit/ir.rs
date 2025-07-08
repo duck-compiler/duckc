@@ -1,5 +1,5 @@
 use crate::emit::{
-    types::primitive_type_name,
+    types::{primitive_native_type_name, primitive_type_name},
     value::{Case, IrInstruction, IrValue},
 };
 
@@ -56,19 +56,23 @@ impl IrInstruction {
             IrInstruction::Add(r, left, right, type_expr) => {
                 // TODO: check if this is correct
                 format!(
-                    "{r} = {} {{ value: {}.value + {}.value }}",
+                    "{r} = {} {{ value: {}.as_dgo_{} + {}.as_dgo_{} }}",
                     primitive_type_name(type_expr),
                     left.emit_as_go(),
-                    right.emit_as_go()
+                    primitive_native_type_name(type_expr),
+                    right.emit_as_go(),
+                    primitive_native_type_name(type_expr),
                 )
             }
             IrInstruction::Mul(r, v1, v2, type_expr) => {
                 // TODO: check if this is correct
                 format!(
-                    "{r} = {} {{ {}.value * {}.value }}",
+                    "{r} = {} {{ {}.as_dgo_{} * {}.as_dgo_{} }}",
                     primitive_type_name(type_expr),
                     v1.emit_as_go(),
-                    v2.emit_as_go()
+                    primitive_native_type_name(type_expr),
+                    v2.emit_as_go(),
+                    primitive_native_type_name(type_expr),
                 )
             }
             IrInstruction::Continue => "continue".to_string(),
@@ -222,6 +226,9 @@ pub fn join_ir(v: &[IrInstruction]) -> String {
 impl IrValue {
     pub fn emit_as_go(&self) -> String {
         match self {
+            IrValue::Imm(str) => {
+                format!("{}", str)
+            },
             IrValue::ArrayAccess(target, idx) => {
                 format!("{}[{}.value]", target.emit_as_go(), idx.emit_as_go())
             }

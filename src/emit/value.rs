@@ -82,6 +82,7 @@ pub enum IrValue {
     BoolNegate(Box<IrValue>),
     FieldAccess(Box<IrValue>, String),
     ArrayAccess(Box<IrValue>, Box<IrValue>),
+    Imm(String),
 }
 
 impl IrValue {
