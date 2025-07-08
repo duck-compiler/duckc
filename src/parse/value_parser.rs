@@ -2,6 +2,7 @@ use crate::parse::{
     Context, SS, Spanned,
     assignment_and_declaration_parser::{Assignment, Declaration},
     function_parser::{LambdaFunctionExpr, Param},
+    lexer::FmtStringContents,
     source_file_parser::SourceFile,
     type_parser::{type_expression_parser, type_expression_parser_without_array},
 };
@@ -14,6 +15,12 @@ pub struct MatchArm {
     pub type_case: Spanned<TypeExpr>,
     pub bound_to_identifier: String,
     pub value_expr: Spanned<ValueExpr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValFmtStringContents {
+    Char(char),
+    Expr(Spanned<ValueExpr>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -62,6 +69,7 @@ pub enum ValueExpr {
         value_expr: Box<Spanned<ValueExpr>>,
         arms: Vec<MatchArm>,
     },
+    FormattedString(Vec<ValFmtStringContents>),
 }
 
 pub trait IntoBlock {
@@ -101,15 +109,16 @@ impl ValueExpr {
 }
 
 pub fn value_expr_parser<'src, I, M>(
-    _make_input: M,
-) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone
+    make_input: M,
+) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone + 'src
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
-    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'src,
+    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
 {
+    let make_input = Box::leak(Box::new(make_input));
     recursive(
         |value_expr_parser: Recursive<
-            dyn Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>>,
+            dyn Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + 'src,
         >| {
             let scope_res_ident = just(Token::ScopeRes)
                 .or_not()
@@ -198,14 +207,14 @@ where
                 .ignore_then(
                     value_expr_parser
                         .clone()
-                        .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                        .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
                 )
                 .then(
                     match_arm
                         .separated_by(just(Token::ControlChar(',')))
                         .allow_trailing()
                         .collect::<Vec<_>>()
-                        .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
+                        .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}'))),
                 )
                 .map(|(value_expr, arms)| ValueExpr::Match {
                     value_expr: Box::new(value_expr),
@@ -385,6 +394,54 @@ where
                 FieldAccess(String),
             }
 
+            // let fmt_string = select_ref! { Token::FormatStringLiteral(s) => s.to_string() }
+            //     .map(|s| {
+            //         // let mut targets = Vec::new();
+            //         // let mut byte_counter = 0;
+
+            //         // let chars = s.chars().collect::<Vec<_>>();
+
+            //         // let mut i = 0;
+            //         // while i < chars.len() {
+            //         //     let current = chars[i];
+
+            //         //     if current = '{' {}
+
+            //         //     byte_counter += current.len_utf8();
+            //         //     i += 1;
+            //         // }
+
+            //         empty_tuple()
+            //     })
+            //     .map_with(|x, e| (x, e.span()));
+
+            let fmt_string =
+                select_ref! { Token::FormatStringLiteral(elements) => elements.clone() }
+                    .map({
+                        let value_expr_parser = value_expr_parser.clone();
+                        move |contents| {
+                            let contents = contents.leak();
+                            let mut res = Vec::new();
+
+                            for c in contents {
+                                match c {
+                                    FmtStringContents::Char(c) => {
+                                        res.push(ValFmtStringContents::Char(*c))
+                                    }
+                                    FmtStringContents::Tokens(s) => {
+                                        let expr = value_expr_parser
+                                            .parse(make_input(empty_range(), s.as_slice()))
+                                            .into_result()
+                                            .expect("invalid code");
+                                        res.push(ValFmtStringContents::Expr(expr));
+                                    }
+                                }
+                            }
+                            ValueExpr::FormattedString(res)
+                        }
+                    })
+                    .map_with(|x, e| (x, e.span()));
+
             let array_with_type = (just(Token::ControlChar('.'))
                 .ignore_then(type_expression_parser_without_array())
                 .or_not())
@@ -436,6 +493,7 @@ where
                         .or(choice((
                             choice((array.clone(), array_with_type.clone())),
                             int,
+                            fmt_string,
                             bool_val,
                             string_val,
                             scope_res_ident.clone(),
@@ -762,11 +820,10 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
         }
         ValueExpr::Match { value_expr, arms } => {
             value_expr_into_empty_range(value_expr);
-            arms.iter_mut()
-                .for_each(|arm| {
-                    type_expr_into_empty_range(&mut arm.type_case);
-                    value_expr_into_empty_range(&mut arm.value_expr);
-                });
+            arms.iter_mut().for_each(|arm| {
+                type_expr_into_empty_range(&mut arm.type_case);
+                value_expr_into_empty_range(&mut arm.value_expr);
+            });
         }
         _ => {}
     }
@@ -777,10 +834,16 @@ mod tests {
     use chumsky::prelude::*;
 
     use crate::parse::{
-        assignment_and_declaration_parser::{Assignment, Declaration}, function_parser::LambdaFunctionExpr, lexer::lexer, make_input, type_parser::{Duck, Field, TypeExpr}, value_parser::{
-            empty_duck, empty_range, empty_tuple, type_expr_into_empty_range,
-            value_expr_into_empty_range, value_expr_parser, MatchArm,
-        }, Spanned
+        Spanned,
+        assignment_and_declaration_parser::{Assignment, Declaration},
+        function_parser::LambdaFunctionExpr,
+        lexer::lexer,
+        make_input,
+        type_parser::{Duck, Field, TypeExpr},
+        value_parser::{
+            MatchArm, empty_duck, empty_range, empty_tuple, type_expr_into_empty_range,
+            value_expr_into_empty_range, value_expr_parser,
+        },
     };
 
     use super::ValueExpr;
@@ -2014,14 +2077,13 @@ mod tests {
                 "match (5) { Int i -> i }",
                 ValueExpr::Match {
                     value_expr: Box::new(ValueExpr::Int(5).into_empty_span()),
-                    arms: vec![
-                        MatchArm {
-                            type_case: TypeExpr::Int.into_empty_span(),
-                            bound_to_identifier: "i".to_string(),
-                            value_expr: ValueExpr::Variable(false, "i".to_string(), None).into_empty_span(),
-                        }
-                    ]
-                }
+                    arms: vec![MatchArm {
+                        type_case: TypeExpr::Int.into_empty_span(),
+                        bound_to_identifier: "i".to_string(),
+                        value_expr: ValueExpr::Variable(false, "i".to_string(), None)
+                            .into_empty_span(),
+                    }],
+                },
             ),
             (
                 "match (\"Hallo\") { String s -> s, Int i -> i }",
@@ -2031,15 +2093,17 @@ mod tests {
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),
                             bound_to_identifier: "s".to_string(),
-                            value_expr: ValueExpr::Variable(false, "s".to_string(), None).into_empty_span(),
+                            value_expr: ValueExpr::Variable(false, "s".to_string(), None)
+                                .into_empty_span(),
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
                             bound_to_identifier: "i".to_string(),
-                            value_expr: ValueExpr::Variable(false, "i".to_string(), None).into_empty_span(),
-                        }
-                    ]
-                }
+                            value_expr: ValueExpr::Variable(false, "i".to_string(), None)
+                                .into_empty_span(),
+                        },
+                    ],
+                },
             ),
             (
                 "match (\"Hallo\") { String s -> s, Int i -> i, Other o -> {
@@ -2051,27 +2115,33 @@ mod tests {
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),
                             bound_to_identifier: "s".to_string(),
-                            value_expr: ValueExpr::Variable(false, "s".to_string(), None).into_empty_span(),
+                            value_expr: ValueExpr::Variable(false, "s".to_string(), None)
+                                .into_empty_span(),
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
                             bound_to_identifier: "i".to_string(),
-                            value_expr: ValueExpr::Variable(false, "i".to_string(), None).into_empty_span(),
+                            value_expr: ValueExpr::Variable(false, "i".to_string(), None)
+                                .into_empty_span(),
                         },
                         MatchArm {
-                            type_case: TypeExpr::TypeName(false, "Other".to_string()).into_empty_span(),
+                            type_case: TypeExpr::TypeName(false, "Other".to_string())
+                                .into_empty_span(),
                             bound_to_identifier: "o".to_string(),
                             value_expr: ValueExpr::Block(vec![
-                                ValueExpr::Return(
-                                    Some(Box::new(ValueExpr::Variable(false, "o".to_string(), None).into_empty_span()))
-                                ).into_empty_span(),
-                            ]).into_empty_span(),
-                        }
-                    ]
-                }
+                                ValueExpr::Return(Some(Box::new(
+                                    ValueExpr::Variable(false, "o".to_string(), None)
+                                        .into_empty_span(),
+                                )))
+                                .into_empty_span(),
+                            ])
+                            .into_empty_span(),
+                        },
+                    ],
+                },
             ),
             (
-                            "match (\"Hallo\") {
+                "match (\"Hallo\") {
                                 String s -> s,
                                 Int i -> i,
                                 Other o -> {
@@ -2083,47 +2153,62 @@ mod tests {
                                     }
                                 },
                             }",
-                            ValueExpr::Match {
-                                value_expr: Box::new(ValueExpr::String("Hallo".to_string()).into_empty_span()),
-                                arms: vec![
-                                    MatchArm {
+                ValueExpr::Match {
+                    value_expr: Box::new(ValueExpr::String("Hallo".to_string()).into_empty_span()),
+                    arms: vec![
+                        MatchArm {
+                            type_case: TypeExpr::String.into_empty_span(),
+                            bound_to_identifier: "s".to_string(),
+                            value_expr: ValueExpr::Variable(false, "s".to_string(), None)
+                                .into_empty_span(),
+                        },
+                        MatchArm {
+                            type_case: TypeExpr::Int.into_empty_span(),
+                            bound_to_identifier: "i".to_string(),
+                            value_expr: ValueExpr::Variable(false, "i".to_string(), None)
+                                .into_empty_span(),
+                        },
+                        MatchArm {
+                            type_case: TypeExpr::TypeName(false, "Other".to_string())
+                                .into_empty_span(),
+                            bound_to_identifier: "o".to_string(),
+                            value_expr: ValueExpr::Block(vec![
+                                ValueExpr::Return(Some(Box::new(
+                                    ValueExpr::Variable(false, "o".to_string(), None)
+                                        .into_empty_span(),
+                                )))
+                                .into_empty_span(),
+                            ])
+                            .into_empty_span(),
+                        },
+                        MatchArm {
+                            type_case: TypeExpr::TypeName(false, "Other".to_string())
+                                .into_empty_span(),
+                            bound_to_identifier: "o".to_string(),
+                            value_expr: ValueExpr::Block(vec![
+                                ValueExpr::Match {
+                                    value_expr: Box::new(
+                                        ValueExpr::Variable(false, "o".to_string(), None)
+                                            .into_empty_span(),
+                                    ),
+                                    arms: vec![MatchArm {
                                         type_case: TypeExpr::String.into_empty_span(),
                                         bound_to_identifier: "s".to_string(),
-                                        value_expr: ValueExpr::Variable(false, "s".to_string(), None).into_empty_span(),
-                                    },
-                                    MatchArm {
-                                        type_case: TypeExpr::Int.into_empty_span(),
-                                        bound_to_identifier: "i".to_string(),
-                                        value_expr: ValueExpr::Variable(false, "i".to_string(), None).into_empty_span(),
-                                    },
-                                    MatchArm {
-                                        type_case: TypeExpr::TypeName(false, "Other".to_string()).into_empty_span(),
-                                        bound_to_identifier: "o".to_string(),
-                                        value_expr: ValueExpr::Block(vec![
-                                            ValueExpr::Return(
-                                                Some(Box::new(ValueExpr::Variable(false, "o".to_string(), None).into_empty_span()))
-                                            ).into_empty_span(),
-                                        ]).into_empty_span(),
-                                    },
-                                    MatchArm {
-                                        type_case: TypeExpr::TypeName(false, "Other".to_string()).into_empty_span(),
-                                        bound_to_identifier: "o".to_string(),
-                                        value_expr: ValueExpr::Block(vec![
-                                            ValueExpr::Match {
-                                                value_expr: Box::new(ValueExpr::Variable(false, "o".to_string(), None).into_empty_span()),
-                                                arms: vec![
-                                                    MatchArm {
-                                                        type_case: TypeExpr::String.into_empty_span(),
-                                                        bound_to_identifier: "s".to_string(),
-                                                        value_expr: ValueExpr::Variable(false, "s".to_string(), None).into_empty_span(),
-                                                    },
-                                                ]
-                                            }.into_empty_span()
-                                        ]).into_empty_span(),
-                                    },
-                                ]
-                            }
-                        ),
+                                        value_expr: ValueExpr::Variable(
+                                            false,
+                                            "s".to_string(),
+                                            None,
+                                        )
+                                        .into_empty_span(),
+                                    }],
+                                }
+                                .into_empty_span(),
+                            ])
+                            .into_empty_span(),
+                        },
+                    ],
+                },
+            ),
         ];
 
         for (i, (src, expected_tokens)) in test_cases.into_iter().enumerate() {

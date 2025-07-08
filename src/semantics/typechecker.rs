@@ -1,7 +1,11 @@
 use std::{collections::HashMap, process};
 
 use crate::parse::{
-    failure, function_parser::FunctionDefintion, source_file_parser::SourceFile, type_parser::{Duck, Field, Struct, TypeExpr}, value_parser::{empty_range, ValueExpr}, Spanned, SS
+    SS, Spanned, failure,
+    function_parser::FunctionDefintion,
+    source_file_parser::SourceFile,
+    type_parser::{Duck, Field, Struct, TypeExpr},
+    value_parser::{ValFmtStringContents, ValueExpr, empty_range},
 };
 
 #[derive(Debug, Clone)]
@@ -354,6 +358,13 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         match value_expr {
+            ValueExpr::FormattedString(contents) => {
+                for c in contents {
+                    if let ValFmtStringContents::Expr(e) = c {
+                        typeresolve_value_expr(&mut e.0, type_env);
+                    }
+                }
+            }
             ValueExpr::ArrayAccess(target, idx) => {
                 typeresolve_value_expr(&mut target.0, type_env);
                 typeresolve_value_expr(&mut idx.0, type_env);
@@ -364,7 +375,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 }
                 let ty = TypeExpr::from_value_expr(value_expr as &ValueExpr, type_env);
                 type_env.insert_type(ty);
-            },
+            }
             ValueExpr::InlineGo(..) => {}
             ValueExpr::Lambda(_lambda_expr) => {
                 // typeresolve_value_expr(lambda_expr., type_env);
@@ -489,21 +500,20 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ValueExpr::Int(..) => {
                 type_env.insert_type(TypeExpr::Int);
             } // this is so that only the used primitive types are in the type env
-            ValueExpr::Match {
-                value_expr,
-                arms,
-            } => {
+            ValueExpr::Match { value_expr, arms } => {
                 typeresolve_value_expr(&mut value_expr.0, type_env);
-                arms.iter_mut()
-                    .for_each(|arm| {
-                        type_env.push_identifier_types();
+                arms.iter_mut().for_each(|arm| {
+                    type_env.push_identifier_types();
 
-                        type_env.insert_identifier_type(arm.bound_to_identifier.clone(), arm.type_case.0.clone());
-                        typeresolve_value_expr(&mut arm.value_expr.0, type_env);
+                    type_env.insert_identifier_type(
+                        arm.bound_to_identifier.clone(),
+                        arm.type_case.0.clone(),
+                    );
+                    typeresolve_value_expr(&mut arm.value_expr.0, type_env);
 
-                        type_env.pop_identifier_types();
-                    });
-            },
+                    type_env.pop_identifier_types();
+                });
+            }
             ValueExpr::Break | ValueExpr::Return(None) | ValueExpr::Continue => {}
         }
     }
@@ -512,11 +522,25 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 impl TypeExpr {
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
+            ValueExpr::FormattedString(contents) => {
+                for c in contents {
+                    if let ValFmtStringContents::Expr(e) = c {
+                        require(
+                            matches!(TypeExpr::from_value_expr(&e.0, type_env), TypeExpr::String),
+                            "Needs to be string".into(),
+                        );
+                    }
+                }
+                TypeExpr::String
+            }
             ValueExpr::ArrayAccess(target, idx) => {
                 let target_type = TypeExpr::from_value_expr(&target.0, type_env);
                 let idx_type = TypeExpr::from_value_expr(&idx.0, type_env);
 
-                require(matches!(&target_type, TypeExpr::Array(_)), "Needs to be array".into());
+                require(
+                    matches!(&target_type, TypeExpr::Array(_)),
+                    "Needs to be array".into(),
+                );
                 require(matches!(&idx_type, TypeExpr::Int), "Needs to be int".into());
 
                 let TypeExpr::Array(array_type) = target_type else {
@@ -524,7 +548,7 @@ impl TypeExpr {
                 };
 
                 array_type.0.clone()
-            },
+            }
             ValueExpr::Array(ty, exprs) => {
                 let mut ty = ty.clone().map(|(ty, _)| ty);
                 for expr in exprs {
@@ -534,14 +558,14 @@ impl TypeExpr {
                             check_type_compatability(
                                 &(expr_type, expr.1.clone()),
                                 &(expected.clone(), empty_range()),
-                                type_env
+                                type_env,
                             );
                         }
                         None => ty = Some(expr_type),
                     }
                 }
                 TypeExpr::Array(ty.unwrap().into_empty_span().into())
-            },
+            }
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
                 lambda_expr
                     .params
@@ -738,7 +762,7 @@ impl TypeExpr {
                     .or(type_env.get_identifier_type(ident.clone()))
                     .expect("Expected type but didn't get one")
                     .clone()
-            },
+            }
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(
                     &(
@@ -808,14 +832,12 @@ impl TypeExpr {
                 let _body_type_expr = TypeExpr::from_value_expr(&body.0, type_env);
 
                 return TypeExpr::Tuple(vec![]);
-            },
+            }
             // TODO: Match Expressions need to be type resolved just as the function defs
             ValueExpr::Match {
                 value_expr: _,
-                arms: _
-            } => {
-                return TypeExpr::Tuple(vec![])
-            },
+                arms: _,
+            } => return TypeExpr::Tuple(vec![]),
         };
     }
 
@@ -912,12 +934,19 @@ fn resolve_implicit_function_return_type(
         type_env: &mut TypeEnv,
     ) {
         match value_expr {
+            ValueExpr::FormattedString(contents) => {
+                for c in contents {
+                    if let ValFmtStringContents::Expr(e) = c {
+                        flatten_returns(&e.0, return_types_found, type_env);
+                    }
+                }
+            }
             ValueExpr::Array(_, exprs) => {
                 for expr in exprs {
                     flatten_returns(&expr.0, return_types_found, type_env);
                 }
             }
-            ValueExpr::FunctionCall {..}
+            ValueExpr::FunctionCall { .. }
             | ValueExpr::Int(..)
             | ValueExpr::InlineGo(..)
             | ValueExpr::String(..)
@@ -932,9 +961,13 @@ fn resolve_implicit_function_return_type(
             | ValueExpr::FieldAccess { .. }
             | ValueExpr::Lambda(..)
             | ValueExpr::Variable(..)
-            | ValueExpr::Match {..}
+            | ValueExpr::Match { .. }
             | ValueExpr::ArrayAccess(..) => {}
-            ValueExpr::If { condition, then, r#else } => {
+            ValueExpr::If {
+                condition,
+                then,
+                r#else,
+            } => {
                 flatten_returns(&condition.as_ref().0, return_types_found, type_env);
                 flatten_returns(&then.as_ref().0, return_types_found, type_env);
                 r#else.as_ref().inspect(|r#else| {
@@ -1116,9 +1149,19 @@ fn check_type_compatability(
         return;
     }
 
-    if let TypeExpr::Array(ty_1) = &one.0 && let TypeExpr::Array(ty_2) = &two.0 {
-        let first_coerce = if let TypeExpr::InlineGo = &ty_1.0 { true } else { false };
-        let two_coerce = if let TypeExpr::InlineGo = &ty_2.0 { true } else { false };
+    if let TypeExpr::Array(ty_1) = &one.0
+        && let TypeExpr::Array(ty_2) = &two.0
+    {
+        let first_coerce = if let TypeExpr::InlineGo = &ty_1.0 {
+            true
+        } else {
+            false
+        };
+        let two_coerce = if let TypeExpr::InlineGo = &ty_2.0 {
+            true
+        } else {
+            false
+        };
         if first_coerce || two_coerce {
             return;
         }
@@ -1469,8 +1512,14 @@ mod test {
             (TypeExpr::Int, TypeExpr::Float),
             (TypeExpr::Float, TypeExpr::Int),
             (
-                TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]),
-                TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]),
+                TypeExpr::Tuple(vec![
+                    empty_spanned(TypeExpr::Int),
+                    empty_spanned(TypeExpr::String),
+                ]),
+                TypeExpr::Tuple(vec![
+                    empty_spanned(TypeExpr::Int),
+                    empty_spanned(TypeExpr::String),
+                ]),
             ),
             (
                 TypeExpr::Duck(Duck {
@@ -1481,12 +1530,22 @@ mod test {
                 }),
             ),
             (
-                TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]),
+                TypeExpr::Or(vec![
+                    empty_spanned(TypeExpr::Int),
+                    empty_spanned(TypeExpr::String),
+                ]),
                 TypeExpr::Int,
             ),
             (
-                TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String), empty_spanned(TypeExpr::Bool)]),
-                TypeExpr::Or(vec![empty_spanned(TypeExpr::String), empty_spanned(TypeExpr::Int)]),
+                TypeExpr::Or(vec![
+                    empty_spanned(TypeExpr::Int),
+                    empty_spanned(TypeExpr::String),
+                    empty_spanned(TypeExpr::Bool),
+                ]),
+                TypeExpr::Or(vec![
+                    empty_spanned(TypeExpr::String),
+                    empty_spanned(TypeExpr::Int),
+                ]),
             ),
         ];
 
@@ -1499,14 +1558,22 @@ mod test {
     #[should_panic(expected = "Incompatible Types")]
     fn test_incompatible_primitives() {
         let mut type_env = TypeEnv::default();
-        check_type_compatability(&empty_spanned(TypeExpr::Int), &empty_spanned(TypeExpr::String), &mut type_env);
+        check_type_compatability(
+            &empty_spanned(TypeExpr::Int),
+            &empty_spanned(TypeExpr::String),
+            &mut type_env,
+        );
     }
 
     #[test]
     #[should_panic(expected = "Incompatible Types")]
     fn test_incompatible_number_and_string() {
         let mut type_env = TypeEnv::default();
-        check_type_compatability(&empty_spanned(TypeExpr::Float), &empty_spanned(TypeExpr::String), &mut type_env);
+        check_type_compatability(
+            &empty_spanned(TypeExpr::Float),
+            &empty_spanned(TypeExpr::String),
+            &mut type_env,
+        );
     }
 
     #[test]
@@ -1526,7 +1593,10 @@ mod test {
         let mut type_env = TypeEnv::default();
 
         let one = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int)]);
-        let two = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::Int)]);
+        let two = TypeExpr::Tuple(vec![
+            empty_spanned(TypeExpr::Int),
+            empty_spanned(TypeExpr::Int),
+        ]);
 
         check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
     }
@@ -1568,10 +1638,17 @@ mod test {
     fn test_type_not_in_variant() {
         let mut type_env = TypeEnv::default();
 
-        let variant = TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]);
+        let variant = TypeExpr::Or(vec![
+            empty_spanned(TypeExpr::Int),
+            empty_spanned(TypeExpr::String),
+        ]);
         let a_bool = TypeExpr::Bool;
 
-        check_type_compatability(&empty_spanned(variant), &empty_spanned(a_bool), &mut type_env);
+        check_type_compatability(
+            &empty_spanned(variant),
+            &empty_spanned(a_bool),
+            &mut type_env,
+        );
     }
 
     #[test]
@@ -1579,10 +1656,20 @@ mod test {
     fn test_variant_not_subset_of_variant() {
         let mut type_env = TypeEnv::default();
 
-        let super_variant = TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::String)]);
-        let sub_variant = TypeExpr::Or(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::Bool)]);
+        let super_variant = TypeExpr::Or(vec![
+            empty_spanned(TypeExpr::Int),
+            empty_spanned(TypeExpr::String),
+        ]);
+        let sub_variant = TypeExpr::Or(vec![
+            empty_spanned(TypeExpr::Int),
+            empty_spanned(TypeExpr::Bool),
+        ]);
 
-        check_type_compatability(&empty_spanned(super_variant), &empty_spanned(sub_variant), &mut type_env);
+        check_type_compatability(
+            &empty_spanned(super_variant),
+            &empty_spanned(sub_variant),
+            &mut type_env,
+        );
     }
 
     fn empty_spanned<T>(item: T) -> Spanned<T> {
@@ -1593,7 +1680,13 @@ mod test {
             file_contents: "",
         };
 
-        return (item, SS { start: 0, end: 0, context });
+        return (
+            item,
+            SS {
+                start: 0,
+                end: 0,
+                context,
+            },
+        );
     }
-
 }

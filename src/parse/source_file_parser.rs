@@ -233,7 +233,7 @@ pub fn source_file_parser<'src, I, M>(
 ) -> impl Parser<'src, I, SourceFile, extra::Err<Rich<'src, Token, SS>>>
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
-    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'src,
+    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
 {
     let p = Box::leak(Box::new(p));
     recursive(|e| {

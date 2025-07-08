@@ -1,0 +1,26 @@
+use go "fmt";
+use go "strings";
+
+fn fprintln(input: String, args: String[]) -> String {
+    go {
+        result := input.value
+        for _, arg := range args {
+            arg := arg.value
+            result = strings.Replace(result, "{}", arg, 1)
+        }
+        fmt.Println(result);
+
+        return DuckString { value: result };
+    }
+
+    return ""
+}
+
+fn x() -> String | Bool {
+    return "hallo";
+}
+
+fn main() {
+    x();
+    fprintln("Hello, World", .String[]);
+}
