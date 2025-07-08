@@ -114,9 +114,9 @@ where
                 .map(TypeExpr::Go);
 
             let string_literal = select_ref! { Token::StringLiteral(str) => str.clone() }
-                .map(|str| TypeExpr::StringLiteral(str));
+                .map(TypeExpr::StringLiteral);
             let bool_literal = select_ref! { Token::BoolLiteral(bool) => *bool }
-                .map(|bool| TypeExpr::BoolLiteral(bool));
+                .map(TypeExpr::BoolLiteral);
             let int_literal = select_ref! { Token::IntLiteral(int) => *int }
                 .map(|int| TypeExpr::IntLiteral(int.try_into().unwrap())); // TODO: unwrap!
 
@@ -318,9 +318,9 @@ where
                 });
 
             let string_literal = select_ref! { Token::StringLiteral(str) => str.clone() }
-                .map(|str| TypeExpr::StringLiteral(str));
+                .map(TypeExpr::StringLiteral);
             let bool_literal = select_ref! { Token::BoolLiteral(bool) => *bool }
-                .map(|bool| TypeExpr::BoolLiteral(bool));
+                .map(TypeExpr::BoolLiteral);
             let int_literal = select_ref! { Token::IntLiteral(int) => *int }
                 .map(|int| TypeExpr::IntLiteral(int.try_into().unwrap())); // TODO: unwrap!
 

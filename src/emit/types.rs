@@ -38,8 +38,8 @@ pub fn primitive_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
         TypeExpr::Bool => "DuckBool",
         TypeExpr::Char => "Char",
         TypeExpr::IntLiteral(int) => Box::leak(Box::new(format!("IntLiteral_{int}"))),
-        TypeExpr::StringLiteral(str) => Box::leak(Box::new(format!("StringLiteral_{}", escape_string_literal(&str)))),
-        TypeExpr::BoolLiteral(bool) => Box::leak(Box::new(format!("BoolLiteral_{}", bool))),
+        TypeExpr::StringLiteral(str) => Box::leak(Box::new(format!("StringLiteral_{}", escape_string_literal(str)))),
+        TypeExpr::BoolLiteral(bool) => Box::leak(Box::new(format!("BoolLiteral_{bool}"))),
         _ => panic!("That's not a primitive"),
     }
 }
@@ -133,7 +133,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
         .flat_map(|primitive_type_expr| {
             if primitive_type_expr.is_literal() {
                 let ir_value = IrValue::Imm(match primitive_type_expr.clone() {
-                    TypeExpr::StringLiteral(value) => format!("\"{}\"", value),
+                    TypeExpr::StringLiteral(value) => format!("\"{value}\""),
                     TypeExpr::IntLiteral(int_value) => format!("{int_value}"),
                     TypeExpr::BoolLiteral(bool_value) => format!("{bool_value}"),
                     _ => unreachable!()
@@ -199,7 +199,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                 unreachable!()
             };
             let variant_type_name = variant_type_expr.as_clean_go_type_name(type_env);
-            let variant_seal_fn_name = format!("Seal_{}", variant_type_name);
+            let variant_seal_fn_name = format!("Seal_{variant_type_name}");
 
             let mut sealing_fn_instructions = variants
                 .iter()

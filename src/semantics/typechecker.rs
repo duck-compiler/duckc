@@ -564,7 +564,7 @@ impl TypeExpr {
                     match ty.as_ref() {
                         Some(expected) => {
                             check_type_compatability(
-                                &(expr_type, expr.1.clone()),
+                                &(expr_type, expr.1),
                                 &(expected.clone(), empty_range()),
                                 type_env,
                             );
@@ -1195,8 +1195,8 @@ fn check_type_compatability(
         }
     }
 
-    if one.0.is_string() {
-        if !two.0.is_string() {
+    if one.0.is_string()
+        && !two.0.is_string() {
             failure(
                 one.1.context.file_name,
                 "Incompatible Types".to_string(),
@@ -1224,7 +1224,6 @@ fn check_type_compatability(
                 one.1.context.file_contents,
             )
         }
-    }
 
     if one.0.is_number() {
         if !two.0.is_number() {

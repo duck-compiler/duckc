@@ -42,8 +42,8 @@ impl MangleEnv {
         let prefix = if is_global { "" } else { prefix };
         let starts_with_mangle = ident.split("_").collect::<Vec<_>>();
 
-        if starts_with_mangle.len() > 1 {
-            if let Some((is_glob, import_path)) =
+        if starts_with_mangle.len() > 1
+            && let Some((is_glob, import_path)) =
                 self.resolve_import(starts_with_mangle[0].to_owned())
             {
                 return Some(format!(
@@ -51,7 +51,6 @@ impl MangleEnv {
                     if is_glob { "" } else { prefix }
                 ));
             }
-        }
 
         if !self.local_defined(ident) {
             if let Some((is_glob, import_path)) = self.resolve_import(ident.to_owned()) {

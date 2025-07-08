@@ -154,10 +154,7 @@ pub fn lex_single<'a>(
                         .ignore_then(lex_fstring_tokens(lexer.clone()))
                         .map(|e| {
                             FmtStringContents::Tokens(
-                                e[1..e.len() - 1]
-                                    .iter()
-                                    .map(|x| x.clone())
-                                    .collect::<Vec<_>>(),
+                                e[1..e.len() - 1].to_vec(),
                             )
                         }),
                     none_of("\\\n\t\"")
@@ -174,7 +171,7 @@ pub fn lex_single<'a>(
                 .collect::<Vec<_>>(),
             )
             .then_ignore(just('"'))
-            .map(|x| Token::FormatStringLiteral(x));
+            .map(Token::FormatStringLiteral);
 
         let token = inline_go_parser()
             .or(fmt_string)
@@ -290,20 +287,17 @@ fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, cha
 
 pub fn token_empty_range(token_span: &mut Spanned<Token>) {
     token_span.1 = empty_range();
-    match &mut token_span.0 {
-        Token::FormatStringLiteral(contents) => {
-            for content in contents {
-                match content {
-                    FmtStringContents::Tokens(tokens) => {
-                        for token in tokens {
-                            token_empty_range(token);
-                        }
+    if let Token::FormatStringLiteral(contents) = &mut token_span.0 {
+        for content in contents {
+            match content {
+                FmtStringContents::Tokens(tokens) => {
+                    for token in tokens {
+                        token_empty_range(token);
                     }
-                    FmtStringContents::Char(_) => {}
                 }
+                FmtStringContents::Char(_) => {}
             }
         }
-        _ => {}
     }
 }
 

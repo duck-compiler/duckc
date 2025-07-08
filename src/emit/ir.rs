@@ -227,7 +227,7 @@ impl IrValue {
     pub fn emit_as_go(&self) -> String {
         match self {
             IrValue::Imm(str) => {
-                format!("{}", str)
+                str.to_string()
             },
             IrValue::ArrayAccess(target, idx) => {
                 format!("{}[{}.value]", target.emit_as_go(), idx.emit_as_go())
@@ -240,9 +240,9 @@ impl IrValue {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            IrValue::Bool(b) => format!("DuckBool {{ value: {} }}", b),
-            IrValue::Int(i) => format!("DuckInt {{ value: {} }}", i),
-            IrValue::Float(f) => format!("DuckFloat {{ value: {} }}", f),
+            IrValue::Bool(b) => format!("DuckBool {{ value: {b} }}"),
+            IrValue::Int(i) => format!("DuckInt {{ value: {i} }}"),
+            IrValue::Float(f) => format!("DuckFloat {{ value: {f} }}"),
             IrValue::Char(c) => format!("DuckChar {{ value: '{c}' }}"),
             IrValue::String(s) => format!("DuckString {{ \"{s}\" }}"),
             IrValue::Var(v) => v.to_string(),
