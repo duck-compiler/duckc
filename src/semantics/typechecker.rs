@@ -1212,24 +1212,6 @@ fn check_type_compatability(
         return;
     }
 
-    if let TypeExpr::Array(ty_1) = &one.0
-        && let TypeExpr::Array(ty_2) = &two.0
-    {
-        let first_coerce = if let TypeExpr::InlineGo = &ty_1.0 {
-            true
-        } else {
-            false
-        };
-        let two_coerce = if let TypeExpr::InlineGo = &ty_2.0 {
-            true
-        } else {
-            false
-        };
-        if first_coerce || two_coerce {
-            return;
-        }
-    }
-
     if one.0.is_bool() && !two.0.is_bool() {
         failure(
             one.1.context.file_name,

@@ -83,8 +83,14 @@ impl IrInstruction {
                     .map(IrValue::emit_as_go)
                     .unwrap_or("".to_string())
             ),
-            IrInstruction::Equals(r, v1, v2) => {
-                format!("{r} = {} == {}", v1.emit_as_go(), v2.emit_as_go())
+            IrInstruction::Equals(r, v1, v2, type_expr) => {
+                format!(
+                    "{r} = ConcDuckBool {{ value: {}.as_dgo_{}() == {}.as_dgo_{}() }}",
+                    v1.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                    v2.emit_as_go(),
+                    primitive_native_type_name(type_expr)
+                )
             }
             IrInstruction::Block(block_instr) => {
                 format!("{{\n{}\n}}", join_ir(block_instr))
