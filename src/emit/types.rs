@@ -239,7 +239,11 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                         variant_seal_fn_name.clone(),
                         Some((
                             "self".to_string(),
-                            variant.0.as_clean_go_type_name(type_env),
+                            if variant.0.is_primitive() {
+                                primitive_conc_type_name(&variant.0).to_string()
+                            } else {
+                                variant.0.as_clean_go_type_name(type_env)
+                            },
                         )),
                         vec![],
                         None,

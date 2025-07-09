@@ -852,6 +852,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             collect_unions_value_expr(&function_definition.value_expr.0, type_env);
         });
 
+    // Step 5: Map function names available
     source_file
         .function_definitions
         .iter_mut()
@@ -878,6 +879,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
         });
 
+    // Step 6: Type Check functions
     source_file
         .function_definitions
         .iter_mut()

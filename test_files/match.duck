@@ -1,7 +1,11 @@
 use go "fmt";
 
+fn xyz() -> String | Int {
+    return "a";
+}
+
 fn abc() -> (String | Int) | Bool {
-    return true;
+    return xyz();
 }
 
 fn main() {
