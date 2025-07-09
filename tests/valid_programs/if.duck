@@ -1,0 +1,9 @@
+use std;
+
+fn main() {
+    if (true) {
+        std::io::println("true");
+    } else {
+        std::io::println("false");
+    }
+}
