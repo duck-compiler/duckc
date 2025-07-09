@@ -132,17 +132,18 @@ pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
 
     let mut copy_target_clone = copy_target.to_path_buf();
     copy_target_clone.push("main.duck");
-    compile::compile(copy_target_clone, None).map_err(|err| {
-        (
-            format!(
-                "{}{} couldn't compile the code\n{}",
-                Tag::Build,
-                Tag::Err,
-                err.0,
-            ),
-            BuildErrKind::Compile(err.1),
-        )
-    })?;
+    compile::compile(copy_target_clone, None)
+        .map_err(|err| {
+            (
+                format!(
+                    "{}{} couldn't compile the code\n{}",
+                    Tag::Build,
+                    Tag::Err,
+                    err.0,
+                ),
+                BuildErrKind::Compile(err.1),
+            )
+        })?;
 
     Ok(())
 }
