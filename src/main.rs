@@ -21,17 +21,11 @@ use parse::{
     lexer::{Token, lexer},
     source_file_parser::SourceFile,
 };
-use semantics::typechecker::{self, TypeEnv};
 use tags::Tag;
 
-use crate::parse::{
-    Context, SS,
-    function_parser::LambdaFunctionExpr,
-    make_input, parse_failure,
-    source_file_parser::source_file_parser,
-    type_parser::{Duck, Struct, TypeExpr},
-    value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr},
-};
+use crate::{parse::{
+    function_parser::LambdaFunctionExpr, make_input, parse_failure, source_file_parser::source_file_parser, type_parser::{Duck, Struct, TypeExpr}, value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}, Context, SS
+}, semantics::type_resolve::{self, TypeEnv}};
 
 use lazy_static::lazy_static;
 
@@ -356,7 +350,7 @@ fn parse_src_file(
 
 fn typecheck(src_file_ast: &mut SourceFile) -> TypeEnv {
     let mut type_env = TypeEnv::default();
-    typechecker::typeresolve_source_file(src_file_ast, &mut type_env);
+    type_resolve::typeresolve_source_file(src_file_ast, &mut type_env);
 
     type_env
 }
