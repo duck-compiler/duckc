@@ -930,7 +930,7 @@ mod tests {
             (
                 "{ x: 123 }",
                 vec![
-                    decl("var_0", "interface {\n   Hasx[DuckInt]\n}"),
+                    decl("var_0", "interface {\n   Hasx[DuckInt]\n\n}"),
                     IrInstruction::VarAssignment(
                         "var_0".into(),
                         IrValue::Duck(

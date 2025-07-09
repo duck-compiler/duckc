@@ -535,51 +535,13 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .function_definitions
         .iter_mut()
         .for_each(|function_definition| {
-            for p in function_definition.params.as_mut().unwrap() {
-                if let TypeExpr::TypeName(_, x) = &p.1.0 {
-                    p.1.0 = dbg!(type_env.resolve_type_alias(x));
+            if let Some(params) = function_definition.params.as_mut() {
+                for p in params {
+                    if let TypeExpr::TypeName(_, x) = &p.1.0 {
+                        p.1.0 = dbg!(type_env.resolve_type_alias(x));
+                    }
+                    dbg!(&p);
                 }
-                dbg!(&p);
-            }
-
-            let fn_type_expr = TypeExpr::Fun(
-                function_definition
-                    .params
-                    .as_ref()
-                    .unwrap_or(&Vec::new())
-                    .iter()
-                    .map(|(identifier, type_expr)| (Some(identifier.clone()), type_expr.clone()))
-                    .collect::<Vec<_>>(),
-                function_definition
-                    .return_type
-                    .as_ref()
-                    .map(|spanned_type_expr| {
-                        Box::new((
-                            type_env.insert_type(spanned_type_expr.0.clone()),
-                            spanned_type_expr.1,
-                        ))
-                    }),
-            );
-
-            type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
-        });
-
-    source_file
-        .function_definitions
-        .iter_mut()
-        .for_each(|function_definition| {
-            // if let Some((return_type, _)) = &mut function_definition.return_type {
-            //     *return_type = type_env.insert_type(return_type.clone());
-            //     if let Some((ref mut a @ TypeExpr::TypeName(_, x), _)) = &mut function_definition.return_type {
-            //          *a = type_env.resolve_type_alias(x);
-            //     }
-            // }
-
-            for p in function_definition.params.as_mut().unwrap() {
-                if let TypeExpr::TypeName(_, x) = &p.1.0 {
-                    p.1.0 = dbg!(type_env.resolve_type_alias(x));
-                }
-                dbg!(&p);
             }
 
             let fn_type_expr = TypeExpr::Fun(
@@ -667,8 +629,11 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         }
 
         type_env.push_identifier_types();
-        for p in function_definition.params.as_mut().unwrap() {
-            type_env.insert_identifier_type(p.0.clone(), p.1.0.clone());
+
+        if let Some(params) = function_definition.params.clone().as_mut() {
+            for p in params {
+                type_env.insert_identifier_type(p.0.clone(), p.1.0.clone());
+            }
         }
 
         typeresolve_value_expr(&mut function_definition.value_expr.0, type_env);
