@@ -28,5 +28,6 @@ jobs:
 
     - name: Run Python Test Script in CI/CD Mode
       run: |
+        ./install_std.sh
         cd ./tests
         python run_tests.py --cicd
