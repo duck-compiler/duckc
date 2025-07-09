@@ -24,7 +24,7 @@ jobs:
 
       - name: Prepare issue directory
         run: |
-          ls -la ./gh-pages-data/.issues/
+          ls -la ./gh-pages-data/
           mkdir -p ./.issues
           cp -r ./gh-pages-data/.issues/ ./.issues/ 2>/dev/null || true
 
