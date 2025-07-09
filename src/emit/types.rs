@@ -230,6 +230,8 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
             let variant_type_name = variant_type_expr.as_clean_go_type_name(type_env);
             let variant_seal_fn_name = format!("Seal_{variant_type_name}");
 
+            dbg!(&variant_type_name, &variants);
+
             let mut sealing_fn_instructions = variants
                 .iter()
                 .map(|variant| {

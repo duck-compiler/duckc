@@ -1,3 +1,4 @@
 fn main() {
     let x: std::time::Duration = { seconds: 10 };
+    std::task::sleep(x);
 }

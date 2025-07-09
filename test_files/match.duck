@@ -1,9 +1,9 @@
 use go "fmt";
 
+fn abc() -> (String | Int) | Bool {
+    return true;
+}
+
 fn main() {
-    let x: String | Bool = true;
-    match (x) {
-        String s -> go { fmt.Println("A") },
-        Bool b -> go { fmt.Println("b") },
-    }
+    abc();
 }
