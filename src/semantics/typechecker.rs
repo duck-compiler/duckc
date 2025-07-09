@@ -534,8 +534,8 @@ impl TypeExpr {
             TypeExpr::InlineGo => "inline-go".to_string(),
             TypeExpr::Struct(_) => "struct {{ todo }}".to_string(),
             TypeExpr::Go(str) => format!("go({str})"),
-            TypeExpr::Duck(duck) => format!("duck {{ todo }}"),
-            TypeExpr::Tuple(items) => format!("tuple(todo)"),
+            TypeExpr::Duck(_) => "duck { todo }".to_string(),
+            TypeExpr::Tuple(_) => "tuple(todo)".to_string(),
             TypeExpr::TypeName(_, str) => format!("type {str}"),
             TypeExpr::TypeNameInternal(str) => format!("internal {str}"),
             TypeExpr::StringLiteral(str) => format!("\"{str}\""),
@@ -546,8 +546,8 @@ impl TypeExpr {
             TypeExpr::Bool => "Bool".to_string(),
             TypeExpr::Char => "Char".to_string(),
             TypeExpr::Float => "Float".to_string(),
-            TypeExpr::Or(items) => "todo | todo".to_string(),
-            TypeExpr::Fun(items, _) => "fn (todo) -> todo".to_string(),
+            TypeExpr::Or(..) => "todo | todo".to_string(),
+            TypeExpr::Fun(..) => "fn (todo) -> todo".to_string(),
             TypeExpr::Array(_) => "todo[]".to_string(),
         }
     }
