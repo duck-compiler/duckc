@@ -300,6 +300,7 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
                     out.extend(i);
                 }
 
+                // TODO: respect additional identifer scopes like blocks and lambdas
                 if let Some(i) = declared_var_ident {
                     e.insert_ident(i);
                 }
