@@ -18,17 +18,14 @@ fn xyz(x: { x: Int }) {
 }
 
 fn f() -> String | Bool {
-    "X"
+    return "X";
 }
 
 fn ff() -> String | { x: Int } {
-    "X"
+    return "X";
 }
 
 fn main() {
-    let union_duck: { x: String | Bool, y: String | { x: Int } } = { x: f(), y: ff() };
-
-
     "before sleep"->println();
     let dura: std::time::Duration = { seconds: 1 };
     sleep(dura);
@@ -36,6 +33,7 @@ fn main() {
 
     let x: struct { y: Int } = .{ y: 10 };
     let y: { x: { x: Int } } = { x: { x: 20 } };
+
     abc(y.x.x);
     xyz(y.x);
 

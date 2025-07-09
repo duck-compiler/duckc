@@ -1,8 +1,8 @@
 use go "time";
 
-fn sleep(d: std::time::Duration) {
+fn sleep(d: ::time::Duration) {
     match (d) {
-        { millis: Int } millis -> go { time.Sleep(time.Duration(millis.Getmillis().as_dgo_int()) * time.Millisecond) },
+        ::time::Millis millis -> go { time.Sleep(time.Duration(millis.Getmillis().as_dgo_int()) * time.Millisecond) },
         { seconds: Int } seconds -> go { time.Sleep(time.Duration(seconds.Getseconds().as_dgo_int()) * time.Second) },
         { minutes: Int } minutes -> go { time.Sleep(time.Duration(minutes.Getminutes().as_dgo_int()) * time.Minute) },
         { hours: Int } hours -> go { time.Sleep(time.Duration(hours.Gethours().as_dgo_int()) * time.Hour) },

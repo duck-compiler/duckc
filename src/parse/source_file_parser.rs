@@ -111,8 +111,9 @@ impl SourceFile {
                     mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
                 }
                 mangle_env.push_idents();
-                if let Some(params) = &f.params {
-                    for (name, _) in params {
+                if let Some(params) = &mut f.params {
+                    for (name, type_expr) in params {
+                        mangle_type_expression(&mut type_expr.0, prefix, &mut mangle_env);
                         mangle_env.insert_ident(name.clone());
                     }
                 }
