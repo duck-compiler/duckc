@@ -38,6 +38,14 @@ pub mod semantics;
 pub mod tags;
 
 lazy_static! {
+    static ref DUCK_STD_PATH: PathBuf = {
+        env::home_dir().map(|mut path| {
+            path.push(".duck");
+            path.push("std");
+            path
+        }).expect("couldn't get pathbuf for std lib")
+    };
+
     static ref DARGO_DOT_DIR: PathBuf = {
         fn require_sub_dir(str: &str) {
             let Ok(current_dir) = env::current_dir() else {
