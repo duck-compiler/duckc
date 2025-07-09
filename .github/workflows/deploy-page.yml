@@ -43,8 +43,6 @@ jobs:
             popd
 
             cp -r ./main-branch/.github/scripts/.issues/ ./.issues
-            pwd
-            ls -la
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
