@@ -33,7 +33,7 @@ jobs:
         run: |
             # copy the state from gh-pages branch into the main-branch checkout
             mkdir -p ./main-branch/.github/scripts/.issues/state
-            cp -r gh-pages/state ./main-branch/.github/scripts/.issues/state &2>/dev/null || true
+            cp -r gh-pages/state ./main-branch/.github/scripts/.issues &2>/dev/null || true
 
             pushd main-branch/.github/scripts/
 
