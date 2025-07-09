@@ -3,8 +3,7 @@ use crate::{
         function_parser::LambdaFunctionExpr,
         type_parser::{Duck, Struct, TypeExpr},
         value_parser::{Declaration, ValFmtStringContents, ValueExpr},
-    },
-    semantics::typechecker::TypeEnv,
+    }, semantics::type_resolve::TypeEnv,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -801,8 +800,7 @@ mod tests {
             make_input,
             type_parser::TypeExpr,
             value_parser::{empty_range, value_expr_parser},
-        },
-        semantics::typechecker::TypeEnv,
+        }, semantics::type_resolve::TypeEnv,
     };
 
     fn decl(name: impl Into<String>, t: impl Into<String>) -> IrInstruction {
