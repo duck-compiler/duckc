@@ -233,10 +233,31 @@ def verify_snapshot(test_name, actual_stdout, actual_stderr):
         return True
 
     if not os.path.exists(snapshot_path):
-        print(f"{CHECK} {COLOR_CYAN}No previous snapshot found. Creating new snapshot for {COLOR_RESET}{test_name}")
-        with open(snapshot_path, 'w', encoding='utf-8') as f:
-            json.dump(snapshot_data, f, indent=4)
-        return True
+        print(f"{CHECK} {COLOR_CYAN}No previous snapshot found for {COLOR_RESET}{test_name}")
+
+        if CICD:
+            print(f"{CROSS} {COLOR_RED}New snapshot detected in CICD mode. Failing test.{COLOR_RESET}")
+            print_diff("stdout", "", actual_stdout)
+            print_diff("stderr", "", actual_stderr)
+            return False
+
+        print(f"\n{COLOR_GRAY}--- Proposed STDOUT ---{COLOR_RESET}")
+        print(f"{COLOR_GREEN}{actual_stdout if actual_stdout else '<empty>'}{COLOR_RESET}")
+        print(f"{COLOR_GRAY}-----------------------{COLOR_RESET}")
+        print(f"\n{COLOR_GRAY}--- Proposed STDERR ---{COLOR_RESET}")
+        print(f"{COLOR_RED}{actual_stderr if actual_stderr else '<empty>'}{COLOR_RESET}")
+        print(f"{COLOR_GRAY}-----------------------{COLOR_RESET}\n")
+
+        while True:
+            choice = input(f"{COLOR_YELLOW}Create new snapshot with this output? (y/n): {COLOR_RESET}").lower().strip()
+            if choice == 'y':
+                with open(snapshot_path, 'w', encoding='utf-8') as f:
+                    json.dump(snapshot_data, f, indent=4)
+                print(f"{UPDATE} {COLOR_BLUE}New snapshot created.{COLOR_RESET}")
+                return True
+            elif choice == 'n':
+                print(f"{CROSS} {COLOR_RED}Test failed. New snapshot rejected by user.{COLOR_RESET}")
+                return False
 
     try:
         with open(snapshot_path, 'r', encoding='utf-8') as f:
