@@ -6,13 +6,14 @@ use crate::tags::Tag;
 pub enum GoCliErrKind {
     SpawnProcess,
     WaitProcess,
+    CompileFailed,
 }
 
 pub fn build(
     compile_output_target: &Path,
     go_output_file: &Path,
 ) -> Result<(), (String, GoCliErrKind)> {
-    Command::new("go")
+    let cmd_result = Command::new("go")
         .args([
             OsString::from("build"),
             OsString::from("-o"),
@@ -41,5 +42,17 @@ pub fn build(
                 GoCliErrKind::WaitProcess,
             )
         })?;
+
+    if !cmd_result.success() {
+        return Err((
+            format!(
+                "{}{} couldn't compile the generated go code",
+                Tag::Go,
+                Tag::Err,
+            ),
+            GoCliErrKind::CompileFailed
+        ))
+    }
+
     Ok(())
 }

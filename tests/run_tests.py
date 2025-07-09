@@ -3,9 +3,13 @@ import os
 import subprocess
 import shutil
 import argparse
+import json
+import difflib
+import re
 
 VERBOSE = False
 CICD = False
+UPDATE_SNAPSHOTS = False
 
 COLOR_RED = "\033[91m"
 COLOR_GREEN = "\033[92m"
@@ -18,6 +22,7 @@ COLOR_RESET = "\033[0m"
 CHECK = f"{COLOR_GRAY}[{COLOR_GREEN}✔{COLOR_GRAY}]{COLOR_RESET}"
 CROSS = f"{COLOR_GRAY}[{COLOR_RED}✗{COLOR_GRAY}]{COLOR_RESET}"
 SKIP = f"{COLOR_GRAY}[{COLOR_YELLOW}~{COLOR_GRAY}]{COLOR_RESET}"
+UPDATE = f"{COLOR_GRAY}[{COLOR_BLUE}U{COLOR_GRAY}]{COLOR_RESET}"
 
 def indent_all_lines_with_tab(input_string):
     if not isinstance(input_string, str):
@@ -203,96 +208,125 @@ def compile_valid(compiler_path, valid_program):
         return None
     pass
 
-def read_meta_file(file_name):
-    meta_file_path = f"{file_name}.meta"
-    meta_data = {}
+def path_to_filename(path: str) -> str:
+    if not isinstance(path, str):
+        raise TypeError("Input path must be a string.")
 
-    if VERBOSE:
-        print(f"{COLOR_YELLOW}attempting to read meta file for {file_name}{COLOR_RESET}: {meta_file_path}")
+    sanitized = re.sub(r'[\\/]', '_', path)
+    sanitized = re.sub(r'[^a-zA-Z0-9._-]', '_', sanitized)
+    sanitized = re.sub(r'__+', '_', sanitized)
+    sanitized = sanitized.strip('_')
 
-    if not os.path.exists(meta_file_path):
-        print(f"{CROSS} {COLOR_RED}Error{COLOR_RESET}: {COLOR_RED}Meta file {COLOR_RESET}'{meta_file_path}' {COLOR_RED}does not exist.")
-        if CICD:
-            sys.exit(-1)
-        return {}
+    return sanitized
 
-    if not os.path.isfile(meta_file_path):
-        print(f"{CROSS} Error: '{meta_file_path}' exists but is not a file (it might be a directory).")
-        if CICD:
-            sys.exit(-1)
-        return {}
+def verify_snapshot(test_name, actual_stdout, actual_stderr):
+    snapshot_path = f".snapshots/{path_to_filename(test_name)}.snap"
+    snapshot_data = {
+        "stdout": actual_stdout,
+        "stderr": actual_stderr,
+    }
 
-    try:
-        with open(meta_file_path, 'r', encoding='utf-8') as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip() # Remove leading/trailing whitespace, including newline
-                if not line or line.startswith('#'): # Skip empty lines and comments
-                    continue
+    if UPDATE_SNAPSHOTS:
+        print(f"{UPDATE} {COLOR_BLUE}Updating snapshot for {COLOR_RESET}{test_name}")
+        with open(snapshot_path, 'w', encoding='utf-8') as f:
+            json.dump(snapshot_data, f, indent=4)
+        return True
 
-                if '=' in line:
-                    key, value = line.split('=', 1) # Split only on the first '='
-                    meta_data[key.strip()] = value.strip()
-                else:
-                    print(f"{COLOR_YELLOW}Warning{COLOR_RESET}: {COLOR_YELLOW}Line {line_num} in '{meta_file_path}' is not in 'key=value' format: '{line}'")
-
-        if not meta_data and VERBOSE:
-            print(f"{COLOR_YELLOW}Info{COLOR_RESET}: Meta file '{meta_file_path}' was empty or contained no valid key-value pairs.")
-
-        if VERBOSE:
-            print(f"{COLOR_YELLOW} Successfully read meta data from '{meta_file_path}'.")
-
-        return meta_data
-
-    except PermissionError:
-        print(f"{COLOR_RED}Error{COLOR_RESET}: Permission denied to read meta file '{meta_file_path}'.")
-        return {}
-    except Exception as e:
-        print(f"{COLOR_RED}An unexpected error occurred while reading '{meta_file_path}': {e}")
-        return {}
-
-def compile_valid_with_assert(compiler_path, valid_program):
-    if VERBOSE:
-        print(f"{COLOR_YELLOW}compile_valid_with_assert {COLOR_RESET}'{valid_program}'")
+    if not os.path.exists(snapshot_path):
+        print(f"{CHECK} {COLOR_CYAN}No previous snapshot found. Creating new snapshot for {COLOR_RESET}{test_name}")
+        with open(snapshot_path, 'w', encoding='utf-8') as f:
+            json.dump(snapshot_data, f, indent=4)
+        return True
 
     try:
-        command = [compiler_path] + ["compile"] + [valid_program];
+        with open(snapshot_path, 'r', encoding='utf-8') as f:
+            expected_data = json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"{CROSS} {COLOR_RED}Error reading snapshot file '{snapshot_path}': {e}{COLOR_RESET}")
+        return False
 
-        result = subprocess.run(command, capture_output=True, text=True, check=False)
+    expected_stdout = expected_data.get("stdout", "")
+    expected_stderr = expected_data.get("stderr", "")
 
-        if VERBOSE:
-            if len(result.stdout) > 1:
-                print(f"{COLOR_YELLOW}  captured output of stdout{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stdout)}'")
-            if len(result.stderr) > 1:
-                print(f"{COLOR_RED}  captured output of stderr{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stderr)}'")
+    if actual_stdout == expected_stdout and actual_stderr == expected_stderr:
+        return True
 
-        if result.returncode != 0:
-            print(f"{SKIP} {COLOR_YELLOW}test {COLOR_RESET}{valid_program} {COLOR_GRAY}-> {COLOR_RED}compilation failed")
-            return
+    print(f"{CROSS} {COLOR_RED}Snapshot mismatch for {COLOR_RESET}{test_name}")
 
-        meta = read_meta_file(valid_program)
-        expected_return_code = meta["expected_return_code"];
-        if expected_return_code == None:
-            print(f"{SKIP} {COLOR_YELLOW}test {COLOR_RESET}{valid_program} {COLOR_GRAY}-> {COLOR_RED}no expected return code defined in metadata")
-            return
+    print_diff("stdout", expected_stdout, actual_stdout)
+    print_diff("stderr", expected_stderr, actual_stderr)
 
-        expected_return_code = int(expected_return_code)
+    if CICD:
+        return False
 
-        duck_execute_result = subprocess.run("./.dargo/duck_out", capture_output=True, text=True, check=False)
-        actual_return_code = duck_execute_result.returncode
+    while True:
+        choice = input(f"{COLOR_RED}Accept new snapshot? (y/n): {COLOR_RESET}").lower().strip()
+        if choice == 'y':
+            with open(snapshot_path, 'w', encoding='utf-8') as f:
+                json.dump(snapshot_data, f, indent=4)
+            print(f"{UPDATE} {COLOR_BLUE}Snapshot updated.{COLOR_RESET}")
+            return True
+        elif choice == 'n':
+            print(f"{CROSS} {COLOR_RED}Test failed. Fix code or update snapshot.{COLOR_RESET}")
+            return False
 
-        if actual_return_code != expected_return_code:
-            print(f"{CROSS} {COLOR_YELLOW}test {COLOR_RESET}{valid_program} {COLOR_RESET}")
-            if CICD:
-                sys.exit(-1)
-            print(f"    {COLOR_GRAY}-> {COLOR_RED} Expected return code to be {expected_return_code} but got {actual_return_code}")
+def print_diff(output_type, expected, actual):
+    if expected == actual:
+        return
+
+    print(f"\n{COLOR_GRAY}--- Mismatch in {output_type.upper()} ---{COLOR_RESET}")
+    diff = difflib.unified_diff(
+        expected.splitlines(keepends=True),
+        actual.splitlines(keepends=True),
+        fromfile='expected',
+        tofile='actual',
+    )
+    for line in diff:
+        if line.startswith('+'):
+            print(f"{COLOR_GREEN}{line}{COLOR_RESET}", end='')
+        elif line.startswith('-'):
+            print(f"{COLOR_RED}{line}{COLOR_RESET}", end='')
         else:
-            print(f"{CHECK} {COLOR_YELLOW}test {COLOR_RESET}{valid_program} {COLOR_RESET}")
-    except FileNotFoundError:
-        print(f"Error: Program not found at '{compiler_path}'")
-    except Exception as exception:
-        print(f"An unexpected error occured for file : {exception}")
-        return None
-    pass
+            print(line, end='')
+    print(f"{COLOR_GRAY}--------------------{COLOR_RESET}\n")
+
+def compile_and_run_with_assert(compiler_path, program_path):
+    if VERBOSE:
+        print(f"{COLOR_YELLOW}Running compile_and_run_with_assert for '{program_path}'{COLOR_RESET}")
+    try:
+        compile_command = [compiler_path, "compile", program_path]
+        compile_result = subprocess.run(compile_command, capture_output=True, text=True, check=False)
+
+        if compile_result.returncode != 0:
+            print(f"{SKIP} {COLOR_YELLOW}test {COLOR_RESET}{program_path} {COLOR_GRAY}-> {COLOR_RED}compilation failed{COLOR_RESET}")
+            if VERBOSE:
+                print(f"  {COLOR_RED}STDERR:\n{indent_all_lines_with_tab(compile_result.stderr)}{COLOR_RESET}")
+            return
+
+        executable_path = "./.dargo/duck_out"
+        if not os.path.exists(executable_path):
+             print(f"{CROSS} {COLOR_RED}test {COLOR_RESET}{program_path} {COLOR_GRAY}-> {COLOR_RED}compiled output not found at '{executable_path}'{COLOR_RESET}")
+             if CICD: sys.exit(1)
+             return
+
+        run_result = subprocess.run(executable_path, capture_output=True, text=True, check=False)
+        actual_stdout = run_result.stdout
+        actual_stderr = run_result.stderr
+
+        has_error = False
+
+        snapshot_passed = verify_snapshot(program_path, actual_stdout, actual_stderr)
+        if not snapshot_passed:
+            has_error = True
+
+        if not has_error:
+            print(f"{CHECK} {COLOR_GREEN}test {COLOR_RESET}{program_path}")
+        elif CICD:
+            sys.exit(1)
+
+    except Exception as e:
+        print(f"{CROSS} {COLOR_RED}An unexpected error occurred for file '{program_path}': {e}{COLOR_RESET}")
+        if CICD: sys.exit(1)
 
 def perform_tests():
     compiler_path = build_and_move_cargo_binary("dargo");
@@ -305,17 +339,12 @@ def perform_tests():
         compile_failure(compiler_path, invalid_program)
         pass
 
-    valid_program_files = find_duck_files_in_directory("./valid_programs")
-    print(f"\n{COLOR_YELLOW}Starting the evaluation of the valid test cases...")
-    for valid_program in valid_program_files:
-        compile_valid(compiler_path, valid_program)
-        pass
+    assert_program_files = find_duck_files_in_directory("./valid_programs")
+    if assert_program_files:
+        print(f"\n{COLOR_CYAN}--- Evaluating Programs with Assertions (snapshots) ---{COLOR_RESET}")
+        for program in assert_program_files:
+            compile_and_run_with_assert(compiler_path, program)
 
-    valid_program_files_with_assert = find_duck_files_in_directory("./valid_programs_with_assert")
-    print(f"\n{COLOR_YELLOW}Starting the evaluation of the valid test cases with assertions...")
-    for valid_program in valid_program_files_with_assert:
-        compile_valid_with_assert(compiler_path, valid_program)
-        pass
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -334,6 +363,13 @@ if __name__ == "__main__":
         help='Run script in cicd mode'
     )
 
+    parser.add_argument(
+        '-u', '--update',
+        action='store_true',
+        dest='update_snapshots',
+        help='Force update all snapshot files with new output.'
+    )
+
     args = parser.parse_args()
 
     VERBOSE = args.verbose
@@ -343,4 +379,9 @@ if __name__ == "__main__":
     CICD = args.cicd
     if CICD:
         print(f"{COLOR_YELLOW}Running the script in CICD Mode.{COLOR_RESET}")
+
+    UPDATE_SNAPSHOTS = args.update_snapshots
+    if UPDATE_SNAPSHOTS:
+        print(f"{COLOR_YELLOW}Running in Snapshot Update Mode. All snapshots will be overwritten.{COLOR_RESET}")
+
     perform_tests()

@@ -10,7 +10,7 @@ use std::{
     error::Error,
     fs::{self, File},
     io::Write,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, process,
 };
 
 use chumsky::{Parser, error::Rich};
@@ -171,7 +171,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cli_result = dargo::cli::run_cli();
     if let Err(err) = cli_result {
         duck_with_message("Ooops... something went wrong!!");
-        println!("{}", err.0)
+        println!("{}", err.0);
+        process::exit(1);
     }
 
     Ok(())
