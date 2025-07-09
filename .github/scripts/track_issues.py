@@ -100,22 +100,9 @@ def get_git_info():
         return None
 
 def get_git_blame_info(file_path, line_number):
-    """
-    Runs 'git blame' to find the author of a specific line.
-    Executes the command in the source repository checkout for CI/CD.
-    """
     try:
-        source_repo_path = os.environ.get("SOURCE_REPO_PATH")
-
-        if source_repo_path:
-            blame_file_path = os.path.relpath(file_path, source_repo_path)
-            cwd = source_repo_path
-        else:
-            blame_file_path = file_path
-            cwd = None
-
-        command = ["git", "blame", "-L", f"{line_number},{line_number}", "--porcelain", blame_file_path]
-        result = subprocess.run(command, capture_output=True, text=True, check=True, encoding='utf-8', cwd=cwd)
+        command = ["git", "blame", "-L", f"{line_number},{line_number}", "--porcelain", file_path]
+        result = subprocess.run(command, capture_output=True, text=True, check=True, encoding='utf-8')
 
         author, author_mail = None, None
         for line in result.stdout.splitlines():
@@ -127,7 +114,7 @@ def get_git_blame_info(file_path, line_number):
         if author and author_mail:
             return {"name": author, "email": author_mail}
 
-    except (subprocess.CalledProcessError, FileNotFoundError, TypeError):
+    except (subprocess.CalledProcessError, FileNotFoundError):
         pass
     return None
 
