@@ -10,14 +10,14 @@ fn main() {
     x.x.x = 200;
 
     go {
-        fmt.Println(x)
+        fmt.Println(x.x.Getx())
         fmt.Println(y)
     }
 
     x.x = { x: 150 };
 
     go {
-        fmt.Println(x)
+        fmt.Println(x.x.Getx())
         fmt.Println(y)
     }
 
