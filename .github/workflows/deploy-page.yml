@@ -12,38 +12,39 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout gh-pages branch
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: public
-
       - name: Checkout main branch
         uses: actions/checkout@v4
         with:
-          ref: main
-          path: source_repo
+          fetch-depth: 0
+
+      - name: Fetch historical data from gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: ./gh-pages-data
+          continue-on-error: true
+
+      - name: Prepare issue directory
+        run: |
+          mkdir -p i
+          # Kopiert die alten Daten, falls vorhanden. Das "|| true" verhindert einen Fehler, wenn der Ordner leer ist.
+          cp -r ./gh-pages-data/i/. ./i/ 2>/dev/null || true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-
       - name: Install Dependencies
-        run: pip install -r source_repo/.github/scripts/requirements.txt
+        run: pip install -r ./.github/scripts/requirements.txt
 
       - name: Generate Issue Report
-        working-directory: ./public
-        run: python ../source_repo/.github/scripts/track_issues.py
-        env:
-          SCAN_TARGET_DIR: ../source_repo/src
-          ISSUES_OUTPUT_DIR: i
-          SOURCE_BRANCH: main
-          SOURCE_PATH_PREFIX: ../source_repo
+        run: python ./.github/scripts/track_issues.py
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
+          publish_dir: ./i
+          publish_branch: gh-pages
+          force_orphan: false
           commit_message: "docs: Update issue tracker report [skip ci]"
