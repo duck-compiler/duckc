@@ -244,8 +244,20 @@ impl IrValue {
             IrValue::Char(c) => format!("ConcDuckChar {{ value: '{c}' }}"),
             IrValue::String(s) => format!("ConcDuckString {{ \"{s}\" }}"),
             IrValue::Var(v) => v.to_string(),
-            IrValue::Duck(s, fields) | IrValue::Struct(s, fields) => {
+            IrValue::Struct(s, fields) => {
                 format!(
+                    // TODO: check if this should be a reference
+                    "{s}{{{}}}",
+                    fields
+                        .iter()
+                        .map(|x| format!("{}: {}", x.0, x.1.emit_as_go()))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            IrValue::Duck(s, fields) => {
+                format!(
+                    // TODO: check if this should be a reference
                     "&{s}{{{}}}",
                     fields
                         .iter()
