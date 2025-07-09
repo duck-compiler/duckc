@@ -1,0 +1,5 @@
+fn spawn(x: fn() -> ()) {
+    go {
+        go x()
+    }
+}

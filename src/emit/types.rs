@@ -341,6 +341,12 @@ impl TypeExpr {
                     .join(","),
                 return_type
                     .clone()
+                    .filter(|x| {
+                        match &x.0 {
+                            TypeExpr::Tuple(fields) if fields.is_empty() => false,
+                            _ => true,
+                        }
+                    })
                     .map_or("".to_string(), |return_type| return_type
                         .0
                         .as_go_type_annotation(type_env))
