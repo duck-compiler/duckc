@@ -116,18 +116,6 @@ pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
 
     let copy_target = Path::new(".dargo/project/");
 
-    let std_lib_src = Path::new("/usr/local/lib/duck/std");
-    if std_lib_src.exists() {
-        println!(
-            "{}{}{} Standard library found, copying to build directory...",
-            Tag::Dargo,
-            Tag::Build,
-            Tag::Check,
-        );
-        let std_lib_dest = copy_target.join("std");
-        copy_dir_all(std_lib_src, std_lib_dest)?;
-    }
-
     copy_dir_all(Path::new("./src"), copy_target)?;
 
     let mut copy_target_clone = copy_target.to_path_buf();

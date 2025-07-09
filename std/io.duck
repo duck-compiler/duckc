@@ -1,9 +1,0 @@
-use go "fmt";
-
-module io {
-    fn println(str: String) {
-        go {
-            fmt.Println(str.as_dgo_string());
-        }
-    }
-}
