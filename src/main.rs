@@ -128,7 +128,9 @@ fn parse_src_file(
         std::process::exit(0);
     }
 
-    let file_text = std::fs::read_to_string(DUCK_STD_PATH.to_path_buf()).unwrap().leak();
+    let file_text = std::fs::read_to_string(DUCK_STD_PATH.to_path_buf())
+        .unwrap()
+        .leak();
     let lex = lex("std.duck", file_text);
     let std_src_file = source_file_parser(
         {

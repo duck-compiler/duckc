@@ -23,8 +23,8 @@ pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
     // this is to ensure that the dargo dot dir exists
     _ = DARGO_DOT_DIR.clone();
 
-    let dargo_config = load_dargo_config(None)
-        .map_err(|err| (err.0, BuildErrKind::CargoConfigLoad(err.1)))?;
+    let dargo_config =
+        load_dargo_config(None).map_err(|err| (err.0, BuildErrKind::CargoConfigLoad(err.1)))?;
 
     if let Some(dependencies) = dargo_config.dependencies {
         for (git_uri, _) in dependencies.iter() {
@@ -120,18 +120,17 @@ pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
 
     let mut copy_target_clone = copy_target.to_path_buf();
     copy_target_clone.push("main.duck");
-    compile::compile(copy_target_clone, None)
-        .map_err(|err| {
-            (
-                format!(
-                    "{}{} couldn't compile the code\n{}",
-                    Tag::Build,
-                    Tag::Err,
-                    err.0,
-                ),
-                BuildErrKind::Compile(err.1),
-            )
-        })?;
+    compile::compile(copy_target_clone, None).map_err(|err| {
+        (
+            format!(
+                "{}{} couldn't compile the code\n{}",
+                Tag::Build,
+                Tag::Err,
+                err.0,
+            ),
+            BuildErrKind::Compile(err.1),
+        )
+    })?;
 
     Ok(())
 }

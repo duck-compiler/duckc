@@ -50,8 +50,8 @@ pub fn build(
                 Tag::Go,
                 Tag::Err,
             ),
-            GoCliErrKind::CompileFailed
-        ))
+            GoCliErrKind::CompileFailed,
+        ));
     }
 
     Ok(())
