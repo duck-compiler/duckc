@@ -941,6 +941,11 @@ impl TypeExpr {
             || matches!(*self, TypeExpr::IntLiteral(..));
     }
 
+    pub fn is_bool(&self) -> bool {
+        return *self == TypeExpr::Bool
+            || matches!(*self, TypeExpr::BoolLiteral(..));
+    }
+
     pub fn is_string(&self) -> bool {
         return *self == TypeExpr::String || matches!(*self, TypeExpr::StringLiteral(..));
     }
@@ -1107,6 +1112,10 @@ fn types_are_compatible(one: &TypeExpr, two: &TypeExpr, _type_env: &mut TypeEnv)
         return true;
     }
 
+    if one.is_bool() && two.is_bool() {
+        return true;
+    }
+
     if one.is_number() && two.is_number() {
         return true;
     }
@@ -1219,6 +1228,35 @@ fn check_type_compatability(
         if first_coerce || two_coerce {
             return;
         }
+    }
+
+    if one.0.is_bool() && !two.0.is_bool() {
+        failure(
+            one.1.context.file_name,
+            "Incompatible Types".to_string(),
+            (
+                format!(
+                    "This expression is of type {}, which is a bool.",
+                    one.0.as_clean_user_faced_type_name()
+                ),
+                one.1,
+            ),
+            vec![
+                (
+                    "because of this, the second operand also needs to be of type bool."
+                        .to_string(),
+                    two.1,
+                ),
+                (
+                    format!(
+                        "but it is of type {}.",
+                        two.0.as_clean_user_faced_type_name()
+                    ),
+                    two.1,
+                ),
+            ],
+            one.1.context.file_contents,
+        )
     }
 
     if one.0.is_string() && !two.0.is_string() {
