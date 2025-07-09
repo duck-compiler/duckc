@@ -1,0 +1,12 @@
+use std;
+
+fn bool_or_str() -> String | Bool {
+    return true;
+}
+
+fn main() {
+    match (bool_or_str()) {
+        String s -> std::io::println(f"is a string"),
+        Bool b -> std::io::println(f"is a bool"),
+    }
+}
