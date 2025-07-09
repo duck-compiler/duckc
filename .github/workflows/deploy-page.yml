@@ -12,38 +12,36 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout main branch
+      - name: setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: checkout main branch
         uses: actions/checkout@v4
         with:
           path: ./main-branch
 
-      - name: Fetch historical data from gh-pages
+      - name: fetch gh-pages branch for the historical data
         uses: actions/checkout@v4
         with:
           ref: gh-pages
           path: ./gh-pages
           continue-on-error: true
 
-      - name: Prepare directory
+      - name: generate new state and prepare for deploy
         run: |
-            # cp main-branch/.github/scripts/track_issues.py .
-            # cp main-branch/.github/scripts/requirements.txt .
-            cp -r main-branch/src .
+            # copy the state from gh-pages branch into the main-branch checkout
             mkdir -p ./main-branch/.github/scripts/.issues/state
             cp -r gh-pages/state ./main-branch/.github/scripts/.issues/state &2>/dev/null || true
+
             cd main-branch/.github/scripts/
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      - name: Install Dependencies
-        run: pip install -r requirements.txt
-
-      - name: Generate Issue Report
-        run: |
+            pip install -r requirements.txt
             python track_issues.py
+
             popd
+
             cp -r ./main-branch/.github/scripts/.issues/ ./issues
 
       - name: Deploy to GitHub Pages

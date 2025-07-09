@@ -6,7 +6,7 @@ import subprocess
 import requests
 from datetime import datetime
 
-TARGET_DIRECTORY = os.environ.get("SCAN_TARGET_DIR", "./src")
+TARGET_DIRECTORY = os.environ.get("SCAN_TARGET_DIR", "../../src")
 STATE_DIR = "./.issues/state"
 ISSUES_DIR = "./.issues"
 FILE_EXTENSIONS = (".rs",)
