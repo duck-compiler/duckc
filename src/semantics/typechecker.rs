@@ -528,6 +528,30 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 }
 
 impl TypeExpr {
+    pub fn as_clean_user_faced_type_name(&self) -> String {
+        match self {
+            TypeExpr::Any => "Any".to_string(),
+            TypeExpr::InlineGo => "inline-go".to_string(),
+            TypeExpr::Struct(_) => "struct {{ todo }}".to_string(),
+            TypeExpr::Go(str) => format!("go({str})"),
+            TypeExpr::Duck(duck) => format!("duck {{ todo }}"),
+            TypeExpr::Tuple(items) => format!("tuple(todo)"),
+            TypeExpr::TypeName(_, str) => format!("type {str}"),
+            TypeExpr::TypeNameInternal(str) => format!("internal {str}"),
+            TypeExpr::StringLiteral(str) => format!("\"{str}\""),
+            TypeExpr::IntLiteral(int) => format!("{int}"),
+            TypeExpr::BoolLiteral(bool) => format!("{bool}"),
+            TypeExpr::String => "String".to_string(),
+            TypeExpr::Int => "Int".to_string(),
+            TypeExpr::Bool => "Bool".to_string(),
+            TypeExpr::Char => "Char".to_string(),
+            TypeExpr::Float => "Float".to_string(),
+            TypeExpr::Or(items) => "todo | todo".to_string(),
+            TypeExpr::Fun(items, _) => "fn (todo) -> todo".to_string(),
+            TypeExpr::Array(_) => "todo[]".to_string(),
+        }
+    }
+
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
             ValueExpr::FormattedString(contents) => {
@@ -1126,14 +1150,14 @@ fn is_subset_of_variant_type(
                         (
                             format!(
                                 "The type `{}` is not compatible with the target variant.",
-                                other_member.0.as_go_type_annotation(type_env)
+                                other_member.0.as_clean_user_faced_type_name()
                             ),
                             other_member.1,
                         ),
                         vec![(
                             format!(
                                 "The target variant only allows the following types: `{}`.",
-                                variant_type.0.as_go_type_annotation(type_env)
+                                variant_type.0.as_clean_user_faced_type_name()
                             ),
                             variant_type.1,
                         )],
@@ -1151,14 +1175,14 @@ fn is_subset_of_variant_type(
                     (
                         format!(
                             "This expression is of type `{}`.",
-                            other.0.as_go_type_annotation(type_env)
+                            other.0.as_clean_user_faced_type_name()
                         ),
                         other.1,
                     ),
                     vec![(
                         format!(
                             "But it needs to be compatible with one of the types in the variant: `{}`.",
-                            variant_type.0.as_go_type_annotation(type_env)
+                            variant_type.0.as_clean_user_faced_type_name()
                         ),
                         variant_type.1,
                     )],
@@ -1204,7 +1228,7 @@ fn check_type_compatability(
             (
                 format!(
                     "This expression is of type {}, which is a string.",
-                    one.0.as_go_type_annotation(type_env)
+                    one.0.as_clean_user_faced_type_name()
                 ),
                 one.1,
             ),
@@ -1217,7 +1241,7 @@ fn check_type_compatability(
                 (
                     format!(
                         "but it is of type {}.",
-                        two.0.as_go_type_annotation(type_env)
+                        two.0.as_clean_user_faced_type_name()
                     ),
                     two.1,
                 ),
@@ -1234,7 +1258,7 @@ fn check_type_compatability(
                 (
                     format!(
                         "This expression is of type {}, which is a number.",
-                        one.0.as_go_type_annotation(type_env)
+                        one.0.as_clean_user_faced_type_name()
                     ),
                     one.1,
                 ),
@@ -1247,7 +1271,7 @@ fn check_type_compatability(
                     (
                         format!(
                             "but it is of type {}.",
-                            two.0.as_go_type_annotation(type_env)
+                            two.0.as_clean_user_faced_type_name()
                         ),
                         two.1,
                     ),
@@ -1276,12 +1300,12 @@ fn check_type_compatability(
             one.1.context.file_name,
             "Incompatible Types".to_string(),
             (
-                format!("this is of type {}", one.0.as_go_type_annotation(type_env)),
+                format!("this is of type {}", one.0.as_clean_user_faced_type_name()),
                 one.1,
             ),
             vec![
                 (
-                    format!("this is of type {}", two.0.as_go_type_annotation(type_env)),
+                    format!("this is of type {}", two.0.as_clean_user_faced_type_name()),
                     two.1,
                 ),
                 (
