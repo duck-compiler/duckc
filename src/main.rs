@@ -24,9 +24,6 @@ use parse::{
 use semantics::typechecker::{self, TypeEnv};
 use tags::Tag;
 
-// todo(@Mvmo): This should work
-// this is the description
-
 use crate::parse::{
     Context, SS,
     function_parser::LambdaFunctionExpr,
