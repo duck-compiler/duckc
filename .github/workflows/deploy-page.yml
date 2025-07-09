@@ -29,7 +29,6 @@ jobs:
             cp main-branch/.github/scripts/track_issues.py .
             cp main-branch/.github/scripts/requirements.txt .
             cp -r main-branch/src .
-            cp state
             mkdir ./.issues/
             cp -r gh-pages/state ./.issues/state
 
