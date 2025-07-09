@@ -20,6 +20,10 @@ impl MangleEnv {
         self.is_top_level_ident(x) && self.imports.contains_key(x)
     }
 
+    pub fn is_imported_type(&self, x: &String) -> bool {
+        self.is_top_level_type(x) && self.imports.contains_key(x)
+    }
+
     pub fn local_defined(&self, n: &String) -> bool {
         self.names.last().filter(|x| x.contains(n)).is_some()
     }
@@ -36,6 +40,34 @@ impl MangleEnv {
         }
 
         result
+    }
+
+    pub fn mangle_type(&self, is_global: bool, prefix: &str, ident: &String) -> Option<String> {
+        let prefix = if is_global { "" } else { prefix };
+        let starts_with_mangle = ident.split("_").collect::<Vec<_>>();
+
+        if starts_with_mangle.len() > 1
+            && let Some((is_glob, import_path)) =
+                self.resolve_import(starts_with_mangle[0].to_owned())
+        {
+            return Some(format!(
+                "{}{import_path}{ident}",
+                if is_glob { "" } else { prefix }
+            ));
+        }
+
+        if let Some((is_glob, import_path)) = self.resolve_import(ident.to_owned()) {
+            return Some(format!(
+                "{}{import_path}{ident}",
+                if is_glob { "" } else { prefix }
+            ));
+        }
+
+        if self.is_top_level_type(ident) {
+            return Some(format!("{prefix}{ident}"));
+        }
+
+        None
     }
 
     pub fn mangle_ident(&self, is_global: bool, prefix: &str, ident: &String) -> Option<String> {
@@ -134,8 +166,8 @@ impl MangleEnv {
 pub fn mangle_type_expression(type_expr: &mut TypeExpr, prefix: &str, mangle_env: &mut MangleEnv) {
     match type_expr {
         TypeExpr::TypeName(is_global, name) => {
-            if !*is_global && mangle_env.is_top_level_type(name) {
-                *name = format!("{prefix}{name}")
+            if let Some(mangled) = mangle_env.mangle_type(*is_global, prefix, name) {
+                *name = mangled;
             }
         }
         TypeExpr::Struct(Struct { fields }) => {
@@ -230,6 +262,10 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
                 out: &mut Vec<(tree_sitter::Range, String)>,
             ) {
                 fn extract_all_ident(t: &[u8], n: &Node) -> Vec<(tree_sitter::Range, String)> {
+                    if n.grammar_name() == "selector_expression" {
+                        return vec![(n.range(), n.utf8_text(t).unwrap().to_string())];
+                    }
+
                     if n.grammar_name() == "identifier" {
                         return vec![(n.range(), n.utf8_text(t).unwrap().to_string())];
                     }
@@ -264,6 +300,7 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
                     out.extend(i);
                 }
 
+                // TODO: respect additional identifer scopes like blocks and lambdas
                 if let Some(i) = declared_var_ident {
                     e.insert_ident(i);
                 }

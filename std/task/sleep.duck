@@ -1,11 +1,13 @@
 use go "time";
 
-fn sleep(d: ::time::Duration) {
+use std::time::{Duration, Millis, Seconds, Minutes, Hours, Days};
+
+fn sleep(d: Duration) {
     match (d) {
-        ::time::Millis millis -> go { time.Sleep(time.Duration(millis.Getmillis().as_dgo_int()) * time.Millisecond) },
-        { seconds: Int } seconds -> go { time.Sleep(time.Duration(seconds.Getseconds().as_dgo_int()) * time.Second) },
-        { minutes: Int } minutes -> go { time.Sleep(time.Duration(minutes.Getminutes().as_dgo_int()) * time.Minute) },
-        { hours: Int } hours -> go { time.Sleep(time.Duration(hours.Gethours().as_dgo_int()) * time.Hour) },
-        { days: Int } days -> go { time.Sleep(time.Duration(days.Getdays().as_dgo_int()) * 24 * time.Hour) },
+        Millis millis -> go { time.Sleep(time.Duration(millis.Getmillis().as_dgo_int()) * time.Millisecond) },
+        Seconds seconds -> go { time.Sleep(time.Duration(seconds.Getseconds().as_dgo_int()) * time.Second) },
+        Minutes minutes -> go { time.Sleep(time.Duration(minutes.Getminutes().as_dgo_int()) * time.Minute) },
+        Hours hours -> go { time.Sleep(time.Duration(hours.Gethours().as_dgo_int()) * time.Hour) },
+        Days days -> go { time.Sleep(time.Duration(days.Getdays().as_dgo_int()) * 24 * time.Hour) },
     }
 }
