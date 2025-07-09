@@ -1,0 +1,49 @@
+name: Update and Deploy Issue Tracker
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  update-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: public
+
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: source_repo
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: pip install -r source_repo/requirements.txt
+
+      - name: Generate Issue Report
+        working-directory: ./public
+        run: python ../source_repo/.github/scripts/track_issues.py
+        env:
+          SCAN_TARGET_DIR: ../source_repo/src
+          ISSUES_OUTPUT_DIR: i
+          SOURCE_BRANCH: main
+          SOURCE_PATH_PREFIX: ../source_repo
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          commit_message: "docs: Update issue tracker report [skip ci]"
