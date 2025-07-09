@@ -237,7 +237,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                         variant_seal_fn_name.clone(),
                         Some((
                             "self".to_string(),
-                            primitive_conc_type_name(&variant.0).to_string(),
+                            variant.0.as_clean_go_type_name(type_env),
                         )),
                         vec![],
                         None,
@@ -356,8 +356,10 @@ impl TypeExpr {
                 let mut fields = duck.fields.clone();
                 fields.sort_by_key(|field| field.name.clone());
 
+                let clean_name = self.as_clean_go_type_name(type_env);
+
                 format!(
-                    "interface {{\n{}\n}}",
+                    "interface {{\n{}\n{}\n}}",
                     fields
                         .iter()
                         .map(|field| format!(
@@ -366,6 +368,12 @@ impl TypeExpr {
                             field.type_expr.0.as_go_type_annotation(type_env)
                         ))
                         .collect::<Vec<_>>()
+                        .join("\n"),
+                    type_env
+                        .used_in_seals
+                        .get(&clean_name)
+                        .cloned()
+                        .unwrap_or(Vec::new())
                         .join("\n")
                 )
             }

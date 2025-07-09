@@ -12,10 +12,16 @@ pub struct TypeDefinition {
     pub type_expression: Spanned<TypeExpr>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Field {
     pub name: String,
     pub type_expr: Spanned<TypeExpr>,
+}
+
+impl PartialEq for Field {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
 }
 
 impl Field {

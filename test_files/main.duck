@@ -1,5 +1,9 @@
 use go "fmt";
 
+use std::io::{println};
+use std::task::{sleep};
+use std::time::{Duration};
+
 fn abc(x: Int) {
     go {
         fmt.Println(x)
@@ -14,6 +18,11 @@ fn xyz(x: { x: Int }) {
 }
 
 fn main() {
+    "before sleep"->println();
+    let dura: std::time::Duration = { seconds: 1 };
+    sleep(dura);
+    "after sleep"->println();
+
     let x: struct { y: Int } = .{ y: 10 };
     let y: { x: { x: Int } } = { x: { x: 20 } };
     abc(y.x.x);

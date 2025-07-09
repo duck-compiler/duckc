@@ -5,11 +5,12 @@ use crate::parse::{
     function_parser::{FunctionDefintion, LambdaFunctionExpr},
     source_file_parser::SourceFile,
     type_parser::{Duck, Field, Struct, TypeExpr},
-    value_parser::{ValFmtStringContents, ValueExpr, empty_range},
+    value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr, empty_range},
 };
 
 #[derive(Debug, Clone)]
 pub struct TypeEnv {
+    pub used_in_seals: HashMap<String, Vec<String>>,
     pub identifier_types: Vec<HashMap<String, TypeExpr>>,
     pub type_aliases: Vec<HashMap<String, TypeExpr>>,
     pub all_types: Vec<TypeExpr>,
@@ -17,17 +18,9 @@ pub struct TypeEnv {
 
 impl Default for TypeEnv {
     fn default() -> Self {
-        let mut identifier_type_map = HashMap::<String, TypeExpr>::new();
-
-        identifier_type_map.insert(
-            "println".to_string(),
-            TypeExpr::Fun(vec![(None, TypeExpr::Any.into_empty_span())], None),
-        );
-
-        let identifier_types = vec![identifier_type_map];
-
         Self {
-            identifier_types,
+            used_in_seals: HashMap::new(),
+            identifier_types: vec![HashMap::new()],
             type_aliases: vec![HashMap::new()],
             all_types: vec![],
         }
@@ -123,7 +116,7 @@ impl TypeEnv {
             .insert(alias, type_expr);
     }
 
-    pub fn resolve_type_alias(&mut self, alias: &String) -> TypeExpr {
+    pub fn resolve_type_alias(&self, alias: &String) -> TypeExpr {
         let type_aliases = self
             .type_aliases
             .last()
@@ -131,10 +124,20 @@ impl TypeEnv {
 
         println!("Try to resolve type alias {alias}");
 
-        type_aliases
+        let mut res = type_aliases
             .get(alias)
             .unwrap_or_else(|| panic!("Couldn't resolve type alias {alias}"))
-            .clone()
+            .clone();
+
+        if let TypeExpr::Or(types) = &mut res {
+            for ty in types {
+                if let TypeExpr::TypeName(_, name) = &ty.0 {
+                    ty.0 = self.resolve_type_alias(name);
+                }
+            }
+        }
+
+        res
     }
 
     fn flatten_types(
@@ -234,6 +237,7 @@ impl TypeEnv {
         all_types.iter_mut().for_each(|type_expr| {
             to_push.append(&mut self.flatten_types(type_expr, &mut param_names_used));
         });
+        dbg!(&all_types, &to_push);
 
         all_types.append(&mut to_push);
         all_types.sort_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
@@ -248,8 +252,237 @@ impl TypeEnv {
     }
 }
 
+fn sort_fields_value_expr(expr: &mut ValueExpr) {
+    match expr {
+        ValueExpr::Array(ty, exprs) => {
+            if let Some(ty) = ty {
+                sort_fields_type_expr(&mut ty.0);
+            }
+            for expr in exprs {
+                sort_fields_value_expr(&mut expr.0);
+            }
+        }
+        ValueExpr::VarDecl(d) => {
+            let Declaration {
+                name: _,
+                type_expr,
+                initializer,
+            } = &mut d.0;
+            sort_fields_type_expr(&mut type_expr.0);
+            if let Some(e) = initializer {
+                sort_fields_value_expr(&mut e.0);
+            }
+        }
+        ValueExpr::Lambda(l) => {
+            let LambdaFunctionExpr {
+                params,
+                return_type,
+                value_expr,
+            } = &mut **l;
+            if let Some(return_type) = return_type {
+                sort_fields_type_expr(&mut return_type.0);
+            }
+            for (_, p) in params {
+                sort_fields_type_expr(&mut p.0);
+            }
+            sort_fields_value_expr(&mut value_expr.0);
+        }
+        ValueExpr::Add(l, r) | ValueExpr::Mul(l, r) | ValueExpr::Equals(l, r) => {
+            sort_fields_value_expr(&mut l.0);
+            sort_fields_value_expr(&mut r.0);
+        }
+        ValueExpr::ArrayAccess(target, idx) => {
+            sort_fields_value_expr(&mut target.0);
+            sort_fields_value_expr(&mut idx.0);
+        }
+        ValueExpr::Block(exprs) => {
+            for expr in exprs {
+                sort_fields_value_expr(&mut expr.0);
+            }
+        }
+        ValueExpr::BoolNegate(e) => sort_fields_value_expr(&mut e.0),
+        ValueExpr::Duck(init) => {
+            for i in init {
+                sort_fields_value_expr(&mut i.1.0);
+            }
+        }
+        ValueExpr::FieldAccess {
+            target_obj,
+            field_name: _,
+        } => {
+            sort_fields_value_expr(&mut target_obj.0);
+        }
+        ValueExpr::FormattedString(content) => {
+            for c in content {
+                if let ValFmtStringContents::Expr(e) = c {
+                    sort_fields_value_expr(&mut e.0);
+                }
+            }
+        }
+        ValueExpr::FunctionCall { target, params } => {
+            sort_fields_value_expr(&mut target.0);
+            for p in params {
+                sort_fields_value_expr(&mut p.0);
+            }
+        }
+        ValueExpr::If {
+            condition,
+            then,
+            r#else,
+        } => {
+            sort_fields_value_expr(&mut condition.0);
+            sort_fields_value_expr(&mut then.0);
+            if let Some(r#else) = r#else {
+                sort_fields_value_expr(&mut r#else.0);
+            }
+        }
+        ValueExpr::Match { value_expr, arms } => {
+            sort_fields_value_expr(&mut value_expr.0);
+            for arm in arms {
+                sort_fields_type_expr(&mut arm.type_case.0);
+                sort_fields_value_expr(&mut arm.value_expr.0);
+            }
+        }
+        ValueExpr::Return(r) => {
+            if let Some(r) = r {
+                sort_fields_value_expr(&mut r.0);
+            }
+        }
+        ValueExpr::Struct(fields) => {
+            for field in fields {
+                sort_fields_value_expr(&mut field.1.0);
+            }
+        }
+        ValueExpr::Tuple(fields) => {
+            for field in fields {
+                sort_fields_value_expr(&mut field.0);
+            }
+        }
+        ValueExpr::VarAssign(a) => {
+            let Assignment { target, value_expr } = &mut a.0;
+            sort_fields_value_expr(&mut target.0);
+            sort_fields_value_expr(&mut value_expr.0);
+        }
+        ValueExpr::While { condition, body } => {
+            sort_fields_value_expr(&mut condition.0);
+            sort_fields_value_expr(&mut body.0);
+        }
+        ValueExpr::Break
+        | ValueExpr::InlineGo(..)
+        | ValueExpr::Int(..)
+        | ValueExpr::Variable(..)
+        | ValueExpr::Continue
+        | ValueExpr::String(..)
+        | ValueExpr::Char(..)
+        | ValueExpr::Float(..)
+        | ValueExpr::Bool(..) => {}
+    }
+}
+
+fn sort_fields_type_expr(expr: &mut TypeExpr) {
+    match expr {
+        TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
+            fields.sort_by_key(|x| x.name.clone());
+            for field in fields {
+                sort_fields_type_expr(&mut field.type_expr.0);
+            }
+        }
+        TypeExpr::Array(d) => sort_fields_type_expr(&mut d.0),
+        TypeExpr::Fun(params, r) => {
+            if let Some(r) = r {
+                sort_fields_type_expr(&mut r.0);
+            }
+            params
+                .iter_mut()
+                .for_each(|(_, x)| sort_fields_type_expr(&mut x.0));
+        }
+        TypeExpr::Or(exprs) => {
+            for expr in exprs {
+                sort_fields_type_expr(&mut expr.0);
+            }
+        }
+        TypeExpr::Tuple(fields) => {
+            for field in fields {
+                sort_fields_type_expr(&mut field.0);
+            }
+        }
+        TypeExpr::Any
+        | TypeExpr::Bool
+        | TypeExpr::BoolLiteral(_)
+        | TypeExpr::Char
+        | TypeExpr::Float
+        | TypeExpr::Go(_)
+        | TypeExpr::InlineGo
+        | TypeExpr::Int
+        | TypeExpr::IntLiteral(_)
+        | TypeExpr::String
+        | TypeExpr::StringLiteral(_)
+        | TypeExpr::TypeName(..)
+        | TypeExpr::TypeNameInternal(..) => {}
+    }
+}
+
+fn resolve_all_aliases(expr: &mut TypeExpr, env: &TypeEnv) {
+    match expr {
+        TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
+            fields.sort_by_key(|x| x.name.clone());
+            for field in fields {
+                resolve_all_aliases(&mut field.type_expr.0, env);
+            }
+        }
+        TypeExpr::Array(d) => resolve_all_aliases(&mut d.0, env),
+        TypeExpr::Fun(params, r) => {
+            if let Some(r) = r {
+                resolve_all_aliases(&mut r.0, env);
+            }
+            params
+                .iter_mut()
+                .for_each(|(_, x)| resolve_all_aliases(&mut x.0, env));
+        }
+        TypeExpr::Or(exprs) => {
+            for expr in exprs {
+                resolve_all_aliases(&mut expr.0, env);
+            }
+        }
+        TypeExpr::Tuple(fields) => {
+            for field in fields {
+                resolve_all_aliases(&mut field.0, env);
+            }
+        }
+        TypeExpr::TypeName(_, name) => {
+            *expr = env.resolve_type_alias(name);
+        }
+        TypeExpr::Any
+        | TypeExpr::Bool
+        | TypeExpr::BoolLiteral(_)
+        | TypeExpr::Char
+        | TypeExpr::Float
+        | TypeExpr::Go(_)
+        | TypeExpr::InlineGo
+        | TypeExpr::Int
+        | TypeExpr::IntLiteral(_)
+        | TypeExpr::String
+        | TypeExpr::StringLiteral(_)
+        | TypeExpr::TypeNameInternal(..) => {}
+    }
+}
+
 pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut TypeEnv) {
     type_env.push_type_aliases();
+
+    source_file
+        .type_definitions
+        .iter_mut()
+        .for_each(|type_definition| {
+            sort_fields_type_expr(&mut type_definition.type_expression.0);
+        });
+
+    source_file
+        .function_definitions
+        .iter_mut()
+        .for_each(|function_definition| {
+            sort_fields_value_expr(&mut function_definition.value_expr.0);
+        });
 
     source_file
         .type_definitions
@@ -262,19 +495,60 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         });
 
     source_file
+        .type_definitions
+        .iter_mut()
+        .for_each(|type_definition| {
+            resolve_all_aliases(&mut type_definition.type_expression.0, type_env);
+        });
+
+    dbg!(&source_file.type_definitions);
+
+    source_file
+        .type_definitions
+        .iter_mut()
+        .for_each(|type_definition| {
+            dbg!(&type_definition);
+            let name = type_definition
+                .type_expression
+                .0
+                .as_clean_go_type_name(type_env);
+            if let TypeExpr::Or(exprs) = &mut type_definition.type_expression.0 {
+                dbg!(&name, &exprs);
+                for (expr, _) in exprs {
+                    if let TypeExpr::Duck(..) = expr {
+                        let ty_name = expr.as_clean_go_type_name(type_env);
+                        if let Some(used_in) = type_env.used_in_seals.get_mut(&ty_name) {
+                            if !used_in.contains(&name) {
+                                used_in.push(name.clone());
+                            }
+                        } else {
+                            type_env.used_in_seals.insert(ty_name, vec![name.clone()]);
+                        }
+                    }
+                }
+            }
+        });
+
+    dbg!(&type_env.used_in_seals);
+
+    source_file
         .function_definitions
         .iter_mut()
         .for_each(|function_definition| {
+            for p in function_definition.params.as_mut().unwrap() {
+                if let TypeExpr::TypeName(_, x) = &p.1.0 {
+                    p.1.0 = dbg!(type_env.resolve_type_alias(x));
+                }
+                dbg!(&p);
+            }
+
             let fn_type_expr = TypeExpr::Fun(
                 function_definition
                     .params
                     .as_ref()
                     .unwrap_or(&Vec::new())
                     .iter()
-                    .map(|(identifier, type_expr)| {
-                        type_env.insert_identifier_type(identifier.clone(), type_expr.0.clone());
-                        (Some(identifier.clone()), type_expr.clone())
-                    })
+                    .map(|(identifier, type_expr)| (Some(identifier.clone()), type_expr.clone()))
                     .collect::<Vec<_>>(),
                 function_definition
                     .return_type
@@ -286,6 +560,47 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                         ))
                     }),
             );
+
+            type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
+        });
+
+    source_file
+        .function_definitions
+        .iter_mut()
+        .for_each(|function_definition| {
+            // if let Some((return_type, _)) = &mut function_definition.return_type {
+            //     *return_type = type_env.insert_type(return_type.clone());
+            //     if let Some((ref mut a @ TypeExpr::TypeName(_, x), _)) = &mut function_definition.return_type {
+            //          *a = type_env.resolve_type_alias(x);
+            //     }
+            // }
+
+            for p in function_definition.params.as_mut().unwrap() {
+                if let TypeExpr::TypeName(_, x) = &p.1.0 {
+                    p.1.0 = dbg!(type_env.resolve_type_alias(x));
+                }
+                dbg!(&p);
+            }
+
+            let fn_type_expr = TypeExpr::Fun(
+                function_definition
+                    .params
+                    .as_ref()
+                    .unwrap_or(&Vec::new())
+                    .iter()
+                    .map(|(identifier, type_expr)| (Some(identifier.clone()), type_expr.clone()))
+                    .collect::<Vec<_>>(),
+                function_definition
+                    .return_type
+                    .as_ref()
+                    .map(|spanned_type_expr| {
+                        Box::new((
+                            type_env.insert_type(spanned_type_expr.0.clone()),
+                            spanned_type_expr.1,
+                        ))
+                    }),
+            );
+
             type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
         });
 
@@ -352,6 +667,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         }
 
         type_env.push_identifier_types();
+        for p in function_definition.params.as_mut().unwrap() {
+            type_env.insert_identifier_type(p.0.clone(), p.1.0.clone());
+        }
+
         typeresolve_value_expr(&mut function_definition.value_expr.0, type_env);
         type_env.pop_identifier_types();
     }

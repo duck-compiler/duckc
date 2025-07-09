@@ -162,6 +162,14 @@ pub fn mangle_type_expression(type_expr: &mut TypeExpr, prefix: &str, mangle_env
                 mangle_type_expression(&mut return_type.0, prefix, mangle_env);
             }
         }
+        TypeExpr::Or(s) => {
+            for t in s {
+                mangle_type_expression(&mut t.0, prefix, mangle_env);
+            }
+        }
+        TypeExpr::Array(t) => {
+            mangle_type_expression(&mut t.0, prefix, mangle_env);
+        }
         _ => {}
     }
 }
