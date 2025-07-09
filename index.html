@@ -1,0 +1,547 @@
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>🦆 Duck Issue Tracker</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; background-color: #f8f9fa; color: #212529; margin: 0; padding: 2rem; }
+            .container { max-width: 1600px; margin: auto; }
+            .page-grid { display: grid; grid-template-columns: 3fr 1fr; gap: 2rem; }
+            .main-content { background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+            .activity-log-container { background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); height: fit-content; max-height: 90vh; overflow-y: auto; }
+            h1, h2 { color: #343a40; border-bottom: 2px solid #dee2e6; padding-bottom: 0.5rem; }
+            .tab-buttons { border-bottom: 2px solid #dee2e6; margin-bottom: 1.5rem; }
+            .tab-button { background: none; border: none; padding: 1rem 1.5rem; font-size: 1rem; cursor: pointer; }
+            .tab-button.active { border-bottom: 3px solid #007bff; font-weight: bold; color: #007bff; }
+            .tab-content { display: none; }
+            .tab-content.active { display: block; }
+            .issue-table { width: 100%; border-collapse: collapse; }
+            .issue-summary td { padding: 0.8rem 1rem; vertical-align: middle; }
+            .issue-summary { cursor: pointer; border-bottom: 1px solid #dee2e6; }
+            .issue-summary:hover { background-color: #f1f3f5; }
+            .issue-details { display: none; }
+            .issue-details-content { background-color: #f8f9fa; padding: 1.5rem; }
+            .tag { padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.85rem; margin-right: 5px; background-color: #6c757d; color: white; }
+            .title { font-weight: 500; }
+            .description-pre, .code-line { white-space: pre-wrap; word-wrap: break-word; font-family: "SF Mono", "Fira Code", "Consolas", monospace; margin-top: 0.5rem; padding: 1rem; border-radius: 4px; }
+            .description-pre { background: #e9ecef; }
+            .code-line { background: #fffbdd; border: 1px solid #ffeeba; }
+            .code-header { margin-top: 1rem; margin-bottom: 0.5rem; color: #495057; }
+            .footer { margin-top: 2rem; text-align: center; color: #6c757d; font-size: 0.9rem; }
+            .avatar, .avatar-small { border-radius: 50%; vertical-align: middle; }
+            .avatar { width: 32px; height: 32px; }
+            .avatar-small { width: 24px; height: 24px; }
+            .avatar-stack { display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
+            .arrow { font-size: 1.2rem; color: #6c757d; }
+            .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+            .details-box h3 { margin-top: 0; color: #495057; border-bottom: 1px solid #dee2e6; padding-bottom: 0.5rem; }
+            .author-block { display: flex; align-items: center; gap: 10px; }
+            .file-path { font-family: "SF Mono", "Fira Code", "Consolas", monospace; }
+            a { color: #007bff; text-decoration: none; }
+            a:hover { text-decoration: underline; }
+            .activity-item { display: flex; gap: 1rem; padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid #e9ecef; align-items: flex-start; }
+            .activity-item:last-child { border-bottom: none; }
+            .activity-icon { font-size: 1.2rem; margin-top: 2px; }
+            .activity-details strong { font-weight: 600; }
+            .activity-details em { color: #495057; }
+            .activity-time { font-size: 0.8rem; color: #6c757d; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🦆 Duck Issue Tracker</h1>
+            <div class="page-grid">
+                <div class="main-content">
+                    <p>Generated on: 2025-07-09 23:15:12</p>
+                    <p>Generated on branch: <strong>main</strong></p>
+                    <div class="tab-buttons">
+                        <button class="tab-button active" onclick="openTab(event, 'open')">Open (13)</button>
+                        <button class="tab-button" onclick="openTab(event, 'closed')">Closed (0)</button>
+                    </div>
+                    <div id="open" class="tab-content active">
+                        <table class="issue-table"><tbody>
+            <tr class="issue-summary" onclick="toggleDetails(this)">
+                <td width="200">
+                    <span class="tag">todo</span>
+                    <span class="tag module-tag" style="background-color:#6f42c1; color:#ffffff;">dargo</span>
+                </td>
+                <td class="title">windows :(</td>
+                <td width="120" align="right">
+                    <div class="avatar-stack"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a></div>
+                </td>
+            </tr>
+        
+            <tr class="issue-details"><td colspan="3">
+                <div class="issue-details-content"><div class="details-grid">
+                    <div class="details-box">
+                        <h3>Details</h3>
+                        <strong>Author:</strong> <div class="author-block"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span>Maurice Schmidt</span></div><br>
+                        <strong>File:</strong> <span class="file-path">src/dargo/build.rs</span><br>
+                        <strong>Location:</strong> <a href="https://github.com/duck-compiler/duckc/blob/main/src/dargo/build.rs#L107" target="_blank">View on GitHub</a><br>
+                        <strong>First Seen:</strong> 2025-07-09
+                        <h4 class="code-header">Code</h4>
+                        <pre class="code-line">// TODO: windows :(</pre>
+                    </div>
+                    <div class="details-box"><h3>Description</h3><p>No description provided.</p></div>
+                </div></div>
+            </td></tr>
+        
+            <tr class="issue-summary" onclick="toggleDetails(this)">
+                <td width="200">
+                    <span class="tag">todo</span>
+                    <span class="tag module-tag" style="background-color:#e83e8c; color:#ffffff;">emit</span>
+                </td>
+                <td class="title">mvmo - 03.07.2025: this should check if the last is without a semicolon</td>
+                <td width="120" align="right">
+                    <div class="avatar-stack"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a></div>
+                </td>
+            </tr>
+        
+            <tr class="issue-details"><td colspan="3">
+                <div class="issue-details-content"><div class="details-grid">
+                    <div class="details-box">
+                        <h3>Details</h3>
+                        <strong>Author:</strong> <div class="author-block"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span>Maurice Schmidt</span></div><br>
+                        <strong>File:</strong> <span class="file-path">src/emit/function.rs</span><br>
+                        <strong>Location:</strong> <a href="https://github.com/duck-compiler/duckc/blob/main/src/emit/function.rs#L11" target="_blank">View on GitHub</a><br>
+                        <strong>First Seen:</strong> 2025-07-09
+                        <h4 class="code-header">Code</h4>
+                        <pre class="code-line">// TODO mvmo - 03.07.2025: this should check if the last is without a semicolon</pre>
+                    </div>
+                    <div class="details-box"><h3>Description</h3><p>No description provided.</p></div>
+                </div></div>
+            </td></tr>
+        
+            <tr class="issue-summary" onclick="toggleDetails(this)">
+                <td width="200">
+                    <span class="tag">todo</span>
+                    <span class="tag module-tag" style="background-color:#e83e8c; color:#ffffff;">emit</span>
+                </td>
+                <td class="title">check if this should be a reference</td>
+                <td width="120" align="right">
+                    <div class="avatar-stack"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a></div>
+                </td>
+            </tr>
+        
+            <tr class="issue-details"><td colspan="3">
+                <div class="issue-details-content"><div class="details-grid">
+                    <div class="details-box">
+                        <h3>Details</h3>
+                        <strong>Author:</strong> <div class="author-block"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span>Maurice Schmidt</span></div><br>
+                        <strong>File:</strong> <span class="file-path">src/emit/ir.rs</span><br>
+                        <strong>Location:</strong> <a href="https://github.com/duck-compiler/duckc/blob/main/src/emit/ir.rs#L267" target="_blank">View on GitHub</a><br>
+                        <strong>First Seen:</strong> 2025-07-09
+                        <h4 class="code-header">Code</h4>
+                        <pre class="code-line">// TODO: check if this should be a reference</pre>
+                    </div>
+                    <div class="details-box"><h3>Description</h3><p>No description provided.</p></div>
+                </div></div>
+            </td></tr>
+        
+            <tr class="issue-summary" onclick="toggleDetails(this)">
+                <td width="200">
+                    <span class="tag">todo</span>
+                    <span class="tag module-tag" style="background-color:#e83e8c; color:#ffffff;">emit</span>
+                </td>
+                <td class="title">check if this is correct</td>
+                <td width="120" align="right">
+                    <div class="avatar-stack"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a></div>
+                </td>
+            </tr>
+        
+            <tr class="issue-details"><td colspan="3">
+                <div class="issue-details-content"><div class="details-grid">
+                    <div class="details-box">
+                        <h3>Details</h3>
+                        <strong>Author:</strong> <div class="author-block"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span>Maurice Schmidt</span></div><br>
+                        <strong>File:</strong> <span class="file-path">src/emit/ir.rs</span><br>
+                        <strong>Location:</strong> <a href="https://github.com/duck-compiler/duckc/blob/main/src/emit/ir.rs#L68" target="_blank">View on GitHub</a><br>
+                        <strong>First Seen:</strong> 2025-07-09
+                        <h4 class="code-header">Code</h4>
+                        <pre class="code-line">// TODO: check if this is correct</pre>
+                    </div>
+                    <div class="details-box"><h3>Description</h3><p>No description provided.</p></div>
+                </div></div>
+            </td></tr>
+        
+            <tr class="issue-summary" onclick="toggleDetails(this)">
+                <td width="200">
+                    <span class="tag">todo</span>
+                    <span class="tag module-tag" style="background-color:#e83e8c; color:#ffffff;">emit</span>
+                </td>
+                <td class="title">should this be mangled???? LOLOLOLO I DON"T THINK SO</td>
+                <td width="120" align="right">
+                    <div class="avatar-stack"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a></div>
+                </td>
+            </tr>
+        
+            <tr class="issue-details"><td colspan="3">
+                <div class="issue-details-content"><div class="details-grid">
+                    <div class="details-box">
+                        <h3>Details</h3>
+                        <strong>Author:</strong> <div class="author-block"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span>Maurice Schmidt</span></div><br>
+                        <strong>File:</strong> <span class="file-path">src/emit/ir.rs</span><br>
+                        <strong>Location:</strong> <a href="https://github.com/duck-compiler/duckc/blob/main/src/emit/ir.rs#L24" target="_blank">View on GitHub</a><br>
+                        <strong>First Seen:</strong> 2025-07-09
+                        <h4 class="code-header">Code</h4>
+                        <pre class="code-line">// TODO: should this be mangled???? LOLOLOLO I DON"T THINK SO</pre>
+                    </div>
+                    <div class="details-box"><h3>Description</h3><p>No description provided.</p></div>
+                </div></div>
+            </td></tr>
+        
+            <tr class="issue-summary" onclick="toggleDetails(this)">
+                <td width="200">
+                    <span class="tag">todo</span>
+                    <span class="tag module-tag" style="background-color:#e83e8c; color:#ffffff;">emit</span>
+                </td>
+                <td class="title">todo!() in value.rs @ line 785</td>
+                <td width="120" align="right">
+                    <div class="avatar-stack"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a></div>
+                </td>
+            </tr>
+        
+            <tr class="issue-details"><td colspan="3">
+                <div class="issue-details-content"><div class="details-grid">
+                    <div class="details-box">
+                        <h3>Details</h3>
+                        <strong>Author:</strong> <div class="author-block"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span>Maurice Schmidt</span></div><br>
+                        <strong>File:</strong> <span class="file-path">src/emit/value.rs</span><br>
+                        <strong>Location:</strong> <a href="https://github.com/duck-compiler/duckc/blob/main/src/emit/value.rs#L785" target="_blank">View on GitHub</a><br>
+                        <strong>First Seen:</strong> 2025-07-09
+                        <h4 class="code-header">Code</h4>
+                        <pre class="code-line">todo!()</pre>
+                    </div>
+                    <div class="details-box"><h3>Description</h3><p>No description provided.</p></div>
+                </div></div>
+            </td></tr>
+        
+            <tr class="issue-summary" onclick="toggleDetails(this)">
+                <td width="200">
+                    <span class="tag">todo</span>
+                    <span class="tag module-tag" style="background-color:#d73a49; color:#ffffff;">fixup</span>
+                </td>
+                <td class="title">resolve returns in main function to use the exit() fn of go, or wrap the code of the main function into a second function which then get's called inside a new main which just returns exit(other_main())</td>
+                <td width="120" align="right">
+                    <div class="avatar-stack"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a></div>
+                </td>
+            </tr>
+        
+            <tr class="issue-details"><td colspan="3">
+                <div class="issue-details-content"><div class="details-grid">
+                    <div class="details-box">
+                        <h3>Details</h3>
+                        <strong>Author:</strong> <div class="author-block"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span>Maurice Schmidt</span></div><br>
+                        <strong>File:</strong> <span class="file-path">src/fixup/main_fun_fixup.rs</span><br>
+                        <strong>Location:</strong> <a href="https://github.com/duck-compiler/duckc/blob/main/src/fixup/main_fun_fixup.rs#L8" target="_blank">View on GitHub</a><br>
+                        <strong>First Seen:</strong> 2025-07-09
+                        <h4 class="code-header">Code</h4>
+                        <pre class="code-line">// TODO: resolve returns in main function to use the exit() fn of go, or wrap the code of the main function into a second function which then get's called inside a new main which just returns exit(other_main())</pre>
+                    </div>
+                    <div class="details-box"><h3>Description</h3><p>No description provided.</p></div>
+                </div></div>
+            </td></tr>
+        
+            <tr class="issue-summary" onclick="toggleDetails(this)">
+                <td width="200">
+                    <span class="tag">todo</span>
+                    <span class="tag module-tag" style="background-color:#007bff; color:#ffffff;">semantics</span>
+                </td>
+                <td class="title">add spans</td>
+                <td width="120" align="right">
+                    <div class="avatar-stack"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a></div>
+                </td>
+            </tr>
+        
+            <tr class="issue-details"><td colspan="3">
+                <div class="issue-details-content"><div class="details-grid">
+                    <div class="details-box">
+                        <h3>Details</h3>
+                        <strong>Author:</strong> <div class="author-block"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span>Maurice Schmidt</span></div><br>
+                        <strong>File:</strong> <span class="file-path">src/semantics/type_resolve.rs</span><br>
+                        <strong>Location:</strong> <a href="https://github.com/duck-compiler/duckc/blob/main/src/semantics/type_resolve.rs#L1015" target="_blank">View on GitHub</a><br>
+                        <strong>First Seen:</strong> 2025-07-09
+                        <h4 class="code-header">Code</h4>
+                        <pre class="code-line">// TODO add spans</pre>
+                    </div>
+                    <div class="details-box"><h3>Description</h3><p>No description provided.</p></div>
+                </div></div>
+            </td></tr>
+        
+            <tr class="issue-summary" onclick="toggleDetails(this)">
+                <td width="200">
+                    <span class="tag">todo</span>
+                    <span class="tag module-tag" style="background-color:#007bff; color:#ffffff;">semantics</span>
+                </td>
+                <td class="title">move checks from typeresolve to typecheck</td>
+                <td width="120" align="right">
+                    <div class="avatar-stack"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span class="arrow">→</span><a href="https://github.com/Mvmo" target="_blank" title="Maurice Schmidt"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a></div>
+                </td>
+            </tr>
+        
+            <tr class="issue-details"><td colspan="3">
+                <div class="issue-details-content"><div class="details-grid">
+                    <div class="details-box">
+                        <h3>Details</h3>
+                        <strong>Author:</strong> <div class="author-block"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span>Maurice Schmidt</span></div><br>
+                        <strong>File:</strong> <span class="file-path">src/semantics/type_resolve.rs</span><br>
+                        <strong>Location:</strong> <a href="https://github.com/duck-compiler/duckc/blob/main/src/semantics/type_resolve.rs#L692" target="_blank">View on GitHub</a><br>
+                        <strong>First Seen:</strong> 2025-07-09
+                        <h4 class="code-header">Code</h4>
+                        <pre class="code-line">// todo(@mvmo): move checks from typeresolve to typecheck</pre>
+                    </div>
+                    <div class="details-box"><h3>Description</h3><p>No description provided.</p></div>
+                </div></div>
+            </td></tr>
+        
+            <tr class="issue-summary" onclick="toggleDetails(this)">
+                <td width="200">
+                    <span class="tag">todo</span>
+                    <span class="tag module-tag" style="background-color:#007bff; color:#ffffff;">semantics</span>
+                </td>
+                <td class="title">typeinference</td>
+                <td width="120" align="right">
+                    <div class="avatar-stack"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span class="arrow">→</span><a href="https://github.com/Mvmo" target="_blank" title="Maurice Schmidt"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a></div>
+                </td>
+            </tr>
+        
+            <tr class="issue-details"><td colspan="3">
+                <div class="issue-details-content"><div class="details-grid">
+                    <div class="details-box">
+                        <h3>Details</h3>
+                        <strong>Author:</strong> <div class="author-block"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span>Maurice Schmidt</span></div><br>
+                        <strong>File:</strong> <span class="file-path">src/semantics/type_resolve.rs</span><br>
+                        <strong>Location:</strong> <a href="https://github.com/duck-compiler/duckc/blob/main/src/semantics/type_resolve.rs#L899" target="_blank">View on GitHub</a><br>
+                        <strong>First Seen:</strong> 2025-07-09
+                        <h4 class="code-header">Code</h4>
+                        <pre class="code-line">// todo(@mvmo): typeinference</pre>
+                    </div>
+                    <div class="details-box"><h3>Description</h3><pre class='description-pre'>resolve implicit type and attach it to variables for type inference</pre></div>
+                </div></div>
+            </td></tr>
+        
+            <tr class="issue-summary" onclick="toggleDetails(this)">
+                <td width="200">
+                    <span class="tag">todo</span>
+                    <span class="tag module-tag" style="background-color:#007bff; color:#ffffff;">semantics</span>
+                </td>
+                <td class="title">add correct return type of block</td>
+                <td width="120" align="right">
+                    <div class="avatar-stack"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a></div>
+                </td>
+            </tr>
+        
+            <tr class="issue-details"><td colspan="3">
+                <div class="issue-details-content"><div class="details-grid">
+                    <div class="details-box">
+                        <h3>Details</h3>
+                        <strong>Author:</strong> <div class="author-block"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span>Maurice Schmidt</span></div><br>
+                        <strong>File:</strong> <span class="file-path">src/semantics/typechecker.rs</span><br>
+                        <strong>Location:</strong> <a href="https://github.com/duck-compiler/duckc/blob/main/src/semantics/typechecker.rs#L279" target="_blank">View on GitHub</a><br>
+                        <strong>First Seen:</strong> 2025-07-09
+                        <h4 class="code-header">Code</h4>
+                        <pre class="code-line">// TODO: add correct return type of block</pre>
+                    </div>
+                    <div class="details-box"><h3>Description</h3><pre class='description-pre'>26.06.2025: Return type of last expression as type of block?</pre></div>
+                </div></div>
+            </td></tr>
+        
+            <tr class="issue-summary" onclick="toggleDetails(this)">
+                <td width="200">
+                    <span class="tag">todo</span>
+                    <span class="tag module-tag" style="background-color:#007bff; color:#ffffff;">semantics</span>
+                </td>
+                <td class="title">Match Expressions need to be type resolved just as the function defs</td>
+                <td width="120" align="right">
+                    <div class="avatar-stack"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a></div>
+                </td>
+            </tr>
+        
+            <tr class="issue-details"><td colspan="3">
+                <div class="issue-details-content"><div class="details-grid">
+                    <div class="details-box">
+                        <h3>Details</h3>
+                        <strong>Author:</strong> <div class="author-block"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span>Maurice Schmidt</span></div><br>
+                        <strong>File:</strong> <span class="file-path">src/semantics/typechecker.rs</span><br>
+                        <strong>Location:</strong> <a href="https://github.com/duck-compiler/duckc/blob/main/src/semantics/typechecker.rs#L363" target="_blank">View on GitHub</a><br>
+                        <strong>First Seen:</strong> 2025-07-09
+                        <h4 class="code-header">Code</h4>
+                        <pre class="code-line">// TODO: Match Expressions need to be type resolved just as the function defs</pre>
+                    </div>
+                    <div class="details-box"><h3>Description</h3><p>No description provided.</p></div>
+                </div></div>
+            </td></tr>
+        
+            <tr class="issue-summary" onclick="toggleDetails(this)">
+                <td width="200">
+                    <span class="tag">todo</span>
+                    <span class="tag module-tag" style="background-color:#007bff; color:#ffffff;">semantics</span>
+                </td>
+                <td class="title">!("combine then and else, then return combined type");</td>
+                <td width="120" align="right">
+                    <div class="avatar-stack"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a></div>
+                </td>
+            </tr>
+        
+            <tr class="issue-details"><td colspan="3">
+                <div class="issue-details-content"><div class="details-grid">
+                    <div class="details-box">
+                        <h3>Details</h3>
+                        <strong>Author:</strong> <div class="author-block"><a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a><span>Maurice Schmidt</span></div><br>
+                        <strong>File:</strong> <span class="file-path">src/semantics/typechecker.rs</span><br>
+                        <strong>Location:</strong> <a href="https://github.com/duck-compiler/duckc/blob/main/src/semantics/typechecker.rs#L323" target="_blank">View on GitHub</a><br>
+                        <strong>First Seen:</strong> 2025-07-09
+                        <h4 class="code-header">Code</h4>
+                        <pre class="code-line">// todo!("combine then and else, then return combined type");</pre>
+                    </div>
+                    <div class="details-box"><h3>Description</h3><p>No description provided.</p></div>
+                </div></div>
+            </td></tr>
+        </tbody></table>
+                    </div>
+                    <div id="closed" class="tab-content">
+                        <table class="issue-table"><tbody><tr><td colspan="3" style="text-align:center; padding: 2rem;">No issues in this category.</td></tr></tbody></table>
+                    </div>
+                </div>
+                <aside class="activity-log-container">
+                    <h2>Activity Log</h2>
+                    
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-details">
+                        <a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar-small" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a> <strong>Mvmo</strong> created issue:<br>
+                        <em>resolve returns in main function to use the exit() fn of go, or wrap the code of the main function into a second function which then get's called inside a new main which just returns exit(other_main())</em><br>
+                        <span class="activity-time">Jul 09, 23:15</span>
+                    </div>
+                </div>
+            
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-details">
+                        <a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar-small" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a> <strong>Mvmo</strong> created issue:<br>
+                        <em>should this be mangled???? LOLOLOLO I DON"T THINK SO</em><br>
+                        <span class="activity-time">Jul 09, 23:15</span>
+                    </div>
+                </div>
+            
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-details">
+                        <a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar-small" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a> <strong>Mvmo</strong> created issue:<br>
+                        <em>check if this is correct</em><br>
+                        <span class="activity-time">Jul 09, 23:15</span>
+                    </div>
+                </div>
+            
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-details">
+                        <a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar-small" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a> <strong>Mvmo</strong> created issue:<br>
+                        <em>check if this should be a reference</em><br>
+                        <span class="activity-time">Jul 09, 23:15</span>
+                    </div>
+                </div>
+            
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-details">
+                        <a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar-small" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a> <strong>Mvmo</strong> created issue:<br>
+                        <em>mvmo - 03.07.2025: this should check if the last is without a semicolon</em><br>
+                        <span class="activity-time">Jul 09, 23:15</span>
+                    </div>
+                </div>
+            
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-details">
+                        <a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar-small" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a> <strong>Mvmo</strong> created issue:<br>
+                        <em>todo!() in value.rs @ line 785</em><br>
+                        <span class="activity-time">Jul 09, 23:15</span>
+                    </div>
+                </div>
+            
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-details">
+                        <a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar-small" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a> <strong>Mvmo</strong> created issue:<br>
+                        <em>add correct return type of block</em><br>
+                        <span class="activity-time">Jul 09, 23:15</span>
+                    </div>
+                </div>
+            
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-details">
+                        <a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar-small" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a> <strong>Mvmo</strong> created issue:<br>
+                        <em>!("combine then and else, then return combined type");</em><br>
+                        <span class="activity-time">Jul 09, 23:15</span>
+                    </div>
+                </div>
+            
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-details">
+                        <a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar-small" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a> <strong>Mvmo</strong> created issue:<br>
+                        <em>Match Expressions need to be type resolved just as the function defs</em><br>
+                        <span class="activity-time">Jul 09, 23:15</span>
+                    </div>
+                </div>
+            
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-details">
+                        <a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar-small" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a> <strong>Mvmo</strong> created issue:<br>
+                        <em>move checks from typeresolve to typecheck</em><br>
+                        <span class="activity-time">Jul 09, 23:15</span>
+                    </div>
+                </div>
+            
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-details">
+                        <a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar-small" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a> <strong>Mvmo</strong> created issue:<br>
+                        <em>typeinference</em><br>
+                        <span class="activity-time">Jul 09, 23:15</span>
+                    </div>
+                </div>
+            
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-details">
+                        <a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar-small" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a> <strong>Mvmo</strong> created issue:<br>
+                        <em>add spans</em><br>
+                        <span class="activity-time">Jul 09, 23:15</span>
+                    </div>
+                </div>
+            
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-details">
+                        <a href="https://github.com/Mvmo" target="_blank" title="Mvmo"><img src="https://avatars.githubusercontent.com/u/35810294?v=4&s=40" class="avatar-small" onerror="this.src='https://placehold.co/40x40/cccccc/ffffff?text=?'; this.onerror=null;"></a> <strong>Mvmo</strong> created issue:<br>
+                        <em>windows :(</em><br>
+                        <span class="activity-time">Jul 09, 23:15</span>
+                    </div>
+                </div>
+            
+                </aside>
+            </div>
+            <div class="footer">Report generated by Duck Issue Tracker.</div>
+        </div>
+        <script>
+            function toggleDetails(row) {
+                row.nextElementSibling.style.display = row.nextElementSibling.style.display === 'table-row' ? 'none' : 'table-row';
+            }
+            function openTab(evt, tabName) {
+                let i, tabcontent, tablinks;
+                tabcontent = document.getElementsByClassName("tab-content");
+                for (i = 0; i < tabcontent.length; i++) { tabcontent[i].style.display = "none"; }
+                tablinks = document.getElementsByClassName("tab-button");
+                for (i = 0; i < tablinks.length; i++) { tablinks[i].className = tablinks[i].className.replace(" active", ""); }
+                document.getElementById(tabName).style.display = "block";
+                evt.currentTarget.className += " active";
+            }
+        </script>
+    </body>
+    </html>
+    

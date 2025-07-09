@@ -1,7 +1,0 @@
-use go "fmt";
-
-fn println(str: String) {
-    go {
-        fmt.Println(str.as_dgo_string());
-    }
-}

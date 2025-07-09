@@ -1,0 +1,132 @@
+[
+    {
+        "type": "created",
+        "timestamp": "2025-07-09T23:15:12.304401",
+        "issue_id": "db78c3868bfd00b2907df35f4d989684",
+        "issue_title": "resolve returns in main function to use the exit() fn of go, or wrap the code of the main function into a second function which then get's called inside a new main which just returns exit(other_main())",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-07-09T23:15:12.304401",
+        "issue_id": "da0532d17b7bc8b710213013d1b37916",
+        "issue_title": "should this be mangled???? LOLOLOLO I DON\"T THINK SO",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-07-09T23:15:12.304401",
+        "issue_id": "98b8f42243c552b825f2f86f536dee5b",
+        "issue_title": "check if this is correct",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-07-09T23:15:12.304401",
+        "issue_id": "55858862493c535dec82e483d164ad99",
+        "issue_title": "check if this should be a reference",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-07-09T23:15:12.304401",
+        "issue_id": "7ca202446ad9d30d5c9dd75fcc8f32cb",
+        "issue_title": "mvmo - 03.07.2025: this should check if the last is without a semicolon",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-07-09T23:15:12.304401",
+        "issue_id": "55b87cf3bb4499e965e33b5e4efe9c0f",
+        "issue_title": "todo!() in value.rs @ line 785",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-07-09T23:15:12.304401",
+        "issue_id": "08d4ea6633203a66f7130937bdba9646",
+        "issue_title": "add correct return type of block",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-07-09T23:15:12.304401",
+        "issue_id": "fcb3f9eb5327dfccc556c11af2cad15a",
+        "issue_title": "!(\"combine then and else, then return combined type\");",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-07-09T23:15:12.304401",
+        "issue_id": "1bc39227f7b86613ca803ab82b8f6b34",
+        "issue_title": "Match Expressions need to be type resolved just as the function defs",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-07-09T23:15:12.304401",
+        "issue_id": "ab171c08521638216687559985056db6",
+        "issue_title": "move checks from typeresolve to typecheck",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-07-09T23:15:12.304401",
+        "issue_id": "eafb30b0c424a5220951f6aa028f8a3d",
+        "issue_title": "typeinference",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-07-09T23:15:12.304401",
+        "issue_id": "85e0c950789d9ad5d875a7db05b97130",
+        "issue_title": "add spans",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-07-09T23:15:12.304401",
+        "issue_id": "fe7bbea4368102b886c67bf2bedada4a",
+        "issue_title": "windows :(",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    }
+]

@@ -1,0 +1,19 @@
+{
+    "id": "fe7bbea4368102b886c67bf2bedada4a",
+    "file_path": "../../src/dargo/build.rs",
+    "line_number": 107,
+    "title": "windows :(",
+    "tag": "todo",
+    "module_tag": "dargo",
+    "user": null,
+    "issue_ref": null,
+    "description": "",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// TODO: windows :(",
+    "status": "open",
+    "first_seen": "2025-07-09T23:15:12.305961",
+    "history": []
+}

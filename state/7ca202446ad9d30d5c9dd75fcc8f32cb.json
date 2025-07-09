@@ -1,0 +1,19 @@
+{
+    "id": "7ca202446ad9d30d5c9dd75fcc8f32cb",
+    "file_path": "../../src/emit/function.rs",
+    "line_number": 11,
+    "title": "mvmo - 03.07.2025: this should check if the last is without a semicolon",
+    "tag": "todo",
+    "module_tag": "emit",
+    "user": null,
+    "issue_ref": null,
+    "description": "",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// TODO mvmo - 03.07.2025: this should check if the last is without a semicolon",
+    "status": "open",
+    "first_seen": "2025-07-09T23:15:12.305161",
+    "history": []
+}

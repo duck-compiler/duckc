@@ -1,8 +1,0 @@
-fn main () {
-    {
-        let x: String = "Hallo";
-    }
-    {
-        let x: String = "Hallo";
-    }
-}

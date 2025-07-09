@@ -1,0 +1,19 @@
+{
+    "id": "08d4ea6633203a66f7130937bdba9646",
+    "file_path": "../../src/semantics/typechecker.rs",
+    "line_number": 279,
+    "title": "add correct return type of block",
+    "tag": "todo",
+    "module_tag": "semantics",
+    "user": null,
+    "issue_ref": null,
+    "description": "26.06.2025: Return type of last expression as type of block?",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// TODO: add correct return type of block",
+    "status": "open",
+    "first_seen": "2025-07-09T23:15:12.305483",
+    "history": []
+}

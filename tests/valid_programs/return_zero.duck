@@ -1,7 +1,0 @@
-use go "fmt";
-
-fn main() {
-    go {
-        fmt.Println("Hallo, Welt");
-    }
-}

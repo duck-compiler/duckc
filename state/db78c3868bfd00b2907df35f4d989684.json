@@ -1,0 +1,19 @@
+{
+    "id": "db78c3868bfd00b2907df35f4d989684",
+    "file_path": "../../src/fixup/main_fun_fixup.rs",
+    "line_number": 8,
+    "title": "resolve returns in main function to use the exit() fn of go, or wrap the code of the main function into a second function which then get's called inside a new main which just returns exit(other_main())",
+    "tag": "todo",
+    "module_tag": "fixup",
+    "user": null,
+    "issue_ref": null,
+    "description": "",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// TODO: resolve returns in main function to use the exit() fn of go, or wrap the code of the main function into a second function which then get's called inside a new main which just returns exit(other_main())",
+    "status": "open",
+    "first_seen": "2025-07-09T23:15:12.304461",
+    "history": []
+}

@@ -1,0 +1,19 @@
+{
+    "id": "98b8f42243c552b825f2f86f536dee5b",
+    "file_path": "../../src/emit/ir.rs",
+    "line_number": 68,
+    "title": "check if this is correct",
+    "tag": "todo",
+    "module_tag": "emit",
+    "user": null,
+    "issue_ref": null,
+    "description": "",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// TODO: check if this is correct",
+    "status": "open",
+    "first_seen": "2025-07-09T23:15:12.304663",
+    "history": []
+}

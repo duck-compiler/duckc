@@ -1,6 +1,0 @@
-fn x(y: String) {
-}
-
-fn main() {
-    x(5);
-}

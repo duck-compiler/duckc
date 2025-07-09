@@ -1,4 +1,0 @@
-module multiple;
-module nested;
-module empty;
-module another_mod {}

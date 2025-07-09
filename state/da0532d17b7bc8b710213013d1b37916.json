@@ -1,0 +1,19 @@
+{
+    "id": "da0532d17b7bc8b710213013d1b37916",
+    "file_path": "../../src/emit/ir.rs",
+    "line_number": 24,
+    "title": "should this be mangled???? LOLOLOLO I DON\"T THINK SO",
+    "tag": "todo",
+    "module_tag": "emit",
+    "user": null,
+    "issue_ref": null,
+    "description": "",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// TODO: should this be mangled???? LOLOLOLO I DON\"T THINK SO",
+    "status": "open",
+    "first_seen": "2025-07-09T23:15:12.304576",
+    "history": []
+}

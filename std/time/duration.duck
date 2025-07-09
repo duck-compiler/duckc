@@ -1,7 +1,0 @@
-type Millis = { millis: Int };
-type Seconds = { seconds: Int };
-type Minutes = { minutes: Int };
-type Hours = { hours: Int };
-type Days = { days: Int };
-
-type Duration = Millis | Seconds | Minutes | Hours | Days;

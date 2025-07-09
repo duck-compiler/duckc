@@ -1,0 +1,19 @@
+{
+    "id": "ab171c08521638216687559985056db6",
+    "file_path": "../../src/semantics/type_resolve.rs",
+    "line_number": 692,
+    "title": "move checks from typeresolve to typecheck",
+    "tag": "todo",
+    "module_tag": "semantics",
+    "user": "@mvmo",
+    "issue_ref": null,
+    "description": "",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// todo(@mvmo): move checks from typeresolve to typecheck",
+    "status": "open",
+    "first_seen": "2025-07-09T23:15:12.305730",
+    "history": []
+}

@@ -1,0 +1,19 @@
+{
+    "id": "eafb30b0c424a5220951f6aa028f8a3d",
+    "file_path": "../../src/semantics/type_resolve.rs",
+    "line_number": 899,
+    "title": "typeinference",
+    "tag": "todo",
+    "module_tag": "semantics",
+    "user": "@mvmo",
+    "issue_ref": null,
+    "description": "resolve implicit type and attach it to variables for type inference",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// todo(@mvmo): typeinference",
+    "status": "open",
+    "first_seen": "2025-07-09T23:15:12.305807",
+    "history": []
+}

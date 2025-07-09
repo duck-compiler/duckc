@@ -1,0 +1,19 @@
+{
+    "id": "fcb3f9eb5327dfccc556c11af2cad15a",
+    "file_path": "../../src/semantics/typechecker.rs",
+    "line_number": 323,
+    "title": "!(\"combine then and else, then return combined type\");",
+    "tag": "todo",
+    "module_tag": "semantics",
+    "user": null,
+    "issue_ref": null,
+    "description": "",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// todo!(\"combine then and else, then return combined type\");",
+    "status": "open",
+    "first_seen": "2025-07-09T23:15:12.305571",
+    "history": []
+}
