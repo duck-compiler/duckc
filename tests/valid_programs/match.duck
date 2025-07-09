@@ -1,5 +1,3 @@
-use std;
-
 fn bool_or_str() -> String | Bool {
     return true;
 }

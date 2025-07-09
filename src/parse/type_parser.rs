@@ -12,10 +12,16 @@ pub struct TypeDefinition {
     pub type_expression: Spanned<TypeExpr>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Field {
     pub name: String,
     pub type_expr: Spanned<TypeExpr>,
+}
+
+impl PartialEq for Field {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
 }
 
 impl Field {
@@ -228,7 +234,10 @@ where
                     if elements.len() == 1 {
                         elements.into_iter().next().unwrap()
                     } else {
-                        (TypeExpr::Or(elements), e.span())
+                        let mut elems = Vec::new();
+                        let expr = (TypeExpr::Or(elements), e.span());
+                        merge_or(&expr, &mut elems);
+                        (TypeExpr::Or(elems), e.span())
                     }
                 })
         },
@@ -401,11 +410,24 @@ where
                     if elements.len() == 1 {
                         elements.into_iter().next().unwrap()
                     } else {
-                        (TypeExpr::Or(elements), e.span())
+                        let mut elems = Vec::new();
+                        let expr = (TypeExpr::Or(elements), e.span());
+                        merge_or(&expr, &mut elems);
+                        (TypeExpr::Or(elems), e.span())
                     }
                 })
         },
     )
+}
+
+pub fn merge_or(t: &Spanned<TypeExpr>, o: &mut Vec<Spanned<TypeExpr>>) {
+    if let TypeExpr::Or(elems) = &t.0 {
+        for elem in elems {
+            merge_or(elem, o);
+        }
+    } else {
+        o.push(t.clone());
+    }
 }
 
 pub fn type_definition_parser<'src, I>()
@@ -588,6 +610,15 @@ pub mod tests {
                 ],
                 Some(Box::new(TypeExpr::Char.into_empty_span())),
             ),
+        );
+
+        assert_type_expression(
+            "(String | Bool) | Int",
+            TypeExpr::Or(vec![
+                TypeExpr::String.into_empty_span(),
+                TypeExpr::Bool.into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
+            ]),
         );
 
         assert_type_expression(
