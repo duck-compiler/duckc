@@ -26,11 +26,12 @@ jobs:
 
       - name: Prepare directory
         run: |
-            cp main-branch/.github/scripts/track_issues.py .
-            cp main-branch/.github/scripts/requirements.txt .
+            # cp main-branch/.github/scripts/track_issues.py .
+            # cp main-branch/.github/scripts/requirements.txt .
             cp -r main-branch/src .
-            mkdir ./.issues/
-            cp -r gh-pages/state ./.issues/state &2>/dev/null || true
+            mkdir -p ./main-branch/.github/scripts/.issues/state
+            cp -r gh-pages/state ./main-branch/.github/scripts/.issues/state &2>/dev/null || true
+            cd main-branch/.github/scripts/
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -42,6 +43,8 @@ jobs:
       - name: Generate Issue Report
         run: |
             python track_issues.py
+            popd
+            cp -r ./main-branch/.github/scripts/.issues/ ./issues
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
