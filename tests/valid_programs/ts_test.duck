@@ -11,10 +11,10 @@ module long_mod_name {
         let local_str: String = "hallo";
         go {
             fmt.Println("zz abc")
-            fmt.Println("local:", local_str)
-            fmt.Println("param:", xxy)
-            fmt.Println("param2:", xxy)
-            fmt.Println("in mod func:", gets_str())
+            fmt.Println("local:", local_str.as_dgo_string())
+            fmt.Println("param:", xxy.as_dgo_string())
+            fmt.Println("param2:", xxy.as_dgo_string())
+            fmt.Println("in mod func:", gets_str().as_dgo_string())
         }
     }
 
@@ -28,7 +28,7 @@ module long_mod_name {
         go {
             i_am_long()
             fmt.Println("abc")
-            zzABC("i am an argument")
+            zzABC(ConcDuckString { value: "i am an argument" })
         }
     }
 }
