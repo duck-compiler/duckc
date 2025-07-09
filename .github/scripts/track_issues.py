@@ -102,10 +102,20 @@ def get_git_info():
 def get_git_blame_info(file_path, line_number):
     """
     Runs 'git blame' to find the author of a specific line.
+    Executes the command in the source repository checkout for CI/CD.
     """
     try:
-        command = ["git", "blame", "-L", f"{line_number},{line_number}", "--porcelain", file_path]
-        result = subprocess.run(command, capture_output=True, text=True, check=True, encoding='utf-8')
+        source_repo_path = os.environ.get("SOURCE_REPO_PATH")
+
+        if source_repo_path:
+            blame_file_path = os.path.relpath(file_path, source_repo_path)
+            cwd = source_repo_path
+        else:
+            blame_file_path = file_path
+            cwd = None
+
+        command = ["git", "blame", "-L", f"{line_number},{line_number}", "--porcelain", blame_file_path]
+        result = subprocess.run(command, capture_output=True, text=True, check=True, encoding='utf-8', cwd=cwd)
 
         author, author_mail = None, None
         for line in result.stdout.splitlines():
@@ -117,7 +127,7 @@ def get_git_blame_info(file_path, line_number):
         if author and author_mail:
             return {"name": author, "email": author_mail}
 
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, FileNotFoundError, TypeError):
         pass
     return None
 
@@ -303,8 +313,6 @@ def render_issue_table_html(issues, git_info):
 
     table_html = ""
     for issue in issues:
-        if not issue:
-            continue
         module_tag_name = issue.get('module_tag', 'general')
         module_bg_color = get_color_for_tag(module_tag_name)
         module_text_color = get_text_color_for_bg(module_bg_color)
