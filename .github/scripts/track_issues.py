@@ -303,6 +303,8 @@ def render_issue_table_html(issues, git_info):
 
     table_html = ""
     for issue in issues:
+        if not issue:
+            continue
         module_tag_name = issue.get('module_tag', 'general')
         module_bg_color = get_color_for_tag(module_tag_name)
         module_text_color = get_text_color_for_bg(module_bg_color)
