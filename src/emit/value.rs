@@ -29,7 +29,7 @@ pub enum IrInstruction {
     StringConcat(IrRes, Vec<IrValue>),
     Add(IrRes, IrValue, IrValue, TypeExpr),
     Mul(IrRes, IrValue, IrValue, TypeExpr),
-    Equals(IrRes, IrValue, IrValue),
+    Equals(IrRes, IrValue, IrValue, TypeExpr),
     Break,
     Continue,
     Return(Option<IrValue>),
@@ -641,7 +641,12 @@ impl ValueExpr {
                 let var = env.new_var();
                 ir.extend([
                     IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
-                    IrInstruction::Equals(var.clone(), v1_res.unwrap(), v2_res.unwrap()),
+                    IrInstruction::Equals(
+                        var.clone(),
+                        v1_res.unwrap(),
+                        v2_res.unwrap(),
+                        TypeExpr::from_value_expr(&v1.0, type_env),
+                    ),
                 ]);
 
                 (ir, as_rvar(var))
@@ -866,7 +871,12 @@ mod tests {
                 "1 == 2",
                 vec![
                     decl("var_0", "DuckBool"),
-                    IrInstruction::Equals("var_0".into(), IrValue::Int(1), IrValue::Int(2)),
+                    IrInstruction::Equals(
+                        "var_0".into(),
+                        IrValue::Int(1),
+                        IrValue::Int(2),
+                        TypeExpr::Int,
+                    ),
                 ],
             ),
             (
