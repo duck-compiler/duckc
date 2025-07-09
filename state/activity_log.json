@@ -1,6 +1,16 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-07-09T23:22:20.781476",
+        "issue_id": "d1adb05842916005a85d085735ffd01a",
+        "issue_title": "respect additional identifer scopes like blocks and lambdas",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-07-09T23:15:12.304401",
         "issue_id": "db78c3868bfd00b2907df35f4d989684",
         "issue_title": "resolve returns in main function to use the exit() fn of go, or wrap the code of the main function into a second function which then get's called inside a new main which just returns exit(other_main())",

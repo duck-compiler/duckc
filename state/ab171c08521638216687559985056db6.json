@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Maurice Schmidt",
-        "email": "mvmogo@gmail.com"
+        "name": "Apfelfrosch",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "// todo(@mvmo): move checks from typeresolve to typecheck",
     "status": "open",
