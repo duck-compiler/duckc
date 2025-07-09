@@ -6,7 +6,7 @@ import subprocess
 import requests
 from datetime import datetime
 
-TARGET_DIRECTORY = os.environ.get("SCAN_TARGET_DIR", "../src")
+TARGET_DIRECTORY = os.environ.get("SCAN_TARGET_DIR", "./src")
 STATE_DIR = "./.issues/state"
 ISSUES_DIR = "./.issues"
 FILE_EXTENSIONS = (".rs",)
@@ -282,7 +282,7 @@ def update_issue_database(found_issues):
         with open(issue_file_path, 'w', encoding='utf-8') as f:
             json.dump(issue_data, f, indent=4)
 
-    log_path = os.path.join(ISSUES_DIR, "activity_log.json")
+    log_path = os.path.join(STATE_DIR, "activity_log.json")
     all_activities = []
     if os.path.exists(log_path):
         with open(log_path, 'r', encoding='utf-8') as f:
@@ -390,7 +390,7 @@ def generate_html_report(git_info):
     closed_issues_html = render_issue_table_html(closed_issues, git_info)
 
     activity_log_html = ""
-    log_path = os.path.join(ISSUES_DIR, "activity_log.json")
+    log_path = os.path.join(STATE_DIR, "activity_log.json")
     if os.path.exists(log_path):
         with open(log_path, 'r', encoding='utf-8') as f:
             activities = json.load(f)

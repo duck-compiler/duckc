@@ -14,33 +14,35 @@ jobs:
     steps:
       - name: Checkout main branch
         uses: actions/checkout@v4
+        with:
+          path: ./main-branch
 
       - name: Fetch historical data from gh-pages
         uses: actions/checkout@v4
         with:
           ref: gh-pages
-          path: ./gh-pages-data
+          path: ./gh-pages
           continue-on-error: true
 
-      - name: Prepare issue directory
+      - name: Prepare directory
         run: |
-          ls -la ./gh-pages-data/
-          mkdir -p ./.issues
-          cp -r ./gh-pages-data/.issues/ ./.issues/ 2>/dev/null || true
+            cp main-branch/.github/scripts/track_issues.py .
+            cp main-branch/.github/scripts/requirements.txt .
+            cp -r main-branch/src .
+            cp state
+            mkdir ./.issues/
+            cp -r gh-pages/state ./.issues/state
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
       - name: Install Dependencies
-        run: pip install -r ./.github/scripts/requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Generate Issue Report
         run: |
-            python ./.github/scripts/track_issues.py
-            ls -la ./.github/scripts/
-            ls -la ./
-            ls -la ./.issues
+            python track_issues.py
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
