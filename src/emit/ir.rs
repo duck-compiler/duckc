@@ -162,6 +162,7 @@ impl IrInstruction {
                         } else {
                             return_type.clone()
                         })
+                        .filter(|x| x != "Tup_")
                         .unwrap_or(String::new()),
                     format!(
                         "{}\n{}",
@@ -293,7 +294,11 @@ impl IrValue {
                     .map(|(name, ty)| format!("{name} {ty}"))
                     .collect::<Vec<_>>()
                     .join(" "),
-                return_type.clone().unwrap_or_default(),
+                return_type
+                    .clone()
+                    .filter(|x| x != "Tup_")
+                    .clone()
+                    .unwrap_or_default(),
                 body.iter()
                     .map(IrInstruction::emit_as_go)
                     .collect::<Vec<_>>()

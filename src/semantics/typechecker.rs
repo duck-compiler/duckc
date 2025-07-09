@@ -942,8 +942,7 @@ impl TypeExpr {
     }
 
     pub fn is_bool(&self) -> bool {
-        return *self == TypeExpr::Bool
-            || matches!(*self, TypeExpr::BoolLiteral(..));
+        return *self == TypeExpr::Bool || matches!(*self, TypeExpr::BoolLiteral(..));
     }
 
     pub fn is_string(&self) -> bool {
@@ -1301,6 +1300,44 @@ fn check_type_compatability(
         }
 
         return;
+    }
+
+    let one_fn = match &one.0 {
+        TypeExpr::Fun(params, return_type) => Some((params, return_type)),
+        _ => None,
+    };
+
+    let two_fn = match &two.0 {
+        TypeExpr::Fun(params, return_type) => Some((params, return_type)),
+        _ => None,
+    };
+
+    if let Some((fst, snd)) = one_fn.zip(two_fn) {
+        let fst_params = fst
+            .0
+            .iter()
+            .map(|x| x.1.0.as_clean_go_type_name(type_env))
+            .collect::<Vec<_>>();
+        let snd_params = snd
+            .0
+            .iter()
+            .map(|x| x.1.0.as_clean_go_type_name(type_env))
+            .collect::<Vec<_>>();
+
+        let fst_return = fst
+            .1
+            .clone()
+            .map(|x| x.0.as_clean_go_type_name(type_env))
+            .unwrap_or(TypeExpr::Tuple(vec![]).as_clean_go_type_name(type_env));
+        let snd_return = snd
+            .1
+            .clone()
+            .map(|x| x.0.as_clean_go_type_name(type_env))
+            .unwrap_or(TypeExpr::Tuple(vec![]).as_clean_go_type_name(type_env));
+
+        if (fst_params == snd_params) && (fst_return == snd_return) {
+            return;
+        }
     }
 
     if one.0.as_clean_go_type_name(type_env) != two.0.as_clean_go_type_name(type_env) {
