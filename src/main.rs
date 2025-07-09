@@ -10,7 +10,8 @@ use std::{
     error::Error,
     fs::{self, File},
     io::Write,
-    path::{Path, PathBuf}, process,
+    path::{Path, PathBuf},
+    process,
 };
 
 use chumsky::{Parser, error::Rich};
@@ -39,13 +40,15 @@ pub mod tags;
 
 lazy_static! {
     static ref DUCK_STD_PATH: PathBuf = {
-        env::home_dir().map(|mut path| {
-            path.push(".duck");
-            path.push("std");
-            path
-        }).expect("couldn't get pathbuf for std lib")
+        env::home_dir()
+            .map(|mut path| {
+                path.push(".duck");
+                path.push("std");
+                path.push("std.duck");
+                path
+            })
+            .expect("couldn't get pathbuf for std lib")
     };
-
     static ref DARGO_DOT_DIR: PathBuf = {
         fn require_sub_dir(str: &str) {
             let Ok(current_dir) = env::current_dir() else {
@@ -115,6 +118,39 @@ fn parse_src_file(
     src_file_file_contents: &'static str,
     tokens: Vec<Spanned<Token>>,
 ) -> SourceFile {
+    let std_lib_src = Path::new("/usr/local/lib/duck/std/std.duck");
+    if !DUCK_STD_PATH.exists() {
+        println!(
+            "{}{}{} Standard library not found",
+            Tag::Dargo,
+            Tag::Err,
+            Tag::Build,
+        );
+        std::process::exit(0);
+    }
+    let file_text = std::fs::read_to_string(std_lib_src).unwrap().leak();
+    let lex = lex("std.duck", file_text);
+    let std_src_file = source_file_parser(
+        {
+            let mut buf = std_lib_src.to_path_buf();
+            buf.pop();
+            buf
+        },
+        make_input,
+    )
+    .parse(make_input(
+        SS {
+            start: 0,
+            end: file_text.len(),
+            context: Context {
+                file_name: "std.duck",
+                file_contents: file_text,
+            },
+        },
+        lex.as_slice(),
+    ))
+    .unwrap();
+
     let (src_file, parse_errors) = source_file_parser(
         {
             let mut src_file_clone = src_file.to_path_buf();
@@ -140,7 +176,9 @@ fn parse_src_file(
         parse_failure(src_file_name, &e, src_file_file_contents);
     });
 
-    src_file.unwrap().flatten()
+    let mut src_file = src_file.unwrap();
+    src_file.sub_modules.push(("std".into(), std_src_file));
+    src_file.flatten()
 }
 
 fn typecheck(src_file_ast: &mut SourceFile) -> TypeEnv {
