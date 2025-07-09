@@ -35,7 +35,7 @@ jobs:
             mkdir -p ./main-branch/.github/scripts/.issues/state
             cp -r gh-pages/state ./main-branch/.github/scripts/.issues/state &2>/dev/null || true
 
-            cd main-branch/.github/scripts/
+            pushd main-branch/.github/scripts/
 
             pip install -r requirements.txt
             python track_issues.py
