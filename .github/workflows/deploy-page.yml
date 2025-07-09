@@ -24,8 +24,7 @@ jobs:
 
       - name: Prepare issue directory
         run: |
-          mkdir -p i
-          # Kopiert die alten Daten, falls vorhanden. Das "|| true" verhindert einen Fehler, wenn der Ordner leer ist.
+          mkdir -p ./.issues
           cp -r ./gh-pages-data/.issues/ ./.issues/ 2>/dev/null || true
 
       - name: Set up Python
