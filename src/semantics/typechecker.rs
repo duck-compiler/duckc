@@ -10,7 +10,6 @@ use crate::parse::{
 
 #[derive(Debug, Clone)]
 pub struct TypeEnv {
-    pub used_in_seals: HashMap<String, Vec<String>>,
     pub identifier_types: Vec<HashMap<String, TypeExpr>>,
     pub type_aliases: Vec<HashMap<String, TypeExpr>>,
     pub all_types: Vec<TypeExpr>,
@@ -19,7 +18,6 @@ pub struct TypeEnv {
 impl Default for TypeEnv {
     fn default() -> Self {
         Self {
-            used_in_seals: HashMap::new(),
             identifier_types: vec![HashMap::new()],
             type_aliases: vec![HashMap::new()],
             all_types: vec![],
@@ -594,186 +592,6 @@ fn resolve_all_aliases_value_expr(expr: &mut ValueExpr, env: &TypeEnv) {
     }
 }
 
-pub fn collect_unions_type_expr(expr: &TypeExpr, env: &mut TypeEnv) {
-    match expr {
-        TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
-            for field in fields {
-                collect_unions_type_expr(&field.type_expr.0, env);
-            }
-        }
-        TypeExpr::Array(d) => collect_unions_type_expr(&d.0, env),
-        TypeExpr::Fun(params, r) => {
-            if let Some(r) = r {
-                collect_unions_type_expr(&r.0, env);
-            }
-            params
-                .iter()
-                .for_each(|(_, x)| collect_unions_type_expr(&x.0, env));
-        }
-        TypeExpr::Or(or_exprs) => {
-            let union_name = expr.as_clean_go_type_name(env);
-
-            for or_expr in or_exprs {
-                collect_unions_type_expr(&or_expr.0, env);
-
-                let ty_name = or_expr.0.as_clean_go_type_name(env);
-                if let Some(used_in) = env.used_in_seals.get_mut(&ty_name) {
-                    if !used_in.contains(&union_name) {
-                        used_in.push(union_name.clone());
-                    }
-                } else {
-                    env.used_in_seals.insert(ty_name, vec![union_name.clone()]);
-                }
-            }
-        }
-        TypeExpr::Tuple(fields) => {
-            for field in fields {
-                collect_unions_type_expr(&field.0, env);
-            }
-        }
-        TypeExpr::Any
-        | TypeExpr::TypeName(..)
-        | TypeExpr::Bool
-        | TypeExpr::BoolLiteral(_)
-        | TypeExpr::Char
-        | TypeExpr::Float
-        | TypeExpr::Go(_)
-        | TypeExpr::InlineGo
-        | TypeExpr::Int
-        | TypeExpr::IntLiteral(_)
-        | TypeExpr::String
-        | TypeExpr::StringLiteral(_)
-        | TypeExpr::TypeNameInternal(..) => {}
-    }
-}
-
-fn collect_unions_value_expr(expr: &ValueExpr, env: &mut TypeEnv) {
-    match expr {
-        ValueExpr::Array(ty, exprs) => {
-            if let Some(ty) = ty {
-                collect_unions_type_expr(&ty.0, env);
-            }
-            for expr in exprs {
-                collect_unions_value_expr(&expr.0, env);
-            }
-        }
-        ValueExpr::VarDecl(d) => {
-            let Declaration {
-                name: _,
-                type_expr,
-                initializer,
-            } = &d.0;
-            collect_unions_type_expr(&type_expr.0, env);
-            if let Some(e) = initializer {
-                collect_unions_value_expr(&e.0, env);
-            }
-        }
-        ValueExpr::Lambda(l) => {
-            let LambdaFunctionExpr {
-                params,
-                return_type,
-                value_expr,
-            } = &**l;
-            if let Some(return_type) = return_type {
-                collect_unions_type_expr(&return_type.0, env);
-            }
-            for (_, p) in params {
-                collect_unions_type_expr(&p.0, env);
-            }
-            collect_unions_value_expr(&value_expr.0, env);
-        }
-        ValueExpr::Add(l, r) | ValueExpr::Mul(l, r) | ValueExpr::Equals(l, r) => {
-            collect_unions_value_expr(&l.0, env);
-            collect_unions_value_expr(&r.0, env);
-        }
-        ValueExpr::ArrayAccess(target, idx) => {
-            collect_unions_value_expr(&target.0, env);
-            collect_unions_value_expr(&idx.0, env);
-        }
-        ValueExpr::Block(exprs) => {
-            for expr in exprs {
-                collect_unions_value_expr(&expr.0, env);
-            }
-        }
-        ValueExpr::BoolNegate(e) => collect_unions_value_expr(&e.0, env),
-        ValueExpr::Duck(init) => {
-            for i in init {
-                collect_unions_value_expr(&i.1.0, env);
-            }
-        }
-        ValueExpr::FieldAccess {
-            target_obj,
-            field_name: _,
-        } => {
-            collect_unions_value_expr(&target_obj.0, env);
-        }
-        ValueExpr::FormattedString(content) => {
-            for c in content {
-                if let ValFmtStringContents::Expr(e) = c {
-                    collect_unions_value_expr(&e.0, env);
-                }
-            }
-        }
-        ValueExpr::FunctionCall { target, params } => {
-            collect_unions_value_expr(&target.0, env);
-            for p in params {
-                collect_unions_value_expr(&p.0, env);
-            }
-        }
-        ValueExpr::If {
-            condition,
-            then,
-            r#else,
-        } => {
-            collect_unions_value_expr(&condition.0, env);
-            collect_unions_value_expr(&then.0, env);
-            if let Some(r#else) = r#else {
-                collect_unions_value_expr(&r#else.0, env);
-            }
-        }
-        ValueExpr::Match { value_expr, arms } => {
-            collect_unions_value_expr(&value_expr.0, env);
-            for arm in arms {
-                collect_unions_type_expr(&arm.type_case.0, env);
-                collect_unions_value_expr(&arm.value_expr.0, env);
-            }
-        }
-        ValueExpr::Return(r) => {
-            if let Some(r) = r {
-                collect_unions_value_expr(&r.0, env);
-            }
-        }
-        ValueExpr::Struct(fields) => {
-            for field in fields {
-                collect_unions_value_expr(&field.1.0, env);
-            }
-        }
-        ValueExpr::Tuple(fields) => {
-            for field in fields {
-                collect_unions_value_expr(&field.0, env);
-            }
-        }
-        ValueExpr::VarAssign(a) => {
-            let Assignment { target, value_expr } = &a.0;
-            collect_unions_value_expr(&target.0, env);
-            collect_unions_value_expr(&value_expr.0, env);
-        }
-        ValueExpr::While { condition, body } => {
-            collect_unions_value_expr(&condition.0, env);
-            collect_unions_value_expr(&body.0, env);
-        }
-        ValueExpr::Break
-        | ValueExpr::InlineGo(..)
-        | ValueExpr::Int(..)
-        | ValueExpr::Variable(..)
-        | ValueExpr::Continue
-        | ValueExpr::String(..)
-        | ValueExpr::Char(..)
-        | ValueExpr::Float(..)
-        | ValueExpr::Bool(..) => {}
-    }
-}
-
 pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut TypeEnv) {
     type_env.push_type_aliases();
 
@@ -824,32 +642,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 resolve_all_aliases_type_expr(&mut r.0, type_env);
             }
             resolve_all_aliases_value_expr(&mut function_definition.value_expr.0, type_env);
-        });
-
-    dbg!(&source_file.type_definitions);
-
-    // Step 4: Collect unions
-
-    source_file
-        .type_definitions
-        .iter()
-        .for_each(|type_definition| {
-            collect_unions_type_expr(&type_definition.type_expression.0, type_env);
-        });
-
-    source_file
-        .function_definitions
-        .iter()
-        .for_each(|function_definition| {
-            if let Some(params) = function_definition.params.as_ref() {
-                for (_, p) in params {
-                    collect_unions_type_expr(&p.0, type_env);
-                }
-            }
-            if let Some(r) = function_definition.return_type.as_ref() {
-                collect_unions_type_expr(&r.0, type_env);
-            }
-            collect_unions_value_expr(&function_definition.value_expr.0, type_env);
         });
 
     // Step 5: Map function names available

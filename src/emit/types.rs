@@ -219,51 +219,6 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
 
     instructions.append(&mut primitive_types_instructions);
 
-    let mut variant_instructions = summary
-        .types_used
-        .iter()
-        .filter(|type_expr| matches!(type_expr, TypeExpr::Or(..)))
-        .flat_map(|variant_type_expr| {
-            let TypeExpr::Or(variants) = variant_type_expr else {
-                unreachable!()
-            };
-            let variant_type_name = variant_type_expr.as_clean_go_type_name(type_env);
-            let variant_seal_fn_name = format!("Seal_{variant_type_name}");
-
-            dbg!(&variant_type_name, &variants);
-
-            let mut sealing_fn_instructions = variants
-                .iter()
-                .map(|variant| {
-                    IrInstruction::FunDef(
-                        variant_seal_fn_name.clone(),
-                        Some((
-                            "self".to_string(),
-                            if variant.0.is_primitive() {
-                                primitive_conc_type_name(&variant.0).to_string()
-                            } else {
-                                variant.0.as_clean_go_type_name(type_env)
-                            },
-                        )),
-                        vec![],
-                        None,
-                        vec![],
-                    )
-                })
-                .collect::<Vec<_>>();
-
-            sealing_fn_instructions.push(IrInstruction::InterfaceDef(
-                variant_type_name,
-                vec![],
-                vec![(variant_seal_fn_name.to_string(), vec![], None)],
-            ));
-
-            sealing_fn_instructions
-        })
-        .collect::<Vec<_>>();
-
-    instructions.append(&mut variant_instructions);
-
     summary
         .types_used
         .iter()
@@ -362,10 +317,8 @@ impl TypeExpr {
                 let mut fields = duck.fields.clone();
                 fields.sort_by_key(|field| field.name.clone());
 
-                let clean_name = self.as_clean_go_type_name(type_env);
-
                 format!(
-                    "interface {{\n{}\n{}\n}}",
+                    "interface {{\n{}\n}}",
                     fields
                         .iter()
                         .map(|field| format!(
@@ -375,16 +328,10 @@ impl TypeExpr {
                         ))
                         .collect::<Vec<_>>()
                         .join("\n"),
-                    type_env
-                        .used_in_seals
-                        .get(&clean_name)
-                        .cloned()
-                        .unwrap_or(Vec::new())
-                        .join("\n")
                 )
             }
             TypeExpr::Tuple(_fields) => self.as_clean_go_type_name(type_env),
-            TypeExpr::Or(_variants) => self.as_clean_go_type_name(type_env),
+            TypeExpr::Or(_variants) => "any".to_string(),
         };
     }
 
@@ -451,16 +398,7 @@ impl TypeExpr {
                         .join("\n")
                 )
             }
-            TypeExpr::Or(variants) => {
-                format!(
-                    "struct {{\n{}\n}}",
-                    variants
-                        .iter()
-                        .map(|type_expr| type_expr.0.as_go_type_annotation(type_env).to_string())
-                        .collect::<Vec<_>>()
-                        .join("_")
-                )
-            }
+            TypeExpr::Or(_) => "any".to_string(),
         };
     }
 
