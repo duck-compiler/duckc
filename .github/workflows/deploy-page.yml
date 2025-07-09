@@ -30,7 +30,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install Dependencies
-        run: pip install -r source_repo/requirements.txt
+        run: pip install -r source_repo/.github/scripts/requirements.txt
 
       - name: Generate Issue Report
         working-directory: ./public
