@@ -118,7 +118,6 @@ fn parse_src_file(
     src_file_file_contents: &'static str,
     tokens: Vec<Spanned<Token>>,
 ) -> SourceFile {
-    let std_lib_src = Path::new("/usr/local/lib/duck/std/std.duck");
     if !DUCK_STD_PATH.exists() {
         println!(
             "{}{}{} Standard library not found",
@@ -128,11 +127,12 @@ fn parse_src_file(
         );
         std::process::exit(0);
     }
-    let file_text = std::fs::read_to_string(std_lib_src).unwrap().leak();
+
+    let file_text = std::fs::read_to_string(DUCK_STD_PATH.to_path_buf()).unwrap().leak();
     let lex = lex("std.duck", file_text);
     let std_src_file = source_file_parser(
         {
-            let mut buf = std_lib_src.to_path_buf();
+            let mut buf = DUCK_STD_PATH.to_path_buf();
             buf.pop();
             buf
         },
