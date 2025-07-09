@@ -26,7 +26,7 @@ jobs:
         run: |
           mkdir -p i
           # Kopiert die alten Daten, falls vorhanden. Das "|| true" verhindert einen Fehler, wenn der Ordner leer ist.
-          cp -r ./gh-pages-data/i/. ./i/ 2>/dev/null || true
+          cp -r ./gh-pages-data/.issues/ ./.issues/ 2>/dev/null || true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -36,7 +36,11 @@ jobs:
         run: pip install -r ./.github/scripts/requirements.txt
 
       - name: Generate Issue Report
-        run: python ./.github/scripts/track_issues.py
+        run: |
+            python ./.github/scripts/track_issues.py
+            ls -la ./.github/scripts/
+            ls -la ./
+            ls -la ./.issues
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
