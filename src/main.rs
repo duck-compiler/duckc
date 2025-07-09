@@ -25,7 +25,12 @@ use semantics::typechecker::{self, TypeEnv};
 use tags::Tag;
 
 use crate::parse::{
-    Context, SS, make_input, parse_failure, source_file_parser::source_file_parser,
+    Context, SS,
+    function_parser::LambdaFunctionExpr,
+    make_input, parse_failure,
+    source_file_parser::source_file_parser,
+    type_parser::{Duck, Struct, TypeExpr},
+    value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr},
 };
 
 use lazy_static::lazy_static;
@@ -132,7 +137,7 @@ fn parse_src_file(
         .unwrap()
         .leak();
     let lex = lex("std.duck", file_text);
-    let std_src_file = source_file_parser(
+    let mut std_src_file = source_file_parser(
         {
             let mut buf = DUCK_STD_PATH.to_path_buf();
             buf.pop();
@@ -151,7 +156,173 @@ fn parse_src_file(
         },
         lex.as_slice(),
     ))
-    .unwrap();
+    .unwrap()
+    .flatten();
+
+    for func in std_src_file.function_definitions.iter_mut() {
+        if let Some(params) = &mut func.params {
+            for (_, p) in params {
+                typename_reset_global(&mut p.0);
+            }
+        }
+
+        if let Some(ret) = &mut func.return_type {
+            typename_reset_global(&mut ret.0);
+        }
+
+        typename_reset_global_value_expr(&mut func.value_expr.0);
+    }
+
+    fn typename_reset_global(t: &mut TypeExpr) {
+        match t {
+            TypeExpr::TypeName(global, _) => *global = false,
+            TypeExpr::Array(t) => typename_reset_global(&mut t.0),
+            TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
+                for field in fields {
+                    typename_reset_global(&mut field.type_expr.0);
+                }
+            }
+            TypeExpr::Tuple(fields) => {
+                for field in fields {
+                    typename_reset_global(&mut field.0);
+                }
+            }
+            TypeExpr::Fun(params, ret) => {
+                for (_, p) in params {
+                    typename_reset_global(&mut p.0);
+                }
+
+                if let Some(ret) = ret {
+                    typename_reset_global(&mut ret.0);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn typename_reset_global_value_expr(t: &mut ValueExpr) {
+        match t {
+            ValueExpr::Match { value_expr, arms } => {
+                typename_reset_global_value_expr(&mut value_expr.0);
+                for arm in arms {
+                    typename_reset_global_value_expr(&mut arm.value_expr.0);
+                    typename_reset_global(&mut arm.type_case.0);
+                }
+            }
+            ValueExpr::Block(exprs) => {
+                for expr in exprs {
+                    typename_reset_global_value_expr(&mut expr.0);
+                }
+            }
+            ValueExpr::Add(l, r) | ValueExpr::Mul(l, r) | ValueExpr::Equals(l, r) => {
+                typename_reset_global_value_expr(&mut l.0);
+                typename_reset_global_value_expr(&mut r.0);
+            }
+            ValueExpr::Lambda(l) => {
+                let LambdaFunctionExpr {
+                    params,
+                    return_type,
+                    value_expr,
+                } = &mut **l;
+                for (_, p) in params {
+                    typename_reset_global(&mut p.0);
+                }
+
+                if let Some(return_type) = return_type {
+                    typename_reset_global(&mut return_type.0);
+                }
+
+                typename_reset_global_value_expr(&mut value_expr.0);
+            }
+            ValueExpr::ArrayAccess(target, idx) => {
+                typename_reset_global_value_expr(&mut target.0);
+                typename_reset_global_value_expr(&mut idx.0);
+            }
+            ValueExpr::FunctionCall { target, params } => {
+                for p in params {
+                    typename_reset_global_value_expr(&mut p.0);
+                }
+                typename_reset_global_value_expr(&mut target.0);
+            }
+            ValueExpr::FieldAccess {
+                target_obj,
+                field_name: _,
+            } => {
+                typename_reset_global_value_expr(&mut target_obj.0);
+            }
+            ValueExpr::Array(ty, exprs) => {
+                if let Some(ty) = ty {
+                    typename_reset_global(&mut ty.0);
+                }
+
+                for expr in exprs {
+                    typename_reset_global_value_expr(&mut expr.0);
+                }
+            }
+            ValueExpr::BoolNegate(expr) | ValueExpr::Return(Some(expr)) => {
+                typename_reset_global_value_expr(&mut expr.0);
+            }
+            ValueExpr::FormattedString(content) => {
+                for c in content {
+                    if let ValFmtStringContents::Expr(e) = c {
+                        typename_reset_global_value_expr(&mut e.0);
+                    }
+                }
+            }
+            ValueExpr::If {
+                condition,
+                then,
+                r#else,
+            } => {
+                typename_reset_global_value_expr(&mut condition.0);
+                typename_reset_global_value_expr(&mut then.0);
+                if let Some(r#else) = r#else {
+                    typename_reset_global_value_expr(&mut r#else.0);
+                }
+            }
+            ValueExpr::While { condition, body } => {
+                typename_reset_global_value_expr(&mut condition.0);
+                typename_reset_global_value_expr(&mut body.0);
+            }
+            ValueExpr::VarDecl(b) => {
+                let Declaration {
+                    name: _,
+                    type_expr,
+                    initializer,
+                } = &mut b.0;
+                typename_reset_global(&mut type_expr.0);
+
+                if let Some(initializer) = initializer {
+                    typename_reset_global_value_expr(&mut initializer.0);
+                }
+            }
+            ValueExpr::VarAssign(b) => {
+                let Assignment { target, value_expr } = &mut b.0;
+                typename_reset_global_value_expr(&mut target.0);
+                typename_reset_global_value_expr(&mut value_expr.0);
+            }
+            ValueExpr::Tuple(fields) => {
+                for field in fields {
+                    typename_reset_global_value_expr(&mut field.0);
+                }
+            }
+            ValueExpr::Duck(fields) | ValueExpr::Struct(fields) => {
+                for field in fields {
+                    typename_reset_global_value_expr(&mut field.1.0);
+                }
+            }
+            ValueExpr::Break
+            | ValueExpr::Char(..)
+            | ValueExpr::Continue
+            | ValueExpr::Float(..)
+            | ValueExpr::String(..)
+            | ValueExpr::Int(..)
+            | ValueExpr::Bool(..)
+            | ValueExpr::Variable(..)
+            | ValueExpr::Return(..)
+            | ValueExpr::InlineGo(..) => {}
+        }
+    }
 
     let (src_file, parse_errors) = source_file_parser(
         {
@@ -180,7 +351,7 @@ fn parse_src_file(
 
     let mut src_file = src_file.unwrap();
     src_file.sub_modules.push(("std".into(), std_src_file));
-    src_file.flatten()
+    dbg!(src_file.flatten())
 }
 
 fn typecheck(src_file_ast: &mut SourceFile) -> TypeEnv {
