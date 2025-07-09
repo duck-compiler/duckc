@@ -6,8 +6,9 @@ import subprocess
 import requests
 from datetime import datetime
 
-TARGET_DIRECTORY = os.environ.get("SCAN_TARGET_DIR", "./src")
-ISSUES_DIR = "i"
+TARGET_DIRECTORY = os.environ.get("SCAN_TARGET_DIR", "../src")
+STATE_DIR = "./.issues/state"
+ISSUES_DIR = "./.issues"
 FILE_EXTENSIONS = (".rs",)
 COMMENT_MARKER = "//"
 COMMENT_TAGS = ("todo", "review")
@@ -217,27 +218,27 @@ def find_issues_in_file(file_path, scan_dir):
 def get_all_source_files(directory):
     source_files = []
     for root, _, files in os.walk(directory):
-        if ISSUES_DIR in root:
-            continue
         for file in files:
             if file.endswith(FILE_EXTENSIONS):
                 source_files.append(os.path.join(root, file))
+
+    print(source_files)
     return source_files
 
 def update_issue_database(found_issues):
-    if not os.path.exists(ISSUES_DIR):
-        os.makedirs(ISSUES_DIR)
+    if not os.path.exists(STATE_DIR):
+        os.makedirs(STATE_DIR)
 
     activities = []
     now_iso = datetime.now().isoformat()
 
-    tracked_issue_files = {f.replace('.json', '') for f in os.listdir(ISSUES_DIR) if f.endswith('.json') and f != 'activity_log.json'}
+    tracked_issue_files = {f.replace('.json', '') for f in os.listdir(STATE_DIR) if f.endswith('.json') and f != 'activity_log.json'}
     found_issue_ids = set()
 
     for issue in found_issues:
         issue_id = issue["id"]
         found_issue_ids.add(issue_id)
-        issue_file_path = os.path.join(ISSUES_DIR, f"{issue_id}.json")
+        issue_file_path = os.path.join(STATE_DIR, f"{issue_id}.json")
 
         if os.path.exists(issue_file_path):
             with open(issue_file_path, 'r', encoding='utf-8') as f:
@@ -268,7 +269,7 @@ def update_issue_database(found_issues):
 
     closed_issue_ids = tracked_issue_files - found_issue_ids
     for issue_id in closed_issue_ids:
-        issue_file_path = os.path.join(ISSUES_DIR, f"{issue_id}.json")
+        issue_file_path = os.path.join(STATE_DIR, f"{issue_id}.json")
         with open(issue_file_path, 'r', encoding='utf-8') as f:
             issue_data = json.load(f)
         if issue_data["status"] == "open":
@@ -376,10 +377,10 @@ def generate_html_report(git_info):
     """
     report_path = os.path.join(ISSUES_DIR, "index.html")
     all_issues = []
-    if os.path.exists(ISSUES_DIR):
-        for filename in sorted(os.listdir(ISSUES_DIR)):
+    if os.path.exists(STATE_DIR):
+        for filename in sorted(os.listdir(STATE_DIR)):
             if filename.endswith(".json") and filename != "activity_log.json":
-                with open(os.path.join(ISSUES_DIR, filename), 'r', encoding='utf-8') as f:
+                with open(os.path.join(STATE_DIR, filename), 'r', encoding='utf-8') as f:
                     all_issues.append(json.load(f))
 
     open_issues = sorted([i for i in all_issues if i['status'] == 'open'], key=lambda x: (x.get('module_tag', 'zzzz'), x['file_path']))

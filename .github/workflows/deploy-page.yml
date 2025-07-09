@@ -42,7 +42,7 @@ jobs:
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./i
+          publish_dir: ./.issues
           publish_branch: gh-pages
           force_orphan: false
           commit_message: "docs: Update issue tracker report [skip ci]"
