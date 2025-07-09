@@ -30,7 +30,7 @@ jobs:
             cp main-branch/.github/scripts/requirements.txt .
             cp -r main-branch/src .
             mkdir ./.issues/
-            cp -r gh-pages/state ./.issues/state
+            cp -r gh-pages/state ./.issues/state &2>/dev/null || true
 
       - name: Set up Python
         uses: actions/setup-python@v5
