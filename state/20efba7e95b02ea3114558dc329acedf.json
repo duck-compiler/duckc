@@ -7,7 +7,7 @@
     "module_tag": "dargo",
     "user": "@Apfelfrosch",
     "issue_ref": null,
-    "description": "",
+    "description": "hallo welt",
     "blame": {
         "name": "Mvmo",
         "email": "mvmogo@gmail.com"
@@ -15,5 +15,10 @@
     "source_line": "// todo(@Apfelfrosch): Please do something",
     "status": "open",
     "first_seen": "2025-07-10T15:17:27.962722",
-    "history": []
+    "history": [
+        {
+            "timestamp": "2025-07-10T15:19:11.913306",
+            "description": ""
+        }
+    ]
 }
