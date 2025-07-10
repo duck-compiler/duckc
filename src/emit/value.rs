@@ -3,7 +3,8 @@ use crate::{
         function_parser::LambdaFunctionExpr,
         type_parser::{Duck, Struct, TypeExpr},
         value_parser::{Declaration, ValFmtStringContents, ValueExpr},
-    }, semantics::type_resolve::TypeEnv,
+    },
+    semantics::type_resolve::TypeEnv,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -432,6 +433,15 @@ impl ValueExpr {
                             format!("{target_res}[{idx_res}.as_dgo_int()]"),
                             a_res,
                         ));
+                    } else {
+                        let (target_instr, Some(IrValue::Var(target_res))) =
+                            target.emit(type_env, env)
+                        else {
+                            panic!("can only assign var")
+                        };
+
+                        res.extend(target_instr);
+                        res.push(IrInstruction::VarAssignment(target_res, a_res));
                     }
 
                     (res, Some(IrValue::empty_tuple()))
@@ -800,7 +810,8 @@ mod tests {
             make_input,
             type_parser::TypeExpr,
             value_parser::{empty_range, value_expr_parser},
-        }, semantics::type_resolve::TypeEnv,
+        },
+        semantics::type_resolve::TypeEnv,
     };
 
     fn decl(name: impl Into<String>, t: impl Into<String>) -> IrInstruction {

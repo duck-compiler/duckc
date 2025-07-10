@@ -1,0 +1,15 @@
+use go "fmt";
+
+fn main() {
+    let a: ((),) = ((),);
+    let b: ((),(),) = ((),(),);
+    let c: (((),),(),) = (((),),(),);
+    let d: ((((),),),(),) = ((((),),),(),);
+
+    go {
+        fmt.Println(a)
+        fmt.Println(b)
+        fmt.Println(c)
+        fmt.Println(d)
+    }
+}

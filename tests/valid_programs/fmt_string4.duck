@@ -1,0 +1,4 @@
+fn main() {
+    let x: String = f"String in {"String"} <- this is a string";
+    std::io::println(x);
+}

@@ -1,0 +1,8 @@
+fn main() {
+    let x: String = f"hello i'm an f string";
+    std::io::println(x);
+    x = "i'm a normal string";
+    std::io::println(x);
+    x = f"Previous value: {x}";
+    std::io::println(x);
+}

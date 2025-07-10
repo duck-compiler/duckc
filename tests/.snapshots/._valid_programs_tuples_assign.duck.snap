@@ -1,0 +1,4 @@
+{
+    "stdout": "{}\n{{Tuple}}\n{{tuple 2} {10}}\n{}\n{{Tuple}}\n{{New string: tuple 2} {10}}\n",
+    "stderr": ""
+}

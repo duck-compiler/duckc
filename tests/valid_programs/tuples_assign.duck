@@ -10,4 +10,12 @@ fn main() {
         fmt.Println(y)
         fmt.Println(z)
     }
+
+    z.0 = f"New string: {z.0}";
+
+    go {
+        fmt.Println(x)
+        fmt.Println(y)
+        fmt.Println(z)
+    }
 }

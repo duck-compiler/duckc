@@ -1,0 +1,10 @@
+fn main() {
+    if (true) {
+        std::io::println("level 1");
+        if (false) {
+            std::io::println("nested true");
+        } else {
+            std::io::println("nested else");
+        }
+    }
+}
