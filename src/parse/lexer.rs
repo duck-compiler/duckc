@@ -39,6 +39,8 @@ pub enum Token {
     Module,
     ScopeRes,
     ThinArrow,
+    Comment(String),
+    DocComment(String),
 }
 
 impl Display for Token {
@@ -71,6 +73,8 @@ impl Display for Token {
             Token::InlineGo(_) => "inline go",
             Token::Module => "module",
             Token::Match => "match",
+            Token::DocComment(comment) => &format!("/// {comment}"),
+            Token::Comment(comment) => &format!("// {comment}"),
         };
         write!(f, "{t}")
     }
@@ -143,6 +147,16 @@ pub fn lex_single<'a>(
         let scope_res = just("::").to(Token::ScopeRes);
         let thin_arrow = just("->").to(Token::ThinArrow);
 
+        let doc_comment = just("///")
+                .ignore_then(any().and_is(just('\n').not()).repeated().collect::<Vec<_>>())
+                .padded()
+                .map(|comment| Token::DocComment(comment.iter().collect::<String>().trim().to_string()));
+
+        let comment = just("//")
+                .ignore_then(any().and_is(just('\n').not()).repeated().collect::<Vec<_>>())
+                .padded()
+                .map(|comment| Token::Comment(comment.iter().collect::<String>().trim().to_string()));
+
         let fmt_string = just("f")
             .ignore_then(just('"'))
             .ignore_then(
@@ -168,6 +182,8 @@ pub fn lex_single<'a>(
             .map(Token::FormatStringLiteral);
 
         let token = inline_go_parser()
+            .or(doc_comment)
+            .or(comment)
             .or(fmt_string)
             .or(thin_arrow)
             .or(scope_res)
@@ -307,6 +323,154 @@ mod tests {
                         (Token::ControlChar('}'), empty_range()),
                     ],
                 )])],
+            ),
+            (
+                "/// hallo ich bin ein dokkommentar",
+                vec![
+                    Token::DocComment("hallo ich bin ein dokkommentar".to_string())
+                ]
+            ),
+            (
+                "// hallo ich bin ein kommentar",
+                vec![
+                    Token::Comment("hallo ich bin ein kommentar".to_string())
+                ]
+            ),
+            (
+                "//",
+                vec![
+                    Token::Comment("".to_string())
+                ]
+            ),
+            (
+                "///",
+                vec![
+                    Token::DocComment("".to_string())
+                ]
+            ),
+            (
+                "//    ",
+                vec![
+                    Token::Comment("".to_string())
+                ]
+            ),
+            (
+                "///    ",
+                vec![
+                    Token::DocComment("".to_string())
+                ]
+            ),
+            (
+                "//  leading and trailing whitespace  ",
+                vec![
+                    Token::Comment("leading and trailing whitespace".to_string())
+                ]
+            ),
+            (
+                "///  leading and trailing whitespace  ",
+                vec![
+                    Token::DocComment("leading and trailing whitespace".to_string())
+                ]
+            ),
+            (
+                "//// this is a doc comment",
+                vec![
+                    Token::DocComment("/ this is a doc comment".to_string())
+                ]
+            ),
+            (
+                "// an /// inner doc comment",
+                vec![
+                    Token::Comment("an /// inner doc comment".to_string())
+                ]
+            ),
+            (
+                "/// a // regular inner comment",
+                vec![
+                    Token::DocComment("a // regular inner comment".to_string())
+                ]
+            ),
+            (
+                "// a comment with !@#$%^&*()_+-=[]{}|;':\",./<>?",
+                vec![
+                    Token::Comment("a comment with !@#$%^&*()_+-=[]{}|;':\",./<>?".to_string())
+                ]
+            ),
+            (
+                "/// a doc comment with !@#$%^&*()_+-=[]{}|;':\",./<>?",
+                vec![
+                    Token::DocComment("a doc comment with !@#$%^&*()_+-=[]{}|;':\",./<>?".to_string())
+                ]
+            ),
+            (
+                "// Hallo World 🌍",
+                vec![
+                    Token::Comment("Hallo World 🌍".to_string())
+                ]
+            ),
+            (
+                "/// Hallo World 🌍",
+                vec![
+                    Token::DocComment("Hallo World 🌍".to_string())
+                ]
+            ),
+            (
+                "// first line\n// second line",
+                vec![
+                    Token::Comment("first line".to_string()),
+                    Token::Comment("second line".to_string())
+                ]
+            ),
+            (
+                "/// doc line 1\n/// doc line 2\n// regular line 3",
+                vec![
+                    Token::DocComment("doc line 1".to_string()),
+                    Token::DocComment("doc line 2".to_string()),
+                    Token::Comment("regular line 3".to_string())
+                ]
+            ),
+            (
+                "// a comment with a // nested one",
+                vec![
+                    Token::Comment("a comment with a // nested one".to_string())
+                ]
+            ),
+            (
+                "/// a doc comment with a // nested regular one",
+                vec![
+                    Token::DocComment("a doc comment with a // nested regular one".to_string())
+                ]
+            ),
+            (
+                "// a comment with a /// nested doc one",
+                vec![
+                    Token::Comment("a comment with a /// nested doc one".to_string())
+                ]
+            ),
+            (
+                "//\tcomment with a tab before content",
+                vec![
+                    Token::Comment("comment with a tab before content".to_string())
+                ]
+            ),
+            (
+                "///\t doc comment with a tab before content",
+                vec![
+                    Token::DocComment("doc comment with a tab before content".to_string())
+                ]
+            ),
+            (
+                "// comment with mixed languages: Привет мир, こんにちは世界",
+                vec![
+                    Token::Comment("comment with mixed languages: Привет мир, こんにちは世界".to_string())
+                ]
+            ),
+            (
+                "//\n///",
+                vec![
+                    Token::Comment("".to_string()),
+                    Token::DocComment("".to_string())
+                ]
             ),
             (
                 "f\"{1}\"",
