@@ -2,10 +2,19 @@ use go "fmt";
 
 fn main() {
     let x: ((String,),) = (("tuple",),);
+
     go {
         fmt.Println(x)
     }
+
     x.0 = ("replaced",);
+
+    go {
+        fmt.Println(x)
+    }
+
+    x.0.0 = "again replaced";
+
     go {
         fmt.Println(x)
     }
