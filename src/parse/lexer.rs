@@ -644,6 +644,193 @@ mod tests {
                     FmtStringContents::Tokens(vec![(Token::Ident("var".into()), empty_range())]),
                 ])],
             ),
+            (
+                // Adjacent strings and f-strings to test greedy tokenizing.
+                "\"a\"f\"b\"'c'",
+                vec![
+                    Token::StringLiteral("a".to_string()),
+                    Token::FormatStringLiteral(vec![FmtStringContents::Char('b')]),
+                    Token::CharLiteral('c'),
+                ]
+            ),
+            (
+                "123testing",
+                vec![
+                    Token::IntLiteral(123),
+                    Token::Ident("testing".to_string()),
+                ]
+            ),
+            (
+                "ifelse",
+                vec![
+                    Token::Ident("ifelse".to_string()),
+                ]
+            ),
+            (
+                // todo: discuss if π should be an valid identifier
+                "let π = 3;",
+                vec![
+                    Token::Let,
+                    Token::Ident("π".to_string()),
+                    Token::ControlChar('='),
+                    Token::IntLiteral(3),
+                    Token::ControlChar(';'),
+                ]
+            ),
+            (
+                // todo: divide token
+                "5 / 2",
+                vec![
+                    Token::IntLiteral(5),
+                    Token::ControlChar('/'),
+                    Token::IntLiteral(2),
+                ]
+            ),
+            (
+                "fn(x){if(true)1 else 0;}",
+                vec![
+                    Token::Function,
+                    Token::ControlChar('('),
+                    Token::Ident("x".to_string()),
+                    Token::ControlChar(')'),
+                    Token::ControlChar('{'),
+                    Token::If,
+                    Token::ControlChar('('),
+                    Token::BoolLiteral(true),
+                    Token::ControlChar(')'),
+                    Token::IntLiteral(1),
+                    Token::Else,
+                    Token::IntLiteral(0),
+                    Token::ControlChar(';'),
+                    Token::ControlChar('}'),
+                ]
+            ),
+            (
+                "1.0// a float-like thing",
+                vec![
+                    Token::IntLiteral(1),
+                    Token::ControlChar('.'),
+                    Token::IntLiteral(0),
+                    Token::Comment("a float-like thing".to_string()),
+                ]
+            ),
+            (
+                "f\" outer {\"inner\"} outer \"",
+                vec![
+                    Token::FormatStringLiteral(vec![
+                        FmtStringContents::Char(' '),
+                        FmtStringContents::Char('o'),
+                        FmtStringContents::Char('u'),
+                        FmtStringContents::Char('t'),
+                        FmtStringContents::Char('e'),
+                        FmtStringContents::Char('r'),
+                        FmtStringContents::Char(' '),
+                        FmtStringContents::Tokens(
+                            vec![(Token::StringLiteral("inner".to_string()), empty_range())]
+                        ),
+                        FmtStringContents::Char(' '),
+                        FmtStringContents::Char('o'),
+                        FmtStringContents::Char('u'),
+                        FmtStringContents::Char('t'),
+                        FmtStringContents::Char('e'),
+                        FmtStringContents::Char('r'),
+                        FmtStringContents::Char(' '),
+                    ])
+                ]
+            ),
+            (
+                "f\"\"",
+                vec![
+                    Token::FormatStringLiteral(vec![])
+                ]
+            ),
+            (
+                "f\"{}\"",
+                vec![
+                    Token::FormatStringLiteral(vec![
+                        FmtStringContents::Tokens(vec![])
+                    ])
+                ]
+            ),
+            (
+                "f\"result is {calc(1, 2)}\"",
+                vec![
+                    Token::FormatStringLiteral(vec![
+                        FmtStringContents::Char('r'),
+                        FmtStringContents::Char('e'),
+                        FmtStringContents::Char('s'),
+                        FmtStringContents::Char('u'),
+                        FmtStringContents::Char('l'),
+                        FmtStringContents::Char('t'),
+                        FmtStringContents::Char(' '),
+                        FmtStringContents::Char('i'),
+                        FmtStringContents::Char('s'),
+                        FmtStringContents::Char(' '),
+                        FmtStringContents::Tokens(vec![
+                            (Token::Ident("calc".to_string()), empty_range()),
+                            (Token::ControlChar('('), empty_range()),
+                            (Token::IntLiteral(1), empty_range()),
+                            (Token::ControlChar(','), empty_range()),
+                            (Token::IntLiteral(2), empty_range()),
+                            (Token::ControlChar(')'), empty_range()),
+                        ]),
+                    ])
+                ]
+            ),
+            (
+                "f\"outer {f\"inner {y}\"} end\"",
+                vec![
+                    Token::FormatStringLiteral(vec![
+                        FmtStringContents::Char('o'),
+                        FmtStringContents::Char('u'),
+                        FmtStringContents::Char('t'),
+                        FmtStringContents::Char('e'),
+                        FmtStringContents::Char('r'),
+                        FmtStringContents::Char(' '),
+                        FmtStringContents::Tokens(vec![(
+                            Token::FormatStringLiteral(vec![
+                                FmtStringContents::Char('i'),
+                                FmtStringContents::Char('n'),
+                                FmtStringContents::Char('n'),
+                                FmtStringContents::Char('e'),
+                                FmtStringContents::Char('r'),
+                                FmtStringContents::Char(' '),
+                                FmtStringContents::Tokens(vec![(Token::Ident("y".to_string()), empty_range())]),
+                            ]),
+                            empty_range(),
+                        )]),
+                        FmtStringContents::Char(' '),
+                        FmtStringContents::Char('e'),
+                        FmtStringContents::Char('n'),
+                        FmtStringContents::Char('d'),
+                    ])
+                ]
+            ),
+            (
+                "f\"{1+1}\"",
+                vec![
+                    Token::FormatStringLiteral(vec![
+                        FmtStringContents::Tokens(vec![
+                            (Token::IntLiteral(1), empty_range()),
+                            (Token::ControlChar('+'), empty_range()),
+                            (Token::IntLiteral(1), empty_range()),
+                        ]),
+                    ])
+                ]
+            ),
+            (
+                "f\"{1+1}a\"",
+                vec![
+                    Token::FormatStringLiteral(vec![
+                        FmtStringContents::Tokens(vec![
+                            (Token::IntLiteral(1), empty_range()),
+                            (Token::ControlChar('+'), empty_range()),
+                            (Token::IntLiteral(1), empty_range()),
+                        ]),
+                        FmtStringContents::Char('a'),
+                    ])
+                ]
+            ),
         ];
 
         for (src, expected_tokens) in test_cases {
