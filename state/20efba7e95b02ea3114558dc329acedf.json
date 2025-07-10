@@ -1,19 +1,19 @@
 {
-    "id": "fe7bbea4368102b886c67bf2bedada4a",
+    "id": "20efba7e95b02ea3114558dc329acedf",
     "file_path": "../../src/dargo/build.rs",
-    "line_number": 109,
-    "title": "windows :(",
+    "line_number": 22,
+    "title": "Please do something",
     "tag": "todo",
     "module_tag": "dargo",
-    "user": null,
+    "user": "@Apfelfrosch",
     "issue_ref": null,
     "description": "",
     "blame": {
         "name": "Mvmo",
         "email": "mvmogo@gmail.com"
     },
-    "source_line": "// TODO: windows :(",
+    "source_line": "// todo(@Apfelfrosch): Please do something",
     "status": "open",
-    "first_seen": "2025-07-09T23:15:12.305961",
+    "first_seen": "2025-07-10T15:17:27.962722",
     "history": []
 }

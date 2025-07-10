@@ -1,6 +1,16 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-07-10T15:17:27.959302",
+        "issue_id": "20efba7e95b02ea3114558dc329acedf",
+        "issue_title": "Please do something",
+        "author_info": {
+            "name": "Mvmo",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-07-10T02:06:00.308700",
         "issue_id": "8d0660ae75477e8a06503be8ae6848e1",
         "issue_title": "code doc generation, using doc comments",
