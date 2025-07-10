@@ -1,6 +1,0 @@
-use go "fmt";
-fn do_io() {
-    go {
-        fmt.Println("Doing io lol")
-    }
-}

@@ -1,0 +1,17 @@
+use go "fmt";
+
+fn main() {
+    let x: { a: { b: { c: Int } }, z: Bool } = {
+        a: {
+            b: {
+                c: 10
+            }
+        },
+        z: true
+    };
+
+    go {
+        fmt.Println(x.Getz())
+        fmt.Println(x.Geta().Getb().Getc())
+    }
+}

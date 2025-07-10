@@ -1,0 +1,8 @@
+use go "fmt";
+
+fn main() {
+    let x: { s: String } = { s: "i am in a duck" };
+    go {
+        fmt.Println(x)
+    }
+}

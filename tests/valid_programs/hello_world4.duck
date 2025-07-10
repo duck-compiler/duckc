@@ -1,0 +1,7 @@
+use std::{io};
+use std::io::{println};
+
+fn main() {
+    io::println("with io");
+    println("with println");
+}

@@ -1,4 +1,0 @@
-module abc {
-
-module xyz {
-fn abc() {}

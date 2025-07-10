@@ -26,7 +26,6 @@ pub enum Token {
     IntLiteral(i64),
     BoolLiteral(bool),
     CharLiteral(char),
-    FloatLiteral(f64),
     Equals,
     Match,
     If,
@@ -61,7 +60,6 @@ impl Display for Token {
             Token::IntLiteral(_) => "int",
             Token::BoolLiteral(_) => "bool",
             Token::CharLiteral(_) => "char",
-            Token::FloatLiteral(_) => "float",
             Token::Equals => "equals",
             Token::If => "if",
             Token::Else => "else",
@@ -241,15 +239,7 @@ fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'s
         s.parse::<i64>()
             .map_err(|_| Rich::custom(span, "Invalid integer"))
     });
-    let frac = just('.').ignore_then(text::digits(10)).to_slice();
-    pre.then(frac.or_not()).map(|(pre, frac)| {
-        if let Some(frac) = frac {
-            let num = format!("{pre}{frac}").parse().unwrap();
-            Token::FloatLiteral(num)
-        } else {
-            Token::IntLiteral(pre)
-        }
-    })
+    pre.map(Token::IntLiteral)
 }
 
 fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone {
@@ -454,7 +444,14 @@ mod tests {
             ),
             ("'c'", vec![Token::CharLiteral('c')]),
             ("'\\n'", vec![Token::CharLiteral('\n')]),
-            ("1.1", vec![Token::FloatLiteral(1.1)]),
+            (
+                "1.1",
+                vec![
+                    Token::IntLiteral(1),
+                    Token::ControlChar('.'),
+                    Token::IntLiteral(1),
+                ],
+            ),
             (
                 "let x: {};",
                 vec![

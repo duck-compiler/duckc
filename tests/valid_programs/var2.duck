@@ -1,0 +1,4 @@
+fn main() {
+    let x: String = "hallo";
+    std::io::println(x);
+}

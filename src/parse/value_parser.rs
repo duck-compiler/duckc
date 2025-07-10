@@ -416,8 +416,13 @@ where
                 .map(ValueExpr::Char)
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
-            let float_expr = select_ref! { Token::FloatLiteral(num) => *num }
-                .map(ValueExpr::Float)
+
+            let float_expr = select_ref! { Token::IntLiteral(num) => *num }
+                .then_ignore(just(Token::ControlChar('.')))
+                .then(select_ref! { Token::IntLiteral(num) => *num })
+                .map(|(pre, frac)| {
+                    ValueExpr::Float(format!("{pre}.{frac}").parse::<f64>().unwrap())
+                })
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
@@ -505,6 +510,7 @@ where
                         .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                         .or(choice((
                             choice((array.clone(), array_with_type.clone())),
+                            float_expr,
                             int,
                             fmt_string,
                             bool_val,
@@ -513,7 +519,6 @@ where
                             r#match,
                             if_expr,
                             char_expr,
-                            float_expr,
                             tuple,
                             duck_expression,
                             struct_expression,
