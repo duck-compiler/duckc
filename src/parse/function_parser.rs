@@ -84,7 +84,7 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::{lexer::lexer, make_input, value_parser::empty_range};
+    use crate::parse::{lexer::lex_parser, make_input, value_parser::empty_range};
 
     use super::*;
 
@@ -102,7 +102,7 @@ pub mod tests {
 
         for valid_function_definition in valid_function_definitions {
             println!("lexing {valid_function_definition}");
-            let lexer_parse_result = lexer("test", "").parse(valid_function_definition);
+            let lexer_parse_result = lex_parser("test", "").parse(valid_function_definition);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -121,7 +121,7 @@ pub mod tests {
 
         for invalid_function_definition in invalid_function_definitions {
             println!("lexing {invalid_function_definition}");
-            let lexer_parse_result = lexer("test", "").parse(invalid_function_definition);
+            let lexer_parse_result = lex_parser("test", "").parse(invalid_function_definition);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 

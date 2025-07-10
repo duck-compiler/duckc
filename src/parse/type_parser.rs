@@ -449,7 +449,7 @@ where
 #[cfg(test)]
 pub mod tests {
     use crate::parse::{
-        lexer::lexer,
+        lexer::lex_parser,
         make_input,
         value_parser::{empty_range, type_expr_into_empty_range},
     };
@@ -496,7 +496,7 @@ pub mod tests {
 
     fn assert_type_expression(input_str: &str, expected_expr: TypeExpr) {
         println!("lexing and parsing: \"{}\"", input_str);
-        let lexer_parse_result = lexer("test", "").parse(input_str);
+        let lexer_parse_result = lex_parser("test", "").parse(input_str);
         assert!(
             !lexer_parse_result.has_errors(),
             "lexing errors for \"{}\": {:?}",
@@ -1031,7 +1031,7 @@ pub mod tests {
 
         for valid_type_definition in valid_type_definitions {
             println!("lexing {valid_type_definition}");
-            let lexer_parse_result = lexer("test", "").parse(valid_type_definition);
+            let lexer_parse_result = lex_parser("test", "").parse(valid_type_definition);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -1069,7 +1069,7 @@ pub mod tests {
 
         for valid_type_expression in valid_type_expressions {
             println!("lexing {valid_type_expression}");
-            let lexer_parse_result = lexer("test", "").parse(valid_type_expression);
+            let lexer_parse_result = lex_parser("test", "").parse(valid_type_expression);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -1104,7 +1104,7 @@ pub mod tests {
 
         for invalid_type_expression in invalid_type_expressions {
             println!("lexing {invalid_type_expression}");
-            let lexer_parse_result = lexer("test", "").parse(invalid_type_expression);
+            let lexer_parse_result = lex_parser("test", "").parse(invalid_type_expression);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 

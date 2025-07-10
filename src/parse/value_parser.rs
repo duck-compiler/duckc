@@ -877,7 +877,7 @@ mod tests {
     use crate::parse::{
         Spanned,
         function_parser::LambdaFunctionExpr,
-        lexer::lexer,
+        lexer::lex_parser,
         make_input,
         type_parser::{Duck, Field, TypeExpr},
         value_parser::{
@@ -2295,7 +2295,8 @@ mod tests {
         ];
 
         for (i, (src, expected_tokens)) in test_cases.into_iter().enumerate() {
-            let lex_result = lexer("test", "").parse(src).into_result().expect(&src);
+            let lex_result = lex_parser("test", "").parse(src).into_result().expect(&src);
+            dbg!(&lex_result);
             let parse_result =
                 value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
 
@@ -2349,7 +2350,7 @@ mod tests {
         ];
 
         for (input, expected_output) in inputs_and_expected_outputs {
-            let lexer_parse_result = lexer("test", "").parse(input);
+            let lexer_parse_result = lex_parser("test", "").parse(input);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -2393,7 +2394,7 @@ mod tests {
 
         for valid_declaration in valid_declarations {
             println!("lexing {valid_declaration}");
-            let lexer_parse_result = lexer("test", "").parse(valid_declaration);
+            let lexer_parse_result = lex_parser("test", "").parse(valid_declaration);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -2425,7 +2426,7 @@ mod tests {
         ];
 
         for valid_assignment in valid_assignments {
-            let lexer_parse_result = lexer("test", "").parse(valid_assignment);
+            let lexer_parse_result = lex_parser("test", "").parse(valid_assignment);
             assert_eq!(lexer_parse_result.has_errors(), false, "{valid_assignment}");
             assert_eq!(lexer_parse_result.has_output(), true);
 

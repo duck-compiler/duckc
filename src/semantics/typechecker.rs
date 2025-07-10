@@ -751,7 +751,7 @@ fn check_type_compatability(
 #[cfg(test)]
 mod test {
     use crate::{parse::{
-        function_parser::FunctionDefintion, lexer::lexer, make_input, source_file_parser::SourceFile, type_parser::Field, value_parser::{empty_range, value_expr_parser}
+        function_parser::FunctionDefintion, lexer::lex_parser, make_input, source_file_parser::SourceFile, type_parser::Field, value_parser::{empty_range, value_expr_parser}
     }, semantics::type_resolve::{typeresolve_source_file, TypesSummary}};
     use chumsky::prelude::*;
 
@@ -818,7 +818,7 @@ mod test {
 
         for (src, expected_type_expr) in src_and_expected_type_vec {
             println!("lexing {src}");
-            let lexer_parse_result = lexer("test", "").parse(src);
+            let lexer_parse_result = lex_parser("test", "").parse(src);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -957,7 +957,7 @@ mod test {
         ];
 
         for (src, summary_check_fun) in src_and_summary_check_funs {
-            let lexer_parse_result = lexer("test", "").parse(src);
+            let lexer_parse_result = lex_parser("test", "").parse(src);
             assert_eq!(lexer_parse_result.has_errors(), false, "Couldn't lex {src}");
             assert_eq!(lexer_parse_result.has_output(), true, "Couldn't lex {src}");
 
