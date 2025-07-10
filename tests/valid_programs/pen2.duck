@@ -1,0 +1,11 @@
+use std::string::{to_upper, to_lower};
+
+fn main() {
+    "should be upper"->to_upper()->std::io::println();
+    "SHOULD BE LOWER"->to_lower()->std::io::println();
+    "SHOULD BE LOWER"
+        ->to_lower()
+        ->to_lower()
+        ->to_lower()
+        ->std::io::println();
+}

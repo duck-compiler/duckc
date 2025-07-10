@@ -1,0 +1,9 @@
+fn main() {
+    "should be upper"->std::string::to_upper()->std::io::println();
+    "SHOULD BE LOWER"->std::string::to_lower()->std::io::println();
+    "SHOULD BE LOWER"
+        ->std::string::to_lower()
+        ->std::string::to_lower()
+        ->std::string::to_lower()
+        ->std::io::println();
+}
