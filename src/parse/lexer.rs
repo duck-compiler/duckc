@@ -671,7 +671,7 @@ mod tests {
     fn test_lex_comment_filtered() {
         let test_cases = vec![
             (
-                "f\"{{{1}}}\"",
+                "f\"{{{1}}}\" // check",
                 vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
                     vec![
                         (Token::ControlChar('{'), empty_range()),
@@ -776,53 +776,46 @@ mod tests {
             (
                 "// a comment with a // nested one",
                 vec![
-
                 ]
             ),
             (
                 "/// a doc comment with a // nested regular one",
                 vec![
-
                 ]
             ),
             (
                 "// a comment with a /// nested doc one",
                 vec![
-
                 ]
             ),
             (
                 "//\tcomment with a tab before content",
                 vec![
-
                 ]
             ),
             (
                 "///\t doc comment with a tab before content",
                 vec![
-
                 ]
             ),
             (
                 "// comment with mixed languages: Привет мир, こんにちは世界",
                 vec![
-
                 ]
             ),
             (
                 "//\n///",
                 vec![
-
                 ]
             ),
             (
-                "f\"{1}\"",
+                "f\"{1}\" // check",
                 vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
                     vec![(Token::IntLiteral(1), empty_range())],
                 )])],
             ),
             (
-                "type Y = duck {};",
+                "type Y = duck {}; // check",
                 vec![
                     Token::Type,
                     Token::Ident("Y".to_string()),
@@ -834,7 +827,7 @@ mod tests {
                 ],
             ),
             (
-                "typeY=duck{};",
+                "typeY=duck{}; // check",
                 vec![
                     Token::Ident("typeY".to_string()),
                     Token::ControlChar('='),
@@ -845,7 +838,7 @@ mod tests {
                 ],
             ),
             (
-                "type Y = duck {} & duck {};",
+                "type Y = duck {} & duck {}; // check",
                 vec![
                     Token::Type,
                     Token::Ident("Y".to_string()),
@@ -861,7 +854,7 @@ mod tests {
                 ],
             ),
             (
-                "type Y = duck { x: String, y: String };",
+                "type Y = duck { x: String, y: String }; // check",
                 vec![
                     Token::Type,
                     Token::Ident("Y".to_string()),
@@ -879,31 +872,31 @@ mod tests {
                     Token::ControlChar(';'),
                 ],
             ),
-            ("()", vec![Token::ControlChar('('), Token::ControlChar(')')]),
-            ("->", vec![Token::ThinArrow]),
-            ("fn", vec![Token::Function]),
-            ("\"\"", vec![Token::StringLiteral(String::from(""))]),
-            ("\"XX\"", vec![Token::StringLiteral(String::from("XX"))]),
+            ("() // check", vec![Token::ControlChar('('), Token::ControlChar(')')]),
+            ("-> // check", vec![Token::ThinArrow]),
+            ("fn // check", vec![Token::Function]),
+            ("\"\" // check", vec![Token::StringLiteral(String::from(""))]),
+            ("\"XX\" // check", vec![Token::StringLiteral(String::from("XX"))]),
             (
-                "\"X\\\"X\"",
+                "\"X\\\"X\" // check",
                 vec![Token::StringLiteral(String::from("X\"X"))],
             ),
             (
-                "\"Hallo ich bin ein String\\n\\n\\nNeue Zeile\"",
+                "\"Hallo ich bin ein String\\n\\n\\nNeue Zeile\" // check",
                 vec![Token::StringLiteral(String::from(
                     "Hallo ich bin ein String\n\n\nNeue Zeile",
                 ))],
             ),
-            ("1", vec![Token::IntLiteral(1)]),
-            ("2003", vec![Token::IntLiteral(2003)]),
-            ("true", vec![Token::BoolLiteral(true)]),
-            ("false", vec![Token::BoolLiteral(false)]),
-            ("go { {} }", vec![Token::InlineGo(String::from(" {} "))]),
-            ("go { xx }", vec![Token::InlineGo(String::from(" xx "))]),
-            ("go {}", vec![Token::InlineGo(String::from(""))]),
-            ("go {{}{}{}}", vec![Token::InlineGo(String::from("{}{}{}"))]),
+            ("1 // check", vec![Token::IntLiteral(1)]),
+            ("2003 // check", vec![Token::IntLiteral(2003)]),
+            ("true // check", vec![Token::BoolLiteral(true)]),
+            ("false // check", vec![Token::BoolLiteral(false)]),
+            ("go { {} } // check", vec![Token::InlineGo(String::from(" {} "))]),
+            ("go { xx } // check", vec![Token::InlineGo(String::from(" xx "))]),
+            ("go {} // check", vec![Token::InlineGo(String::from(""))]),
+            ("go {{}{}{}} // check", vec![Token::InlineGo(String::from("{}{}{}"))]),
             (
-                "if (true) {}",
+                "if (true) {} // check",
                 vec![
                     Token::If,
                     Token::ControlChar('('),
@@ -914,7 +907,7 @@ mod tests {
                 ],
             ),
             (
-                "if (true) {} else {}",
+                "if (true) {} else {} // check",
                 vec![
                     Token::If,
                     Token::ControlChar('('),
@@ -928,7 +921,7 @@ mod tests {
                 ],
             ),
             (
-                "if (true) {} else if {} else if {} else {}",
+                "if (true) {} else if {} else if {} else {} // check",
                 vec![
                     Token::If,
                     Token::ControlChar('('),
@@ -949,10 +942,10 @@ mod tests {
                     Token::ControlChar('}'),
                 ],
             ),
-            ("'c'", vec![Token::CharLiteral('c')]),
-            ("'\\n'", vec![Token::CharLiteral('\n')]),
+            ("'c' // check", vec![Token::CharLiteral('c')]),
+            ("'\\n'//w", vec![Token::CharLiteral('\n')]),
             (
-                "1.1",
+                "1.1 // check",
                 vec![
                     Token::IntLiteral(1),
                     Token::ControlChar('.'),
@@ -960,7 +953,7 @@ mod tests {
                 ],
             ),
             (
-                "let x: {};",
+                "let x: {}; // with comment",
                 vec![
                     Token::Let,
                     Token::Ident("x".to_string()),
@@ -971,7 +964,7 @@ mod tests {
                 ],
             ),
             (
-                "f\"FMT {var}\"",
+                "f\"FMT {var}\" // check",
                 vec![Token::FormatStringLiteral(vec![
                     FmtStringContents::Char('F'),
                     FmtStringContents::Char('M'),
@@ -979,7 +972,7 @@ mod tests {
                     FmtStringContents::Char(' '),
                     FmtStringContents::Tokens(vec![(Token::Ident("var".into()), empty_range())]),
                 ])],
-            ),
+            )
         ];
 
         for (src, expected_tokens) in test_cases {
