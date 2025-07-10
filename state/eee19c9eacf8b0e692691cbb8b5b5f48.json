@@ -1,0 +1,19 @@
+{
+    "id": "eee19c9eacf8b0e692691cbb8b5b5f48",
+    "file_path": "../../src/parse/lexer.rs",
+    "line_number": 681,
+    "title": "divide token",
+    "tag": "todo",
+    "module_tag": "parse",
+    "user": null,
+    "issue_ref": null,
+    "description": "",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// todo: divide token",
+    "status": "open",
+    "first_seen": "2025-07-10T02:06:00.308985",
+    "history": []
+}
