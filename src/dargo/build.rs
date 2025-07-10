@@ -20,6 +20,7 @@ pub enum BuildErrKind {
 }
 
 // todo(@Apfelfrosch): Please do something
+// hallo welt
 
 pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
     // this is to ensure that the dargo dot dir exists
