@@ -1,0 +1,9 @@
+fn main() {
+    let x: { x: String } = { x: f"a string" };
+    x.x
+        ->std::string::to_upper()
+        ->std::io::println();
+
+    let s: ({x: struct {x: (String[],)}},) = ({x: .{ x: (["nested"],) }},);
+    s.0.x.x.0[0]->std::io::println();
+}
