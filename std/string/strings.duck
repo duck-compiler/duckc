@@ -1,0 +1,17 @@
+use go "strings";
+
+fn to_upper(s: String) -> String {
+    let res: String;
+    go {
+        res = ConcDuckString { value: strings.ToUpper(s.as_dgo_string()) }
+    }
+    return res;
+}
+
+fn to_lower(s: String) -> String {
+    let res: String;
+    go {
+        res = ConcDuckString { value: strings.ToLower(s.as_dgo_string()) }
+    }
+    return res;
+}
