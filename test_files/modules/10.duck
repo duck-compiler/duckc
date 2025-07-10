@@ -1,7 +1,0 @@
-module other;
-
-use other::{my_func};
-
-fn main() {
-    my_func();
-}

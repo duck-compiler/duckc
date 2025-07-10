@@ -23,7 +23,7 @@ fn main() {
     let z: (Int, { x: String }) = (10, { x: "Hallo" });
     z.1.x = "ööö";
     go {
-        fmt.Println(z)
+        fmt.Println(z.field_0, z.field_1.Getx())
         fmt.Println(z.field_1.Getx())
     }
 
