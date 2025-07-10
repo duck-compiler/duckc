@@ -18,13 +18,13 @@ use chumsky::{Parser, error::Rich};
 use colored::Colorize;
 use parse::{
     Spanned,
-    lexer::{Token, lexer},
+    lexer::Token,
     source_file_parser::SourceFile,
 };
 use tags::Tag;
 
 use crate::{parse::{
-    function_parser::LambdaFunctionExpr, make_input, parse_failure, source_file_parser::source_file_parser, type_parser::{Duck, Struct, TypeExpr}, value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}, Context, SS
+    function_parser::LambdaFunctionExpr, lexer::lex_parser, make_input, parse_failure, source_file_parser::source_file_parser, type_parser::{Duck, Struct, TypeExpr}, value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}, Context, SS
 }, semantics::type_resolve::{self, TypeEnv}};
 
 use lazy_static::lazy_static;
@@ -85,8 +85,13 @@ lazy_static! {
     };
 }
 
-fn lex(file_name: &'static str, file_contents: &'static str) -> Vec<Spanned<Token>> {
-    let (lex, lex_errors) = lexer(file_name, file_contents)
+// todo(@Mvmo): code doc generation, using doc comments
+//      we already have the function lex_with_comments, right below this issue.
+//      now the only thing we have to do is lex the code with comments and then generate some kind of report, maybe in json, which can be interpreted by some docs generator.
+//      or maybe just generate the html docs directly
+#[allow(dead_code)]
+fn lex_with_comments(file_name: &'static str, file_contents: &'static str) -> Vec<Spanned<Token>> {
+    let (lex, lex_errors) = lex_parser(file_name, file_contents)
         .parse(file_contents)
         .into_output_errors();
 
@@ -110,6 +115,38 @@ fn lex(file_name: &'static str, file_contents: &'static str) -> Vec<Spanned<Toke
 
     lex.unwrap()
 }
+
+fn lex(file_name: &'static str, file_contents: &'static str) -> Vec<Spanned<Token>> {
+    let (lex, lex_errors) = lex_parser(file_name, file_contents)
+        .parse(file_contents)
+        .into_output_errors();
+
+    lex_errors.into_iter().for_each(|e| {
+        parse_failure(
+            file_name,
+            &Rich::<&str, SS>::custom(
+                SS {
+                    start: e.span().start,
+                    end: e.span().end,
+                    context: crate::parse::Context {
+                        file_name,
+                        file_contents,
+                    },
+                },
+                format!("{}{} {}", Tag::Lexer, Tag::Err, e.reason()),
+            ),
+            file_contents,
+        );
+    });
+
+
+    lex.unwrap()
+        .iter()
+        .cloned()
+        .filter(|(token, _)| !matches!(token, Token::Comment(..) | Token::DocComment(..)))
+        .collect::<Vec<_>>()
+}
+
 
 fn parse_src_file(
     src_file: &Path,

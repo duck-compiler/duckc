@@ -77,7 +77,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::{lexer::lexer, make_input, value_parser::empty_range};
+    use crate::parse::{lexer::lex_parser, make_input, value_parser::empty_range};
 
     use super::*;
 
@@ -129,7 +129,7 @@ mod tests {
 
         for (src, expected_ast) in src_and_expected_ast {
             println!("lexing {src}");
-            let lexer_parse_result = lexer("test", "").parse(src);
+            let lexer_parse_result = lex_parser("test", "").parse(src);
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);
 
@@ -168,7 +168,7 @@ mod tests {
 
         for invalid_use_statement in invalid_use_statements {
             println!("lexing {invalid_use_statement}");
-            let lexer_parse_result = lexer("test", "").parse(invalid_use_statement);
+            let lexer_parse_result = lex_parser("test", "").parse(invalid_use_statement);
 
             assert_eq!(lexer_parse_result.has_errors(), false);
             assert_eq!(lexer_parse_result.has_output(), true);

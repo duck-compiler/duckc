@@ -806,7 +806,7 @@ mod tests {
     use crate::{
         emit::value::{Case, IrInstruction, IrValue, ToIr},
         parse::{
-            lexer::lexer,
+            lexer::lex_parser,
             make_input,
             type_parser::TypeExpr,
             value_parser::{empty_range, value_expr_parser},
@@ -993,7 +993,7 @@ mod tests {
         ];
 
         for (src, exp) in test_cases {
-            let lexed = lexer("test", src).parse(src).unwrap();
+            let lexed = lex_parser("test", src).parse(src).unwrap();
             let parsed = value_expr_parser(make_input)
                 .parse(make_input(empty_range(), &lexed))
                 .unwrap()

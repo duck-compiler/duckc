@@ -6,7 +6,7 @@ use crate::{
     parse::{
         Context, SS, Spanned,
         function_parser::{FunctionDefintion, function_definition_parser},
-        lexer::{Token, lexer},
+        lexer::{Token, lex_parser},
         make_input, parse_failure,
         type_parser::{TypeDefinition, type_definition_parser},
         use_statement_parser::{Indicator, UseStatement, use_statement_parser},
@@ -184,7 +184,7 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
             .leak() as &'static str;
         let target_path = joined.to_string_lossy();
         let target_path_leaked = target_path.to_string().leak() as &str;
-        let (lex, lex_errors) = lexer(target_path_leaked, src_text)
+        let (lex, lex_errors) = lex_parser(target_path_leaked, src_text)
             .parse(src_text)
             .into_output_errors();
 
@@ -296,7 +296,7 @@ mod tests {
 
     use crate::parse::{
         function_parser::FunctionDefintion,
-        lexer::lexer,
+        lexer::lex_parser,
         make_input,
         source_file_parser::{SourceFile, source_file_parser},
         type_parser::{Duck, Field, Struct, TypeDefinition, TypeExpr},
@@ -456,7 +456,7 @@ mod tests {
         ];
 
         for (src, exp) in test_cases {
-            let lex = lexer("test", "").parse(src).into_result().expect(src);
+            let lex = lex_parser("test", "").parse(src).into_result().expect(src);
             let mut parse = source_file_parser(PathBuf::from("test_files"), make_input)
                 .parse(make_input(empty_range(), &lex))
                 .into_result()
@@ -716,7 +716,7 @@ mod tests {
 
         for (main_file, mut expected) in test_cases {
             let src = std::fs::read_to_string(dir.join(main_file)).unwrap();
-            let lex = lexer("test", "").parse(&src).unwrap();
+            let lex = lex_parser("test", "").parse(&src).unwrap();
             let mut got = source_file_parser(dir.clone(), make_input)
                 .parse(make_input(empty_range(), &lex))
                 .unwrap();
