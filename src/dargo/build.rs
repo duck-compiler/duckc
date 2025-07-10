@@ -19,6 +19,8 @@ pub enum BuildErrKind {
     Compile(CompileErrKind),
 }
 
+// todo(@Apfelfrosch): Please do something
+
 pub fn build(_build_args: &BuildArgs) -> Result<(), (String, BuildErrKind)> {
     // this is to ensure that the dargo dot dir exists
     _ = DARGO_DOT_DIR.clone();
