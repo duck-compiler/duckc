@@ -4,7 +4,7 @@ use crate::parse::{lexer::Token, Spanned, SS};
 
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Generic {
     pub name: String,
 }
@@ -79,4 +79,95 @@ pub mod tests {
             assert_eq!(typedef_parse_result.has_output(), false);
         }
     }
+
+    #[test]
+    fn test_detailed_generics_parser() {
+        let test_cases = vec![
+            (
+                "<TYPENAME>",
+                vec![Generic { name: "TYPENAME".to_string() }]
+            ),
+            (
+                "<TYPENAME, TYPENAMETWO>",
+                vec![
+                    Generic { name: "TYPENAME".to_string() },
+                    Generic { name: "TYPENAMETWO".to_string() },
+                ]
+            ),
+            (
+                "<TYPENAME, TYPENAMETWO, TYPENAMETHREE>",
+                vec![
+                    Generic { name: "TYPENAME".to_string() },
+                    Generic { name: "TYPENAMETWO".to_string() },
+                    Generic { name: "TYPENAMETHREE".to_string() },
+                ]
+            ),
+            (
+                "<ABCDEFGHIJKLMNOPQRSTUVWXYZ>",
+                vec![
+                    Generic { name: "ABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string() },
+                ]
+            ),
+            (
+                "<A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z>",
+                vec![
+                    Generic { name: "A".to_string() },
+                    Generic { name: "B".to_string() },
+                    Generic { name: "C".to_string() },
+                    Generic { name: "D".to_string() },
+                    Generic { name: "E".to_string() },
+                    Generic { name: "F".to_string() },
+                    Generic { name: "G".to_string() },
+                    Generic { name: "H".to_string() },
+                    Generic { name: "I".to_string() },
+                    Generic { name: "J".to_string() },
+                    Generic { name: "K".to_string() },
+                    Generic { name: "L".to_string() },
+                    Generic { name: "M".to_string() },
+                    Generic { name: "N".to_string() },
+                    Generic { name: "O".to_string() },
+                    Generic { name: "P".to_string() },
+                    Generic { name: "Q".to_string() },
+                    Generic { name: "R".to_string() },
+                    Generic { name: "S".to_string() },
+                    Generic { name: "T".to_string() },
+                    Generic { name: "U".to_string() },
+                    Generic { name: "V".to_string() },
+                    Generic { name: "W".to_string() },
+                    Generic { name: "X".to_string() },
+                    Generic { name: "Y".to_string() },
+                    Generic { name: "Z".to_string() },
+                ]
+            ),
+        ];
+
+        for (i, (src, expected_generics)) in test_cases.into_iter().enumerate() {
+            println!("Hallo, wElt'");
+            let lex_result = lex_parser("test", "").parse(src).into_result().expect(&src);
+            let parse_result = generics_parser()
+                .parse(make_input(empty_range(), &lex_result));
+
+            assert_eq!(
+                parse_result.has_errors(),
+                false,
+                "{i}: {} {:?} {:?}",
+                src,
+                lex_result,
+                parse_result
+            );
+
+            assert_eq!(parse_result.has_output(), true, "{i}: {}", src);
+
+            let output = parse_result
+                .into_result()
+                .expect(&src);
+
+            let actual_generics = output.iter()
+                .map(|(generic, _)| generic.clone())
+                .collect::<Vec<Generic>>();
+
+            assert_eq!(actual_generics, expected_generics, "{i}: {}", src);
+        }
+    }
+
 }
