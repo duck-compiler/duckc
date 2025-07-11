@@ -15,6 +15,7 @@ pub mod source_file_parser;
 pub mod type_parser;
 pub mod use_statement_parser;
 pub mod value_parser;
+pub mod generics_parser;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Context {
