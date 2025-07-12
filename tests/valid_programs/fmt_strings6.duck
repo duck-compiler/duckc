@@ -1,0 +1,8 @@
+use go "fmt";
+
+fn main() {
+    let x: String = f"{f"nested f string"}";
+    go {
+        fmt.Println(x)
+    }
+}
