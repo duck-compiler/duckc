@@ -142,7 +142,6 @@ pub mod tests {
         ];
 
         for (i, (src, expected_generics)) in test_cases.into_iter().enumerate() {
-            println!("Hallo, wElt'");
             let lex_result = lex_parser("test", "").parse(src).into_result().expect(&src);
             let parse_result = generics_parser()
                 .parse(make_input(empty_range(), &lex_result));
