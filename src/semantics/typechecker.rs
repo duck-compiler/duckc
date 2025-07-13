@@ -25,6 +25,7 @@ pub enum GoTypeDefinition {
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
         match self {
+            TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::Any => "Any".to_string(),
             TypeExpr::InlineGo => "inline-go".to_string(),
             TypeExpr::Struct(_) => "struct {{ todo }}".to_string(),

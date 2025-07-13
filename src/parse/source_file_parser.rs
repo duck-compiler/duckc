@@ -4,14 +4,9 @@ use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::{
     parse::{
-        Context, SS, Spanned,
-        function_parser::{FunctionDefintion, function_definition_parser},
-        lexer::{Token, lex_parser},
-        make_input, parse_failure,
-        type_parser::{TypeDefinition, type_definition_parser},
-        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
+        function_parser::{function_definition_parser, FunctionDefintion}, lexer::{lex_parser, Token}, make_input, parse_failure, type_parser::{type_definition_parser, TypeDefinition}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, Context, Spanned, SS
     },
-    semantics::ident_mangler::{MangleEnv, mangle_type_expression, mangle_value_expr},
+    semantics::ident_mangler::{mangle, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv},
 };
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -37,12 +32,21 @@ impl SourceFile {
         }
     }
 
-    pub fn flatten(&self) -> SourceFile {
-        fn flatten0(s: &SourceFile, prefix: &str) -> SourceFile {
+    pub fn flatten(&self, global_prefix: &Vec<String>, with_std: bool) -> SourceFile {
+        fn flatten0(
+            s: &SourceFile,
+            global_prefix: &Vec<String>,
+            prefix: &Vec<String>,
+            with_std: bool,
+        ) -> SourceFile {
             let mut mangle_env = MangleEnv {
+                sub_mods: s.sub_modules.iter().map(|x| x.0.clone()).collect(),
+                global_prefix: global_prefix.clone(),
                 imports: {
                     let mut imports = HashMap::new();
-                    imports.insert("std".into(), (true, "".into()));
+                    if with_std {
+                        imports.insert("std".into(), (true, vec![]));
+                    }
                     for u in &s.use_statements {
                         if let UseStatement::Regular(glob, v) = u {
                             let pre = v
@@ -52,12 +56,11 @@ impl SourceFile {
                                     let Indicator::Module(x) = x else { panic!() };
                                     x.to_string()
                                 })
-                                .collect::<Vec<_>>()
-                                .join("_");
+                                .collect::<Vec<_>>();
                             let last = v.last();
                             if let Some(Indicator::Symbols(sym)) = last {
                                 for s in sym {
-                                    imports.insert(s.clone(), (*glob, format!("{pre}_")));
+                                    imports.insert(s.clone(), (*glob, pre.clone()));
                                 }
                             }
                         }
@@ -82,7 +85,11 @@ impl SourceFile {
             let mut result = SourceFile::default();
 
             for (name, sub_module) in &s.sub_modules {
-                let src = flatten0(sub_module, &format!("{prefix}{name}_"));
+                let mut p = Vec::new();
+                p.extend_from_slice(prefix);
+                p.push(name.to_owned());
+                let src = flatten0(sub_module, global_prefix, &p, with_std);
+
                 for f in src.function_definitions {
                     mangle_env.insert_ident(f.name[prefix.len()..].to_string());
                     result.function_definitions.push(f);
@@ -106,7 +113,12 @@ impl SourceFile {
 
             for func in &s.function_definitions {
                 let mut f = func.clone();
-                f.name = format!("{prefix}{}", f.name);
+
+                let mut p = Vec::new();
+                p.extend_from_slice(prefix);
+                p.push(f.name.clone());
+                f.name = mangle(&p);
+
                 if let Some(return_type) = &mut f.return_type {
                     mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
                 }
@@ -117,14 +129,18 @@ impl SourceFile {
                         mangle_env.insert_ident(name.clone());
                     }
                 }
-                mangle_value_expr(&mut f.value_expr.0, prefix, &mut mangle_env);
+                mangle_value_expr(&mut f.value_expr.0, global_prefix, prefix, &mut mangle_env);
                 mangle_env.pop_idents();
                 result.function_definitions.push(f);
             }
 
             for t in &s.type_definitions {
                 let mut ty = t.clone();
-                ty.name = format!("{prefix}{}", ty.name);
+
+                let mut p = Vec::new();
+                p.extend_from_slice(prefix);
+                p.push(ty.name.clone());
+                ty.name = mangle(&p);
                 mangle_type_expression(&mut ty.type_expression.0, prefix, &mut mangle_env);
                 result.type_definitions.push(ty);
             }
@@ -132,7 +148,21 @@ impl SourceFile {
             result
         }
 
-        flatten0(self, "")
+        let mut r = flatten0(self, global_prefix, &vec![], with_std);
+
+        for f in &mut r.function_definitions {
+            let mut c = global_prefix.clone();
+            c.extend(unmangle(&f.name));
+            f.name = mangle(&c);
+        }
+
+        for t in &mut r.type_definitions {
+            let mut c = global_prefix.clone();
+            c.extend(unmangle(&t.name));
+            t.name = mangle(&c);
+        }
+
+        r
     }
 }
 

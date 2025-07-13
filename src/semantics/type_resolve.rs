@@ -231,6 +231,7 @@ impl TypeEnv {
 
 fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &TypeEnv) {
     match expr {
+        TypeExpr::RawTypeName(..) => panic!(),
         TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
             fields.sort_by_key(|x| x.name.clone());
             for field in fields {
@@ -545,6 +546,7 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
 
 fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
+        TypeExpr::RawTypeName(..) => {}
         TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
             fields.sort_by_key(|x| x.name.clone());
             for field in fields {
@@ -744,7 +746,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         match value_expr {
-            ValueExpr::RawVariable(..) => panic!(),
+            ValueExpr::RawVariable(..) => panic!("{value_expr:?}"),
             ValueExpr::FormattedString(contents) => {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {

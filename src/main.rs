@@ -24,7 +24,7 @@ use parse::{
 use tags::Tag;
 
 use crate::{parse::{
-    function_parser::LambdaFunctionExpr, lexer::lex_parser, make_input, parse_failure, source_file_parser::source_file_parser, type_parser::{Duck, Struct, TypeExpr}, value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}, Context, SS
+    function_parser::LambdaFunctionExpr, lexer::lex_parser, make_input, parse_failure, source_file_parser::source_file_parser, type_parser::{Duck, Struct, TypeExpr}, use_statement_parser::UseStatement, value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}, Context, SS
 }, semantics::type_resolve::{self, TypeEnv}};
 
 use lazy_static::lazy_static;
@@ -188,9 +188,9 @@ fn parse_src_file(
         lex.as_slice(),
     ))
     .unwrap()
-    .flatten();
+    .flatten(&vec!["std".to_string()], false);
 
-    dbg!(&std_src_file);
+    // dbg!(std_src_file);
 
     for func in std_src_file.function_definitions.iter_mut() {
         if let Some(params) = &mut func.params {
@@ -386,8 +386,20 @@ fn parse_src_file(
     });
 
     let mut src_file = src_file.unwrap();
-    src_file.sub_modules.push(("std".into(), std_src_file));
-    dbg!(src_file.flatten())
+    let mut flattened = src_file.flatten(&vec![], true);
+    for s in &std_src_file.function_definitions {
+       flattened.function_definitions.push(s.clone());
+    }
+    for s in &std_src_file.type_definitions {
+       flattened.type_definitions.push(s.clone());
+    }
+    for s in &std_src_file.use_statements {
+        if let UseStatement::Go(..) = s {
+            flattened.push_use(s);
+        }
+    }
+
+    dbg!(flattened)
 }
 
 fn typecheck(src_file_ast: &mut SourceFile) -> TypeEnv {

@@ -49,6 +49,7 @@ pub enum TypeExpr {
     Go(String),
     Duck(Duck),
     Tuple(Vec<Spanned<TypeExpr>>),
+    RawTypeName(bool, Vec<String>, Option<Vec<Spanned<TypeParam>>>),
     TypeName(bool, String, Option<Vec<Spanned<TypeParam>>>),
     TypeNameInternal(String),
     StringLiteral(String),
@@ -208,7 +209,8 @@ where
                     "Bool" => TypeExpr::Bool,
                     "String" => TypeExpr::String,
                     "Char" => TypeExpr::Char,
-                    _ => TypeExpr::TypeName(is_global.is_some(), identifier.join("_"), None),
+                    // TODO: generic type name
+                    _ => TypeExpr::RawTypeName(is_global.is_some(), identifier, None),
                 });
 
             let term_type_expr = p
@@ -382,7 +384,7 @@ where
                     "Bool" => TypeExpr::Bool,
                     "String" => TypeExpr::String,
                     "Char" => TypeExpr::Char,
-                    _ => TypeExpr::TypeName(is_global.is_some(), identifier.join("_"), type_params),
+                    _ => TypeExpr::RawTypeName(is_global.is_some(), identifier, type_params),
                 });
 
             let term_type_expr = p

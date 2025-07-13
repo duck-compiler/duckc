@@ -270,6 +270,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::Array(t) => format!("[]{}", t.0.as_go_type_annotation(type_env)),
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::IntLiteral(i) => primitive_type_name(&TypeExpr::IntLiteral(*i)).to_string(),
@@ -337,6 +338,7 @@ impl TypeExpr {
 
     pub fn as_go_concrete_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::IntLiteral(i) => primitive_type_name(&TypeExpr::IntLiteral(*i)).to_string(),
             TypeExpr::BoolLiteral(b) => primitive_type_name(&TypeExpr::BoolLiteral(*b)).to_string(),
             TypeExpr::StringLiteral(str) => {
@@ -405,6 +407,7 @@ impl TypeExpr {
 
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::IntLiteral(i) => primitive_type_name(&TypeExpr::IntLiteral(*i)).to_string(),
             TypeExpr::BoolLiteral(b) => primitive_type_name(&TypeExpr::BoolLiteral(*b)).to_string(),
             TypeExpr::StringLiteral(str) => {
