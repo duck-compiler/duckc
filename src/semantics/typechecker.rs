@@ -839,6 +839,7 @@ mod test {
                     params: None,
                     return_type: None,
                     value_expr: value_expr,
+                    generics: None,
                 }],
                 ..Default::default()
             };
@@ -987,6 +988,7 @@ mod test {
                     params: None,
                     return_type: None,
                     value_expr: value_expr,
+                    generics: None,
                 }],
                 ..Default::default()
             };

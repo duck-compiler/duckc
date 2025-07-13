@@ -1,6 +1,6 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
-use crate::parse::{SS, Spanned, value_parser::IntoBlock};
+use crate::parse::{generics_parser::{generics_parser, Generic}, value_parser::IntoBlock, Spanned, SS};
 
 use super::{
     lexer::Token,
@@ -17,6 +17,7 @@ pub struct FunctionDefintion {
     pub return_type: Option<Spanned<TypeExpr>>,
     pub params: Option<Vec<Param>>,
     pub value_expr: Spanned<ValueExpr>,
+    pub generics: Option<Vec<Spanned<Generic>>>
 }
 
 impl Default for FunctionDefintion {
@@ -26,6 +27,7 @@ impl Default for FunctionDefintion {
             return_type: None,
             params: Some(Default::default()),
             value_expr: ValueExpr::Tuple(vec![]).into_empty_span_and_block(),
+            generics: None,
         }
     }
 }
@@ -59,12 +61,13 @@ where
 
     just(Token::Function)
         .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
+        .then(generics_parser().or_not())
         .then_ignore(just(Token::ControlChar('(')))
         .then(params_parser)
         .then_ignore(just(Token::ControlChar(')')))
         .then(return_type_parser.or_not())
         .then(value_expr_parser(make_input))
-        .map(|(((identifier, params), return_type), mut value_expr)| {
+        .map(|((((identifier, generics), params), return_type), mut value_expr)| {
             value_expr = match value_expr {
                 (ValueExpr::Duck(x), loc) if x.is_empty() => {
                     (ValueExpr::Tuple(vec![]), loc).into_block()
@@ -78,6 +81,7 @@ where
                 return_type,
                 params,
                 value_expr,
+                generics,
             }
         })
 }
