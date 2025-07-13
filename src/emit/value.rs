@@ -165,6 +165,7 @@ impl ValueExpr {
         env: &mut ToIr,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
+            ValueExpr::RawVariable(..) => panic!(),
             ValueExpr::FormattedString(contents) => {
                 let mut instr = Vec::new();
 

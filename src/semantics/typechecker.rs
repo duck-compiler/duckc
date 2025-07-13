@@ -49,6 +49,7 @@ impl TypeExpr {
 
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
+            ValueExpr::RawVariable(..) => panic!(),
             ValueExpr::FormattedString(contents) => {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {

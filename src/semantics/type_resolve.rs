@@ -405,6 +405,7 @@ fn resolve_all_aliases_value_expr(expr: &mut ValueExpr, env: &TypeEnv) {
         | ValueExpr::InlineGo(..)
         | ValueExpr::Int(..)
         | ValueExpr::Variable(..)
+        | ValueExpr::RawVariable(..)
         | ValueExpr::Continue
         | ValueExpr::String(..)
         | ValueExpr::Char(..)
@@ -533,6 +534,7 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
         | ValueExpr::InlineGo(..)
         | ValueExpr::Int(..)
         | ValueExpr::Variable(..)
+        | ValueExpr::RawVariable(..)
         | ValueExpr::Continue
         | ValueExpr::String(..)
         | ValueExpr::Char(..)
@@ -742,6 +744,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         match value_expr {
+            ValueExpr::RawVariable(..) => panic!(),
             ValueExpr::FormattedString(contents) => {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {
@@ -919,6 +922,7 @@ fn resolve_implicit_function_return_type(
         type_env: &mut TypeEnv,
     ) {
         match value_expr {
+
             ValueExpr::FormattedString(contents) => {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {
@@ -946,6 +950,7 @@ fn resolve_implicit_function_return_type(
             | ValueExpr::FieldAccess { .. }
             | ValueExpr::Lambda(..)
             | ValueExpr::Variable(..)
+            | ValueExpr::RawVariable(..)
             | ValueExpr::Match { .. }
             | ValueExpr::ArrayAccess(..) => {}
             ValueExpr::If {

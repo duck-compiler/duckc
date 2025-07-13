@@ -49,6 +49,7 @@ pub enum ValueExpr {
     Bool(bool),
     Float(f64),
     Char(char),
+    RawVariable(bool, Vec<String>),
     Variable(bool, String, Option<TypeExpr>),
     If {
         condition: Box<Spanned<ValueExpr>>,
@@ -131,6 +132,7 @@ impl ValueExpr {
             | ValueExpr::Array(..)
             | ValueExpr::ArrayAccess(..)
             | ValueExpr::Variable(..)
+            | ValueExpr::RawVariable(..)
             | ValueExpr::Tuple(..)
             | ValueExpr::Break
             | ValueExpr::Continue
@@ -167,15 +169,7 @@ where
                         .at_least(1)
                         .collect::<Vec<_>>(),
                 )
-                .map(|(is_global, path)| {
-                    ValueExpr::Variable(
-                        is_global.is_some(),
-                        path.into_iter()
-                            .reduce(|acc, x| format!("{acc}_{x}"))
-                            .unwrap(),
-                        None,
-                    )
-                })
+                .map(|(is_global, path)| ValueExpr::RawVariable(is_global.is_some(), path))
                 .map_with(|x, e| (x, e.span()));
 
             let lambda_parser = {

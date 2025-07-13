@@ -354,6 +354,7 @@ fn parse_src_file(
             | ValueExpr::Int(..)
             | ValueExpr::Bool(..)
             | ValueExpr::Variable(..)
+            | ValueExpr::RawVariable(..)
             | ValueExpr::Return(..)
             | ValueExpr::InlineGo(..) => {}
         }

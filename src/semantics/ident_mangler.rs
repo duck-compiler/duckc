@@ -351,6 +351,7 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
                 .iter_mut()
                 .for_each(|param| mangle_value_expr(&mut param.0, prefix, mangle_env));
         }
+        ValueExpr::RawVariable(is_global, path) => todo!(),
         ValueExpr::Variable(is_global, identifier, _) => {
             if let Some(mangled) = mangle_env.mangle_ident(*is_global, prefix, identifier) {
                 *identifier = mangled;
