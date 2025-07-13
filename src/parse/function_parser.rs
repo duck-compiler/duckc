@@ -143,4 +143,81 @@ pub mod tests {
             assert_eq!(typedef_parse_result.has_output(), false);
         }
     }
+
+    #[test]
+    fn test_detailed_function_definitions() {
+        let test_cases = vec![
+            (
+                "fn y<TYPENAME>() {}",
+                FunctionDefintion {
+                    name: "y".to_string(),
+                    params: Some(vec![]),
+                    return_type: None,
+                    generics: Some(vec![(Generic { name: "TYPENAME".to_string() }, empty_range())]),
+                    value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                }
+            ),
+            (
+                "fn y<TYPENAME, TYPENAME2>() {}",
+                FunctionDefintion {
+                    name: "y".to_string(),
+                    params: Some(vec![]),
+                    return_type: None,
+                    generics: Some(vec![
+                        (Generic { name: "TYPENAME".to_string() }, empty_range()),
+                        (Generic { name: "TYPENAME2".to_string() }, empty_range()),
+                    ]),
+                    value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                }
+            ),
+            (
+                "fn y<TYPENAME, TYPENAME2, TYPENAME3>() {}",
+                FunctionDefintion {
+                    name: "y".to_string(),
+                    params: Some(vec![]),
+                    return_type: None,
+                    generics: Some(vec![
+                        (Generic { name: "TYPENAME".to_string() }, empty_range()),
+                        (Generic { name: "TYPENAME2".to_string() }, empty_range()),
+                        (Generic { name: "TYPENAME3".to_string() }, empty_range()),
+                    ]),
+                    value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                }
+            ),
+        ];
+
+        for (i, (src, expected_fns)) in test_cases.into_iter().enumerate() {
+            let lex_result = lex_parser("test", "").parse(src).into_result().expect(&src);
+            let parse_result = function_definition_parser(make_input)
+                .parse(make_input(empty_range(), &lex_result));
+
+            assert_eq!(
+                parse_result.has_errors(),
+                false,
+                "{i}: {} {:?} {:?}",
+                src,
+                lex_result,
+                parse_result
+            );
+
+            assert_eq!(parse_result.has_output(), true, "{i}: {}", src);
+
+            let mut output = parse_result
+                .into_result()
+                .expect(&src);
+
+            output.generics
+                .as_mut()
+                .unwrap()
+                .iter_mut()
+                .for_each(|generic| {
+                    *generic = (generic.0.clone(), empty_range());
+                });
+
+            output.value_expr = ValueExpr::Block(vec![]).into_empty_span();
+
+            assert_eq!(output, expected_fns, "{i}: {}", src);
+        }
+    }
+
 }
