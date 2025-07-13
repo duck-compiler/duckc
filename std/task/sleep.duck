@@ -1,6 +1,6 @@
 use go "time";
 
-use std::time::{Duration, Millis, Seconds, Minutes, Hours, Days};
+use ::time::{Duration, Millis, Seconds, Minutes, Hours, Days};
 
 fn sleep(d: Duration) {
     match (d) {
