@@ -102,6 +102,9 @@ pub mod tests {
             "fn x() -> {x: String} {}",
             "fn x() -> {x: String} { 5; }",
             "fn x() -> {x: String} { 5; }",
+            "fn x<TYPE>() -> {x: String} { 5; }",
+            "fn x<TYPE, TYPE2>() -> {x: String} { 5; }",
+            "fn x<TYPE, TYPE2, TYPE3>() -> {x: String} { 5; }",
         ];
 
         for valid_function_definition in valid_function_definitions {
