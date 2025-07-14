@@ -142,8 +142,8 @@ fn lex(file_name: &'static str, file_contents: &'static str) -> Vec<Spanned<Toke
 
     lex.unwrap()
         .iter()
-        .cloned()
         .filter(|(token, _)| !matches!(token, Token::Comment(..) | Token::DocComment(..)))
+        .cloned()
         .collect::<Vec<_>>()
 }
 
@@ -385,21 +385,21 @@ fn parse_src_file(
         parse_failure(src_file_name, &e, src_file_file_contents);
     });
 
-    let mut src_file = src_file.unwrap();
-    let mut flattened = src_file.flatten(&vec![], true);
+    // TODO: do this for all dependencies
+    let mut result = src_file.unwrap().flatten(&vec![], true);
     for s in &std_src_file.function_definitions {
-       flattened.function_definitions.push(s.clone());
+       result.function_definitions.push(s.clone());
     }
     for s in &std_src_file.type_definitions {
-       flattened.type_definitions.push(s.clone());
+       result.type_definitions.push(s.clone());
     }
     for s in &std_src_file.use_statements {
         if let UseStatement::Go(..) = s {
-            flattened.push_use(s);
+            result.push_use(s);
         }
     }
 
-    dbg!(flattened)
+    dbg!(result)
 }
 
 fn typecheck(src_file_ast: &mut SourceFile) -> TypeEnv {

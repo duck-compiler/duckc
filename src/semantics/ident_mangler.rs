@@ -17,9 +17,9 @@ pub struct MangleEnv {
     pub types: Vec<Vec<String>>,
 }
 
-pub const MANGLE_SEP: &'static str = "_____";
+pub const MANGLE_SEP: &str = "_____";
 
-pub fn mangle(p: &Vec<String>) -> String {
+pub fn mangle(p: &[String]) -> String {
     p.join(MANGLE_SEP)
 }
 
@@ -69,10 +69,10 @@ impl MangleEnv {
     pub fn mangle_type(
         &self,
         is_global: bool,
-        prefix: &Vec<String>,
-        ident: &Vec<String>,
+        prefix: &[String],
+        ident: &[String],
     ) -> Option<Vec<String>> {
-        let prefix = if is_global { &vec![] } else { prefix };
+        let prefix = if is_global { &[] } else { prefix };
 
         if let Some((is_glob, import_path)) = self.resolve_import(ident.first()?.clone()) {
             let mut res = Vec::new();
@@ -106,15 +106,14 @@ impl MangleEnv {
     pub fn mangle_ident(
         &self,
         is_global: bool,
-        global_prefix: &Vec<String>,
-        prefix: &Vec<String>,
-        ident: &Vec<String>,
+        prefix: &[String],
+        ident: &[String],
     ) -> Option<Vec<String>> {
         if self.local_defined(ident.first()?) {
             return None;
         }
 
-        let prefix = if is_global { &vec![] } else { prefix };
+        let prefix = if is_global { &[] } else { prefix };
 
         if let Some((is_glob, import_path)) = self.resolve_import(ident.first()?.clone()) {
             let mut res = Vec::new();
@@ -210,11 +209,7 @@ pub fn mangle_type_expression(
     mangle_env: &mut MangleEnv,
 ) {
     match type_expr {
-        TypeExpr::TypeName(is_global, name) => {
-            // if let Some(mangled) = mangle_env.mangle_type(*is_global, prefix, name) {
-            //     *name = mangled;
-            // }
-        }
+        TypeExpr::TypeName(..) => panic!("type name shouldn't be here"),
         TypeExpr::RawTypeName(is_global, path) => {
             // TODO: type params
             if let Some(mangled) = mangle_env.mangle_type(*is_global, prefix, path) {
@@ -374,7 +369,7 @@ pub fn mangle_value_expr(
             let mut translation = 0;
             for (range, ident) in o {
                 let mangled_ident =
-                    mangle_env.mangle_ident(false, global_prefix, prefix, &vec![ident.clone()]);
+                    mangle_env.mangle_ident(false, prefix, std::slice::from_ref(&ident));
 
                 if let Some(mangled_ident) = mangled_ident {
                     let mangled = mangle(&mangled_ident);
@@ -411,17 +406,12 @@ pub fn mangle_value_expr(
             });
         }
         ValueExpr::RawVariable(is_global, path) => {
-            if let Some(mangled) = mangle_env.mangle_ident(*is_global, global_prefix, prefix, path)
-            {
+            if let Some(mangled) = mangle_env.mangle_ident(*is_global, prefix, path) {
                 *path = mangled;
             }
             *value_expr = ValueExpr::Variable(true, mangle(path), None);
         }
-        ValueExpr::Variable(is_global, identifier, _) => {
-            // if let Some(mangled) = mangle_env.mangle_ident(*is_global, prefix, identifier) {
-            //     *identifier = mangled;
-            // }
-        }
+        ValueExpr::Variable(..) => panic!("variable shouldn't be here."),
         ValueExpr::If {
             condition,
             then,
