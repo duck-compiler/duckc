@@ -1,6 +1,7 @@
 use crate::{
     emit::value::{IrInstruction, IrValue},
-    parse::type_parser::{Duck, Field, Struct, TypeExpr}, semantics::type_resolve::TypeEnv,
+    parse::type_parser::{Duck, Field, Struct, TypeExpr},
+    semantics::type_resolve::TypeEnv,
 };
 
 pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {

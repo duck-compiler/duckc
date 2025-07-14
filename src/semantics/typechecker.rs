@@ -1,10 +1,11 @@
 use std::process;
 
-use crate::{parse::{
-    failure, value_parser::{empty_range, ValFmtStringContents, ValueExpr}, Spanned, SS
-}};
-use crate::semantics::type_resolve::TypeEnv;
 use crate::parse::type_parser::{Duck, Field, Struct, TypeExpr};
+use crate::parse::{
+    SS, Spanned, failure,
+    value_parser::{ValFmtStringContents, ValueExpr, empty_range},
+};
+use crate::semantics::type_resolve::TypeEnv;
 
 #[derive(Debug, Clone)]
 pub enum GoTypeDefinition {
@@ -218,7 +219,11 @@ impl TypeExpr {
 
                 left_type_expr
             }
-            ValueExpr::FunctionCall { target, params, type_params: _ } => {
+            ValueExpr::FunctionCall {
+                target,
+                params,
+                type_params: _,
+            } => {
                 // todo: type_params
                 let in_param_types = params
                     .iter()
@@ -753,9 +758,17 @@ fn check_type_compatability(
 
 #[cfg(test)]
 mod test {
-    use crate::{parse::{
-        function_parser::FunctionDefintion, lexer::lex_parser, make_input, source_file_parser::SourceFile, type_parser::Field, value_parser::{empty_range, value_expr_parser}
-    }, semantics::type_resolve::{typeresolve_source_file, TypesSummary}};
+    use crate::{
+        parse::{
+            function_parser::FunctionDefintion,
+            lexer::lex_parser,
+            make_input,
+            source_file_parser::SourceFile,
+            type_parser::Field,
+            value_parser::{empty_range, value_expr_parser},
+        },
+        semantics::type_resolve::{TypesSummary, typeresolve_source_file},
+    };
     use chumsky::prelude::*;
 
     use super::*;

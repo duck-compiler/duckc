@@ -3,7 +3,8 @@ use crate::{
         types::emit_type_definitions,
         value::{IrInstruction, ToIr},
     },
-    parse::{source_file_parser::SourceFile, use_statement_parser::UseStatement}, semantics::type_resolve::TypeEnv,
+    parse::{source_file_parser::SourceFile, use_statement_parser::UseStatement},
+    semantics::type_resolve::TypeEnv,
 };
 
 impl SourceFile {

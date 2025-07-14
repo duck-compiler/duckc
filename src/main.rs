@@ -16,16 +16,22 @@ use std::{
 
 use chumsky::{Parser, error::Rich};
 use colored::Colorize;
-use parse::{
-    Spanned,
-    lexer::Token,
-    source_file_parser::SourceFile,
-};
+use parse::{Spanned, lexer::Token, source_file_parser::SourceFile};
 use tags::Tag;
 
-use crate::{parse::{
-    function_parser::LambdaFunctionExpr, lexer::lex_parser, make_input, parse_failure, source_file_parser::source_file_parser, type_parser::{Duck, Struct, TypeExpr}, use_statement_parser::UseStatement, value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}, Context, SS
-}, semantics::type_resolve::{self, TypeEnv}};
+use crate::{
+    parse::{
+        Context, SS,
+        function_parser::LambdaFunctionExpr,
+        lexer::lex_parser,
+        make_input, parse_failure,
+        source_file_parser::source_file_parser,
+        type_parser::{Duck, Struct, TypeExpr},
+        use_statement_parser::UseStatement,
+        value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr},
+    },
+    semantics::type_resolve::{self, TypeEnv},
+};
 
 use lazy_static::lazy_static;
 
@@ -139,14 +145,12 @@ fn lex(file_name: &'static str, file_contents: &'static str) -> Vec<Spanned<Toke
         );
     });
 
-
     lex.unwrap()
         .iter()
         .filter(|(token, _)| !matches!(token, Token::Comment(..) | Token::DocComment(..)))
         .cloned()
         .collect::<Vec<_>>()
 }
-
 
 fn parse_src_file(
     src_file: &Path,
@@ -272,7 +276,11 @@ fn parse_src_file(
                 typename_reset_global_value_expr(&mut target.0);
                 typename_reset_global_value_expr(&mut idx.0);
             }
-            ValueExpr::FunctionCall { target, params, type_params: _ } => {
+            ValueExpr::FunctionCall {
+                target,
+                params,
+                type_params: _,
+            } => {
                 // todo: type_params
                 for p in params {
                     typename_reset_global_value_expr(&mut p.0);
@@ -388,10 +396,10 @@ fn parse_src_file(
     // TODO: do this for all dependencies
     let mut result = src_file.unwrap().flatten(&vec![], true);
     for s in &std_src_file.function_definitions {
-       result.function_definitions.push(s.clone());
+        result.function_definitions.push(s.clone());
     }
     for s in &std_src_file.type_definitions {
-       result.type_definitions.push(s.clone());
+        result.type_definitions.push(s.clone());
     }
     for s in &std_src_file.use_statements {
         if let UseStatement::Go(..) = s {

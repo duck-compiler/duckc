@@ -148,14 +148,26 @@ pub fn lex_single<'a>(
         let thin_arrow = just("->").to(Token::ThinArrow);
 
         let doc_comment = just("///")
-                .ignore_then(any().and_is(just('\n').not()).repeated().collect::<Vec<_>>())
-                .padded()
-                .map(|comment| Token::DocComment(comment.iter().collect::<String>().trim().to_string()));
+            .ignore_then(
+                any()
+                    .and_is(just('\n').not())
+                    .repeated()
+                    .collect::<Vec<_>>(),
+            )
+            .padded()
+            .map(|comment| {
+                Token::DocComment(comment.iter().collect::<String>().trim().to_string())
+            });
 
         let comment = just("//")
-                .ignore_then(any().and_is(just('\n').not()).repeated().collect::<Vec<_>>())
-                .padded()
-                .map(|comment| Token::Comment(comment.iter().collect::<String>().trim().to_string()));
+            .ignore_then(
+                any()
+                    .and_is(just('\n').not())
+                    .repeated()
+                    .collect::<Vec<_>>(),
+            )
+            .padded()
+            .map(|comment| Token::Comment(comment.iter().collect::<String>().trim().to_string()));
 
         let fmt_string = just("f")
             .ignore_then(just('"'))
@@ -328,156 +340,122 @@ mod tests {
                 "type /// hallo ich bin ein dokkommentar",
                 vec![
                     Token::Type,
-                    Token::DocComment("hallo ich bin ein dokkommentar".to_string())
-                ]
+                    Token::DocComment("hallo ich bin ein dokkommentar".to_string()),
+                ],
             ),
             (
                 "/// hallo ich bin ein dokkommentar",
-                vec![
-                    Token::DocComment("hallo ich bin ein dokkommentar".to_string())
-                ]
+                vec![Token::DocComment(
+                    "hallo ich bin ein dokkommentar".to_string(),
+                )],
             ),
             (
                 "// hallo ich bin ein kommentar",
-                vec![
-                    Token::Comment("hallo ich bin ein kommentar".to_string())
-                ]
+                vec![Token::Comment("hallo ich bin ein kommentar".to_string())],
             ),
-            (
-                "//",
-                vec![
-                    Token::Comment("".to_string())
-                ]
-            ),
-            (
-                "///",
-                vec![
-                    Token::DocComment("".to_string())
-                ]
-            ),
-            (
-                "//    ",
-                vec![
-                    Token::Comment("".to_string())
-                ]
-            ),
-            (
-                "///    ",
-                vec![
-                    Token::DocComment("".to_string())
-                ]
-            ),
+            ("//", vec![Token::Comment("".to_string())]),
+            ("///", vec![Token::DocComment("".to_string())]),
+            ("//    ", vec![Token::Comment("".to_string())]),
+            ("///    ", vec![Token::DocComment("".to_string())]),
             (
                 "//  leading and trailing whitespace  ",
-                vec![
-                    Token::Comment("leading and trailing whitespace".to_string())
-                ]
+                vec![Token::Comment(
+                    "leading and trailing whitespace".to_string(),
+                )],
             ),
             (
                 "///  leading and trailing whitespace  ",
-                vec![
-                    Token::DocComment("leading and trailing whitespace".to_string())
-                ]
+                vec![Token::DocComment(
+                    "leading and trailing whitespace".to_string(),
+                )],
             ),
             (
                 "//// this is a doc comment",
-                vec![
-                    Token::DocComment("/ this is a doc comment".to_string())
-                ]
+                vec![Token::DocComment("/ this is a doc comment".to_string())],
             ),
             (
                 "// an /// inner doc comment",
-                vec![
-                    Token::Comment("an /// inner doc comment".to_string())
-                ]
+                vec![Token::Comment("an /// inner doc comment".to_string())],
             ),
             (
                 "/// a // regular inner comment",
-                vec![
-                    Token::DocComment("a // regular inner comment".to_string())
-                ]
+                vec![Token::DocComment("a // regular inner comment".to_string())],
             ),
             (
                 "// a comment with !@#$%^&*()_+-=[]{}|;':\",./<>?",
-                vec![
-                    Token::Comment("a comment with !@#$%^&*()_+-=[]{}|;':\",./<>?".to_string())
-                ]
+                vec![Token::Comment(
+                    "a comment with !@#$%^&*()_+-=[]{}|;':\",./<>?".to_string(),
+                )],
             ),
             (
                 "/// a doc comment with !@#$%^&*()_+-=[]{}|;':\",./<>?",
-                vec![
-                    Token::DocComment("a doc comment with !@#$%^&*()_+-=[]{}|;':\",./<>?".to_string())
-                ]
+                vec![Token::DocComment(
+                    "a doc comment with !@#$%^&*()_+-=[]{}|;':\",./<>?".to_string(),
+                )],
             ),
             (
                 "// Hallo World 🌍",
-                vec![
-                    Token::Comment("Hallo World 🌍".to_string())
-                ]
+                vec![Token::Comment("Hallo World 🌍".to_string())],
             ),
             (
                 "/// Hallo World 🌍",
-                vec![
-                    Token::DocComment("Hallo World 🌍".to_string())
-                ]
+                vec![Token::DocComment("Hallo World 🌍".to_string())],
             ),
             (
                 "// first line\n// second line",
                 vec![
                     Token::Comment("first line".to_string()),
-                    Token::Comment("second line".to_string())
-                ]
+                    Token::Comment("second line".to_string()),
+                ],
             ),
             (
                 "/// doc line 1\n/// doc line 2\n// regular line 3",
                 vec![
                     Token::DocComment("doc line 1".to_string()),
                     Token::DocComment("doc line 2".to_string()),
-                    Token::Comment("regular line 3".to_string())
-                ]
+                    Token::Comment("regular line 3".to_string()),
+                ],
             ),
             (
                 "// a comment with a // nested one",
-                vec![
-                    Token::Comment("a comment with a // nested one".to_string())
-                ]
+                vec![Token::Comment("a comment with a // nested one".to_string())],
             ),
             (
                 "/// a doc comment with a // nested regular one",
-                vec![
-                    Token::DocComment("a doc comment with a // nested regular one".to_string())
-                ]
+                vec![Token::DocComment(
+                    "a doc comment with a // nested regular one".to_string(),
+                )],
             ),
             (
                 "// a comment with a /// nested doc one",
-                vec![
-                    Token::Comment("a comment with a /// nested doc one".to_string())
-                ]
+                vec![Token::Comment(
+                    "a comment with a /// nested doc one".to_string(),
+                )],
             ),
             (
                 "//\tcomment with a tab before content",
-                vec![
-                    Token::Comment("comment with a tab before content".to_string())
-                ]
+                vec![Token::Comment(
+                    "comment with a tab before content".to_string(),
+                )],
             ),
             (
                 "///\t doc comment with a tab before content",
-                vec![
-                    Token::DocComment("doc comment with a tab before content".to_string())
-                ]
+                vec![Token::DocComment(
+                    "doc comment with a tab before content".to_string(),
+                )],
             ),
             (
                 "// comment with mixed languages: Привет мир, こんにちは世界",
-                vec![
-                    Token::Comment("comment with mixed languages: Привет мир, こんにちは世界".to_string())
-                ]
+                vec![Token::Comment(
+                    "comment with mixed languages: Привет мир, こんにちは世界".to_string(),
+                )],
             ),
             (
                 "//\n///",
                 vec![
                     Token::Comment("".to_string()),
-                    Token::DocComment("".to_string())
-                ]
+                    Token::DocComment("".to_string()),
+                ],
             ),
             (
                 "f\"{1}\"",
@@ -651,21 +629,13 @@ mod tests {
                     Token::StringLiteral("a".to_string()),
                     Token::FormatStringLiteral(vec![FmtStringContents::Char('b')]),
                     Token::CharLiteral('c'),
-                ]
+                ],
             ),
             (
                 "123testing",
-                vec![
-                    Token::IntLiteral(123),
-                    Token::Ident("testing".to_string()),
-                ]
+                vec![Token::IntLiteral(123), Token::Ident("testing".to_string())],
             ),
-            (
-                "ifelse",
-                vec![
-                    Token::Ident("ifelse".to_string()),
-                ]
-            ),
+            ("ifelse", vec![Token::Ident("ifelse".to_string())]),
             (
                 // todo: discuss if π should be an valid identifier
                 "let π = 3;",
@@ -675,7 +645,7 @@ mod tests {
                     Token::ControlChar('='),
                     Token::IntLiteral(3),
                     Token::ControlChar(';'),
-                ]
+                ],
             ),
             (
                 // todo: divide token
@@ -684,7 +654,7 @@ mod tests {
                     Token::IntLiteral(5),
                     Token::ControlChar('/'),
                     Token::IntLiteral(2),
-                ]
+                ],
             ),
             (
                 "fn(x){if(true)1 else 0;}",
@@ -703,7 +673,7 @@ mod tests {
                     Token::IntLiteral(0),
                     Token::ControlChar(';'),
                     Token::ControlChar('}'),
-                ]
+                ],
             ),
             (
                 "1.0// a float-like thing",
@@ -712,124 +682,111 @@ mod tests {
                     Token::ControlChar('.'),
                     Token::IntLiteral(0),
                     Token::Comment("a float-like thing".to_string()),
-                ]
+                ],
             ),
             (
                 "f\" outer {\"inner\"} outer \"",
-                vec![
-                    Token::FormatStringLiteral(vec![
-                        FmtStringContents::Char(' '),
-                        FmtStringContents::Char('o'),
-                        FmtStringContents::Char('u'),
-                        FmtStringContents::Char('t'),
-                        FmtStringContents::Char('e'),
-                        FmtStringContents::Char('r'),
-                        FmtStringContents::Char(' '),
-                        FmtStringContents::Tokens(
-                            vec![(Token::StringLiteral("inner".to_string()), empty_range())]
-                        ),
-                        FmtStringContents::Char(' '),
-                        FmtStringContents::Char('o'),
-                        FmtStringContents::Char('u'),
-                        FmtStringContents::Char('t'),
-                        FmtStringContents::Char('e'),
-                        FmtStringContents::Char('r'),
-                        FmtStringContents::Char(' '),
-                    ])
-                ]
+                vec![Token::FormatStringLiteral(vec![
+                    FmtStringContents::Char(' '),
+                    FmtStringContents::Char('o'),
+                    FmtStringContents::Char('u'),
+                    FmtStringContents::Char('t'),
+                    FmtStringContents::Char('e'),
+                    FmtStringContents::Char('r'),
+                    FmtStringContents::Char(' '),
+                    FmtStringContents::Tokens(vec![(
+                        Token::StringLiteral("inner".to_string()),
+                        empty_range(),
+                    )]),
+                    FmtStringContents::Char(' '),
+                    FmtStringContents::Char('o'),
+                    FmtStringContents::Char('u'),
+                    FmtStringContents::Char('t'),
+                    FmtStringContents::Char('e'),
+                    FmtStringContents::Char('r'),
+                    FmtStringContents::Char(' '),
+                ])],
             ),
-            (
-                "f\"\"",
-                vec![
-                    Token::FormatStringLiteral(vec![])
-                ]
-            ),
+            ("f\"\"", vec![Token::FormatStringLiteral(vec![])]),
             (
                 "f\"{}\"",
-                vec![
-                    Token::FormatStringLiteral(vec![
-                        FmtStringContents::Tokens(vec![])
-                    ])
-                ]
+                vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
+                    vec![],
+                )])],
             ),
             (
                 "f\"result is {calc(1, 2)}\"",
-                vec![
-                    Token::FormatStringLiteral(vec![
-                        FmtStringContents::Char('r'),
-                        FmtStringContents::Char('e'),
-                        FmtStringContents::Char('s'),
-                        FmtStringContents::Char('u'),
-                        FmtStringContents::Char('l'),
-                        FmtStringContents::Char('t'),
-                        FmtStringContents::Char(' '),
-                        FmtStringContents::Char('i'),
-                        FmtStringContents::Char('s'),
-                        FmtStringContents::Char(' '),
-                        FmtStringContents::Tokens(vec![
-                            (Token::Ident("calc".to_string()), empty_range()),
-                            (Token::ControlChar('('), empty_range()),
-                            (Token::IntLiteral(1), empty_range()),
-                            (Token::ControlChar(','), empty_range()),
-                            (Token::IntLiteral(2), empty_range()),
-                            (Token::ControlChar(')'), empty_range()),
-                        ]),
-                    ])
-                ]
+                vec![Token::FormatStringLiteral(vec![
+                    FmtStringContents::Char('r'),
+                    FmtStringContents::Char('e'),
+                    FmtStringContents::Char('s'),
+                    FmtStringContents::Char('u'),
+                    FmtStringContents::Char('l'),
+                    FmtStringContents::Char('t'),
+                    FmtStringContents::Char(' '),
+                    FmtStringContents::Char('i'),
+                    FmtStringContents::Char('s'),
+                    FmtStringContents::Char(' '),
+                    FmtStringContents::Tokens(vec![
+                        (Token::Ident("calc".to_string()), empty_range()),
+                        (Token::ControlChar('('), empty_range()),
+                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ControlChar(','), empty_range()),
+                        (Token::IntLiteral(2), empty_range()),
+                        (Token::ControlChar(')'), empty_range()),
+                    ]),
+                ])],
             ),
             (
                 "f\"outer {f\"inner {y}\"} end\"",
-                vec![
-                    Token::FormatStringLiteral(vec![
-                        FmtStringContents::Char('o'),
-                        FmtStringContents::Char('u'),
-                        FmtStringContents::Char('t'),
-                        FmtStringContents::Char('e'),
-                        FmtStringContents::Char('r'),
-                        FmtStringContents::Char(' '),
-                        FmtStringContents::Tokens(vec![(
-                            Token::FormatStringLiteral(vec![
-                                FmtStringContents::Char('i'),
-                                FmtStringContents::Char('n'),
-                                FmtStringContents::Char('n'),
-                                FmtStringContents::Char('e'),
-                                FmtStringContents::Char('r'),
-                                FmtStringContents::Char(' '),
-                                FmtStringContents::Tokens(vec![(Token::Ident("y".to_string()), empty_range())]),
-                            ]),
-                            empty_range(),
-                        )]),
-                        FmtStringContents::Char(' '),
-                        FmtStringContents::Char('e'),
-                        FmtStringContents::Char('n'),
-                        FmtStringContents::Char('d'),
-                    ])
-                ]
+                vec![Token::FormatStringLiteral(vec![
+                    FmtStringContents::Char('o'),
+                    FmtStringContents::Char('u'),
+                    FmtStringContents::Char('t'),
+                    FmtStringContents::Char('e'),
+                    FmtStringContents::Char('r'),
+                    FmtStringContents::Char(' '),
+                    FmtStringContents::Tokens(vec![(
+                        Token::FormatStringLiteral(vec![
+                            FmtStringContents::Char('i'),
+                            FmtStringContents::Char('n'),
+                            FmtStringContents::Char('n'),
+                            FmtStringContents::Char('e'),
+                            FmtStringContents::Char('r'),
+                            FmtStringContents::Char(' '),
+                            FmtStringContents::Tokens(vec![(
+                                Token::Ident("y".to_string()),
+                                empty_range(),
+                            )]),
+                        ]),
+                        empty_range(),
+                    )]),
+                    FmtStringContents::Char(' '),
+                    FmtStringContents::Char('e'),
+                    FmtStringContents::Char('n'),
+                    FmtStringContents::Char('d'),
+                ])],
             ),
             (
                 "f\"{1+1}\"",
-                vec![
-                    Token::FormatStringLiteral(vec![
-                        FmtStringContents::Tokens(vec![
-                            (Token::IntLiteral(1), empty_range()),
-                            (Token::ControlChar('+'), empty_range()),
-                            (Token::IntLiteral(1), empty_range()),
-                        ]),
-                    ])
-                ]
+                vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
+                    vec![
+                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ControlChar('+'), empty_range()),
+                        (Token::IntLiteral(1), empty_range()),
+                    ],
+                )])],
             ),
             (
                 "f\"{1+1}a\"",
-                vec![
-                    Token::FormatStringLiteral(vec![
-                        FmtStringContents::Tokens(vec![
-                            (Token::IntLiteral(1), empty_range()),
-                            (Token::ControlChar('+'), empty_range()),
-                            (Token::IntLiteral(1), empty_range()),
-                        ]),
-                        FmtStringContents::Char('a'),
-                    ])
-                ]
+                vec![Token::FormatStringLiteral(vec![
+                    FmtStringContents::Tokens(vec![
+                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ControlChar('+'), empty_range()),
+                        (Token::IntLiteral(1), empty_range()),
+                    ]),
+                    FmtStringContents::Char('a'),
+                ])],
             ),
         ];
 
@@ -869,132 +826,37 @@ mod tests {
                     ],
                 )])],
             ),
-            (
-                "type /// hallo ich bin ein dokkommentar",
-                vec![
-                    Token::Type,
-                ]
-            ),
-            (
-                "/// hallo ich bin ein dokkommentar",
-                vec![
-                ]
-            ),
-            (
-                "// hallo ich bin ein kommentar",
-                vec![
-                ]
-            ),
-            (
-                "//",
-                vec![
-                ]
-            ),
-            (
-                "///",
-                vec![
-                ]
-            ),
-            (
-                "//    ",
-                vec![
-                ]
-            ),
-            (
-                "///    ",
-                vec![
-                ]
-            ),
-            (
-                "//  leading and trailing whitespace  ",
-                vec![
-                ]
-            ),
-            (
-                "///  leading and trailing whitespace  ",
-                vec![
-                ]
-            ),
-            (
-                "//// this is a doc comment",
-                vec![
-                ]
-            ),
-            (
-                "// an /// inner doc comment",
-                vec![
-                ]
-            ),
-            (
-                "/// a // regular inner comment",
-                vec![
-                ]
-            ),
-            (
-                "// a comment with !@#$%^&*()_+-=[]{}|;':\",./<>?",
-                vec![
-                ]
-            ),
+            ("type /// hallo ich bin ein dokkommentar", vec![Token::Type]),
+            ("/// hallo ich bin ein dokkommentar", vec![]),
+            ("// hallo ich bin ein kommentar", vec![]),
+            ("//", vec![]),
+            ("///", vec![]),
+            ("//    ", vec![]),
+            ("///    ", vec![]),
+            ("//  leading and trailing whitespace  ", vec![]),
+            ("///  leading and trailing whitespace  ", vec![]),
+            ("//// this is a doc comment", vec![]),
+            ("// an /// inner doc comment", vec![]),
+            ("/// a // regular inner comment", vec![]),
+            ("// a comment with !@#$%^&*()_+-=[]{}|;':\",./<>?", vec![]),
             (
                 "/// a doc comment with !@#$%^&*()_+-=[]{}|;':\",./<>?",
-                vec![
-                ]
+                vec![],
             ),
-            (
-                "// Hallo World 🌍",
-                vec![
-                ]
-            ),
-            (
-                "/// Hallo World 🌍",
-                vec![
-                ]
-            ),
-            (
-                "// first line\n// second line",
-                vec![
-                ]
-            ),
-            (
-                "/// doc line 1\n/// doc line 2\n// regular line 3",
-                vec![
-                ]
-            ),
-            (
-                "// a comment with a // nested one",
-                vec![
-                ]
-            ),
-            (
-                "/// a doc comment with a // nested regular one",
-                vec![
-                ]
-            ),
-            (
-                "// a comment with a /// nested doc one",
-                vec![
-                ]
-            ),
-            (
-                "//\tcomment with a tab before content",
-                vec![
-                ]
-            ),
-            (
-                "///\t doc comment with a tab before content",
-                vec![
-                ]
-            ),
+            ("// Hallo World 🌍", vec![]),
+            ("/// Hallo World 🌍", vec![]),
+            ("// first line\n// second line", vec![]),
+            ("/// doc line 1\n/// doc line 2\n// regular line 3", vec![]),
+            ("// a comment with a // nested one", vec![]),
+            ("/// a doc comment with a // nested regular one", vec![]),
+            ("// a comment with a /// nested doc one", vec![]),
+            ("//\tcomment with a tab before content", vec![]),
+            ("///\t doc comment with a tab before content", vec![]),
             (
                 "// comment with mixed languages: Привет мир, こんにちは世界",
-                vec![
-                ]
+                vec![],
             ),
-            (
-                "//\n///",
-                vec![
-                ]
-            ),
+            ("//\n///", vec![]),
             (
                 "f\"{1}\" // check",
                 vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
@@ -1059,11 +921,20 @@ mod tests {
                     Token::ControlChar(';'),
                 ],
             ),
-            ("() // check", vec![Token::ControlChar('('), Token::ControlChar(')')]),
+            (
+                "() // check",
+                vec![Token::ControlChar('('), Token::ControlChar(')')],
+            ),
             ("-> // check", vec![Token::ThinArrow]),
             ("fn // check", vec![Token::Function]),
-            ("\"\" // check", vec![Token::StringLiteral(String::from(""))]),
-            ("\"XX\" // check", vec![Token::StringLiteral(String::from("XX"))]),
+            (
+                "\"\" // check",
+                vec![Token::StringLiteral(String::from(""))],
+            ),
+            (
+                "\"XX\" // check",
+                vec![Token::StringLiteral(String::from("XX"))],
+            ),
             (
                 "\"X\\\"X\" // check",
                 vec![Token::StringLiteral(String::from("X\"X"))],
@@ -1078,10 +949,19 @@ mod tests {
             ("2003 // check", vec![Token::IntLiteral(2003)]),
             ("true // check", vec![Token::BoolLiteral(true)]),
             ("false // check", vec![Token::BoolLiteral(false)]),
-            ("go { {} } // check", vec![Token::InlineGo(String::from(" {} "))]),
-            ("go { xx } // check", vec![Token::InlineGo(String::from(" xx "))]),
+            (
+                "go { {} } // check",
+                vec![Token::InlineGo(String::from(" {} "))],
+            ),
+            (
+                "go { xx } // check",
+                vec![Token::InlineGo(String::from(" xx "))],
+            ),
             ("go {} // check", vec![Token::InlineGo(String::from(""))]),
-            ("go {{}{}{}} // check", vec![Token::InlineGo(String::from("{}{}{}"))]),
+            (
+                "go {{}{}{}} // check",
+                vec![Token::InlineGo(String::from("{}{}{}"))],
+            ),
             (
                 "if (true) {} // check",
                 vec![
@@ -1159,7 +1039,7 @@ mod tests {
                     FmtStringContents::Char(' '),
                     FmtStringContents::Tokens(vec![(Token::Ident("var".into()), empty_range())]),
                 ])],
-            )
+            ),
         ];
 
         for (src, expected_tokens) in test_cases {

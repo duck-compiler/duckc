@@ -1,6 +1,10 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
-use crate::parse::{generics_parser::{generics_parser, Generic}, value_parser::IntoBlock, Spanned, SS};
+use crate::parse::{
+    SS, Spanned,
+    generics_parser::{Generic, generics_parser},
+    value_parser::IntoBlock,
+};
 
 use super::{
     lexer::Token,
@@ -17,7 +21,7 @@ pub struct FunctionDefintion {
     pub return_type: Option<Spanned<TypeExpr>>,
     pub params: Option<Vec<Param>>,
     pub value_expr: Spanned<ValueExpr>,
-    pub generics: Option<Vec<Spanned<Generic>>>
+    pub generics: Option<Vec<Spanned<Generic>>>,
 }
 
 impl Default for FunctionDefintion {
@@ -67,23 +71,25 @@ where
         .then_ignore(just(Token::ControlChar(')')))
         .then(return_type_parser.or_not())
         .then(value_expr_parser(make_input))
-        .map(|((((identifier, generics), params), return_type), mut value_expr)| {
-            value_expr = match value_expr {
-                (ValueExpr::Duck(x), loc) if x.is_empty() => {
-                    (ValueExpr::Tuple(vec![]), loc).into_block()
-                }
-                x @ (ValueExpr::Block(_), _) => x,
-                _ => panic!("Function must be block"),
-            };
+        .map(
+            |((((identifier, generics), params), return_type), mut value_expr)| {
+                value_expr = match value_expr {
+                    (ValueExpr::Duck(x), loc) if x.is_empty() => {
+                        (ValueExpr::Tuple(vec![]), loc).into_block()
+                    }
+                    x @ (ValueExpr::Block(_), _) => x,
+                    _ => panic!("Function must be block"),
+                };
 
-            FunctionDefintion {
-                name: identifier,
-                return_type,
-                params,
-                value_expr,
-                generics,
-            }
-        })
+                FunctionDefintion {
+                    name: identifier,
+                    return_type,
+                    params,
+                    value_expr,
+                    generics,
+                }
+            },
+        )
 }
 
 #[cfg(test)]
@@ -153,9 +159,14 @@ pub mod tests {
                     name: "y".to_string(),
                     params: Some(vec![]),
                     return_type: None,
-                    generics: Some(vec![(Generic { name: "TYPENAME".to_string() }, empty_range())]),
+                    generics: Some(vec![(
+                        Generic {
+                            name: "TYPENAME".to_string(),
+                        },
+                        empty_range(),
+                    )]),
                     value_expr: ValueExpr::Block(vec![]).into_empty_span(),
-                }
+                },
             ),
             (
                 "fn y<TYPENAME, TYPENAME2>() {}",
@@ -164,11 +175,21 @@ pub mod tests {
                     params: Some(vec![]),
                     return_type: None,
                     generics: Some(vec![
-                        (Generic { name: "TYPENAME".to_string() }, empty_range()),
-                        (Generic { name: "TYPENAME2".to_string() }, empty_range()),
+                        (
+                            Generic {
+                                name: "TYPENAME".to_string(),
+                            },
+                            empty_range(),
+                        ),
+                        (
+                            Generic {
+                                name: "TYPENAME2".to_string(),
+                            },
+                            empty_range(),
+                        ),
                     ]),
                     value_expr: ValueExpr::Block(vec![]).into_empty_span(),
-                }
+                },
             ),
             (
                 "fn y<TYPENAME, TYPENAME2, TYPENAME3>() {}",
@@ -177,12 +198,27 @@ pub mod tests {
                     params: Some(vec![]),
                     return_type: None,
                     generics: Some(vec![
-                        (Generic { name: "TYPENAME".to_string() }, empty_range()),
-                        (Generic { name: "TYPENAME2".to_string() }, empty_range()),
-                        (Generic { name: "TYPENAME3".to_string() }, empty_range()),
+                        (
+                            Generic {
+                                name: "TYPENAME".to_string(),
+                            },
+                            empty_range(),
+                        ),
+                        (
+                            Generic {
+                                name: "TYPENAME2".to_string(),
+                            },
+                            empty_range(),
+                        ),
+                        (
+                            Generic {
+                                name: "TYPENAME3".to_string(),
+                            },
+                            empty_range(),
+                        ),
                     ]),
                     value_expr: ValueExpr::Block(vec![]).into_empty_span(),
-                }
+                },
             ),
         ];
 
@@ -202,11 +238,10 @@ pub mod tests {
 
             assert_eq!(parse_result.has_output(), true, "{i}: {}", src);
 
-            let mut output = parse_result
-                .into_result()
-                .expect(&src);
+            let mut output = parse_result.into_result().expect(&src);
 
-            output.generics
+            output
+                .generics
                 .as_mut()
                 .unwrap()
                 .iter_mut()
@@ -219,5 +254,4 @@ pub mod tests {
             assert_eq!(output, expected_fns, "{i}: {}", src);
         }
     }
-
 }
