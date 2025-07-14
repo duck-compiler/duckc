@@ -19,8 +19,11 @@ pub struct MangleEnv {
 
 pub const MANGLE_SEP: &str = "_____";
 
-pub fn mangle(p: &[String]) -> String {
-    p.join(MANGLE_SEP)
+pub fn mangle(p: &[impl AsRef<str>]) -> String {
+    p.iter()
+        .map(|x| x.as_ref().to_string())
+        .collect::<Vec<_>>()
+        .join(MANGLE_SEP)
 }
 
 pub fn unmangle(s: &str) -> Vec<String> {
@@ -416,7 +419,7 @@ pub fn mangle_value_expr(
             }
             *value_expr = ValueExpr::Variable(true, mangle(path), None);
         }
-        ValueExpr::Variable(..) => panic!("variable shouldn't be here."),
+        ValueExpr::Variable(..) => panic!("variable shouldn't be here. {value_expr:?}"),
         ValueExpr::If {
             condition,
             then,

@@ -4,7 +4,7 @@ use crate::{
         type_parser::{Duck, Struct, TypeExpr},
         value_parser::{Declaration, ValFmtStringContents, ValueExpr},
     },
-    semantics::type_resolve::TypeEnv,
+    semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -165,7 +165,6 @@ impl ValueExpr {
         env: &mut ToIr,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
-            ValueExpr::RawVariable(..) => panic!(),
             ValueExpr::FormattedString(contents) => {
                 let mut instr = Vec::new();
 
@@ -635,6 +634,7 @@ impl ValueExpr {
                     (instr, None)
                 }
             }
+            ValueExpr::RawVariable(_, p) => (vec![], as_rvar(mangle(p))),
             ValueExpr::Variable(_, x, _) => (vec![], as_rvar(x.to_owned())),
             ValueExpr::Equals(v1, v2) => {
                 let mut ir = Vec::new();
