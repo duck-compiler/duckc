@@ -789,6 +789,16 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
                 type_expr_into_empty_range(&mut f.type_expr);
             }
         }
+        TypeExpr::TypeName(_, _, Some(params)) => {
+            for p in params {
+                type_expr_into_empty_range(p);
+            }
+        }
+        TypeExpr::RawTypeName(_, _, Some(params)) => {
+            for p in params {
+                type_expr_into_empty_range(p);
+            }
+        }
         _ => {}
     }
 }
