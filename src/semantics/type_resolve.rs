@@ -771,7 +771,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
                 let type_expr = type_env
                     .get_identifier_type(ident.clone())
-                    .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {}", ident));
+                    .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {ident}"));
 
                 println!(
                     "{}{}{}trying to resolve raw variable {:?}",
