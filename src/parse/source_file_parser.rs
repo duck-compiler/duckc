@@ -4,9 +4,16 @@ use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::{
     parse::{
-        function_parser::{function_definition_parser, FunctionDefintion}, lexer::{lex_parser, Token}, make_input, parse_failure, type_parser::{type_definition_parser, TypeDefinition}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, Context, Spanned, SS
+        Context, SS, Spanned,
+        function_parser::{FunctionDefintion, function_definition_parser},
+        lexer::{Token, lex_parser},
+        make_input, parse_failure,
+        type_parser::{TypeDefinition, type_definition_parser},
+        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
     },
-    semantics::ident_mangler::{mangle, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv},
+    semantics::ident_mangler::{
+        MangleEnv, mangle, mangle_type_expression, mangle_value_expr, unmangle,
+    },
 };
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -770,7 +777,10 @@ mod tests {
     #[test]
     fn test_flatten() {
         let test_cases = vec![
-            (SourceFile::default().flatten(), SourceFile::default()),
+            (
+                SourceFile::default().flatten(&vec![], false),
+                SourceFile::default(),
+            ),
             (
                 SourceFile::default(),
                 SourceFile {
@@ -1115,7 +1125,7 @@ mod tests {
             }
             source_file_into_empty_range(&mut original);
 
-            let mut original = original.flatten();
+            let mut original = original.flatten(&vec![], false);
 
             sort_all(&mut expected);
             sort_all(&mut original);
@@ -1124,7 +1134,7 @@ mod tests {
                 value_expr_into_empty_range(&mut func.value_expr);
             }
 
-            assert_eq!(expected, original.flatten(), "{i}");
+            assert_eq!(expected, original.flatten(&vec![], false), "{i}");
         }
     }
 }

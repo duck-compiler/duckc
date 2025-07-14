@@ -597,7 +597,7 @@ impl ValueExpr {
             ValueExpr::FunctionCall {
                 target: v_target,
                 params,
-                type_params,
+                type_params: _,
             } => {
                 // todo: type_params
                 let (mut instr, target) = v_target.0.direct_or_with_instr(type_env, env);

@@ -210,13 +210,14 @@ pub fn mangle_type_expression(
 ) {
     match type_expr {
         TypeExpr::TypeName(..) => panic!("type name shouldn't be here"),
-        TypeExpr::RawTypeName(is_global, path) => {
+        TypeExpr::RawTypeName(is_global, path, type_params) => {
             // TODO: type params
+
             if let Some(mangled) = mangle_env.mangle_type(*is_global, prefix, path) {
                 *path = mangle_env.global_prefix.clone();
                 path.extend(mangled);
             }
-            *type_expr = TypeExpr::TypeName(true, mangle(path));
+            *type_expr = TypeExpr::TypeName(true, mangle(path), type_params.clone());
         }
         TypeExpr::Struct(Struct { fields }) => {
             for f in fields {
@@ -398,7 +399,11 @@ pub fn mangle_value_expr(
             mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env);
             mangle_env.pop_idents();
         }
-        ValueExpr::FunctionCall { target, params } => {
+        ValueExpr::FunctionCall {
+            target,
+            params,
+            type_params: _,
+        } => {
             // TODO: type params
             mangle_value_expr(&mut target.0, global_prefix, prefix, mangle_env);
             params.iter_mut().for_each(|param| {
