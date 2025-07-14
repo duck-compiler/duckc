@@ -1030,6 +1030,9 @@ pub mod tests {
             "type X = ::String::ABC::C;",
             "type X = fn() -> String;",
             "type X = fn() -> String;",
+            "type X<TYPENAME> = fn() -> String;",
+            "type X<TYPENAME, TYPENAME2> = fn() -> String;",
+            "type X<TYPENAME, TYPENAME2, TYPENAME3> = fn() -> String;",
         ];
 
         for valid_type_definition in valid_type_definitions {
