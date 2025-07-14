@@ -1007,6 +1007,10 @@ pub mod tests {
         );
     }
 
+    // TODO(@mvmo): type definition testing
+    // At the moment type definitions are just tested by if they parse or not.
+    // They should be tested against their structure, so doing asserts on the actual TypeDefinition.
+    // Just as we do it everywhere else
     #[test]
     fn test_type_definition_parser() {
         let valid_type_definitions = vec![
