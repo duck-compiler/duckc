@@ -466,7 +466,9 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
             }
             sort_fields_value_expr(&mut value_expr.0);
         }
-        ValueExpr::Add(l, r) | ValueExpr::Mul(l, r) | ValueExpr::Equals(l, r) => {
+        ValueExpr::Add(l, r)
+        | ValueExpr::Mul(l, r)
+        | ValueExpr::Equals(l, r) => {
             sort_fields_value_expr(&mut l.0);
             sort_fields_value_expr(&mut r.0);
         }
