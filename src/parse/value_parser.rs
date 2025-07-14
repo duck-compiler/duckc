@@ -560,24 +560,23 @@ where
                                 just(Token::ControlChar(']')),
                             )
                             .map(|x| AtomPostParseUnit::ArrayAccess(x[0].clone())),
-                        params
-                            .clone()
-                            .then(
-                                (
-                                    just(Token::ControlChar('<'))
-                                        .ignore_then(
-                                            type_expression_parser()
-                                                .clone()
-                                                .separated_by(just(Token::ControlChar(',')))
-                                                .allow_trailing()
-                                                .at_least(1)
-                                                .collect::<Vec<Spanned<TypeExpr>>>()
-                                        )
-                                        .then_ignore(just(Token::ControlChar('>')))
+                        (
+                            (
+                                just(Token::ControlChar('<'))
+                                    .ignore_then(
+                                        type_expression_parser()
+                                            .clone()
+                                            .separated_by(just(Token::ControlChar(',')))
+                                            .allow_trailing()
+                                            .at_least(1)
+                                            .collect::<Vec<Spanned<TypeExpr>>>()
+                                    )
+                                    .then_ignore(just(Token::ControlChar('>')))
                                 )
-                                    .or_not()
+                                .or_not()
                             )
-                            .map(|(params, type_params)| AtomPostParseUnit::FuncCall(params, type_params)),
+                            .then(params.clone())
+                            .map(|(type_params, params)| AtomPostParseUnit::FuncCall(params, type_params)),
                         just(Token::ControlChar('.'))
                             .ignore_then(
                                 select_ref! { Token::Ident(s) => s.to_string() }
