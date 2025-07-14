@@ -1,0 +1,19 @@
+{
+    "id": "58d8a60b9166dde326b6e743875d268e",
+    "file_path": "../../src/main.rs",
+    "line_number": 388,
+    "title": "do this for all dependencies",
+    "tag": "todo",
+    "module_tag": "root",
+    "user": null,
+    "issue_ref": null,
+    "description": "",
+    "blame": {
+        "name": "Apfelfrosch",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
+    },
+    "source_line": "// TODO: do this for all dependencies",
+    "status": "open",
+    "first_seen": "2025-07-14T09:44:03.702703",
+    "history": []
+}

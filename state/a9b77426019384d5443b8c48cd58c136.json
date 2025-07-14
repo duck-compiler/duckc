@@ -1,8 +1,8 @@
 {
-    "id": "85e0c950789d9ad5d875a7db05b97130",
+    "id": "a9b77426019384d5443b8c48cd58c136",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 1072,
-    "title": "add spans",
+    "line_number": 821,
+    "title": "type_params",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Apfelfrosch",
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
-    "source_line": "// TODO add spans",
+    "source_line": "// todo: type_params",
     "status": "open",
-    "first_seen": "2025-07-09T23:15:12.305885",
+    "first_seen": "2025-07-14T09:44:03.706713",
     "history": []
 }

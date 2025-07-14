@@ -1,8 +1,8 @@
 {
-    "id": "55b87cf3bb4499e965e33b5e4efe9c0f",
+    "id": "2f878b6ff80b3a8f3cebcdff3aba8c5d",
     "file_path": "../../src/emit/value.rs",
-    "line_number": 798,
-    "title": "todo!() in value.rs @ line 798",
+    "line_number": 601,
+    "title": "type_params",
     "tag": "todo",
     "module_tag": "emit",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Apfelfrosch",
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
-    "source_line": "todo!()",
+    "source_line": "// todo: type_params",
     "status": "open",
-    "first_seen": "2025-07-09T23:15:12.305255",
+    "first_seen": "2025-07-14T09:44:03.704951",
     "history": []
 }

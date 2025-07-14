@@ -1,7 +1,7 @@
 {
     "id": "eafb30b0c424a5220951f6aa028f8a3d",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 899,
+    "line_number": 955,
     "title": "typeinference",
     "tag": "todo",
     "module_tag": "semantics",
