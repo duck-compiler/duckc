@@ -25,13 +25,14 @@ pub enum GoTypeDefinition {
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
         match self {
+            TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::Any => "Any".to_string(),
             TypeExpr::InlineGo => "inline-go".to_string(),
             TypeExpr::Struct(_) => "struct {{ todo }}".to_string(),
             TypeExpr::Go(str) => format!("go({str})"),
             TypeExpr::Duck(_) => "duck { todo }".to_string(),
             TypeExpr::Tuple(_) => "tuple(todo)".to_string(),
-            TypeExpr::TypeName(_, str) => format!("type {str}"),
+            TypeExpr::TypeName(_, str, _) => format!("type {str}"), // todo: type params
             TypeExpr::TypeNameInternal(str) => format!("internal {str}"),
             TypeExpr::StringLiteral(str) => format!("\"{str}\""),
             TypeExpr::IntLiteral(int) => format!("{int}"),
@@ -49,6 +50,7 @@ impl TypeExpr {
 
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
+            ValueExpr::RawVariable(..) => panic!(),
             ValueExpr::FormattedString(contents) => {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {
@@ -216,7 +218,8 @@ impl TypeExpr {
 
                 left_type_expr
             }
-            ValueExpr::FunctionCall { target, params } => {
+            ValueExpr::FunctionCall { target, params, type_params: _ } => {
+                // todo: type_params
                 let in_param_types = params
                     .iter()
                     .map(|param| (TypeExpr::from_value_expr(&param.0, type_env), param.1))
@@ -839,6 +842,7 @@ mod test {
                     params: None,
                     return_type: None,
                     value_expr: value_expr,
+                    generics: None,
                 }],
                 ..Default::default()
             };
@@ -987,6 +991,7 @@ mod test {
                     params: None,
                     return_type: None,
                     value_expr: value_expr,
+                    generics: None,
                 }],
                 ..Default::default()
             };

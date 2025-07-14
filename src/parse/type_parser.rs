@@ -2,7 +2,11 @@ use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
-use crate::parse::{SS, Spanned, value_parser::empty_range};
+use crate::parse::{
+    SS, Spanned,
+    generics_parser::{Generic, generics_parser},
+    value_parser::{TypeParam, empty_range},
+};
 
 use super::lexer::Token;
 
@@ -10,6 +14,7 @@ use super::lexer::Token;
 pub struct TypeDefinition {
     pub name: String,
     pub type_expression: Spanned<TypeExpr>,
+    pub generics: Option<Vec<Spanned<Generic>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -48,7 +53,8 @@ pub enum TypeExpr {
     Go(String),
     Duck(Duck),
     Tuple(Vec<Spanned<TypeExpr>>),
-    TypeName(bool, String),
+    RawTypeName(bool, Vec<String>, Option<Vec<Spanned<TypeParam>>>),
+    TypeName(bool, String, Option<Vec<Spanned<TypeParam>>>),
     TypeNameInternal(String),
     StringLiteral(String),
     IntLiteral(i32),
@@ -207,7 +213,8 @@ where
                     "Bool" => TypeExpr::Bool,
                     "String" => TypeExpr::String,
                     "Char" => TypeExpr::Char,
-                    _ => TypeExpr::TypeName(is_global.is_some(), identifier.join("_")),
+                    // TODO: generic type name
+                    _ => TypeExpr::RawTypeName(is_global.is_some(), identifier, None),
                 });
 
             let term_type_expr = p
@@ -363,14 +370,28 @@ where
                         .at_least(1)
                         .collect::<Vec<_>>(),
                 )
-                .map(|(is_global, identifier)| match identifier[0].as_str() {
-                    "Int" => TypeExpr::Int,
-                    "Float" => TypeExpr::Float,
-                    "Bool" => TypeExpr::Bool,
-                    "String" => TypeExpr::String,
-                    "Char" => TypeExpr::Char,
-                    _ => TypeExpr::TypeName(is_global.is_some(), identifier.join("_")),
-                });
+                .then(
+                    just(Token::ControlChar('<'))
+                        .ignore_then(
+                            p.clone()
+                                .separated_by(just(Token::ControlChar(',')))
+                                .allow_trailing()
+                                .at_least(1)
+                                .collect::<Vec<Spanned<TypeParam>>>(),
+                        )
+                        .then_ignore(just(Token::ControlChar('>')))
+                        .or_not(),
+                )
+                .map(
+                    |((is_global, identifier), type_params)| match identifier[0].as_str() {
+                        "Int" => TypeExpr::Int,
+                        "Float" => TypeExpr::Float,
+                        "Bool" => TypeExpr::Bool,
+                        "String" => TypeExpr::String,
+                        "Char" => TypeExpr::Char,
+                        _ => TypeExpr::RawTypeName(is_global.is_some(), identifier, type_params),
+                    },
+                );
 
             let term_type_expr = p
                 .clone()
@@ -437,12 +458,14 @@ where
 {
     just(Token::Type)
         .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
+        .then(generics_parser().or_not())
         .then_ignore(just(Token::ControlChar('=')))
         .then(type_expression_parser())
         .then_ignore(just(Token::ControlChar(';')))
-        .map(|(identifier, type_expression)| TypeDefinition {
+        .map(|((identifier, generics), type_expression)| TypeDefinition {
             name: identifier,
             type_expression,
+            generics,
         })
 }
 
@@ -489,6 +512,19 @@ pub mod tests {
                 return_type.map(|rt_box| Box::new(strip_spans(*rt_box))),
             ),
             TypeExpr::Or(variants) => TypeExpr::Or(variants.into_iter().map(strip_spans).collect()),
+            TypeExpr::TypeName(is_global, type_name, Some(generics)) => TypeExpr::TypeName(
+                is_global,
+                type_name,
+                Some(
+                    generics
+                        .into_iter()
+                        .map(|generic| strip_spans(generic))
+                        .collect::<Vec<_>>(),
+                ),
+            ),
+            TypeExpr::Array(type_expr) => {
+                TypeExpr::Array(Box::new(strip_spans(type_expr.as_ref().clone())))
+            }
             other => other,
         };
         (stripped_expr, empty_range())
@@ -622,17 +658,426 @@ pub mod tests {
         );
 
         assert_type_expression(
+            "Generic<String>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Generic".to_string()],
+                Some(vec![TypeExpr::String.into_empty_span()]),
+            ),
+        );
+
+        assert_type_expression(
+            "Option<String>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Option".to_string()],
+                Some(vec![TypeExpr::String.into_empty_span()]),
+            ),
+        );
+
+        assert_type_expression(
+            "Result<Int, String>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Result".to_string()],
+                Some(vec![
+                    TypeExpr::Int.into_empty_span(),
+                    TypeExpr::String.into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
+            "Map<String, Int>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Map".to_string()],
+                Some(vec![
+                    TypeExpr::String.into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
+            "::std::Vec<::std::fs::File>",
+            TypeExpr::RawTypeName(
+                true,
+                vec!["std".to_string(), "Vec".to_string()],
+                Some(vec![
+                    TypeExpr::RawTypeName(
+                        true,
+                        vec!["std".to_string(), "fs".to_string(), "File".to_string()],
+                        None,
+                    )
+                    .into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
+            "Option<Option<Int>>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Option".to_string()],
+                Some(vec![
+                    TypeExpr::RawTypeName(
+                        false,
+                        vec!["Option".to_string()],
+                        Some(vec![TypeExpr::Int.into_empty_span()]),
+                    )
+                    .into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
+            "Result<Result<Int, String>, Error>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Result".to_string()],
+                Some(vec![
+                    TypeExpr::RawTypeName(
+                        false,
+                        vec!["Result".to_string()],
+                        Some(vec![
+                            TypeExpr::Int.into_empty_span(),
+                            TypeExpr::String.into_empty_span(),
+                        ]),
+                    )
+                    .into_empty_span(),
+                    TypeExpr::RawTypeName(false, vec!["Error".to_string()], None).into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
+            "Map<String, Vec<Int>>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Map".to_string()],
+                Some(vec![
+                    TypeExpr::String.into_empty_span(),
+                    TypeExpr::RawTypeName(
+                        false,
+                        vec!["Vec".to_string()],
+                        Some(vec![TypeExpr::Int.into_empty_span()]),
+                    )
+                    .into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
+            "Option<String>[]",
+            TypeExpr::Array(
+                TypeExpr::RawTypeName(
+                    false,
+                    vec!["Option".to_string()],
+                    Some(vec![TypeExpr::String.into_empty_span()]),
+                )
+                .into_empty_span()
+                .into(),
+            ),
+        );
+
+        assert_type_expression(
+            "(Int, Result<String, Error>)",
+            TypeExpr::Tuple(vec![
+                TypeExpr::Int.into_empty_span(),
+                TypeExpr::RawTypeName(
+                    false,
+                    vec!["Result".to_string()],
+                    Some(vec![
+                        TypeExpr::String.into_empty_span(),
+                        TypeExpr::RawTypeName(false, vec!["Error".to_string()], None)
+                            .into_empty_span(),
+                    ]),
+                )
+                .into_empty_span(),
+            ]),
+        );
+
+        assert_type_expression(
+            "Option<Int> | Option<String>",
+            TypeExpr::Or(vec![
+                TypeExpr::RawTypeName(
+                    false,
+                    vec!["Option".to_string()],
+                    Some(vec![TypeExpr::Int.into_empty_span()]),
+                )
+                .into_empty_span(),
+                TypeExpr::RawTypeName(
+                    false,
+                    vec!["Option".to_string()],
+                    Some(vec![TypeExpr::String.into_empty_span()]),
+                )
+                .into_empty_span(),
+            ]),
+        );
+
+        assert_type_expression(
+            "fn(p: Promise<Int>) -> Future<String>",
+            TypeExpr::Fun(
+                vec![(
+                    "p".to_string().into(),
+                    TypeExpr::RawTypeName(
+                        false,
+                        vec!["Promise".to_string()],
+                        Some(vec![TypeExpr::Int.into_empty_span()]),
+                    )
+                    .into_empty_span(),
+                )],
+                Some(Box::new(
+                    TypeExpr::RawTypeName(
+                        false,
+                        vec!["Future".to_string()],
+                        Some(vec![TypeExpr::String.into_empty_span()]),
+                    )
+                    .into_empty_span(),
+                )),
+            ),
+        );
+
+        assert_type_expression(
+            "Box<(Int, String)>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Box".to_string()],
+                Some(vec![
+                    TypeExpr::Tuple(vec![
+                        TypeExpr::Int.into_empty_span(),
+                        TypeExpr::String.into_empty_span(),
+                    ])
+                    .into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
+            "Container<{ id: Int, data: String }>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Container".to_string()],
+                Some(vec![
+                    TypeExpr::Duck(Duck {
+                        fields: vec![
+                            Field::new("data".to_string(), TypeExpr::String.into_empty_span()),
+                            Field::new("id".to_string(), TypeExpr::Int.into_empty_span()),
+                        ],
+                    })
+                    .into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
+            "Holder<{}>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Holder".to_string()],
+                Some(vec![TypeExpr::Any.into_empty_span()]),
+            ),
+        );
+
+        assert_type_expression(
+            "Wrapper<struct { success: Bool, value: Float }>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Wrapper".to_string()],
+                Some(vec![
+                    TypeExpr::Struct(Struct {
+                        fields: vec![
+                            Field::new("success".to_string(), TypeExpr::Bool.into_empty_span()),
+                            Field::new("value".to_string(), TypeExpr::Float.into_empty_span()),
+                        ],
+                    })
+                    .into_empty_span(),
+                ]),
+            ),
+        );
+
+        // TODO: discuss unnamed paramters in fn typeexpr
+        //      fn (String) -> Int
+        // without the x:
+        // There's an example of this right below this issue.
+        // It shows that you have to declare the parameter name
+
+        assert_type_expression(
+            "Executor<fn(x: String) -> Int>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Executor".to_string()],
+                Some(vec![
+                    TypeExpr::Fun(
+                        vec![("x".to_string().into(), TypeExpr::String.into_empty_span())],
+                        Some(Box::new(TypeExpr::Int.into_empty_span())),
+                    )
+                    .into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
+            "Collection<Int[]>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Collection".to_string()],
+                Some(vec![
+                    TypeExpr::Array(TypeExpr::Int.into_empty_span().into()).into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
+            "Result<Map<String, User[]>, (Int, String)>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Result".to_string()],
+                Some(vec![
+                    TypeExpr::RawTypeName(
+                        false,
+                        vec!["Map".to_string()],
+                        Some(vec![
+                            TypeExpr::String.into_empty_span(),
+                            TypeExpr::Array(
+                                TypeExpr::RawTypeName(false, vec!["User".to_string()], None)
+                                    .into_empty_span()
+                                    .into(),
+                            )
+                            .into_empty_span(),
+                        ]),
+                    )
+                    .into_empty_span(),
+                    TypeExpr::Tuple(vec![
+                        TypeExpr::Int.into_empty_span(),
+                        TypeExpr::String.into_empty_span(),
+                    ])
+                    .into_empty_span(),
+                ]),
+            ),
+        );
+
+        // TODO: allow no return type in fn's type expr
+        // case example right below issue.
+        assert_type_expression(
+            "fn(cb: fn(x: Result<Int, E>) -> ()) -> Subscription<T>",
+            TypeExpr::Fun(
+                vec![(
+                    "cb".to_string().into(),
+                    TypeExpr::Fun(
+                        vec![(
+                            "x".to_string().into(),
+                            TypeExpr::RawTypeName(
+                                false,
+                                vec!["Result".to_string()],
+                                Some(vec![
+                                    TypeExpr::Int.into_empty_span(),
+                                    TypeExpr::RawTypeName(false, vec!["E".to_string()], None)
+                                        .into_empty_span(),
+                                ]),
+                            )
+                            .into_empty_span(),
+                        )],
+                        Some(Box::new(TypeExpr::Tuple(vec![]).into_empty_span())),
+                    )
+                    .into_empty_span(),
+                )],
+                Some(Box::new(
+                    TypeExpr::RawTypeName(
+                        false,
+                        vec!["Subscription".to_string()],
+                        Some(vec![
+                            TypeExpr::RawTypeName(false, vec!["T".to_string()], None)
+                                .into_empty_span(),
+                        ]),
+                    )
+                    .into_empty_span(),
+                )),
+            ),
+        );
+
+        assert_type_expression(
+            "Cache<String, duck { data: Result<T, E> }>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Cache".to_string()],
+                Some(vec![
+                    TypeExpr::String.into_empty_span(),
+                    TypeExpr::Duck(Duck {
+                        fields: vec![Field::new(
+                            "data".to_string(),
+                            TypeExpr::RawTypeName(
+                                false,
+                                vec!["Result".to_string()],
+                                Some(vec![
+                                    TypeExpr::RawTypeName(false, vec!["T".to_string()], None)
+                                        .into_empty_span(),
+                                    TypeExpr::RawTypeName(false, vec!["E".to_string()], None)
+                                        .into_empty_span(),
+                                ]),
+                            )
+                            .into_empty_span(),
+                        )],
+                    })
+                    .into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
+            "Result<Int, String,>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Result".to_string()],
+                Some(vec![
+                    TypeExpr::Int.into_empty_span(),
+                    TypeExpr::String.into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
+            "Box<Int | String | Bool>",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Box".to_string()],
+                Some(vec![
+                    TypeExpr::Or(vec![
+                        TypeExpr::Int.into_empty_span(),
+                        TypeExpr::String.into_empty_span(),
+                        TypeExpr::Bool.into_empty_span(),
+                    ])
+                    .into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
+            "  Map < String,  Int >  ",
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Map".to_string()],
+                Some(vec![
+                    TypeExpr::String.into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
+                ]),
+            ),
+        );
+
+        assert_type_expression(
             "fn(param1: TypeName,) -> ()",
             TypeExpr::Fun(
                 vec![(
                     "param1".to_string().into(),
-                    TypeExpr::TypeName(false, "TypeName".to_string()).into_empty_span(),
+                    TypeExpr::RawTypeName(false, vec!["TypeName".to_string()], None)
+                        .into_empty_span(),
                 )],
                 Some(Box::new(TypeExpr::Tuple(Vec::new()).into_empty_span())),
             ),
         );
 
-        // TODO
+        // TODO(@Apfelfrosch): Here's an TODO, which had no title.
         assert_type_expression(
             "fn(data: duck { name: String, age: Int }) -> ::MyResult",
             TypeExpr::Fun(
@@ -647,7 +1092,8 @@ pub mod tests {
                     .into_empty_span(),
                 )],
                 Some(Box::new(
-                    TypeExpr::TypeName(true, "MyResult".to_string()).into_empty_span(),
+                    TypeExpr::RawTypeName(true, vec!["MyResult".to_string()], None)
+                        .into_empty_span(),
                 )),
             ),
         );
@@ -931,22 +1377,37 @@ pub mod tests {
             ]),
         );
 
-        assert_type_expression("MyType", TypeExpr::TypeName(false, "MyType".to_string()));
+        assert_type_expression(
+            "MyType",
+            TypeExpr::RawTypeName(false, vec!["MyType".to_string()], None),
+        );
         assert_type_expression(
             "::GlobalType",
-            TypeExpr::TypeName(true, "GlobalType".to_string()),
+            TypeExpr::RawTypeName(true, vec!["GlobalType".to_string()], None),
         );
         assert_type_expression(
             "Module::MyType",
-            TypeExpr::TypeName(false, "Module_MyType".to_string()),
+            TypeExpr::RawTypeName(
+                false,
+                vec!["Module".to_string(), "MyType".to_string()],
+                None,
+            ),
         );
         assert_type_expression(
             "::Module::MyType",
-            TypeExpr::TypeName(true, "Module_MyType".to_string()),
+            TypeExpr::RawTypeName(true, vec!["Module".to_string(), "MyType".to_string()], None),
         );
         assert_type_expression(
             "::Module::SubModule::MyType",
-            TypeExpr::TypeName(true, "Module_SubModule_MyType".to_string()),
+            TypeExpr::RawTypeName(
+                true,
+                vec![
+                    "Module".to_string(),
+                    "SubModule".to_string(),
+                    "MyType".to_string(),
+                ],
+                None,
+            ),
         );
 
         assert_type_expression("String", TypeExpr::String);
@@ -1004,6 +1465,10 @@ pub mod tests {
         );
     }
 
+    // TODO(@mvmo): type definition testing
+    // At the moment type definitions are just tested by if they parse or not.
+    // They should be tested against their structure, so doing asserts on the actual TypeDefinition.
+    // Just as we do it everywhere else
     #[test]
     fn test_type_definition_parser() {
         let valid_type_definitions = vec![
@@ -1027,6 +1492,9 @@ pub mod tests {
             "type X = ::String::ABC::C;",
             "type X = fn() -> String;",
             "type X = fn() -> String;",
+            "type X<TYPENAME> = fn() -> String;",
+            "type X<TYPENAME, TYPENAME2> = fn() -> String;",
+            "type X<TYPENAME, TYPENAME2, TYPENAME3> = fn() -> String;",
         ];
 
         for valid_type_definition in valid_type_definitions {

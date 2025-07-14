@@ -1,6 +1,15 @@
 use std::collections::HashMap;
 
-use crate::parse::{function_parser::{FunctionDefintion, LambdaFunctionExpr}, source_file_parser::SourceFile, type_parser::{Duck, Struct, TypeExpr}, value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}};
+use crate::{
+    parse::{
+        function_parser::{FunctionDefintion, LambdaFunctionExpr},
+        source_file_parser::SourceFile,
+        type_parser::{Duck, Struct, TypeExpr},
+        value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr},
+    },
+    semantics::ident_mangler::mangle,
+    tags::Tag,
+};
 
 #[derive(Debug, Clone)]
 pub struct TypeEnv {
@@ -61,7 +70,8 @@ impl TypeEnv {
     }
 
     pub fn insert_type(&mut self, type_expr: TypeExpr) -> TypeExpr {
-        if let TypeExpr::TypeName(_, ident) = &type_expr {
+        // todo: type params
+        if let TypeExpr::TypeName(_, ident, _type_params) = &type_expr {
             let resolved = self.resolve_type_alias(ident);
             self.all_types.push(resolved.clone());
             resolved
@@ -106,7 +116,8 @@ impl TypeEnv {
 
         if let TypeExpr::Or(types) = &mut res {
             for ty in types {
-                if let TypeExpr::TypeName(_, name) = &ty.0 {
+                // todo: type params
+                if let TypeExpr::TypeName(_, name, _type_params) = &ty.0 {
                     ty.0 = self.resolve_type_alias(name);
                 }
             }
@@ -229,6 +240,7 @@ impl TypeEnv {
 
 fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &TypeEnv) {
     match expr {
+        TypeExpr::RawTypeName(..) => panic!(),
         TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
             fields.sort_by_key(|x| x.name.clone());
             for field in fields {
@@ -254,7 +266,15 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &TypeEnv) {
                 resolve_all_aliases_type_expr(&mut field.0, env);
             }
         }
-        TypeExpr::TypeName(_, name) => {
+        TypeExpr::TypeName(_, name, type_params) => {
+            if let Some(type_params) = type_params {
+                type_params
+                    .iter_mut()
+                    .for_each(|type_param| resolve_all_aliases_type_expr(&mut type_param.0, env));
+
+                return;
+            }
+
             *expr = env.resolve_type_alias(name);
         }
         TypeExpr::Any
@@ -339,11 +359,22 @@ fn resolve_all_aliases_value_expr(expr: &mut ValueExpr, env: &TypeEnv) {
                 }
             }
         }
-        ValueExpr::FunctionCall { target, params } => {
+        ValueExpr::FunctionCall {
+            target,
+            params,
+            type_params,
+        } => {
             resolve_all_aliases_value_expr(&mut target.0, env);
-            for p in params {
-                resolve_all_aliases_value_expr(&mut p.0, env);
+
+            if let Some(type_params) = type_params {
+                type_params
+                    .iter_mut()
+                    .for_each(|type_param| resolve_all_aliases_type_expr(&mut type_param.0, env));
             }
+
+            params
+                .iter_mut()
+                .for_each(|param| resolve_all_aliases_value_expr(&mut param.0, env));
         }
         ValueExpr::If {
             condition,
@@ -391,6 +422,7 @@ fn resolve_all_aliases_value_expr(expr: &mut ValueExpr, env: &TypeEnv) {
         | ValueExpr::InlineGo(..)
         | ValueExpr::Int(..)
         | ValueExpr::Variable(..)
+        | ValueExpr::RawVariable(..)
         | ValueExpr::Continue
         | ValueExpr::String(..)
         | ValueExpr::Char(..)
@@ -466,7 +498,12 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
                 }
             }
         }
-        ValueExpr::FunctionCall { target, params } => {
+        ValueExpr::FunctionCall {
+            target,
+            params,
+            type_params: _,
+        } => {
+            // todo: type_params
             sort_fields_value_expr(&mut target.0);
             for p in params {
                 sort_fields_value_expr(&mut p.0);
@@ -518,6 +555,7 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
         | ValueExpr::InlineGo(..)
         | ValueExpr::Int(..)
         | ValueExpr::Variable(..)
+        | ValueExpr::RawVariable(..)
         | ValueExpr::Continue
         | ValueExpr::String(..)
         | ValueExpr::Char(..)
@@ -528,6 +566,7 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
 
 fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
+        TypeExpr::RawTypeName(..) => {}
         TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
             fields.sort_by_key(|x| x.name.clone());
             for field in fields {
@@ -587,7 +626,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             sort_fields_value_expr(&mut function_definition.value_expr.0);
         });
 
-    // Stpe 2: Insert type definitions
+    // Step 2: Insert type definitions
     source_file
         .type_definitions
         .iter()
@@ -664,9 +703,9 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             //     resolve_implicit_function_return_type(function_definition, type_env).unwrap();
 
             // check_type_compatability(
-                // &explicit_return_type,
-                // &implicit_return_type.into_empty_span(),
-                // type_env,
+            // &explicit_return_type,
+            // &implicit_return_type.into_empty_span(),
+            // type_env,
             // );
         });
 
@@ -727,6 +766,23 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         match value_expr {
+            ValueExpr::RawVariable(_, path) => {
+                let ident = mangle(path);
+
+                let type_expr = type_env
+                    .get_identifier_type(ident.clone())
+                    .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {}", ident));
+
+                println!(
+                    "{}{}{}trying to resolve raw variable {:?}",
+                    Tag::Dargo,
+                    Tag::Build,
+                    Tag::Err,
+                    &value_expr
+                );
+
+                *value_expr = ValueExpr::Variable(true, ident, Some(type_expr));
+            }
             ValueExpr::FormattedString(contents) => {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {
@@ -757,7 +813,12 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 typeresolve_value_expr(&mut value_expr.0, type_env);
                 type_env.pop_identifier_types();
             }
-            ValueExpr::FunctionCall { target, params } => {
+            ValueExpr::FunctionCall {
+                target,
+                params,
+                type_params: _,
+            } => {
+                // todo: type_params
                 typeresolve_value_expr(&mut target.0, type_env);
                 params
                     .iter_mut()
@@ -832,7 +893,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ValueExpr::VarDecl(declaration) => {
                 let declaration = &mut declaration.0;
 
-                if let (TypeExpr::TypeName(_, type_name), span) = &declaration.type_expr {
+                // todo: type params
+                if let (TypeExpr::TypeName(_, type_name, _type_params), span) =
+                    &declaration.type_expr
+                {
                     let type_expr = type_env.resolve_type_alias(type_name);
                     // mutate
                     declaration.type_expr = (type_expr, *span);
@@ -862,21 +926,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ValueExpr::BoolNegate(value_expr) => {
                 typeresolve_value_expr(&mut value_expr.0, type_env);
             }
-            ValueExpr::String(..) => {
-                type_env.insert_type(TypeExpr::String);
-            }
-            ValueExpr::Bool(..) => {
-                type_env.insert_type(TypeExpr::Bool);
-            }
-            ValueExpr::Float(..) => {
-                type_env.insert_type(TypeExpr::Float);
-            }
-            ValueExpr::Char(..) => {
-                type_env.insert_type(TypeExpr::Char);
-            }
-            ValueExpr::Int(..) => {
-                type_env.insert_type(TypeExpr::Int);
-            } // this is so that only the used primitive types are in the type env
             ValueExpr::Match { value_expr, arms } => {
                 typeresolve_value_expr(&mut value_expr.0, type_env);
                 arms.iter_mut().for_each(|arm| {
@@ -891,7 +940,14 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     type_env.pop_identifier_types();
                 });
             }
-            ValueExpr::Break | ValueExpr::Return(None) | ValueExpr::Continue => {}
+            ValueExpr::String(..)
+            | ValueExpr::Int(..)
+            | ValueExpr::Bool(..)
+            | ValueExpr::Char(..)
+            | ValueExpr::Float(..)
+            | ValueExpr::Break
+            | ValueExpr::Return(None)
+            | ValueExpr::Continue => {}
         }
     }
 }
@@ -937,6 +993,7 @@ fn resolve_implicit_function_return_type(
             | ValueExpr::FieldAccess { .. }
             | ValueExpr::Lambda(..)
             | ValueExpr::Variable(..)
+            | ValueExpr::RawVariable(..)
             | ValueExpr::Match { .. }
             | ValueExpr::ArrayAccess(..) => {}
             ValueExpr::If {
