@@ -758,7 +758,7 @@ mod tests {
                         type_expression: TypeExpr::Struct(Struct {
                             fields: vec![Field {
                                 name: "recv".into(),
-                                type_expr: TypeExpr::TypeName(false, "abc_TestStruct".into())
+                                type_expr: TypeExpr::TypeName(false, "abc_TestStruct".into(), None)
                                     .into_empty_span(),
                             }],
                         })
@@ -837,6 +837,7 @@ mod tests {
                                             type_expr: TypeExpr::TypeName(
                                                 false,
                                                 "TestStruct".into(),
+                                                None,
                                             )
                                             .into_empty_span(),
                                         }],

@@ -165,7 +165,8 @@ impl MangleEnv {
 
 pub fn mangle_type_expression(type_expr: &mut TypeExpr, prefix: &str, mangle_env: &mut MangleEnv) {
     match type_expr {
-        TypeExpr::TypeName(is_global, name) => {
+        // todo: type params
+        TypeExpr::TypeName(is_global, name, _type_params) => {
             if let Some(mangled) = mangle_env.mangle_type(*is_global, prefix, name) {
                 *name = mangled;
             }
@@ -343,8 +344,8 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
             mangle_value_expr(&mut value_expr.0, prefix, mangle_env);
             mangle_env.pop_idents();
         }
-        ValueExpr::FunctionCall { target, params, type_params } => {
-            // todo: type_params
+        // todo: type_params
+        ValueExpr::FunctionCall { target, params, type_params: _ } => {
             mangle_value_expr(&mut target.0, prefix, mangle_env);
             params
                 .iter_mut()
@@ -405,7 +406,8 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
         ValueExpr::VarDecl(declaration) => {
             let declaration = &mut declaration.0;
 
-            if let (TypeExpr::TypeName(is_global, type_name), _) = &mut declaration.type_expr
+            // todo: type params
+            if let (TypeExpr::TypeName(is_global, type_name, _type_params), _) = &mut declaration.type_expr
                 && !*is_global
             {
                 *type_name = format!("{prefix}{type_name}");

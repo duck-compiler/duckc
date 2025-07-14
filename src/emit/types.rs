@@ -285,7 +285,8 @@ impl TypeExpr {
             TypeExpr::String => "DuckString".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeNameInternal(name) => name.clone(),
-            TypeExpr::TypeName(_, name) => type_env
+            // todo: type params
+            TypeExpr::TypeName(_, name, _type_params) => type_env
                 .resolve_type_alias(name)
                 .as_go_type_annotation(type_env),
             TypeExpr::Fun(params, return_type) => format!(
@@ -351,7 +352,8 @@ impl TypeExpr {
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::TypeNameInternal(name) => name.clone(),
-            TypeExpr::TypeName(_, name) => type_env
+            // todo: type params
+            TypeExpr::TypeName(_, name, _type_params) => type_env
                 .resolve_type_alias(name)
                 .as_go_concrete_annotation(type_env),
             TypeExpr::Fun(params, return_type) => format!(
@@ -416,7 +418,8 @@ impl TypeExpr {
             TypeExpr::Char => "DuckChar".to_string(),
             TypeExpr::String => "DuckString".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeName(_, name) => name.clone(),
+            // todo: type params
+            TypeExpr::TypeName(_, name, _type_params) => name.clone(),
             TypeExpr::TypeNameInternal(name) => name.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type) => format!(

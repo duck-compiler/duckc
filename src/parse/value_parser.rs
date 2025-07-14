@@ -2311,7 +2311,7 @@ mod tests {
                                 .into_empty_span(),
                         },
                         MatchArm {
-                            type_case: TypeExpr::TypeName(false, "Other".to_string())
+                            type_case: TypeExpr::TypeName(false, "Other".to_string(), None)
                                 .into_empty_span(),
                             bound_to_identifier: "o".to_string(),
                             value_expr: ValueExpr::Block(vec![
@@ -2355,7 +2355,7 @@ mod tests {
                                 .into_empty_span(),
                         },
                         MatchArm {
-                            type_case: TypeExpr::TypeName(false, "Other".to_string())
+                            type_case: TypeExpr::TypeName(false, "Other".to_string(), None)
                                 .into_empty_span(),
                             bound_to_identifier: "o".to_string(),
                             value_expr: ValueExpr::Block(vec![
@@ -2368,7 +2368,7 @@ mod tests {
                             .into_empty_span(),
                         },
                         MatchArm {
-                            type_case: TypeExpr::TypeName(false, "Other".to_string())
+                            type_case: TypeExpr::TypeName(false, "Other".to_string(), None)
                                 .into_empty_span(),
                             bound_to_identifier: "o".to_string(),
                             value_expr: ValueExpr::Block(vec![

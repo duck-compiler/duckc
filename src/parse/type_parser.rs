@@ -2,7 +2,7 @@ use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
-use crate::parse::{generics_parser::{generics_parser, Generic}, value_parser::empty_range, Spanned, SS};
+use crate::parse::{generics_parser::{generics_parser, Generic}, value_parser::{empty_range, TypeParam}, Spanned, SS};
 
 use super::lexer::Token;
 
@@ -49,7 +49,7 @@ pub enum TypeExpr {
     Go(String),
     Duck(Duck),
     Tuple(Vec<Spanned<TypeExpr>>),
-    TypeName(bool, String),
+    TypeName(bool, String, Option<Vec<Spanned<TypeParam>>>),
     TypeNameInternal(String),
     StringLiteral(String),
     IntLiteral(i32),
@@ -208,7 +208,7 @@ where
                     "Bool" => TypeExpr::Bool,
                     "String" => TypeExpr::String,
                     "Char" => TypeExpr::Char,
-                    _ => TypeExpr::TypeName(is_global.is_some(), identifier.join("_")),
+                    _ => TypeExpr::TypeName(is_global.is_some(), identifier.join("_"), None),
                 });
 
             let term_type_expr = p
@@ -364,13 +364,24 @@ where
                         .at_least(1)
                         .collect::<Vec<_>>(),
                 )
-                .map(|(is_global, identifier)| match identifier[0].as_str() {
+                .then(
+                    just(Token::ControlChar('<'))
+                        .ignore_then(
+                            p.clone()
+                                .separated_by(just(Token::ControlChar(',')))
+                                .allow_trailing()
+                                .collect::<Vec<Spanned<TypeParam>>>()
+                        )
+                        .then_ignore(just(Token::ControlChar('>')))
+                        .or_not()
+                )
+                .map(|((is_global, identifier), type_params)| match identifier[0].as_str() {
                     "Int" => TypeExpr::Int,
                     "Float" => TypeExpr::Float,
                     "Bool" => TypeExpr::Bool,
                     "String" => TypeExpr::String,
                     "Char" => TypeExpr::Char,
-                    _ => TypeExpr::TypeName(is_global.is_some(), identifier.join("_")),
+                    _ => TypeExpr::TypeName(is_global.is_some(), identifier.join("_"), type_params),
                 });
 
             let term_type_expr = p
@@ -629,7 +640,7 @@ pub mod tests {
             TypeExpr::Fun(
                 vec![(
                     "param1".to_string().into(),
-                    TypeExpr::TypeName(false, "TypeName".to_string()).into_empty_span(),
+                    TypeExpr::TypeName(false, "TypeName".to_string(), None).into_empty_span(),
                 )],
                 Some(Box::new(TypeExpr::Tuple(Vec::new()).into_empty_span())),
             ),
@@ -650,7 +661,7 @@ pub mod tests {
                     .into_empty_span(),
                 )],
                 Some(Box::new(
-                    TypeExpr::TypeName(true, "MyResult".to_string()).into_empty_span(),
+                    TypeExpr::TypeName(true, "MyResult".to_string(), None).into_empty_span(),
                 )),
             ),
         );
@@ -934,22 +945,22 @@ pub mod tests {
             ]),
         );
 
-        assert_type_expression("MyType", TypeExpr::TypeName(false, "MyType".to_string()));
+        assert_type_expression("MyType", TypeExpr::TypeName(false, "MyType".to_string(), None));
         assert_type_expression(
             "::GlobalType",
-            TypeExpr::TypeName(true, "GlobalType".to_string()),
+            TypeExpr::TypeName(true, "GlobalType".to_string(), None),
         );
         assert_type_expression(
             "Module::MyType",
-            TypeExpr::TypeName(false, "Module_MyType".to_string()),
+            TypeExpr::TypeName(false, "Module_MyType".to_string(), None),
         );
         assert_type_expression(
             "::Module::MyType",
-            TypeExpr::TypeName(true, "Module_MyType".to_string()),
+            TypeExpr::TypeName(true, "Module_MyType".to_string(), None),
         );
         assert_type_expression(
             "::Module::SubModule::MyType",
-            TypeExpr::TypeName(true, "Module_SubModule_MyType".to_string()),
+            TypeExpr::TypeName(true, "Module_SubModule_MyType".to_string(), None),
         );
 
         assert_type_expression("String", TypeExpr::String);

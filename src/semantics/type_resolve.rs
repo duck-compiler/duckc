@@ -61,7 +61,8 @@ impl TypeEnv {
     }
 
     pub fn insert_type(&mut self, type_expr: TypeExpr) -> TypeExpr {
-        if let TypeExpr::TypeName(_, ident) = &type_expr {
+        // todo: type params
+        if let TypeExpr::TypeName(_, ident, _type_params) = &type_expr {
             let resolved = self.resolve_type_alias(ident);
             self.all_types.push(resolved.clone());
             resolved
@@ -106,7 +107,8 @@ impl TypeEnv {
 
         if let TypeExpr::Or(types) = &mut res {
             for ty in types {
-                if let TypeExpr::TypeName(_, name) = &ty.0 {
+                // todo: type params
+                if let TypeExpr::TypeName(_, name, _type_params) = &ty.0 {
                     ty.0 = self.resolve_type_alias(name);
                 }
             }
@@ -254,7 +256,8 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &TypeEnv) {
                 resolve_all_aliases_type_expr(&mut field.0, env);
             }
         }
-        TypeExpr::TypeName(_, name) => {
+        // todo: type params
+        TypeExpr::TypeName(_, name, _type_params) => {
             *expr = env.resolve_type_alias(name);
         }
         TypeExpr::Any
@@ -339,7 +342,7 @@ fn resolve_all_aliases_value_expr(expr: &mut ValueExpr, env: &TypeEnv) {
                 }
             }
         }
-        ValueExpr::FunctionCall { target, params, type_params } => {
+        ValueExpr::FunctionCall { target, params, type_params: _ } => {
             // todo: type_params
             resolve_all_aliases_value_expr(&mut target.0, env);
             for p in params {
@@ -467,7 +470,7 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
                 }
             }
         }
-        ValueExpr::FunctionCall { target, params, type_params } => {
+        ValueExpr::FunctionCall { target, params, type_params: _ } => {
             // todo: type_params
             sort_fields_value_expr(&mut target.0);
             for p in params {
@@ -759,7 +762,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 typeresolve_value_expr(&mut value_expr.0, type_env);
                 type_env.pop_identifier_types();
             }
-            ValueExpr::FunctionCall { target, params, type_params } => {
+            ValueExpr::FunctionCall { target, params, type_params: _ } => {
                 // todo: type_params
                 typeresolve_value_expr(&mut target.0, type_env);
                 params
@@ -835,7 +838,8 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ValueExpr::VarDecl(declaration) => {
                 let declaration = &mut declaration.0;
 
-                if let (TypeExpr::TypeName(_, type_name), span) = &declaration.type_expr {
+                // todo: type params
+                if let (TypeExpr::TypeName(_, type_name, _type_params), span) = &declaration.type_expr {
                     let type_expr = type_env.resolve_type_alias(type_name);
                     // mutate
                     declaration.type_expr = (type_expr, *span);

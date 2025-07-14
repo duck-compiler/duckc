@@ -31,7 +31,7 @@ impl TypeExpr {
             TypeExpr::Go(str) => format!("go({str})"),
             TypeExpr::Duck(_) => "duck { todo }".to_string(),
             TypeExpr::Tuple(_) => "tuple(todo)".to_string(),
-            TypeExpr::TypeName(_, str) => format!("type {str}"),
+            TypeExpr::TypeName(_, str, _) => format!("type {str}"), // todo: type params
             TypeExpr::TypeNameInternal(str) => format!("internal {str}"),
             TypeExpr::StringLiteral(str) => format!("\"{str}\""),
             TypeExpr::IntLiteral(int) => format!("{int}"),

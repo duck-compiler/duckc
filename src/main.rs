@@ -208,7 +208,8 @@ fn parse_src_file(
 
     fn typename_reset_global(t: &mut TypeExpr) {
         match t {
-            TypeExpr::TypeName(global, _) => *global = false,
+            TypeExpr::TypeName(_global, _, Some(_)) => todo!("type params"),
+            TypeExpr::TypeName(global, _, None) => *global = false,
             TypeExpr::Array(t) => typename_reset_global(&mut t.0),
             TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
                 for field in fields {
@@ -271,7 +272,7 @@ fn parse_src_file(
                 typename_reset_global_value_expr(&mut target.0);
                 typename_reset_global_value_expr(&mut idx.0);
             }
-            ValueExpr::FunctionCall { target, params, type_params } => {
+            ValueExpr::FunctionCall { target, params, type_params: _ } => {
                 // todo: type_params
                 for p in params {
                     typename_reset_global_value_expr(&mut p.0);
