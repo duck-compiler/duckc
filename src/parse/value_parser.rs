@@ -932,6 +932,14 @@ mod tests {
     fn test_value_expression_parser() {
         let test_cases = vec![
             (
+                "a<String>()",
+                ValueExpr::FunctionCall {
+                    target: var("a"),
+                    params: vec![],
+                    type_params: Some(vec![TypeExpr::String.into_empty_span()]),
+                },
+            ),
+            (
                 "a->b() == x->c()",
                 ValueExpr::Equals(
                     ValueExpr::FunctionCall {
@@ -1091,7 +1099,7 @@ mod tests {
                             value_expr: ValueExpr::Int(5).into_empty_span().into(),
                         },
                         empty_range(),
-                    )
+                        )
                         .into(),
                 ),
             ),
@@ -1432,7 +1440,7 @@ mod tests {
                             value_expr: ValueExpr::Int(100).into_empty_span(),
                         },
                         empty_range(),
-                    )
+                        )
                         .into(),
                 ),
             ),
@@ -1455,7 +1463,7 @@ mod tests {
                             value_expr: ValueExpr::Int(100).into_empty_span(),
                         },
                         empty_range(),
-                    )
+                        )
                         .into(),
                 ),
             ),
@@ -1478,7 +1486,7 @@ mod tests {
                             value_expr: ValueExpr::Int(100).into_empty_span(),
                         },
                         empty_range(),
-                    )
+                        )
                         .into(),
                 ),
             ),
@@ -1945,7 +1953,7 @@ mod tests {
                             type_expr: TypeExpr::String.into_empty_span(),
                         },
                         empty_range(),
-                    )
+                        )
                         .into(),
                 ),
             ),
@@ -2281,7 +2289,7 @@ mod tests {
             ),
             (
                 "match (\"Hallo\") { String s -> s, Int i -> i, Other o -> {
-                    return o
+                return o
                 } }",
                 ValueExpr::Match {
                     value_expr: Box::new(ValueExpr::String("Hallo".to_string()).into_empty_span()),
@@ -2316,17 +2324,17 @@ mod tests {
             ),
             (
                 "match (\"Hallo\") {
-                                String s -> s,
-                                Int i -> i,
-                                Other o -> {
-                                    return o
-                                },
-                                Other o -> {
-                                    match (o) {
-                                        String s -> s
-                                    }
-                                },
-                            }",
+                String s -> s,
+                Int i -> i,
+                Other o -> {
+                return o
+                },
+                Other o -> {
+                match (o) {
+                String s -> s
+                }
+                },
+                }",
                 ValueExpr::Match {
                     value_expr: Box::new(ValueExpr::String("Hallo".to_string()).into_empty_span()),
                     arms: vec![
