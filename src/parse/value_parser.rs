@@ -9,6 +9,8 @@ use crate::parse::{
 use super::{lexer::Token, type_parser::TypeExpr};
 use chumsky::{input::BorrowInput, prelude::*};
 
+pub type TypeParam = TypeExpr;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm {
     pub type_case: Spanned<TypeExpr>,
@@ -40,6 +42,7 @@ pub enum ValueExpr {
     FunctionCall {
         target: Box<Spanned<ValueExpr>>,
         params: Vec<Spanned<ValueExpr>>,
+        type_params: Option<Vec<Spanned<TypeParam>>>
     },
     Int(i64),
     String(String),
@@ -426,9 +429,10 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
+
             #[derive(Debug, PartialEq, Clone)]
             enum AtomPostParseUnit {
-                FuncCall(Vec<Spanned<ValueExpr>>),
+                FuncCall(Vec<Spanned<ValueExpr>>, Option<Vec<Spanned<TypeParam>>>),
                 ArrayAccess(Spanned<ValueExpr>),
                 FieldAccess(String),
             }
@@ -556,7 +560,24 @@ where
                                 just(Token::ControlChar(']')),
                             )
                             .map(|x| AtomPostParseUnit::ArrayAccess(x[0].clone())),
-                        params.clone().map(AtomPostParseUnit::FuncCall),
+                        params
+                            .clone()
+                            .then(
+                                (
+                                    just(Token::ControlChar('<'))
+                                        .ignore_then(
+                                            type_expression_parser()
+                                                .clone()
+                                                .separated_by(just(Token::ControlChar(',')))
+                                                .allow_trailing()
+                                                .at_least(1)
+                                                .collect::<Vec<Spanned<TypeExpr>>>()
+                                        )
+                                        .then_ignore(just(Token::ControlChar('>')))
+                                )
+                                    .or_not()
+                            )
+                            .map(|(params, type_params)| AtomPostParseUnit::FuncCall(params, type_params)),
                         just(Token::ControlChar('.'))
                             .ignore_then(
                                 select_ref! { Token::Ident(s) => s.to_string() }
@@ -572,9 +593,10 @@ where
                         AtomPostParseUnit::ArrayAccess(idx_expr) => {
                             ValueExpr::ArrayAccess(acc.into(), idx_expr.into()).into_empty_span()
                         }
-                        AtomPostParseUnit::FuncCall(params) => ValueExpr::FunctionCall {
+                        AtomPostParseUnit::FuncCall(params, type_params) => ValueExpr::FunctionCall {
                             target: acc.into(),
                             params,
+                            type_params,
                         }
                         .into_empty_span(),
                         AtomPostParseUnit::FieldAccess(field_name) => ValueExpr::FieldAccess {
@@ -602,12 +624,12 @@ where
                         .iter()
                         .map(|expr| expr.to_owned())
                         .fold(first, |acc, elem| {
-                            let (ValueExpr::FunctionCall { target, mut params }, s) = elem else {
+                            let (ValueExpr::FunctionCall { target, mut params, type_params }, s) = elem else {
                                 panic!("can only pen functions")
                             };
 
                             params.insert(0, acc);
-                            (ValueExpr::FunctionCall { target, params }, s)
+                            (ValueExpr::FunctionCall { target, params, type_params }, s)
                         })
                 })
                 .map_with(|(x, _), e| (x, e.span()));
@@ -779,10 +801,17 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
                 value_expr_into_empty_range(elem);
             }
         }
-        ValueExpr::FunctionCall { target, params } => {
+        ValueExpr::FunctionCall { target, params, type_params } => {
             value_expr_into_empty_range(target);
             for p in params {
                 value_expr_into_empty_range(p);
+            }
+
+            if let Some(type_params) = type_params {
+                type_params.iter_mut()
+                    .for_each(|type_param| {
+                        type_expr_into_empty_range(type_param);
+                    })
             }
         }
         ValueExpr::Add(v1, v2) => {
@@ -909,12 +938,14 @@ mod tests {
                     ValueExpr::FunctionCall {
                         target: var("b"),
                         params: vec![*var("a")],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
                     ValueExpr::FunctionCall {
                         target: var("c"),
                         params: vec![*var("x")],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
@@ -933,10 +964,12 @@ mod tests {
                             .into_empty_span()
                             .into(),
                             params: vec![*var("a")],
+                            type_params: None,
                         }
                         .into_empty_span(),
                         ValueExpr::Int(1).into_empty_span(),
                     ],
+                    type_params: None,
                 },
             ),
             (
@@ -944,6 +977,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("b"),
                     params: vec![*var("a")],
+                    type_params: None,
                 },
             ),
             (
@@ -1036,6 +1070,7 @@ mod tests {
                     .into_empty_span()
                     .into(),
                     params: vec![],
+                    type_params: None,
                 },
             ),
             (
@@ -1081,6 +1116,7 @@ mod tests {
                         ValueExpr::FunctionCall {
                             target: var("a"),
                             params: vec![],
+                            type_params: None,
                         }
                         .into_empty_span()
                         .into(),
@@ -1089,6 +1125,7 @@ mod tests {
                     .into_empty_span()
                     .into(),
                     params: vec![],
+                    type_params: None,
                 },
             ),
             (
@@ -1099,6 +1136,7 @@ mod tests {
                             ValueExpr::FunctionCall {
                                 target: var("a"),
                                 params: vec![],
+                                type_params: None,
                             }
                             .into_empty_span()
                             .into(),
@@ -1111,6 +1149,7 @@ mod tests {
                     .into_empty_span()
                     .into(),
                     params: vec![],
+                    type_params: None,
                 },
             ),
             (
@@ -1121,11 +1160,13 @@ mod tests {
                         ValueExpr::FunctionCall {
                             target: var("a"),
                             params: vec![],
+                            type_params: None,
                         }
                         .into_empty_span(),
                         ValueExpr::FunctionCall {
                             target: var("b"),
                             params: vec![],
+                            type_params: None,
                         }
                         .into_empty_span(),
                         ValueExpr::Tuple(vec![
@@ -1162,6 +1203,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
                     params: Vec::new(),
+                    type_params: None,
                 },
             ),
             (
@@ -1169,6 +1211,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
                     params: vec![ValueExpr::Int(1).into_empty_span()],
+                    type_params: None,
                 },
             ),
             (
@@ -1176,6 +1219,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
                     params: vec![ValueExpr::Int(1).into_empty_span()],
+                    type_params: None,
                 },
             ),
             (
@@ -1183,6 +1227,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
                     params: Vec::new(),
+                    type_params: None,
                 },
             ),
             (
@@ -1190,6 +1235,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
                     params: vec![ValueExpr::Int(1).into_empty_span()],
+                    type_params: None,
                 },
             ),
             (
@@ -1197,6 +1243,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
                     params: vec![ValueExpr::Int(1).into_empty_span()],
+                    type_params: None,
                 },
             ),
             (
@@ -1204,6 +1251,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
                     params: Vec::new(),
+                    type_params: None,
                 },
             ),
             (
@@ -1211,6 +1259,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
                     params: vec![ValueExpr::Int(1).into_empty_span()],
+                    type_params: None,
                 },
             ),
             (
@@ -1218,6 +1267,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: gvar("to_upper"),
                     params: vec![ValueExpr::Int(1).into_empty_span()],
+                    type_params: None,
                 },
             ),
             (
@@ -1225,6 +1275,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("abc_to_upper"),
                     params: vec![ValueExpr::Int(1).into_empty_span()],
+                    type_params: None,
                 },
             ),
             (
@@ -1232,6 +1283,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("abc_xyz_to_upper"),
                     params: vec![ValueExpr::Int(1).into_empty_span()],
+                    type_params: None,
                 },
             ),
             (
@@ -1239,6 +1291,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: gvar("abc_xyz_to_upper"),
                     params: vec![ValueExpr::Int(1).into_empty_span()],
+                    type_params: None,
                 },
             ),
             (
@@ -1246,6 +1299,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("to_upper"),
                     params: vec![ValueExpr::Int(1).into_empty_span()],
+                    type_params: None,
                 },
             ),
             (
@@ -1264,14 +1318,17 @@ mod tests {
                                         ValueExpr::Int(5).into_empty_span(),
                                         ValueExpr::Int(10).into_empty_span(),
                                     ],
+                                    type_params: None,
                                 }
                                 .into_empty_span(),
                                 ValueExpr::Int(4).into_empty_span(),
                             ],
+                            type_params: None,
                         }
                         .into_empty_span(),
                         ValueExpr::Bool(true).into_empty_span(),
                     ],
+                    type_params: None,
                 },
             ),
             (
@@ -1282,6 +1339,7 @@ mod tests {
                         ValueExpr::String("hallo".into()).into_empty_span(),
                         ValueExpr::String("moin".into()).into_empty_span(),
                     ],
+                    type_params: None,
                 },
             ),
             ("x", ValueExpr::Variable(false, "x".into(), None)),
@@ -1295,9 +1353,11 @@ mod tests {
                         ValueExpr::FunctionCall {
                             target: var("lol"),
                             params: vec![],
+                            type_params: None,
                         }
                         .into_empty_span(),
                     ],
+                    type_params: None,
                 },
             ),
             (
@@ -1349,6 +1409,7 @@ mod tests {
                     ValueExpr::FunctionCall {
                         target: var("std_arch_is_windows"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
@@ -1454,6 +1515,7 @@ mod tests {
                     ValueExpr::FunctionCall {
                         target: var("x"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span(),
                 ]),
@@ -1467,6 +1529,7 @@ mod tests {
                     ValueExpr::FunctionCall {
                         target: var("x"),
                         params: vec![empty_duck().into_empty_span()],
+                        type_params: None,
                     }
                     .into_empty_span(),
                 ]),
@@ -1477,11 +1540,13 @@ mod tests {
                     ValueExpr::FunctionCall {
                         target: var("x"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span(),
                     ValueExpr::FunctionCall {
                         target: var("y"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span(),
                     empty_tuple().into_empty_span(),
@@ -1502,18 +1567,21 @@ mod tests {
                                         ValueExpr::FunctionCall {
                                             target: var("z"),
                                             params: vec![],
+                                            type_params: None,
                                         }
                                         .into_empty_span(),
                                         empty_tuple().into_empty_span(),
                                     ])
                                     .into_empty_span(),
                                 ],
+                                type_params: None,
                             }
                             .into_empty_span(),
                         ])
                         .into_empty_span(),
                         ValueExpr::Variable(false, "lol".into(), None).into_empty_span(),
                     ],
+                    type_params: None,
                 },
             ),
             (
@@ -1522,10 +1590,12 @@ mod tests {
                     target: ValueExpr::FunctionCall {
                         target: var("a"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
                     params: vec![],
+                    type_params: None,
                 },
             ),
             (
@@ -1555,10 +1625,12 @@ mod tests {
                         .into_empty_span()
                         .into(),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
                     params: vec![],
+                    type_params: None,
                 },
             ),
             (
@@ -1574,6 +1646,7 @@ mod tests {
                     condition: ValueExpr::FunctionCall {
                         target: var("my_func"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
@@ -1586,6 +1659,7 @@ mod tests {
                     condition: ValueExpr::FunctionCall {
                         target: var("my_func"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
@@ -1604,6 +1678,7 @@ mod tests {
                     condition: ValueExpr::FunctionCall {
                         target: var("my_func"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
@@ -1665,6 +1740,7 @@ mod tests {
                                     ValueExpr::FunctionCall {
                                         target: var("print"),
                                         params: vec![],
+                                        type_params: None,
                                     }
                                     .into_empty_span(),
                                     ValueExpr::Int(2).into_empty_span(),
@@ -1717,6 +1793,7 @@ mod tests {
                     target_obj: ValueExpr::FunctionCall {
                         target: var("x"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
@@ -1728,6 +1805,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("x"),
                     params: vec![],
+                    type_params: None,
                 },
             ),
             (
@@ -1735,6 +1813,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("x"),
                     params: vec![],
+                    type_params: None,
                 },
             ),
             (
@@ -1742,6 +1821,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: ValueExpr::Int(1).into_empty_span().into(),
                     params: vec![],
+                    type_params: None,
                 },
             ),
             (
@@ -1749,6 +1829,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: ValueExpr::Int(123).into_empty_span().into(),
                     params: vec![],
+                    type_params: None,
                 },
             ),
             (
@@ -1757,10 +1838,12 @@ mod tests {
                     target: ValueExpr::FunctionCall {
                         target: var("returns_lambda"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
                     params: vec![],
+                    type_params: None,
                 },
             ),
             (
@@ -1825,6 +1908,7 @@ mod tests {
                         .into_empty_span(),
                         ValueExpr::Int(1).into_empty_span(),
                     ],
+                    type_params: None,
                 },
             ),
             (
@@ -1845,6 +1929,7 @@ mod tests {
                         .into_empty_span(),
                         ValueExpr::Int(1).into_empty_span(),
                     ],
+                    type_params: None,
                 },
             ),
             (
@@ -1871,12 +1956,14 @@ mod tests {
                     ValueExpr::FunctionCall {
                         target: var("x"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
                     ValueExpr::FunctionCall {
                         target: var("y"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
@@ -1915,6 +2002,7 @@ mod tests {
                         ValueExpr::FunctionCall {
                             target: var("x"),
                             params: vec![],
+                            type_params: None,
                         }
                         .into_empty_span()
                         .into(),
@@ -1947,6 +2035,7 @@ mod tests {
                     ValueExpr::FunctionCall {
                         target: var("x"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
@@ -1959,6 +2048,7 @@ mod tests {
                         ValueExpr::FunctionCall {
                             target: var("x"),
                             params: vec![],
+                            type_params: None,
                         }
                         .into_empty_span()
                         .into(),
@@ -2013,12 +2103,14 @@ mod tests {
                     ValueExpr::FunctionCall {
                         target: var("x"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),
                     ValueExpr::FunctionCall {
                         target: var("y"),
                         params: vec![],
+                        type_params: None,
                     }
                     .into_empty_span()
                     .into(),

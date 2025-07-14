@@ -339,7 +339,8 @@ fn resolve_all_aliases_value_expr(expr: &mut ValueExpr, env: &TypeEnv) {
                 }
             }
         }
-        ValueExpr::FunctionCall { target, params } => {
+        ValueExpr::FunctionCall { target, params, type_params } => {
+            // todo: type_params
             resolve_all_aliases_value_expr(&mut target.0, env);
             for p in params {
                 resolve_all_aliases_value_expr(&mut p.0, env);
@@ -466,7 +467,8 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
                 }
             }
         }
-        ValueExpr::FunctionCall { target, params } => {
+        ValueExpr::FunctionCall { target, params, type_params } => {
+            // todo: type_params
             sort_fields_value_expr(&mut target.0);
             for p in params {
                 sort_fields_value_expr(&mut p.0);
@@ -757,7 +759,8 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 typeresolve_value_expr(&mut value_expr.0, type_env);
                 type_env.pop_identifier_types();
             }
-            ValueExpr::FunctionCall { target, params } => {
+            ValueExpr::FunctionCall { target, params, type_params } => {
+                // todo: type_params
                 typeresolve_value_expr(&mut target.0, type_env);
                 params
                     .iter_mut()

@@ -343,7 +343,8 @@ pub fn mangle_value_expr(value_expr: &mut ValueExpr, prefix: &str, mangle_env: &
             mangle_value_expr(&mut value_expr.0, prefix, mangle_env);
             mangle_env.pop_idents();
         }
-        ValueExpr::FunctionCall { target, params } => {
+        ValueExpr::FunctionCall { target, params, type_params } => {
+            // todo: type_params
             mangle_value_expr(&mut target.0, prefix, mangle_env);
             params
                 .iter_mut()

@@ -596,7 +596,9 @@ impl ValueExpr {
             ValueExpr::FunctionCall {
                 target: v_target,
                 params,
+                type_params,
             } => {
+                // todo: type_params
                 let (mut instr, target) = v_target.0.direct_or_with_instr(type_env, env);
                 if let Some(target) = target {
                     let mut v_p_res = Vec::new();

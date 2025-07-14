@@ -779,6 +779,7 @@ mod tests {
                                     .into_empty_span()
                                     .into(),
                                     params: vec![],
+                                    type_params: None,
                                 }
                                 .into_empty_span(),
                             ])
@@ -806,6 +807,7 @@ mod tests {
                                     .into_empty_span()
                                     .into(),
                                     params: vec![],
+                                    type_params: None,
                                 }
                                 .into_empty_span(),
                             ])
@@ -868,6 +870,7 @@ mod tests {
                                                         .into_empty_span()
                                                         .into(),
                                                         params: vec![],
+                                                        type_params: None,
                                                     }
                                                     .into_empty_span(),
                                                 ])
@@ -886,6 +889,7 @@ mod tests {
                                                         .into_empty_span()
                                                         .into(),
                                                         params: vec![],
+                                                        type_params: None,
                                                     }
                                                     .into_empty_span(),
                                                 ])

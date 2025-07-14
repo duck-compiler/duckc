@@ -216,7 +216,8 @@ impl TypeExpr {
 
                 left_type_expr
             }
-            ValueExpr::FunctionCall { target, params } => {
+            ValueExpr::FunctionCall { target, params, type_params: _ } => {
+                // todo: type_params
                 let in_param_types = params
                     .iter()
                     .map(|param| (TypeExpr::from_value_expr(&param.0, type_env), param.1))
