@@ -560,21 +560,17 @@ where
                                 just(Token::ControlChar(']')),
                             )
                             .map(|x| AtomPostParseUnit::ArrayAccess(x[0].clone())),
-                        (
-                            (
-                                just(Token::ControlChar('<'))
-                                    .ignore_then(
-                                        type_expression_parser()
-                                            .clone()
-                                            .separated_by(just(Token::ControlChar(',')))
-                                            .allow_trailing()
-                                            .at_least(1)
-                                            .collect::<Vec<Spanned<TypeExpr>>>()
-                                    )
-                                    .then_ignore(just(Token::ControlChar('>')))
-                                )
-                                .or_not()
+                        just(Token::ControlChar('<'))
+                            .ignore_then(
+                                type_expression_parser()
+                                    .clone()
+                                    .separated_by(just(Token::ControlChar(',')))
+                                    .allow_trailing()
+                                    .at_least(1)
+                                    .collect::<Vec<Spanned<TypeExpr>>>()
                             )
+                            .then_ignore(just(Token::ControlChar('>')))
+                            .or_not()
                             .then(params.clone())
                             .map(|(type_params, params)| AtomPostParseUnit::FuncCall(params, type_params)),
                         just(Token::ControlChar('.'))
