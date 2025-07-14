@@ -1,7 +1,7 @@
 {
     "id": "fcb3f9eb5327dfccc556c11af2cad15a",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 326,
+    "line_number": 331,
     "title": "!(\"combine then and else, then return combined type\");",
     "tag": "todo",
     "module_tag": "semantics",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Apfelfrosch",
-        "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        "name": "Mvmo",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo!(\"combine then and else, then return combined type\");",
     "status": "open",
