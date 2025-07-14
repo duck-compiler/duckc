@@ -510,6 +510,9 @@ pub mod tests {
                     .map(|generic| strip_spans(generic))
                     .collect::<Vec<_>>()),
             ),
+            TypeExpr::Array(type_expr) => TypeExpr::Array(
+                   Box::new(strip_spans(type_expr.as_ref().clone()))
+            ),
             other => other,
         };
         (stripped_expr, empty_range())
@@ -640,6 +643,11 @@ pub mod tests {
                 TypeExpr::Bool.into_empty_span(),
                 TypeExpr::Int.into_empty_span(),
             ]),
+        );
+
+        assert_type_expression(
+            "Generic<String>",
+            TypeExpr::TypeName(false, "Generic".to_string(), Some(vec![TypeExpr::String.into_empty_span()])),
         );
 
         assert_type_expression(
