@@ -271,7 +271,8 @@ fn parse_src_file(
                 typename_reset_global_value_expr(&mut target.0);
                 typename_reset_global_value_expr(&mut idx.0);
             }
-            ValueExpr::FunctionCall { target, params } => {
+            ValueExpr::FunctionCall { target, params, type_params } => {
+                // todo: type_params
                 for p in params {
                     typename_reset_global_value_expr(&mut p.0);
                 }
