@@ -936,6 +936,14 @@ mod tests {
                 },
             ),
             (
+                "b->a<String>()",
+                ValueExpr::FunctionCall {
+                    target: var("a"),
+                    params: vec![*var("b")],
+                    type_params: Some(vec![TypeExpr::String.into_empty_span()]),
+                },
+            ),
+            (
                 "a->b() == x->c()",
                 ValueExpr::Equals(
                     ValueExpr::FunctionCall {
