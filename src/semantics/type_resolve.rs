@@ -256,8 +256,14 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &TypeEnv) {
                 resolve_all_aliases_type_expr(&mut field.0, env);
             }
         }
-        // todo: type params
-        TypeExpr::TypeName(_, name, _type_params) => {
+        TypeExpr::TypeName(_, name, type_params) => {
+            if let Some(type_params) = type_params {
+                type_params.iter_mut()
+                    .for_each(|type_param| resolve_all_aliases_type_expr(&mut type_param.0, env));
+
+                return;
+            }
+
             *expr = env.resolve_type_alias(name);
         }
         TypeExpr::Any
@@ -342,12 +348,16 @@ fn resolve_all_aliases_value_expr(expr: &mut ValueExpr, env: &TypeEnv) {
                 }
             }
         }
-        ValueExpr::FunctionCall { target, params, type_params: _ } => {
-            // todo: type_params
+        ValueExpr::FunctionCall { target, params, type_params } => {
             resolve_all_aliases_value_expr(&mut target.0, env);
-            for p in params {
-                resolve_all_aliases_value_expr(&mut p.0, env);
+
+            if let Some(type_params) = type_params {
+                type_params.iter_mut()
+                    .for_each(|type_param| resolve_all_aliases_type_expr(&mut type_param.0, env));
             }
+
+            params.iter_mut()
+                .for_each(|param| resolve_all_aliases_value_expr(&mut param.0, env));
         }
         ValueExpr::If {
             condition,
@@ -592,7 +602,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             sort_fields_value_expr(&mut function_definition.value_expr.0);
         });
 
-    // Stpe 2: Insert type definitions
+    // Step 2: Insert type definitions
     source_file
         .type_definitions
         .iter()
@@ -869,21 +879,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ValueExpr::BoolNegate(value_expr) => {
                 typeresolve_value_expr(&mut value_expr.0, type_env);
             }
-            ValueExpr::String(..) => {
-                type_env.insert_type(TypeExpr::String);
-            }
-            ValueExpr::Bool(..) => {
-                type_env.insert_type(TypeExpr::Bool);
-            }
-            ValueExpr::Float(..) => {
-                type_env.insert_type(TypeExpr::Float);
-            }
-            ValueExpr::Char(..) => {
-                type_env.insert_type(TypeExpr::Char);
-            }
-            ValueExpr::Int(..) => {
-                type_env.insert_type(TypeExpr::Int);
-            } // this is so that only the used primitive types are in the type env
             ValueExpr::Match { value_expr, arms } => {
                 typeresolve_value_expr(&mut value_expr.0, type_env);
                 arms.iter_mut().for_each(|arm| {
@@ -898,7 +893,14 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     type_env.pop_identifier_types();
                 });
             }
-            ValueExpr::Break | ValueExpr::Return(None) | ValueExpr::Continue => {}
+            ValueExpr::String(..)
+            | ValueExpr::Int(..)
+            | ValueExpr::Bool(..)
+            | ValueExpr::Char(..)
+            | ValueExpr::Float(..)
+            | ValueExpr::Break
+            | ValueExpr::Return(None)
+            | ValueExpr::Continue => {}
         }
     }
 }
