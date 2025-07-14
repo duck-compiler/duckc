@@ -370,6 +370,7 @@ where
                             p.clone()
                                 .separated_by(just(Token::ControlChar(',')))
                                 .allow_trailing()
+                                .at_least(1)
                                 .collect::<Vec<Spanned<TypeParam>>>()
                         )
                         .then_ignore(just(Token::ControlChar('>')))
@@ -894,11 +895,6 @@ pub mod tests {
                     TypeExpr::Bool.into_empty_span(),
                 ]).into_empty_span()
             ])),
-        );
-
-        assert_type_expression(
-            "Empty<>",
-            TypeExpr::TypeName(false, "Empty".to_string(), Some(vec![])),
         );
 
         assert_type_expression(
