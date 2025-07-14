@@ -503,6 +503,13 @@ pub mod tests {
                 return_type.map(|rt_box| Box::new(strip_spans(*rt_box))),
             ),
             TypeExpr::Or(variants) => TypeExpr::Or(variants.into_iter().map(strip_spans).collect()),
+            TypeExpr::TypeName(is_global, type_name, Some(generics)) => TypeExpr::TypeName(
+                is_global,
+                type_name,
+                Some(generics.into_iter()
+                    .map(|generic| strip_spans(generic))
+                    .collect::<Vec<_>>()),
+            ),
             other => other,
         };
         (stripped_expr, empty_range())
