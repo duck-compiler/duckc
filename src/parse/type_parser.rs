@@ -2,7 +2,7 @@ use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
-use crate::parse::{SS, Spanned, value_parser::empty_range};
+use crate::parse::{generics_parser::{generics_parser, Generic}, value_parser::empty_range, Spanned, SS};
 
 use super::lexer::Token;
 
@@ -10,6 +10,7 @@ use super::lexer::Token;
 pub struct TypeDefinition {
     pub name: String,
     pub type_expression: Spanned<TypeExpr>,
+    pub generics: Option<Vec<Spanned<Generic>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -437,12 +438,14 @@ where
 {
     just(Token::Type)
         .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
+        .then(generics_parser().or_not())
         .then_ignore(just(Token::ControlChar('=')))
         .then(type_expression_parser())
         .then_ignore(just(Token::ControlChar(';')))
-        .map(|(identifier, type_expression)| TypeDefinition {
+        .map(|((identifier, generics), type_expression)| TypeDefinition {
             name: identifier,
             type_expression,
+            generics,
         })
 }
 

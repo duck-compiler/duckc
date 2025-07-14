@@ -358,6 +358,7 @@ mod tests {
                             )],
                         })
                         .into_empty_span(),
+                        generics: None,
                     }],
                     ..Default::default()
                 },
@@ -449,6 +450,7 @@ mod tests {
                             )],
                         })
                         .into_empty_span(),
+                        generics: None,
                     }],
                     ..Default::default()
                 },
@@ -761,6 +763,7 @@ mod tests {
                             }],
                         })
                         .into_empty_span(),
+                        generics: None,
                     }],
                     use_statements: vec![UseStatement::Go("fmt".into(), None)],
                     function_definitions: vec![
@@ -837,6 +840,7 @@ mod tests {
                                         }],
                                     })
                                     .into_empty_span(),
+                                    generics: None,
                                 }],
                                 function_definitions: vec![FunctionDefintion {
                                     name: "im_calling_a_sub_module".into(),
