@@ -208,8 +208,7 @@ impl ValueExpr {
                     None => return (instructions, None),
                 };
 
-                let result_type_annotation =
-                    TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
+                let result_type_annotation = TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
 
                 let result_var_name = env.new_var();
                 instructions.push(IrInstruction::VarDecl(
