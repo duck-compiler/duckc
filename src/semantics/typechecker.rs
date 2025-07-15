@@ -7,25 +7,10 @@ use crate::parse::{
 };
 use crate::semantics::type_resolve::TypeEnv;
 
-#[derive(Debug, Clone)]
-pub enum GoTypeDefinition {
-    TypaAlias {
-        name: String,
-        target: String,
-    },
-    Struct {
-        name: String,
-        fields: Vec<(String, String)>,
-        methods: Vec<String>,
-    },
-    Interface {
-        name: String,
-        methods: Vec<String>,
-    },
-}
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
         match self {
+            TypeExpr::GenericToBeReplaced(..) => panic!(),
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::Any => "Any".to_string(),
             TypeExpr::InlineGo => "inline-go".to_string(),
