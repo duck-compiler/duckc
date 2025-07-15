@@ -1,5 +1,3 @@
-use std::default;
-
 use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
@@ -73,12 +71,6 @@ pub enum TypeExpr {
     ),
     Array(Box<Spanned<TypeExpr>>),
     GenericToBeReplaced(String),
-}
-
-impl Default for TypeExpr {
-    fn default() -> Self {
-        return TypeExpr::Tuple(vec![])
-    }
 }
 
 impl TypeExpr {
