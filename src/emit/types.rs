@@ -68,7 +68,8 @@ pub fn primitive_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
 }
 
 pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
-    let summary = type_env.summarize();
+
+    let summary = summary;
 
     fn interface_implementations(
         typename: String,

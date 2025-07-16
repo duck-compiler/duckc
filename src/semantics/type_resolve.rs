@@ -18,7 +18,7 @@ pub enum GenericDefinition {
 }
 
 impl GenericDefinition {
-    fn typename_with_given_typeparams(
+    pub fn typename_with_given_typeparams(
         &self,
         env: &mut TypeEnv,
         type_params: Vec<(String, Spanned<TypeExpr>)>,
