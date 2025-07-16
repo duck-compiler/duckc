@@ -21,7 +21,7 @@ impl GenericDefinition {
     pub fn typename_with_given_typeparams(
         &self,
         env: &mut TypeEnv,
-        type_params: Vec<(String, Spanned<TypeExpr>)>,
+        type_params: &Vec<(String, Spanned<TypeExpr>)>,
     ) -> TypeExpr {
         let typename = match self {
             Self::Function(function_def) => format!(
@@ -45,7 +45,7 @@ impl GenericDefinition {
         TypeExpr::TypeNameInternal(typename)
     }
 
-    fn generics_names(
+    pub fn generics_names(
         &self,
     ) -> Vec<String> {
         return match self {
@@ -130,14 +130,20 @@ impl TypeEnv {
     }
 
     pub fn insert_type(&mut self, type_expr: TypeExpr) -> TypeExpr {
-        // todo: type params
-        if let TypeExpr::TypeName(_, ident, _type_params) = &type_expr {
-            let resolved = self.resolve_type_alias(ident);
-            self.all_types.push(resolved.clone());
-            resolved
-        } else {
-            self.all_types.push(type_expr.clone());
-            type_expr
+
+        match &type_expr {
+            TypeExpr::TypeName(_, ident, None) => {
+                let resolved = self.resolve_type_alias(ident);
+                self.all_types.push(resolved.clone());
+                resolved
+            },
+            TypeExpr::TypeName(_, ident, Some(generics)) => {
+                TypeExpr::TypeNameInternal(ident.clone())
+            },
+            _ => {
+                self.all_types.push(type_expr.clone());
+                type_expr
+            }
         }
     }
 
@@ -179,7 +185,7 @@ impl TypeEnv {
         self.generics_used
             .push((definition.clone(), with.clone()));
 
-        return definition.typename_with_given_typeparams(self, with.clone())
+        return definition.typename_with_given_typeparams(self, with)
     }
 
     pub fn resolve_type_alias(&self, alias: &String) -> TypeExpr {
@@ -304,7 +310,6 @@ impl TypeEnv {
         all_types.iter_mut().for_each(|type_expr| {
             to_push.append(&mut self.flatten_types(type_expr, &mut param_names_used));
         });
-        dbg!(&all_types, &to_push);
 
         all_types.append(&mut to_push);
         all_types.sort_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
