@@ -317,9 +317,6 @@ impl TypeEnv {
 
         param_names_used.dedup();
 
-        dbg!(&self.generic_definitions);
-        dbg!(&self.generics_used);
-
         return TypesSummary {
             types_used: all_types,
             param_names_used,
@@ -335,8 +332,7 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
                 panic!()
             }
 
-            let type_expr = env.resolve_type_alias(typename.first().unwrap());
-            dbg!(type_expr);
+            env.resolve_type_alias(typename.first().unwrap());
         },
         TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
             fields.sort_by_key(|x| x.name.clone());
@@ -349,6 +345,7 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
             if let Some(r) = r {
                 resolve_all_aliases_type_expr(&mut r.0, env);
             }
+
             params
                 .iter_mut()
                 .for_each(|(_, x)| resolve_all_aliases_type_expr(&mut x.0, env));
@@ -799,8 +796,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             }
             resolve_all_aliases_value_expr(&mut function_definition.value_expr.0, type_env);
         });
-
-    dbg!(&source_file);
 
     // Step 5: Map function names available
     source_file
