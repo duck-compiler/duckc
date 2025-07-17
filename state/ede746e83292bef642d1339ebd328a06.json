@@ -1,7 +1,7 @@
 {
     "id": "ede746e83292bef642d1339ebd328a06",
     "file_path": "../../src/parse/type_parser.rs",
-    "line_number": 1080,
+    "line_number": 1081,
     "title": "Here's an TODO, which had no title.",
     "tag": "todo",
     "module_tag": "parse",
@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Mvmo",
+        "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO(@Apfelfrosch): Here's an TODO, which had no title.",

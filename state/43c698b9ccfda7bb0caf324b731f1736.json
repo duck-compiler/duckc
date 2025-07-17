@@ -1,0 +1,19 @@
+{
+    "id": "43c698b9ccfda7bb0caf324b731f1736",
+    "file_path": "../../src/semantics/type_resolve.rs",
+    "line_number": 784,
+    "title": "create some kind of type which indicates that this type needs to be replaced later on.",
+    "tag": "todo",
+    "module_tag": "semantics",
+    "user": null,
+    "issue_ref": null,
+    "description": "",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// todo: create some kind of type which indicates that this type needs to be replaced later on.",
+    "status": "open",
+    "first_seen": "2025-07-17T01:01:31.199815",
+    "history": []
+}

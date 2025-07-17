@@ -1,7 +1,7 @@
 {
     "id": "2339dee19dc7245046537fad08ea4981",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 896,
+    "line_number": 1050,
     "title": "type params",
     "tag": "todo",
     "module_tag": "semantics",
@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Mvmo",
+        "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: type params",
