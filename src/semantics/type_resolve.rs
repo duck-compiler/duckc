@@ -19,7 +19,7 @@ impl GenericDefinition {
     pub fn typename_with_given_typeparams(
         &self,
         env: &mut TypeEnv,
-        type_params: &Vec<(String, Spanned<TypeExpr>)>,
+        type_params: &[(String, Spanned<TypeExpr>)],
     ) -> TypeExpr {
         let typename = match self {
             Self::Function(function_def) => format!(
@@ -83,13 +83,15 @@ impl GenericDefinition {
     }
 }
 
+type TypeParams = Vec<(String, Spanned<TypeExpr>)>;
+
 #[derive(Debug, Clone)]
 pub struct TypeEnv {
     pub identifier_types: Vec<HashMap<String, TypeExpr>>,
     pub type_aliases: Vec<HashMap<String, TypeExpr>>,
     pub all_types: Vec<TypeExpr>,
     pub generic_definitions: HashMap<String, GenericDefinition>,
-    pub generics_used: Vec<(GenericDefinition, Vec<(String, Spanned<TypeExpr>)>)>,
+    pub generics_used: Vec<(GenericDefinition, TypeParams)>,
 }
 
 impl Default for TypeEnv {
@@ -198,7 +200,7 @@ impl TypeEnv {
 
     pub fn use_generic_definition(&mut self, definition: GenericDefinition, with: &Vec<(String, Spanned<TypeExpr>)>) -> TypeExpr {
         self.generics_used
-            .push((definition.clone(), with.clone()));
+            .push((definition.clone(), with.to_owned()));
 
         return definition.typename_with_given_typeparams(self, with)
     }
