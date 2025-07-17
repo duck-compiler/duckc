@@ -1,8 +1,9 @@
 use std::process;
 
 use crate::parse::type_parser::{Duck, Field, Struct, TypeExpr};
+use crate::parse::SS;
 use crate::parse::{
-    SS, Spanned, failure,
+    Spanned, failure,
     value_parser::{ValFmtStringContents, ValueExpr, empty_range},
 };
 use crate::semantics::type_resolve::TypeEnv;
@@ -571,173 +572,173 @@ fn check_type_compatability(
     two: &Spanned<TypeExpr>,
     type_env: &mut TypeEnv,
 ) {
-    // if one.0.is_variant() {
-    //     is_subset_of_variant_type(one, two, type_env);
-    //     return;
-    // }
+    if one.0.is_variant() {
+        is_subset_of_variant_type(one, two, type_env);
+        return;
+    }
 
-    // if one.0.is_bool() && !two.0.is_bool() {
-    //     failure(
-    //         one.1.context.file_name,
-    //         "Incompatible Types".to_string(),
-    //         (
-    //             format!(
-    //                 "This expression is of type {}, which is a bool.",
-    //                 one.0.as_clean_user_faced_type_name()
-    //             ),
-    //             one.1,
-    //         ),
-    //         vec![
-    //             (
-    //                 "because of this, the second operand also needs to be of type bool."
-    //                     .to_string(),
-    //                 two.1,
-    //             ),
-    //             (
-    //                 format!(
-    //                     "but it is of type {}.",
-    //                     two.0.as_clean_user_faced_type_name()
-    //                 ),
-    //                 two.1,
-    //             ),
-    //         ],
-    //         one.1.context.file_contents,
-    //     )
-    // }
+    if one.0.is_bool() && !two.0.is_bool() {
+        failure(
+            one.1.context.file_name,
+            "Incompatible Types".to_string(),
+            (
+                format!(
+                    "This expression is of type {}, which is a bool.",
+                    one.0.as_clean_user_faced_type_name()
+                ),
+                one.1,
+            ),
+            vec![
+                (
+                    "because of this, the second operand also needs to be of type bool."
+                        .to_string(),
+                    two.1,
+                ),
+                (
+                    format!(
+                        "but it is of type {}.",
+                        two.0.as_clean_user_faced_type_name()
+                    ),
+                    two.1,
+                ),
+            ],
+            one.1.context.file_contents,
+        )
+    }
 
-    // if one.0.is_string() && !two.0.is_string() {
-    //     failure(
-    //         one.1.context.file_name,
-    //         "Incompatible Types".to_string(),
-    //         (
-    //             format!(
-    //                 "This expression is of type {}, which is a string.",
-    //                 one.0.as_clean_user_faced_type_name()
-    //             ),
-    //             one.1,
-    //         ),
-    //         vec![
-    //             (
-    //                 "because of this, the second operand also needs to be of type string."
-    //                     .to_string(),
-    //                 two.1,
-    //             ),
-    //             (
-    //                 format!(
-    //                     "but it is of type {}.",
-    //                     two.0.as_clean_user_faced_type_name()
-    //                 ),
-    //                 two.1,
-    //             ),
-    //         ],
-    //         one.1.context.file_contents,
-    //     )
-    // }
+    if one.0.is_string() && !two.0.is_string() {
+        failure(
+            one.1.context.file_name,
+            "Incompatible Types".to_string(),
+            (
+                format!(
+                    "This expression is of type {}, which is a string.",
+                    one.0.as_clean_user_faced_type_name()
+                ),
+                one.1,
+            ),
+            vec![
+                (
+                    "because of this, the second operand also needs to be of type string."
+                        .to_string(),
+                    two.1,
+                ),
+                (
+                    format!(
+                        "but it is of type {}.",
+                        two.0.as_clean_user_faced_type_name()
+                    ),
+                    two.1,
+                ),
+            ],
+            one.1.context.file_contents,
+        )
+    }
 
-    // if one.0.is_number() {
-    //     if !two.0.is_number() {
-    //         failure(
-    //             one.1.context.file_name,
-    //             "Incompatible Types".to_string(),
-    //             (
-    //                 format!(
-    //                     "This expression is of type {}, which is a number.",
-    //                     one.0.as_clean_user_faced_type_name()
-    //                 ),
-    //                 one.1,
-    //             ),
-    //             vec![
-    //                 (
-    //                     "because of this, the second operand also needs to be of type number."
-    //                         .to_string(),
-    //                     two.1,
-    //                 ),
-    //                 (
-    //                     format!(
-    //                         "but it is of type {}.",
-    //                         two.0.as_clean_user_faced_type_name()
-    //                     ),
-    //                     two.1,
-    //                 ),
-    //             ],
-    //             one.1.context.file_contents,
-    //         )
-    //     }
+    if one.0.is_number() {
+        if !two.0.is_number() {
+            failure(
+                one.1.context.file_name,
+                "Incompatible Types".to_string(),
+                (
+                    format!(
+                        "This expression is of type {}, which is a number.",
+                        one.0.as_clean_user_faced_type_name()
+                    ),
+                    one.1,
+                ),
+                vec![
+                    (
+                        "because of this, the second operand also needs to be of type number."
+                            .to_string(),
+                        two.1,
+                    ),
+                    (
+                        format!(
+                            "but it is of type {}.",
+                            two.0.as_clean_user_faced_type_name()
+                        ),
+                        two.1,
+                    ),
+                ],
+                one.1.context.file_contents,
+            )
+        }
 
-    //     return;
-    // }
+        return;
+    }
 
-    // let one_fn = match &one.0 {
-    //     TypeExpr::Fun(params, return_type) => Some((params, return_type)),
-    //     _ => None,
-    // };
+    let one_fn = match &one.0 {
+        TypeExpr::Fun(params, return_type) => Some((params, return_type)),
+        _ => None,
+    };
 
-    // let two_fn = match &two.0 {
-    //     TypeExpr::Fun(params, return_type) => Some((params, return_type)),
-    //     _ => None,
-    // };
+    let two_fn = match &two.0 {
+        TypeExpr::Fun(params, return_type) => Some((params, return_type)),
+        _ => None,
+    };
 
-    // if let Some((fst, snd)) = one_fn.zip(two_fn) {
-    //     let fst_params = fst
-    //         .0
-    //         .iter()
-    //         .map(|x| x.1.0.as_clean_go_type_name(type_env))
-    //         .collect::<Vec<_>>();
-    //     let snd_params = snd
-    //         .0
-    //         .iter()
-    //         .map(|x| x.1.0.as_clean_go_type_name(type_env))
-    //         .collect::<Vec<_>>();
+    if let Some((fst, snd)) = one_fn.zip(two_fn) {
+        let fst_params = fst
+            .0
+            .iter()
+            .map(|x| x.1.0.as_clean_go_type_name(type_env))
+            .collect::<Vec<_>>();
+        let snd_params = snd
+            .0
+            .iter()
+            .map(|x| x.1.0.as_clean_go_type_name(type_env))
+            .collect::<Vec<_>>();
 
-    //     let fst_return = fst
-    //         .1
-    //         .clone()
-    //         .map(|x| x.0.as_clean_go_type_name(type_env))
-    //         .unwrap_or(TypeExpr::Tuple(vec![]).as_clean_go_type_name(type_env));
-    //     let snd_return = snd
-    //         .1
-    //         .clone()
-    //         .map(|x| x.0.as_clean_go_type_name(type_env))
-    //         .unwrap_or(TypeExpr::Tuple(vec![]).as_clean_go_type_name(type_env));
+        let fst_return = fst
+            .1
+            .clone()
+            .map(|x| x.0.as_clean_go_type_name(type_env))
+            .unwrap_or(TypeExpr::Tuple(vec![]).as_clean_go_type_name(type_env));
+        let snd_return = snd
+            .1
+            .clone()
+            .map(|x| x.0.as_clean_go_type_name(type_env))
+            .unwrap_or(TypeExpr::Tuple(vec![]).as_clean_go_type_name(type_env));
 
-    //     if (fst_params == snd_params) && (fst_return == snd_return) {
-    //         return;
-    //     }
-    // }
+        if (fst_params == snd_params) && (fst_return == snd_return) {
+            return;
+        }
+    }
 
-    // if one.0.as_clean_go_type_name(type_env) != two.0.as_clean_go_type_name(type_env) {
-    //     let (smaller, larger) = if one.1.start <= two.1.start {
-    //         (one.1, two.1)
-    //     } else {
-    //         (two.1, one.1)
-    //     };
+    if one.0.as_clean_go_type_name(type_env) != two.0.as_clean_go_type_name(type_env) {
+        let (smaller, larger) = if one.1.start <= two.1.start {
+            (one.1, two.1)
+        } else {
+            (two.1, one.1)
+        };
 
-    //     let combined_span = SS {
-    //         start: smaller.start,
-    //         end: larger.end,
-    //         context: one.1.context,
-    //     };
+        let combined_span = SS {
+            start: smaller.start,
+            end: larger.end,
+            context: one.1.context,
+        };
 
-    //     failure(
-    //         one.1.context.file_name,
-    //         "Incompatible Types".to_string(),
-    //         (
-    //             format!("this is of type {}", one.0.as_clean_user_faced_type_name()),
-    //             one.1,
-    //         ),
-    //         vec![
-    //             (
-    //                 format!("this is of type {}", two.0.as_clean_user_faced_type_name()),
-    //                 two.1,
-    //             ),
-    //             (
-    //                 "These two types are not not compatible".to_string(),
-    //                 combined_span,
-    //             ),
-    //         ],
-    //         one.1.context.file_contents,
-    //     );
-    // }
+        failure(
+            one.1.context.file_name,
+            "Incompatible Types".to_string(),
+            (
+                format!("this is of type {}", one.0.as_clean_user_faced_type_name()),
+                one.1,
+            ),
+            vec![
+                (
+                    format!("this is of type {}", two.0.as_clean_user_faced_type_name()),
+                    two.1,
+                ),
+                (
+                    "These two types are not not compatible".to_string(),
+                    combined_span,
+                ),
+            ],
+            one.1.context.file_contents,
+        );
+    }
 }
 
 #[cfg(test)]
@@ -749,9 +750,9 @@ mod test {
             make_input,
             source_file_parser::SourceFile,
             type_parser::Field,
-            value_parser::{empty_range, value_expr_parser},
+            value_parser::{empty_range, value_expr_parser}, SS,
         },
-        semantics::type_resolve::{TypesSummary, typeresolve_source_file},
+        semantics::type_resolve::{typeresolve_source_file, TypesSummary},
     };
     use chumsky::prelude::*;
 
