@@ -672,8 +672,8 @@ impl ValueExpr {
                 let field_name = field_name.clone();
                 let (mut i, t_res) = target_obj.0.emit(type_env, env);
                 if let Some(t_res) = t_res {
-                    let ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
-                    match ty {
+                    let target_type = TypeExpr::from_value_expr(&target_obj.0, type_env);
+                    match target_type {
                         TypeExpr::Duck(Duck { fields }) => {
                             let f = fields.iter().find(|f| f.name == field_name).unwrap();
                             let res = env.new_var();
@@ -720,7 +720,7 @@ impl ValueExpr {
                             ));
                             return (i, Some(IrValue::Var(res)));
                         }
-                        _ => panic!("can only access object like"),
+                        _ => panic!("can only access object like {self:?} {target_type:?}"),
                     }
                 } else {
                     return (i, None);

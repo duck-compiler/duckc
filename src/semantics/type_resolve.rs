@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 
 use crate::{
-    parse::{
+    emit::types::replace_generics_in_type_expr, parse::{
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         source_file_parser::SourceFile,
         type_parser::{Duck, Struct, TypeDefinition, TypeExpr},
         value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}, Spanned,
-    },
-    semantics::ident_mangler::mangle,
-    tags::Tag,
+    }, semantics::ident_mangler::mangle, tags::Tag
 };
 
 #[derive(Debug, Clone)]
@@ -32,14 +30,32 @@ impl GenericDefinition {
                     .collect::<Vec<_>>()
                     .join("____")
             ),
-            Self::Type(type_def) => format!(
-                "{}{}",
-                type_def.name,
-                type_params.iter()
-                    .map(|(generic_name, type_expr)| format!("{generic_name}_as_{}", type_expr.0.as_clean_go_type_name(env)))
-                    .collect::<Vec<_>>()
-                    .join("____")
-            )
+            Self::Type(type_def) => {
+                let mut type_expr = type_def.type_expression.0.clone();
+                match &type_expr {
+                    TypeExpr::Duck(Duck { fields }) => {
+                        let replacement_map = type_params.iter()
+                            .fold(HashMap::new(), |mut acc, type_param| {
+                                acc.insert(type_param.0.clone(), &type_param.1.0);
+                                acc
+                            });
+
+                        replace_generics_in_type_expr(&mut type_expr, &replacement_map);
+
+                        return type_expr
+                    },
+                    _ => todo!("implement all other type expressions for typename with given typeparams fn"),
+                }
+
+                // format!(
+                    // "{}{}",
+                    // type_def.name,
+                    // type_params.iter()
+                        // .map(|(generic_name, type_expr)| format!("{generic_name}_as_{}", type_expr.0.as_clean_go_type_name(env)))
+                        // .collect::<Vec<_>>()
+                        // .join("____")
+                // )
+            }
         };
 
         TypeExpr::TypeNameInternal(typename)
