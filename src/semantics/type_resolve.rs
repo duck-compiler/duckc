@@ -33,7 +33,7 @@ impl GenericDefinition {
             Self::Type(type_def) => {
                 let mut type_expr = type_def.type_expression.0.clone();
                 match &type_expr {
-                    TypeExpr::Duck(Duck { fields }) => {
+                    TypeExpr::Duck(Duck { fields: _ }) => {
                         let replacement_map = type_params.iter()
                             .fold(HashMap::new(), |mut acc, type_param| {
                                 acc.insert(type_param.0.clone(), &type_param.1.0);
@@ -146,14 +146,13 @@ impl TypeEnv {
     }
 
     pub fn insert_type(&mut self, type_expr: TypeExpr) -> TypeExpr {
-
         match &type_expr {
             TypeExpr::TypeName(_, ident, None) => {
                 let resolved = self.resolve_type_alias(ident);
                 self.all_types.push(resolved.clone());
                 resolved
             },
-            TypeExpr::TypeName(_, ident, Some(generics)) => {
+            TypeExpr::TypeName(_, ident, Some(_)) => {
                 TypeExpr::TypeNameInternal(ident.clone())
             },
             _ => {

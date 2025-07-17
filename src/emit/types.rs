@@ -551,7 +551,7 @@ impl TypeExpr {
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeNameInternal(name) => name.clone(),
             // todo: type params
-            TypeExpr::TypeName(_, name, type_params) => {
+            TypeExpr::TypeName(_, name, _) => {
                 type_env
                     .resolve_type_alias(name)
                     .as_go_type_annotation(type_env)
