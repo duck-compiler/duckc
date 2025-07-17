@@ -1,0 +1,32 @@
+use go "fmt";
+use std::io::{println};
+
+type V<W, Z> = { name: W, age: Z, lol: String };
+
+type List<ELEMENT_TYPE> = {
+    array: ELEMENT_TYPE[]
+};
+
+fn new_int_list(int_arr: Int[]) -> List<Int> {
+    return {
+        array: int_arr
+    }
+}
+
+fn push_int(self: List<Int>, i: Int) {
+    go {
+        self.Setarray(append(self.Getarray(), i))
+    }
+}
+
+fn main() {
+    let x: V<String, Int> = { name: "Hallo", age: 2, lol: "Hallo, wElt" };
+    let y: List<Int> = new_int_list([1, 2, 3]);
+    y->push_int(5);
+
+    println(f"{x.name}");
+    go {
+        fmt.Println(x.Getage().as_dgo_int())
+        fmt.Println(y);
+    }
+}
