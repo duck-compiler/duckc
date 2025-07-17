@@ -208,8 +208,7 @@ impl ValueExpr {
                     None => return (instructions, None),
                 };
 
-                let result_type_annotation =
-                    TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
+                let result_type_annotation = TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
 
                 let result_var_name = env.new_var();
                 instructions.push(IrInstruction::VarDecl(
@@ -305,7 +304,10 @@ impl ValueExpr {
                     type_expr,
                     initializer,
                 } = &b.0;
+
+                dbg!(type_expr);
                 let ty = type_expr.0.as_go_type_annotation(type_env);
+
                 let mut v = Vec::new();
                 v.push(IrInstruction::VarDecl(name.clone(), ty));
                 if let Some(initializer) = initializer {
@@ -670,8 +672,8 @@ impl ValueExpr {
                 let field_name = field_name.clone();
                 let (mut i, t_res) = target_obj.0.emit(type_env, env);
                 if let Some(t_res) = t_res {
-                    let ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
-                    match ty {
+                    let target_type = TypeExpr::from_value_expr(&target_obj.0, type_env);
+                    match target_type {
                         TypeExpr::Duck(Duck { fields }) => {
                             let f = fields.iter().find(|f| f.name == field_name).unwrap();
                             let res = env.new_var();
@@ -718,7 +720,7 @@ impl ValueExpr {
                             ));
                             return (i, Some(IrValue::Var(res)));
                         }
-                        _ => panic!("can only access object like"),
+                        _ => panic!("can only access object like {self:?} {target_type:?}"),
                     }
                 } else {
                     return (i, None);

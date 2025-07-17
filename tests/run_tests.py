@@ -24,6 +24,11 @@ CROSS = f"{COLOR_GRAY}[{COLOR_RED}✗{COLOR_GRAY}]{COLOR_RESET}"
 SKIP = f"{COLOR_GRAY}[{COLOR_YELLOW}~{COLOR_GRAY}]{COLOR_RESET}"
 UPDATE = f"{COLOR_GRAY}[{COLOR_BLUE}U{COLOR_GRAY}]{COLOR_RESET}"
 
+STAT_TOTAL = "total"
+STAT_PASSED = "passed"
+STAT_FAILED = "failed"
+STAT_SKIPPED = "skipped"
+
 def indent_all_lines_with_tab(input_string):
     if not isinstance(input_string, str):
         raise TypeError("Input must be a string.")
@@ -152,9 +157,11 @@ def build_and_move_cargo_binary(project_name, build_type="debug"):
 
     return moved_binary_path
 
-def compile_failure(compiler_path, invalid_program):
+def compile_failure(compiler_path, invalid_program, test_stats):
     if VERBOSE:
         print(f"{COLOR_YELLOW}compile_failure {COLOR_RESET}'{invalid_program}'")
+
+    test_stats[STAT_TOTAL] += 1
 
     try:
         command = [compiler_path] + ["compile"] + [invalid_program];
@@ -169,14 +176,18 @@ def compile_failure(compiler_path, invalid_program):
 
         if result.returncode != 0:
             print(f"{CHECK} {COLOR_YELLOW}test {COLOR_RESET}{invalid_program}")
+            test_stats[STAT_PASSED] += 1
         else:
             print(f"{CROSS} {COLOR_YELLOW}test {COLOR_RESET}{invalid_program}")
+            test_stats[STAT_FAILED] += 1
             if CICD:
                 sys.exit(-1)
     except FileNotFoundError:
         print(f"Error: Program not found at '{compiler_path}'")
+        test_stats[STAT_FAILED] += 1
     except Exception as exception:
         print(f"An unexpected error occured for file : {exception}")
+        test_stats[STAT_FAILED] += 1
         return None
     pass
 
@@ -311,15 +322,19 @@ def print_diff(output_type, expected, actual):
             print(line, end='')
     print(f"{COLOR_GRAY}--------------------{COLOR_RESET}\n")
 
-def compile_and_run_with_assert(compiler_path, program_path):
+def compile_and_run_with_assert(compiler_path, program_path, test_stats):
     if VERBOSE:
         print(f"{COLOR_YELLOW}Running compile_and_run_with_assert for '{program_path}'{COLOR_RESET}")
+
+    test_stats[STAT_TOTAL] += 1
+
     try:
         compile_command = [compiler_path, "compile", program_path]
         compile_result = subprocess.run(compile_command, capture_output=True, text=True, check=False)
 
         if compile_result.returncode != 0:
             print(f"{SKIP} {COLOR_YELLOW}test {COLOR_RESET}{program_path} {COLOR_GRAY}-> {COLOR_RED}compilation failed{COLOR_RESET}")
+            test_stats[STAT_SKIPPED] += 1
             if VERBOSE:
                 print(f"  {COLOR_RED}STDERR:\n{indent_all_lines_with_tab(compile_result.stderr)}{COLOR_RESET}")
             return
@@ -339,17 +354,45 @@ def compile_and_run_with_assert(compiler_path, program_path):
         snapshot_passed = verify_snapshot(program_path, actual_stdout, actual_stderr)
         if not snapshot_passed:
             has_error = True
+            test_stats[STAT_FAILED] += 1
 
         if not has_error:
             print(f"{CHECK} {COLOR_GREEN}test {COLOR_RESET}{program_path}")
+            test_stats[STAT_PASSED] += 1
         elif CICD:
             sys.exit(1)
 
     except Exception as e:
         print(f"{CROSS} {COLOR_RED}An unexpected error occurred for file '{program_path}': {e}{COLOR_RESET}")
+        test_stats[STAT_FAILED] += 1
         if CICD: sys.exit(1)
 
+def print_summary(stats):
+    total = stats["total"]
+    passed = stats["passed"]
+    failed = stats["failed"]
+    skipped = stats["skipped"]
+
+    print(f"\n{COLOR_CYAN}--- Test Summary ---{COLOR_RESET}")
+    print(f"Total tests: {total}")
+    print(f"{COLOR_GREEN}Passed:      {passed}{COLOR_RESET}")
+    print(f"{COLOR_RED}Failed:      {failed}{COLOR_RESET}")
+    print(f"{COLOR_YELLOW}Skipped:     {skipped}{COLOR_RESET}")
+    print(f"{COLOR_CYAN}--------------------{COLOR_RESET}")
+
+    if failed > 0:
+        print(f"\n{CROSS} {COLOR_RED}{failed} test(s) failed.{COLOR_RESET}")
+    else:
+        print(f"\n{CHECK} {COLOR_GREEN}All tests passed!{COLOR_RESET} 💛")
+
 def perform_tests():
+    test_stats = {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0
+    }
+
     compiler_path = build_and_move_cargo_binary("dargo");
 
     print(f"{COLOR_YELLOW}Duck Compiler is located at {COLOR_RESET}{compiler_path}{COLOR_RESET}")
@@ -357,15 +400,16 @@ def perform_tests():
     invalid_program_files = find_duck_files_in_directory("./invalid_programs")
     print(f"\n{COLOR_YELLOW}Starting the evaluation of the invalid test cases...")
     for invalid_program in invalid_program_files:
-        compile_failure(compiler_path, invalid_program)
+        compile_failure(compiler_path, invalid_program, test_stats)
         pass
 
     assert_program_files = find_duck_files_in_directory("./valid_programs")
     if assert_program_files:
         print(f"\n{COLOR_CYAN}--- Evaluating Programs with Assertions (snapshots) ---{COLOR_RESET}")
         for program in assert_program_files:
-            compile_and_run_with_assert(compiler_path, program)
+            compile_and_run_with_assert(compiler_path, program, test_stats)
 
+    print_summary(test_stats)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

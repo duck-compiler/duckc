@@ -194,8 +194,6 @@ fn parse_src_file(
     .unwrap()
     .flatten(&vec!["std".to_string()], false);
 
-    // dbg!(std_src_file);
-
     for func in std_src_file.function_definitions.iter_mut() {
         if let Some(params) = &mut func.params {
             for (_, p) in params {
@@ -407,7 +405,7 @@ fn parse_src_file(
         }
     }
 
-    dbg!(result)
+    result
 }
 
 fn typecheck(src_file_ast: &mut SourceFile) -> TypeEnv {

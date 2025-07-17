@@ -1,31 +1,17 @@
 use std::process;
 
 use crate::parse::type_parser::{Duck, Field, Struct, TypeExpr};
+use crate::parse::SS;
 use crate::parse::{
-    SS, Spanned, failure,
+    Spanned, failure,
     value_parser::{ValFmtStringContents, ValueExpr, empty_range},
 };
 use crate::semantics::type_resolve::TypeEnv;
 
-#[derive(Debug, Clone)]
-pub enum GoTypeDefinition {
-    TypaAlias {
-        name: String,
-        target: String,
-    },
-    Struct {
-        name: String,
-        fields: Vec<(String, String)>,
-        methods: Vec<String>,
-    },
-    Interface {
-        name: String,
-        methods: Vec<String>,
-    },
-}
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
         match self {
+            TypeExpr::GenericToBeReplaced(..) => panic!(),
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::Any => "Any".to_string(),
             TypeExpr::InlineGo => "inline-go".to_string(),
@@ -290,7 +276,6 @@ impl TypeExpr {
                 return ty;
             }
             ValueExpr::Variable(_, ident, type_expr) => {
-                dbg!(&ident);
                 type_expr
                     .as_ref()
                     .cloned()
@@ -765,9 +750,9 @@ mod test {
             make_input,
             source_file_parser::SourceFile,
             type_parser::Field,
-            value_parser::{empty_range, value_expr_parser},
+            value_parser::{empty_range, value_expr_parser}, SS,
         },
-        semantics::type_resolve::{TypesSummary, typeresolve_source_file},
+        semantics::type_resolve::{typeresolve_source_file, TypesSummary},
     };
     use chumsky::prelude::*;
 

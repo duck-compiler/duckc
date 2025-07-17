@@ -70,6 +70,7 @@ pub enum TypeExpr {
         Option<Box<Spanned<TypeExpr>>>,
     ),
     Array(Box<Spanned<TypeExpr>>),
+    GenericToBeReplaced(String),
 }
 
 impl TypeExpr {
