@@ -198,6 +198,9 @@ pub fn replace_generics_in_value_expr(
     }
 }
 
+fn fully_resolve_typename(type_expr: &mut TypeExpr) {
+}
+
 pub fn replace_generics_in_type_expr(
     type_expr: &mut TypeExpr,
     generics_to_concrete_type_map: &HashMap<String, &TypeExpr>,
@@ -274,7 +277,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                    });
 
                type_env.push_type_aliases();
-               let name = generic_def.typename_with_given_typeparams(type_env, with_type_params)
+               let name = generic_def.generate_generic_code_with_typeparams(type_env, with_type_params)
                    .as_clean_go_type_name(type_env);
 
                let ir_instructions = match generic_def {
@@ -675,7 +678,9 @@ impl TypeExpr {
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::GenericToBeReplaced(x) => x.clone(),
-            TypeExpr::RawTypeName(..) => panic!(),
+            TypeExpr::RawTypeName(_, ident, _) => {
+                panic!("{ident:?}")
+            },
             TypeExpr::IntLiteral(i) => primitive_type_name(&TypeExpr::IntLiteral(*i)).to_string(),
             TypeExpr::BoolLiteral(b) => primitive_type_name(&TypeExpr::BoolLiteral(*b)).to_string(),
             TypeExpr::StringLiteral(str) => {
