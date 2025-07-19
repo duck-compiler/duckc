@@ -257,81 +257,6 @@ pub fn replace_generics_in_type_expr(
 pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
     let summary = type_env.summarize();
 
-    let concrete_generics_implementation = type_env
-           .clone()
-           .generics_used
-           .iter()
-           .flat_map(|(generic_def, with_type_params)| {
-               type_env.push_type_aliases();
-
-               generic_def.generics_names()
-                   .iter()
-                   .enumerate()
-                   .for_each(|(index, generic_name)| {
-                       type_env.insert_type_alias(
-                           generic_name.clone(),
-                           with_type_params.get(index)
-                               .expect("type param expected")
-                               .1.0.clone()
-                       );
-                   });
-
-               type_env.push_type_aliases();
-               let name = generic_def.generate_generic_code_with_typeparams(type_env, with_type_params)
-                   .as_clean_go_type_name(type_env);
-
-               let ir_instructions = match generic_def {
-                   GenericDefinition::Function(..) => todo!(),
-                   GenericDefinition::Type(TypeDefinition { type_expression: (original_type_expr, _), .. }) => {
-                       let replacements: HashMap<String, &TypeExpr> = with_type_params
-                           .iter()
-                           .map(|(name, expr)| (name.clone(), &expr.0))
-                           .collect();
-
-                       let mut concrete_type_expr = original_type_expr.clone();
-
-                       replace_generics_in_type_expr(&mut concrete_type_expr, &replacements);
-                       dbg!(&name);
-                       dbg!(&concrete_type_expr);
-                       let mut instructions =
-                           interface_implementations(name.clone(), &concrete_type_expr, type_env);
-
-                       instructions.push(match &concrete_type_expr {
-                           TypeExpr::Tuple(t) => IrInstruction::StructDef(
-                               name.clone(),
-                               t.iter()
-                                   .enumerate()
-                                   .map(|(i, x)| (format!("field_{i}"), x.0.as_go_type_annotation(type_env)))
-                                   .collect::<Vec<_>>(),
-                           ),
-                           TypeExpr::Struct(Struct { fields }) | TypeExpr::Duck(Duck { fields }) => {
-                               IrInstruction::StructDef(
-                                   name.clone(),
-                                   fields
-                                       .iter()
-                                       .map(
-                                           |Field {
-                                               name,
-                                               type_expr: (type_expr, _),
-                                           }| {
-                                               (name.clone(), type_expr.as_go_type_annotation(type_env))
-                                           },
-                                       )
-                                       .collect::<Vec<_>>(),
-                               )
-                           }
-                           _ => panic!("cant create for {name}"),
-                       });
-
-                       instructions
-                   }
-               };
-
-               type_env.pop_type_aliases();
-               ir_instructions
-           })
-           .collect::<Vec<IrInstruction>>();
-
     fn interface_implementations(
         typename: String,
         type_expr: &TypeExpr,
@@ -410,9 +335,6 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
             )
         })
         .collect::<Vec<_>>();
-
-    // generics
-    instructions.extend(concrete_generics_implementation);
 
     let mut primitive_types_instructions = summary
         .types_used

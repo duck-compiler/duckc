@@ -1,11 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, process};
 
 use crate::{
     emit::types::replace_generics_in_type_expr, parse::{
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         source_file_parser::SourceFile,
         type_parser::{Duck, Struct, TypeDefinition, TypeExpr},
-        value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}, Spanned,
+        value_parser::{empty_range, Assignment, Declaration, ValFmtStringContents, ValueExpr},
+        Spanned, SS,
     }, semantics::ident_mangler::mangle, tags::Tag
 };
 
@@ -16,49 +17,6 @@ pub enum GenericDefinition {
 }
 
 impl GenericDefinition {
-    pub fn generate_generic_code_with_typeparams(
-        &self,
-        env: &mut TypeEnv,
-        type_params: &[(String, Spanned<TypeExpr>)],
-    ) -> TypeExpr {
-        let typename = match self {
-            Self::Function(function_def) => format!(
-                "{}{}",
-                function_def.name,
-                type_params.iter()
-                    .map(|(generic_name, type_expr)| format!("{generic_name}_as_{}", type_expr.0.as_clean_go_type_name(env)))
-                    .collect::<Vec<_>>()
-                    .join("____")
-            ),
-            Self::Type(type_def) => {
-                let mut type_expr = type_def.type_expression.0.clone();
-                let replacement_map = type_params.iter()
-                    .fold(HashMap::new(), |mut acc, type_param| {
-                        acc.insert(type_param.0.clone(), &type_param.1.0);
-                        acc
-                    });
-                match &type_expr {
-                    TypeExpr::Duck(Duck { fields: _ }) => {
-                        replace_generics_in_type_expr(&mut type_expr, &replacement_map);
-                        return type_expr
-                    },
-                    _ => todo!("{type_expr:?}implement all other type expressions for typename with given typeparams fn"),
-                }
-
-                // format!(
-                    // "{}{}",
-                    // type_def.name,
-                    // type_params.iter()
-                        // .map(|(generic_name, type_expr)| format!("{generic_name}_as_{}", type_expr.0.as_clean_go_type_name(env)))
-                        // .collect::<Vec<_>>()
-                        // .join("____")
-                // )
-            }
-        };
-
-        TypeExpr::TypeNameInternal(typename)
-    }
-
     pub fn generics_names(
         &self,
     ) -> Vec<String> {
@@ -89,7 +47,6 @@ pub struct TypeEnv {
     pub type_aliases: Vec<HashMap<String, TypeExpr>>,
     pub all_types: Vec<TypeExpr>,
     pub generic_definitions: HashMap<String, GenericDefinition>,
-    pub generics_used: Vec<(GenericDefinition, TypeParams)>,
 }
 
 impl Default for TypeEnv {
@@ -99,7 +56,6 @@ impl Default for TypeEnv {
             type_aliases: vec![HashMap::new()],
             all_types: vec![],
             generic_definitions: HashMap::new(),
-            generics_used: vec![],
         }
     }
 }
@@ -151,10 +107,8 @@ impl TypeEnv {
                 let resolved = self.resolve_type_alias(ident);
                 self.all_types.push(resolved.clone());
                 resolved
-            },
-            TypeExpr::TypeName(_, ident, Some(_)) => {
-                TypeExpr::TypeNameInternal(ident.clone())
-            },
+            }
+            TypeExpr::TypeName(_, ident, Some(_)) => TypeExpr::TypeNameInternal(ident.clone()),
             _ => {
                 self.all_types.push(type_expr.clone());
                 type_expr
@@ -176,52 +130,6 @@ impl TypeEnv {
     }
 
     pub fn insert_type_alias(&mut self, alias: String, type_expr: TypeExpr) {
-        println!("insert {alias} -> {type_expr:?}");
-        if let TypeExpr::TypeName(_, identifier, type_params) = type_expr {
-            if self.generic_definitions.contains_key(&identifier) {
-                let generic_def = self.generic_definitions.get(&identifier)
-                    .expect("internal error: this message is to be done");
-
-                let generics_names = generic_def.generics_names();
-
-                let with = type_params
-                    .expect("internal error: this message is to be done")
-                    .iter()
-                    .enumerate()
-                    .map(|(index, type_expr)| (
-                        // todo: error message when user tries to refer to a generic type but doesn't provide any generics
-                        generics_names
-                            .get(index)
-                            .expect("error message when user tries to refer to a generic type but doesn't provide any generics")
-                            .clone(),
-                        (*type_expr).clone()
-                    ))
-                    .collect::<Vec<_>>();
-
-                let type_expr = self.use_generic_definition(
-                    generic_def.clone(),
-                    &with
-                );
-
-                self.type_aliases
-                    .last_mut()
-                    .expect("error message when user tries to alias a type but type doesn't exist.")
-                    .insert(alias, type_expr);
-
-                return;
-            }
-
-            let type_expr = self.resolve_type_alias(&identifier);
-
-            // todo: error message when user tries to alias a type but type doesn't exist.
-            self.type_aliases
-                .last_mut()
-                .expect("error message when user tries to alias a type but type doesn't exist.")
-                .insert(alias, type_expr);
-
-            return
-        }
-
         self.type_aliases
             .last_mut()
             .expect("At least one type aliases hashmap should exist. :(")
@@ -229,65 +137,83 @@ impl TypeEnv {
     }
 
     pub fn insert_generic_definition(&mut self, alias: String, definition: GenericDefinition) {
-        self.generic_definitions
-            .insert(alias, definition);
+        self.generic_definitions.insert(alias, definition);
     }
 
-    pub fn resolve_generic_type_definition(&mut self, alias: String) -> GenericDefinition {
-        self.generic_definitions
-            .iter()
-            .find(|(key, _)| **key == alias)
-            .expect("expect")
-            .1
-            .clone()
-    }
+    fn instantiate_generic_type(
+        &mut self,
+        name: &String,
+        type_params: &Vec<Spanned<TypeExpr>>,
+        _span: SS,
+    ) -> TypeExpr {
+        let generic_def = self.generic_definitions.get(name).cloned()
+            .unwrap_or_else(|| {
+                println!(
+                    "{}{}{}Generic type '{}' not found.",
+                    Tag::Dargo,
+                    Tag::Build,
+                    Tag::Err,
+                    name
+                );
+                process::exit(1);
+            });
 
-    pub fn use_generic_definition(&mut self, definition: GenericDefinition, with: &Vec<(String, Spanned<TypeExpr>)>) -> TypeExpr {
-        self.generics_used
-            .push((definition.clone(), with.to_owned()));
-
-        match definition {
-            GenericDefinition::Function(..) => todo!(),
-            GenericDefinition::Type(type_def) => {
-                let mut type_expr = type_def.type_expression.0.clone();
-                let replacement_map = with.iter()
-                    .fold(HashMap::new(), |mut acc, type_param| {
-                        acc.insert(type_param.0.clone(), &type_param.1.0);
-                        acc
-                    });
-
-                match &type_expr {
-                    TypeExpr::Duck(Duck { fields: _ }) => {
-                        replace_generics_in_type_expr(&mut type_expr, &replacement_map);
-                        self.insert_type_alias(type_def.name, type_expr.clone());
-                        type_expr
-                    },
-                    TypeExpr::TypeName(_, identifier, type_params) => {
-                        let generic_definition = self.resolve_generic_type_definition(identifier.to_string());
-                        let generics_names = generic_definition.generics_names();
-
-                        let with = type_params
-                            .as_ref()
-                            .expect("internal error: message to be done")
-                            .iter()
-                            .enumerate()
-                            .map(|(index, type_expr)| (
-                                generics_names
-                                    .get(index)
-                                    .expect("TODO: message")
-                                    .clone(),
-                                type_expr.clone()
-                            ))
-                            .collect::<Vec<_>>();
-
-                        let type_expr = self.use_generic_definition(generic_definition, &with);
-                        type_expr
-                    }
-                    _ => todo!("{type_expr:?} here implement all other type expressions for typename with given typeparams fn"),
-                }
+        let type_def = match generic_def {
+            GenericDefinition::Type(td) => td,
+            GenericDefinition::Function(_) => {
+                println!(
+                    "{}{}{}Expected '{}' to be a generic type, but it's a function.",
+                    Tag::Dargo,
+                    Tag::Build,
+                    Tag::Err,
+                    name
+                );
+                process::exit(1);
             }
+        };
+
+        let generics = type_def.generics.as_ref().unwrap();
+        if generics.len() != type_params.len() {
+            println!(
+                "{}{}{}Expected {} type arguments for generic type '{}', but got {}.",
+                Tag::Dargo,
+                Tag::Build,
+                Tag::Err,
+                generics.len(),
+                name,
+                type_params.len()
+            );
+            process::exit(1);
         }
 
+        let mangled_name = format!(
+            "{}_{}",
+            type_def.name,
+            type_params
+                .iter()
+                .map(|tp| tp.0.as_clean_go_type_name(self))
+                .collect::<Vec<_>>()
+                .join("_")
+        );
+
+        if self.type_aliases.last().unwrap().contains_key(&mangled_name) {
+            return TypeExpr::TypeNameInternal(mangled_name);
+        }
+
+        let mut concrete_type_expr = type_def.type_expression.0.clone();
+        let replacement_map = generics
+            .iter()
+            .map(|g| g.0.name.clone())
+            .zip(type_params.iter().map(|tp| &tp.0))
+            .collect::<HashMap<_, _>>();
+
+        replace_generics_in_type_expr(&mut concrete_type_expr, &replacement_map);
+        resolve_all_aliases_type_expr(&mut concrete_type_expr, self);
+
+        self.insert_type_alias(mangled_name.clone(), concrete_type_expr.clone());
+        self.all_types.push(concrete_type_expr);
+
+        TypeExpr::TypeNameInternal(mangled_name)
     }
 
     pub fn resolve_type_alias(&self, alias: &String) -> TypeExpr {
@@ -435,7 +361,7 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
             }
 
             env.resolve_type_alias(typename.first().unwrap());
-        },
+        }
         TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
             fields.sort_by_key(|x| x.name.clone());
             for field in fields {
@@ -463,33 +389,27 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
             }
         }
         TypeExpr::TypeName(_, name, type_params) => {
-            println!("{name} with {type_params:?}");
             if let Some(type_params) = type_params {
-                type_params
-                    .iter_mut()
-                    .for_each(|type_param| resolve_all_aliases_type_expr(&mut type_param.0, env));
+                for type_param in type_params.iter_mut() {
+                    resolve_all_aliases_type_expr(&mut type_param.0, env);
+                }
 
-                let generic_definition = env.resolve_generic_type_definition(name.to_string());
-                let generics_names = generic_definition.generics_names();
-
-                let with = type_params.iter()
-                    .enumerate()
-                    .map(|(index, type_expr)| (
-                        generics_names
-                            .get(index)
-                            .expect("TODO: message")
-                            .clone(),
-                        type_expr.clone()
-                    ))
-                    .collect::<Vec<_>>();
-
-                let type_expr = env.use_generic_definition(generic_definition, &with);
-
-                *expr = type_expr;
-                return;
+                // todo: add span for instantiated generic type
+                // maybe this should be the a span over all type_params
+                *expr = env.instantiate_generic_type(name, type_params, empty_range());
+            } else {
+                if env.generic_definitions.contains_key(name) {
+                    println!(
+                        "{}{}{}Generic type '{}' used without type arguments.",
+                        Tag::Dargo,
+                        Tag::Build,
+                        Tag::Err,
+                        name
+                    );
+                    process::exit(1);
+                }
+                *expr = env.resolve_type_alias(name);
             }
-
-            *expr = env.resolve_type_alias(name);
         }
         TypeExpr::Any
         | TypeExpr::Bool
@@ -510,6 +430,24 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
 
 fn resolve_all_aliases_value_expr(expr: &mut ValueExpr, env: &mut TypeEnv) {
     match expr {
+        ValueExpr::FunctionCall {
+                    target,
+                    params,
+                    type_params,
+                } => {
+                    resolve_all_aliases_value_expr(&mut target.0, env);
+
+                    if let Some(type_params) = type_params {
+                        type_params
+                            .iter_mut()
+                            .for_each(|type_param| resolve_all_aliases_type_expr(&mut type_param.0, env));
+                        todo!("Properly implement generic function instantiation");
+                    }
+
+                    params
+                        .iter_mut()
+                        .for_each(|param| resolve_all_aliases_value_expr(&mut param.0, env));
+                }
         ValueExpr::Array(ty, exprs) => {
             if let Some(ty) = ty {
                 resolve_all_aliases_type_expr(&mut ty.0, env);
@@ -574,23 +512,6 @@ fn resolve_all_aliases_value_expr(expr: &mut ValueExpr, env: &mut TypeEnv) {
                     resolve_all_aliases_value_expr(&mut e.0, env);
                 }
             }
-        }
-        ValueExpr::FunctionCall {
-            target,
-            params,
-            type_params,
-        } => {
-            resolve_all_aliases_value_expr(&mut target.0, env);
-
-            if let Some(type_params) = type_params {
-                type_params
-                    .iter_mut()
-                    .for_each(|type_param| resolve_all_aliases_type_expr(&mut type_param.0, env));
-            }
-
-            params
-                .iter_mut()
-                .for_each(|param| resolve_all_aliases_value_expr(&mut param.0, env));
         }
         ValueExpr::If {
             condition,
@@ -846,51 +767,19 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     // Step 2: Insert type definitions
     source_file
         .type_definitions
-        .iter_mut()
+        .iter()
         .for_each(|type_definition| {
             if type_definition.generics.is_some() {
-                if let TypeExpr::TypeName(_, ident, Some(type_params)) = &type_definition.type_expression.0 {
-                    type_env.push_type_aliases();
-
-                    let generic_def = type_env.generic_definitions.get(ident)
-                        .expect("internal error: this message is to be done");
-
-                    let generics_names = generic_def.generics_names();
-
-                    let with = type_params
-                        .iter()
-                        .enumerate()
-                        .map(|(index, type_expr)| (
-                            // todo: error message when user tries to refer to a generic type but doesn't provide any generics
-                            generics_names
-                                .get(index)
-                                .expect("error message when user tries to refer to a generic type but doesn't provide any generics")
-                                .clone(),
-                            (*type_expr).clone()
-                        ))
-                        .collect::<Vec<_>>();
-
-                    let resolved = type_env.use_generic_definition(
-                        generic_def.clone(),
-                        &with
-                    );
-
-                    println!("resolved -> {:?}", resolved);
-                    type_definition.type_expression.0 = resolved;
-                }
-
                 type_env.insert_generic_definition(
                     type_definition.name.clone(),
                     GenericDefinition::Type(type_definition.clone()),
                 );
-
-                return;
+            } else {
+                type_env.insert_type_alias(
+                    type_definition.name.clone(),
+                    type_definition.type_expression.0.clone(),
+                );
             }
-
-            type_env.insert_type_alias(
-                type_definition.name.clone(),
-                type_definition.type_expression.0.clone(),
-            )
         });
 
     // Step 3: Resolve all aliases
@@ -902,11 +791,17 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 // todo: create some kind of type which indicates that this type needs to be replaced later on.
                 type_env.push_type_aliases();
 
-                generics.iter()
-                    .for_each(|generic| {
-                        println!("Inserting generic in stack {} {}", generic.0.name.clone(), type_env.type_aliases.len());
-                        type_env.insert_type_alias(generic.0.name.clone(), TypeExpr::GenericToBeReplaced(generic.0.name.clone()))
-                    });
+                generics.iter().for_each(|generic| {
+                    println!(
+                        "Inserting generic in stack {} {}",
+                        generic.0.name.clone(),
+                        type_env.type_aliases.len()
+                    );
+                    type_env.insert_type_alias(
+                        generic.0.name.clone(),
+                        TypeExpr::GenericToBeReplaced(generic.0.name.clone()),
+                    )
+                });
 
                 resolve_all_aliases_type_expr(&mut type_definition.type_expression.0, type_env);
 
@@ -1169,7 +1064,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
                 // todo: type params
                 if let (TypeExpr::TypeName(_, type_name, _type_params), span) =
-                    &declaration.type_expr
+                &declaration.type_expr
                 {
                     let type_expr = type_env.resolve_type_alias(type_name);
                     // mutate
