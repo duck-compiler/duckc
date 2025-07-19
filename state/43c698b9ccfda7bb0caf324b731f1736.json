@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Maurice Schmidt",
+        "name": "Mvmo",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: create some kind of type which indicates that this type needs to be replaced later on.",

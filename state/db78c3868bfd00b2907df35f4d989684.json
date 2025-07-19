@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Maurice Schmidt",
+        "name": "Mvmo",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO: resolve returns in main function to use the exit() fn of go, or wrap the code of the main function into a second function which then get's called inside a new main which just returns exit(other_main())",
