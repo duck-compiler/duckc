@@ -45,6 +45,7 @@ pub struct TypeEnv {
     pub type_aliases: Vec<HashMap<String, TypeExpr>>,
     pub all_types: Vec<TypeExpr>,
     pub generic_definitions: HashMap<String, GenericDefinition>,
+    pub generic_fns_generated: HashMap<String, (FunctionDefintion, TypeExpr)>
 }
 
 impl Default for TypeEnv {
@@ -54,6 +55,7 @@ impl Default for TypeEnv {
             type_aliases: vec![HashMap::new()],
             all_types: vec![],
             generic_definitions: HashMap::new(),
+            generic_fns_generated: HashMap::new(),
         }
     }
 }
@@ -123,6 +125,7 @@ impl TypeEnv {
     }
 
     pub fn insert_type_alias(&mut self, alias: String, type_expr: TypeExpr) {
+        println!("insert type alias {} on stack {}", alias, self.type_aliases.len());
         self.type_aliases
             .last_mut()
             .expect("At least one type aliases hashmap should exist. :(")
