@@ -48,6 +48,8 @@ Parsed die dargo.toml im aktuellen Directory.
 Installiert alle benoetigten Dependencies.
 Compiled das Projekt.
 
+TODO
+
 > $ duck run <bin>
 
 #### Optionale Flags:
