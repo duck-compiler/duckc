@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     emit::value::{IrInstruction, IrValue},
-    parse::{function_parser::LambdaFunctionExpr, type_parser::{Duck, Field, Struct, TypeDefinition, TypeExpr}, value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}},
-    semantics::type_resolve::{GenericDefinition, TypeEnv},
+    parse::{function_parser::LambdaFunctionExpr, type_parser::{Duck, Field, Struct, TypeExpr}, value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}},
+    semantics::type_resolve::TypeEnv,
 };
 
 pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
@@ -196,9 +196,6 @@ pub fn replace_generics_in_value_expr(
         | ValueExpr::Variable(..)
         | ValueExpr::RawVariable(..) => {}
     }
-}
-
-fn fully_resolve_typename(type_expr: &mut TypeExpr) {
 }
 
 pub fn replace_generics_in_type_expr(
