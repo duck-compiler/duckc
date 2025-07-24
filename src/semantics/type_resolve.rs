@@ -198,12 +198,6 @@ impl TypeEnv {
 
         for (generic_param, concrete_type) in generics.iter().zip(type_params.iter()) {
             self.insert_type_alias(generic_param.0.name.clone(), concrete_type.0.clone());
-            replace_type_in_value_expr(
-                &mut fn_def.value_expr.0,
-                TypeExpr::TypeNameInternal(generic_param.0.name.clone()),
-                concrete_type.0.clone(),
-                self,
-            );
         }
 
         let mut concrete_type_expr = TypeExpr::Fun(
@@ -631,54 +625,6 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
         | ValueExpr::Char(..)
         | ValueExpr::Float(..)
         | ValueExpr::Bool(..) => {}
-    }
-}
-
-fn replace_type_in_value_expr(
-    value_expr: &mut ValueExpr,
-    target_type: TypeExpr,
-    with: TypeExpr,
-    type_env: &mut TypeEnv
-) {
-    match value_expr {
-        ValueExpr::FunctionCall { target, params: _, type_params } => {
-            replace_type_in_value_expr(&mut target.as_mut().0, target_type, with, type_env);
-            println!("i want to know if this is empty - i hope not {:?}", type_params);
-        },
-        ValueExpr::VarDecl(decl) => {
-            let decl_type = &mut decl.as_mut().0.type_expr.0;
-            if *decl_type == target_type {
-                *decl_type = with
-            }
-        },
-        ValueExpr::Add(_, _)
-        | ValueExpr::Mul(_, _)
-        | ValueExpr::BoolNegate(_)
-        | ValueExpr::Equals(_, _)
-        | ValueExpr::InlineGo(_)
-        | ValueExpr::Lambda(..)
-        | ValueExpr::ArrayAccess(_, _)
-        | ValueExpr::Match {..}
-        | ValueExpr::FormattedString(..)
-        | ValueExpr::RawVariable(_, _)
-        | ValueExpr::Variable(_, _, _)
-        | ValueExpr::If { .. }
-        | ValueExpr::While {.. }
-        | ValueExpr::Tuple(..)
-        | ValueExpr::Block(..)
-        | ValueExpr::Break
-        | ValueExpr::Continue
-        | ValueExpr::Duck(..)
-        | ValueExpr::Struct(..)
-        | ValueExpr::FieldAccess {..}
-        | ValueExpr::Array(..)
-        | ValueExpr::Return(..)
-        | ValueExpr::VarAssign(..)
-        | ValueExpr::Bool(_)
-        | ValueExpr::Float(_)
-        | ValueExpr::Char(_)
-        | ValueExpr::String(_)
-        | ValueExpr::Int(_) => println!("skipped {value_expr:?}")
     }
 }
 
@@ -1343,3 +1289,39 @@ fn resolve_implicit_function_return_type(
             .collect::<Vec<_>>(),
     ));
 }
+
+pub fn replace_generics_in_value_expr(
+    value_expr: &mut ValueExpr,
+    generics_to_concrete_type_map: &HashMap<String, &TypeExpr>,
+) {
+    match value_expr {
+        ValueExpr::Array(ty, exprs) => {
+            if let Some(t) = ty {
+                replace_generics_in_type_expr(&mut t.0, generics_to_concrete_type_map);
+            }
+            for expr in exprs {
+                replace_generics_in_value_expr(&mut expr.0, generics_to_concrete_type_map);
+            }
+        }
+        ValueExpr::VarDecl(d) => {
+            let Declaration {
+                type_expr,
+                initializer,
+                ..
+            } = &mut d.0;
+            replace_generics_in_type_expr(&mut type_expr.0, generics_to_concrete_type_map);
+            if let Some(init) = initializer {
+                replace_generics_in_value_expr(&mut init.0, generics_to_concrete_type_map);
+            }
+        }
+        ValueExpr::Lambda(l) => {
+            let LambdaFunctionExpr {
+                params,
+                return_type,
+                value_expr,
+            } = &mut **l;
+            if let Some(rt) = return_type {
+                replace_generics_in_type_expr(&mut rt.0, generics_to_concrete_type_map);
+            }
+            for (_, p) in params {
+                replace_generics_in_type_expr(&mut p.0, generics_to_concrete_type_map);
