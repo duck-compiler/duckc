@@ -25,6 +25,10 @@ impl SourceFile {
         let mut to_ir = ToIr::default();
 
         for f in self.function_definitions {
+            // generic functions shouldn't be emitted, as they have incomplete type information
+            if f.generics.is_some() {
+                continue;
+            }
             instructions.push(f.emit(type_env, &mut to_ir));
         }
 
