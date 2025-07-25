@@ -6,12 +6,16 @@ Duck is a modern, compiled programming language designed for the next generation
 We're working on a book, which will explore the core principles of the language.
 For now you can clone the source code and build your own version of the compiler.
 
-> $ git clone git@github.com:duck-compiler/duckc.git
-> $ cd duckc
-> $ cargo install --path .
+```sh
+git clone git@github.com:duck-compiler/duckc.git
+cd duckc
+cargo install --path .
+```
 
 This will install dargo onto your system.
 
 Continue with:
 
-> $ dargo --help
+```sh
+dargo --help
+```
