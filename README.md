@@ -1,67 +1,17 @@
-# Duck Lang - The Language for Hyperscalers
+# Duck - The Language for Hyperscalers
+Welcome to the official repository of the Duck programming language!
 
-## TODO
-## CLI
+Duck is a modern, compiled programming language designed for the next generation of cloud software. It is built to empower developers creating highly scalable and resilient microservices. At its core, Duck champions **duck typing**, providing flexibility while leveraging the robust, high-performance Go ecosystem. Duck code compiles directly to Go, allowing you to tap into Go's concurrency features, tooling, and extensive libraries seamlessly.
 
-### dargo init
+We're working on a book, which will explore the core principles of the language.
+For now you can clone the source code and build your own version of the compiler.
 
-Erstellt eine Standard dargo.toml im aktuellen Directory.
-Der Projekt Name ist der Name des aktuellen Directory.
+> $ git clone git@github.com:duck-compiler/duckc.git
+> $ cd duckc
+> $ cargo install --path .
 
-> $ duck init
+This will install dargo onto your system.
 
-#### Optionale Flags:
-| Name | Beschreibung |
--------- | --------
-| `--lib` | Erzeugt das Projekt, sodass es direkt als Library konfiguriert ist. |
+Continue with:
 
-### duck new
-
-Erstellt ein Directory mit dem gegebenen Namen.
-Directory darf nicht existieren.
-Wenn name nicht angegeben, dann wird nutzer nach namen geprompted.
-
-> $ duck new <name>
-
-#### Optionale Flags:
-| Name | Beschreibung |
--------- | --------
-| `--lib` | Erzeugt das Projekt, sodass es direkt als Library konfiguriert ist. |
-
-### dargo build
-
-Parsed die dargo.toml im aktuellen Directory.
-Installiert alle benoetigten Dependencies.
-Compiled das Projekt.
-Wenn keine Binary angegeben, dann werden alle kompiliert.
-Ansonsten nur die angegebene
-
-> $ duck build [\<bin\>]
-
-#### Optionale Flags:
-| Name | Beschreibung | Default |
--------- | -------- | -------
-|
-
-### dargo run
-
-Parsed die dargo.toml im aktuellen Directory.
-Installiert alle benoetigten Dependencies.
-Compiled das Projekt.
-
-> $ duck run <bin>
-
-#### Optionale Flags:
-| Name | Beschreibung | Default |
--------- | -------- | -------
-|
-
-### duck compile
-Kompiliert die gegebene Duck File
-
-> $ duck compile <file.duck>
-
-#### Optionale Flags:
-| Name | Beschreibung | Default
--------- | -------- | ------
-|--output <file_name>, -o <file_name>| Name fuer die ausgegebene binary | duck_out|
+> $ dargo --help
