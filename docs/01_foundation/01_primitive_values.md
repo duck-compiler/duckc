@@ -1,4 +1,4 @@
-# Primitive Types
+# Primitive Values
 To make life easy we have a small set of primitive types, which are build into the compiler.
 These types are described in this section of the chapter.
 
