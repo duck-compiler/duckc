@@ -27,3 +27,10 @@ fn function_receiving_string(str: String) {
 }
 ```
 
+As you might already have guessed, functions can also return a value
+
+```duck
+fn multiply_by_two(to_multiply: Int) -> Int {
+    return to_multiply * 2;
+}
+```
