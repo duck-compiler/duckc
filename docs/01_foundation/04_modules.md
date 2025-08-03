@@ -35,3 +35,17 @@ fn main() {
 }
 ```
 This will keep the exact same behaviour, but it's easier to write.
+
+You can create your own modules very easily. Just create a `module` block, like
+
+```duck
+module quick_maths {
+    fn square(to_square: Int) -> Int {
+        return to_square * to_square;
+    }
+}
+
+fn main() {
+    let result: Int = quick_maths::square(5);
+}
+```
