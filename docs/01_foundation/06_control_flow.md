@@ -2,7 +2,7 @@
 Control flow structures, allow, as the name suggests, to control the flow of the program. They're used if you need to execute code based on certain conditions.
 We have several control flow structures, which we'll discuss in this section.
 
-# If
+# If (-Else)
 The if control structure is used, when you need to check if a certain condition is met and execute the code of the if body, only if that given condition is met.
 Our if is as simple as it can get, you use the `if` keyword and a bool value inside of parens followed by a code block.
 ```duck
