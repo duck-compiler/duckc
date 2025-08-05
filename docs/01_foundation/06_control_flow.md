@@ -23,3 +23,18 @@ fn main() {
     }
 }
 ```
+
+# Match / Pattern Matching
+You can use the `match` keyword, to initiate pattern matching, therefore you have to pass a value into the match, which is done by passing it inside of parens directly after the match keyword, which is followed by a block, containing all cases, like:
+
+```duck
+use std;
+
+fn main() {
+    let x: Any = 5;
+    match (x) {
+        String str -> std::io::println(str),
+        else -> std::io::println("unmatched"),
+    }
+}
+```
