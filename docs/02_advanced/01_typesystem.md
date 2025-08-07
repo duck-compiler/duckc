@@ -20,3 +20,25 @@ type MyType = {
 
 The MyType is a symbols, which we'll refer to as a typename. It refers to a duck type. You could alternatively specify explicitly that it's a duck type, by passing the `duck` keyword infront of the "object" description, like
 
+```duck
+type MyType = duck {
+    field_one: String,
+    field_two: String,
+};
+```
+
+But that's not neccessary. Just for you to make sure, you know that when a object description occurs without any keyword infront it's always a duck.
+You can nest ducks as deep as you want them to be nested. For example
+
+```duck
+type MyType = duck {
+    field_one: String,
+    field_two: String,
+    field_nested: {
+        field_three: String,
+        field_nested_two: {
+            field_four: String,
+        }
+    }
+};
+```
