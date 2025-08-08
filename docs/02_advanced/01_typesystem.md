@@ -20,9 +20,12 @@ type MyType = {
 };
 ```
 
-The MyType is a symbols, which we'll refer to as a typename. It refers to a duck type. You could alternatively specify explicitly that it's a duck type, by passing the `duck` keyword infront of the "object" description, like
+The MyType is a symbols, which we'll refer to as a typename.
 
 ## Ducks
+
+The above `MyType` refers to a duck type.
+You could alternatively specify explicitly that it's a duck type, by passing the `duck` keyword infront of the "object" description, like
 
 ```duck
 type MyType = duck {
