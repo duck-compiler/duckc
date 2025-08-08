@@ -2,6 +2,8 @@
 The duck typesystem leverages the capabilities of duck typing to enhance the experience of devs.
 Our type system is inspired by the functional programming world. You could find some similarities to typescript.
 
+## Typealias
+
 We start by defining our first type, which will act as an alias
 
 ```duck
@@ -19,6 +21,8 @@ type MyType = {
 ```
 
 The MyType is a symbols, which we'll refer to as a typename. It refers to a duck type. You could alternatively specify explicitly that it's a duck type, by passing the `duck` keyword infront of the "object" description, like
+
+## Ducks
 
 ```duck
 type MyType = duck {
@@ -42,3 +46,5 @@ type MyType = duck {
     }
 };
 ```
+
+## Structs
