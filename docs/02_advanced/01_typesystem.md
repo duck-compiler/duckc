@@ -48,3 +48,15 @@ type MyType = duck {
 ```
 
 ## Structs
+
+If you've asked yourself, why is there even an option to tell explicitly that it's a duck, then you're asking the right questions.
+It's because we do not only have ducks, but we also support structs. These structs, have an identity, which ducks don't have, as they live after "if it quacks like a duck, it is a duck".
+Structs are more structured, they keep the order of the fields for example and also they're really checked by identity, so you can't just replace a struct by a just equivalent struct, it has to be the exact same one.
+
+You can define structs as following
+
+```duck
+type MyStructType = struct {
+    field_one: String,
+};
+```
