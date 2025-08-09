@@ -63,3 +63,18 @@ type MyStructType = struct {
     field_one: String,
 };
 ```
+
+# Unions / Variant Types
+We also support union/variant types, therefore you have to use the `|` ("or") type operator, which will define a type which can be either one the given variants.
+
+```duck
+type MyUnion = Int | String;
+```
+
+This type states that it can either be a string or a int and must be checked at runtime for it's actual type. Which can be done with pattern matching (todo: link pattern matching)
+
+The or's can be chained, so you can define as many variants as you like. For example
+
+```duck
+type Primitive = Int | String | Bool | Char | Float;
+```
