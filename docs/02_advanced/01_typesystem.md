@@ -78,3 +78,60 @@ The or's can be chained, so you can define as many variants as you like. For exa
 ```duck
 type Primitive = Int | String | Bool | Char | Float;
 ```
+
+# Literal types
+Duck supports literal types, so some values can be used as types. For example, the string `"whatever"` can be used as a type.
+```duck
+let x: "whatever" = "whatever";
+```
+
+This means that the type of x must be of type string with the value "whatever". This allows us to be more expressive in our apis.
+For example, when you have a subset of strategies your program can follow to execute a given algorithm - you will need to have some way to "flag" your code for the current strategy.
+Let's draw it out
+
+```duck
+use std::io::{println};
+
+fn my_algorithm(strategy: Int) {
+    if (strategy == 1){
+        println("run with strategy 1");
+    }
+
+    if (strategy == 2){
+        println("run with strategy 2");
+    }
+    // implementation of the algo
+}
+```
+
+This is the functions which runs the algo but before it evaluates which strategy to use. In the old way we'd have to get creative with declaring how to pass the strategy.
+For example, we could receive strings, which tell use what strategy to use strings instead of ints, like
+
+```duck
+use std::io::{println};
+
+fn my_algorithm(strategy: String) {
+    if (strategy == "improved"){
+        println("run with strategy 1");
+    }
+
+    if (strategy == "legacy"){
+        println("run with strategy 2");
+    }
+    // implementation of the algo
+}
+```
+
+Now we can be a bit more expressive when calling the function and pass a string with the name of the strategy to use. But we haven't actually limited the options a user could pass to us.
+Here the literal types come in handy. You can limit the options of a specific value, without having to define a helper structure.
+
+```duck
+fn my_algorithm(strategy: "improved" | "legacy") {
+    match (strategy) {
+        "improved" _ -> println("run with strategy 1"),
+        "legacy" _ -> println("run with strategy 2"),
+    }
+}
+```
+
+By that we not only have limited the options a user could pass to our function but we now also know if we're covering every possibility, as it's a known subset.
