@@ -14,4 +14,18 @@ fn main() {
 ```
 
 This will compile a binary, which uses fmt.Println to print out `Hello, World!`. The combination of those two features enables us to interop with go easily, you can do whatever you want inside of that go code block.
-The go code block will also reflect the current scope of the duck program.
+The go code block will also reflect the current scope of the duck program. So if you declare a variable, right above the go code block, these variables will be available in the given code block.
+Example given
+
+```duck
+use go "fmt";
+
+fn main() {
+    let x: String = "Hello, World!";
+    go {
+        fmt.Println(x);
+    }
+}
+```
+
+This will work as expected.
