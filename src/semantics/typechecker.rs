@@ -410,8 +410,12 @@ impl TypeExpr {
 
     pub fn is_number(&self) -> bool {
         return *self == TypeExpr::Int
-            || *self == TypeExpr::Float
-            || matches!(*self, TypeExpr::IntLiteral(..));
+        || *self == TypeExpr::Float
+        || matches!(*self, TypeExpr::IntLiteral(..));
+    }
+
+    pub fn is_tuple(&self) -> bool {
+        return *self == TypeExpr::Bool || matches!(*self, TypeExpr::BoolLiteral(..));
     }
 
     pub fn is_bool(&self) -> bool {
