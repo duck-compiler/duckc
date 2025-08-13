@@ -1,0 +1,52 @@
+use std::io::{println};
+
+type MyGenericDuck<
+    A, B, C, D
+> = {
+    a: A,
+    b: B,
+    c: C,
+    d: D,
+};
+
+type MyGenericDuckWithAString<B, C, D> = MyGenericDuck<String, B, C, D>;
+type MyGenericDuckWithBString<A, C, D> = MyGenericDuck<A, String, C, D>;
+type MyGenericDuckWithCString<A, B, D> = MyGenericDuck<A, B, String, D>;
+type MyGenericDuckWithDString<A, B, C> = MyGenericDuck<A, B, C, String>;
+
+type WithAllString = MyGenericDuckWithAString<String, String, String>;
+type WithAllString2 = MyGenericDuckWithBString<String, String, String>;
+type WithAllString3 = MyGenericDuckWithCString<String, String, String>;
+type WithAllString4 = MyGenericDuckWithDString<String, String, String>;
+
+fn main() {
+    let abcd: { a: String, b: String, c: String, d: String } = { a: "a", b: "b", c: "c", d: "d" };
+    let abcd_a: WithAllString = abcd;
+    let abcd_b: WithAllString2 = abcd;
+    let abcd_c: WithAllString3 = abcd;
+    let abcd_d: WithAllString4 = abcd;
+
+    println(abcd.a);
+    println(abcd_a.a);
+    println(abcd_b.a);
+    println(abcd_c.a);
+    println(abcd_d.a);
+
+    println(abcd.b);
+    println(abcd_a.b);
+    println(abcd_b.b);
+    println(abcd_c.b);
+    println(abcd_d.b);
+
+    println(abcd.c);
+    println(abcd_a.c);
+    println(abcd_b.c);
+    println(abcd_c.c);
+    println(abcd_d.c);
+
+    println(abcd.d);
+    println(abcd_a.d);
+    println(abcd_b.d);
+    println(abcd_c.d);
+    println(abcd_d.d);
+}
