@@ -137,7 +137,7 @@ impl TypeEnv {
     fn instantiate_generic_function(
         &mut self,
         name: &String,
-        type_params: &Vec<Spanned<TypeExpr>>,
+        type_params: &[Spanned<TypeExpr>],
         _span: SS,
     ) -> (FunctionDefintion, TypeExpr) {
         let generic_def = self.generic_definitions.get(name).cloned().unwrap_or_else(|| {
@@ -250,7 +250,7 @@ impl TypeEnv {
     fn instantiate_generic_type(
         &mut self,
         name: &String,
-        type_params: &mut Vec<Spanned<TypeExpr>>,
+        type_params: &mut [Spanned<TypeExpr>],
         _span: SS,
     ) -> TypeExpr {
         let generic_def = self.generic_definitions.get(name).cloned().unwrap_or_else(|| {
@@ -509,10 +509,8 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
                     // todo: add span for generic types
                     *expr = env.instantiate_generic_type(name, type_params, empty_range());
                 }
-            } else {
-                if !env.generic_definitions.contains_key(name) {
-                    *expr = env.resolve_type_alias(name);
-                }
+            } else if !env.generic_definitions.contains_key(name) {
+                *expr = env.resolve_type_alias(name);
             }
         }
         _ => {}
@@ -831,13 +829,13 @@ fn find_generic_fn_instantiations(function_definition: &mut FunctionDefintion, t
                     .for_each(|param| instantiations.extend(in_value_expr(&mut param.0, type_env)));
 
                 // if it's a generic it must be a variable
-                let span = target.as_ref().1.clone();
+                let span = target.as_ref().1;
                 let target = &mut target.as_mut().0;
-                if let ValueExpr::Variable(is_global, identifier, r#type) = target {
-                    if type_env.generic_definitions.contains_key(identifier) {
+                if let ValueExpr::Variable(is_global, identifier, r#type) = target
+                    && type_env.generic_definitions.contains_key(identifier) {
                         let (fn_def, fn_type) = type_env.instantiate_generic_function(
                             identifier,
-                            &type_params.clone().unwrap_or_else(|| vec![]),
+                            &type_params.clone().unwrap_or_else(std::vec::Vec::new),
                             span,
                         );
 
@@ -849,7 +847,6 @@ fn find_generic_fn_instantiations(function_definition: &mut FunctionDefintion, t
                         println!("return\n\t{:?} \n\tfor {:?}", &instantiations, &value_expr);
                         return instantiations;
                     }
-                }
             },
             ValueExpr::Variable(_, identifier, _) => {
                 // if it's a generic it must be a variable
@@ -869,7 +866,7 @@ fn find_generic_fn_instantiations(function_definition: &mut FunctionDefintion, t
                 instantiations.extend(
                     r#else.as_mut()
                         .map(|boxed| in_value_expr(&mut boxed.as_mut().0, type_env))
-                        .unwrap_or_else(|| vec![])
+                        .unwrap_or_else(std::vec::Vec::new)
                 );
 
                 return instantiations
@@ -992,7 +989,7 @@ fn find_generic_fn_instantiations(function_definition: &mut FunctionDefintion, t
             | ValueExpr::Break => {},
         }
 
-        println!("return none for {:?}", value_expr);
+        println!("return none for {value_expr:?}");
         vec![]
     }
 

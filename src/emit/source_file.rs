@@ -26,7 +26,7 @@ impl SourceFile {
 
         let mut generic_function_defs = type_env.generic_fns_generated.clone();
         for f in generic_function_defs.iter_mut() {
-            println!("41 emit generic fun {:?}", f);
+            println!("41 emit generic fun {f:?}");
             instructions.push(f.1.0.emit(type_env, &mut to_ir));
         }
 
