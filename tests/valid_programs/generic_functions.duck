@@ -1,0 +1,56 @@
+use std::io::{println};
+
+type ArrayList<
+    ElementType
+> = {
+    elements: ElementType[],
+};
+
+fn list_of<ElementType>(elements: ElementType[]) -> ArrayList<ElementType> {
+    return { elements: elements };
+}
+
+fn insert<ElementType>(list: ArrayList<ElementType>, element: ElementType) {
+    go {
+        list.Setelements(append(list.Getelements(), element));
+    }
+}
+
+fn join(
+    str_list: ArrayList<String>,
+    with: String,
+) -> String {
+    go {
+        strs := str_list.Getelements()
+        var final_str string
+        for index, str := range strs {
+            if index != 0 {
+                final_str += with.as_dgo_string()
+            }
+            final_str += str.as_dgo_string()
+        }
+
+        return ConcDuckString { value: final_str };
+    }
+
+    return ""
+}
+
+fn main() {
+    let my_list: ArrayList<String> = list_of<String>([
+        "Hello",
+        "World"
+    ]);
+
+    my_list->insert<String>("this is wild");
+    my_list->insert<String>("mui");
+    my_list->insert<String>("hallo");
+    my_list->insert<String>("5");
+    my_list->insert<String>("4");
+    my_list->insert<String>("3");
+    my_list->insert<String>("2");
+    my_list->insert<String>("1");
+
+    let str: String = my_list->join(", ");
+    println(str);
+}

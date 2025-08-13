@@ -1,7 +1,7 @@
 use std::{collections::HashMap, process};
 
 use crate::{
-    parse::{
+    emit::function, parse::{
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         source_file_parser::SourceFile,
         type_parser::{Duck, Struct, TypeDefinition, TypeExpr},
@@ -188,27 +188,33 @@ impl TypeEnv {
                 .collect::<Vec<_>>()
                 .join("_")
         );
+
         println!("instantiate {name} as {mangled_name}");
 
         if self.generic_fns_generated.contains_key(&mangled_name) {
+            println!("returned already existing fn");
             return self.generic_fns_generated.get(&mangled_name).unwrap().clone();
         }
 
         self.push_type_aliases();
 
         for (generic_param, concrete_type) in generics.iter().zip(type_params.iter()) {
+            println!("inserting {} as {:?}", generic_param.0.name.clone(), concrete_type);
             self.insert_type_alias(generic_param.0.name.clone(), concrete_type.0.clone());
         }
 
         if let Some(params) = fn_def.params.as_mut() {
-            for (_, param_type_expr) in params {
+            for (param_name, param_type_expr) in params {
                 resolve_all_aliases_type_expr(&mut param_type_expr.0, self);
+                self.insert_identifier_type(param_name.clone(), param_type_expr.0.clone());
             }
         }
 
-        if let Some(r) = fn_def.return_type.as_mut() {
-            resolve_all_aliases_type_expr(&mut r.0, self);
+        if let Some(return_type) = fn_def.return_type.as_mut() {
+            resolve_all_aliases_type_expr(&mut return_type.0, self);
         }
+
+        typeresolve_value_expr(&mut fn_def.value_expr.0, self);
 
         fn_def.name = mangled_name;
         fn_def.generics = None;
@@ -236,6 +242,8 @@ impl TypeEnv {
 
         self.insert_identifier_type(fn_def.name.clone(), fn_type_expr.clone());
 
+        println!("insert into generic fns generated {:?}", fn_def.name.clone());
+        self.generic_fns_generated.insert(fn_def.name.clone(), (fn_def.clone(), fn_type_expr.clone()));
         return (fn_def, fn_type_expr);
     }
 
@@ -329,6 +337,8 @@ impl TypeEnv {
                         }
                     }
                 }
+
+                println!("returning {res:?}");
                 return res;
             }
         }
@@ -439,6 +449,9 @@ impl TypeEnv {
         all_types.dedup_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
 
         param_names_used.dedup();
+
+        println!("in summary");
+        println!("{:?}", self.generic_fns_generated);
 
         return TypesSummary {
             types_used: all_types,
@@ -783,15 +796,12 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     );
 
     // Step 4: Instantiate all generic functions
-    source_file.function_definitions = source_file
+    source_file
         .function_definitions
         .iter_mut()
-        .flat_map(|function_definition| {
-            let mut instantiations = find_generic_fn_instantiations(function_definition, type_env);
-            instantiations.push(function_definition.clone());
-            return instantiations
-        })
-        .collect::<Vec<_>>();
+        .for_each(|function_definition| {
+            find_generic_fn_instantiations(function_definition, type_env);
+        });
 
     println!(
         "{} final resolve of all functions",
@@ -810,13 +820,15 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 type ResultingDefinitions = Vec<FunctionDefintion>;
 fn find_generic_fn_instantiations(function_definition: &mut FunctionDefintion, type_env: &mut TypeEnv) -> ResultingDefinitions {
     fn in_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) -> ResultingDefinitions {
+        println!("\n\n\n\n-------------------------------");
+        println!("in value expr {value_expr:?}");
         match value_expr {
             ValueExpr::FunctionCall { target, params, type_params } => {
                 let mut instantiations = vec![];
 
-                // params
-                //     .iter_mut()
-                //     .for_each(|param| instantiations.extend(in_value_expr(&mut param.0, type_env)));
+                params
+                    .iter_mut()
+                    .for_each(|param| instantiations.extend(in_value_expr(&mut param.0, type_env)));
 
                 // if it's a generic it must be a variable
                 let span = target.as_ref().1.clone();
@@ -834,6 +846,7 @@ fn find_generic_fn_instantiations(function_definition: &mut FunctionDefintion, t
                         *target = ValueExpr::Variable(*is_global, fn_def.name.clone(), Some(fn_type));
 
                         instantiations.push(fn_def.clone());
+                        println!("return\n\t{:?} \n\tfor {:?}", &instantiations, &value_expr);
                         return instantiations;
                     }
                 }
@@ -979,10 +992,14 @@ fn find_generic_fn_instantiations(function_definition: &mut FunctionDefintion, t
             | ValueExpr::Break => {},
         }
 
+        println!("return none for {:?}", value_expr);
         vec![]
     }
 
-    return in_value_expr(&mut function_definition.value_expr.0, type_env);
+    let x = in_value_expr(&mut function_definition.value_expr.0, type_env);
+    println!("{}", function_definition.name.clone());
+    dbg!(&x);
+    return x
 }
 
 fn typeresolve_function_definition(
