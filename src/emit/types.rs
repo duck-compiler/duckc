@@ -304,7 +304,7 @@ impl TypeExpr {
                     .iter()
                     .map(|(name, type_expr)| match name {
                         Some(name) =>
-                            format!("{name}: {}", type_expr.0.as_go_type_annotation(type_env)),
+                            format!("{name} {}", type_expr.0.as_go_type_annotation(type_env)),
                         None => type_expr.0.as_go_type_annotation(type_env),
                     })
                     .collect::<Vec<_>>()
