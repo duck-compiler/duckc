@@ -20,6 +20,7 @@ pub enum Tag {
     Setup,
     IO,
     Go,
+    TypeResolve,
 }
 
 impl Display for Tag {
@@ -91,6 +92,7 @@ impl Display for Tag {
             ),
             Self::Clean => write!(f, "{}", " clean ".on_bright_magenta().bright_white()),
             Self::Go => write!(f, "{}", " go ".on_bright_blue().bright_white()),
+            Self::TypeResolve => write!(f, "{}", " type resolve ".on_bright_blue().bright_white()),
         };
     }
 }

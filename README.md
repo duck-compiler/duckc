@@ -13,9 +13,3 @@ cargo install --path .
 ```
 
 This will install dargo onto your system.
-
-Continue with:
-
-```sh
-dargo --help
-```

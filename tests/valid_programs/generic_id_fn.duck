@@ -1,0 +1,10 @@
+use std::io::{println};
+
+fn id<T>(t: T) -> T {
+    return t;
+}
+
+fn main() {
+    let x: String = id<String>("Hallo, Welt");
+    x->println();
+}

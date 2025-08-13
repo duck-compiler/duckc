@@ -24,7 +24,18 @@ impl SourceFile {
 
         let mut to_ir = ToIr::default();
 
+        let mut generic_function_defs = type_env.generic_fns_generated.clone();
+        for f in generic_function_defs.iter_mut() {
+            println!("41 emit generic fun {f:?}");
+            instructions.push(f.1.0.emit(type_env, &mut to_ir));
+        }
+
         for f in self.function_definitions {
+            // generic functions shouldn't be emitted, as they have incomplete type information
+            if f.generics.is_some() {
+                continue;
+            }
+            println!("44 emit {}", f.name);
             instructions.push(f.emit(type_env, &mut to_ir));
         }
 
