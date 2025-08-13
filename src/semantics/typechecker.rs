@@ -205,8 +205,8 @@ impl TypeExpr {
                             }
 
                             check_type_compatability(
-                                in_param_types.get(index).unwrap(),
                                 &param_type.1,
+                                in_param_types.get(index).unwrap(),
                                 type_env,
                             )
                         });
