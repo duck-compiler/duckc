@@ -10,29 +10,7 @@ use crate::semantics::type_resolve::TypeEnv;
 
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
-        match self {
-            TypeExpr::GenericToBeReplaced(..) => panic!(),
-            TypeExpr::RawTypeName(..) => panic!(),
-            TypeExpr::Any => "Any".to_string(),
-            TypeExpr::InlineGo => "inline-go".to_string(),
-            TypeExpr::Struct(_) => "struct {{ todo }}".to_string(),
-            TypeExpr::Go(str) => format!("go({str})"),
-            TypeExpr::Duck(_) => "duck { todo }".to_string(),
-            TypeExpr::Tuple(_) => "tuple(todo)".to_string(),
-            TypeExpr::TypeName(_, str, _) => format!("type {str}"), // todo: type params
-            TypeExpr::TypeNameInternal(str) => format!("internal {str}"),
-            TypeExpr::StringLiteral(str) => format!("\"{str}\""),
-            TypeExpr::IntLiteral(int) => format!("{int}"),
-            TypeExpr::BoolLiteral(bool) => format!("{bool}"),
-            TypeExpr::String => "String".to_string(),
-            TypeExpr::Int => "Int".to_string(),
-            TypeExpr::Bool => "Bool".to_string(),
-            TypeExpr::Char => "Char".to_string(),
-            TypeExpr::Float => "Float".to_string(),
-            TypeExpr::Or(..) => "todo | todo".to_string(),
-            TypeExpr::Fun(..) => "fn (todo) -> todo".to_string(),
-            TypeExpr::Array(_) => "todo[]".to_string(),
-        }
+        return format!("{self}");
     }
 
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
