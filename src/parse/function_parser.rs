@@ -63,8 +63,10 @@ where
 
     let return_type_parser = just(Token::ThinArrow).ignore_then(type_expression_parser());
 
-    just(Token::Function)
-        .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
+    just(Token::Sus)
+        .or_not()
+        .then_ignore(just(Token::Function))
+        .then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
         .then(generics_parser().or_not())
         .then_ignore(just(Token::ControlChar('(')))
         .then(params_parser)
@@ -72,7 +74,13 @@ where
         .then(return_type_parser.or_not())
         .then(value_expr_parser(make_input))
         .map(
-            |((((identifier, generics), params), return_type), mut value_expr)| {
+            |(((((has_sus, identifier), generics), params), return_type), mut value_expr)| {
+                let is_sus = has_sus.is_some();
+
+                if is_sus && return_type.is_some() {
+                    panic!("sus function is not allowed to return something");
+                }
+
                 value_expr = match value_expr {
                     (ValueExpr::Duck(x), loc) if x.is_empty() => {
                         (ValueExpr::Tuple(vec![]), loc).into_block()
@@ -80,6 +88,32 @@ where
                     x @ (ValueExpr::Block(_), _) => x,
                     _ => panic!("Function must be block"),
                 };
+
+                if is_sus {
+                    value_expr = (
+                        ValueExpr::FunctionCall {
+                            target: ValueExpr::RawVariable(
+                                true,
+                                vec!["std".into(), "task".into(), "spawn".into()],
+                            )
+                            .into_empty_span()
+                            .into(),
+                            params: vec![
+                                ValueExpr::Lambda(
+                                    LambdaFunctionExpr {
+                                        params: vec![],
+                                        return_type: None,
+                                        value_expr: value_expr.clone(),
+                                    }
+                                    .into(),
+                                )
+                                .into_empty_span(),
+                            ],
+                            type_params: None,
+                        },
+                        value_expr.1,
+                    );
+                }
 
                 FunctionDefintion {
                     name: identifier,

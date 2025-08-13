@@ -41,6 +41,7 @@ pub enum Token {
     ThinArrow,
     Comment(String),
     DocComment(String),
+    Sus,
 }
 
 impl Display for Token {
@@ -75,6 +76,7 @@ impl Display for Token {
             Token::Match => "match",
             Token::DocComment(comment) => &format!("/// {comment}"),
             Token::Comment(comment) => &format!("// {comment}"),
+            Token::Sus => "sus",
         };
         write!(f, "{t}")
     }
@@ -130,6 +132,7 @@ pub fn lex_single<'a>(
             "continue" => Token::Continue,
             "as" => Token::As,
             "match" => Token::Match,
+            "sus" => Token::Sus,
             _ => Token::Ident(str.to_string()),
         });
 
@@ -1040,6 +1043,8 @@ mod tests {
                     FmtStringContents::Tokens(vec![(Token::Ident("var".into()), empty_range())]),
                 ])],
             ),
+            ("sus", vec![Token::Sus]),
+            ("sus fn", vec![Token::Sus, Token::Function]),
         ];
 
         for (src, expected_tokens) in test_cases {
