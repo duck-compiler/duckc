@@ -1,8 +1,8 @@
 {
-    "id": "a9b77426019384d5443b8c48cd58c136",
+    "id": "cfd712843928e94008314c58c4efabb7",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 592,
-    "title": "type_params",
+    "line_number": 959,
+    "title": "discuss if we enable generic functions being called from go and how",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
-    "source_line": "// todo: type_params",
+    "source_line": "// todo: discuss if we enable generic functions being called from go and how",
     "status": "open",
-    "first_seen": "2025-07-14T09:44:03.706713",
+    "first_seen": "2025-08-13T00:29:24.232373",
     "history": []
 }

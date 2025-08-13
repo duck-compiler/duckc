@@ -1,6 +1,76 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-08-13T00:29:24.227841",
+        "issue_id": "29732f89deff9557a011fb6fe3d1d8d6",
+        "issue_title": "add span for generic types",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-08-13T00:29:24.227841",
+        "issue_id": "67253afb2d99d44e686ad77b0cd44619",
+        "issue_title": "check if we'd rather sort after generic generation",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-08-13T00:29:24.227841",
+        "issue_id": "cfd712843928e94008314c58c4efabb7",
+        "issue_title": "discuss if we enable generic functions being called from go and how",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-08-13T00:29:24.227841",
+        "issue_id": "ef80848b952d1bcd90960a8f1f295cd2",
+        "issue_title": "let's discuss if we should use asserts for compiler internal errors.",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-08-13T00:29:24.227841",
+        "issue_id": "2339dee19dc7245046537fad08ea4981",
+        "issue_title": "type params",
+        "author_info": {
+            "name": "Mvmo",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-08-13T00:29:24.227841",
+        "issue_id": "ab171c08521638216687559985056db6",
+        "issue_title": "move checks from typeresolve to typecheck",
+        "author_info": {
+            "name": "Mvmo",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-08-13T00:29:24.227841",
+        "issue_id": "43c698b9ccfda7bb0caf324b731f1736",
+        "issue_title": "create some kind of type which indicates that this type needs to be replaced later on.",
+        "author_info": {
+            "name": "Mvmo",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-07-17T01:01:31.194238",
         "issue_id": "43c698b9ccfda7bb0caf324b731f1736",
         "issue_title": "create some kind of type which indicates that this type needs to be replaced later on.",

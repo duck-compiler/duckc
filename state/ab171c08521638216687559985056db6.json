@@ -13,7 +13,8 @@
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo(@mvmo): move checks from typeresolve to typecheck",
-    "status": "open",
+    "status": "closed",
     "first_seen": "2025-07-09T23:15:12.305730",
-    "history": []
+    "history": [],
+    "closed_at": "2025-08-13T00:29:24.234798"
 }

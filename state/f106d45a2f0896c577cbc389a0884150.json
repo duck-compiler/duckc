@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "case example right below issue.",
     "blame": {
-        "name": "Mvmo",
+        "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO: allow no return type in fn's type expr",

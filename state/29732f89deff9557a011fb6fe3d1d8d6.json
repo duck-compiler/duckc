@@ -1,8 +1,8 @@
 {
-    "id": "a9b77426019384d5443b8c48cd58c136",
+    "id": "29732f89deff9557a011fb6fe3d1d8d6",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 592,
-    "title": "type_params",
+    "line_number": 509,
+    "title": "add span for generic types",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
-    "source_line": "// todo: type_params",
+    "source_line": "// todo: add span for generic types",
     "status": "open",
-    "first_seen": "2025-07-14T09:44:03.706713",
+    "first_seen": "2025-08-13T00:29:24.231966",
     "history": []
 }

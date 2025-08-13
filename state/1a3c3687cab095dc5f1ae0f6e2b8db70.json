@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "fn (String) -> Int\nwithout the x:\nThere's an example of this right below this issue.\nIt shows that you have to declare the parameter name",
     "blame": {
-        "name": "Mvmo",
+        "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO: discuss unnamed paramters in fn typeexpr",

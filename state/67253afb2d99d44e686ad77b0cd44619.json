@@ -1,8 +1,8 @@
 {
-    "id": "a9b77426019384d5443b8c48cd58c136",
+    "id": "67253afb2d99d44e686ad77b0cd44619",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 592,
-    "title": "type_params",
+    "line_number": 714,
+    "title": "check if we'd rather sort after generic generation",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
-    "source_line": "// todo: type_params",
+    "source_line": "// todo: check if we'd rather sort after generic generation",
     "status": "open",
-    "first_seen": "2025-07-14T09:44:03.706713",
+    "first_seen": "2025-08-13T00:29:24.232253",
     "history": []
 }
