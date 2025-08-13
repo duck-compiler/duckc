@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter, Result};
+
 use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
@@ -21,6 +23,126 @@ pub struct TypeDefinition {
 pub struct Field {
     pub name: String,
     pub type_expr: Spanned<TypeExpr>,
+}
+
+impl Display for TypeExpr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            TypeExpr::Any => write!(f, "any"),
+            TypeExpr::InlineGo => write!(f, "inline_go"),
+            TypeExpr::Struct(s) => {
+                write!(f, "struct {{ ")?;
+                s.fields.iter().enumerate().try_for_each(|(i, field)| {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}: {}", field.name, field.type_expr.0)
+                })?;
+                write!(f, " }}")
+            }
+            TypeExpr::Go(s) => write!(f, "go {}", s),
+            TypeExpr::Duck(d) => write!(f, "{}", d), // Delegates to Duck's Display impl
+            TypeExpr::Tuple(elements) => {
+                write!(f, "(")?;
+                elements.iter().enumerate().try_for_each(|(i, elem)| {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", elem.0)
+                })?;
+                if elements.len() == 1 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")
+            }
+            TypeExpr::TypeName(is_global, name, generics) => {
+                if *is_global {
+                    write!(f, "::")?;
+                }
+                write!(f, "{}", name)?;
+
+                if let Some(params) = generics {
+                    write!(f, "<")?;
+                    params.iter().enumerate().try_for_each(|(i, param)| {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", param.0)
+                    })?;
+                    write!(f, ">")?;
+                }
+
+                Ok(())
+            }
+            TypeExpr::RawTypeName(is_global, path, generics)  => {
+                if *is_global {
+                    write!(f, "::")?;
+                }
+                write!(f, "{}", path.join("::"))?;
+
+                if let Some(params) = generics {
+                    write!(f, "<")?;
+                    params.iter().enumerate().try_for_each(|(i, param)| {
+                         if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", param.0)
+                    })?;
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+            TypeExpr::TypeNameInternal(s) => write!(f, "{}", s),
+            TypeExpr::StringLiteral(s) => write!(f, "\"{}\"", s),
+            TypeExpr::IntLiteral(i) => write!(f, "{}", i),
+            TypeExpr::BoolLiteral(b) => write!(f, "{}", b),
+            TypeExpr::String => write!(f, "String"),
+            TypeExpr::Int => write!(f, "Int"),
+            TypeExpr::Bool => write!(f, "Bool"),
+            TypeExpr::Char => write!(f, "Char"),
+            TypeExpr::Float => write!(f, "Float"),
+            TypeExpr::Or(variants) => {
+                variants.iter().enumerate().try_for_each(|(i, variant)| {
+                    if i > 0 {
+                        write!(f, " | ")?;
+                    }
+                    write!(f, "{}", variant.0)
+                })
+            }
+            TypeExpr::Fun(params, return_type) => {
+                write!(f, "fn(")?;
+                params.iter().enumerate().try_for_each(|(i, (name, type_expr))| {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    if let Some(n) = name {
+                        write!(f, "{}: ", n)?;
+                    }
+                    write!(f, "{}", type_expr.0)
+                })?;
+                write!(f, ")")?;
+                if let Some(rt) = return_type {
+                    write!(f, " -> {}", rt.0)?;
+                }
+                Ok(())
+            }
+            TypeExpr::Array(inner) => write!(f, "{}[]", inner.0),
+            TypeExpr::GenericToBeReplaced(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+impl Display for Duck {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{ ")?;
+        self.fields.iter().enumerate().try_for_each(|(i, field)| {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "\"{}\": {}", field.name, field.type_expr.0)
+        })?;
+        write!(f, " }}")
+    }
 }
 
 impl PartialEq for Field {
@@ -1460,6 +1582,20 @@ pub mod tests {
                         "y".to_string(),
                         TypeExpr::String.into_empty_span(),
                     )],
+                })
+                .into_empty_span(),
+            ]),
+        );
+
+        assert_type_expression(
+            "{ x: \"hallo\" } | { x: \"bye\" }",
+            TypeExpr::Or(vec![
+                TypeExpr::Duck(Duck {
+                    fields: vec![Field::new("x".to_string(), TypeExpr::StringLiteral("hallo".to_string()).into_empty_span())],
+                })
+                .into_empty_span(),
+                TypeExpr::Duck(Duck {
+                    fields: vec![Field::new("x".to_string(), TypeExpr::StringLiteral("bye".to_string()).into_empty_span())],
                 })
                 .into_empty_span(),
             ]),
