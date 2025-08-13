@@ -1,7 +1,7 @@
 use std::{collections::HashMap, process};
 
 use crate::{
-    emit::function, parse::{
+    parse::{
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         source_file_parser::SourceFile,
         type_parser::{Duck, Struct, TypeDefinition, TypeExpr},

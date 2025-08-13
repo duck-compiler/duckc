@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-
 use crate::{
     emit::value::{IrInstruction, IrValue},
-    parse::{function_parser::LambdaFunctionExpr, type_parser::{Duck, Field, Struct, TypeExpr}, value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}},
+    parse::type_parser::{Duck, Field, Struct, TypeExpr},
     semantics::type_resolve::TypeEnv,
 };
 
