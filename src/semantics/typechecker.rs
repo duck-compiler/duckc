@@ -346,6 +346,13 @@ impl TypeExpr {
         }
     }
 
+    pub fn is_duck(&self) -> bool {
+        match self {
+            Self::Duck(..) => true,
+            _ => false,
+        }
+    }
+
     pub fn has_subtypes(&self) -> bool {
         match self {
             Self::Or(..) | Self::Tuple(..) | Self::Duck(..) | Self::Struct(..) => true,
