@@ -480,7 +480,7 @@ fn is_non_variant_type_in_variant(
     })
 }
 
-fn is_subset_of_variant_type(
+fn require_subset_of_variant_type(
     variant_type: &Spanned<TypeExpr>,
     other: &Spanned<TypeExpr>,
     type_env: &mut TypeEnv,
@@ -551,7 +551,7 @@ fn check_type_compatability(
     type_env: &mut TypeEnv,
 ) {
     if one.0.is_variant() {
-        is_subset_of_variant_type(one, two, type_env);
+        require_subset_of_variant_type(one, two, type_env);
         return;
     }
 
