@@ -654,7 +654,7 @@ fn check_type_compatability(
                 );
             }
         },
-        TypeExpr::Tuple(items) => {
+        TypeExpr::Tuple(item_types) => {
             if !given_type.0.is_tuple() {
                 fail_requirement(
                     format!(
@@ -664,6 +664,26 @@ fn check_type_compatability(
                     String::new()
                 )
             }
+
+            let required_item_types = item_types;
+            let TypeExpr::Tuple(given_item_types) = &given_type.0 else { unreachable!() };
+
+            if given_item_types.len() < required_item_types.len() {
+                fail_requirement(
+                    format!(
+                        "requires {} item(s)",
+                        format!("{}", required_item_types.len()).bright_green(),
+                    ),
+                    format!(
+                        "only has {} item(s)",
+                        format!("{}", given_item_types.len()).bright_green(),
+                    ),
+                )
+            }
+
+            // for (index, required_item_type) in required_item_types.iter().enumerate() {
+                // let given_item_type = requi
+                // }
         },
         TypeExpr::RawTypeName(_, items, items1) => todo!(),
         TypeExpr::TypeName(_, _, items) => todo!(),
