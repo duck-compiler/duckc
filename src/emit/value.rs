@@ -305,7 +305,6 @@ impl ValueExpr {
                     initializer,
                 } = &b.0;
 
-                dbg!(type_expr);
                 let ty = type_expr.0.as_go_type_annotation(type_env);
 
                 let mut v = Vec::new();

@@ -123,7 +123,6 @@ impl TypeEnv {
     }
 
     pub fn insert_type_alias(&mut self, alias: String, type_expr: TypeExpr) {
-        println!("insert type alias {} on stack {}", alias, self.type_aliases.len());
         self.type_aliases
             .last_mut()
             .expect("At least one type aliases hashmap should exist. :(")
@@ -189,17 +188,13 @@ impl TypeEnv {
                 .join("_")
         );
 
-        println!("instantiate {name} as {mangled_name}");
-
         if self.generic_fns_generated.contains_key(&mangled_name) {
-            println!("returned already existing fn");
             return self.generic_fns_generated.get(&mangled_name).unwrap().clone();
         }
 
         self.push_type_aliases();
 
         for (generic_param, concrete_type) in generics.iter().zip(type_params.iter()) {
-            println!("inserting {} as {:?}", generic_param.0.name.clone(), concrete_type);
             self.insert_type_alias(generic_param.0.name.clone(), concrete_type.0.clone());
         }
 
@@ -242,7 +237,6 @@ impl TypeEnv {
 
         self.insert_identifier_type(fn_def.name.clone(), fn_type_expr.clone());
 
-        println!("insert into generic fns generated {:?}", fn_def.name.clone());
         self.generic_fns_generated.insert(fn_def.name.clone(), (fn_def.clone(), fn_type_expr.clone()));
         return (fn_def, fn_type_expr);
     }
@@ -325,8 +319,6 @@ impl TypeEnv {
     }
 
     pub fn resolve_type_alias(&self, alias: &String) -> TypeExpr {
-        println!("Try to resolve type alias {alias}");
-
         for scope in self.type_aliases.iter().rev() {
             if let Some(type_expr) = scope.get(alias) {
                 let mut res = type_expr.clone();
@@ -338,7 +330,6 @@ impl TypeEnv {
                     }
                 }
 
-                println!("returning {res:?}");
                 return res;
             }
         }
@@ -449,9 +440,6 @@ impl TypeEnv {
         all_types.dedup_by_key(|type_expr| type_expr.as_clean_go_type_name(self));
 
         param_names_used.dedup();
-
-        println!("in summary");
-        println!("{:?}", self.generic_fns_generated);
 
         return TypesSummary {
             types_used: all_types,
@@ -995,7 +983,6 @@ fn find_generic_fn_instantiations(function_definition: &mut FunctionDefintion, t
 
     let x = in_value_expr(&mut function_definition.value_expr.0, type_env);
     println!("{}", function_definition.name.clone());
-    dbg!(&x);
     return x
 }
 

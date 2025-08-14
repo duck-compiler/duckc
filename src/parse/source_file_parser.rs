@@ -289,7 +289,6 @@ where
                         .map(Some),
                 )))
                 .map(|(name, src)| {
-                    println!("X: {} {}", name, p.to_str().unwrap());
                     if let Some(src) = src {
                         SourceUnit::Module(name, src)
                     } else {
