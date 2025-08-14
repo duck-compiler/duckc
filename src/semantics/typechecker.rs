@@ -557,6 +557,53 @@ fn require_subset_of_variant_type(
 }
 
 fn check_type_compatability(
+    required_type: &Spanned<TypeExpr>,
+    given_type: &Spanned<TypeExpr>,
+    type_env: &mut TypeEnv,
+) {
+    let fail_requirement = |explain_required: String, explain_given: String| {
+        let (smaller, larger) = if required_type.1.start <= given_type.1.start {
+            (required_type.1, given_type.1)
+        } else {
+            (required_type.1, given_type.1)
+        };
+
+        let combined_span = SS {
+            start: smaller.start,
+            end: larger.end,
+            context: required_type.1.context,
+        };
+
+        failure(
+            given_type.1.context.file_name,
+            format!(
+                "Incompatible Types",
+            ),
+            (format!(
+                "The value you were expected to pass should be of type {}.",
+                format!("{}", required_type.0).bright_yellow(),
+            ), combined_span),
+            vec![
+                (format!(
+                    "{explain_required}"
+                ), required_type.1),
+                (format!(
+                    "{explain_given}"
+                ), given_type.1),
+                (format!(
+                    "instead you've passed a value of type {}.",
+                    format!("{}", given_type.0).bright_yellow()
+                ), given_type.1),
+            ],
+            given_type.1.context.file_contents
+        )
+    };
+
+    println!("check compatability for required type '{}' and given type '{}'", required_type.0, given_type.0);
+
+}
+
+fn check_type_compatability__(
     one: &Spanned<TypeExpr>,
     two: &Spanned<TypeExpr>,
     type_env: &mut TypeEnv,
