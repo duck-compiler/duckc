@@ -54,7 +54,7 @@ pub fn failure(
                 .with_color(Color::Yellow)
         }))
         .finish()
-        .print(sources([(file_name, src)]))
+        .eprint(sources([(file_name, src)]))
         .unwrap();
     panic!("{}", msg)
 }
