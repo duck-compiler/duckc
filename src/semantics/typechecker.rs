@@ -9,7 +9,6 @@ use crate::parse::{
     value_parser::{ValFmtStringContents, ValueExpr, empty_range},
 };
 use crate::semantics::type_resolve::TypeEnv;
-use crate::tags::Tag;
 
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
@@ -578,13 +577,14 @@ fn check_type_compatability(
             context: required_type.1.context,
         };
 
+
         failure(
             given_type.1.context.file_name,
             format!(
                 "Incompatible Types",
             ),
             (format!(
-                "The value you were expected to pass should be of type {}.",
+                "Expected value of type {}.",
                 format!("{}", required_type.0).bright_yellow(),
             ), combined_span),
             vec![
@@ -595,7 +595,7 @@ fn check_type_compatability(
                     "{explain_given}"
                 ), given_type.1),
                 (format!(
-                    "instead you've passed a value of type {}.",
+                    "but got a value of type {}.",
                     format!("{}", given_type.0).bright_yellow()
                 ), given_type.1),
             ],
@@ -675,7 +675,14 @@ fn check_type_compatability(
         TypeExpr::IntLiteral(_) => todo!(),
         TypeExpr::BoolLiteral(_) => todo!(),
         TypeExpr::String => todo!(),
-        TypeExpr::Int => todo!(),
+        TypeExpr::Int => {
+            if !given_type.0.is_number() {
+                fail_requirement(
+                    format!("a {} value is required here, so {}", "Number".bright_yellow(), "Float | Int".bright_yellow()),
+                    format!("")
+                )
+            }
+        },
         TypeExpr::Bool => todo!(),
         TypeExpr::Char => todo!(),
         TypeExpr::Float => todo!(),
