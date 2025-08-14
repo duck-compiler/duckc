@@ -99,10 +99,10 @@ impl TypeExpr {
             ValueExpr::Struct(fields) => {
                 let types = fields
                     .iter()
-                    .map(|(name, (value_expr, _))| {
+                    .map(|(name, (value_expr, span))| {
                         Field::new(
                             name.to_string(),
-                            TypeExpr::from_value_expr(value_expr, type_env).into_empty_span(),
+                            (TypeExpr::from_value_expr(value_expr, type_env), dbg!(*span)),
                         )
                     })
                     .collect::<Vec<Field>>();
@@ -122,10 +122,10 @@ impl TypeExpr {
             ValueExpr::Duck(fields) => {
                 let types = fields
                     .iter()
-                    .map(|(name, value_expr)| {
+                    .map(|(name, (value_expr, span))| {
                         Field::new(
                             name.to_string(),
-                            TypeExpr::from_value_expr(&value_expr.0, type_env).into_empty_span(),
+                            (TypeExpr::from_value_expr(&value_expr, type_env), *span),
                         )
                     })
                     .collect::<Vec<Field>>();
@@ -570,6 +570,7 @@ fn check_type_compatability(
         } else {
             (required_type.1, given_type.1)
         };
+
 
         let combined_span = SS {
             start: smaller.start,
