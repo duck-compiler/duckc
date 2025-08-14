@@ -661,10 +661,7 @@ fn check_type_compatability(
                         "{} is a tuple",
                         format!("{}", required_type.0).bright_yellow(),
                     ),
-                    format!(
-                        "{} is no tuple",
-                        format!("{}", given_type.0).bright_yellow()
-                    )
+                    String::new()
                 )
             }
         },
