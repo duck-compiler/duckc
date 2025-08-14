@@ -417,7 +417,7 @@ impl TypeExpr {
     }
 
     pub fn is_tuple(&self) -> bool {
-        return *self == TypeExpr::Bool || matches!(*self, TypeExpr::BoolLiteral(..));
+        return matches!(*self, TypeExpr::Tuple(..));
     }
 
     pub fn is_bool(&self) -> bool {
