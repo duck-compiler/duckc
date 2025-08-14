@@ -1,5 +1,7 @@
 use std::process;
 
+use colored::Colorize;
+
 use crate::parse::type_parser::{Duck, Field, Struct, TypeExpr};
 use crate::parse::SS;
 use crate::parse::{
@@ -7,6 +9,7 @@ use crate::parse::{
     value_parser::{ValFmtStringContents, ValueExpr, empty_range},
 };
 use crate::semantics::type_resolve::TypeEnv;
+use crate::tags::Tag;
 
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
@@ -601,6 +604,85 @@ fn check_type_compatability(
 
     println!("check compatability for required type '{}' and given type '{}'", required_type.0, given_type.0);
 
+    match &required_type.0 {
+        TypeExpr::Any => return,
+        TypeExpr::InlineGo => todo!("should inline go be typechecked?"),
+        TypeExpr::Struct(_) => todo!("implement struct typechecking"),
+        TypeExpr::Go(_) => unreachable!("typeexpr::go"),
+        TypeExpr::Duck(duck) => {
+            if !given_type.0.is_duck() {
+                fail_requirement(
+                    format!(
+                        "the required type {} is a duck",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                    format!(
+                        "because of the fact, that the required type {} is a duck. The value you need to pass must be a duck aswell, but it isn't.",
+                        format!("{}", required_type.0).bright_yellow(),
+                    )
+                )
+            }
+
+            let required_duck = duck;
+            let TypeExpr::Duck(given_duck) = &given_type.0 else { unreachable!() };
+
+            for required_field in required_duck.fields.iter() {
+                let companion_field = given_duck.fields.iter()
+                    .find(|field| field.name == required_field.name);
+
+                if companion_field.is_none() {
+                    fail_requirement(
+                        format!(
+                            "this type states that it has requires a field {} of type {}",
+                            required_field.name.bright_purple(),
+                            format!("{}", required_field.type_expr.0).bright_yellow(),
+                        ),
+                        format!(
+                            "the given type doesn't have a field {}",
+                            required_field.name.bright_purple(),
+                        )
+                    )
+                }
+
+                let companion_field = companion_field.unwrap();
+
+                check_type_compatability(
+                    &required_field.type_expr,
+                    &companion_field.type_expr,
+                    type_env
+                );
+            }
+        },
+        TypeExpr::Tuple(items) => {
+            if !given_type.0.is_tuple() {
+                fail_requirement(
+                    format!(
+                        "{} is a tuple",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                    format!(
+                        "{} is no tuple",
+                        format!("{}", given_type.0).bright_yellow()
+                    )
+                )
+            }
+        },
+        TypeExpr::RawTypeName(_, items, items1) => todo!(),
+        TypeExpr::TypeName(_, _, items) => todo!(),
+        TypeExpr::TypeNameInternal(_) => todo!(),
+        TypeExpr::StringLiteral(_) => todo!(),
+        TypeExpr::IntLiteral(_) => todo!(),
+        TypeExpr::BoolLiteral(_) => todo!(),
+        TypeExpr::String => todo!(),
+        TypeExpr::Int => todo!(),
+        TypeExpr::Bool => todo!(),
+        TypeExpr::Char => todo!(),
+        TypeExpr::Float => todo!(),
+        TypeExpr::Or(items) => todo!(),
+        TypeExpr::Fun(items, _) => todo!(),
+        TypeExpr::Array(_) => todo!(),
+        TypeExpr::GenericToBeReplaced(_) => todo!(),
+    }
 }
 
 fn check_type_compatability__(
