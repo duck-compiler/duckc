@@ -591,16 +591,14 @@ fn check_type_compatability(
         let (smaller, larger) = if required_type.1.start <= given_type.1.start {
             (required_type.1, given_type.1)
         } else {
-            (required_type.1, given_type.1)
+            (given_type.1, required_type.1)
         };
-
 
         let combined_span = SS {
             start: smaller.start,
             end: larger.end,
             context: required_type.1.context,
         };
-
 
         failure(
             given_type.1.context.file_name,
