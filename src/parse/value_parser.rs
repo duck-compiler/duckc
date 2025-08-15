@@ -471,20 +471,21 @@ where
                 .at_least(1)
                 .collect::<Vec<_>>(),
             )
-            .map(|(ty, exprs)| {
-                if ty.is_none() && exprs.is_empty() {
+            .map(|(declared_content_type, exprs)| {
+                if declared_content_type.is_none() && exprs.is_empty() {
                     panic!("error: empty array must provide type");
                 }
 
-                let mut fty = ty.clone();
+                let mut content_type = declared_content_type.clone();
 
-                if ty.is_some() {
+                if declared_content_type.is_some() {
                     for _ in 0..exprs.len() - 1 {
-                        fty = Some(TypeExpr::Array(Box::new(fty.unwrap())).into_empty_span())
+                        content_type =
+                            Some(TypeExpr::Array(Box::new(content_type.unwrap())).into_empty_span())
                     }
                 }
 
-                ValueExpr::Array(fty, exprs.last().unwrap().clone())
+                ValueExpr::Array(content_type, exprs.last().unwrap().clone())
             })
             .map_with(|x, e| (x, e.span()));
 
