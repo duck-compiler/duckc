@@ -94,7 +94,7 @@ impl Display for TypeExpr {
             }
             TypeExpr::TypeNameInternal(s) => write!(f, "{}", s),
             TypeExpr::ConstString(s) => write!(f, "String [const \"{}\"]", s),
-            TypeExpr::IntLiteral(i) => write!(f, "{}", i),
+            TypeExpr::ConstInt(i) => write!(f, "{}", i),
             TypeExpr::BoolLiteral(b) => write!(f, "{}", b),
             TypeExpr::String => write!(f, "String"),
             TypeExpr::Int => write!(f, "Int"),
@@ -179,7 +179,7 @@ pub enum TypeExpr {
     TypeName(bool, String, Option<Vec<Spanned<TypeParam>>>),
     TypeNameInternal(String),
     ConstString(String),
-    IntLiteral(i32),
+    ConstInt(i32),
     BoolLiteral(bool),
     String,
     Int,
@@ -253,7 +253,7 @@ where
             let bool_literal =
                 select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::BoolLiteral);
             let int_literal = select_ref! { Token::IntLiteral(int) => *int }
-                .map(|int| TypeExpr::IntLiteral(int.try_into().unwrap())); // TODO: unwrap!
+                .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
 
             let r#struct = just(Token::Struct)
                 .ignore_then(just(Token::ControlChar('{')))
@@ -459,7 +459,7 @@ where
             let bool_literal =
                 select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::BoolLiteral);
             let int_literal = select_ref! { Token::IntLiteral(int) => *int }
-                .map(|int| TypeExpr::IntLiteral(int.try_into().unwrap())); // TODO: unwrap!
+                .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
 
             let function = just(Token::Function)
                 .ignore_then(just(Token::ControlChar('(')))
@@ -725,15 +725,15 @@ pub mod tests {
             ]),
         );
 
-        assert_type_expression("1", TypeExpr::IntLiteral(1));
+        assert_type_expression("1", TypeExpr::ConstInt(1));
 
-        assert_type_expression("555", TypeExpr::IntLiteral(555));
+        assert_type_expression("555", TypeExpr::ConstInt(555));
 
         assert_type_expression(
             "555 | 1000",
             TypeExpr::Or(vec![
-                TypeExpr::IntLiteral(555).into_empty_span(),
-                TypeExpr::IntLiteral(1000).into_empty_span(),
+                TypeExpr::ConstInt(555).into_empty_span(),
+                TypeExpr::ConstInt(1000).into_empty_span(),
             ]),
         );
 

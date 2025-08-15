@@ -11,7 +11,7 @@ pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str
         TypeExpr::Float => "float32",
         TypeExpr::Bool => "bool",
         TypeExpr::Char => "rune",
-        TypeExpr::IntLiteral(..) => "int",
+        TypeExpr::ConstInt(..) => "int",
         TypeExpr::BoolLiteral(..) => "bool",
         TypeExpr::ConstString(..) => "string",
         _ => panic!("That's not a primitive"),
@@ -32,7 +32,7 @@ pub fn primitive_conc_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
         TypeExpr::Float => "ConcDuckFloat",
         TypeExpr::Bool => "ConcDuckBool",
         TypeExpr::Char => "ConcDuckChar",
-        TypeExpr::IntLiteral(int) => Box::leak(Box::new(format!("IntLiteral_{int}"))),
+        TypeExpr::ConstInt(int) => Box::leak(Box::new(format!("ConstInt_{int}"))),
         TypeExpr::ConstString(str) => Box::leak(Box::new(format!(
             "ConstString_{}",
             escape_string_literal(str)
@@ -49,7 +49,7 @@ pub fn primitive_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
         TypeExpr::Float => "DuckFloat",
         TypeExpr::Bool => "DuckBool",
         TypeExpr::Char => "DuckChar",
-        TypeExpr::IntLiteral(int) => Box::leak(Box::new(format!("IntLiteral_{int}"))),
+        TypeExpr::ConstInt(int) => Box::leak(Box::new(format!("ConstInt_{int}"))),
         TypeExpr::ConstString(str) => Box::leak(Box::new(format!(
             "ConstString_{}",
             escape_string_literal(str)
@@ -151,7 +151,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
             if primitive_type_expr.is_literal() {
                 let ir_value = IrValue::Imm(match primitive_type_expr.clone() {
                     TypeExpr::ConstString(value) => format!("\"{value}\""),
-                    TypeExpr::IntLiteral(int_value) => format!("{int_value}"),
+                    TypeExpr::ConstInt(int_value) => format!("{int_value}"),
                     TypeExpr::BoolLiteral(bool_value) => format!("{bool_value}"),
                     _ => unreachable!(),
                 });
@@ -269,7 +269,7 @@ impl TypeExpr {
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::Array(t) => format!("[]{}", t.0.as_go_type_annotation(type_env)),
             TypeExpr::Any => "interface{}".to_string(),
-            TypeExpr::IntLiteral(i) => primitive_type_name(&TypeExpr::IntLiteral(*i)).to_string(),
+            TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
             TypeExpr::BoolLiteral(b) => primitive_type_name(&TypeExpr::BoolLiteral(*b)).to_string(),
             TypeExpr::ConstString(str) => {
                 primitive_type_name(&TypeExpr::ConstString(str.clone())).to_string()
@@ -338,7 +338,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::GenericToBeReplaced(..) => panic!(),
             TypeExpr::RawTypeName(..) => panic!(),
-            TypeExpr::IntLiteral(i) => primitive_type_name(&TypeExpr::IntLiteral(*i)).to_string(),
+            TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
             TypeExpr::BoolLiteral(b) => primitive_type_name(&TypeExpr::BoolLiteral(*b)).to_string(),
             TypeExpr::ConstString(str) => {
                 primitive_type_name(&TypeExpr::ConstString(str.clone())).to_string()
@@ -410,7 +410,7 @@ impl TypeExpr {
             TypeExpr::RawTypeName(_, ident, _) => {
                 panic!("{ident:?}")
             },
-            TypeExpr::IntLiteral(i) => primitive_type_name(&TypeExpr::IntLiteral(*i)).to_string(),
+            TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
             TypeExpr::BoolLiteral(b) => primitive_type_name(&TypeExpr::BoolLiteral(*b)).to_string(),
             TypeExpr::ConstString(str) => {
                 primitive_type_name(&TypeExpr::ConstString(str.clone())).to_string()

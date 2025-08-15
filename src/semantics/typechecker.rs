@@ -413,7 +413,7 @@ impl TypeExpr {
     pub fn is_number(&self) -> bool {
         return *self == TypeExpr::Int
         || *self == TypeExpr::Float
-        || matches!(*self, TypeExpr::IntLiteral(..));
+        || matches!(*self, TypeExpr::ConstInt(..));
     }
 
     pub fn is_tuple(&self) -> bool {
@@ -431,7 +431,7 @@ impl TypeExpr {
     pub fn holds_const_value(&self) -> bool {
         // todo(@Mvmo) Implement other literal types
         // floats, chars.... missing
-        return matches!(*self, TypeExpr::IntLiteral(..))
+        return matches!(*self, TypeExpr::ConstInt(..))
         || matches!(*self, TypeExpr::ConstString(..))
         || matches!(*self, TypeExpr::BoolLiteral(..));
     }
@@ -442,7 +442,7 @@ impl TypeExpr {
 
     pub fn is_literal(&self) -> bool {
         return match *self {
-            TypeExpr::IntLiteral(..) | TypeExpr::BoolLiteral(..) | TypeExpr::ConstString(..) => {
+            TypeExpr::ConstInt(..) | TypeExpr::BoolLiteral(..) | TypeExpr::ConstString(..) => {
                 true
             }
             _ => false,
@@ -455,7 +455,7 @@ impl TypeExpr {
             | TypeExpr::Float
             | TypeExpr::String
             | TypeExpr::Char
-            | TypeExpr::IntLiteral(..)
+            | TypeExpr::ConstInt(..)
             | TypeExpr::BoolLiteral(..)
             | TypeExpr::ConstString(..)
             | TypeExpr::Bool => true,
@@ -724,7 +724,7 @@ fn check_type_compatability(
                 )
             }
         },
-        TypeExpr::IntLiteral(_) => todo!(),
+        TypeExpr::ConstInt(_) => todo!(),
         TypeExpr::BoolLiteral(_) => todo!(),
         TypeExpr::String => {
             if !given_type.0.is_string() {

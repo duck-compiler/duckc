@@ -675,7 +675,7 @@ fn sort_fields_type_expr(expr: &mut TypeExpr) {
         | TypeExpr::Go(_)
         | TypeExpr::InlineGo
         | TypeExpr::Int
-        | TypeExpr::IntLiteral(_)
+        | TypeExpr::ConstInt(_)
         | TypeExpr::String
         | TypeExpr::ConstString(_)
         | TypeExpr::TypeName(..)
@@ -1488,7 +1488,7 @@ pub fn replace_generics_in_type_expr(
         | TypeExpr::Go(_)
         | TypeExpr::TypeNameInternal(_)
         | TypeExpr::ConstString(_)
-        | TypeExpr::IntLiteral(_)
+        | TypeExpr::ConstInt(_)
         | TypeExpr::BoolLiteral(_)
         | TypeExpr::String
         | TypeExpr::Int
