@@ -728,8 +728,30 @@ fn check_type_compatability(
                 )
             }
         },
-        TypeExpr::ConstInt(_) => {
-            if given_type.0.is_string()
+        TypeExpr::ConstInt(const_int) => {
+            if !given_type.0.is_int() {
+                fail_requirement(
+                    format!("this requires an at compile time known Int"),
+                    format!("this value isn't even an Int."),
+                )
+            }
+
+            if !given_type.0.holds_const_value() {
+                fail_requirement(
+                    format!("this requires a compile time known Int"),
+                    format!("this is an Int, but it's not known at compile time"),
+                )
+            }
+
+            let required_int = const_int;
+            let TypeExpr::ConstInt(given_int) = &given_type.0 else { unreachable!("we've just checked that the given type is a string and is const") };
+
+            if required_int != given_int {
+                fail_requirement(
+                    format!("this requires the compile time known Int '{}'", required_int),
+                    format!("this is a compile time known Int, but it's '{}'", given_int),
+                )
+            }
         },
         TypeExpr::BoolLiteral(_) => todo!(),
         TypeExpr::String => {
