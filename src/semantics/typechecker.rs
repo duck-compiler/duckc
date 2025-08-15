@@ -75,7 +75,7 @@ impl TypeExpr {
             ValueExpr::Bool(..) => TypeExpr::Bool,
             ValueExpr::Char(..) => TypeExpr::Char,
             ValueExpr::Float(..) => TypeExpr::Float,
-            ValueExpr::String(str_value) => TypeExpr::StringLiteral(str_value.clone()),
+            ValueExpr::String(str_value) => TypeExpr::ConstString(str_value.clone()),
             ValueExpr::Break => TypeExpr::Tuple(vec![]),
             ValueExpr::Continue => TypeExpr::Tuple(vec![]),
             ValueExpr::Return(Some(value_expr)) => {
@@ -425,14 +425,14 @@ impl TypeExpr {
     }
 
     pub fn is_string(&self) -> bool {
-        return *self == TypeExpr::String || matches!(*self, TypeExpr::StringLiteral(..));
+        return *self == TypeExpr::String || matches!(*self, TypeExpr::ConstString(..));
     }
 
     pub fn holds_const_value(&self) -> bool {
         // todo(@Mvmo) Implement other literal types
         // floats, chars.... missing
         return matches!(*self, TypeExpr::IntLiteral(..))
-        || matches!(*self, TypeExpr::StringLiteral(..))
+        || matches!(*self, TypeExpr::ConstString(..))
         || matches!(*self, TypeExpr::BoolLiteral(..));
     }
 
@@ -442,7 +442,7 @@ impl TypeExpr {
 
     pub fn is_literal(&self) -> bool {
         return match *self {
-            TypeExpr::IntLiteral(..) | TypeExpr::BoolLiteral(..) | TypeExpr::StringLiteral(..) => {
+            TypeExpr::IntLiteral(..) | TypeExpr::BoolLiteral(..) | TypeExpr::ConstString(..) => {
                 true
             }
             _ => false,
@@ -457,7 +457,7 @@ impl TypeExpr {
             | TypeExpr::Char
             | TypeExpr::IntLiteral(..)
             | TypeExpr::BoolLiteral(..)
-            | TypeExpr::StringLiteral(..)
+            | TypeExpr::ConstString(..)
             | TypeExpr::Bool => true,
             _ => false,
         };
@@ -699,7 +699,7 @@ fn check_type_compatability(
                 check_type_compatability(required_item_type, given_item_type, type_env);
             }
         },
-        TypeExpr::StringLiteral(literal) => {
+        TypeExpr::ConstString(literal) => {
             if !given_type.0.is_string() {
                 fail_requirement(
                     format!("this requires an at compile time known string"),
@@ -709,24 +709,31 @@ fn check_type_compatability(
 
             if !given_type.0.holds_const_value() {
                 fail_requirement(
-                    format!("this requires an at compile time known string"),
+                    format!("this requires a compile time known string"),
                     format!("this is a string, but it's not known at compile time"),
                 )
             }
 
             let required_string = literal;
-            let TypeExpr::StringLiteral(given_string) = &given_type.0 else { unreachable!("we've just checked that the given type is a string and is const") };
+            let TypeExpr::ConstString(given_string) = &given_type.0 else { unreachable!("we've just checked that the given type is a string and is const") };
 
             if given_string != required_string {
                 fail_requirement(
-                    format!("this requires the at compile time known string '{}'", required_string),
-                    format!("this is an compile time known string, but it's '{}'", given_string),
+                    format!("this requires the compile time known string '{}'", required_string),
+                    format!("this is a compile time known string, but it's '{}'", given_string),
                 )
             }
         },
         TypeExpr::IntLiteral(_) => todo!(),
         TypeExpr::BoolLiteral(_) => todo!(),
-        TypeExpr::String => todo!(),
+        TypeExpr::String => {
+            if !given_type.0.is_string() {
+                fail_requirement(
+                    format!("this expects a string."),
+                    format!("this is not a string."),
+                );
+            }
+        },
         TypeExpr::Int => {
             if !given_type.0.is_number() {
                 fail_requirement(
@@ -735,10 +742,26 @@ fn check_type_compatability(
                 )
             }
         },
-        TypeExpr::Bool => todo!(),
+        TypeExpr::Bool => {
+            if !given_type.0.is_bool() {
+                fail_requirement(
+                    format!(
+                        "a {} value is required here",
+                        "Bool".bright_yellow(),
+                    ),
+                    format!("this is not a bool"),
+                )
+            }
+
+            if given_type.0.holds_const_value() {
+
+            }
+        },
         TypeExpr::Char => todo!(),
         TypeExpr::Float => todo!(),
-        TypeExpr::Or(items) => todo!(),
+        TypeExpr::Or(items) => {
+            require_subset_of_variant_type(required_type, given_type, type_env);
+        },
         TypeExpr::Fun(items, _) => todo!(),
         TypeExpr::Array(_) => todo!(),
         TypeExpr::RawTypeName(_, items, items1) => todo!("check_type_compatability TypeExpr::RawTypeName"),

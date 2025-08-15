@@ -12,8 +12,8 @@ pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str
         TypeExpr::Bool => "bool",
         TypeExpr::Char => "rune",
         TypeExpr::IntLiteral(..) => "int",
-        TypeExpr::StringLiteral(..) => "string",
         TypeExpr::BoolLiteral(..) => "bool",
+        TypeExpr::ConstString(..) => "string",
         _ => panic!("That's not a primitive"),
     }
 }
@@ -33,8 +33,9 @@ pub fn primitive_conc_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
         TypeExpr::Bool => "ConcDuckBool",
         TypeExpr::Char => "ConcDuckChar",
         TypeExpr::IntLiteral(int) => Box::leak(Box::new(format!("IntLiteral_{int}"))),
-        TypeExpr::StringLiteral(str) => Box::leak(Box::new(format!(
-            "DuckString",
+        TypeExpr::ConstString(str) => Box::leak(Box::new(format!(
+            "ConstString_{}",
+            escape_string_literal(str)
         ))),
         TypeExpr::BoolLiteral(bool) => Box::leak(Box::new(format!("BoolLiteral_{bool}"))),
         _ => panic!("That's not a primitive"),
@@ -49,7 +50,10 @@ pub fn primitive_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
         TypeExpr::Bool => "DuckBool",
         TypeExpr::Char => "DuckChar",
         TypeExpr::IntLiteral(int) => Box::leak(Box::new(format!("IntLiteral_{int}"))),
-        TypeExpr::StringLiteral(..) => "DuckString",
+        TypeExpr::ConstString(str) => Box::leak(Box::new(format!(
+            "ConstString_{}",
+            escape_string_literal(str)
+        ))),
         TypeExpr::BoolLiteral(bool) => Box::leak(Box::new(format!("BoolLiteral_{bool}"))),
         _ => panic!("That's not a primitive"),
     }
@@ -146,7 +150,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
         .flat_map(|primitive_type_expr| {
             if primitive_type_expr.is_literal() {
                 let ir_value = IrValue::Imm(match primitive_type_expr.clone() {
-                    TypeExpr::StringLiteral(value) => format!("\"{value}\""),
+                    TypeExpr::ConstString(value) => format!("\"{value}\""),
                     TypeExpr::IntLiteral(int_value) => format!("{int_value}"),
                     TypeExpr::BoolLiteral(bool_value) => format!("{bool_value}"),
                     _ => unreachable!(),
@@ -267,8 +271,8 @@ impl TypeExpr {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::IntLiteral(i) => primitive_type_name(&TypeExpr::IntLiteral(*i)).to_string(),
             TypeExpr::BoolLiteral(b) => primitive_type_name(&TypeExpr::BoolLiteral(*b)).to_string(),
-            TypeExpr::StringLiteral(str) => {
-                primitive_type_name(&TypeExpr::StringLiteral(str.clone())).to_string()
+            TypeExpr::ConstString(str) => {
+                primitive_type_name(&TypeExpr::ConstString(str.clone())).to_string()
             }
             TypeExpr::Bool => "DuckBool".to_string(),
             TypeExpr::InlineGo => "any".to_string(),
@@ -336,8 +340,8 @@ impl TypeExpr {
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::IntLiteral(i) => primitive_type_name(&TypeExpr::IntLiteral(*i)).to_string(),
             TypeExpr::BoolLiteral(b) => primitive_type_name(&TypeExpr::BoolLiteral(*b)).to_string(),
-            TypeExpr::StringLiteral(str) => {
-                primitive_type_name(&TypeExpr::StringLiteral(str.clone())).to_string()
+            TypeExpr::ConstString(str) => {
+                primitive_type_name(&TypeExpr::ConstString(str.clone())).to_string()
             }
             TypeExpr::Array(t) => format!("[]{}", t.0.as_go_concrete_annotation(type_env)),
             TypeExpr::Any => "interface{}".to_string(),
@@ -408,8 +412,8 @@ impl TypeExpr {
             },
             TypeExpr::IntLiteral(i) => primitive_type_name(&TypeExpr::IntLiteral(*i)).to_string(),
             TypeExpr::BoolLiteral(b) => primitive_type_name(&TypeExpr::BoolLiteral(*b)).to_string(),
-            TypeExpr::StringLiteral(str) => {
-                primitive_type_name(&TypeExpr::StringLiteral(str.clone())).to_string()
+            TypeExpr::ConstString(str) => {
+                primitive_type_name(&TypeExpr::ConstString(str.clone())).to_string()
             }
             TypeExpr::Array(t) => format!("Array_{}", t.0.as_clean_go_type_name(type_env)),
             TypeExpr::Any => "Any".to_string(),

@@ -677,7 +677,7 @@ fn sort_fields_type_expr(expr: &mut TypeExpr) {
         | TypeExpr::Int
         | TypeExpr::IntLiteral(_)
         | TypeExpr::String
-        | TypeExpr::StringLiteral(_)
+        | TypeExpr::ConstString(_)
         | TypeExpr::TypeName(..)
         | TypeExpr::TypeNameInternal(..) => {}
     }
@@ -1177,8 +1177,10 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 type_env.pop_identifier_types();
             });
         }
-        ValueExpr::String(..)
-        | ValueExpr::Int(..)
+        ValueExpr::String(str) => {
+            type_env.insert_type(TypeExpr::ConstString(str.clone()));
+        }
+        ValueExpr::Int(..)
         | ValueExpr::Bool(..)
         | ValueExpr::Char(..)
         | ValueExpr::Float(..)
@@ -1485,7 +1487,7 @@ pub fn replace_generics_in_type_expr(
         | TypeExpr::InlineGo
         | TypeExpr::Go(_)
         | TypeExpr::TypeNameInternal(_)
-        | TypeExpr::StringLiteral(_)
+        | TypeExpr::ConstString(_)
         | TypeExpr::IntLiteral(_)
         | TypeExpr::BoolLiteral(_)
         | TypeExpr::String

@@ -93,7 +93,7 @@ impl Display for TypeExpr {
                 Ok(())
             }
             TypeExpr::TypeNameInternal(s) => write!(f, "{}", s),
-            TypeExpr::StringLiteral(s) => write!(f, "\"{}\"", s),
+            TypeExpr::ConstString(s) => write!(f, "String [const \"{}\"]", s),
             TypeExpr::IntLiteral(i) => write!(f, "{}", i),
             TypeExpr::BoolLiteral(b) => write!(f, "{}", b),
             TypeExpr::String => write!(f, "String"),
@@ -178,7 +178,7 @@ pub enum TypeExpr {
     RawTypeName(bool, Vec<String>, Option<Vec<Spanned<TypeParam>>>),
     TypeName(bool, String, Option<Vec<Spanned<TypeParam>>>),
     TypeNameInternal(String),
-    StringLiteral(String),
+    ConstString(String),
     IntLiteral(i32),
     BoolLiteral(bool),
     String,
@@ -248,8 +248,8 @@ where
                 .ignore_then(go_type_identifier)
                 .map(TypeExpr::Go);
 
-            let string_literal = select_ref! { Token::StringLiteral(str) => str.clone() }
-                .map(TypeExpr::StringLiteral);
+            let string_literal = select_ref! { Token::ConstString(str) => str.clone() }
+                .map(TypeExpr::ConstString);
             let bool_literal =
                 select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::BoolLiteral);
             let int_literal = select_ref! { Token::IntLiteral(int) => *int }
@@ -454,8 +454,8 @@ where
                     _ => TypeExpr::Any,
                 });
 
-            let string_literal = select_ref! { Token::StringLiteral(str) => str.clone() }
-                .map(TypeExpr::StringLiteral);
+            let string_literal = select_ref! { Token::ConstString(str) => str.clone() }
+                .map(TypeExpr::ConstString);
             let bool_literal =
                 select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::BoolLiteral);
             let int_literal = select_ref! { Token::IntLiteral(int) => *int }
@@ -737,18 +737,18 @@ pub mod tests {
             ]),
         );
 
-        assert_type_expression("\"str\"", TypeExpr::StringLiteral("str".to_string()));
+        assert_type_expression("\"str\"", TypeExpr::ConstString("str".to_string()));
 
         assert_type_expression(
             "\"other_str\"",
-            TypeExpr::StringLiteral("other_str".to_string()),
+            TypeExpr::ConstString("other_str".to_string()),
         );
 
         assert_type_expression(
             "\"str\" | \"other_str\"",
             TypeExpr::Or(vec![
-                TypeExpr::StringLiteral("str".to_string()).into_empty_span(),
-                TypeExpr::StringLiteral("other_str".to_string()).into_empty_span(),
+                TypeExpr::ConstString("str".to_string()).into_empty_span(),
+                TypeExpr::ConstString("other_str".to_string()).into_empty_span(),
             ]),
         );
 
@@ -1591,11 +1591,11 @@ pub mod tests {
             "{ x: \"hallo\" } | { x: \"bye\" }",
             TypeExpr::Or(vec![
                 TypeExpr::Duck(Duck {
-                    fields: vec![Field::new("x".to_string(), TypeExpr::StringLiteral("hallo".to_string()).into_empty_span())],
+                    fields: vec![Field::new("x".to_string(), TypeExpr::ConstString("hallo".to_string()).into_empty_span())],
                 })
                 .into_empty_span(),
                 TypeExpr::Duck(Duck {
-                    fields: vec![Field::new("x".to_string(), TypeExpr::StringLiteral("bye".to_string()).into_empty_span())],
+                    fields: vec![Field::new("x".to_string(), TypeExpr::ConstString("bye".to_string()).into_empty_span())],
                 })
                 .into_empty_span(),
             ]),

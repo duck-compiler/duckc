@@ -378,7 +378,7 @@ where
                 .map(ValueExpr::Bool)
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
-            let string_val = select_ref! { Token::StringLiteral(s) => s.to_owned() }
+            let string_val = select_ref! { Token::ConstString(s) => s.to_owned() }
                 .map(ValueExpr::String)
                 .map_with(|x, e| (x, e.span()));
             let if_expr = if_with_condition_and_body

@@ -21,7 +21,7 @@ pub enum Token {
     Return,
     Ident(String),
     ControlChar(char),
-    StringLiteral(String),
+    ConstString(String),
     FormatStringLiteral(Vec<FmtStringContents>),
     IntLiteral(i64),
     BoolLiteral(bool),
@@ -59,7 +59,7 @@ impl Display for Token {
             Token::Return => "return",
             Token::Ident(_) => "identifier",
             Token::ControlChar(c) => &format!("{c}"),
-            Token::StringLiteral(s) => &format!("string {s}"),
+            Token::ConstString(s) => &format!("string {s}"),
             Token::IntLiteral(_) => "int",
             Token::BoolLiteral(_) => "bool",
             Token::CharLiteral(_) => "char",
@@ -299,7 +299,7 @@ fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, cha
                 .collect::<String>(),
         )
         .then_ignore(just('"'))
-        .map(Token::StringLiteral)
+        .map(Token::ConstString)
 }
 
 pub fn token_empty_range(token_span: &mut Spanned<Token>) {
@@ -527,15 +527,15 @@ mod tests {
             ("()", vec![Token::ControlChar('('), Token::ControlChar(')')]),
             ("->", vec![Token::ThinArrow]),
             ("fn", vec![Token::Function]),
-            ("\"\"", vec![Token::StringLiteral(String::from(""))]),
-            ("\"XX\"", vec![Token::StringLiteral(String::from("XX"))]),
+            ("\"\"", vec![Token::ConstString(String::from(""))]),
+            ("\"XX\"", vec![Token::ConstString(String::from("XX"))]),
             (
                 "\"X\\\"X\"",
-                vec![Token::StringLiteral(String::from("X\"X"))],
+                vec![Token::ConstString(String::from("X\"X"))],
             ),
             (
                 "\"Hallo ich bin ein String\\n\\n\\nNeue Zeile\"",
-                vec![Token::StringLiteral(String::from(
+                vec![Token::ConstString(String::from(
                     "Hallo ich bin ein String\n\n\nNeue Zeile",
                 ))],
             ),
@@ -629,7 +629,7 @@ mod tests {
                 // Adjacent strings and f-strings to test greedy tokenizing.
                 "\"a\"f\"b\"'c'",
                 vec![
-                    Token::StringLiteral("a".to_string()),
+                    Token::ConstString("a".to_string()),
                     Token::FormatStringLiteral(vec![FmtStringContents::Char('b')]),
                     Token::CharLiteral('c'),
                 ],
@@ -698,7 +698,7 @@ mod tests {
                     FmtStringContents::Char('r'),
                     FmtStringContents::Char(' '),
                     FmtStringContents::Tokens(vec![(
-                        Token::StringLiteral("inner".to_string()),
+                        Token::ConstString("inner".to_string()),
                         empty_range(),
                     )]),
                     FmtStringContents::Char(' '),
@@ -932,19 +932,19 @@ mod tests {
             ("fn // check", vec![Token::Function]),
             (
                 "\"\" // check",
-                vec![Token::StringLiteral(String::from(""))],
+                vec![Token::ConstString(String::from(""))],
             ),
             (
                 "\"XX\" // check",
-                vec![Token::StringLiteral(String::from("XX"))],
+                vec![Token::ConstString(String::from("XX"))],
             ),
             (
                 "\"X\\\"X\" // check",
-                vec![Token::StringLiteral(String::from("X\"X"))],
+                vec![Token::ConstString(String::from("X\"X"))],
             ),
             (
                 "\"Hallo ich bin ein String\\n\\n\\nNeue Zeile\" // check",
-                vec![Token::StringLiteral(String::from(
+                vec![Token::ConstString(String::from(
                     "Hallo ich bin ein String\n\n\nNeue Zeile",
                 ))],
             ),

@@ -1,5 +1,5 @@
 use crate::emit::{
-    types::{primitive_conc_type_name, primitive_native_type_name},
+    types::{escape_string_literal, primitive_conc_type_name, primitive_native_type_name},
     value::{Case, IrInstruction, IrValue},
 };
 
@@ -249,7 +249,10 @@ impl IrValue {
             IrValue::Int(i) => format!("ConcDuckInt {{ value: {i} }}"),
             IrValue::Float(f) => format!("ConcDuckFloat {{ value: {f} }}"),
             IrValue::Char(c) => format!("ConcDuckChar {{ value: '{c}' }}"),
-            IrValue::String(s) => format!("ConcDuckString {{ \"{s}\" }}"),
+            IrValue::String(s) => format!(
+                "ConstString_{} {{}}",
+                escape_string_literal(s)
+            ),
             IrValue::Var(v) => v.to_string(),
             IrValue::Struct(s, fields) => {
                 format!(
