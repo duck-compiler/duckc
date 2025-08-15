@@ -75,7 +75,7 @@ impl TypeExpr {
             ValueExpr::Bool(..) => TypeExpr::Bool,
             ValueExpr::Char(..) => TypeExpr::Char,
             ValueExpr::Float(..) => TypeExpr::Float,
-            ValueExpr::String(..) => TypeExpr::String,
+            ValueExpr::String(str_value) => TypeExpr::StringLiteral(str_value.clone()),
             ValueExpr::Break => TypeExpr::Tuple(vec![]),
             ValueExpr::Continue => TypeExpr::Tuple(vec![]),
             ValueExpr::Return(Some(value_expr)) => {
@@ -112,7 +112,7 @@ impl TypeExpr {
                 let types = fields
                     .iter()
                     .map(|value_expr| {
-                        TypeExpr::from_value_expr(&value_expr.0, type_env).into_empty_span()
+                        (TypeExpr::from_value_expr(&value_expr.0, type_env), value_expr.1)
                     })
                     .collect::<Vec<Spanned<TypeExpr>>>();
 
@@ -693,13 +693,37 @@ fn check_type_compatability(
                 let given_item_type = given_item_types.get(index)
                     .expect("we've just checked that given_item_types is at least the sizeof required_item_types");
 
+                dbg!(required_item_type);
+                dbg!(given_item_type);
+
                 check_type_compatability(required_item_type, given_item_type, type_env);
             }
         },
-        TypeExpr::RawTypeName(_, items, items1) => todo!(),
-        TypeExpr::TypeName(_, _, items) => todo!(),
-        TypeExpr::TypeNameInternal(_) => todo!(),
-        TypeExpr::StringLiteral(_) => todo!(),
+        TypeExpr::StringLiteral(literal) => {
+            if !given_type.0.is_string() {
+                fail_requirement(
+                    format!("this requires an at compile time known string"),
+                    format!("this value isn't even a string."),
+                )
+            }
+
+            if !given_type.0.holds_const_value() {
+                fail_requirement(
+                    format!("this requires an at compile time known string"),
+                    format!("this is a string, but it's not known at compile time"),
+                )
+            }
+
+            let required_string = literal;
+            let TypeExpr::StringLiteral(given_string) = &given_type.0 else { unreachable!("we've just checked that the given type is a string and is const") };
+
+            if given_string != required_string {
+                fail_requirement(
+                    format!("this requires the at compile time known string '{}'", required_string),
+                    format!("this is an compile time known string, but it's '{}'", given_string),
+                )
+            }
+        },
         TypeExpr::IntLiteral(_) => todo!(),
         TypeExpr::BoolLiteral(_) => todo!(),
         TypeExpr::String => todo!(),
@@ -717,6 +741,9 @@ fn check_type_compatability(
         TypeExpr::Or(items) => todo!(),
         TypeExpr::Fun(items, _) => todo!(),
         TypeExpr::Array(_) => todo!(),
+        TypeExpr::RawTypeName(_, items, items1) => todo!("check_type_compatability TypeExpr::RawTypeName"),
+        TypeExpr::TypeName(_, _, items) => todo!("check_type_compatability TypeExpr::TypeName"),
+        TypeExpr::TypeNameInternal(_) => todo!("check_type_compatability TypeExpr::TypeName"),
         TypeExpr::GenericToBeReplaced(_) => todo!(),
     }
 }

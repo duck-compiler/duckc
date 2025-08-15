@@ -42,8 +42,7 @@ pub fn primitive_conc_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
         TypeExpr::Char => "ConcDuckChar",
         TypeExpr::IntLiteral(int) => Box::leak(Box::new(format!("IntLiteral_{int}"))),
         TypeExpr::StringLiteral(str) => Box::leak(Box::new(format!(
-            "StringLiteral_{}",
-            escape_string_literal(str)
+            "DuckString",
         ))),
         TypeExpr::BoolLiteral(bool) => Box::leak(Box::new(format!("BoolLiteral_{bool}"))),
         _ => panic!("That's not a primitive"),
@@ -58,10 +57,7 @@ pub fn primitive_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
         TypeExpr::Bool => "DuckBool",
         TypeExpr::Char => "DuckChar",
         TypeExpr::IntLiteral(int) => Box::leak(Box::new(format!("IntLiteral_{int}"))),
-        TypeExpr::StringLiteral(str) => Box::leak(Box::new(format!(
-            "StringLiteral_{}",
-            escape_string_literal(str)
-        ))),
+        TypeExpr::StringLiteral(..) => "DuckString",
         TypeExpr::BoolLiteral(bool) => Box::leak(Box::new(format!("BoolLiteral_{bool}"))),
         _ => panic!("That's not a primitive"),
     }
