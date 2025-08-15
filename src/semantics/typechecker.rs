@@ -689,9 +689,12 @@ fn check_type_compatability(
                 )
             }
 
-            // for (index, required_item_type) in required_item_types.iter().enumerate() {
-                // let given_item_type = requi
-                // }
+            for (index, required_item_type) in required_item_types.iter().enumerate() {
+                let given_item_type = given_item_types.get(index)
+                    .expect("we've just checked that given_item_types is at least the sizeof required_item_types");
+
+                check_type_compatability(required_item_type, given_item_type, type_env);
+            }
         },
         TypeExpr::RawTypeName(_, items, items1) => todo!(),
         TypeExpr::TypeName(_, _, items) => todo!(),
