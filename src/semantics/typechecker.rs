@@ -428,6 +428,14 @@ impl TypeExpr {
         return *self == TypeExpr::String || matches!(*self, TypeExpr::StringLiteral(..));
     }
 
+    pub fn holds_const_value(&self) -> bool {
+        // todo(@Mvmo) Implement other literal types
+        // floats, chars.... missing
+        return matches!(*self, TypeExpr::IntLiteral(..))
+        || matches!(*self, TypeExpr::StringLiteral(..))
+        || matches!(*self, TypeExpr::BoolLiteral(..));
+    }
+
     pub fn is_variant(&self) -> bool {
         return matches!(&self, TypeExpr::Or(..));
     }
