@@ -21,15 +21,7 @@ pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str
 pub fn escape_string_literal(input_str: &str) -> String {
     input_str
         .chars()
-        .filter_map(|c| {
-            if c.is_alphanumeric() {
-                Some(c)
-            } else if c == ' ' {
-                Some('_')
-            } else {
-                None
-            }
-        })
+        .map(|c| format!("{}_", c as u32))
         .collect()
 }
 
