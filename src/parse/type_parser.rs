@@ -95,7 +95,7 @@ impl Display for TypeExpr {
             TypeExpr::TypeNameInternal(s) => write!(f, "{}", s),
             TypeExpr::ConstString(s) => write!(f, "String [const \"{}\"]", s),
             TypeExpr::ConstInt(i) => write!(f, "{}", i),
-            TypeExpr::BoolLiteral(b) => write!(f, "{}", b),
+            TypeExpr::ConstBool(b) => write!(f, "{}", b),
             TypeExpr::String => write!(f, "String"),
             TypeExpr::Int => write!(f, "Int"),
             TypeExpr::Bool => write!(f, "Bool"),
@@ -180,7 +180,7 @@ pub enum TypeExpr {
     TypeNameInternal(String),
     ConstString(String),
     ConstInt(i32),
-    BoolLiteral(bool),
+    ConstBool(bool),
     String,
     Int,
     Bool,
@@ -251,7 +251,7 @@ where
             let string_literal = select_ref! { Token::ConstString(str) => str.clone() }
                 .map(TypeExpr::ConstString);
             let bool_literal =
-                select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::BoolLiteral);
+                select_ref! { Token::ConstBool(bool) => *bool }.map(TypeExpr::ConstBool);
             let int_literal = select_ref! { Token::ConstInt(int) => *int }
                 .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
 
@@ -457,7 +457,7 @@ where
             let string_literal = select_ref! { Token::ConstString(str) => str.clone() }
                 .map(TypeExpr::ConstString);
             let bool_literal =
-                select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::BoolLiteral);
+                select_ref! { Token::ConstBool(bool) => *bool }.map(TypeExpr::ConstBool);
             let int_literal = select_ref! { Token::ConstInt(int) => *int }
                 .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
 
@@ -713,15 +713,15 @@ pub mod tests {
             TypeExpr::Fun(vec![], Some(Box::new(TypeExpr::String.into_empty_span()))),
         );
 
-        assert_type_expression("true", TypeExpr::BoolLiteral(true));
+        assert_type_expression("true", TypeExpr::ConstBool(true));
 
-        assert_type_expression("false", TypeExpr::BoolLiteral(false));
+        assert_type_expression("false", TypeExpr::ConstBool(false));
 
         assert_type_expression(
             "true | false",
             TypeExpr::Or(vec![
-                TypeExpr::BoolLiteral(true).into_empty_span(),
-                TypeExpr::BoolLiteral(false).into_empty_span(),
+                TypeExpr::ConstBool(true).into_empty_span(),
+                TypeExpr::ConstBool(false).into_empty_span(),
             ]),
         );
 

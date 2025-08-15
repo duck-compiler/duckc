@@ -374,7 +374,7 @@ where
                 .map(ValueExpr::Int)
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
-            let bool_val = select_ref! { Token::BoolLiteral(b) => *b }
+            let bool_val = select_ref! { Token::ConstBool(b) => *b }
                 .map(ValueExpr::Bool)
                 .map_with(|x, e| (x, e.span()))
                 .boxed();

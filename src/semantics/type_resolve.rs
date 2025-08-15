@@ -669,7 +669,7 @@ fn sort_fields_type_expr(expr: &mut TypeExpr) {
         }
         TypeExpr::Any
         | TypeExpr::Bool
-        | TypeExpr::BoolLiteral(_)
+        | TypeExpr::ConstBool(_)
         | TypeExpr::Char
         | TypeExpr::Float
         | TypeExpr::Go(_)
@@ -1489,7 +1489,7 @@ pub fn replace_generics_in_type_expr(
         | TypeExpr::TypeNameInternal(_)
         | TypeExpr::ConstString(_)
         | TypeExpr::ConstInt(_)
-        | TypeExpr::BoolLiteral(_)
+        | TypeExpr::ConstBool(_)
         | TypeExpr::String
         | TypeExpr::Int
         | TypeExpr::Bool

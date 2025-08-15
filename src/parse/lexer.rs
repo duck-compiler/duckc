@@ -24,7 +24,7 @@ pub enum Token {
     ConstString(String),
     FormatStringLiteral(Vec<FmtStringContents>),
     ConstInt(i64),
-    BoolLiteral(bool),
+    ConstBool(bool),
     CharLiteral(char),
     Equals,
     Match,
@@ -61,7 +61,7 @@ impl Display for Token {
             Token::ControlChar(c) => &format!("{c}"),
             Token::ConstString(s) => &format!("string {s}"),
             Token::ConstInt(_) => "int",
-            Token::BoolLiteral(_) => "bool",
+            Token::ConstBool(_) => "bool",
             Token::CharLiteral(_) => "char",
             Token::Equals => "equals",
             Token::If => "if",
@@ -140,8 +140,8 @@ pub fn lex_single<'a>(
 
         let string = string_lexer();
         let r#bool = choice((
-            just("true").to(Token::BoolLiteral(true)),
-            just("false").to(Token::BoolLiteral(false)),
+            just("true").to(Token::ConstBool(true)),
+            just("false").to(Token::ConstBool(false)),
         ));
         let r#char = char_lexer();
         let num = num_literal();
@@ -541,8 +541,8 @@ mod tests {
             ),
             ("1", vec![Token::ConstInt(1)]),
             ("2003", vec![Token::ConstInt(2003)]),
-            ("true", vec![Token::BoolLiteral(true)]),
-            ("false", vec![Token::BoolLiteral(false)]),
+            ("true", vec![Token::ConstBool(true)]),
+            ("false", vec![Token::ConstBool(false)]),
             ("go { {} }", vec![Token::InlineGo(String::from(" {} "))]),
             ("go { xx }", vec![Token::InlineGo(String::from(" xx "))]),
             ("go {}", vec![Token::InlineGo(String::from(""))]),
@@ -552,7 +552,7 @@ mod tests {
                 vec![
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
@@ -563,7 +563,7 @@ mod tests {
                 vec![
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
@@ -577,7 +577,7 @@ mod tests {
                 vec![
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
@@ -669,7 +669,7 @@ mod tests {
                     Token::ControlChar('{'),
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
                     Token::ConstInt(1),
                     Token::Else,
@@ -950,8 +950,8 @@ mod tests {
             ),
             ("1 // check", vec![Token::ConstInt(1)]),
             ("2003 // check", vec![Token::ConstInt(2003)]),
-            ("true // check", vec![Token::BoolLiteral(true)]),
-            ("false // check", vec![Token::BoolLiteral(false)]),
+            ("true // check", vec![Token::ConstBool(true)]),
+            ("false // check", vec![Token::ConstBool(false)]),
             (
                 "go { {} } // check",
                 vec![Token::InlineGo(String::from(" {} "))],
@@ -970,7 +970,7 @@ mod tests {
                 vec![
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
@@ -981,7 +981,7 @@ mod tests {
                 vec![
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
@@ -995,7 +995,7 @@ mod tests {
                 vec![
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
