@@ -252,7 +252,7 @@ where
                 .map(TypeExpr::ConstString);
             let bool_literal =
                 select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::BoolLiteral);
-            let int_literal = select_ref! { Token::IntLiteral(int) => *int }
+            let int_literal = select_ref! { Token::ConstInt(int) => *int }
                 .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
 
             let r#struct = just(Token::Struct)
@@ -458,7 +458,7 @@ where
                 .map(TypeExpr::ConstString);
             let bool_literal =
                 select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::BoolLiteral);
-            let int_literal = select_ref! { Token::IntLiteral(int) => *int }
+            let int_literal = select_ref! { Token::ConstInt(int) => *int }
                 .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
 
             let function = just(Token::Function)

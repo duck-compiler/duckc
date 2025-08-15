@@ -428,6 +428,10 @@ impl TypeExpr {
         return *self == TypeExpr::String || matches!(*self, TypeExpr::ConstString(..));
     }
 
+    pub fn is_int(&self) -> bool {
+        return *self == TypeExpr::Int;
+    }
+
     pub fn holds_const_value(&self) -> bool {
         // todo(@Mvmo) Implement other literal types
         // floats, chars.... missing
@@ -724,7 +728,9 @@ fn check_type_compatability(
                 )
             }
         },
-        TypeExpr::ConstInt(_) => todo!(),
+        TypeExpr::ConstInt(_) => {
+            if given_type.0.is_string()
+        },
         TypeExpr::BoolLiteral(_) => todo!(),
         TypeExpr::String => {
             if !given_type.0.is_string() {

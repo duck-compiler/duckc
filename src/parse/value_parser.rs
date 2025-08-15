@@ -370,7 +370,7 @@ where
                 .then(while_body.clone())
                 .boxed();
 
-            let int = select_ref! { Token::IntLiteral(i) => *i }
+            let int = select_ref! { Token::ConstInt(i) => *i }
                 .map(ValueExpr::Int)
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
@@ -414,9 +414,9 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            let float_expr = select_ref! { Token::IntLiteral(num) => *num }
+            let float_expr = select_ref! { Token::ConstInt(num) => *num }
                 .then_ignore(just(Token::ControlChar('.')))
-                .then(select_ref! { Token::IntLiteral(num) => *num })
+                .then(select_ref! { Token::ConstInt(num) => *num })
                 .map(|(pre, frac)| {
                     ValueExpr::Float(format!("{pre}.{frac}").parse::<f64>().unwrap())
                 })
@@ -571,7 +571,7 @@ where
                         just(Token::ControlChar('.'))
                             .ignore_then(
                                 select_ref! { Token::Ident(s) => s.to_string() }
-                                    .or(select_ref! { Token::IntLiteral(i) => i.to_string() }),
+                                    .or(select_ref! { Token::ConstInt(i) => i.to_string() }),
                             )
                             .map(AtomPostParseUnit::FieldAccess),
                     ))

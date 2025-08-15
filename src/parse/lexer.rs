@@ -23,7 +23,7 @@ pub enum Token {
     ControlChar(char),
     ConstString(String),
     FormatStringLiteral(Vec<FmtStringContents>),
-    IntLiteral(i64),
+    ConstInt(i64),
     BoolLiteral(bool),
     CharLiteral(char),
     Equals,
@@ -60,7 +60,7 @@ impl Display for Token {
             Token::Ident(_) => "identifier",
             Token::ControlChar(c) => &format!("{c}"),
             Token::ConstString(s) => &format!("string {s}"),
-            Token::IntLiteral(_) => "int",
+            Token::ConstInt(_) => "int",
             Token::BoolLiteral(_) => "bool",
             Token::CharLiteral(_) => "char",
             Token::Equals => "equals",
@@ -270,7 +270,7 @@ fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'s
         s.parse::<i64>()
             .map_err(|_| Rich::custom(span, "Invalid integer"))
     });
-    pre.map(Token::IntLiteral)
+    pre.map(Token::ConstInt)
 }
 
 fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone {
@@ -333,7 +333,7 @@ mod tests {
                     vec![
                         (Token::ControlChar('{'), empty_range()),
                         (Token::ControlChar('{'), empty_range()),
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
                     ],
@@ -463,7 +463,7 @@ mod tests {
             (
                 "f\"{1}\"",
                 vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
-                    vec![(Token::IntLiteral(1), empty_range())],
+                    vec![(Token::ConstInt(1), empty_range())],
                 )])],
             ),
             (
@@ -539,8 +539,8 @@ mod tests {
                     "Hallo ich bin ein String\n\n\nNeue Zeile",
                 ))],
             ),
-            ("1", vec![Token::IntLiteral(1)]),
-            ("2003", vec![Token::IntLiteral(2003)]),
+            ("1", vec![Token::ConstInt(1)]),
+            ("2003", vec![Token::ConstInt(2003)]),
             ("true", vec![Token::BoolLiteral(true)]),
             ("false", vec![Token::BoolLiteral(false)]),
             ("go { {} }", vec![Token::InlineGo(String::from(" {} "))]),
@@ -599,9 +599,9 @@ mod tests {
             (
                 "1.1",
                 vec![
-                    Token::IntLiteral(1),
+                    Token::ConstInt(1),
                     Token::ControlChar('.'),
-                    Token::IntLiteral(1),
+                    Token::ConstInt(1),
                 ],
             ),
             (
@@ -636,7 +636,7 @@ mod tests {
             ),
             (
                 "123testing",
-                vec![Token::IntLiteral(123), Token::Ident("testing".to_string())],
+                vec![Token::ConstInt(123), Token::Ident("testing".to_string())],
             ),
             ("ifelse", vec![Token::Ident("ifelse".to_string())]),
             (
@@ -646,7 +646,7 @@ mod tests {
                     Token::Let,
                     Token::Ident("π".to_string()),
                     Token::ControlChar('='),
-                    Token::IntLiteral(3),
+                    Token::ConstInt(3),
                     Token::ControlChar(';'),
                 ],
             ),
@@ -654,9 +654,9 @@ mod tests {
                 // todo: divide token
                 "5 / 2",
                 vec![
-                    Token::IntLiteral(5),
+                    Token::ConstInt(5),
                     Token::ControlChar('/'),
-                    Token::IntLiteral(2),
+                    Token::ConstInt(2),
                 ],
             ),
             (
@@ -671,9 +671,9 @@ mod tests {
                     Token::ControlChar('('),
                     Token::BoolLiteral(true),
                     Token::ControlChar(')'),
-                    Token::IntLiteral(1),
+                    Token::ConstInt(1),
                     Token::Else,
-                    Token::IntLiteral(0),
+                    Token::ConstInt(0),
                     Token::ControlChar(';'),
                     Token::ControlChar('}'),
                 ],
@@ -681,9 +681,9 @@ mod tests {
             (
                 "1.0// a float-like thing",
                 vec![
-                    Token::IntLiteral(1),
+                    Token::ConstInt(1),
                     Token::ControlChar('.'),
-                    Token::IntLiteral(0),
+                    Token::ConstInt(0),
                     Token::Comment("a float-like thing".to_string()),
                 ],
             ),
@@ -733,9 +733,9 @@ mod tests {
                     FmtStringContents::Tokens(vec![
                         (Token::Ident("calc".to_string()), empty_range()),
                         (Token::ControlChar('('), empty_range()),
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                         (Token::ControlChar(','), empty_range()),
-                        (Token::IntLiteral(2), empty_range()),
+                        (Token::ConstInt(2), empty_range()),
                         (Token::ControlChar(')'), empty_range()),
                     ]),
                 ])],
@@ -774,9 +774,9 @@ mod tests {
                 "f\"{1+1}\"",
                 vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
                     vec![
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                         (Token::ControlChar('+'), empty_range()),
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                     ],
                 )])],
             ),
@@ -784,9 +784,9 @@ mod tests {
                 "f\"{1+1}a\"",
                 vec![Token::FormatStringLiteral(vec![
                     FmtStringContents::Tokens(vec![
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                         (Token::ControlChar('+'), empty_range()),
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                     ]),
                     FmtStringContents::Char('a'),
                 ])],
@@ -823,7 +823,7 @@ mod tests {
                     vec![
                         (Token::ControlChar('{'), empty_range()),
                         (Token::ControlChar('{'), empty_range()),
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
                     ],
@@ -863,7 +863,7 @@ mod tests {
             (
                 "f\"{1}\" // check",
                 vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
-                    vec![(Token::IntLiteral(1), empty_range())],
+                    vec![(Token::ConstInt(1), empty_range())],
                 )])],
             ),
             (
@@ -948,8 +948,8 @@ mod tests {
                     "Hallo ich bin ein String\n\n\nNeue Zeile",
                 ))],
             ),
-            ("1 // check", vec![Token::IntLiteral(1)]),
-            ("2003 // check", vec![Token::IntLiteral(2003)]),
+            ("1 // check", vec![Token::ConstInt(1)]),
+            ("2003 // check", vec![Token::ConstInt(2003)]),
             ("true // check", vec![Token::BoolLiteral(true)]),
             ("false // check", vec![Token::BoolLiteral(false)]),
             (
@@ -1017,9 +1017,9 @@ mod tests {
             (
                 "1.1 // check",
                 vec![
-                    Token::IntLiteral(1),
+                    Token::ConstInt(1),
                     Token::ControlChar('.'),
-                    Token::IntLiteral(1),
+                    Token::ConstInt(1),
                 ],
             ),
             (
