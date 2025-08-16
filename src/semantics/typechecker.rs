@@ -46,21 +46,21 @@ impl TypeExpr {
                 array_type.0.clone()
             }
             ValueExpr::Array(ty, exprs) => {
-                let mut ty = ty.clone().map(|(ty, _)| ty);
+                let mut ty = ty.clone();
                 for expr in exprs {
                     let expr_type = TypeExpr::from_value_expr(&expr.0, type_env);
                     match ty.as_ref() {
-                        Some(expected) => {
+                        Some((expected, span)) => {
                             check_type_compatability(
                                 &(expr_type, expr.1),
-                                &(expected.clone(), empty_range()),
+                                &(expected.clone(), span.clone()),
                                 type_env,
                             );
                         }
-                        None => ty = Some(expr_type),
+                        None => ty = Some((expr_type, expr.1.clone())),
                     }
                 }
-                TypeExpr::Array(ty.unwrap().into_empty_span().into())
+                TypeExpr::Array(ty.unwrap().into())
             }
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
                 lambda_expr
@@ -726,6 +726,7 @@ fn check_type_compatability(
             }
         }
         TypeExpr::ConstString(literal) => {
+            dbg!(&required_type, &given_type);
             if !given_type.0.is_string() {
                 fail_requirement(
                     format!("this requires an at compile time known string"),

@@ -367,7 +367,7 @@ where
                         let mut elems = Vec::new();
                         let expr = (TypeExpr::Or(elements), e.span());
                         merge_or(&expr, &mut elems);
-                        (TypeExpr::Or(elems), e.span())
+                        dbg!((TypeExpr::Or(elems), e.span()))
                     }
                 })
         },
@@ -539,10 +539,10 @@ where
                         .repeated()
                         .collect::<Vec<_>>(),
                 )
-                .map(|((x, _), is_array)| {
+                .map(|((x, span), is_array)| {
                     is_array
                         .iter()
-                        .fold(x, |acc, _| TypeExpr::Array(acc.into_empty_span().into()))
+                        .fold(x, |acc, _| TypeExpr::Array((acc, span.clone()).into()))
                 })
                 .map_with(|x, e| (x, e.span()));
 

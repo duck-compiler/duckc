@@ -1,3 +1,5 @@
+use std::panic::Location;
+
 use crate::parse::{
     Context, SS, Spanned,
     function_parser::{LambdaFunctionExpr, Param},
@@ -499,6 +501,8 @@ where
                     }
                 }
 
+                dbg!(&content_type);
+
                 ValueExpr::Array(content_type, exprs.last().unwrap().clone())
             })
             .map_with(|x, e| (x, e.span()));
@@ -730,13 +734,15 @@ fn empty_duck() -> ValueExpr {
     ValueExpr::Duck(Vec::new())
 }
 
+// track caller so that we find out where this method is called in case of error
+#[track_caller]
 pub fn empty_range() -> SS {
     SS {
         start: 0,
         end: 1,
         context: Context {
             file_name: "TODO: Empty Range",
-            file_contents: "TODO: PLEASE DONT",
+            file_contents: format!("TODO: PLEASE DONT {}", Location::caller()).leak(),
         },
     }
 }
