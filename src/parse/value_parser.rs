@@ -457,6 +457,16 @@ where
                     })
                     .map_with(|x, e| (x, e.span()));
 
+            let array = value_expr_parser
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .at_least(1)
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
+                .map(|exprs| ValueExpr::Array(None, exprs))
+                .map_with(|x, e| (x, e.span()));
+
             let array_with_type = (just(Token::ControlChar('.'))
                 .ignore_then(type_expression_parser_without_array())
                 .or_not())
@@ -472,8 +482,12 @@ where
                 .collect::<Vec<_>>(),
             )
             .map(|(declared_content_type, exprs)| {
-                if declared_content_type.is_none() && exprs.is_empty() {
+                if declared_content_type.is_none() && exprs.last().unwrap().is_empty() {
                     panic!("error: empty array must provide type");
+                }
+
+                if exprs.len() > 0 && exprs[..exprs.len() - 1].iter().any(|e| !e.is_empty()) {
+                    panic!("only last braces my include values");
                 }
 
                 let mut content_type = declared_content_type.clone();
@@ -488,16 +502,6 @@ where
                 ValueExpr::Array(content_type, exprs.last().unwrap().clone())
             })
             .map_with(|x, e| (x, e.span()));
-
-            let array = value_expr_parser
-                .clone()
-                .separated_by(just(Token::ControlChar(',')))
-                .at_least(1)
-                .allow_trailing()
-                .collect::<Vec<_>>()
-                .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
-                .map(|exprs| ValueExpr::Array(None, exprs))
-                .map_with(|x, e| (x, e.span()));
 
             let atom = just(Token::ControlChar('!'))
                 .repeated()
