@@ -45,19 +45,14 @@ impl TypeExpr {
 
                 array_type.0.clone()
             }
-            ValueExpr::Array(ty, exprs) => {
-                let mut ty = ty.clone();
-                for expr in exprs {
-                    let expr_type = TypeExpr::from_value_expr(&expr.0, type_env);
-                    match ty.as_ref() {
-                        Some((expected, span)) => {
-                            check_type_compatability(
-                                &(expr_type, expr.1),
-                                &(expected.clone(), span.clone()),
-                                type_env,
-                            );
-                        }
-                        None => ty = Some((expr_type, expr.1.clone())),
+            ValueExpr::Array(optional_type_support, value_exprs) => {
+                    dbg!(type_support);
+                    for value_expr in value_exprs {
+                        check_type_compatability(
+                            type_support,
+                            &(TypeExpr::from_value_expr(&value_expr.0, type_env), value_expr.1),
+                            type_env
+                        );
                     }
                 }
                 TypeExpr::Array(ty.unwrap().into())

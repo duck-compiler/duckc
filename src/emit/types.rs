@@ -404,6 +404,15 @@ impl TypeExpr {
         };
     }
 
+    pub fn unconst(&self) -> TypeExpr {
+        match self {
+            TypeExpr::ConstString(..) => TypeExpr::String,
+            TypeExpr::ConstBool(..) => TypeExpr::Bool,
+            TypeExpr::ConstInt(..) => TypeExpr::Int,
+            _ => self.clone()
+        }
+    }
+
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::GenericToBeReplaced(x) => x.clone(),
