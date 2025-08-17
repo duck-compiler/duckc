@@ -864,10 +864,11 @@ fn check_type_compatability(
             }
         }
         TypeExpr::Float => {
-            if !given_type.0.is_float() {
+            // todo: discuss if we just allow passing ints as floats
+            if !given_type.0.is_number() {
                 fail_requirement(
-                    format!("this expects an float."),
-                    format!("this is not an float."),
+                    format!("this expects a number."),
+                    format!("this is not a number."),
                 );
             }
         }
@@ -1127,15 +1128,9 @@ fn check_type_compatability__(
 mod test {
     use crate::{
         parse::{
-            SS,
-            function_parser::FunctionDefintion,
-            lexer::lex_parser,
-            make_input,
-            source_file_parser::SourceFile,
-            type_parser::Field,
-            value_parser::{empty_range, value_expr_parser},
+            function_parser::FunctionDefintion, lexer::lex_parser, make_input, source_file_parser::SourceFile, type_parser::Field, value_parser::{empty_range, type_expr_into_empty_range, value_expr_parser}, SS
         },
-        semantics::type_resolve::{TypesSummary, typeresolve_source_file},
+        semantics::type_resolve::{typeresolve_source_file, TypesSummary},
     };
     use chumsky::prelude::*;
 
@@ -1145,7 +1140,7 @@ mod test {
     fn test_typeresolve() {
         let src_and_expected_type_vec = vec![
             ("4 + 4", TypeExpr::Int),
-            ("\"Hallo\"", TypeExpr::String),
+            ("\"Hallo\"", TypeExpr::ConstString("Hallo".to_string())),
             (
                 "{ x: \"hallo\", }",
                 TypeExpr::Duck(Duck {
@@ -1189,7 +1184,7 @@ mod test {
                 TypeExpr::Tuple(vec![
                     TypeExpr::Int.into_empty_span(),
                     TypeExpr::Tuple(vec![
-                        TypeExpr::String.into_empty_span(),
+                        TypeExpr::ConstString("Hallo, Welt".to_string()).into_empty_span(),
                         TypeExpr::Int.into_empty_span(),
                     ])
                     .into_empty_span(),
@@ -1231,7 +1226,7 @@ mod test {
             let mut type_env = TypeEnv::default();
             typeresolve_source_file(&mut source_file, &mut type_env);
 
-            let type_expr = TypeExpr::from_value_expr(
+            let mut type_expr = (TypeExpr::from_value_expr(
                 &source_file
                     .function_definitions
                     .get(0)
@@ -1239,8 +1234,10 @@ mod test {
                     .value_expr
                     .0,
                 &mut type_env,
-            );
-            assert_eq!(type_expr, expected_type_expr);
+            ), empty_range());
+            type_expr_into_empty_range(&mut type_expr);
+
+            assert_eq!(type_expr.0, expected_type_expr);
         }
     }
 
@@ -1493,7 +1490,7 @@ mod test {
     fn test_incompatible_tuples_different_length() {
         let mut type_env = TypeEnv::default();
 
-        let one = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int)]);
+        let one = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::Int)]);
         let two = TypeExpr::Tuple(vec![
             empty_spanned(TypeExpr::Int),
             empty_spanned(TypeExpr::Int),
