@@ -1,10 +1,6 @@
 
 use crate::parse::{
-    Context, SS, Spanned,
-    function_parser::{LambdaFunctionExpr, Param},
-    lexer::FmtStringContents,
-    source_file_parser::SourceFile,
-    type_parser::{type_expression_parser, type_expression_parser_without_array},
+    function_parser::{LambdaFunctionExpr, Param}, lexer::{FmtStringContents}, source_file_parser::SourceFile, type_parser::{type_expression_parser, type_expression_parser_without_array}, Context, Spanned, SS
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
@@ -21,7 +17,7 @@ pub struct MatchArm {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValFmtStringContents {
-    Char(char),
+    String(String),
     Expr(Spanned<ValueExpr>),
 }
 
@@ -441,8 +437,8 @@ where
 
                             for c in contents {
                                 match c {
-                                    FmtStringContents::Char(c) => {
-                                        res.push(ValFmtStringContents::Char(*c))
+                                    FmtStringContents::String(s) => {
+                                        res.push(ValFmtStringContents::String(s.to_owned()))
                                     }
                                     FmtStringContents::Tokens(s) => {
                                         let expr = value_expr_parser

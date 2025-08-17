@@ -274,7 +274,7 @@ impl TypeExpr {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
             TypeExpr::ConstBool(b) => primitive_type_name(&TypeExpr::ConstBool(*b)).to_string(),
-            TypeExpr::ConstString(str) => {
+            TypeExpr::ConstString(_str) => {
                 // primitive_type_name(&TypeExpr::ConstString(str.clone())).to_string()
                 "DuckString".to_string()
             }

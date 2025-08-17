@@ -659,7 +659,7 @@ fn check_type_compatability(
         TypeExpr::Any => return,
         TypeExpr::InlineGo => todo!("should inline go be typechecked?"),
         TypeExpr::Go(_) => return,
-        TypeExpr::Struct(strct) => {
+        TypeExpr::Struct(_strct) => {
             if !given_type.0.is_struct() {
                 fail_requirement(
                     format!(

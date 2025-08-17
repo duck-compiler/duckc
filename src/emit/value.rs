@@ -175,8 +175,8 @@ impl ValueExpr {
 
                 for c in contents {
                     match c {
-                        ValFmtStringContents::Char(c) => {
-                            concat_params.push(IrValue::String(c.to_string()))
+                        ValFmtStringContents::String(s) => {
+                            concat_params.push(IrValue::String(s.to_owned()))
                         }
                         ValFmtStringContents::Expr(expr) => {
                             template.push_str("%s");
