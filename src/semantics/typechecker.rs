@@ -81,7 +81,7 @@ impl TypeExpr {
                 }
 
                 if variants.len() == 0 {
-                    todo!("empty errors need to defined their type error");
+                    panic!("Internal Compiler Error: variants shoulnd't ever be empty, as this is a syntax error.");
                 }
 
                 let first_type = variants.first().expect("we've checked that variants is exactly of len 1");

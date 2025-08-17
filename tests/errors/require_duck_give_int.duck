@@ -2,5 +2,5 @@ fn my_duck_fun(d: { some: String }) {
 }
 
 fn main() {
-    my_duck_fun({ });
+    my_duck_fun(1);
 }
