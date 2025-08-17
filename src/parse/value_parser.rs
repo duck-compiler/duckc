@@ -742,7 +742,7 @@ pub fn empty_range() -> SS {
         end: 1,
         context: Context {
             file_name: "TODO: Empty Range",
-            file_contents: format!("TODO: PLEASE DONT {}", Location::caller()).leak(),
+            file_contents: format!("TODO: PLEASE DONT").leak(),
         },
     }
 }
