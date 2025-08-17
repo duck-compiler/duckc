@@ -663,11 +663,11 @@ fn check_type_compatability(
             if !given_type.0.is_struct() {
                 fail_requirement(
                     format!(
-                        "the required type {} is a duck",
+                        "the required type {} is a struct",
                         format!("{}", required_type.0).bright_yellow(),
                     ),
                     format!(
-                        "because of the fact, that the required type {} is a duck. The value you need to pass must be a duck aswell, but it isn't.",
+                        "because of the fact, that the required type {} is a struct. The value you need to pass must be a duck aswell, but it isn't.",
                         format!("{}", required_type.0).bright_yellow(),
                     ),
                 )
