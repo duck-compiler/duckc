@@ -1,40 +1,9 @@
-use go "time";
-use go "fmt";
-use go "net/http";
-use go "io";
-
-fn fetch(url: String) -> String {
-    let result: String = "";
-
-    go {
-        res, _ := http.Get(url.as_dgo_string())
-        defer res.Body.Close()
-
-        body, _ := io.ReadAll(res.Body)
-
-        result = ConcDuckString { value: string(body) }
-    }
-
-    return result;
-}
-
-fn string_from_network() -> String {
-    return fetch("https://random-d.uk/api/random");
-}
-
-sus fn sussy_fn() {
-    std::io::println("started sussy func");
-    go {
-        time.Sleep(time.Second * 1)
-    }
-    std::io::println(fetch("https://random-d.uk/api/random"));
-}
+use std::io::{println};
 
 fn main() {
-    sussy_fn();
-    std::io::println("now blocking main");
-    go {
-        time.Sleep(time.Second * 3)
-    }
-    std::io::println("after main block");
+    let x: ((String,),) = (("tuple",),);
+    println("assign");
+    x.0.0 = "again";
+    println("assign over");
+    println(x.0.0);
 }

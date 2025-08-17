@@ -250,7 +250,7 @@ impl IrValue {
             IrValue::Float(f) => format!("ConcDuckFloat {{ value: {f} }}"),
             IrValue::Char(c) => format!("ConcDuckChar {{ value: '{c}' }}"),
             IrValue::String(s) => format!(
-                "ConstString_{} {{}}",
+                "ConstString_{} {{ \"{s}\" }}",
                 escape_string_literal(s)
             ),
             IrValue::Var(v) => v.to_string(),
