@@ -1,3 +1,4 @@
 fn main() {
-    let x: ("b" | "c")[] = .("b" | "c")["b", "c"];
+    let x: Int = 10;
+    let y: Int = x;
 }

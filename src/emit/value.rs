@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::{
     parse::{
         function_parser::LambdaFunctionExpr,
@@ -208,7 +210,8 @@ impl ValueExpr {
                     None => return (instructions, None),
                 };
 
-                let result_type_annotation = TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
+                let result_type_annotation =
+                    TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
 
                 let result_var_name = env.new_var();
                 instructions.push(IrInstruction::VarDecl(
@@ -386,11 +389,48 @@ impl ValueExpr {
                         field_name,
                     } = target
                     {
-                        let (target_instr, Some(IrValue::Var(target_res))) =
-                            target_obj.0.emit(type_env, env)
-                        else {
-                            panic!("no var {target_obj:?}");
-                        };
+                        let mut target_instr = VecDeque::new();
+                        let mut current_obj = target_obj.clone();
+
+                        let mut s = VecDeque::new();
+
+                        loop {
+                            match &current_obj.0 {
+                                ValueExpr::Variable(_, name, _) => {
+                                    s.push_front(name.clone());
+                                    break;
+                                }
+                                ValueExpr::ArrayAccess(next_obj, index) => {
+                                    let (instr, res) = index.0.emit(type_env, env);
+                                    instr.into_iter().for_each(|x| target_instr.push_front(x));
+                                    if let Some(res) = res {
+                                        let IrValue::Var(res) = res else {
+                                            panic!("need var");
+                                        };
+
+                                        s.push_front(format!("[{res}]"));
+                                    } else {
+                                        return (target_instr.into(), None);
+                                    }
+                                    current_obj = next_obj.to_owned();
+                                }
+                                ValueExpr::FieldAccess {
+                                    target_obj,
+                                    field_name,
+                                } => {
+                                    match TypeExpr::from_value_expr(&target_obj.0, type_env) {
+                                        TypeExpr::Tuple(..) => s.push_front(format!("field_{field_name}")),
+                                        TypeExpr::Duck(..) => s.push_front(format!("Get{field_name}")),
+                                        TypeExpr::Struct(..) => s.push_front(format!("{field_name}")),
+                                        _ => panic!("can only access object like"),
+                                     }
+                                    current_obj = target_obj.to_owned();
+                                }
+                                _ => panic!("need var"),
+                            }
+                        }
+
+                        let target_res = Into::<Vec<_>>::into(s).join(".");
                         let target_ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
                         res.extend(target_instr);
                         match target_ty {
