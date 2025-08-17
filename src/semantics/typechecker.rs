@@ -2,8 +2,8 @@ use std::process;
 
 use colored::Colorize;
 
-use crate::parse::{failure_with_occurence, SS};
 use crate::parse::type_parser::{Duck, Field, Struct, TypeExpr};
+use crate::parse::{SS, failure_with_occurence};
 use crate::parse::{
     Spanned, failure,
     value_parser::{ValFmtStringContents, ValueExpr},
@@ -22,7 +22,9 @@ impl TypeExpr {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {
                         require(
-                            matches!(TypeExpr::from_value_expr(&e.0, type_env), TypeExpr::String),
+                            // matches!(TypeExpr::from_value_expr(&e.0, type_env), TypeExpr::String) ||
+                            // matches!(TypeExpr::from_value_expr(&e.0, type_env), TypeExpr::ConstString(..)),
+                            TypeExpr::from_value_expr(&e.0, type_env).is_string(),
                             "Needs to be string".into(),
                         );
                     }
@@ -33,11 +35,8 @@ impl TypeExpr {
                 let target_type = TypeExpr::from_value_expr(&target.0, type_env);
                 let idx_type = TypeExpr::from_value_expr(&idx.0, type_env);
 
-                require(
-                    matches!(&target_type, TypeExpr::Array(_)),
-                    "Needs to be array".into(),
-                );
-                require(matches!(&idx_type, TypeExpr::Int), "Needs to be int".into());
+                require(target_type.is_array(), "Needs to be array".into());
+                require(idx_type.is_int(), "Needs to be int".into());
 
                 let TypeExpr::Array(array_type) = target_type else {
                     panic!()
@@ -48,12 +47,11 @@ impl TypeExpr {
             ValueExpr::Array(optional_type_support, value_exprs) => {
                 if let Some(type_support) = optional_type_support {
                     for value_expr in value_exprs {
-                        let type_expr = &(TypeExpr::from_value_expr(&value_expr.0, type_env), value_expr.1);
-                        check_type_compatability(
-                            type_support,
-                            type_expr,
-                            type_env
+                        let type_expr = &(
+                            TypeExpr::from_value_expr(&value_expr.0, type_env),
+                            value_expr.1,
                         );
+                        check_type_compatability(type_support, type_expr, type_env);
                     }
 
                     return TypeExpr::Array(Box::new(type_support.clone()));
@@ -61,15 +59,24 @@ impl TypeExpr {
 
                 let mut variants = value_exprs
                     .iter()
-                    .map(|value_expr| (TypeExpr::from_value_expr(&value_expr.0, type_env).unconst(), value_expr.1))
+                    .map(|value_expr| {
+                        (
+                            TypeExpr::from_value_expr(&value_expr.0, type_env).unconst(),
+                            value_expr.1,
+                        )
+                    })
                     .collect::<Vec<Spanned<TypeExpr>>>();
 
                 variants.sort_by_key(|value_expr| value_expr.0.as_clean_go_type_name(type_env));
                 variants.dedup_by_key(|value_expr| value_expr.0.as_clean_go_type_name(type_env));
 
                 if variants.len() > 1 {
-                    let start = variants.first().expect("we've just checked that variants is at least 2 items long");
-                    let end = variants.last().expect("we've just checked that variants is at least 2 items long");
+                    let start = variants
+                        .first()
+                        .expect("we've just checked that variants is at least 2 items long");
+                    let end = variants
+                        .last()
+                        .expect("we've just checked that variants is at least 2 items long");
 
                     let combined_span = SS {
                         context: start.1.context,
@@ -81,11 +88,15 @@ impl TypeExpr {
                 }
 
                 if variants.is_empty() {
-                    panic!("Internal Compiler Error: variants shoulnd't ever be empty, as this is a syntax error.");
+                    panic!(
+                        "Internal Compiler Error: variants shoulnd't ever be empty, as this is a syntax error."
+                    );
                 }
 
-                let first_type = variants.first().expect("we've checked that variants is exactly of len 1");
-                return TypeExpr::Array(Box::new(first_type.clone()))
+                let first_type = variants
+                    .first()
+                    .expect("we've checked that variants is exactly of len 1");
+                return TypeExpr::Array(Box::new(first_type.clone()));
             }
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
                 lambda_expr
@@ -141,8 +152,7 @@ impl TypeExpr {
                         // maybe we need a way to tell that it should be consted here. e.g.
                         //  `(5,"hallo")`
                         (
-                            TypeExpr::from_value_expr(&value_expr.0, type_env)
-                                .unconst(),
+                            TypeExpr::from_value_expr(&value_expr.0, type_env).unconst(),
                             value_expr.1,
                         )
                     })
@@ -392,7 +402,6 @@ impl TypeExpr {
         }
     }
 
-
     pub fn has_subtypes(&self) -> bool {
         match self {
             Self::Or(..) | Self::Tuple(..) | Self::Duck(..) | Self::Struct(..) => true,
@@ -476,8 +485,10 @@ impl TypeExpr {
 
     pub fn is_string(&self) -> bool {
         return *self == TypeExpr::String || matches!(*self, TypeExpr::ConstString(..)) || {
-            let TypeExpr::Or(variants) = self else { return false };
-            return !variants.iter().any(|variant| !variant.0.is_string())
+            let TypeExpr::Or(variants) = self else {
+                return false;
+            };
+            return !variants.iter().any(|variant| !variant.0.is_string());
         };
     }
 
@@ -674,7 +685,7 @@ fn check_type_compatability(
             }
 
             // todo: check against identity of struct in typechecking
-        },
+        }
         TypeExpr::Duck(duck) => {
             if !given_type.0.is_duck() {
                 fail_requirement(
@@ -781,12 +792,8 @@ fn check_type_compatability(
 
             if given_string != required_string {
                 fail_requirement(
-                    format!(
-                        "this requires the compile time known string '{required_string}'"
-                    ),
-                    format!(
-                        "this is a compile time known string, but it's '{given_string}'"
-                    ),
+                    format!("this requires the compile time known string '{required_string}'"),
+                    format!("this is a compile time known string, but it's '{given_string}'"),
                 )
             }
         }
@@ -812,9 +819,7 @@ fn check_type_compatability(
 
             if required_int != given_int {
                 fail_requirement(
-                    format!(
-                        "this requires the compile time known Int '{required_int}'"
-                    ),
+                    format!("this requires the compile time known Int '{required_int}'"),
                     format!("this is a compile time known Int, but it's '{given_int}'"),
                 )
             }
@@ -841,12 +846,8 @@ fn check_type_compatability(
 
             if required_bool != given_bool {
                 fail_requirement(
-                    format!(
-                        "this requires the compile time known Bool '{required_bool}'"
-                    ),
-                    format!(
-                        "this is a compile time known Bool, but it's '{required_bool}'"
-                    ),
+                    format!("this requires the compile time known Bool '{required_bool}'"),
+                    format!("this is a compile time known Bool, but it's '{required_bool}'"),
                 )
             }
         }
@@ -961,7 +962,7 @@ fn check_type_compatability(
         TypeExpr::RawTypeName(..)
         | TypeExpr::TypeName(..)
         | TypeExpr::TypeNameInternal(..)
-        | TypeExpr::GenericToBeReplaced(..) => {},
+        | TypeExpr::GenericToBeReplaced(..) => {}
     }
 }
 
@@ -969,9 +970,15 @@ fn check_type_compatability(
 mod test {
     use crate::{
         parse::{
-            function_parser::FunctionDefintion, lexer::lex_parser, make_input, source_file_parser::SourceFile, type_parser::Field, value_parser::{empty_range, type_expr_into_empty_range, value_expr_parser}, SS
+            SS,
+            function_parser::FunctionDefintion,
+            lexer::lex_parser,
+            make_input,
+            source_file_parser::SourceFile,
+            type_parser::Field,
+            value_parser::{empty_range, type_expr_into_empty_range, value_expr_parser},
         },
-        semantics::type_resolve::{typeresolve_source_file, TypesSummary},
+        semantics::type_resolve::{TypesSummary, typeresolve_source_file},
     };
     use chumsky::prelude::*;
 
@@ -1067,15 +1074,18 @@ mod test {
             let mut type_env = TypeEnv::default();
             typeresolve_source_file(&mut source_file, &mut type_env);
 
-            let mut type_expr = (TypeExpr::from_value_expr(
-                &source_file
-                    .function_definitions
-                    .get(0)
-                    .unwrap()
-                    .value_expr
-                    .0,
-                &mut type_env,
-            ), empty_range());
+            let mut type_expr = (
+                TypeExpr::from_value_expr(
+                    &source_file
+                        .function_definitions
+                        .get(0)
+                        .unwrap()
+                        .value_expr
+                        .0,
+                    &mut type_env,
+                ),
+                empty_range(),
+            );
             type_expr_into_empty_range(&mut type_expr);
 
             assert_eq!(type_expr.0, expected_type_expr);
@@ -1331,7 +1341,11 @@ mod test {
     fn test_incompatible_tuples_different_length() {
         let mut type_env = TypeEnv::default();
 
-        let one = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::Int), empty_spanned(TypeExpr::Int)]);
+        let one = TypeExpr::Tuple(vec![
+            empty_spanned(TypeExpr::Int),
+            empty_spanned(TypeExpr::Int),
+            empty_spanned(TypeExpr::Int),
+        ]);
         let two = TypeExpr::Tuple(vec![
             empty_spanned(TypeExpr::Int),
             empty_spanned(TypeExpr::Int),

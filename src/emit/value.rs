@@ -420,7 +420,7 @@ impl ValueExpr {
                                 } => {
                                     match TypeExpr::from_value_expr(&target_obj.0, type_env) {
                                         TypeExpr::Tuple(..) => s.push_front(format!("field_{field_name}")),
-                                        TypeExpr::Duck(..) => s.push_front(format!("Get{field_name}")),
+                                        TypeExpr::Duck(..) => s.push_front(format!("Get{field_name}()")),
                                         TypeExpr::Struct(..) => s.push_front(format!("{field_name}")),
                                         _ => panic!("can only access object like"),
                                      }
