@@ -487,7 +487,7 @@ where
                     panic!("error: empty array must provide type");
                 }
 
-                if exprs.len() > 0 && exprs[..exprs.len() - 1].iter().any(|e| !e.is_empty()) {
+                if !exprs.is_empty() && exprs[..exprs.len() - 1].iter().any(|e| !e.is_empty()) {
                     panic!("only last braces my include values");
                 }
 
@@ -499,8 +499,6 @@ where
                             Some(TypeExpr::Array(Box::new(content_type.unwrap())).into_empty_span())
                     }
                 }
-
-                dbg!(&content_type);
 
                 ValueExpr::Array(content_type, exprs.last().unwrap().clone())
             })
@@ -741,7 +739,7 @@ pub fn empty_range() -> SS {
         end: 1,
         context: Context {
             file_name: "TODO: Empty Range",
-            file_contents: format!("TODO: PLEASE DONT").leak(),
+            file_contents: "TODO: PLEASE DONT".to_string().leak(),
         },
     }
 }

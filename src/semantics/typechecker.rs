@@ -80,7 +80,7 @@ impl TypeExpr {
                     return TypeExpr::Array(Box::new((TypeExpr::Or(variants), combined_span)));
                 }
 
-                if variants.len() == 0 {
+                if variants.is_empty() {
                     panic!("Internal Compiler Error: variants shoulnd't ever be empty, as this is a syntax error.");
                 }
 
@@ -126,7 +126,7 @@ impl TypeExpr {
                     .map(|(name, (value_expr, span))| {
                         Field::new(
                             name.to_string(),
-                            (TypeExpr::from_value_expr(value_expr, type_env), dbg!(*span)),
+                            (TypeExpr::from_value_expr(value_expr, type_env), *span),
                         )
                     })
                     .collect::<Vec<Field>>();
@@ -152,7 +152,7 @@ impl TypeExpr {
                     .map(|(name, (value_expr, span))| {
                         Field::new(
                             name.to_string(),
-                            (TypeExpr::from_value_expr(&value_expr, type_env), *span),
+                            (TypeExpr::from_value_expr(value_expr, type_env), *span),
                         )
                     })
                     .collect::<Vec<Field>>();
@@ -624,7 +624,8 @@ fn check_type_compatability(
             (given_type.1, required_type.1)
         };
 
-        let combined_span = SS {
+        // this is unused at the moment but come in handy later
+        let _combined_span = SS {
             start: smaller.start,
             end: larger.end,
             context: required_type.1.context,
@@ -632,11 +633,11 @@ fn check_type_compatability(
 
         failure_with_occurence(
             given_type.1.context.file_name,
-            format!("Incompatible Types",),
+            "Incompatible Types".to_string(),
             given_type.1,
             vec![
-                (format!("{explain_required}"), required_type.1),
-                (format!("{explain_given}"), given_type.1),
+                (explain_required.to_string(), required_type.1),
+                (explain_given.to_string(), given_type.1),
             ],
             given_type.1.context.file_contents,
         )
@@ -728,14 +729,10 @@ fn check_type_compatability(
                 let given_item_type = given_item_types.get(index)
                     .expect("we've just checked that given_item_types is at least the sizeof required_item_types");
 
-                dbg!(required_item_type);
-                dbg!(given_item_type);
-
                 check_type_compatability(required_item_type, given_item_type, type_env);
             }
         }
         TypeExpr::ConstString(literal) => {
-            dbg!(&required_type, &given_type);
             if !given_type.0.is_string() {
                 fail_requirement(
                     format!("this requires an at compile time known {}", required_type.0),
@@ -746,7 +743,7 @@ fn check_type_compatability(
             if !given_type.0.holds_const_value() {
                 fail_requirement(
                     format!("this requires a compile time known {}", required_type.0),
-                    format!("this is a string, but it's not known at compile time"),
+                    "this is a string, but it's not known at compile time".to_string(),
                 )
             }
 
@@ -758,12 +755,10 @@ fn check_type_compatability(
             if given_string != required_string {
                 fail_requirement(
                     format!(
-                        "this requires the compile time known string '{}'",
-                        required_string
+                        "this requires the compile time known string '{required_string}'"
                     ),
                     format!(
-                        "this is a compile time known string, but it's '{}'",
-                        given_string
+                        "this is a compile time known string, but it's '{given_string}'"
                     ),
                 )
             }
@@ -771,15 +766,15 @@ fn check_type_compatability(
         TypeExpr::ConstInt(const_int) => {
             if !given_type.0.is_int() {
                 fail_requirement(
-                    format!("this requires an at compile time known Int"),
-                    format!("this value isn't even an Int."),
+                    "this requires an at compile time known Int".to_string(),
+                    "this value isn't even an Int.".to_string(),
                 )
             }
 
             if !given_type.0.holds_const_value() {
                 fail_requirement(
-                    format!("this requires a compile time known Int"),
-                    format!("this is an Int, but it's not known at compile time"),
+                    "this requires a compile time known Int".to_string(),
+                    "this is an Int, but it's not known at compile time".to_string(),
                 )
             }
 
@@ -791,25 +786,24 @@ fn check_type_compatability(
             if required_int != given_int {
                 fail_requirement(
                     format!(
-                        "this requires the compile time known Int '{}'",
-                        required_int
+                        "this requires the compile time known Int '{required_int}'"
                     ),
-                    format!("this is a compile time known Int, but it's '{}'", given_int),
+                    format!("this is a compile time known Int, but it's '{given_int}'"),
                 )
             }
         }
         TypeExpr::ConstBool(const_bool) => {
             if !given_type.0.is_bool() {
                 fail_requirement(
-                    format!("this requires an at compile time known Bool"),
-                    format!("this value isn't even a Bool."),
+                    "this requires an at compile time known Bool".to_string(),
+                    "this value isn't even a Bool.".to_string(),
                 )
             }
 
             if !given_type.0.holds_const_value() {
                 fail_requirement(
-                    format!("this requires a compile time known Bool"),
-                    format!("this is an Bool, but it's not known at compile time"),
+                    "this requires a compile time known Bool".to_string(),
+                    "this is an Bool, but it's not known at compile time".to_string(),
                 )
             }
 
@@ -821,12 +815,10 @@ fn check_type_compatability(
             if required_bool != given_bool {
                 fail_requirement(
                     format!(
-                        "this requires the compile time known Bool '{}'",
-                        required_bool
+                        "this requires the compile time known Bool '{required_bool}'"
                     ),
                     format!(
-                        "this is a compile time known Bool, but it's '{}'",
-                        required_bool
+                        "this is a compile time known Bool, but it's '{required_bool}'"
                     ),
                 )
             }
@@ -834,16 +826,16 @@ fn check_type_compatability(
         TypeExpr::String => {
             if !given_type.0.is_string() {
                 fail_requirement(
-                    format!("this expects a string."),
-                    format!("this is not a string."),
+                    "this expects a string.".to_string(),
+                    "this is not a string.".to_string(),
                 );
             }
         }
         TypeExpr::Int => {
             if !given_type.0.is_number() {
                 fail_requirement(
-                    format!("this expects an int."),
-                    format!("this is not an int."),
+                    "this expects an int.".to_string(),
+                    "this is not an int.".to_string(),
                 )
             }
         }
@@ -851,15 +843,15 @@ fn check_type_compatability(
             if !given_type.0.is_bool() {
                 fail_requirement(
                     format!("a {} value is required here", "Bool".bright_yellow(),),
-                    format!("this is not a bool"),
+                    "this is not a bool".to_string(),
                 )
             }
         }
         TypeExpr::Char => {
             if !given_type.0.is_char() {
                 fail_requirement(
-                    format!("this expects an int."),
-                    format!("this is not an int."),
+                    "this expects an int.".to_string(),
+                    "this is not an int.".to_string(),
                 );
             }
         }
@@ -867,21 +859,19 @@ fn check_type_compatability(
             // todo: discuss if we just allow passing ints as floats
             if !given_type.0.is_number() {
                 fail_requirement(
-                    format!("this expects a number."),
-                    format!("this is not a number."),
+                    "this expects a number.".to_string(),
+                    "this is not a number.".to_string(),
                 );
             }
         }
-        TypeExpr::Or(items) => {
+        TypeExpr::Or(..) => {
             require_subset_of_variant_type(required_type, given_type, type_env);
         }
         TypeExpr::Fun(required_params, required_return_type) => {
-            dbg!(required_type);
-            dbg!(given_type);
             if !given_type.0.is_fun() {
                 fail_requirement(
-                    format!("this requires a function"),
-                    format!("this value isn't even a string."),
+                    "this requires a function".to_string(),
+                    "this value isn't even a string.".to_string(),
                 )
             }
 
@@ -896,7 +886,7 @@ fn check_type_compatability(
                     ),
                     format!(
                         "this is a function, but it takes {} arguments(s)",
-                        format!("{}", given_params.len())
+                        format_args!("{}", given_params.len())
                     ),
                 )
             }
@@ -916,7 +906,7 @@ fn check_type_compatability(
                             "this requires a function that returns {}",
                             required_return_type.clone().0
                         ),
-                        format!("this function doesn't return anything"),
+                        "this function doesn't return anything".to_string(),
                     )
                 }
 
@@ -924,14 +914,14 @@ fn check_type_compatability(
                     .as_ref()
                     .expect("we've just handled is_none");
 
-                check_type_compatability(&required_return_type, &given_return_type, type_env);
+                check_type_compatability(required_return_type, given_return_type, type_env);
             }
         }
         TypeExpr::Array(content_type) => {
             if !given_type.0.is_array() {
                 fail_requirement(
                     format!("this requires an array of {}", &content_type.0),
-                    format!("this is not an array"),
+                    "this is not an array".to_string(),
                 );
             }
 
@@ -939,14 +929,12 @@ fn check_type_compatability(
                 unreachable!("we've checked that given_type is an array")
             };
 
-            check_type_compatability(&content_type, &given_content_type, type_env);
+            check_type_compatability(content_type, &given_content_type, type_env);
         }
-        TypeExpr::RawTypeName(_, items, items1) => {
-            todo!("check_type_compatability TypeExpr::RawTypeName")
-        }
-        TypeExpr::TypeName(_, _, items) => todo!("check_type_compatability TypeExpr::TypeName"),
-        TypeExpr::TypeNameInternal(_) => todo!("check_type_compatability TypeExpr::TypeName"),
-        TypeExpr::GenericToBeReplaced(_) => todo!(),
+        TypeExpr::RawTypeName(..)
+        | TypeExpr::TypeName(..)
+        | TypeExpr::TypeNameInternal(..)
+        | TypeExpr::GenericToBeReplaced(..) => {},
     }
 }
 

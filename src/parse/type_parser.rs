@@ -40,8 +40,8 @@ impl Display for TypeExpr {
                 })?;
                 write!(f, " }}")
             }
-            TypeExpr::Go(s) => write!(f, "go {}", s),
-            TypeExpr::Duck(d) => write!(f, "{}", d), // Delegates to Duck's Display impl
+            TypeExpr::Go(s) => write!(f, "go {s}"),
+            TypeExpr::Duck(d) => write!(f, "{d}"), // Delegates to Duck's Display impl
             TypeExpr::Tuple(elements) => {
                 write!(f, "(")?;
                 elements.iter().enumerate().try_for_each(|(i, elem)| {
@@ -59,7 +59,7 @@ impl Display for TypeExpr {
                 if *is_global {
                     write!(f, "::")?;
                 }
-                write!(f, "{}", name)?;
+                write!(f, "{name}")?;
 
                 if let Some(params) = generics {
                     write!(f, "<")?;
@@ -92,10 +92,10 @@ impl Display for TypeExpr {
                 }
                 Ok(())
             }
-            TypeExpr::TypeNameInternal(s) => write!(f, "{}", s),
-            TypeExpr::ConstString(s) => write!(f, "String [const \"{}\"]", s),
-            TypeExpr::ConstInt(i) => write!(f, "{}", i),
-            TypeExpr::ConstBool(b) => write!(f, "{}", b),
+            TypeExpr::TypeNameInternal(s) => write!(f, "{s}"),
+            TypeExpr::ConstString(s) => write!(f, "String [const \"{s}\"]"),
+            TypeExpr::ConstInt(i) => write!(f, "{i}"),
+            TypeExpr::ConstBool(b) => write!(f, "{b}"),
             TypeExpr::String => write!(f, "String"),
             TypeExpr::Int => write!(f, "Int"),
             TypeExpr::Bool => write!(f, "Bool"),
@@ -116,7 +116,7 @@ impl Display for TypeExpr {
                         write!(f, ", ")?;
                     }
                     if let Some(n) = name {
-                        write!(f, "{}: ", n)?;
+                        write!(f, "{n}: ")?;
                     }
                     write!(f, "{}", type_expr.0)
                 })?;
@@ -127,7 +127,7 @@ impl Display for TypeExpr {
                 Ok(())
             }
             TypeExpr::Array(inner) => write!(f, "{}[]", inner.0),
-            TypeExpr::GenericToBeReplaced(s) => write!(f, "{}", s),
+            TypeExpr::GenericToBeReplaced(s) => write!(f, "{s}"),
         }
     }
 }
@@ -367,7 +367,7 @@ where
                         let mut elems = Vec::new();
                         let expr = (TypeExpr::Or(elements), e.span());
                         merge_or(&expr, &mut elems);
-                        dbg!((TypeExpr::Or(elems), e.span()))
+                        (TypeExpr::Or(elems), e.span())
                     }
                 })
         },
@@ -542,7 +542,7 @@ where
                 .map(|((x, span), is_array)| {
                     is_array
                         .iter()
-                        .fold(x, |acc, _| TypeExpr::Array((acc, span.clone()).into()))
+                        .fold(x, |acc, _| TypeExpr::Array((acc, span).into()))
                 })
                 .map_with(|x, e| (x, e.span()));
 
