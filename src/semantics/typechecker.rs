@@ -137,8 +137,12 @@ impl TypeExpr {
                 let types = fields
                     .iter()
                     .map(|value_expr| {
+                        // todo: check if we really want to unconst tuple values
+                        // maybe we need a way to tell that it should be consted here. e.g.
+                        //  `(5,"hallo")`
                         (
-                            TypeExpr::from_value_expr(&value_expr.0, type_env),
+                            TypeExpr::from_value_expr(&value_expr.0, type_env)
+                                .unconst(),
                             value_expr.1,
                         )
                     })
@@ -380,6 +384,14 @@ impl TypeExpr {
             _ => false,
         }
     }
+
+    pub fn is_struct(&self) -> bool {
+        match self {
+            Self::Struct(..) => true,
+            _ => false,
+        }
+    }
+
 
     pub fn has_subtypes(&self) -> bool {
         match self {
@@ -646,8 +658,23 @@ fn check_type_compatability(
     match &required_type.0 {
         TypeExpr::Any => return,
         TypeExpr::InlineGo => todo!("should inline go be typechecked?"),
-        TypeExpr::Struct(_) => todo!("implement struct typechecking"),
         TypeExpr::Go(_) => unreachable!("typeexpr::go"),
+        TypeExpr::Struct(strct) => {
+            if !given_type.0.is_struct() {
+                fail_requirement(
+                    format!(
+                        "the required type {} is a duck",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                    format!(
+                        "because of the fact, that the required type {} is a duck. The value you need to pass must be a duck aswell, but it isn't.",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                )
+            }
+
+            // todo: check against identity of struct in typechecking
+        },
         TypeExpr::Duck(duck) => {
             if !given_type.0.is_duck() {
                 fail_requirement(
