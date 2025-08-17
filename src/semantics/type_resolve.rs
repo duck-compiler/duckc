@@ -806,8 +806,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 type ResultingDefinitions = Vec<FunctionDefintion>;
 fn find_generic_fn_instantiations(function_definition: &mut FunctionDefintion, type_env: &mut TypeEnv) -> ResultingDefinitions {
     fn in_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) -> ResultingDefinitions {
-        println!("\n\n\n\n-------------------------------");
-        println!("in value expr {value_expr:?}");
         match value_expr {
             ValueExpr::FunctionCall { target, params, type_params } => {
                 let mut instantiations = vec![];
@@ -832,7 +830,6 @@ fn find_generic_fn_instantiations(function_definition: &mut FunctionDefintion, t
                         *target = ValueExpr::Variable(*is_global, fn_def.name.clone(), Some(fn_type));
 
                         instantiations.push(fn_def.clone());
-                        println!("return\n\t{:?} \n\tfor {:?}", &instantiations, &value_expr);
                         return instantiations;
                     }
             },
@@ -977,13 +974,10 @@ fn find_generic_fn_instantiations(function_definition: &mut FunctionDefintion, t
             | ValueExpr::Break => {},
         }
 
-        println!("return none for {value_expr:?}");
         vec![]
     }
 
-    let x = in_value_expr(&mut function_definition.value_expr.0, type_env);
-    println!("{}", function_definition.name.clone());
-    return x
+    return in_value_expr(&mut function_definition.value_expr.0, type_env);
 }
 
 fn typeresolve_function_definition(

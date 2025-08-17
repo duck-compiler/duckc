@@ -642,11 +642,6 @@ fn check_type_compatability(
         )
     };
 
-    println!(
-        "check compatability for required type '{}' and given type '{}'",
-        required_type.0, given_type.0
-    );
-
     match &required_type.0 {
         TypeExpr::Any => return,
         TypeExpr::InlineGo => todo!("should inline go be typechecked?"),
@@ -942,8 +937,6 @@ fn check_type_compatability(
             let TypeExpr::Array(given_content_type) = given_type.clone().0 else {
                 unreachable!("we've checked that given_type is an array")
             };
-
-            println!("hallo");
 
             check_type_compatability(&content_type, &given_content_type, type_env);
         }
@@ -1389,16 +1382,11 @@ mod test {
 
             let summary = type_env.summarize();
 
-            println!("------------------------------------");
-            println!("source: \n{src}");
-            println!("types used:");
             summary
                 .types_used
                 .iter()
                 .map(|type_expr| type_expr.as_clean_go_type_name(&mut type_env))
                 .for_each(|type_name| println!("\t{type_name}"));
-
-            println!("------------------------------------");
 
             summary_check_fun(&summary);
         }
