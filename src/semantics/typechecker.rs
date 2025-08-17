@@ -2,7 +2,7 @@ use std::process;
 
 use colored::Colorize;
 
-use crate::parse::SS;
+use crate::parse::{failure_with_occurence, SS};
 use crate::parse::type_parser::{Duck, Field, Struct, TypeExpr};
 use crate::parse::{
     Spanned, failure,
@@ -46,16 +46,46 @@ impl TypeExpr {
                 array_type.0.clone()
             }
             ValueExpr::Array(optional_type_support, value_exprs) => {
-                    dbg!(type_support);
+                if let Some(type_support) = optional_type_support {
                     for value_expr in value_exprs {
+                        let type_expr = &(TypeExpr::from_value_expr(&value_expr.0, type_env), value_expr.1);
                         check_type_compatability(
                             type_support,
-                            &(TypeExpr::from_value_expr(&value_expr.0, type_env), value_expr.1),
+                            type_expr,
                             type_env
                         );
                     }
+
+                    return TypeExpr::Array(Box::new(type_support.clone()));
                 }
-                TypeExpr::Array(ty.unwrap().into())
+
+                let mut variants = value_exprs
+                    .iter()
+                    .map(|value_expr| (TypeExpr::from_value_expr(&value_expr.0, type_env).unconst(), value_expr.1))
+                    .collect::<Vec<Spanned<TypeExpr>>>();
+
+                variants.sort_by_key(|value_expr| value_expr.0.as_clean_go_type_name(type_env));
+                variants.dedup_by_key(|value_expr| value_expr.0.as_clean_go_type_name(type_env));
+
+                if variants.len() > 1 {
+                    let start = variants.first().expect("we've just checked that variants is at least 2 items long");
+                    let end = variants.last().expect("we've just checked that variants is at least 2 items long");
+
+                    let combined_span = SS {
+                        context: start.1.context,
+                        start: start.1.start,
+                        end: end.1.end,
+                    };
+
+                    return TypeExpr::Array(Box::new((TypeExpr::Or(variants), combined_span)));
+                }
+
+                if variants.len() == 0 {
+                    todo!("empty errors need to defined their type error");
+                }
+
+                let first_type = variants.first().expect("we've checked that variants is exactly of len 1");
+                return TypeExpr::Array(Box::new(first_type.clone()))
             }
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
                 lambda_expr
@@ -433,7 +463,10 @@ impl TypeExpr {
     }
 
     pub fn is_string(&self) -> bool {
-        return *self == TypeExpr::String || matches!(*self, TypeExpr::ConstString(..));
+        return *self == TypeExpr::String || matches!(*self, TypeExpr::ConstString(..)) || {
+            let TypeExpr::Or(variants) = self else { return false };
+            return !variants.iter().any(|variant| !variant.0.is_string())
+        };
     }
 
     pub fn is_array(&self) -> bool {
@@ -553,7 +586,6 @@ fn require_subset_of_variant_type(
                 }
             }
         }
-
         _ => {
             if !is_non_variant_type_in_variant(other, variant_members, type_env) {
                 failure(
@@ -598,26 +630,13 @@ fn check_type_compatability(
             context: required_type.1.context,
         };
 
-        failure(
+        failure_with_occurence(
             given_type.1.context.file_name,
             format!("Incompatible Types",),
-            (
-                format!(
-                    "Expected value of type {}.",
-                    format!("{}", required_type.0).bright_yellow(),
-                ),
-                combined_span,
-            ),
+            given_type.1,
             vec![
                 (format!("{explain_required}"), required_type.1),
                 (format!("{explain_given}"), given_type.1),
-                (
-                    format!(
-                        "but got a value of type {}.",
-                        format!("{}", given_type.0).bright_yellow()
-                    ),
-                    given_type.1,
-                ),
             ],
             given_type.1.context.file_contents,
         )
@@ -724,14 +743,14 @@ fn check_type_compatability(
             dbg!(&required_type, &given_type);
             if !given_type.0.is_string() {
                 fail_requirement(
-                    format!("this requires an at compile time known string"),
-                    format!("this value isn't even a string."),
+                    format!("this requires an at compile time known {}", required_type.0),
+                    format!("this value isn't even a string, it's a {}.", given_type.0),
                 )
             }
 
             if !given_type.0.holds_const_value() {
                 fail_requirement(
-                    format!("this requires a compile time known string"),
+                    format!("this requires a compile time known {}", required_type.0),
                     format!("this is a string, but it's not known at compile time"),
                 )
             }
@@ -913,7 +932,6 @@ fn check_type_compatability(
             }
         }
         TypeExpr::Array(content_type) => {
-            dbg!(required_type, given_type);
             if !given_type.0.is_array() {
                 fail_requirement(
                     format!("this requires an array of {}", &content_type.0),
@@ -922,8 +940,10 @@ fn check_type_compatability(
             }
 
             let TypeExpr::Array(given_content_type) = given_type.clone().0 else {
-                unreachable!()
+                unreachable!("we've checked that given_type is an array")
             };
+
+            println!("hallo");
 
             check_type_compatability(&content_type, &given_content_type, type_env);
         }
