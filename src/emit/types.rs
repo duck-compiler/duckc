@@ -42,7 +42,7 @@ pub fn primitive_conc_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
     }
 }
 
-pub fn primitive_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
+pub fn primitive_type_name(primitive_type_expr: &TypeExpr) -> &'static str {
     match primitive_type_expr {
         TypeExpr::String => "DuckString",
         TypeExpr::Int => "DuckInt",
@@ -159,7 +159,10 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                 return vec![
                     IrInstruction::StructDef(
                         primitive_type_expr.as_go_concrete_annotation(type_env),
-                        vec![],
+                        vec![(
+                            "value".to_string(),
+                            primitive_native_type_name(primitive_type_expr).to_string())
+                        ],
                     ),
                     IrInstruction::FunDef(
                         format!("as_dgo_{}", primitive_native_type_name(primitive_type_expr)),
@@ -272,7 +275,8 @@ impl TypeExpr {
             TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
             TypeExpr::ConstBool(b) => primitive_type_name(&TypeExpr::ConstBool(*b)).to_string(),
             TypeExpr::ConstString(str) => {
-                primitive_type_name(&TypeExpr::ConstString(str.clone())).to_string()
+                // primitive_type_name(&TypeExpr::ConstString(str.clone())).to_string()
+                "DuckString".to_string()
             }
             TypeExpr::Bool => "DuckBool".to_string(),
             TypeExpr::InlineGo => "any".to_string(),
@@ -483,7 +487,7 @@ impl TypeExpr {
                     "Tup_{}",
                     fields
                         .iter()
-                        .map(|type_expr| type_expr.0.as_clean_go_type_name(type_env).to_string())
+                        .map(|type_expr| type_expr.0.as_go_type_annotation(type_env).to_string())
                         .collect::<Vec<_>>()
                         .join("_")
                 )
