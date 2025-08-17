@@ -1,4 +1,3 @@
-use std::panic::Location;
 
 use crate::parse::{
     Context, SS, Spanned,

@@ -6,7 +6,7 @@ use crate::parse::{failure_with_occurence, SS};
 use crate::parse::type_parser::{Duck, Field, Struct, TypeExpr};
 use crate::parse::{
     Spanned, failure,
-    value_parser::{ValFmtStringContents, ValueExpr, empty_range},
+    value_parser::{ValFmtStringContents, ValueExpr},
 };
 use crate::semantics::type_resolve::TypeEnv;
 
