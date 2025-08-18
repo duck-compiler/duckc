@@ -626,7 +626,6 @@ impl ValueExpr {
                     TypeExpr::from_value_expr(self, type_env)
                         .as_go_type_annotation(type_env);
 
-                println!("unconst {name}");
                 for (field_expr, _) in fields {
                     let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, env);
                     res.extend(field_instr);
