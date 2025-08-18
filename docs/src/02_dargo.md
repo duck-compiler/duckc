@@ -1,4 +1,5 @@
-# Dargo - The Build System
+$title = "Dargo - The Build System"
+
 Dargo is our primary way to configure, test, build and deploy a duck application.
 Every duck project is defined by a `dargo.toml` file, which describes some metadata of the application but also contains information about dependencies.
 

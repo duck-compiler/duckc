@@ -1,4 +1,5 @@
-# Getting started
+$title = "Getting started"
+
 Table of contents
     1.) Installation
     2.) Project setup
