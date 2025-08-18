@@ -491,9 +491,6 @@ impl ValueExpr {
                         }
                     } else if let ValueExpr::ArrayAccess(target, idx) = target {
                         //todo(@Apfelfrosch) handle indices of type ! properly (do it in rest of emit too)
-
-                        dbg!(target);
-
                         let (idx_instr, Some(IrValue::Var(idx_res))) = idx.0.emit(type_env, env)
                         else {
                             panic!("no var: {idx:?}")
@@ -626,7 +623,10 @@ impl ValueExpr {
                 let mut res = Vec::new();
                 let mut res_vars = Vec::new();
                 let name =
-                    TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
+                    TypeExpr::from_value_expr(self, type_env)
+                        .as_go_type_annotation(type_env);
+
+                println!("unconst {name}");
                 for (field_expr, _) in fields {
                     let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, env);
                     res.extend(field_instr);

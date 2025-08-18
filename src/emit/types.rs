@@ -335,25 +335,17 @@ impl TypeExpr {
             }
             TypeExpr::Tuple(fields) => {
                 format!(
-                    "Tup_{}",
+                    "struct {{\n{}\n}}",
                     fields
                         .iter()
-                        .map(|type_expr| type_expr.0.as_clean_go_type_name(type_env).to_string())
+                        .enumerate()
+                        .map(|(i, type_expr)| format!(
+                            "field_{i} {}",
+                            type_expr.0.as_go_type_annotation(type_env)
+                        ))
                         .collect::<Vec<_>>()
-                        .join("_")
+                        .join("\n")
                 )
-                // format!(
-                //     "struct {{\n{}\n}}",
-                //     fields
-                //         .iter()
-                //         .enumerate()
-                //         .map(|(i, type_expr)| format!(
-                //             "field_{i} {}",
-                //             type_expr.0.as_go_type_annotation(type_env)
-                //         ))
-                //         .collect::<Vec<_>>()
-                //         .join("\n")
-                // )
             }
             TypeExpr::Or(_variants) => "any".to_string(),
         };
@@ -388,7 +380,7 @@ impl TypeExpr {
                     .iter()
                     .map(|(name, type_expr)| match name {
                         Some(name) =>
-                            format!("{name}: {}", type_expr.0.as_go_type_annotation(type_env)),
+                            format!("{name} {}", type_expr.0.as_go_type_annotation(type_env)),
                         None => type_expr.0.as_go_type_annotation(type_env),
                     })
                     .collect::<Vec<_>>()
