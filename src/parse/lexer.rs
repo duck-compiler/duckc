@@ -712,7 +712,7 @@ mod tests {
             (
                 "f\" outer {\"inner\"} outer \"",
                 vec![Token::FormatStringLiteral(vec![
-                    FmtStringContents::String("outer ".into()),
+                    FmtStringContents::String(" outer ".into()),
                     FmtStringContents::Tokens(vec![(
                         Token::ConstString("inner".to_string()),
                         empty_range(),
