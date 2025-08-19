@@ -66,11 +66,57 @@ def parse_header_and_content(file_path):
     content = "".join(content_lines[header_end_index:]).strip()
     return variables, content
 
+def build_book_from_directory(root_dir="."):
+    log = logging.getLogger(__name__)
+    log.info("bilding book structure from source directory...")
+
+    file_pattern = re.compile(r"^\d{2}_.*")
+    paths = sorted([p for p in os.listdir(root_dir) if file_pattern.match(p)])
+
+    book = {
+        "book_intro": {"name": "Introduction", "sections": []},
+        "chapters": [],
+    }
+
+    for path in paths:
+        full_path = os.path.join(root_dir, path)
+        name_without_prefix = path[3:].replace('.md', '').replace('_', ' ').title()
+
+        if os.path.isfile(full_path) and full_path.endswith('.md'):
+            local_vars, raw_content = parse_header_and_content(full_path)
+            book["book_intro"]["sections"].append({
+                "name": name_without_prefix,
+                "content": raw_content,
+                "title": local_vars.get("title", name_without_prefix)
+            })
+        elif os.path.isdir(full_path):
+            chapter = {
+                "name": name_without_prefix,
+                "sections": []
+            }
+            log.info(f"processing chapter: \033[35m{chapter['name']}\033[0m")
+
+            section_files = sorted([f for f in os.listdir(full_path) if f.endswith('.md')])
+            for section_file in section_files:
+                section_path = os.path.join(full_path, section_file)
+                section_name = section_file[3:].replace('.md', '').replace('_', ' ').title()
+
+                local_vars, raw_content = parse_header_and_content(section_path)
+                chapter["sections"].append({
+                    "name": section_name,
+                    "content": raw_content,
+                    "title": local_vars.get("title", section_name)
+                })
+            book["chapters"].append(chapter)
+
+    return book
+
 def main():
     setup_logger()
     log = logging.getLogger(__name__)
 
     log.info("starting book generation process...")
+    book_data = build_book_from_directory()
     pass
 
 if __name__ == "__main__":
