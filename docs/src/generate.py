@@ -5,6 +5,7 @@ import logging
 import sys
 
 MANDATORY_VARS = ["title"]
+GLOBAL_VARS_FILE = "00_intro.md"
 
 class ColoredFormatter(logging.Formatter):
     LOG_COLORS = {
@@ -72,6 +73,9 @@ def build_book_from_directory(root_dir="."):
 
     file_pattern = re.compile(r"^\d{2}_.*")
     paths = sorted([p for p in os.listdir(root_dir) if file_pattern.match(p)])
+
+    global_vars, _ = parse_header_and_content(os.path.join(root_dir, GLOBAL_VARS_FILE))
+    log.info(f"Loaded {len(global_vars)} global variables from '{GLOBAL_VARS_FILE}'.")
 
     book = {
         "book_intro": {"name": "Introduction", "sections": []},
