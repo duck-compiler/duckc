@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-import sys
+import os
+import re
 import logging
+import sys
+
+MANDATORY_VARS = ["title"]
 
 class ColoredFormatter(logging.Formatter):
     LOG_COLORS = {
@@ -29,6 +33,38 @@ def setup_logger():
     logger.setLevel(logging.INFO)
     if not logger.handlers:
         logger.addHandler(handler)
+
+def parse_header_and_content(file_path):
+    log = logging.getLogger(__name__)
+    log.debug(f"parsing header for: \033[36m{file_path}\033[0m")
+
+    variables = {}
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content_lines = f.readlines()
+    except FileNotFoundError:
+        log.error(f"File not found: {file_path}")
+        return {}, ""
+
+    header_end_index = 0
+    variable_pattern = re.compile(r'^\$(\w+)\s*=\s*"?([^"]*)"?\s*$')
+
+    for i, line in enumerate(content_lines):
+        match = variable_pattern.match(line)
+        if match:
+            key, value = match.groups()
+            variables[key.strip()] = value.strip()
+            header_end_index = i + 1
+        else:
+            break
+
+    for var in MANDATORY_VARS:
+        if var not in variables:
+            log.warning(f"Mandatory variable '{var}' not found in {file_path}")
+            variables.setdefault(var, "Untitled")
+
+    content = "".join(content_lines[header_end_index:]).strip()
+    return variables, content
 
 def main():
     setup_logger()
