@@ -67,6 +67,15 @@ def parse_header_and_content(file_path):
     content = "".join(content_lines[header_end_index:]).strip()
     return variables, content
 
+def replace_variables_in_content(content, local_vars, global_vars):
+    combined_vars = {**global_vars, **local_vars}
+
+    def replace_match(match):
+        var_name = match.group(1)
+        return combined_vars.get(var_name, f"$${{{var_name}}}")
+
+    return re.sub(r'\$\${(\w+)}', replace_match, content)
+
 def build_book_from_directory(root_dir="."):
     log = logging.getLogger(__name__)
     log.info("bilding book structure from source directory...")
@@ -88,9 +97,10 @@ def build_book_from_directory(root_dir="."):
 
         if os.path.isfile(full_path) and full_path.endswith('.md'):
             local_vars, raw_content = parse_header_and_content(full_path)
+            processed_content = replace_variables_in_content(raw_content, local_vars, global_vars)
             book["book_intro"]["sections"].append({
                 "name": name_without_prefix,
-                "content": raw_content,
+                "content": processed_content,
                 "title": local_vars.get("title", name_without_prefix)
             })
         elif os.path.isdir(full_path):
@@ -106,9 +116,10 @@ def build_book_from_directory(root_dir="."):
                 section_name = section_file[3:].replace('.md', '').replace('_', ' ').title()
 
                 local_vars, raw_content = parse_header_and_content(section_path)
+                processed_content = replace_variables_in_content(raw_content, local_vars, global_vars)
                 chapter["sections"].append({
                     "name": section_name,
-                    "content": raw_content,
+                    "content": processed_content,
                     "title": local_vars.get("title", section_name)
                 })
             book["chapters"].append(chapter)
