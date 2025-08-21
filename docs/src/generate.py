@@ -4,6 +4,8 @@ import re
 import logging
 import sys
 
+
+OUTPUT_DIR = ".."
 MANDATORY_VARS = ["title"]
 GLOBAL_VARS_FILE = "00_intro.md"
 
@@ -126,12 +128,32 @@ def build_book_from_directory(root_dir="."):
 
     return book
 
+def generate_output_files(book):
+    log = logging.getLogger(__name__)
+    log.info(f"generating output files in '{os.path.abspath(OUTPUT_DIR)}' directory...")
+    log.warning(f"existing files in the output directory with matching names will be overwritten.")
+
+    flat_pages = []
+    page_counter = 0
+
+    for section in book["book_intro"]["sections"]:
+        filename = "README.md" if page_counter == 0 else f"{page_counter:03d}-{section['name'].lower().replace(' ', '-')}.md"
+        flat_pages.append({"filename": filename, "chapter_name": "Introduction", **section})
+        page_counter += 1
+
+    for chapter in book["chapters"]:
+        for section in chapter["sections"]:
+            filename = f"{page_counter:03d}-{chapter['name'].lower().replace(' ', '-')}-{section['name'].lower().replace(' ', '-')}.md"
+            flat_pages.append({"filename": filename, "chapter_name": chapter['name'], **section})
+            page_counter += 1
+
 def main():
     setup_logger()
     log = logging.getLogger(__name__)
 
     log.info("starting book generation process...")
     book_data = build_book_from_directory()
+    generate_output_files(book_data)
     pass
 
 if __name__ == "__main__":
