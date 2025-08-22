@@ -147,6 +147,23 @@ def generate_output_files(book):
             flat_pages.append({"filename": filename, "chapter_name": chapter['name'], **section})
             page_counter += 1
 
+    total_pages = len(flat_pages)
+    for i, page in enumerate(flat_pages):
+        nav_links = []
+        if i > 0:
+            prev_page = flat_pages[i-1]
+            nav_links.append(f"[< Previous]({prev_page['filename']})")
+
+        if i != 0:
+            home_page = flat_pages[0]
+            nav_links.append(f"[Home]({home_page['filename']})")
+
+        if i < total_pages - 1:
+            next_page = flat_pages[i+1]
+            nav_links.append(f"[Next >]({next_page['filename']})")
+
+        nav_bar = " | ".join(nav_links)
+
 def main():
     setup_logger()
     log = logging.getLogger(__name__)
