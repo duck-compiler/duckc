@@ -147,6 +147,20 @@ def generate_output_files(book):
             flat_pages.append({"filename": filename, "chapter_name": chapter['name'], **section})
             page_counter += 1
 
+    toc_lines = ["\n## Table of Contents\n"]
+    current_chapter = None
+    for page in flat_pages:
+        if page['filename'] == 'README.md':
+            continue
+        if page['chapter_name'] != current_chapter:
+            current_chapter = page['chapter_name']
+            if current_chapter != "Introduction":
+                 toc_lines.append(f"\n- **{current_chapter}**")
+
+        indent = "  " if current_chapter != "Introduction" else ""
+        toc_lines.append(f"{indent}- [{page['title']}]({page['filename']})")
+    toc_content = "\n".join(toc_lines)
+
     total_pages = len(flat_pages)
     for i, page in enumerate(flat_pages):
         nav_links = []
@@ -163,6 +177,10 @@ def generate_output_files(book):
             nav_links.append(f"[Next >]({next_page['filename']})")
 
         nav_bar = " | ".join(nav_links)
+
+        page_content = page['content']
+        if page['filename'] == 'README.md':
+            page_content += "\n" + toc_content
 
 def main():
     setup_logger()
