@@ -182,14 +182,33 @@ def generate_output_files(book):
         if page['filename'] == 'README.md':
             page_content += "\n" + toc_content
 
+        final_content = (
+            f"# {page['title']}\n\n"
+            f"{nav_bar}\n\n"
+            f"---\n\n"
+            f"{page_content}\n\n"
+            f"---\n\n"
+            f"{nav_bar}\n\n"
+            f'<div align="center">🦆</div>\n'
+        )
+
+        output_path = os.path.join(OUTPUT_DIR, page['filename'])
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(final_content)
+        log.debug(f"generated file: {output_path}")
+
 def main():
     setup_logger()
     log = logging.getLogger(__name__)
 
     log.info("starting book generation process...")
-    book_data = build_book_from_directory()
-    generate_output_files(book_data)
-    pass
+    try:
+        book_data = build_book_from_directory()
+        generate_output_files(book_data)
+        log.info(f"successfully generated files in '{os.path.abspath(OUTPUT_DIR)}' directory!")
+    except Exception as e:
+        log.critical(f"error while trying to generate files: {e}", exc_info=False)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
