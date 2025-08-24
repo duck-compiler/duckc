@@ -728,7 +728,7 @@ fn empty_duck() -> ValueExpr {
 }
 
 // track caller so that we find out where this method is called in case of error
-#[track_caller]
+//#[track_caller]
 pub fn empty_range() -> SS {
     SS {
         start: 0,
