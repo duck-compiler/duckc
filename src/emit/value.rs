@@ -166,7 +166,18 @@ fn walk_access(
             } => {
                 match TypeExpr::from_value_expr(&target_obj.0, type_env) {
                     TypeExpr::Tuple(..) => s.push_front(format!("field_{field_name}")),
-                    TypeExpr::Duck(..) => s.push_front(format!("GetPtr{field_name}()")),
+                    TypeExpr::Duck(Duck { fields }) => {
+                        let found_field = fields
+                            .iter()
+                            .find(|x| x.name == field_name)
+                            .expect("Field doesn't exist");
+                        if found_field.type_expr.0.is_array()
+                            || found_field.type_expr.0.is_duck() {
+                            s.push_front(format!("Get{field_name}()"));
+                        } else {
+                            s.push_front(format!("GetPtr{field_name}()"));
+                        }
+                    }
                     TypeExpr::Struct(..) => s.push_front(format!("{field_name}")),
                     _ => panic!("can only access object like"),
                 }
@@ -290,7 +301,7 @@ impl ValueExpr {
 
                 let mut cases = Vec::new();
                 for arm in arms {
-                    let type_name = arm.type_case.0.as_go_type_annotation(type_env);
+                    let type_name = arm.type_case.0.as_clean_go_type_name(type_env);
 
                     let (mut arm_instrs, arm_res) =
                         arm.value_expr.0.direct_or_with_instr(type_env, env);

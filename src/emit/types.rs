@@ -349,18 +349,7 @@ impl TypeExpr {
                 )
             }
             TypeExpr::Tuple(fields) => {
-                format!(
-                    "struct {{\n{}\n}}",
-                    fields
-                        .iter()
-                        .enumerate()
-                        .map(|(i, type_expr)| format!(
-                            "field_{i} {}",
-                            type_expr.0.as_go_type_annotation(type_env)
-                        ))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                )
+                self.as_clean_go_type_name(type_env)
             }
             TypeExpr::Or(_variants) => "any".to_string(),
         };
@@ -465,7 +454,8 @@ impl TypeExpr {
             TypeExpr::String => "DuckString".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
-            TypeExpr::TypeName(_, name, _type_params) => name.clone(),
+            TypeExpr::TypeName(_, name, _type_params) => type_env.resolve_type_alias(name)
+                .as_clean_go_type_name(type_env),
             TypeExpr::TypeNameInternal(name) => name.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type) => format!(
@@ -493,7 +483,7 @@ impl TypeExpr {
                     .map(|field| format!(
                         "{}_{}",
                         field.name,
-                        field.type_expr.0.as_clean_go_type_name(type_env)
+                        field.type_expr.0.unconst().as_clean_go_type_name(type_env)
                     ))
                     .collect::<Vec<_>>()
                     .join("_")
@@ -505,7 +495,7 @@ impl TypeExpr {
                     .map(|field| format!(
                         "{}_{}",
                         field.name,
-                        field.type_expr.0.as_clean_go_type_name(type_env)
+                        field.type_expr.0.unconst().as_clean_go_type_name(type_env)
                     ))
                     .collect::<Vec<_>>()
                     .join("_")
@@ -515,7 +505,7 @@ impl TypeExpr {
                     "Tup_{}",
                     fields
                         .iter()
-                        .map(|type_expr| type_expr.0.as_clean_go_type_name(type_env).to_string())
+                        .map(|type_expr| type_expr.0.unconst().as_clean_go_type_name(type_env).to_string())
                         .collect::<Vec<_>>()
                         .join("_")
                 )
