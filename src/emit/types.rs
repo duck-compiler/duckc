@@ -59,8 +59,6 @@ pub fn primitive_type_name(primitive_type_expr: &TypeExpr) -> &'static str {
     }
 }
 
-
-
 pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
     let summary = type_env.summarize();
 
@@ -83,6 +81,22 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                             vec![IrInstruction::Return(Some(IrValue::FieldAccess(
                                 IrValue::Var("self".into()).into(),
                                 field.name.clone(),
+                            )))],
+                        ),
+                        IrInstruction::FunDef(
+                            format!("GetPtr{}", field.name),
+                            Some(("self".into(), format!("*{}", typename.clone()))),
+                            vec![],
+                            Some(format!(
+                                "*{}",
+                                field.type_expr.0.as_go_type_annotation(type_env)
+                            )),
+                            vec![IrInstruction::Return(Some(IrValue::Pointer(
+                                IrValue::FieldAccess(
+                                    IrValue::Var("self".into()).into(),
+                                    field.name.clone(),
+                                )
+                                .into(),
                             )))],
                         ),
                         IrInstruction::FunDef(
@@ -133,6 +147,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                 vec![("T".into(), "any".into())],
                 vec![
                     (format!("Get{param_name}"), vec![], Some("T".into())),
+                    (format!("GetPtr{param_name}"), vec![], Some("*T".into())),
                     (
                         format!("Set{param_name}"),
                         vec![("param".into(), "T".into())],
@@ -161,8 +176,8 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                         primitive_type_expr.as_go_concrete_annotation(type_env),
                         vec![(
                             "value".to_string(),
-                            primitive_native_type_name(primitive_type_expr).to_string())
-                        ],
+                            primitive_native_type_name(primitive_type_expr).to_string(),
+                        )],
                     ),
                     IrInstruction::FunDef(
                         format!("as_dgo_{}", primitive_native_type_name(primitive_type_expr)),
@@ -268,7 +283,9 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
-            TypeExpr::GenericToBeReplaced(..) => panic!("shouldn't access the GenericToBeReplaced as go type annotation"),
+            TypeExpr::GenericToBeReplaced(..) => {
+                panic!("shouldn't access the GenericToBeReplaced as go type annotation")
+            }
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::Array(t) => format!("[]{}", t.0.as_go_type_annotation(type_env)),
             TypeExpr::Any => "interface{}".to_string(),
@@ -287,11 +304,9 @@ impl TypeExpr {
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeNameInternal(name) => name.clone(),
             // todo: type params
-            TypeExpr::TypeName(_, name, _) => {
-                type_env
-                    .resolve_type_alias(name)
-                    .as_go_type_annotation(type_env)
-            },
+            TypeExpr::TypeName(_, name, _) => type_env
+                .resolve_type_alias(name)
+                .as_go_type_annotation(type_env),
             TypeExpr::Fun(params, return_type) => format!(
                 "func({}) {}",
                 params
@@ -426,7 +441,7 @@ impl TypeExpr {
             TypeExpr::ConstString(..) => TypeExpr::String,
             TypeExpr::ConstBool(..) => TypeExpr::Bool,
             TypeExpr::ConstInt(..) => TypeExpr::Int,
-            _ => self.clone()
+            _ => self.clone(),
         }
     }
 
@@ -435,7 +450,7 @@ impl TypeExpr {
             TypeExpr::GenericToBeReplaced(x) => x.clone(),
             TypeExpr::RawTypeName(_, ident, _) => {
                 panic!("{ident:?}")
-            },
+            }
             TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
             TypeExpr::ConstBool(b) => primitive_type_name(&TypeExpr::ConstBool(*b)).to_string(),
             TypeExpr::ConstString(str) => {

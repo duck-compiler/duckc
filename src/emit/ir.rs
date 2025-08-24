@@ -233,6 +233,7 @@ pub fn join_ir(v: &[IrInstruction]) -> String {
 impl IrValue {
     pub fn emit_as_go(&self) -> String {
         match self {
+            IrValue::Pointer(target) => format!("&{}", target.emit_as_go()),
             IrValue::Imm(str) => str.to_string(),
             IrValue::ArrayAccess(target, idx) => {
                 format!("{}[{}.as_dgo_int()]", target.emit_as_go(), idx.emit_as_go())
