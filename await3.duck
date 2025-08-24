@@ -1,9 +1,0 @@
-use std::io::{println};
-
-fn main() {
-    let x: ((String,),) = (("tuple",),);
-    println("assign");
-    x.0.0 = "again";
-    println("assign over");
-    println(x.0.0);
-}
