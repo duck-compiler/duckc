@@ -2,4 +2,3 @@ module io;
 module task;
 module time;
 module string;
-module http;
