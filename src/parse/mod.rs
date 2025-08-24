@@ -33,6 +33,27 @@ pub fn make_input<'src>(
     toks.map(eoi, |(t, s)| (t, s))
 }
 
+pub fn failure_with_occurence(
+    file_name: &'static str,
+    msg: String,
+    occured_at: SS,
+    labels: impl IntoIterator<Item = (String, SS)>,
+    src: &str,
+) -> ! {
+    Report::build(ReportKind::Error, (file_name, occured_at.into_range()))
+        .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
+        .with_message(&msg)
+        .with_labels(labels.into_iter().map(|label2| {
+            Label::new((file_name, label2.1.into_range()))
+                .with_message(label2.0)
+                .with_color(Color::Yellow)
+        }))
+        .finish()
+        .eprint(sources([(file_name, src)]))
+        .unwrap();
+    panic!("{}", msg)
+}
+
 pub fn failure(
     file_name: &'static str,
     msg: String,
@@ -54,7 +75,7 @@ pub fn failure(
                 .with_color(Color::Yellow)
         }))
         .finish()
-        .print(sources([(file_name, src)]))
+        .eprint(sources([(file_name, src)]))
         .unwrap();
     panic!("{}", msg)
 }

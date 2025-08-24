@@ -1,0 +1,12 @@
+fn give() -> { x: String } {
+    return { x: "Hallo" };
+}
+
+fn give2() -> { x: (String,) } {
+    return { x: ("Hallo",) };
+}
+
+fn main() {
+    give().x = "Yo";
+    give2().x.0 = "abc";
+}

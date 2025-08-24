@@ -57,7 +57,7 @@ where
     I: BorrowInput<'src, Token = Token, Span = SS>,
 {
     (just(Token::Use).then(just(Token::Go)))
-        .ignore_then(select_ref! { Token::StringLiteral(s) => s.to_owned() })
+        .ignore_then(select_ref! { Token::ConstString(s) => s.to_owned() })
         .then(
             just(Token::As)
                 .ignore_then(select_ref! { Token::Ident(i) => i.to_owned() })

@@ -1,4 +1,4 @@
 {
-    "stdout": "A STRING\nnested\n",
+    "stdout": "A STRING\nset by assignment\n",
     "stderr": ""
 }

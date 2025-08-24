@@ -1,38 +1,18 @@
 use std::process;
 
+use colored::Colorize;
+
 use crate::parse::type_parser::{Duck, Field, Struct, TypeExpr};
-use crate::parse::SS;
+use crate::parse::{SS, failure_with_occurence};
 use crate::parse::{
     Spanned, failure,
-    value_parser::{ValFmtStringContents, ValueExpr, empty_range},
+    value_parser::{ValFmtStringContents, ValueExpr},
 };
 use crate::semantics::type_resolve::TypeEnv;
 
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
-        match self {
-            TypeExpr::GenericToBeReplaced(..) => panic!(),
-            TypeExpr::RawTypeName(..) => panic!(),
-            TypeExpr::Any => "Any".to_string(),
-            TypeExpr::InlineGo => "inline-go".to_string(),
-            TypeExpr::Struct(_) => "struct {{ todo }}".to_string(),
-            TypeExpr::Go(str) => format!("go({str})"),
-            TypeExpr::Duck(_) => "duck { todo }".to_string(),
-            TypeExpr::Tuple(_) => "tuple(todo)".to_string(),
-            TypeExpr::TypeName(_, str, _) => format!("type {str}"), // todo: type params
-            TypeExpr::TypeNameInternal(str) => format!("internal {str}"),
-            TypeExpr::StringLiteral(str) => format!("\"{str}\""),
-            TypeExpr::IntLiteral(int) => format!("{int}"),
-            TypeExpr::BoolLiteral(bool) => format!("{bool}"),
-            TypeExpr::String => "String".to_string(),
-            TypeExpr::Int => "Int".to_string(),
-            TypeExpr::Bool => "Bool".to_string(),
-            TypeExpr::Char => "Char".to_string(),
-            TypeExpr::Float => "Float".to_string(),
-            TypeExpr::Or(..) => "todo | todo".to_string(),
-            TypeExpr::Fun(..) => "fn (todo) -> todo".to_string(),
-            TypeExpr::Array(_) => "todo[]".to_string(),
-        }
+        return format!("{self}");
     }
 
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
@@ -42,7 +22,9 @@ impl TypeExpr {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {
                         require(
-                            matches!(TypeExpr::from_value_expr(&e.0, type_env), TypeExpr::String),
+                            // matches!(TypeExpr::from_value_expr(&e.0, type_env), TypeExpr::String) ||
+                            // matches!(TypeExpr::from_value_expr(&e.0, type_env), TypeExpr::ConstString(..)),
+                            TypeExpr::from_value_expr(&e.0, type_env).is_string(),
                             "Needs to be string".into(),
                         );
                     }
@@ -53,11 +35,8 @@ impl TypeExpr {
                 let target_type = TypeExpr::from_value_expr(&target.0, type_env);
                 let idx_type = TypeExpr::from_value_expr(&idx.0, type_env);
 
-                require(
-                    matches!(&target_type, TypeExpr::Array(_)),
-                    "Needs to be array".into(),
-                );
-                require(matches!(&idx_type, TypeExpr::Int), "Needs to be int".into());
+                require(target_type.is_array(), "Needs to be array".into());
+                require(idx_type.is_int(), "Needs to be int".into());
 
                 let TypeExpr::Array(array_type) = target_type else {
                     panic!()
@@ -65,22 +44,59 @@ impl TypeExpr {
 
                 array_type.0.clone()
             }
-            ValueExpr::Array(ty, exprs) => {
-                let mut ty = ty.clone().map(|(ty, _)| ty);
-                for expr in exprs {
-                    let expr_type = TypeExpr::from_value_expr(&expr.0, type_env);
-                    match ty.as_ref() {
-                        Some(expected) => {
-                            check_type_compatability(
-                                &(expr_type, expr.1),
-                                &(expected.clone(), empty_range()),
-                                type_env,
-                            );
-                        }
-                        None => ty = Some(expr_type),
+            ValueExpr::Array(optional_type_support, value_exprs) => {
+                if let Some(type_support) = optional_type_support {
+                    for value_expr in value_exprs {
+                        let type_expr = &(
+                            TypeExpr::from_value_expr(&value_expr.0, type_env),
+                            value_expr.1,
+                        );
+                        check_type_compatability(type_support, type_expr, type_env);
                     }
+
+                    return TypeExpr::Array(Box::new(type_support.clone()));
                 }
-                TypeExpr::Array(ty.unwrap().into_empty_span().into())
+
+                let mut variants = value_exprs
+                    .iter()
+                    .map(|value_expr| {
+                        (
+                            TypeExpr::from_value_expr(&value_expr.0, type_env).unconst(),
+                            value_expr.1,
+                        )
+                    })
+                    .collect::<Vec<Spanned<TypeExpr>>>();
+
+                variants.sort_by_key(|value_expr| value_expr.0.as_clean_go_type_name(type_env));
+                variants.dedup_by_key(|value_expr| value_expr.0.as_clean_go_type_name(type_env));
+
+                if variants.len() > 1 {
+                    let start = variants
+                        .first()
+                        .expect("we've just checked that variants is at least 2 items long");
+                    let end = variants
+                        .last()
+                        .expect("we've just checked that variants is at least 2 items long");
+
+                    let combined_span = SS {
+                        context: start.1.context,
+                        start: start.1.start,
+                        end: end.1.end,
+                    };
+
+                    return TypeExpr::Array(Box::new((TypeExpr::Or(variants), combined_span)));
+                }
+
+                if variants.is_empty() {
+                    panic!(
+                        "Internal Compiler Error: variants shoulnd't ever be empty, as this is a syntax error."
+                    );
+                }
+
+                let first_type = variants
+                    .first()
+                    .expect("we've checked that variants is exactly of len 1");
+                return TypeExpr::Array(Box::new(first_type.clone()));
             }
             ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
                 lambda_expr
@@ -95,7 +111,7 @@ impl TypeExpr {
             ValueExpr::Bool(..) => TypeExpr::Bool,
             ValueExpr::Char(..) => TypeExpr::Char,
             ValueExpr::Float(..) => TypeExpr::Float,
-            ValueExpr::String(..) => TypeExpr::String,
+            ValueExpr::String(str_value) => TypeExpr::ConstString(str_value.clone()),
             ValueExpr::Break => TypeExpr::Tuple(vec![]),
             ValueExpr::Continue => TypeExpr::Tuple(vec![]),
             ValueExpr::Return(Some(value_expr)) => {
@@ -118,10 +134,10 @@ impl TypeExpr {
             ValueExpr::Struct(fields) => {
                 let types = fields
                     .iter()
-                    .map(|(name, (value_expr, _))| {
+                    .map(|(name, (value_expr, span))| {
                         Field::new(
                             name.to_string(),
-                            TypeExpr::from_value_expr(value_expr, type_env).into_empty_span(),
+                            (TypeExpr::from_value_expr(value_expr, type_env), *span),
                         )
                     })
                     .collect::<Vec<Field>>();
@@ -132,7 +148,13 @@ impl TypeExpr {
                 let types = fields
                     .iter()
                     .map(|value_expr| {
-                        TypeExpr::from_value_expr(&value_expr.0, type_env).into_empty_span()
+                        // todo: check if we really want to unconst tuple values
+                        // maybe we need a way to tell that it should be consted here. e.g.
+                        //  `(5,"hallo")`
+                        (
+                            TypeExpr::from_value_expr(&value_expr.0, type_env).unconst(),
+                            value_expr.1,
+                        )
                     })
                     .collect::<Vec<Spanned<TypeExpr>>>();
 
@@ -141,10 +163,10 @@ impl TypeExpr {
             ValueExpr::Duck(fields) => {
                 let types = fields
                     .iter()
-                    .map(|(name, value_expr)| {
+                    .map(|(name, (value_expr, span))| {
                         Field::new(
                             name.to_string(),
-                            TypeExpr::from_value_expr(&value_expr.0, type_env).into_empty_span(),
+                            (TypeExpr::from_value_expr(value_expr, type_env), *span),
                         )
                     })
                     .collect::<Vec<Field>>();
@@ -227,8 +249,8 @@ impl TypeExpr {
                             }
 
                             check_type_compatability(
-                                in_param_types.get(index).unwrap(),
                                 &param_type.1,
+                                in_param_types.get(index).unwrap(),
                                 type_env,
                             )
                         });
@@ -275,14 +297,12 @@ impl TypeExpr {
 
                 return ty;
             }
-            ValueExpr::Variable(_, ident, type_expr) => {
-                type_expr
-                    .as_ref()
-                    .cloned()
-                    .or(type_env.get_identifier_type(ident.clone()))
-                    .expect("Expected type but didn't get one")
-                    .clone()
-            }
+            ValueExpr::Variable(_, ident, type_expr) => type_expr
+                .as_ref()
+                .cloned()
+                .or(type_env.get_identifier_type(ident.clone()))
+                .expect("Expected type but didn't get one")
+                .clone(),
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(
                     &(
@@ -368,6 +388,20 @@ impl TypeExpr {
         }
     }
 
+    pub fn is_duck(&self) -> bool {
+        match self {
+            Self::Duck(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_struct(&self) -> bool {
+        match self {
+            Self::Struct(..) => true,
+            _ => false,
+        }
+    }
+
     pub fn has_subtypes(&self) -> bool {
         match self {
             Self::Or(..) | Self::Tuple(..) | Self::Duck(..) | Self::Struct(..) => true,
@@ -426,15 +460,52 @@ impl TypeExpr {
     pub fn is_number(&self) -> bool {
         return *self == TypeExpr::Int
             || *self == TypeExpr::Float
-            || matches!(*self, TypeExpr::IntLiteral(..));
+            || matches!(*self, TypeExpr::ConstInt(..));
+    }
+
+    pub fn is_tuple(&self) -> bool {
+        return matches!(*self, TypeExpr::Tuple(..));
     }
 
     pub fn is_bool(&self) -> bool {
-        return *self == TypeExpr::Bool || matches!(*self, TypeExpr::BoolLiteral(..));
+        return *self == TypeExpr::Bool || matches!(*self, TypeExpr::ConstBool(..));
+    }
+
+    pub fn is_fun(&self) -> bool {
+        return matches!(*self, TypeExpr::Fun(..));
+    }
+
+    pub fn is_char(&self) -> bool {
+        return *self == TypeExpr::Char;
+    }
+
+    pub fn is_float(&self) -> bool {
+        return *self == TypeExpr::Float;
     }
 
     pub fn is_string(&self) -> bool {
-        return *self == TypeExpr::String || matches!(*self, TypeExpr::StringLiteral(..));
+        return *self == TypeExpr::String || matches!(*self, TypeExpr::ConstString(..)) || {
+            let TypeExpr::Or(variants) = self else {
+                return false;
+            };
+            return !variants.iter().any(|variant| !variant.0.is_string());
+        };
+    }
+
+    pub fn is_array(&self) -> bool {
+        return matches!(*self, TypeExpr::Array(..));
+    }
+
+    pub fn is_int(&self) -> bool {
+        return *self == TypeExpr::Int;
+    }
+
+    pub fn holds_const_value(&self) -> bool {
+        // todo(@Mvmo) Implement other literal types
+        // floats, chars.... missing
+        return matches!(*self, TypeExpr::ConstInt(..))
+            || matches!(*self, TypeExpr::ConstString(..))
+            || matches!(*self, TypeExpr::ConstBool(..));
     }
 
     pub fn is_variant(&self) -> bool {
@@ -443,9 +514,7 @@ impl TypeExpr {
 
     pub fn is_literal(&self) -> bool {
         return match *self {
-            TypeExpr::IntLiteral(..) | TypeExpr::BoolLiteral(..) | TypeExpr::StringLiteral(..) => {
-                true
-            }
+            TypeExpr::ConstInt(..) | TypeExpr::ConstBool(..) | TypeExpr::ConstString(..) => true,
             _ => false,
         };
     }
@@ -456,9 +525,9 @@ impl TypeExpr {
             | TypeExpr::Float
             | TypeExpr::String
             | TypeExpr::Char
-            | TypeExpr::IntLiteral(..)
-            | TypeExpr::BoolLiteral(..)
-            | TypeExpr::StringLiteral(..)
+            | TypeExpr::ConstInt(..)
+            | TypeExpr::ConstBool(..)
+            | TypeExpr::ConstString(..)
             | TypeExpr::Bool => true,
             _ => false,
         };
@@ -502,7 +571,7 @@ fn is_non_variant_type_in_variant(
     })
 }
 
-fn is_subset_of_variant_type(
+fn require_subset_of_variant_type(
     variant_type: &Spanned<TypeExpr>,
     other: &Spanned<TypeExpr>,
     type_env: &mut TypeEnv,
@@ -540,7 +609,6 @@ fn is_subset_of_variant_type(
                 }
             }
         }
-
         _ => {
             if !is_non_variant_type_in_variant(other, variant_members, type_env) {
                 failure(
@@ -568,176 +636,333 @@ fn is_subset_of_variant_type(
 }
 
 fn check_type_compatability(
-    one: &Spanned<TypeExpr>,
-    two: &Spanned<TypeExpr>,
+    required_type: &Spanned<TypeExpr>,
+    given_type: &Spanned<TypeExpr>,
     type_env: &mut TypeEnv,
 ) {
-    if one.0.is_variant() {
-        is_subset_of_variant_type(one, two, type_env);
-        return;
-    }
-
-    if one.0.is_bool() && !two.0.is_bool() {
-        failure(
-            one.1.context.file_name,
-            "Incompatible Types".to_string(),
-            (
-                format!(
-                    "This expression is of type {}, which is a bool.",
-                    one.0.as_clean_user_faced_type_name()
-                ),
-                one.1,
-            ),
-            vec![
-                (
-                    "because of this, the second operand also needs to be of type bool."
-                        .to_string(),
-                    two.1,
-                ),
-                (
-                    format!(
-                        "but it is of type {}.",
-                        two.0.as_clean_user_faced_type_name()
-                    ),
-                    two.1,
-                ),
-            ],
-            one.1.context.file_contents,
-        )
-    }
-
-    if one.0.is_string() && !two.0.is_string() {
-        failure(
-            one.1.context.file_name,
-            "Incompatible Types".to_string(),
-            (
-                format!(
-                    "This expression is of type {}, which is a string.",
-                    one.0.as_clean_user_faced_type_name()
-                ),
-                one.1,
-            ),
-            vec![
-                (
-                    "because of this, the second operand also needs to be of type string."
-                        .to_string(),
-                    two.1,
-                ),
-                (
-                    format!(
-                        "but it is of type {}.",
-                        two.0.as_clean_user_faced_type_name()
-                    ),
-                    two.1,
-                ),
-            ],
-            one.1.context.file_contents,
-        )
-    }
-
-    if one.0.is_number() {
-        if !two.0.is_number() {
-            failure(
-                one.1.context.file_name,
-                "Incompatible Types".to_string(),
-                (
-                    format!(
-                        "This expression is of type {}, which is a number.",
-                        one.0.as_clean_user_faced_type_name()
-                    ),
-                    one.1,
-                ),
-                vec![
-                    (
-                        "because of this, the second operand also needs to be of type number."
-                            .to_string(),
-                        two.1,
-                    ),
-                    (
-                        format!(
-                            "but it is of type {}.",
-                            two.0.as_clean_user_faced_type_name()
-                        ),
-                        two.1,
-                    ),
-                ],
-                one.1.context.file_contents,
-            )
-        }
-
-        return;
-    }
-
-    let one_fn = match &one.0 {
-        TypeExpr::Fun(params, return_type) => Some((params, return_type)),
-        _ => None,
-    };
-
-    let two_fn = match &two.0 {
-        TypeExpr::Fun(params, return_type) => Some((params, return_type)),
-        _ => None,
-    };
-
-    if let Some((fst, snd)) = one_fn.zip(two_fn) {
-        let fst_params = fst
-            .0
-            .iter()
-            .map(|x| x.1.0.as_clean_go_type_name(type_env))
-            .collect::<Vec<_>>();
-        let snd_params = snd
-            .0
-            .iter()
-            .map(|x| x.1.0.as_clean_go_type_name(type_env))
-            .collect::<Vec<_>>();
-
-        let fst_return = fst
-            .1
-            .clone()
-            .map(|x| x.0.as_clean_go_type_name(type_env))
-            .unwrap_or(TypeExpr::Tuple(vec![]).as_clean_go_type_name(type_env));
-        let snd_return = snd
-            .1
-            .clone()
-            .map(|x| x.0.as_clean_go_type_name(type_env))
-            .unwrap_or(TypeExpr::Tuple(vec![]).as_clean_go_type_name(type_env));
-
-        if (fst_params == snd_params) && (fst_return == snd_return) {
-            return;
-        }
-    }
-
-    if one.0.as_clean_go_type_name(type_env) != two.0.as_clean_go_type_name(type_env) {
-        let (smaller, larger) = if one.1.start <= two.1.start {
-            (one.1, two.1)
+    let fail_requirement = |explain_required: String, explain_given: String| {
+        let (smaller, larger) = if required_type.1.start <= given_type.1.start {
+            (required_type.1, given_type.1)
         } else {
-            (two.1, one.1)
+            (given_type.1, required_type.1)
         };
 
-        let combined_span = SS {
+        // this is unused at the moment but come in handy later
+        let _combined_span = SS {
             start: smaller.start,
             end: larger.end,
-            context: one.1.context,
+            context: required_type.1.context,
         };
 
-        failure(
-            one.1.context.file_name,
+        failure_with_occurence(
+            given_type.1.context.file_name,
             "Incompatible Types".to_string(),
-            (
-                format!("this is of type {}", one.0.as_clean_user_faced_type_name()),
-                one.1,
-            ),
+            given_type.1,
             vec![
-                (
-                    format!("this is of type {}", two.0.as_clean_user_faced_type_name()),
-                    two.1,
-                ),
-                (
-                    "These two types are not not compatible".to_string(),
-                    combined_span,
-                ),
+                (explain_required.to_string(), required_type.1),
+                (explain_given.to_string(), given_type.1),
             ],
-            one.1.context.file_contents,
-        );
+            given_type.1.context.file_contents,
+        )
+    };
+
+    match &required_type.0 {
+        TypeExpr::Any => return,
+        TypeExpr::InlineGo => todo!("should inline go be typechecked?"),
+        TypeExpr::Go(_) => return,
+        TypeExpr::Struct(_strct) => {
+            if !given_type.0.is_struct() {
+                fail_requirement(
+                    format!(
+                        "the required type {} is a struct",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                    format!(
+                        "because of the fact, that the required type {} is a struct. The value you need to pass must be a duck aswell, but it isn't.",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                )
+            }
+
+            // todo: check against identity of struct in typechecking
+        }
+        TypeExpr::Duck(duck) => {
+            if !given_type.0.is_duck() {
+                fail_requirement(
+                    format!(
+                        "the required type {} is a duck",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                    format!(
+                        "because of the fact, that the required type {} is a duck. The value you need to pass must be a duck aswell, but it isn't.",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                )
+            }
+
+            let required_duck = duck;
+            let TypeExpr::Duck(given_duck) = &given_type.0 else {
+                unreachable!()
+            };
+
+            for required_field in required_duck.fields.iter() {
+                let companion_field = given_duck
+                    .fields
+                    .iter()
+                    .find(|field| field.name == required_field.name);
+
+                if companion_field.is_none() {
+                    fail_requirement(
+                        format!(
+                            "this type states that it has requires a field {} of type {}",
+                            required_field.name.bright_purple(),
+                            format!("{}", required_field.type_expr.0).bright_yellow(),
+                        ),
+                        format!(
+                            "the given type doesn't have a field {}",
+                            required_field.name.bright_purple(),
+                        ),
+                    )
+                }
+
+                let companion_field = companion_field.unwrap();
+
+                check_type_compatability(
+                    &required_field.type_expr,
+                    &companion_field.type_expr,
+                    type_env,
+                );
+            }
+        }
+        TypeExpr::Tuple(item_types) => {
+            if !given_type.0.is_tuple() {
+                fail_requirement(
+                    format!(
+                        "{} is a tuple",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                    String::new(),
+                )
+            }
+
+            let required_item_types = item_types;
+            let TypeExpr::Tuple(given_item_types) = &given_type.0 else {
+                unreachable!()
+            };
+
+            if given_item_types.len() < required_item_types.len() {
+                fail_requirement(
+                    format!(
+                        "requires {} item(s)",
+                        format!("{}", required_item_types.len()).bright_green(),
+                    ),
+                    format!(
+                        "only has {} item(s)",
+                        format!("{}", given_item_types.len()).bright_green(),
+                    ),
+                )
+            }
+
+            for (index, required_item_type) in required_item_types.iter().enumerate() {
+                let given_item_type = given_item_types.get(index)
+                    .expect("we've just checked that given_item_types is at least the sizeof required_item_types");
+
+                check_type_compatability(required_item_type, given_item_type, type_env);
+            }
+        }
+        TypeExpr::ConstString(literal) => {
+            if !given_type.0.is_string() {
+                fail_requirement(
+                    format!("this requires an at compile time known {}", required_type.0),
+                    format!("this value isn't even a string, it's a {}.", given_type.0),
+                )
+            }
+
+            if !given_type.0.holds_const_value() {
+                fail_requirement(
+                    format!("this requires a compile time known {}", required_type.0),
+                    "this is a string, but it's not known at compile time".to_string(),
+                )
+            }
+
+            let required_string = literal;
+            let TypeExpr::ConstString(given_string) = &given_type.0 else {
+                unreachable!("we've just checked that the given type is a string and is const")
+            };
+
+            if given_string != required_string {
+                fail_requirement(
+                    format!("this requires the compile time known string '{required_string}'"),
+                    format!("this is a compile time known string, but it's '{given_string}'"),
+                )
+            }
+        }
+        TypeExpr::ConstInt(const_int) => {
+            if !given_type.0.is_int() {
+                fail_requirement(
+                    "this requires an at compile time known Int".to_string(),
+                    "this value isn't even an Int.".to_string(),
+                )
+            }
+
+            if !given_type.0.holds_const_value() {
+                fail_requirement(
+                    "this requires a compile time known Int".to_string(),
+                    "this is an Int, but it's not known at compile time".to_string(),
+                )
+            }
+
+            let required_int = const_int;
+            let TypeExpr::ConstInt(given_int) = &given_type.0 else {
+                unreachable!("we've just checked that the given type is a int and is const")
+            };
+
+            if required_int != given_int {
+                fail_requirement(
+                    format!("this requires the compile time known Int '{required_int}'"),
+                    format!("this is a compile time known Int, but it's '{given_int}'"),
+                )
+            }
+        }
+        TypeExpr::ConstBool(const_bool) => {
+            if !given_type.0.is_bool() {
+                fail_requirement(
+                    "this requires an at compile time known Bool".to_string(),
+                    "this value isn't even a Bool.".to_string(),
+                )
+            }
+
+            if !given_type.0.holds_const_value() {
+                fail_requirement(
+                    "this requires a compile time known Bool".to_string(),
+                    "this is an Bool, but it's not known at compile time".to_string(),
+                )
+            }
+
+            let required_bool = const_bool;
+            let TypeExpr::ConstBool(given_bool) = &given_type.0 else {
+                unreachable!("we've just checked that the given type is a bool and is const")
+            };
+
+            if required_bool != given_bool {
+                fail_requirement(
+                    format!("this requires the compile time known Bool '{required_bool}'"),
+                    format!("this is a compile time known Bool, but it's '{required_bool}'"),
+                )
+            }
+        }
+        TypeExpr::String => {
+            if !given_type.0.is_string() {
+                fail_requirement(
+                    "this expects a string.".to_string(),
+                    "this is not a string.".to_string(),
+                );
+            }
+        }
+        TypeExpr::Int => {
+            if !given_type.0.is_number() {
+                fail_requirement(
+                    "this expects an int.".to_string(),
+                    "this is not an int.".to_string(),
+                )
+            }
+        }
+        TypeExpr::Bool => {
+            if !given_type.0.is_bool() {
+                fail_requirement(
+                    format!("a {} value is required here", "Bool".bright_yellow(),),
+                    "this is not a bool".to_string(),
+                )
+            }
+        }
+        TypeExpr::Char => {
+            if !given_type.0.is_char() {
+                fail_requirement(
+                    "this expects an int.".to_string(),
+                    "this is not an int.".to_string(),
+                );
+            }
+        }
+        TypeExpr::Float => {
+            // todo: discuss if we just allow passing ints as floats
+            if !given_type.0.is_number() {
+                fail_requirement(
+                    "this expects a number.".to_string(),
+                    "this is not a number.".to_string(),
+                );
+            }
+        }
+        TypeExpr::Or(..) => {
+            require_subset_of_variant_type(required_type, given_type, type_env);
+        }
+        TypeExpr::Fun(required_params, required_return_type) => {
+            if !given_type.0.is_fun() {
+                fail_requirement(
+                    "this requires a function".to_string(),
+                    "this value isn't even a string.".to_string(),
+                )
+            }
+
+            let TypeExpr::Fun(given_params, given_return_type) = &given_type.0 else {
+                unreachable!("we've already checked that it's a function")
+            };
+            if given_params.len() != required_params.len() {
+                fail_requirement(
+                    format!(
+                        "this requires a function with {} argument(s)",
+                        format!("{}", required_params.len()).bright_green(),
+                    ),
+                    format!(
+                        "this is a function, but it takes {} arguments(s)",
+                        format_args!("{}", given_params.len())
+                    ),
+                )
+            }
+
+            for (index, param) in required_params.iter().enumerate() {
+                let given_param = given_params
+                    .get(index)
+                    .expect("we've just checked that required and given params are equal size");
+
+                check_type_compatability(&param.1, &given_param.1, type_env);
+            }
+
+            if let Some(required_return_type) = required_return_type {
+                if given_return_type.clone().is_none() {
+                    fail_requirement(
+                        format!(
+                            "this requires a function that returns {}",
+                            required_return_type.clone().0
+                        ),
+                        "this function doesn't return anything".to_string(),
+                    )
+                }
+
+                let given_return_type = given_return_type
+                    .as_ref()
+                    .expect("we've just handled is_none");
+
+                check_type_compatability(required_return_type, given_return_type, type_env);
+            }
+        }
+        TypeExpr::Array(content_type) => {
+            if !given_type.0.is_array() {
+                fail_requirement(
+                    format!("this requires an array of {}", &content_type.0),
+                    "this is not an array".to_string(),
+                );
+            }
+
+            let TypeExpr::Array(given_content_type) = given_type.clone().0 else {
+                unreachable!("we've checked that given_type is an array")
+            };
+
+            check_type_compatability(content_type, &given_content_type, type_env);
+        }
+        TypeExpr::RawTypeName(..)
+        | TypeExpr::TypeName(..)
+        | TypeExpr::TypeNameInternal(..)
+        | TypeExpr::GenericToBeReplaced(..) => {}
     }
 }
 
@@ -745,14 +970,15 @@ fn check_type_compatability(
 mod test {
     use crate::{
         parse::{
+            SS,
             function_parser::FunctionDefintion,
             lexer::lex_parser,
             make_input,
             source_file_parser::SourceFile,
             type_parser::Field,
-            value_parser::{empty_range, value_expr_parser}, SS,
+            value_parser::{empty_range, type_expr_into_empty_range, value_expr_parser},
         },
-        semantics::type_resolve::{typeresolve_source_file, TypesSummary},
+        semantics::type_resolve::{TypesSummary, typeresolve_source_file},
     };
     use chumsky::prelude::*;
 
@@ -762,7 +988,7 @@ mod test {
     fn test_typeresolve() {
         let src_and_expected_type_vec = vec![
             ("4 + 4", TypeExpr::Int),
-            ("\"Hallo\"", TypeExpr::String),
+            ("\"Hallo\"", TypeExpr::ConstString("Hallo".to_string())),
             (
                 "{ x: \"hallo\", }",
                 TypeExpr::Duck(Duck {
@@ -848,16 +1074,21 @@ mod test {
             let mut type_env = TypeEnv::default();
             typeresolve_source_file(&mut source_file, &mut type_env);
 
-            let type_expr = TypeExpr::from_value_expr(
-                &source_file
-                    .function_definitions
-                    .get(0)
-                    .unwrap()
-                    .value_expr
-                    .0,
-                &mut type_env,
+            let mut type_expr = (
+                TypeExpr::from_value_expr(
+                    &source_file
+                        .function_definitions
+                        .get(0)
+                        .unwrap()
+                        .value_expr
+                        .0,
+                    &mut type_env,
+                ),
+                empty_range(),
             );
-            assert_eq!(type_expr, expected_type_expr);
+            type_expr_into_empty_range(&mut type_expr);
+
+            assert_eq!(type_expr.0, expected_type_expr);
         }
     }
 
@@ -999,16 +1230,11 @@ mod test {
 
             let summary = type_env.summarize();
 
-            println!("------------------------------------");
-            println!("source: \n{src}");
-            println!("types used:");
             summary
                 .types_used
                 .iter()
                 .map(|type_expr| type_expr.as_clean_go_type_name(&mut type_env))
                 .for_each(|type_name| println!("\t{type_name}"));
-
-            println!("------------------------------------");
 
             summary_check_fun(&summary);
         }
@@ -1115,7 +1341,11 @@ mod test {
     fn test_incompatible_tuples_different_length() {
         let mut type_env = TypeEnv::default();
 
-        let one = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int)]);
+        let one = TypeExpr::Tuple(vec![
+            empty_spanned(TypeExpr::Int),
+            empty_spanned(TypeExpr::Int),
+            empty_spanned(TypeExpr::Int),
+        ]);
         let two = TypeExpr::Tuple(vec![
             empty_spanned(TypeExpr::Int),
             empty_spanned(TypeExpr::Int),

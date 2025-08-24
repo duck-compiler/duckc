@@ -1,0 +1,26 @@
+use go "time";
+use go "fmt";
+
+fn string_from_network() -> String {
+    go {
+        time.Sleep(time.Second * 2)
+    }
+    return "ich bin vom netzwerk";
+}
+
+fn main() {
+    std::task::spawn(fn() {
+        let result_from_network: String = string_from_network();
+        go {
+            fmt.Println(result_from_network)
+        }
+
+        go {
+            fmt.Println("nach der request")
+        }
+    });
+
+    go {
+        time.Sleep(time.Second * 10)
+    }
+}

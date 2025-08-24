@@ -1,0 +1,5 @@
+fn myfn(x: { abc: {}, xyz: {} }) {}
+
+fn main() {
+    myfn({ abc: {} });
+}

@@ -1,5 +1,5 @@
 use crate::emit::{
-    types::{primitive_conc_type_name, primitive_native_type_name},
+    types::{escape_string_literal, primitive_conc_type_name, primitive_native_type_name},
     value::{Case, IrInstruction, IrValue},
 };
 
@@ -233,6 +233,7 @@ pub fn join_ir(v: &[IrInstruction]) -> String {
 impl IrValue {
     pub fn emit_as_go(&self) -> String {
         match self {
+            IrValue::Pointer(target) => format!("&{}", target.emit_as_go()),
             IrValue::Imm(str) => str.to_string(),
             IrValue::ArrayAccess(target, idx) => {
                 format!("{}[{}.as_dgo_int()]", target.emit_as_go(), idx.emit_as_go())
@@ -249,7 +250,10 @@ impl IrValue {
             IrValue::Int(i) => format!("ConcDuckInt {{ value: {i} }}"),
             IrValue::Float(f) => format!("ConcDuckFloat {{ value: {f} }}"),
             IrValue::Char(c) => format!("ConcDuckChar {{ value: '{c}' }}"),
-            IrValue::String(s) => format!("ConcDuckString {{ \"{s}\" }}"),
+            IrValue::String(s) => format!(
+                "ConstString_{} {{ \"{s}\" }}",
+                escape_string_literal(s)
+            ),
             IrValue::Var(v) => v.to_string(),
             IrValue::Struct(s, fields) => {
                 format!(

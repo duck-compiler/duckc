@@ -1,9 +1,6 @@
+
 use crate::parse::{
-    Context, SS, Spanned,
-    function_parser::{LambdaFunctionExpr, Param},
-    lexer::FmtStringContents,
-    source_file_parser::SourceFile,
-    type_parser::{type_expression_parser, type_expression_parser_without_array},
+    function_parser::{LambdaFunctionExpr, Param}, lexer::{FmtStringContents}, source_file_parser::SourceFile, type_parser::{type_expression_parser, type_expression_parser_without_array}, Context, Spanned, SS
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
@@ -20,7 +17,7 @@ pub struct MatchArm {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValFmtStringContents {
-    Char(char),
+    String(String),
     Expr(Spanned<ValueExpr>),
 }
 
@@ -370,15 +367,15 @@ where
                 .then(while_body.clone())
                 .boxed();
 
-            let int = select_ref! { Token::IntLiteral(i) => *i }
+            let int = select_ref! { Token::ConstInt(i) => *i }
                 .map(ValueExpr::Int)
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
-            let bool_val = select_ref! { Token::BoolLiteral(b) => *b }
+            let bool_val = select_ref! { Token::ConstBool(b) => *b }
                 .map(ValueExpr::Bool)
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
-            let string_val = select_ref! { Token::StringLiteral(s) => s.to_owned() }
+            let string_val = select_ref! { Token::ConstString(s) => s.to_owned() }
                 .map(ValueExpr::String)
                 .map_with(|x, e| (x, e.span()));
             let if_expr = if_with_condition_and_body
@@ -414,9 +411,9 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            let float_expr = select_ref! { Token::IntLiteral(num) => *num }
+            let float_expr = select_ref! { Token::ConstInt(num) => *num }
                 .then_ignore(just(Token::ControlChar('.')))
-                .then(select_ref! { Token::IntLiteral(num) => *num })
+                .then(select_ref! { Token::ConstInt(num) => *num })
                 .map(|(pre, frac)| {
                     ValueExpr::Float(format!("{pre}.{frac}").parse::<f64>().unwrap())
                 })
@@ -440,8 +437,8 @@ where
 
                             for c in contents {
                                 match c {
-                                    FmtStringContents::Char(c) => {
-                                        res.push(ValFmtStringContents::Char(*c))
+                                    FmtStringContents::String(s) => {
+                                        res.push(ValFmtStringContents::String(s.to_owned()))
                                     }
                                     FmtStringContents::Tokens(s) => {
                                         let expr = value_expr_parser
@@ -457,6 +454,16 @@ where
                     })
                     .map_with(|x, e| (x, e.span()));
 
+            let array = value_expr_parser
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .at_least(1)
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
+                .map(|exprs| ValueExpr::Array(None, exprs))
+                .map_with(|x, e| (x, e.span()));
+
             let array_with_type = (just(Token::ControlChar('.'))
                 .ignore_then(type_expression_parser_without_array())
                 .or_not())
@@ -471,32 +478,27 @@ where
                 .at_least(1)
                 .collect::<Vec<_>>(),
             )
-            .map(|(ty, exprs)| {
-                if ty.is_none() && exprs.is_empty() {
+            .map(|(declared_content_type, exprs)| {
+                if declared_content_type.is_none() && exprs.last().unwrap().is_empty() {
                     panic!("error: empty array must provide type");
                 }
 
-                let mut fty = ty.clone();
+                if !exprs.is_empty() && exprs[..exprs.len() - 1].iter().any(|e| !e.is_empty()) {
+                    panic!("only last braces my include values");
+                }
 
-                if ty.is_some() {
+                let mut content_type = declared_content_type.clone();
+
+                if declared_content_type.is_some() {
                     for _ in 0..exprs.len() - 1 {
-                        fty = Some(TypeExpr::Array(Box::new(fty.unwrap())).into_empty_span())
+                        content_type =
+                            Some(TypeExpr::Array(Box::new(content_type.unwrap())).into_empty_span())
                     }
                 }
 
-                ValueExpr::Array(fty, exprs.last().unwrap().clone())
+                ValueExpr::Array(content_type, exprs.last().unwrap().clone())
             })
             .map_with(|x, e| (x, e.span()));
-
-            let array = value_expr_parser
-                .clone()
-                .separated_by(just(Token::ControlChar(',')))
-                .at_least(1)
-                .allow_trailing()
-                .collect::<Vec<_>>()
-                .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
-                .map(|exprs| ValueExpr::Array(None, exprs))
-                .map_with(|x, e| (x, e.span()));
 
             let atom = just(Token::ControlChar('!'))
                 .repeated()
@@ -571,7 +573,7 @@ where
                         just(Token::ControlChar('.'))
                             .ignore_then(
                                 select_ref! { Token::Ident(s) => s.to_string() }
-                                    .or(select_ref! { Token::IntLiteral(i) => i.to_string() }),
+                                    .or(select_ref! { Token::ConstInt(i) => i.to_string() }),
                             )
                             .map(AtomPostParseUnit::FieldAccess),
                     ))
@@ -725,13 +727,15 @@ fn empty_duck() -> ValueExpr {
     ValueExpr::Duck(Vec::new())
 }
 
+// track caller so that we find out where this method is called in case of error
+//#[track_caller]
 pub fn empty_range() -> SS {
     SS {
         start: 0,
         end: 1,
         context: Context {
             file_name: "TODO: Empty Range",
-            file_contents: "TODO: PLEASE DONT",
+            file_contents: "TODO: PLEASE DONT".to_string().leak(),
         },
     }
 }
