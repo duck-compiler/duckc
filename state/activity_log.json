@@ -1,6 +1,56 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-08-24T22:43:39.032967",
+        "issue_id": "0bf1fe21fe0b13b6e5303ca5ec7e0fc7",
+        "issue_title": "handle indices of type ! properly (do it in rest of emit too)",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-08-24T22:43:39.032967",
+        "issue_id": "4f45d69c29b964d51ba20cd63a1c09c3",
+        "issue_title": "check if we really want to unconst tuple values",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-08-24T22:43:39.032967",
+        "issue_id": "1b16fc52b6cf377f9270c5ded9fad4d1",
+        "issue_title": "Implement other literal types",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-08-24T22:43:39.032967",
+        "issue_id": "7fe1ded730721d8e4c33c68e53350800",
+        "issue_title": "check against identity of struct in typechecking",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-08-24T22:43:39.032967",
+        "issue_id": "514af71611f0eae8e0992677743467e6",
+        "issue_title": "discuss if we just allow passing ints as floats",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-08-13T00:29:24.227841",
         "issue_id": "29732f89deff9557a011fb6fe3d1d8d6",
         "issue_title": "add span for generic types",

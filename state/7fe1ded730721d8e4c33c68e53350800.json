@@ -1,8 +1,8 @@
 {
-    "id": "fcb3f9eb5327dfccc556c11af2cad15a",
+    "id": "7fe1ded730721d8e4c33c68e53350800",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 336,
-    "title": "!(\"combine then and else, then return combined type\");",
+    "line_number": 687,
+    "title": "check against identity of struct in typechecking",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
-    "source_line": "// todo!(\"combine then and else, then return combined type\");",
+    "source_line": "// todo: check against identity of struct in typechecking",
     "status": "open",
-    "first_seen": "2025-07-09T23:15:12.305571",
+    "first_seen": "2025-08-24T22:43:39.039589",
     "history": []
 }

@@ -1,0 +1,19 @@
+{
+    "id": "4f45d69c29b964d51ba20cd63a1c09c3",
+    "file_path": "../../src/semantics/typechecker.rs",
+    "line_number": 151,
+    "title": "check if we really want to unconst tuple values",
+    "tag": "todo",
+    "module_tag": "semantics",
+    "user": null,
+    "issue_ref": null,
+    "description": "maybe we need a way to tell that it should be consted here. e.g.\n`(5,\"hallo\")`",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// todo: check if we really want to unconst tuple values",
+    "status": "open",
+    "first_seen": "2025-08-24T22:43:39.038537",
+    "history": []
+}

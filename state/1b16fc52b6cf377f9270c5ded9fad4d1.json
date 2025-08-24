@@ -1,0 +1,19 @@
+{
+    "id": "1b16fc52b6cf377f9270c5ded9fad4d1",
+    "file_path": "../../src/semantics/typechecker.rs",
+    "line_number": 504,
+    "title": "Implement other literal types",
+    "tag": "todo",
+    "module_tag": "semantics",
+    "user": "@Mvmo",
+    "issue_ref": null,
+    "description": "floats, chars.... missing",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// todo(@Mvmo) Implement other literal types",
+    "status": "open",
+    "first_seen": "2025-08-24T22:43:39.039450",
+    "history": []
+}

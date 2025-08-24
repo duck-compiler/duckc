@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Mvmo",
+        "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO: respect additional identifer scopes like blocks and lambdas",

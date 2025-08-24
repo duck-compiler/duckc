@@ -1,7 +1,7 @@
 {
     "id": "cfd712843928e94008314c58c4efabb7",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 959,
+    "line_number": 979,
     "title": "discuss if we enable generic functions being called from go and how",
     "tag": "todo",
     "module_tag": "semantics",
@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Mvmo",
+        "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: discuss if we enable generic functions being called from go and how",

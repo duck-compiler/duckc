@@ -1,7 +1,7 @@
 {
     "id": "29732f89deff9557a011fb6fe3d1d8d6",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 509,
+    "line_number": 517,
     "title": "add span for generic types",
     "tag": "todo",
     "module_tag": "semantics",
@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Mvmo",
+        "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: add span for generic types",
