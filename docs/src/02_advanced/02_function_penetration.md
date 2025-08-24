@@ -1,4 +1,4 @@
-# Function Penetration
+$title = "Function Penetration"
 You've probably asked yourself, how to implement functions for specific data types.
 We don't have the concept of methods or member functions, or however you wan't to call it.
 

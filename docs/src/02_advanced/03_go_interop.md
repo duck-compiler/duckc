@@ -1,4 +1,4 @@
-# Go Interop
+$title = "Go Interop"
 We wanted to make it easy to integrate the go ecosystem, as this gives us the whole power of go. Therefore we've implemented the `go` keyword.
 Also we needed a way to import go modules, therefore you can use the `use go` keyword.
 It's not the same as the `go` keyword of the go programming language. It's used to embed go code directly into the duck source code. The `go` keyword initiates a block, which is capable of executing go, like

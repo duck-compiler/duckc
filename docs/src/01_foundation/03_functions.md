@@ -1,4 +1,4 @@
-# Functions
+$title = "Functions"
 Functions in duck are declared using the `fn` keyword. Functions are essential to every duck program, as every program requires to have a main function, which looks somewhat like
 ```duck
 fn main() {

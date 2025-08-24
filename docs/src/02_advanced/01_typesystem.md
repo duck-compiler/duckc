@@ -1,4 +1,4 @@
-# Typesystem
+$title = "Typesystem"
 The duck typesystem leverages the capabilities of duck typing to enhance the experience of devs.
 Our type system is inspired by the functional programming world. You could find some similarities to typescript.
 

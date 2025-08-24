@@ -1,0 +1,31 @@
+<<<<<<<< HEAD:docs/src/02_dargo.md
+$title = "Dargo - The Build System"
+========
+# Dargo - The Build System
+
+[< Previous](001-getting-started.md) | [Home](README.md) | [Next >](003-foundation-intro.md)
+
+---
+>>>>>>>> main:docs/002-dargo.md
+
+Dargo is our primary way to configure, test, build and deploy a duck application.
+Every duck project is defined by a `dargo.toml` file, which describes some metadata of the application but also contains information about dependencies.
+
+For now we do support following dargo commands
+
+## init
+The init command initializes a dargo/duck project in the current directory.
+
+## clean
+The clean command cleans all build artifacts and ensures a clean build, without any old artifacts.
+
+## compile
+The compile command allows to compile a given file
+
+...
+
+---
+
+[< Previous](001-getting-started.md) | [Home](README.md) | [Next >](003-foundation-intro.md)
+
+<div align="center">🦆</div>

@@ -1,4 +1,4 @@
-# Modules
+$title = "Modules"
 You can create modules which you then can use again. For example, we've implemented a standard library module, which will always be accessible for you to use.
 You can do that by stating that you want to use the std, like
 

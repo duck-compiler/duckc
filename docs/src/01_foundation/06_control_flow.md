@@ -1,4 +1,5 @@
-# Control Flow
+$title = "Control Flow"
+
 Control flow structures, allow, as the name suggests, to control the flow of the program. They're used if you need to execute code based on certain conditions.
 We have several control flow structures, which we'll discuss in this section.
 
