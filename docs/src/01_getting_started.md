@@ -1,12 +1,4 @@
-<<<<<<<< HEAD:docs/src/01_getting_started.md
 $title = "Getting started"
-========
-# Getting started
-
-[< Previous](README.md) | [Home](README.md) | [Next >](002-dargo.md)
-
----
->>>>>>>> main:docs/001-getting-started.md
 
 Table of contents
     1.) Installation
@@ -86,9 +78,3 @@ dargo run
 inside of the root of our project.
 
 Then we'll see Hello, World! printed out to the stdout
-
----
-
-[< Previous](README.md) | [Home](README.md) | [Next >](002-dargo.md)
-
-<div align="center">🦆</div>
