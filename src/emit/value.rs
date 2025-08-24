@@ -84,6 +84,7 @@ pub enum IrValue {
     FieldAccess(Box<IrValue>, String),
     ArrayAccess(Box<IrValue>, Box<IrValue>),
     Imm(String),
+    Pointer(Box<IrValue>),
 }
 
 impl IrValue {
@@ -112,7 +113,11 @@ pub fn as_var(s: impl Into<String>) -> IrValue {
     IrValue::Var(s.into())
 }
 
-fn walk_access(obj: ValueExpr, type_env: &mut TypeEnv, env: &mut ToIr) -> (Vec<IrInstruction>, Option<String>) {
+fn walk_access(
+    obj: ValueExpr,
+    type_env: &mut TypeEnv,
+    env: &mut ToIr,
+) -> (Vec<IrInstruction>, Option<String>) {
     let mut res_instr = VecDeque::new();
     let mut current_obj = obj;
     let mut s = VecDeque::new();
@@ -125,7 +130,11 @@ fn walk_access(obj: ValueExpr, type_env: &mut TypeEnv, env: &mut ToIr) -> (Vec<I
             }
             ValueExpr::ArrayAccess(next_obj, index) => {
                 let (instr, res) = index.0.emit(type_env, env);
-                instr.into_iter().for_each(|x| res_instr.push_front(x));
+
+                instr
+                    .into_iter()
+                    .rev()
+                    .for_each(|x| res_instr.push_front(x));
                 if let Some(res) = res {
                     let IrValue::Var(res) = res else {
                         panic!("need var");
@@ -137,13 +146,38 @@ fn walk_access(obj: ValueExpr, type_env: &mut TypeEnv, env: &mut ToIr) -> (Vec<I
                 }
                 current_obj = next_obj.0;
             }
+            ValueExpr::FunctionCall { .. } => {
+                let (i, r) = current_obj.emit(type_env, env);
+                i.into_iter().rev().for_each(|x| res_instr.push_front(x));
+                if let Some(res) = r {
+                    let IrValue::Var(res) = res else {
+                        panic!("need var");
+                    };
+
+                    s.push_front(format!("{res}"));
+                } else {
+                    return (res_instr.into(), None);
+                }
+                break;
+            }
             ValueExpr::FieldAccess {
                 target_obj,
                 field_name,
             } => {
                 match TypeExpr::from_value_expr(&target_obj.0, type_env) {
                     TypeExpr::Tuple(..) => s.push_front(format!("field_{field_name}")),
-                    TypeExpr::Duck(..) => s.push_front(format!("Get{field_name}()")),
+                    TypeExpr::Duck(Duck { fields }) => {
+                        let found_field = fields
+                            .iter()
+                            .find(|x| x.name == field_name)
+                            .expect("Field doesn't exist");
+                        if found_field.type_expr.0.is_array()
+                            || found_field.type_expr.0.is_duck() {
+                            s.push_front(format!("Get{field_name}()"));
+                        } else {
+                            s.push_front(format!("GetPtr{field_name}()"));
+                        }
+                    }
                     TypeExpr::Struct(..) => s.push_front(format!("{field_name}")),
                     _ => panic!("can only access object like"),
                 }
@@ -152,7 +186,10 @@ fn walk_access(obj: ValueExpr, type_env: &mut TypeEnv, env: &mut ToIr) -> (Vec<I
             _ => panic!("need var"),
         }
     }
-    (res_instr.into(), Some(Into::<Vec<String>>::into(s).join(".")))
+    (
+        res_instr.into(),
+        Some(Into::<Vec<String>>::into(s).join(".")),
+    )
 }
 
 impl ValueExpr {
@@ -264,7 +301,7 @@ impl ValueExpr {
 
                 let mut cases = Vec::new();
                 for arm in arms {
-                    let type_name = arm.type_case.0.as_go_type_annotation(type_env);
+                    let type_name = arm.type_case.0.as_clean_go_type_name(type_env);
 
                     let (mut arm_instrs, arm_res) =
                         arm.value_expr.0.direct_or_with_instr(type_env, env);
@@ -432,7 +469,8 @@ impl ValueExpr {
                         field_name,
                     } = target
                     {
-                        let (walk_instr, walk_res) = walk_access(target_obj.0.clone(), type_env, env);
+                        let (walk_instr, walk_res) =
+                            walk_access(target_obj.0.clone(), type_env, env);
                         res.extend(walk_instr);
                         let target_res = match walk_res {
                             Some(s) => s,
@@ -440,6 +478,7 @@ impl ValueExpr {
                         };
 
                         let target_ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
+                        dbg!(&target_ty);
                         match target_ty {
                             TypeExpr::Duck(_) => {
                                 res.push(IrInstruction::FunCall(
@@ -464,9 +503,6 @@ impl ValueExpr {
                         }
                     } else if let ValueExpr::ArrayAccess(target, idx) = target {
                         //todo(@Apfelfrosch) handle indices of type ! properly (do it in rest of emit too)
-
-                        dbg!(target);
-
                         let (idx_instr, Some(IrValue::Var(idx_res))) = idx.0.emit(type_env, env)
                         else {
                             panic!("no var: {idx:?}")
@@ -599,7 +635,9 @@ impl ValueExpr {
                 let mut res = Vec::new();
                 let mut res_vars = Vec::new();
                 let name =
-                    TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
+                    TypeExpr::from_value_expr(self, type_env)
+                        .as_go_type_annotation(type_env);
+
                 for (field_expr, _) in fields {
                     let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, env);
                     res.extend(field_instr);

@@ -1,21 +1,12 @@
-use go "fmt";
+use std::io::{println};
 
 fn main() {
-    let x: () = ();
-    let y: (String,) = ("Tuple",);
-    let z: (String, Int) = ("tuple 2", 10);
+    let x: ((String,),) = (("tuple",),);
+    println(x.0.0);
 
-    go {
-        fmt.Println(x)
-        fmt.Println(y)
-        fmt.Println(z)
-    }
+    x.0 = ("replaced",);
+    println(x.0.0);
 
-    z.0 = f"New string: {z.0}";
-
-    go {
-        fmt.Println(x)
-        fmt.Println(y)
-        fmt.Println(z)
-    }
+    x.0.0 = "again";
+    println(x.0.0);
 }

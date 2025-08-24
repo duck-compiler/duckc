@@ -1032,7 +1032,7 @@ mod test {
                 TypeExpr::Tuple(vec![
                     TypeExpr::Int.into_empty_span(),
                     TypeExpr::Tuple(vec![
-                        TypeExpr::ConstString("Hallo, Welt".to_string()).into_empty_span(),
+                        TypeExpr::String.into_empty_span(),
                         TypeExpr::Int.into_empty_span(),
                     ])
                     .into_empty_span(),
