@@ -4,15 +4,10 @@ use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::{
     parse::{
-        Context, SS, Spanned,
-        function_parser::{FunctionDefintion, function_definition_parser},
-        lexer::{Token, lex_parser},
-        make_input, parse_failure,
-        type_parser::{TypeDefinition, type_definition_parser},
-        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
+        function_parser::{function_definition_parser, FunctionDefintion}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, type_parser::{type_definition_parser, TypeDefinition}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, Context, Spanned, SS
     },
     semantics::ident_mangler::{
-        MangleEnv, mangle, mangle_type_expression, mangle_value_expr, unmangle,
+        mangle, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
     },
 };
 
@@ -20,6 +15,7 @@ use crate::{
 pub struct SourceFile {
     pub function_definitions: Vec<FunctionDefintion>,
     pub type_definitions: Vec<TypeDefinition>,
+    pub struct_definitions: Vec<StructDefinition>,
     pub use_statements: Vec<UseStatement>,
     pub sub_modules: Vec<(String, SourceFile)>,
 }
@@ -28,6 +24,7 @@ pub struct SourceFile {
 pub enum SourceUnit {
     Func(FunctionDefintion),
     Type(TypeDefinition),
+    Struct(StructDefinition),
     Use(UseStatement),
     Module(String, SourceFile),
 }
@@ -279,6 +276,7 @@ where
         choice((
             use_statement_parser().map(SourceUnit::Use),
             type_definition_parser().map(SourceUnit::Type),
+            struct_definition_parser().map(SourceUnit::Struct),
             function_definition_parser(make_input).map(SourceUnit::Func),
             just(Token::Module)
                 .ignore_then(select_ref! { Token::Ident(i) => i.to_owned() })
@@ -299,26 +297,29 @@ where
         .repeated()
         .collect::<Vec<_>>()
         .map(|xs| {
-            let mut f = Vec::new();
-            let mut t = Vec::new();
-            let mut u = Vec::new();
-            let mut s = Vec::new();
+            let mut function_definitions = Vec::new();
+            let mut type_definitions = Vec::new();
+            let mut struct_definitions = Vec::new();
+            let mut use_statements = Vec::new();
+            let mut sub_modules = Vec::new();
 
             for x in xs {
                 use SourceUnit::*;
                 match x {
-                    Func(def) => f.push(def),
-                    Type(def) => t.push(def),
-                    Use(def) => u.push(def),
-                    Module(name, def) => s.push((name, def)),
+                    Func(def) => function_definitions.push(def),
+                    Type(def) => type_definitions.push(def),
+                    Struct(def) => struct_definitions.push(def),
+                    Use(def) => use_statements.push(def),
+                    Module(name, def) => sub_modules.push((name, def)),
                 }
             }
 
             SourceFile {
-                function_definitions: f,
-                type_definitions: t,
-                use_statements: u,
-                sub_modules: s,
+                function_definitions,
+                type_definitions,
+                struct_definitions,
+                use_statements,
+                sub_modules,
             }
         })
     })
@@ -332,16 +333,9 @@ mod tests {
 
     use crate::{
         parse::{
-            function_parser::FunctionDefintion,
-            lexer::lex_parser,
-            make_input,
-            source_file_parser::{SourceFile, source_file_parser},
-            type_parser::{Duck, Field, Struct, TypeDefinition, TypeExpr},
-            use_statement_parser::{Indicator, UseStatement},
-            value_parser::{
-                IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
-                value_expr_into_empty_range,
-            },
+            function_parser::FunctionDefintion, lexer::lex_parser, make_input, source_file_parser::{source_file_parser, SourceFile}, struct_parser::{Field as StructField, StructDefinition}, type_parser::{Duck, Field, Struct, TypeDefinition, TypeExpr}, use_statement_parser::{Indicator, UseStatement}, value_parser::{
+                empty_range, source_file_into_empty_range, value_expr_into_empty_range, IntoBlock, ValueExpr
+            }
         },
         semantics::ident_mangler::mangle,
     };
@@ -397,6 +391,18 @@ mod tests {
                             )],
                         })
                         .into_empty_span(),
+                        generics: None,
+                    }],
+                    ..Default::default()
+                },
+            ),
+            (
+                "struct X = {x: String};",
+                SourceFile {
+                    struct_definitions: vec![StructDefinition {
+                        name: "X".into(),
+                        fields: vec![StructField::new("x".to_string(), TypeExpr::String.into_empty_span())],
+                        methods: vec![],
                         generics: None,
                     }],
                     ..Default::default()
