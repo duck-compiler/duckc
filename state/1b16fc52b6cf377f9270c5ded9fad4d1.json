@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "floats, chars.... missing",
     "blame": {
-        "name": "Maurice Schmidt",
+        "name": "Mvmo",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo(@Mvmo) Implement other literal types",

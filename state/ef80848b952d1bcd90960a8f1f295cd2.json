@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "example right below this issue",
     "blame": {
-        "name": "Maurice Schmidt",
+        "name": "Mvmo",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: let's discuss if we should use asserts for compiler internal errors.",

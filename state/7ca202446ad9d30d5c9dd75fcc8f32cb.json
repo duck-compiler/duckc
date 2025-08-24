@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Maurice Schmidt",
+        "name": "Mvmo",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO mvmo - 03.07.2025: this should check if the last is without a semicolon",
