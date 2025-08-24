@@ -348,7 +348,7 @@ impl TypeExpr {
                         .join("\n"),
                 )
             }
-            TypeExpr::Tuple(fields) => {
+            TypeExpr::Tuple(_fields) => {
                 self.as_clean_go_type_name(type_env)
             }
             TypeExpr::Or(_variants) => "any".to_string(),
