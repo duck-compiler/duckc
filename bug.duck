@@ -1,4 +1,0 @@
-fn main() {
-    let x: Int = 10;
-    let y: Int = x;
-}
