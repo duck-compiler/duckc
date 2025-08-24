@@ -1,0 +1,7 @@
+fn dynamic_int() -> Int {
+    return 5;
+}
+
+fn main() {
+    let x: 1 = dynamic_int();
+}

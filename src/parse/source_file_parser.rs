@@ -217,7 +217,7 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
             })
     } else {
         let src_text = std::fs::read_to_string(format!("{}.duck", joined.to_str().unwrap()))
-            .unwrap()
+            .expect(joined.to_str().unwrap())
             .leak() as &'static str;
         let target_path = joined.to_string_lossy();
         let target_path_leaked = target_path.to_string().leak() as &str;
@@ -289,7 +289,6 @@ where
                         .map(Some),
                 )))
                 .map(|(name, src)| {
-                    println!("X: {} {}", name, p.to_str().unwrap());
                     if let Some(src) = src {
                         SourceUnit::Module(name, src)
                     } else {

@@ -5,8 +5,14 @@ use chumsky::{prelude::*, text::whitespace};
 use crate::parse::{Context, SS, Spanned, value_parser::empty_range};
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum FmtStringContents {
+pub enum RawFmtStringContents {
     Char(char),
+    Tokens(Vec<Spanned<Token>>),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum FmtStringContents {
+    String(String),
     Tokens(Vec<Spanned<Token>>),
 }
 
@@ -21,10 +27,10 @@ pub enum Token {
     Return,
     Ident(String),
     ControlChar(char),
-    StringLiteral(String),
+    ConstString(String),
     FormatStringLiteral(Vec<FmtStringContents>),
-    IntLiteral(i64),
-    BoolLiteral(bool),
+    ConstInt(i64),
+    ConstBool(bool),
     CharLiteral(char),
     Equals,
     Match,
@@ -59,9 +65,9 @@ impl Display for Token {
             Token::Return => "return",
             Token::Ident(_) => "identifier",
             Token::ControlChar(c) => &format!("{c}"),
-            Token::StringLiteral(s) => &format!("string {s}"),
-            Token::IntLiteral(_) => "int",
-            Token::BoolLiteral(_) => "bool",
+            Token::ConstString(s) => &format!("string {s}"),
+            Token::ConstInt(_) => "int",
+            Token::ConstBool(_) => "bool",
             Token::CharLiteral(_) => "char",
             Token::Equals => "equals",
             Token::If => "if",
@@ -140,8 +146,8 @@ pub fn lex_single<'a>(
 
         let string = string_lexer();
         let r#bool = choice((
-            just("true").to(Token::BoolLiteral(true)),
-            just("false").to(Token::BoolLiteral(false)),
+            just("true").to(Token::ConstBool(true)),
+            just("false").to(Token::ConstBool(false)),
         ));
         let r#char = char_lexer();
         let num = num_literal();
@@ -179,7 +185,7 @@ pub fn lex_single<'a>(
                     just("{")
                         .rewind()
                         .ignore_then(lex_fstring_tokens(lexer.clone()))
-                        .map(|e| FmtStringContents::Tokens(e[1..e.len() - 1].to_vec())),
+                        .map(|e| RawFmtStringContents::Tokens(e[1..e.len() - 1].to_vec())),
                     none_of("\\\n\t\"")
                         .or(choice((
                             just("\\\\").to('\\'),
@@ -188,13 +194,35 @@ pub fn lex_single<'a>(
                             just("\\t").to('\t'),
                             just("\\\"").to('"'),
                         )))
-                        .map(FmtStringContents::Char),
+                        .map(RawFmtStringContents::Char),
                 ))
                 .repeated()
                 .collect::<Vec<_>>(),
             )
             .then_ignore(just('"'))
-            .map(Token::FormatStringLiteral);
+            .map(|x| {
+                let mut s = String::new();
+                let mut xx = Vec::new();
+
+                for e in x {
+                    match e {
+                        RawFmtStringContents::Tokens(t) => {
+                            if !s.is_empty() {
+                                xx.push(FmtStringContents::String(s.clone()));
+                                s.clear();
+                            }
+                            xx.push(FmtStringContents::Tokens(t));
+                        }
+                        RawFmtStringContents::Char(c) => s.push(c),
+                    }
+                }
+
+                if !s.is_empty() {
+                    xx.push(FmtStringContents::String(s));
+                }
+
+                Token::FormatStringLiteral(xx)
+            });
 
         let token = inline_go_parser()
             .or(doc_comment)
@@ -270,7 +298,7 @@ fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'s
         s.parse::<i64>()
             .map_err(|_| Rich::custom(span, "Invalid integer"))
     });
-    pre.map(Token::IntLiteral)
+    pre.map(Token::ConstInt)
 }
 
 fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone {
@@ -299,7 +327,7 @@ fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, cha
                 .collect::<String>(),
         )
         .then_ignore(just('"'))
-        .map(Token::StringLiteral)
+        .map(Token::ConstString)
 }
 
 pub fn token_empty_range(token_span: &mut Spanned<Token>) {
@@ -312,7 +340,7 @@ pub fn token_empty_range(token_span: &mut Spanned<Token>) {
                         token_empty_range(token);
                     }
                 }
-                FmtStringContents::Char(_) => {}
+                FmtStringContents::String(_) => {}
             }
         }
     }
@@ -333,7 +361,7 @@ mod tests {
                     vec![
                         (Token::ControlChar('{'), empty_range()),
                         (Token::ControlChar('{'), empty_range()),
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
                     ],
@@ -463,7 +491,7 @@ mod tests {
             (
                 "f\"{1}\"",
                 vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
-                    vec![(Token::IntLiteral(1), empty_range())],
+                    vec![(Token::ConstInt(1), empty_range())],
                 )])],
             ),
             (
@@ -527,22 +555,19 @@ mod tests {
             ("()", vec![Token::ControlChar('('), Token::ControlChar(')')]),
             ("->", vec![Token::ThinArrow]),
             ("fn", vec![Token::Function]),
-            ("\"\"", vec![Token::StringLiteral(String::from(""))]),
-            ("\"XX\"", vec![Token::StringLiteral(String::from("XX"))]),
-            (
-                "\"X\\\"X\"",
-                vec![Token::StringLiteral(String::from("X\"X"))],
-            ),
+            ("\"\"", vec![Token::ConstString(String::from(""))]),
+            ("\"XX\"", vec![Token::ConstString(String::from("XX"))]),
+            ("\"X\\\"X\"", vec![Token::ConstString(String::from("X\"X"))]),
             (
                 "\"Hallo ich bin ein String\\n\\n\\nNeue Zeile\"",
-                vec![Token::StringLiteral(String::from(
+                vec![Token::ConstString(String::from(
                     "Hallo ich bin ein String\n\n\nNeue Zeile",
                 ))],
             ),
-            ("1", vec![Token::IntLiteral(1)]),
-            ("2003", vec![Token::IntLiteral(2003)]),
-            ("true", vec![Token::BoolLiteral(true)]),
-            ("false", vec![Token::BoolLiteral(false)]),
+            ("1", vec![Token::ConstInt(1)]),
+            ("2003", vec![Token::ConstInt(2003)]),
+            ("true", vec![Token::ConstBool(true)]),
+            ("false", vec![Token::ConstBool(false)]),
             ("go { {} }", vec![Token::InlineGo(String::from(" {} "))]),
             ("go { xx }", vec![Token::InlineGo(String::from(" xx "))]),
             ("go {}", vec![Token::InlineGo(String::from(""))]),
@@ -552,7 +577,7 @@ mod tests {
                 vec![
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
@@ -563,7 +588,7 @@ mod tests {
                 vec![
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
@@ -577,7 +602,7 @@ mod tests {
                 vec![
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
@@ -599,9 +624,9 @@ mod tests {
             (
                 "1.1",
                 vec![
-                    Token::IntLiteral(1),
+                    Token::ConstInt(1),
                     Token::ControlChar('.'),
-                    Token::IntLiteral(1),
+                    Token::ConstInt(1),
                 ],
             ),
             (
@@ -618,10 +643,7 @@ mod tests {
             (
                 "f\"FMT {var}\"",
                 vec![Token::FormatStringLiteral(vec![
-                    FmtStringContents::Char('F'),
-                    FmtStringContents::Char('M'),
-                    FmtStringContents::Char('T'),
-                    FmtStringContents::Char(' '),
+                    FmtStringContents::String("FMT ".into()),
                     FmtStringContents::Tokens(vec![(Token::Ident("var".into()), empty_range())]),
                 ])],
             ),
@@ -629,14 +651,14 @@ mod tests {
                 // Adjacent strings and f-strings to test greedy tokenizing.
                 "\"a\"f\"b\"'c'",
                 vec![
-                    Token::StringLiteral("a".to_string()),
-                    Token::FormatStringLiteral(vec![FmtStringContents::Char('b')]),
+                    Token::ConstString("a".to_string()),
+                    Token::FormatStringLiteral(vec![FmtStringContents::String("b".into())]),
                     Token::CharLiteral('c'),
                 ],
             ),
             (
                 "123testing",
-                vec![Token::IntLiteral(123), Token::Ident("testing".to_string())],
+                vec![Token::ConstInt(123), Token::Ident("testing".to_string())],
             ),
             ("ifelse", vec![Token::Ident("ifelse".to_string())]),
             (
@@ -646,7 +668,7 @@ mod tests {
                     Token::Let,
                     Token::Ident("π".to_string()),
                     Token::ControlChar('='),
-                    Token::IntLiteral(3),
+                    Token::ConstInt(3),
                     Token::ControlChar(';'),
                 ],
             ),
@@ -654,9 +676,9 @@ mod tests {
                 // todo: divide token
                 "5 / 2",
                 vec![
-                    Token::IntLiteral(5),
+                    Token::ConstInt(5),
                     Token::ControlChar('/'),
-                    Token::IntLiteral(2),
+                    Token::ConstInt(2),
                 ],
             ),
             (
@@ -669,11 +691,11 @@ mod tests {
                     Token::ControlChar('{'),
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
-                    Token::IntLiteral(1),
+                    Token::ConstInt(1),
                     Token::Else,
-                    Token::IntLiteral(0),
+                    Token::ConstInt(0),
                     Token::ControlChar(';'),
                     Token::ControlChar('}'),
                 ],
@@ -681,33 +703,21 @@ mod tests {
             (
                 "1.0// a float-like thing",
                 vec![
-                    Token::IntLiteral(1),
+                    Token::ConstInt(1),
                     Token::ControlChar('.'),
-                    Token::IntLiteral(0),
+                    Token::ConstInt(0),
                     Token::Comment("a float-like thing".to_string()),
                 ],
             ),
             (
                 "f\" outer {\"inner\"} outer \"",
                 vec![Token::FormatStringLiteral(vec![
-                    FmtStringContents::Char(' '),
-                    FmtStringContents::Char('o'),
-                    FmtStringContents::Char('u'),
-                    FmtStringContents::Char('t'),
-                    FmtStringContents::Char('e'),
-                    FmtStringContents::Char('r'),
-                    FmtStringContents::Char(' '),
+                    FmtStringContents::String(" outer ".into()),
                     FmtStringContents::Tokens(vec![(
-                        Token::StringLiteral("inner".to_string()),
+                        Token::ConstString("inner".to_string()),
                         empty_range(),
                     )]),
-                    FmtStringContents::Char(' '),
-                    FmtStringContents::Char('o'),
-                    FmtStringContents::Char('u'),
-                    FmtStringContents::Char('t'),
-                    FmtStringContents::Char('e'),
-                    FmtStringContents::Char('r'),
-                    FmtStringContents::Char(' '),
+                    FmtStringContents::String(" outer ".into()),
                 ])],
             ),
             ("f\"\"", vec![Token::FormatStringLiteral(vec![])]),
@@ -720,22 +730,13 @@ mod tests {
             (
                 "f\"result is {calc(1, 2)}\"",
                 vec![Token::FormatStringLiteral(vec![
-                    FmtStringContents::Char('r'),
-                    FmtStringContents::Char('e'),
-                    FmtStringContents::Char('s'),
-                    FmtStringContents::Char('u'),
-                    FmtStringContents::Char('l'),
-                    FmtStringContents::Char('t'),
-                    FmtStringContents::Char(' '),
-                    FmtStringContents::Char('i'),
-                    FmtStringContents::Char('s'),
-                    FmtStringContents::Char(' '),
+                    FmtStringContents::String("result is ".into()),
                     FmtStringContents::Tokens(vec![
                         (Token::Ident("calc".to_string()), empty_range()),
                         (Token::ControlChar('('), empty_range()),
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                         (Token::ControlChar(','), empty_range()),
-                        (Token::IntLiteral(2), empty_range()),
+                        (Token::ConstInt(2), empty_range()),
                         (Token::ControlChar(')'), empty_range()),
                     ]),
                 ])],
@@ -743,20 +744,10 @@ mod tests {
             (
                 "f\"outer {f\"inner {y}\"} end\"",
                 vec![Token::FormatStringLiteral(vec![
-                    FmtStringContents::Char('o'),
-                    FmtStringContents::Char('u'),
-                    FmtStringContents::Char('t'),
-                    FmtStringContents::Char('e'),
-                    FmtStringContents::Char('r'),
-                    FmtStringContents::Char(' '),
+                    FmtStringContents::String("outer ".into()),
                     FmtStringContents::Tokens(vec![(
                         Token::FormatStringLiteral(vec![
-                            FmtStringContents::Char('i'),
-                            FmtStringContents::Char('n'),
-                            FmtStringContents::Char('n'),
-                            FmtStringContents::Char('e'),
-                            FmtStringContents::Char('r'),
-                            FmtStringContents::Char(' '),
+                            FmtStringContents::String("inner ".into()),
                             FmtStringContents::Tokens(vec![(
                                 Token::Ident("y".to_string()),
                                 empty_range(),
@@ -764,19 +755,16 @@ mod tests {
                         ]),
                         empty_range(),
                     )]),
-                    FmtStringContents::Char(' '),
-                    FmtStringContents::Char('e'),
-                    FmtStringContents::Char('n'),
-                    FmtStringContents::Char('d'),
+                    FmtStringContents::String(" end".into()),
                 ])],
             ),
             (
                 "f\"{1+1}\"",
                 vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
                     vec![
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                         (Token::ControlChar('+'), empty_range()),
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                     ],
                 )])],
             ),
@@ -784,11 +772,11 @@ mod tests {
                 "f\"{1+1}a\"",
                 vec![Token::FormatStringLiteral(vec![
                     FmtStringContents::Tokens(vec![
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                         (Token::ControlChar('+'), empty_range()),
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                     ]),
-                    FmtStringContents::Char('a'),
+                    FmtStringContents::String("a".into()),
                 ])],
             ),
         ];
@@ -823,7 +811,7 @@ mod tests {
                     vec![
                         (Token::ControlChar('{'), empty_range()),
                         (Token::ControlChar('{'), empty_range()),
-                        (Token::IntLiteral(1), empty_range()),
+                        (Token::ConstInt(1), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
                     ],
@@ -863,7 +851,7 @@ mod tests {
             (
                 "f\"{1}\" // check",
                 vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
-                    vec![(Token::IntLiteral(1), empty_range())],
+                    vec![(Token::ConstInt(1), empty_range())],
                 )])],
             ),
             (
@@ -930,28 +918,25 @@ mod tests {
             ),
             ("-> // check", vec![Token::ThinArrow]),
             ("fn // check", vec![Token::Function]),
-            (
-                "\"\" // check",
-                vec![Token::StringLiteral(String::from(""))],
-            ),
+            ("\"\" // check", vec![Token::ConstString(String::from(""))]),
             (
                 "\"XX\" // check",
-                vec![Token::StringLiteral(String::from("XX"))],
+                vec![Token::ConstString(String::from("XX"))],
             ),
             (
                 "\"X\\\"X\" // check",
-                vec![Token::StringLiteral(String::from("X\"X"))],
+                vec![Token::ConstString(String::from("X\"X"))],
             ),
             (
                 "\"Hallo ich bin ein String\\n\\n\\nNeue Zeile\" // check",
-                vec![Token::StringLiteral(String::from(
+                vec![Token::ConstString(String::from(
                     "Hallo ich bin ein String\n\n\nNeue Zeile",
                 ))],
             ),
-            ("1 // check", vec![Token::IntLiteral(1)]),
-            ("2003 // check", vec![Token::IntLiteral(2003)]),
-            ("true // check", vec![Token::BoolLiteral(true)]),
-            ("false // check", vec![Token::BoolLiteral(false)]),
+            ("1 // check", vec![Token::ConstInt(1)]),
+            ("2003 // check", vec![Token::ConstInt(2003)]),
+            ("true // check", vec![Token::ConstBool(true)]),
+            ("false // check", vec![Token::ConstBool(false)]),
             (
                 "go { {} } // check",
                 vec![Token::InlineGo(String::from(" {} "))],
@@ -970,7 +955,7 @@ mod tests {
                 vec![
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
@@ -981,7 +966,7 @@ mod tests {
                 vec![
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
@@ -995,7 +980,7 @@ mod tests {
                 vec![
                     Token::If,
                     Token::ControlChar('('),
-                    Token::BoolLiteral(true),
+                    Token::ConstBool(true),
                     Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
@@ -1017,9 +1002,9 @@ mod tests {
             (
                 "1.1 // check",
                 vec![
-                    Token::IntLiteral(1),
+                    Token::ConstInt(1),
                     Token::ControlChar('.'),
-                    Token::IntLiteral(1),
+                    Token::ConstInt(1),
                 ],
             ),
             (
@@ -1036,10 +1021,7 @@ mod tests {
             (
                 "f\"FMT {var}\" // check",
                 vec![Token::FormatStringLiteral(vec![
-                    FmtStringContents::Char('F'),
-                    FmtStringContents::Char('M'),
-                    FmtStringContents::Char('T'),
-                    FmtStringContents::Char(' '),
+                    FmtStringContents::String("FMT ".into()),
                     FmtStringContents::Tokens(vec![(Token::Ident("var".into()), empty_range())]),
                 ])],
             ),

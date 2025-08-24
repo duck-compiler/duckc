@@ -40,8 +40,8 @@ impl Display for TypeExpr {
                 })?;
                 write!(f, " }}")
             }
-            TypeExpr::Go(s) => write!(f, "go {}", s),
-            TypeExpr::Duck(d) => write!(f, "{}", d), // Delegates to Duck's Display impl
+            TypeExpr::Go(s) => write!(f, "go {s}"),
+            TypeExpr::Duck(d) => write!(f, "{d}"), // Delegates to Duck's Display impl
             TypeExpr::Tuple(elements) => {
                 write!(f, "(")?;
                 elements.iter().enumerate().try_for_each(|(i, elem)| {
@@ -59,7 +59,7 @@ impl Display for TypeExpr {
                 if *is_global {
                     write!(f, "::")?;
                 }
-                write!(f, "{}", name)?;
+                write!(f, "{name}")?;
 
                 if let Some(params) = generics {
                     write!(f, "<")?;
@@ -92,10 +92,10 @@ impl Display for TypeExpr {
                 }
                 Ok(())
             }
-            TypeExpr::TypeNameInternal(s) => write!(f, "{}", s),
-            TypeExpr::StringLiteral(s) => write!(f, "\"{}\"", s),
-            TypeExpr::IntLiteral(i) => write!(f, "{}", i),
-            TypeExpr::BoolLiteral(b) => write!(f, "{}", b),
+            TypeExpr::TypeNameInternal(s) => write!(f, "{s}"),
+            TypeExpr::ConstString(s) => write!(f, "String [const \"{s}\"]"),
+            TypeExpr::ConstInt(i) => write!(f, "{i}"),
+            TypeExpr::ConstBool(b) => write!(f, "{b}"),
             TypeExpr::String => write!(f, "String"),
             TypeExpr::Int => write!(f, "Int"),
             TypeExpr::Bool => write!(f, "Bool"),
@@ -116,7 +116,7 @@ impl Display for TypeExpr {
                         write!(f, ", ")?;
                     }
                     if let Some(n) = name {
-                        write!(f, "{}: ", n)?;
+                        write!(f, "{n}: ")?;
                     }
                     write!(f, "{}", type_expr.0)
                 })?;
@@ -127,7 +127,7 @@ impl Display for TypeExpr {
                 Ok(())
             }
             TypeExpr::Array(inner) => write!(f, "{}[]", inner.0),
-            TypeExpr::GenericToBeReplaced(s) => write!(f, "{}", s),
+            TypeExpr::GenericToBeReplaced(s) => write!(f, "{s}"),
         }
     }
 }
@@ -178,9 +178,9 @@ pub enum TypeExpr {
     RawTypeName(bool, Vec<String>, Option<Vec<Spanned<TypeParam>>>),
     TypeName(bool, String, Option<Vec<Spanned<TypeParam>>>),
     TypeNameInternal(String),
-    StringLiteral(String),
-    IntLiteral(i32),
-    BoolLiteral(bool),
+    ConstString(String),
+    ConstInt(i32),
+    ConstBool(bool),
     String,
     Int,
     Bool,
@@ -248,12 +248,12 @@ where
                 .ignore_then(go_type_identifier)
                 .map(TypeExpr::Go);
 
-            let string_literal = select_ref! { Token::StringLiteral(str) => str.clone() }
-                .map(TypeExpr::StringLiteral);
+            let string_literal = select_ref! { Token::ConstString(str) => str.clone() }
+                .map(TypeExpr::ConstString);
             let bool_literal =
-                select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::BoolLiteral);
-            let int_literal = select_ref! { Token::IntLiteral(int) => *int }
-                .map(|int| TypeExpr::IntLiteral(int.try_into().unwrap())); // TODO: unwrap!
+                select_ref! { Token::ConstBool(bool) => *bool }.map(TypeExpr::ConstBool);
+            let int_literal = select_ref! { Token::ConstInt(int) => *int }
+                .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
 
             let r#struct = just(Token::Struct)
                 .ignore_then(just(Token::ControlChar('{')))
@@ -454,12 +454,12 @@ where
                     _ => TypeExpr::Any,
                 });
 
-            let string_literal = select_ref! { Token::StringLiteral(str) => str.clone() }
-                .map(TypeExpr::StringLiteral);
+            let string_literal = select_ref! { Token::ConstString(str) => str.clone() }
+                .map(TypeExpr::ConstString);
             let bool_literal =
-                select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::BoolLiteral);
-            let int_literal = select_ref! { Token::IntLiteral(int) => *int }
-                .map(|int| TypeExpr::IntLiteral(int.try_into().unwrap())); // TODO: unwrap!
+                select_ref! { Token::ConstBool(bool) => *bool }.map(TypeExpr::ConstBool);
+            let int_literal = select_ref! { Token::ConstInt(int) => *int }
+                .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
 
             let function = just(Token::Function)
                 .ignore_then(just(Token::ControlChar('(')))
@@ -539,10 +539,10 @@ where
                         .repeated()
                         .collect::<Vec<_>>(),
                 )
-                .map(|((x, _), is_array)| {
+                .map(|((x, span), is_array)| {
                     is_array
                         .iter()
-                        .fold(x, |acc, _| TypeExpr::Array(acc.into_empty_span().into()))
+                        .fold(x, |acc, _| TypeExpr::Array((acc, span).into()))
                 })
                 .map_with(|x, e| (x, e.span()));
 
@@ -713,42 +713,42 @@ pub mod tests {
             TypeExpr::Fun(vec![], Some(Box::new(TypeExpr::String.into_empty_span()))),
         );
 
-        assert_type_expression("true", TypeExpr::BoolLiteral(true));
+        assert_type_expression("true", TypeExpr::ConstBool(true));
 
-        assert_type_expression("false", TypeExpr::BoolLiteral(false));
+        assert_type_expression("false", TypeExpr::ConstBool(false));
 
         assert_type_expression(
             "true | false",
             TypeExpr::Or(vec![
-                TypeExpr::BoolLiteral(true).into_empty_span(),
-                TypeExpr::BoolLiteral(false).into_empty_span(),
+                TypeExpr::ConstBool(true).into_empty_span(),
+                TypeExpr::ConstBool(false).into_empty_span(),
             ]),
         );
 
-        assert_type_expression("1", TypeExpr::IntLiteral(1));
+        assert_type_expression("1", TypeExpr::ConstInt(1));
 
-        assert_type_expression("555", TypeExpr::IntLiteral(555));
+        assert_type_expression("555", TypeExpr::ConstInt(555));
 
         assert_type_expression(
             "555 | 1000",
             TypeExpr::Or(vec![
-                TypeExpr::IntLiteral(555).into_empty_span(),
-                TypeExpr::IntLiteral(1000).into_empty_span(),
+                TypeExpr::ConstInt(555).into_empty_span(),
+                TypeExpr::ConstInt(1000).into_empty_span(),
             ]),
         );
 
-        assert_type_expression("\"str\"", TypeExpr::StringLiteral("str".to_string()));
+        assert_type_expression("\"str\"", TypeExpr::ConstString("str".to_string()));
 
         assert_type_expression(
             "\"other_str\"",
-            TypeExpr::StringLiteral("other_str".to_string()),
+            TypeExpr::ConstString("other_str".to_string()),
         );
 
         assert_type_expression(
             "\"str\" | \"other_str\"",
             TypeExpr::Or(vec![
-                TypeExpr::StringLiteral("str".to_string()).into_empty_span(),
-                TypeExpr::StringLiteral("other_str".to_string()).into_empty_span(),
+                TypeExpr::ConstString("str".to_string()).into_empty_span(),
+                TypeExpr::ConstString("other_str".to_string()).into_empty_span(),
             ]),
         );
 
@@ -1591,11 +1591,11 @@ pub mod tests {
             "{ x: \"hallo\" } | { x: \"bye\" }",
             TypeExpr::Or(vec![
                 TypeExpr::Duck(Duck {
-                    fields: vec![Field::new("x".to_string(), TypeExpr::StringLiteral("hallo".to_string()).into_empty_span())],
+                    fields: vec![Field::new("x".to_string(), TypeExpr::ConstString("hallo".to_string()).into_empty_span())],
                 })
                 .into_empty_span(),
                 TypeExpr::Duck(Duck {
-                    fields: vec![Field::new("x".to_string(), TypeExpr::StringLiteral("bye".to_string()).into_empty_span())],
+                    fields: vec![Field::new("x".to_string(), TypeExpr::ConstString("bye".to_string()).into_empty_span())],
                 })
                 .into_empty_span(),
             ]),

@@ -10,6 +10,7 @@ import re
 VERBOSE = False
 CICD = False
 UPDATE_SNAPSHOTS = False
+ONLY_ERRORS = False
 
 COLOR_RED = "\033[91m"
 COLOR_GREEN = "\033[92m"
@@ -171,8 +172,8 @@ def compile_failure(compiler_path, invalid_program, test_stats):
         if VERBOSE:
             if len(result.stdout) > 1:
                 print(f"{COLOR_YELLOW}  captured output of stdout{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stdout)}'")
-            if len(result.stderr) > 1:
-                print(f"{COLOR_RED}  captured output of stderr{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stderr)}'")
+                if len(result.stderr) > 1:
+                    print(f"{COLOR_RED}  captured output of stderr{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stderr)}'")
 
         if result.returncode != 0:
             print(f"{CHECK} {COLOR_YELLOW}test {COLOR_RESET}{invalid_program}")
@@ -189,7 +190,7 @@ def compile_failure(compiler_path, invalid_program, test_stats):
         print(f"An unexpected error occured for file : {exception}")
         test_stats[STAT_FAILED] += 1
         return None
-    pass
+        pass
 
 def compile_valid(compiler_path, valid_program):
     if VERBOSE:
@@ -203,8 +204,8 @@ def compile_valid(compiler_path, valid_program):
         if VERBOSE:
             if len(result.stdout) > 1:
                 print(f"{COLOR_YELLOW}  captured output of stdout{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stdout)}'")
-            if len(result.stderr) > 1:
-                print(f"{COLOR_RED}  captured output of stderr{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stderr)}'")
+                if len(result.stderr) > 1:
+                    print(f"{COLOR_RED}  captured output of stderr{COLOR_RESET}: \n{COLOR_GRAY}{indent_all_lines_with_tab(result.stderr)}'")
 
         if result.returncode == 0:
             print(f"{CHECK} {COLOR_YELLOW}test {COLOR_RESET}{valid_program}")
@@ -217,7 +218,7 @@ def compile_valid(compiler_path, valid_program):
     except Exception as exception:
         print(f"An unexpected error occured for file : {exception}")
         return None
-    pass
+        pass
 
 def path_to_filename(path: str) -> str:
     if not isinstance(path, str):
@@ -241,7 +242,7 @@ def verify_snapshot(test_name, actual_stdout, actual_stderr):
         print(f"{UPDATE} {COLOR_BLUE}Updating snapshot for {COLOR_RESET}{test_name}")
         with open(snapshot_path, 'w', encoding='utf-8') as f:
             json.dump(snapshot_data, f, indent=4)
-        return True
+            return True
 
     if not os.path.exists(snapshot_path):
         print(f"{CHECK} {COLOR_CYAN}No previous snapshot found for {COLOR_RESET}{test_name}")
@@ -264,8 +265,8 @@ def verify_snapshot(test_name, actual_stdout, actual_stderr):
             if choice == 'y':
                 with open(snapshot_path, 'w', encoding='utf-8') as f:
                     json.dump(snapshot_data, f, indent=4)
-                print(f"{UPDATE} {COLOR_BLUE}New snapshot created.{COLOR_RESET}")
-                return True
+                    print(f"{UPDATE} {COLOR_BLUE}New snapshot created.{COLOR_RESET}")
+                    return True
             elif choice == 'n':
                 print(f"{CROSS} {COLOR_RED}Test failed. New snapshot rejected by user.{COLOR_RESET}")
                 return False
@@ -296,8 +297,8 @@ def verify_snapshot(test_name, actual_stdout, actual_stderr):
         if choice == 'y':
             with open(snapshot_path, 'w', encoding='utf-8') as f:
                 json.dump(snapshot_data, f, indent=4)
-            print(f"{UPDATE} {COLOR_BLUE}Snapshot updated.{COLOR_RESET}")
-            return True
+                print(f"{UPDATE} {COLOR_BLUE}Snapshot updated.{COLOR_RESET}")
+                return True
         elif choice == 'n':
             print(f"{CROSS} {COLOR_RED}Test failed. Fix code or update snapshot.{COLOR_RESET}")
             return False
@@ -320,7 +321,46 @@ def print_diff(output_type, expected, actual):
             print(f"{COLOR_RED}{line}{COLOR_RESET}", end='')
         else:
             print(line, end='')
-    print(f"{COLOR_GRAY}--------------------{COLOR_RESET}\n")
+            print(f"{COLOR_GRAY}--------------------{COLOR_RESET}\n")
+
+def compile_and_run_with_error_assert(compiler_path, program_path, test_stats):
+    if VERBOSE:
+        print(f"{COLOR_YELLOW}Running compile_and_run_with_error_assert for '{program_path}'{COLOR_RESET}")
+
+    test_stats[STAT_TOTAL] += 1
+
+    try:
+        compile_command = [compiler_path, "compile", program_path]
+        compile_result = subprocess.run(compile_command, capture_output=True, text=True, check=False)
+
+        if compile_result.returncode == 0:
+            print(f"{SKIP} {COLOR_YELLOW}test {COLOR_RESET}{program_path} {COLOR_GRAY}-> {COLOR_RED}compilation successful. expected error{COLOR_RESET}")
+            test_stats[STAT_SKIPPED] += 1
+
+        if VERBOSE:
+            print(f"  {COLOR_RED}STDERR:\n{indent_all_lines_with_tab(compile_result.stderr)}{COLOR_RESET}")
+            return
+
+        actual_stdout = compile_result.stdout
+        actual_stderr = compile_result.stderr
+
+        has_error = False
+
+        snapshot_passed = verify_snapshot(program_path, actual_stdout, actual_stderr)
+        if not snapshot_passed:
+            has_error = True
+            test_stats[STAT_FAILED] += 1
+
+        if not has_error:
+            print(f"{CHECK} {COLOR_GREEN}test {COLOR_RESET}{program_path}")
+            test_stats[STAT_PASSED] += 1
+        elif CICD:
+            sys.exit(1)
+
+    except Exception as e:
+        print(f"{CROSS} {COLOR_RED}An unexpected error occurred for file '{program_path}': {e}{COLOR_RESET}")
+        test_stats[STAT_FAILED] += 1
+        if CICD: sys.exit(1)
 
 def compile_and_run_with_assert(compiler_path, program_path, test_stats):
     if VERBOSE:
@@ -337,13 +377,13 @@ def compile_and_run_with_assert(compiler_path, program_path, test_stats):
             test_stats[STAT_SKIPPED] += 1
             if VERBOSE:
                 print(f"  {COLOR_RED}STDERR:\n{indent_all_lines_with_tab(compile_result.stderr)}{COLOR_RESET}")
-            return
+                return
 
         executable_path = "./.dargo/duck_out"
         if not os.path.exists(executable_path):
-             print(f"{CROSS} {COLOR_RED}test {COLOR_RESET}{program_path} {COLOR_GRAY}-> {COLOR_RED}compiled output not found at '{executable_path}'{COLOR_RESET}")
-             if CICD: sys.exit(1)
-             return
+            print(f"{CROSS} {COLOR_RED}test {COLOR_RESET}{program_path} {COLOR_GRAY}-> {COLOR_RED}compiled output not found at '{executable_path}'{COLOR_RESET}")
+            if CICD: sys.exit(1)
+            return
 
         run_result = subprocess.run(executable_path, capture_output=True, text=True, check=False)
         actual_stdout = run_result.stdout
@@ -397,6 +437,17 @@ def perform_tests():
 
     print(f"{COLOR_YELLOW}Duck Compiler is located at {COLOR_RESET}{compiler_path}{COLOR_RESET}")
 
+    assert_error_files = find_duck_files_in_directory("./errors")
+    if assert_error_files:
+        print(f"\n{COLOR_CYAN}--- Evaluating Programs with Error Assertions (snapshots) ---{COLOR_RESET}")
+        for program in assert_error_files:
+            compile_and_run_with_error_assert(compiler_path, program, test_stats)
+
+    if ONLY_ERRORS:
+        print(f"{COLOR_YELLOW} Skipping other test cases - error only mode.")
+        print_summary(test_stats)
+        return
+
     invalid_program_files = find_duck_files_in_directory("./invalid_programs")
     print(f"\n{COLOR_YELLOW}Starting the evaluation of the invalid test cases...")
     for invalid_program in invalid_program_files:
@@ -435,6 +486,13 @@ if __name__ == "__main__":
         help='Force update all snapshot files with new output.'
     )
 
+    parser.add_argument(
+        '-e', '--errors-only',
+        action='store_true',
+        dest='errors_only',
+        help='Run script in error only mode. Helps when working on error handling.'
+    )
+
     args = parser.parse_args()
 
     VERBOSE = args.verbose
@@ -448,5 +506,9 @@ if __name__ == "__main__":
     UPDATE_SNAPSHOTS = args.update_snapshots
     if UPDATE_SNAPSHOTS:
         print(f"{COLOR_YELLOW}Running in Snapshot Update Mode. All snapshots will be overwritten.{COLOR_RESET}")
+
+    ONLY_ERRORS = args.errors_only
+    if ONLY_ERRORS:
+        print(f"{COLOR_YELLOW}Running in Errors only mode. {COLOR_RESET}")
 
     perform_tests()
