@@ -3,7 +3,7 @@ use std::process;
 use colored::Colorize;
 
 use crate::parse::type_parser::{Duck, TypeExpr};
-use crate::parse::{failure_with_occurence, Field, SS};
+use crate::parse::{Field, SS, failure_with_occurence};
 use crate::parse::{
     Spanned, failure,
     value_parser::{ValFmtStringContents, ValueExpr},
@@ -147,18 +147,22 @@ impl TypeExpr {
                     })
                     .collect::<Vec<Field>>();
 
-                let is_missing_field = !struct_def
-                    .fields
-                    .iter()
-                    .all(|field| {
-                        let field_from_value_expr = value_expr_fields.iter()
-                            .find(|value_expr_field| value_expr_field.name == field.name);
+                let is_missing_field = !struct_def.fields.iter().all(|field| {
+                    let field_from_value_expr = value_expr_fields
+                        .iter()
+                        .find(|value_expr_field| value_expr_field.name == field.name);
 
-                        let Some(field_from_value_expr) = field_from_value_expr else { return false };
+                    let Some(field_from_value_expr) = field_from_value_expr else {
+                        return false;
+                    };
 
-                        check_type_compatability(&field.type_expr, &field_from_value_expr.type_expr, type_env);
-                        return true
-                    });
+                    check_type_compatability(
+                        &field.type_expr,
+                        &field_from_value_expr.type_expr,
+                        type_env,
+                    );
+                    return true;
+                });
 
                 if is_missing_field || struct_def.fields.len() != value_expr_fields.len() {
                     panic!("invalid type from value expr")
@@ -374,7 +378,8 @@ impl TypeExpr {
                     ),
                 );
                 require(
-                    target_obj_type_expr.has_field_by_name(field_name.clone()),
+                    target_obj_type_expr.has_field_by_name(field_name.clone())
+                        || target_obj_type_expr.has_method_by_name(field_name.clone()),
                     format!(
                         "{:?} {} doesn't have a field with name {}",
                         &target_obj_type_expr,
@@ -443,6 +448,13 @@ impl TypeExpr {
         }
     }
 
+    fn has_method_by_name(&self, name: String) -> bool {
+        match self {
+            Self::Struct(r#struct) => r#struct.methods.iter().any(|method| *method.name == name),
+            _ => false,
+        }
+    }
+
     fn has_field_by_name(&self, name: String) -> bool {
         match self {
             Self::Tuple(fields) => fields.len() > name.parse::<usize>().unwrap(),
@@ -464,10 +476,24 @@ impl TypeExpr {
             Self::Struct(r#struct) => r#struct
                 .fields
                 .iter()
-                .find(|struct_field| *struct_field.name == field_name)
+                .map(|x| (x.name.clone(), x.type_expr.0.clone()))
+                .chain(r#struct.methods.iter().map(|x| {
+                    (
+                        x.name.clone(),
+                        TypeExpr::Fun(
+                            x.params
+                                .clone()
+                                .unwrap_or_default()
+                                .iter()
+                                .map(|x| (Some(x.0.clone()), x.1.clone()))
+                                .collect(),
+                            x.return_type.clone().map(Box::new),
+                        ),
+                    )
+                }))
+                .find(|struct_field| struct_field.0 == field_name)
                 .expect("Tried to access field that doesn't exist")
-                .type_expr
-                .0
+                .1
                 .clone(),
             Self::Duck(duck) => duck
                 .fields

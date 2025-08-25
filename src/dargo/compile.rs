@@ -97,6 +97,7 @@ pub fn compile(
     let tokens = lex(src_file_name, src_file_file_contents);
     let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
     let mut type_env = typecheck(&mut src_file_ast);
+    dbg!(&src_file_ast);
     let go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env));
 
     let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.go").as_str(), &go_code);

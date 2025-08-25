@@ -2,7 +2,10 @@ use std::collections::VecDeque;
 
 use crate::{
     parse::{
-        function_parser::LambdaFunctionExpr, struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}, value_parser::{Declaration, ValFmtStringContents, ValueExpr}
+        function_parser::LambdaFunctionExpr,
+        struct_parser::StructDefinition,
+        type_parser::{Duck, TypeExpr},
+        value_parser::{Declaration, ValFmtStringContents, ValueExpr},
     },
     semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
 };
@@ -170,8 +173,7 @@ fn walk_access(
                             .iter()
                             .find(|x| x.name == field_name)
                             .expect("Field doesn't exist");
-                        if found_field.type_expr.0.is_array()
-                            || found_field.type_expr.0.is_duck() {
+                        if found_field.type_expr.0.is_array() || found_field.type_expr.0.is_duck() {
                             s.push_front(format!("Get{field_name}()"));
                         } else {
                             s.push_front(format!("GetPtr{field_name}()"));
@@ -634,8 +636,7 @@ impl ValueExpr {
                 let mut res = Vec::new();
                 let mut res_vars = Vec::new();
                 let name =
-                    TypeExpr::from_value_expr(self, type_env)
-                        .as_go_type_annotation(type_env);
+                    TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
 
                 for (field_expr, _) in fields {
                     let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, env);
@@ -688,38 +689,48 @@ impl ValueExpr {
                 type_params: _,
             } => {
                 // todo: type_params
-                let (mut instr, target) = v_target.0.direct_or_with_instr(type_env, env);
-                if let Some(target) = target {
-                    let mut v_p_res = Vec::new();
-                    for (param, _) in params {
-                        let (p_instr, p_res) = param.direct_or_with_instr(type_env, env);
-                        instr.extend(p_instr);
-                        if let Some(p_res) = p_res {
-                            v_p_res.push(p_res);
-                        } else {
-                            return (instr, None);
-                        }
-                    }
+                let (mut instr, res) = walk_access(v_target.0.clone(), type_env, env);
+                if res.is_none() {
+                    return (instr, None);
+                }
 
-                    let TypeExpr::Fun(_, return_type) =
-                        TypeExpr::from_value_expr(&v_target.0, type_env)
-                    else {
-                        panic!("can only call function")
-                    };
+                let call_target = res.unwrap();
 
-                    if let Some(return_type) = return_type {
-                        let res = env.new_var();
-                        instr.push(IrInstruction::VarDecl(
-                            res.clone(),
-                            return_type.0.as_go_type_annotation(type_env),
-                        ));
-                        instr.push(IrInstruction::FunCall(Some(res.clone()), target, v_p_res));
-                        (instr, Some(IrValue::Var(res)))
+                let mut v_p_res = Vec::new();
+                for (param, _) in params {
+                    let (p_instr, p_res) = param.direct_or_with_instr(type_env, env);
+                    instr.extend(p_instr);
+                    if let Some(p_res) = p_res {
+                        v_p_res.push(p_res);
                     } else {
-                        instr.push(IrInstruction::FunCall(None, target, v_p_res));
-                        (instr, None)
+                        return (instr, None);
                     }
+                }
+
+                let TypeExpr::Fun(_, return_type) =
+                    TypeExpr::from_value_expr(&v_target.0, type_env)
+                else {
+                    panic!("can only call function")
+                };
+
+                if let Some(return_type) = return_type {
+                    let res = env.new_var();
+                    instr.push(IrInstruction::VarDecl(
+                        res.clone(),
+                        return_type.0.as_go_type_annotation(type_env),
+                    ));
+                    instr.push(IrInstruction::FunCall(
+                        Some(res.clone()),
+                        IrValue::Var(call_target),
+                        v_p_res,
+                    ));
+                    (instr, Some(IrValue::Var(res)))
                 } else {
+                    instr.push(IrInstruction::FunCall(
+                        None,
+                        IrValue::Var(call_target),
+                        v_p_res,
+                    ));
                     (instr, None)
                 }
             }
@@ -794,8 +805,16 @@ impl ValueExpr {
                             ));
                             return (i, Some(IrValue::Var(res)));
                         }
-                        TypeExpr::Struct(StructDefinition { name: _, fields, methods: _, generics: _ }) => {
-                            let f = fields.iter().find(|f| f.name == field_name).unwrap();
+                        TypeExpr::Struct(StructDefinition {
+                            name: _,
+                            fields,
+                            methods: _,
+                            generics: _,
+                        }) => {
+                            let f = fields
+                                .iter()
+                                .find(|f| f.name == field_name)
+                                .expect(&format!("{field_name} {fields:?}"));
                             let res = env.new_var();
                             i.push(IrInstruction::VarDecl(
                                 res.clone(),
@@ -989,10 +1008,7 @@ mod tests {
                     decl("var_0", "Any"),
                     IrInstruction::VarAssignment(
                         "var_0".into(),
-                        IrValue::Struct(
-                            "Any".into(),
-                            vec![("x".into(), IrValue::Int(123))],
-                        ),
+                        IrValue::Struct("Any".into(), vec![("x".into(), IrValue::Int(123))]),
                     ),
                 ],
             ),

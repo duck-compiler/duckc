@@ -5,9 +5,17 @@ struct Lol = {
         std::io::println(self.kek);
     }
 
+    fn get_kek() -> String {
+        return self.kek;
+    }
+
 };
 
 fn main() {
     let v: Lol = Lol { kek: "Yo" };
+    let v2: Lol = Lol { kek: "Ich bin ein anderse objekt" };
     v.fisch();
+    v2.fisch();
+
+    v.get_kek()->std::io::println();
 }
