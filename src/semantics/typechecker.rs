@@ -15,6 +15,14 @@ impl TypeExpr {
         return format!("{self}");
     }
 
+    pub fn from_value_expr_resolved_type_name(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
+        let mut res = TypeExpr::from_value_expr(value_expr, type_env);
+        if let TypeExpr::TypeName(_, name, _) = &res {
+            res = type_env.resolve_type_alias(name);
+        }
+        res
+    }
+
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
             ValueExpr::RawVariable(_x, p) => panic!("{}", p.join(" ").leak()),
@@ -369,11 +377,11 @@ impl TypeExpr {
                 target_obj,
                 field_name,
             } => {
-                let target_obj_type_expr = TypeExpr::from_value_expr(&target_obj.0, type_env);
+                let target_obj_type_expr = TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
                 require(
                     target_obj_type_expr.is_object_like(),
                     format!(
-                        "the target of a field access must be of type duck, struct or tuple. Got {}",
+                        "the target of a field access must be of type duck, struct or tuple. Got {target_obj_type_expr:?} {}",
                         target_obj_type_expr.as_go_type_annotation(type_env)
                     ),
                 );

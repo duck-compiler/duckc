@@ -166,7 +166,8 @@ fn walk_access(
                 target_obj,
                 field_name,
             } => {
-                match TypeExpr::from_value_expr(&target_obj.0, type_env) {
+                let t = TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
+                match t {
                     TypeExpr::Tuple(..) => s.push_front(format!("field_{field_name}")),
                     TypeExpr::Duck(Duck { fields }) => {
                         let found_field = fields
@@ -180,7 +181,7 @@ fn walk_access(
                         }
                     }
                     TypeExpr::Struct(..) => s.push_front(format!("{field_name}")),
-                    _ => panic!("can only access object like"),
+                    a @ _ => panic!("can only access object like {a:?} {:?}", target_obj.0),
                 }
                 current_obj = target_obj.0;
             }

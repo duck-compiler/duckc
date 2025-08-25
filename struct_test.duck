@@ -1,5 +1,14 @@
+struct Xyz = {
+    number_as_string: String
+} impl {
+    fn give_number() -> String {
+        return self.number_as_string;
+    }
+};
+
 struct Lol = {
     kek: String,
+    xyz: Xyz,
 } impl {
     fn fisch() {
         std::io::println(self.kek);
@@ -9,13 +18,18 @@ struct Lol = {
         return self.kek;
     }
 
+    fn get_xyz() -> Xyz {
+        return self.xyz;
+    }
+
 };
 
 fn main() {
-    let v: Lol = Lol { kek: "Yo" };
-    let v2: Lol = Lol { kek: "Ich bin ein anderse objekt" };
+    let v: Lol = Lol { kek: "Yo", xyz: Xyz { number_as_string: "100" } };
+    let v2: Lol = Lol { kek: "Ich bin ein anderse objekt", xyz: Xyz { number_as_string: "999"} };
     v.fisch();
     v2.fisch();
 
     v.get_kek()->std::io::println();
+    v.get_xyz().give_number()->std::io::println();
 }
