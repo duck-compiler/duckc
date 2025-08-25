@@ -680,7 +680,7 @@ fn check_type_compatability(
                         format!("{}", required_type.0).bright_yellow(),
                     ),
                     format!(
-                        "because of the fact, that the required type {} is a struct. The value you need to pass must be a duck aswell, but it isn't.",
+                        "because of the fact, that the required type {} is a struct. The value you need to pass must be a  aswell, but it isn't.",
                         format!("{}", required_type.0).bright_yellow(),
                     ),
                 )

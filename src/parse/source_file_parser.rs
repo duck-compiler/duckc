@@ -102,6 +102,10 @@ impl SourceFile {
                     mangle_env.insert_type(f.name[prefix.len()..].to_string());
                     result.type_definitions.push(f);
                 }
+                for struct_definition in src.struct_definitions {
+                    mangle_env.insert_type(struct_definition.name[prefix.len()..].to_string());
+                    result.struct_definitions.push(struct_definition);
+                }
                 for u in &src.use_statements {
                     if matches!(u, UseStatement::Go(..)) {
                         result.push_use(u);
@@ -147,6 +151,23 @@ impl SourceFile {
                 ty.name = mangle(&p);
                 mangle_type_expression(&mut ty.type_expression.0, prefix, &mut mangle_env);
                 result.type_definitions.push(ty);
+            }
+
+            // todo(@Apfelfrosch): implement flatten for struct definitions
+            for struct_def in &s.struct_definitions {
+                let mut struct_def = struct_def.clone();
+
+                let mut new_name = Vec::new();
+                new_name.extend_from_slice(prefix);
+                new_name.push(struct_def.name.clone());
+
+                struct_def.name = mangle(&new_name);
+
+                for field in &mut struct_def.fields {
+                    mangle_type_expression(&mut field.type_expr.0, prefix, &mut mangle_env);
+                }
+
+                result.struct_definitions.push(struct_def);
             }
 
             result

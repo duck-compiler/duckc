@@ -12,6 +12,7 @@ use crate::{
 pub enum GenericDefinition {
     Function(FunctionDefintion),
     Type(TypeDefinition),
+    Struct(StructDefinition),
 }
 
 impl GenericDefinition {
@@ -28,6 +29,13 @@ impl GenericDefinition {
                 .generics
                 .as_ref()
                 .expect("TypeDefinition shouldn't be wrapped inside a GenericDefinition, when it doesn't have any generics.")
+                .iter()
+                .map(|generic| generic.0.name.clone())
+                .collect::<Vec<_>>(),
+            Self::Struct(struct_def) => struct_def
+                .generics
+                .as_ref()
+                .expect("StructDefinition shouldn't be wrapped inside a GenericDefinition, when it doesn't have any generics.")
                 .iter()
                 .map(|generic| generic.0.name.clone())
                 .collect::<Vec<_>>(),
@@ -164,6 +172,16 @@ impl TypeEnv {
                 );
                 process::exit(1);
             }
+            GenericDefinition::Struct(_) => {
+                println!(
+                    "{}{}{}Expected '{}' to be a generic function, but it's a struct.",
+                    Tag::Dargo,
+                    Tag::Build,
+                    Tag::Err,
+                    name
+                );
+                process::exit(1);
+            }
         };
 
         let generics = fn_def.generics.as_ref().unwrap();
@@ -277,6 +295,16 @@ impl TypeEnv {
                     name
                 );
                 process::exit(1);
+            },
+            GenericDefinition::Struct(_) => {
+                println!(
+                    "{}{}{}Expected '{}' to be a generic type, but it's a struct.",
+                    Tag::Dargo,
+                    Tag::Build,
+                    Tag::Err,
+                    name
+                );
+                process::exit(1);
             }
         };
 
@@ -321,6 +349,101 @@ impl TypeEnv {
 
         let mut concrete_type_expr = type_def.type_expression.0.clone();
 
+        resolve_all_aliases_type_expr(&mut concrete_type_expr, self);
+
+        self.pop_type_aliases();
+
+        self.insert_type_alias(mangled_name.clone(), concrete_type_expr.clone());
+        self.all_types.push(concrete_type_expr.clone());
+
+        concrete_type_expr
+    }
+
+    fn instantiate_generic_struct(
+        &mut self,
+        name: &String,
+        type_params: &mut [Spanned<TypeExpr>],
+        _span: SS,
+    ) -> TypeExpr {
+        let generic_def = self
+            .generic_definitions
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| {
+                println!(
+                    "{}{}{}Generic struct '{}' not found.",
+                    Tag::Dargo,
+                    Tag::Build,
+                    Tag::Err,
+                    name
+                );
+                process::exit(1);
+            });
+
+        let type_def = match generic_def {
+            GenericDefinition::Struct(struct_def) => struct_def,
+            GenericDefinition::Type(td) => {
+                println!(
+                    "{}{}{}Expected '{}' to be a generic type, but it's a type.",
+                    Tag::Dargo,
+                    Tag::Build,
+                    Tag::Err,
+                    name
+                );
+                process::exit(1);
+            },
+            GenericDefinition::Function(_) => {
+                println!(
+                    "{}{}{}Expected '{}' to be a generic type, but it's a function.",
+                    Tag::Dargo,
+                    Tag::Build,
+                    Tag::Err,
+                    name
+                );
+                process::exit(1);
+            },
+        };
+
+        let generics = type_def.generics.as_ref().unwrap();
+        if generics.len() != type_params.len() {
+            println!(
+                "{}{}{}Expected {} type arguments for generic type '{}', but got {}.",
+                Tag::Dargo,
+                Tag::Build,
+                Tag::Err,
+                generics.len(),
+                name,
+                type_params.len()
+            );
+            process::exit(1);
+        }
+
+        let mangled_name = format!(
+            "{}_{}",
+            type_def.name,
+            type_params
+                .iter()
+                .map(|tp| tp.0.as_clean_go_type_name(self))
+                .collect::<Vec<_>>()
+                .join("_")
+        );
+
+        if self
+            .type_aliases
+            .last()
+            .unwrap()
+            .contains_key(&mangled_name)
+        {
+            return self.resolve_type_alias(&mangled_name);
+        }
+
+        self.push_type_aliases(); // Create a new scope for this instantiation
+
+        for (generic_param, concrete_type) in generics.iter().zip(type_params.iter()) {
+            self.insert_type_alias(generic_param.0.name.clone(), concrete_type.0.clone());
+        }
+
+        let mut concrete_type_expr = TypeExpr::Struct(type_def.clone());
         resolve_all_aliases_type_expr(&mut concrete_type_expr, self);
 
         self.pop_type_aliases();
@@ -733,21 +856,33 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     println!("{} insert type definitions", Tag::TypeResolve,);
 
+    println!("source file struct defs: {}", source_file.struct_definitions.len());
     // Step 2: Insert type definitions
+    source_file
+        .struct_definitions
+        .iter()
+        .for_each(|struct_definition| {
+            if struct_definition.generics.is_some() {
+                type_env.insert_generic_definition(struct_definition.name.clone(), GenericDefinition::Struct(struct_definition.clone()));
+                return;
+            }
+
+            println!("insert {}", struct_definition.name);
+            type_env.insert_type_alias(struct_definition.name.clone(), TypeExpr::Struct(struct_definition.clone()));
+        });
+
     source_file
         .type_definitions
         .iter()
         .for_each(|type_definition| {
             if type_definition.generics.is_some() {
-                type_env.insert_generic_definition(
-                    type_definition.name.clone(),
-                    GenericDefinition::Type(type_definition.clone()),
-                );
-            } else {
-                let mut rhs = type_definition.type_expression.0.clone();
-                resolve_all_aliases_type_expr(&mut rhs, type_env);
-                type_env.insert_type_alias(type_definition.name.clone(), rhs)
+                type_env.insert_generic_definition(type_definition.name.clone(), GenericDefinition::Type(type_definition.clone()));
+                return;
             }
+
+            let mut rhs = type_definition.type_expression.0.clone();
+            resolve_all_aliases_type_expr(&mut rhs, type_env);
+            type_env.insert_type_alias(type_definition.name.clone(), rhs);
         });
 
     println!(
