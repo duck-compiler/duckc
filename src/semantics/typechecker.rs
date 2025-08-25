@@ -17,7 +17,7 @@ impl TypeExpr {
 
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
-            ValueExpr::RawVariable(x, p) => panic!("{}", p.join(" ").leak()),
+            ValueExpr::RawVariable(_x, p) => panic!("{}", p.join(" ").leak()),
             ValueExpr::FormattedString(contents) => {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {
@@ -325,7 +325,7 @@ impl TypeExpr {
                 .as_ref()
                 .cloned()
                 .or(type_env.get_identifier_type(ident.clone()))
-                .expect("Expected type but didn't get one")
+                .expect(format!("Expected type but didn't get one {ident} {type_expr:?}").leak())
                 .clone(),
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(

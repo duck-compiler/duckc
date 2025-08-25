@@ -1,4 +1,4 @@
-use std::{collections::HashMap, process};
+use std::{collections::HashMap, panic::Location, process};
 
 use crate::{
     parse::{
@@ -84,16 +84,20 @@ impl TypeEnv {
         self.type_aliases.pop();
     }
 
+    #[track_caller]
     pub fn push_identifier_types(&mut self) {
         let cloned_hash_map = self
             .identifier_types
             .last()
             .expect("Expect at least one env.")
             .clone();
+        println!("push {} {}", Location::caller(), cloned_hash_map.contains_key("self"));
         self.identifier_types.push(cloned_hash_map);
     }
 
+    #[track_caller]
     pub fn pop_identifier_types(&mut self) {
+        println!("pop {} {}", Location::caller(), self.identifier_types.last().unwrap().contains_key("self"));
         self.identifier_types.pop();
     }
 
@@ -949,6 +953,28 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     // Step 5: Final resolve of all functions
     source_file
+        .struct_definitions
+        .iter_mut()
+        .for_each(|struct_definition| {
+            let ty_expr = TypeExpr::Struct(struct_definition.clone());
+            for m in &mut struct_definition.methods {
+                type_env.push_identifier_types();
+
+                if let Some(params) = m.params.clone().as_mut() {
+                    for p in params {
+                        type_env.insert_identifier_type(p.0.clone(), p.1.0.clone());
+                    }
+                }
+
+                type_env.insert_identifier_type("self".to_string(), ty_expr.clone());
+                typeresolve_value_expr(&mut m.value_expr.0, type_env);
+                type_env.pop_identifier_types();
+
+                dbg!(&m.value_expr.0);
+            }
+        });
+
+    source_file
         .function_definitions
         .iter_mut()
         .for_each(|function_defintion| {
@@ -1258,6 +1284,8 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 .get_identifier_type(identifier.clone())
                 .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));
 
+            dbg!(&identifier, &type_expr);
+
             *type_expr_opt = Some(type_expr)
         }
         ValueExpr::If {
@@ -1270,7 +1298,9 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             typeresolve_value_expr(&mut then.0, type_env);
             type_env.pop_identifier_types();
             if let Some(r#else) = r#else {
+                type_env.push_identifier_types();
                 typeresolve_value_expr(&mut r#else.0, type_env);
+                type_env.pop_identifier_types();
             }
         }
         ValueExpr::While { condition, body } => {

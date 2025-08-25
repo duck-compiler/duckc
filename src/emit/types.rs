@@ -1,5 +1,5 @@
 use crate::{
-    emit::value::{IrInstruction, IrValue, ToIr},
+    emit::value::{IrInstruction, IrValue},
     parse::{struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}, Field},
     semantics::type_resolve::TypeEnv,
 };
@@ -59,14 +59,13 @@ pub fn primitive_type_name(primitive_type_expr: &TypeExpr) -> &'static str {
     }
 }
 
-pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<IrInstruction> {
+pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
     let summary = type_env.summarize();
 
     fn interface_implementations(
         typename: String,
         type_expr: &TypeExpr,
         type_env: &mut TypeEnv,
-        to_ir: &mut ToIr,
     ) -> Vec<IrInstruction> {
         return match type_expr {
             TypeExpr::Duck(duck) => duck
@@ -165,10 +164,6 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                             )],
                         )
                     );
-                }
-
-                for method in &s.methods {
-                    out.push(method.emit(Some(("self".to_string(), format!("*{}", s.name))), type_env, to_ir));
                 }
 
                 out
@@ -281,7 +276,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
             let type_name = type_expr.as_clean_go_type_name(type_env);
 
             let mut instructions =
-                interface_implementations(type_name.clone(), type_expr, type_env, to_ir);
+                interface_implementations(type_name.clone(), type_expr, type_env);
 
             instructions.push(match type_expr {
                 TypeExpr::Tuple(t) => IrInstruction::StructDef(

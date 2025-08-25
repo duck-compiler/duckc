@@ -858,7 +858,7 @@ impl ValueExpr {
 
                 let res_var = env.new_var();
                 res.extend([
-                    IrInstruction::VarDecl(res_var.clone(), name.clone()),
+                    IrInstruction::VarDecl(res_var.clone(), format!("*{name}")),
                     IrInstruction::VarAssignment(res_var.clone(), IrValue::Struct(name, res_vars)),
                 ]);
 
@@ -872,6 +872,7 @@ impl ValueExpr {
             | ValueExpr::String(..) => {
                 if let Some(d) = self.direct_emit(type_env, env) {
                     let res_var = env.new_var();
+                    dbg!(&res_var);
                     (
                         vec![
                             IrInstruction::VarDecl(

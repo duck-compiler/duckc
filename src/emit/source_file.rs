@@ -11,7 +11,7 @@ impl SourceFile {
     pub fn emit(self, pkg_name: String, type_env: &mut TypeEnv) -> Vec<IrInstruction> {
         let mut to_ir = ToIr::default();
 
-        let type_definitions = emit_type_definitions(type_env, &mut to_ir);
+        let type_definitions = emit_type_definitions(type_env);
 
         let mut instructions = Vec::new();
         instructions.push(IrInstruction::GoPackage(pkg_name));
@@ -37,6 +37,12 @@ impl SourceFile {
             }
             instructions.push(f.emit(None, type_env, &mut to_ir));
         }
+
+         for s in self.struct_definitions {
+             for method in &s.methods {
+                 instructions.push(method.emit(Some(("self".to_string(), format!("*{}", s.name))), type_env, &mut to_ir));
+             }
+         }
 
         instructions.extend(type_definitions);
 
