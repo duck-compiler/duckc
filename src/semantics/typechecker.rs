@@ -2,7 +2,6 @@ use std::process;
 
 use colored::Colorize;
 
-use crate::emit::types;
 use crate::parse::type_parser::{Duck, TypeExpr};
 use crate::parse::{failure_with_occurence, Field, SS};
 use crate::parse::{
@@ -18,7 +17,7 @@ impl TypeExpr {
 
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
-            ValueExpr::RawVariable(..) => panic!(),
+            ValueExpr::RawVariable(x, p) => panic!("{}", p.join(" ").leak()),
             ValueExpr::FormattedString(contents) => {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {

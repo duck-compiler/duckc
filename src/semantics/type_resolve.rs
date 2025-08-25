@@ -359,7 +359,7 @@ impl TypeEnv {
         concrete_type_expr
     }
 
-    fn instantiate_generic_struct(
+    fn _instantiate_generic_struct(
         &mut self,
         name: &String,
         type_params: &mut [Spanned<TypeExpr>],
@@ -382,7 +382,7 @@ impl TypeEnv {
 
         let type_def = match generic_def {
             GenericDefinition::Struct(struct_def) => struct_def,
-            GenericDefinition::Type(td) => {
+            GenericDefinition::Type(_td) => {
                 println!(
                     "{}{}{}Expected '{}' to be a generic type, but it's a type.",
                     Tag::Dargo,

@@ -258,7 +258,7 @@ impl IrValue {
             IrValue::Struct(s, fields) => {
                 format!(
                     // TODO: check if this should be a reference
-                    "{s}{{{}}}",
+                    "&{s}{{{}}}",
                     fields
                         .iter()
                         .map(|x| format!("{}: {}", x.0, x.1.emit_as_go()))
@@ -279,6 +279,13 @@ impl IrValue {
             }
             IrValue::FieldAccess(o, field_name) => {
                 format!("{}.{field_name}", o.emit_as_go())
+            }
+            IrValue::MethodCall(o, method_name, params) => {
+                format!(
+                    "{}.{method_name}({})",
+                    o.emit_as_go(),
+                    params.iter().map(|x| x.emit_as_go()).collect::<Vec<_>>().join(", ")
+                )
             }
             IrValue::Tuple(go_struct, fields) => {
                 format!(

@@ -167,6 +167,26 @@ impl SourceFile {
                     mangle_type_expression(&mut field.type_expr.0, prefix, &mut mangle_env);
                 }
 
+                for func in &mut struct_def.methods {
+                    let mut p = Vec::new();
+                    p.extend_from_slice(prefix);
+                    p.push(func.name.clone());
+
+                    if let Some(return_type) = &mut func.return_type {
+                        mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
+                    }
+                    mangle_env.push_idents();
+                    if let Some(params) = &mut func.params {
+                        for (name, type_expr) in params {
+                            mangle_type_expression(&mut type_expr.0, prefix, &mut mangle_env);
+                            mangle_env.insert_ident(name.clone());
+                        }
+                    }
+                    mangle_value_expr(&mut func.value_expr.0, global_prefix, prefix, &mut mangle_env);
+                    mangle_env.pop_idents();
+                    //result.function_definitions.push(f);
+                }
+
                 result.struct_definitions.push(struct_def);
             }
 

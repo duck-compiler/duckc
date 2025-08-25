@@ -80,6 +80,7 @@ pub enum IrValue {
     Var(String),
     BoolNegate(Box<IrValue>),
     FieldAccess(Box<IrValue>, String),
+    MethodCall(Box<IrValue>, String, Vec<IrValue>),
     ArrayAccess(Box<IrValue>, Box<IrValue>),
     Imm(String),
     Pointer(Box<IrValue>),

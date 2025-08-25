@@ -1,0 +1,12 @@
+struct Lol = {
+    kek: String,
+} impl {
+    fn fisch() {
+        std::io::println("hallo von fisch");
+    }
+};
+
+fn main() {
+    let v: Lol = Lol { kek: "Yo" };
+    //v.fisch();
+}
