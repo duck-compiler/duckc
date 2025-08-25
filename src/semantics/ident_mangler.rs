@@ -3,9 +3,7 @@ use std::collections::HashMap;
 use tree_sitter::{Node, Parser};
 
 use crate::parse::{
-    function_parser::LambdaFunctionExpr,
-    type_parser::{Duck, Struct, TypeExpr},
-    value_parser::{ValFmtStringContents, ValueExpr},
+    function_parser::LambdaFunctionExpr, struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}, value_parser::{ValFmtStringContents, ValueExpr}
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -222,7 +220,7 @@ pub fn mangle_type_expression(
             }
             *type_expr = TypeExpr::TypeName(true, mangle(path), type_params.clone());
         }
-        TypeExpr::Struct(Struct { fields }) => {
+        TypeExpr::Struct(StructDefinition { name: _, fields, methods: _, generics: _ }) => {
             for f in fields {
                 mangle_type_expression(&mut f.type_expr.0, prefix, mangle_env);
             }
@@ -455,7 +453,7 @@ pub fn mangle_value_expr(
         ValueExpr::Duck(items) => items.iter_mut().for_each(|(_, value_expr)| {
             mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
         }),
-        ValueExpr::Struct(items) => items.iter_mut().for_each(|(_, value_expr)| {
+        ValueExpr::Struct(_, items) => items.iter_mut().for_each(|(_, value_expr)| {
             mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
         }),
         ValueExpr::FieldAccess { target_obj, .. } => {

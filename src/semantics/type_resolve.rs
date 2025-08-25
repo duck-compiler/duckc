@@ -2,11 +2,7 @@ use std::{collections::HashMap, process};
 
 use crate::{
     parse::{
-        SS, Spanned,
-        function_parser::{FunctionDefintion, LambdaFunctionExpr},
-        source_file_parser::SourceFile,
-        type_parser::{Duck, Struct, TypeDefinition, TypeExpr},
-        value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr, empty_range},
+        function_parser::{FunctionDefintion, LambdaFunctionExpr}, source_file_parser::SourceFile, struct_parser::StructDefinition, type_parser::{Duck, TypeDefinition, TypeExpr}, value_parser::{empty_range, Assignment, Declaration, ValFmtStringContents, ValueExpr}, Spanned, SS
     },
     semantics::ident_mangler::mangle,
     tags::Tag,
@@ -482,7 +478,13 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
 
             *expr = env.resolve_type_alias(typename.first().unwrap());
         }
-        TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
+        TypeExpr::Duck(Duck { fields }) => {
+            fields.sort_by_key(|x| x.name.clone());
+            for field in fields {
+                resolve_all_aliases_type_expr(&mut field.type_expr.0, env);
+            }
+        }
+        TypeExpr::Struct(StructDefinition { name: _, fields, methods: _, generics: _ }) => {
             fields.sort_by_key(|x| x.name.clone());
             for field in fields {
                 resolve_all_aliases_type_expr(&mut field.type_expr.0, env);
@@ -626,7 +628,7 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
                 sort_fields_value_expr(&mut r.0);
             }
         }
-        ValueExpr::Struct(fields) => {
+        ValueExpr::Struct(_, fields) => {
             for field in fields {
                 sort_fields_value_expr(&mut field.1.0);
             }
@@ -662,8 +664,13 @@ fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
         TypeExpr::GenericToBeReplaced(..) => panic!(),
         TypeExpr::RawTypeName(..) => {}
-        TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
+        TypeExpr::Duck(Duck { fields }) => {
             fields.sort_by_key(|x| x.name.clone());
+            for field in fields {
+                sort_fields_type_expr(&mut field.type_expr.0);
+            }
+        }
+        TypeExpr::Struct(StructDefinition { name: _, fields, methods: _, generics: _ }) => {
             for field in fields {
                 sort_fields_type_expr(&mut field.type_expr.0);
             }
@@ -910,7 +917,7 @@ fn find_generic_fn_instantiations(
 
                 return instantiations;
             }
-            ValueExpr::Struct(items) => {
+            ValueExpr::Struct(_, items) => {
                 let mut instantiations = vec![];
                 for item in items {
                     instantiations.extend(in_value_expr(&mut item.1.0, type_env))
@@ -1158,7 +1165,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             let ty = TypeExpr::from_value_expr(value_expr as &ValueExpr, type_env);
             type_env.insert_type(ty);
         }
-        ValueExpr::Struct(items) => {
+        ValueExpr::Struct(_, items) => {
             items
                 .iter_mut()
                 .for_each(|(_, value_expr)| typeresolve_value_expr(&mut value_expr.0, type_env));
@@ -1389,7 +1396,12 @@ pub fn replace_generics_in_value_expr(
                 replace_generics_in_value_expr(&mut expr.0, generics_to_concrete_type_map);
             }
         }
-        ValueExpr::Duck(fields) | ValueExpr::Struct(fields) => {
+        ValueExpr::Duck(fields) => {
+            for (_, field_val) in fields {
+                replace_generics_in_value_expr(&mut field_val.0, generics_to_concrete_type_map);
+            }
+        }
+        ValueExpr::Struct(_, fields) => {
             for (_, field_val) in fields {
                 replace_generics_in_value_expr(&mut field_val.0, generics_to_concrete_type_map);
             }
@@ -1481,7 +1493,15 @@ pub fn replace_generics_in_type_expr(
                 *type_expr = (*concrete_type).clone();
             }
         }
-        TypeExpr::Struct(Struct { fields }) | TypeExpr::Duck(Duck { fields }) => {
+        TypeExpr::Struct(StructDefinition { name: _, fields, methods: _, generics: _ }) => {
+            for field in fields {
+                replace_generics_in_type_expr(
+                    &mut field.type_expr.0,
+                    generics_to_concrete_type_map,
+                );
+            }
+        }
+        TypeExpr::Duck(Duck { fields }) => {
             for field in fields {
                 replace_generics_in_type_expr(
                     &mut field.type_expr.0,

@@ -7,7 +7,7 @@ use chumsky::{
     span::SimpleSpan,
 };
 
-use crate::parse::lexer::Token;
+use crate::parse::{lexer::Token, type_parser::TypeExpr};
 
 pub mod function_parser;
 pub mod generics_parser;
@@ -26,6 +26,24 @@ pub struct Context {
 
 pub type SS = SimpleSpan<usize, Context>;
 pub type Spanned<T> = (T, SS);
+
+#[derive(Debug, Clone)]
+pub struct Field {
+    pub name: String,
+    pub type_expr: Spanned<TypeExpr>,
+}
+
+impl PartialEq for Field {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Field {
+    pub fn new(name: String, type_expr: Spanned<TypeExpr>) -> Self {
+        return Self { name, type_expr };
+    }
+}
 
 pub fn make_input<'src>(
     eoi: SS,

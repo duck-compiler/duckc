@@ -1,6 +1,6 @@
 use crate::{
     emit::value::{IrInstruction, IrValue},
-    parse::type_parser::{Duck, Field, Struct, TypeExpr},
+    parse::{struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}, Field},
     semantics::type_resolve::TypeEnv,
 };
 
@@ -249,7 +249,23 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                         .map(|(i, x)| (format!("field_{i}"), x.0.as_go_type_annotation(type_env)))
                         .collect::<Vec<_>>(),
                 ),
-                TypeExpr::Struct(Struct { fields }) | TypeExpr::Duck(Duck { fields }) => {
+                TypeExpr::Struct(StructDefinition { fields, .. }) => {
+                    IrInstruction::StructDef(
+                                            type_name,
+                                            fields
+                                                .iter()
+                                                .map(
+                                                    |Field {
+                                                         name,
+                                                         type_expr: (type_expr, _),
+                                                     }| {
+                                                        (name.clone(), type_expr.as_go_type_annotation(type_env))
+                                                    },
+                                                )
+                                                .collect::<Vec<_>>(),
+                                        )
+                }
+                TypeExpr::Duck(Duck { fields }) => {
                     IrInstruction::StructDef(
                         type_name,
                         fields
@@ -395,7 +411,19 @@ impl TypeExpr {
                         .0
                         .as_go_type_annotation(type_env))
             ),
-            TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => format!(
+            TypeExpr::Duck(Duck { fields }) => format!(
+                "struct {{\n{}\n}}",
+                fields
+                    .iter()
+                    .map(|field| format!(
+                        "   {} {}",
+                        field.name,
+                        field.type_expr.0.as_go_type_annotation(type_env)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
+            TypeExpr::Struct(StructDefinition { fields, .. }) => format!(
                 "struct {{\n{}\n}}",
                 fields
                     .iter()

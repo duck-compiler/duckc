@@ -62,7 +62,7 @@ pub enum ValueExpr {
     Break,
     Continue,
     Duck(Vec<(String, Spanned<ValueExpr>)>),
-    Struct(Vec<(String, Spanned<ValueExpr>)>),
+    Struct(String, Vec<(String, Spanned<ValueExpr>)>),
     FieldAccess {
         target_obj: Box<Spanned<ValueExpr>>,
         field_name: String,
@@ -296,8 +296,8 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            let struct_expression = just(Token::ControlChar('.'))
-                .ignore_then(
+            let struct_expression = select_ref! { Token::Ident(identifier) => identifier.clone() }
+                .then(
                     select_ref! { Token::Ident(ident) => ident.to_owned() }
                         .then_ignore(just(Token::ControlChar(':')))
                         .then(value_expr_parser.clone())
@@ -305,8 +305,8 @@ where
                         .allow_trailing()
                         .collect::<Vec<_>>()
                         .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
-                        .map(ValueExpr::Struct),
                 )
+                .map(|(identifier, values)| ValueExpr::Struct(identifier, values))
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
@@ -514,13 +514,13 @@ where
                             fmt_string,
                             bool_val,
                             string_val,
+                            struct_expression,
                             scope_res_ident.clone(),
                             r#match,
                             if_expr,
                             char_expr,
                             tuple,
                             duck_expression,
-                            struct_expression,
                             block_expression,
                             just(Token::Break)
                                 .to(ValueExpr::Break)
@@ -884,7 +884,7 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
             }
         }
         ValueExpr::Return(Some(v)) => value_expr_into_empty_range(v),
-        ValueExpr::Struct(fields) => {
+        ValueExpr::Struct(_, fields) => {
             for field in fields {
                 value_expr_into_empty_range(&mut field.1);
             }
@@ -928,15 +928,9 @@ mod tests {
     use chumsky::prelude::*;
 
     use crate::parse::{
-        Spanned,
-        function_parser::LambdaFunctionExpr,
-        lexer::lex_parser,
-        make_input,
-        type_parser::{Duck, Field, TypeExpr},
-        value_parser::{
-            Assignment, Declaration, MatchArm, empty_duck, empty_range, empty_tuple,
-            type_expr_into_empty_range, value_expr_into_empty_range, value_expr_parser,
-        },
+        function_parser::LambdaFunctionExpr, lexer::lex_parser, make_input, type_parser::{Duck, TypeExpr}, value_parser::{
+            empty_duck, empty_range, empty_tuple, type_expr_into_empty_range, value_expr_into_empty_range, value_expr_parser, Assignment, Declaration, MatchArm
+        }, Field, Spanned
     };
 
     use super::ValueExpr;
@@ -1232,16 +1226,16 @@ mod tests {
             ("true", ValueExpr::Bool(true)),
             ("false", ValueExpr::Bool(false)),
             (
-                ".{ x: 5 }",
-                ValueExpr::Struct(vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())]),
+                "MyStruct { x: 5 }",
+                ValueExpr::Struct("MyStruct".to_string(), vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())]),
             ),
             (
-                ".{ x: 5, y: .{ x: 5 } }",
-                ValueExpr::Struct(vec![
+                "Outer { x: 5, y: Inner { x: 5 } }",
+                ValueExpr::Struct("Outer".to_string(), vec![
                     ("x".to_string(), ValueExpr::Int(5).into_empty_span()),
                     (
                         "y".to_string(),
-                        ValueExpr::Struct(vec![(
+                        ValueExpr::Struct("Inner".to_string(), vec![(
                             "x".to_string(),
                             ValueExpr::Int(5).into_empty_span(),
                         )])

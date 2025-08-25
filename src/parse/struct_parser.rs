@@ -3,16 +3,10 @@ use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
 use crate::parse::{
-    function_parser::{function_definition_parser, FunctionDefintion}, generics_parser::{generics_parser, Generic}, type_parser::{type_expression_parser, TypeExpr}, Spanned, SS
+    function_parser::{function_definition_parser, FunctionDefintion}, generics_parser::{generics_parser, Generic}, type_parser::type_expression_parser, Field, Spanned, SS
 };
 
 use super::lexer::Token;
-
-#[derive(Debug, Clone)]
-pub struct Field {
-    pub name: String,
-    pub type_expr: Spanned<TypeExpr>,
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructDefinition {
@@ -20,18 +14,6 @@ pub struct StructDefinition {
     pub fields: Vec<Field>,
     pub methods: Vec<FunctionDefintion>,
     pub generics: Option<Vec<Spanned<Generic>>>,
-}
-
-impl PartialEq for Field {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl Field {
-    pub fn new(name: String, type_expr: Spanned<TypeExpr>) -> Self {
-        return Self { name, type_expr };
-    }
 }
 
 pub fn struct_definition_parser<'src, M, I>(
@@ -97,21 +79,12 @@ pub mod tests {
     fn strip_spans(spanned_type_expr: Spanned<TypeExpr>) -> Spanned<TypeExpr> {
         let (expr, _span) = spanned_type_expr;
         let stripped_expr = match expr {
-            TypeExpr::Struct(s) => TypeExpr::Struct(crate::parse::type_parser::Struct {
-                fields: s
-                    .fields
-                    .into_iter()
-                    .map(|field| crate::parse::type_parser::Field {
-                        name: field.name,
-                        type_expr: strip_spans(field.type_expr),
-                    })
-                    .collect(),
-            }),
+            TypeExpr::Struct(s) => TypeExpr::Struct(strip_struct_definition_spans(s)),
             TypeExpr::Duck(d) => TypeExpr::Duck(crate::parse::type_parser::Duck {
                 fields: d
                     .fields
                     .into_iter()
-                    .map(|field| crate::parse::type_parser::Field {
+                    .map(|field| Field {
                         name: field.name,
                         type_expr: strip_spans(field.type_expr),
                     })
@@ -184,7 +157,8 @@ pub mod tests {
         );
 
         let tokens = lexer_parse_result.output().unwrap();
-        let parse_result = struct_definition_parser()
+
+        let parse_result = struct_definition_parser(make_input)
             .parse(make_input(empty_range(), &tokens));
 
         assert!(
@@ -343,7 +317,7 @@ pub mod tests {
             println!("testing invalid struct: \"{}\"", invalid);
             let lexer_parse_result = lex_parser("test", "").parse(invalid);
             let tokens = lexer_parse_result.output().unwrap();
-            let parse_result = struct_definition_parser().parse(make_input(empty_range(), &tokens));
+            let parse_result = struct_definition_parser(make_input).parse(make_input(empty_range(), &tokens));
             assert!(parse_result.has_errors());
         }
     }

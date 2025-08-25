@@ -21,14 +21,7 @@ use tags::Tag;
 
 use crate::{
     parse::{
-        Context, SS,
-        function_parser::LambdaFunctionExpr,
-        lexer::lex_parser,
-        make_input, parse_failure,
-        source_file_parser::source_file_parser,
-        type_parser::{Duck, Struct, TypeExpr},
-        use_statement_parser::UseStatement,
-        value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr},
+        function_parser::LambdaFunctionExpr, lexer::lex_parser, make_input, parse_failure, source_file_parser::source_file_parser, struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}, use_statement_parser::UseStatement, value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}, Context, SS
     },
     semantics::type_resolve::{self, TypeEnv},
 };
@@ -213,7 +206,12 @@ fn parse_src_file(
             TypeExpr::TypeName(_global, _, Some(_)) => todo!("type params"),
             TypeExpr::TypeName(global, _, None) => *global = false,
             TypeExpr::Array(t) => typename_reset_global(&mut t.0),
-            TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
+            TypeExpr::Duck(Duck { fields }) => {
+                for field in fields {
+                    typename_reset_global(&mut field.type_expr.0);
+                }
+            },
+            TypeExpr::Struct(StructDefinition { name: _, fields, methods: _, generics: _ }) => {
                 for field in fields {
                     typename_reset_global(&mut field.type_expr.0);
                 }
@@ -347,7 +345,12 @@ fn parse_src_file(
                     typename_reset_global_value_expr(&mut field.0);
                 }
             }
-            ValueExpr::Duck(fields) | ValueExpr::Struct(fields) => {
+            ValueExpr::Duck(fields) => {
+                for field in fields {
+                    typename_reset_global_value_expr(&mut field.1.0);
+                }
+            }
+            ValueExpr::Struct(_, fields) => {
                 for field in fields {
                     typename_reset_global_value_expr(&mut field.1.0);
                 }

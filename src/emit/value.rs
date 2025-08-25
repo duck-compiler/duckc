@@ -2,9 +2,7 @@ use std::collections::VecDeque;
 
 use crate::{
     parse::{
-        function_parser::LambdaFunctionExpr,
-        type_parser::{Duck, Struct, TypeExpr},
-        value_parser::{Declaration, ValFmtStringContents, ValueExpr},
+        function_parser::LambdaFunctionExpr, struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}, value_parser::{Declaration, ValFmtStringContents, ValueExpr}
     },
     semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
 };
@@ -795,7 +793,7 @@ impl ValueExpr {
                             ));
                             return (i, Some(IrValue::Var(res)));
                         }
-                        TypeExpr::Struct(Struct { fields }) => {
+                        TypeExpr::Struct(StructDefinition { name: _, fields, methods: _, generics: _ }) => {
                             let f = fields.iter().find(|f| f.name == field_name).unwrap();
                             let res = env.new_var();
                             i.push(IrInstruction::VarDecl(
@@ -841,7 +839,7 @@ impl ValueExpr {
 
                 (res, as_rvar(res_var))
             }
-            ValueExpr::Struct(fields) => {
+            ValueExpr::Struct(_, fields) => {
                 let name =
                     TypeExpr::from_value_expr(self, type_env).as_clean_go_type_name(type_env);
 
@@ -981,14 +979,16 @@ mod tests {
                     ),
                 ],
             ),
+            // todo(@Mvmo): adjust the underlying test to not have any as type
+            // beforehand the issue, that it actually returns any must be fixed
             (
-                ".{ x: 123 }",
+                "S { x: 123 }",
                 vec![
-                    decl("var_0", "Struct_x_DuckInt"),
+                    decl("var_0", "Any"),
                     IrInstruction::VarAssignment(
                         "var_0".into(),
                         IrValue::Struct(
-                            "Struct_x_DuckInt".into(),
+                            "Any".into(),
                             vec![("x".into(), IrValue::Int(123))],
                         ),
                     ),

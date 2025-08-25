@@ -2,8 +2,8 @@ use std::process;
 
 use colored::Colorize;
 
-use crate::parse::type_parser::{Duck, Field, Struct, TypeExpr};
-use crate::parse::{SS, failure_with_occurence};
+use crate::parse::type_parser::{Duck, TypeExpr};
+use crate::parse::{failure_with_occurence, Field, SS};
 use crate::parse::{
     Spanned, failure,
     value_parser::{ValFmtStringContents, ValueExpr},
@@ -131,8 +131,8 @@ impl TypeExpr {
 
                 TypeExpr::Tuple(vec![])
             }
-            ValueExpr::Struct(fields) => {
-                let types = fields
+            ValueExpr::Struct(_, fields) => {
+                let _types = fields
                     .iter()
                     .map(|(name, (value_expr, span))| {
                         Field::new(
@@ -142,7 +142,9 @@ impl TypeExpr {
                     })
                     .collect::<Vec<Field>>();
 
-                TypeExpr::Struct(Struct { fields: types })
+                // TypeExpr::Struct(Struct { fields: types })
+                // TODO: require name and implement typing for structs
+                TypeExpr::Any
             }
             ValueExpr::Tuple(fields) => {
                 let types = fields
@@ -975,7 +977,6 @@ mod test {
             lexer::lex_parser,
             make_input,
             source_file_parser::SourceFile,
-            type_parser::Field,
             value_parser::{empty_range, type_expr_into_empty_range, value_expr_parser},
         },
         semantics::type_resolve::{TypesSummary, typeresolve_source_file},
