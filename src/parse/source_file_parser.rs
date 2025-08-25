@@ -276,7 +276,7 @@ where
         choice((
             use_statement_parser().map(SourceUnit::Use),
             type_definition_parser().map(SourceUnit::Type),
-            struct_definition_parser().map(SourceUnit::Struct),
+            struct_definition_parser(make_input.clone()).map(SourceUnit::Struct),
             function_definition_parser(make_input).map(SourceUnit::Func),
             just(Token::Module)
                 .ignore_then(select_ref! { Token::Ident(i) => i.to_owned() })

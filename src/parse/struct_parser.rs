@@ -3,7 +3,7 @@ use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
 use crate::parse::{
-    function_parser::FunctionDefintion, generics_parser::{generics_parser, Generic}, type_parser::{type_expression_parser, TypeExpr}, Spanned, SS
+    function_parser::{function_definition_parser, FunctionDefintion}, generics_parser::{generics_parser, Generic}, type_parser::{type_expression_parser, TypeExpr}, Spanned, SS
 };
 
 use super::lexer::Token;
@@ -34,15 +34,30 @@ impl Field {
     }
 }
 
-pub fn struct_definition_parser<'src, I>()
+pub fn struct_definition_parser<'src, M, I>(
+    make_input: M
+)
 -> impl Parser<'src, I, StructDefinition, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
+    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
 {
     let field_parser = select_ref! { Token::Ident(identifier) => identifier.clone() }
         .then_ignore(just(Token::ControlChar(':')))
         .then(type_expression_parser())
         .map(|(identifier, type_expr)| Field::new(identifier, type_expr));
+
+    let impl_parser = just(Token::Impl)
+        .ignore_then(just(Token::ControlChar('{')))
+        .ignore_then(
+            function_definition_parser(make_input)
+                .repeated()
+                .at_least(0)
+                .collect::<Vec<_>>()
+        )
+        .then_ignore(just(Token::ControlChar('}')))
+        .or_not()
+        .map(|x| x.or_else(|| Some(vec![])).unwrap());
 
     just(Token::Struct)
         .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
@@ -56,11 +71,12 @@ where
                 .collect()
         )
         .then_ignore(just(Token::ControlChar('}')))
+        .then(impl_parser)
         .then_ignore(just(Token::ControlChar(';')))
-        .map(|((identifier, generics), fields)| StructDefinition {
+        .map(|(((identifier, generics), fields), methods)| StructDefinition {
             name: identifier,
             fields,
-            methods: vec![],
+            methods,
             generics,
         })
 }
