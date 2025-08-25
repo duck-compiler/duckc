@@ -2,6 +2,7 @@ use std::process;
 
 use colored::Colorize;
 
+use crate::emit::types;
 use crate::parse::type_parser::{Duck, TypeExpr};
 use crate::parse::{failure_with_occurence, Field, SS};
 use crate::parse::{
@@ -131,8 +132,13 @@ impl TypeExpr {
 
                 TypeExpr::Tuple(vec![])
             }
-            ValueExpr::Struct(_, fields) => {
-                let _types = fields
+            ValueExpr::Struct(name, value_expr_fields) => {
+                let type_expr = type_env.resolve_type_alias(name);
+                let TypeExpr::Struct(struct_def) = type_expr else {
+                    panic!("is not a struct");
+                };
+
+                let value_expr_fields = value_expr_fields
                     .iter()
                     .map(|(name, (value_expr, span))| {
                         Field::new(
@@ -142,9 +148,26 @@ impl TypeExpr {
                     })
                     .collect::<Vec<Field>>();
 
+                let is_missing_field = !struct_def
+                    .fields
+                    .iter()
+                    .all(|field| {
+                        let field_from_value_expr = value_expr_fields.iter()
+                            .find(|value_expr_field| value_expr_field.name == field.name);
+
+                        let Some(field_from_value_expr) = field_from_value_expr else { return false };
+
+                        check_type_compatability(&field.type_expr, &field_from_value_expr.type_expr, type_env);
+                        return true
+                    });
+
+                if is_missing_field || struct_def.fields.len() != value_expr_fields.len() {
+                    panic!("invalid type from value expr")
+                }
+
                 // TypeExpr::Struct(Struct { fields: types })
                 // TODO: require name and implement typing for structs
-                TypeExpr::Any
+                TypeExpr::Struct(struct_def)
             }
             ValueExpr::Tuple(fields) => {
                 let types = fields
