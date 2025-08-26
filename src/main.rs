@@ -6,16 +6,6 @@
     clippy::large_enum_variant
 )]
 
-struct LOl {
-
-}
-
-impl LOl {
-    fn a() -> Self {
-        (|| -> Self { LOl {} })()
-    }
-}
-
 use std::{
     env,
     error::Error,

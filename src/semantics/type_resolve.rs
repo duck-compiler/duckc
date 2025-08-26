@@ -430,15 +430,13 @@ impl TypeEnv {
                     }
 
                     self.insert_identifier_type("self".to_string(), concrete_type_expr.clone());
-                    println!("resolving method {}", m.name);
+                    println!("resolving method from struct {} {}", struct_definition.name, m.name);
                     typeresolve_value_expr(&mut m.value_expr.0, self);
                     println!("done resolving method {}", m.name);
-                    dbg!(&mut m.value_expr.0);
                     self.pop_identifier_types();
                 }
 
                 concrete_type_expr = TypeExpr::Struct(struct_definition);
-                dbg!(&concrete_type_expr);
 
                 self.pop_type_aliases();
 
@@ -630,11 +628,20 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
             }
         }
         TypeExpr::Struct(StructDefinition {
-            name: _,
+            name,
             fields,
             methods,
-            generics: _,
+            generics,
         }) => {
+            while let Some(expr) = env.type_aliases.last().unwrap().get(name) {
+                match expr {
+                    TypeExpr::TypeName(_, new_name, _) | TypeExpr::TypeNameInternal(new_name) => {
+                        *name = new_name.clone();
+                    }
+                    _ => break,
+                }
+            }
+
             fields.sort_by_key(|x| x.name.clone());
             for field in fields {
                 resolve_all_aliases_type_expr(&mut field.type_expr.0, env);
@@ -649,6 +656,19 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
 
                 if let Some(return_type) = &mut method.return_type {
                     resolve_all_aliases_type_expr(&mut return_type.0, env);
+                }
+            }
+
+            if let Some(generics) = generics {
+                for (generic, _) in generics {
+                    while let Some(expr) = env.type_aliases.last().unwrap().get(&generic.name) {
+                        match expr {
+                            TypeExpr::TypeName(_, name, _) | TypeExpr::TypeNameInternal(name) => {
+                                generic.name = name.clone();
+                            }
+                            _ => break,
+                        }
+                    }
                 }
             }
         }
@@ -1425,6 +1445,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             type_params: maybe_type_params,
         } => {
             let is_generic_struct = type_env.generic_definitions.contains_key(name);
+            println!("hallo");
 
             if let Some(TypeExpr::Struct(s)) = type_env
                 .try_resolve_type_alias(name)
@@ -1433,18 +1454,26 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 *name = s.name;
             }
 
+            println!("lol");
+
             if is_generic_struct && maybe_type_params.is_none() {
                 panic!("expected generics but didn't receive them");
             } else if maybe_type_params.is_some() && !is_generic_struct {
                 panic!("didn't expect generic but did receive them");
             }
 
-            if let Some(type_params) = &maybe_type_params {
+            if let Some(type_params) = maybe_type_params.as_mut() {
+                for (type_param, _) in type_params.iter_mut() {
+                   resolve_all_aliases_type_expr(type_param, type_env);
+                }
+
+                dbg!(1, &type_params);
                 let type_expr = type_env.instantiate_generic_type(
                     name,
                     type_params,
                     type_params.first().unwrap().1,
                 );
+                dbg!(2);
 
                 let TypeExpr::Struct(struct_def) = type_expr else {
                     panic!("compiler error: expected struct type expr")

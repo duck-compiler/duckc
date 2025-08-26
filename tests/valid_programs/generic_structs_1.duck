@@ -7,12 +7,79 @@ struct M<T> = {
         println(self.name);
     }
 
+    fn copy_me() -> Self {
+        println("1");
+        return M<T> {
+            name: self.name,
+        };
+    }
+
+    fn copy_me2() -> M<T> {
+        println("2");
+        return Self {
+            name: self.name,
+        };
+    }
+
+    fn copy_me3() -> Self {
+        println("3");
+        return self.copy_me2();
+    }
+
+    fn copy_me4() -> M<T> {
+        println("4");
+        return self.copy_me();
+    }
+
+    fn copy_me5() -> M<T> {
+        println("5");
+        let res: Self = M<T> {
+            name: self.name,
+        };
+        return res;
+    }
+
+    fn copy_me6() -> M<T> {
+        println("6");
+        let res: Self = M<T> {
+            name: self.name,
+        };
+        let res2: M<T> = res;
+        let res3: Self = res2;
+        let res4: M<T> = res3;
+        return res4;
+    }
+
+    fn copy_me7() -> M<T> {
+        println("7");
+        return (fn() -> Self { return self.copy_me() })();
+    }
+
     fn copy() -> Self {
         return Self { name: self.name };
     }
+
+    fn gimme() -> T {
+        return (fn() -> T { return self.name; })();
+    }
 };
+
+fn print_with_go(x: {}) {
+    go {
+        fmt.Println(x)
+    }
+}
 
 fn main() {
     let x: M<String> = M<String> { name: "Hallo" };
     x.y();
+
+    x.copy_me()->print_with_go();
+    x.copy_me2()->print_with_go();
+    x.copy_me3()->print_with_go();
+    x.copy_me4()->print_with_go();
+    x.copy_me5()->print_with_go();
+    x.copy_me6()->print_with_go();
+    x.copy_me7()->print_with_go();
+    x.gimme()->println();
 }
