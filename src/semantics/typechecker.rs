@@ -146,7 +146,11 @@ impl TypeExpr {
 
                 TypeExpr::Tuple(vec![])
             }
-            ValueExpr::Struct { name, fields: value_expr_fields, type_params } => {
+            ValueExpr::Struct {
+                name,
+                fields: value_expr_fields,
+                type_params,
+            } => {
                 if type_params.is_some() {
                     panic!("compiler error: type params should be omitted by now")
                 }
@@ -347,20 +351,20 @@ impl TypeExpr {
             ValueExpr::Variable(_, ident, type_expr) => {
                 let s = Location::caller();
                 let a = type_expr
-                .as_ref()
-                .cloned()
-                .or(type_env.get_identifier_type(ident.clone()))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "{} - {s}",
-                        format!("Expected type but didn't get one {ident} {type_expr:?}")
-                            .leak()
-                            .to_string(),
-                    )
-                })
-                .clone();
+                    .as_ref()
+                    .cloned()
+                    .or(type_env.get_identifier_type(ident.clone()))
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "{} - {s}",
+                            format!("Expected type but didn't get one {ident} {type_expr:?}")
+                                .leak()
+                                .to_string(),
+                        )
+                    })
+                    .clone();
                 a
-            },
+            }
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(
                     &(
@@ -574,11 +578,15 @@ impl TypeExpr {
     }
 
     pub fn is_generic_struct(&self) -> bool {
-        if let TypeExpr::Struct(StructDefinition { generics: Some(generics), .. }) = self {
-            return true
+        if let TypeExpr::Struct(StructDefinition {
+            generics: Some(_generics),
+            ..
+        }) = self
+        {
+            return true;
         }
 
-        return false
+        return false;
     }
 
     pub fn is_array(&self) -> bool {

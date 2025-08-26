@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use crate::{
     emit::value::{IrInstruction, IrValue, ToIr},
     parse::{

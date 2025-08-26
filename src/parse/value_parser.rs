@@ -4,7 +4,6 @@ use crate::parse::{
     lexer::FmtStringContents,
     source_file_parser::SourceFile,
     type_parser::{type_expression_parser, type_expression_parser_without_array},
-    generics_parser::generics_parser
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
@@ -310,7 +309,7 @@ where
                         .separated_by(just(Token::ControlChar(',')))
                         .allow_trailing()
                         .at_least(1)
-                        .collect::<Vec<_>>()
+                        .collect::<Vec<_>>(),
                 )
                 .then_ignore(just(Token::ControlChar('>')));
 
@@ -325,7 +324,11 @@ where
                         .collect::<Vec<_>>()
                         .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}'))),
                 )
-                .map(|((identifier, generics), values)| ValueExpr::Struct { name: identifier, fields: values, type_params: generics })
+                .map(|((identifier, generics), values)| ValueExpr::Struct {
+                    name: identifier,
+                    fields: values,
+                    type_params: generics,
+                })
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
@@ -1255,7 +1258,7 @@ mod tests {
                 ValueExpr::Struct {
                     name: "MyStruct".to_string(),
                     fields: vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())],
-                    type_params: None
+                    type_params: None,
                 },
             ),
             (
@@ -1268,7 +1271,10 @@ mod tests {
                             "y".to_string(),
                             ValueExpr::Struct {
                                 name: "Inner".to_string(),
-                                fields: vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())],
+                                fields: vec![(
+                                    "x".to_string(),
+                                    ValueExpr::Int(5).into_empty_span(),
+                                )],
                                 type_params: None,
                             }
                             .into_empty_span(),

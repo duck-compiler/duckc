@@ -415,7 +415,7 @@ impl TypeEnv {
                 }
 
                 for f in &mut struct_definition.fields {
-                   resolve_all_aliases_type_expr(&mut f.type_expr.0, self);
+                    resolve_all_aliases_type_expr(&mut f.type_expr.0, self);
                 }
 
                 let mut concrete_type_expr = TypeExpr::Struct(struct_definition.clone());
@@ -426,7 +426,10 @@ impl TypeEnv {
                     self.push_identifier_types();
                     if let Some(params) = m.params.as_mut() {
                         for (param_name, param_type) in params {
-                            self.insert_identifier_type(param_name.to_owned(), param_type.0.clone());
+                            self.insert_identifier_type(
+                                param_name.to_owned(),
+                                param_type.0.clone(),
+                            );
                         }
                     }
 
@@ -586,7 +589,12 @@ impl TypeEnv {
 
     pub fn summarize(&mut self) -> TypesSummary {
         let mut all_types = self.all_types.clone();
-        dbg!(all_types.iter().filter(|x| x.is_struct()).collect::<Vec<_>>());
+        dbg!(
+            all_types
+                .iter()
+                .filter(|x| x.is_struct())
+                .collect::<Vec<_>>()
+        );
         all_types.extend(TypeExpr::primitives());
         all_types.push(TypeExpr::Tuple(vec![]));
         let mut param_names_used = Vec::new();
@@ -599,7 +607,6 @@ impl TypeEnv {
         all_types.append(&mut to_push);
         all_types.sort_by_key(|type_expr| type_expr.type_id(self));
         all_types.dedup_by_key(|type_expr| type_expr.type_id(self));
-
 
         param_names_used.dedup();
 
