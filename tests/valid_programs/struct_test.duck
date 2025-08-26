@@ -1,0 +1,60 @@
+struct Xyz = {
+    number_as_string: String
+} impl {
+    fn give_number() -> String {
+        return self.number_as_string;
+    }
+
+    fn concat_and_print(s1: String, s2: String) -> String {
+        let concatenated: String = f"{s1}{s2}";
+        std::io::println(concatenated);
+        return concatenated;
+    }
+};
+
+struct Lol = {
+    kek: String,
+    xyz: Xyz,
+} impl {
+    fn fisch() {
+        std::io::println(self.kek);
+    }
+
+    fn get_kek() -> String {
+        return self.kek;
+    }
+
+    fn get_xyz() -> Xyz {
+        return self.xyz;
+    }
+
+    fn print_and_return(s: String) -> String {
+        std::io::println(s);
+        return s;
+    }
+};
+
+type StructInDuck = { s: Lol };
+
+fn get_s() -> String {
+    return "im a string";
+}
+
+fn main() {
+    let v: Lol = Lol { kek: "Yo", xyz: Xyz { number_as_string: "100" } };
+    let v2: Lol = Lol { kek: "Ich bin ein anderse objekt", xyz: Xyz { number_as_string: "999"} };
+    v.fisch();
+    v2.fisch();
+
+    v.get_kek()->std::io::println();
+    v.get_xyz().give_number()->std::io::println();
+
+    let x1: StructInDuck = { s: v };
+    x1.s.get_kek()->std::io::println();
+    x1.s.get_xyz().give_number()->std::io::println();
+
+    get_s()
+        ->v.print_and_return()
+        ->v.print_and_return()
+        ->v.get_xyz().concat_and_print(" <- this string is before me");
+}
