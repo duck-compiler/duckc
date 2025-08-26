@@ -1011,7 +1011,31 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             if struct_definition.generics.is_some() {
                 return;
             }
+
+            type_env.push_type_aliases();
+            type_env.insert_type_alias(
+                "Self".to_string(),
+                TypeExpr::TypeNameInternal(struct_definition.name.clone()),
+            );
+
+            for f in &mut struct_definition.fields {
+                resolve_all_aliases_type_expr(&mut f.type_expr.0, type_env);
+            }
+
+            for m in &mut struct_definition.methods {
+                if let Some(return_type) = &mut m.return_type {
+                    resolve_all_aliases_type_expr(&mut return_type.0, type_env);
+                }
+
+                if let Some(params) = m.params.clone().as_mut() {
+                    for p in params {
+                        resolve_all_aliases_type_expr(&mut p.1.0, type_env);
+                    }
+                }
+            }
+
             let ty_expr = TypeExpr::Struct(struct_definition.clone());
+
             for m in &mut struct_definition.methods {
                 type_env.push_identifier_types();
 
@@ -1025,7 +1049,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 typeresolve_value_expr(&mut m.value_expr.0, type_env);
                 type_env.pop_identifier_types();
             }
+
+            type_env.pop_type_aliases();
             let ty_expr = TypeExpr::Struct(struct_definition.clone());
+            type_env.insert_type_alias(struct_definition.name.clone(), ty_expr.clone());
             type_env.all_types.insert(0, ty_expr);
         });
 

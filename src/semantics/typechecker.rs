@@ -156,8 +156,7 @@ impl TypeExpr {
                 }
 
                 let type_expr = type_env.try_resolve_type_expr(&type_env.resolve_type_alias(name));
-                dbg!(&type_env);
-                let TypeExpr::Struct(struct_def) = dbg!(type_expr) else {
+                let TypeExpr::Struct(struct_def) = type_expr else {
                     panic!("is not a struct");
                 };
 
@@ -737,6 +736,8 @@ fn check_type_compatability(
     given_type: &Spanned<TypeExpr>,
     type_env: &mut TypeEnv,
 ) {
+    let mut given_type = given_type.clone();
+    given_type.0 = type_env.try_resolve_type_expr(&given_type.0);
     let fail_requirement = |explain_required: String, explain_given: String| {
         let (smaller, larger) = if required_type.1.start <= given_type.1.start {
             (required_type.1, given_type.1)
@@ -990,7 +991,7 @@ fn check_type_compatability(
             }
         }
         TypeExpr::Or(..) => {
-            require_subset_of_variant_type(required_type, given_type, type_env);
+            require_subset_of_variant_type(required_type, &given_type, type_env);
         }
         TypeExpr::Fun(required_params, required_return_type) => {
             if !given_type.0.is_fun() {

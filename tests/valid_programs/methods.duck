@@ -1,3 +1,5 @@
+use go "fmt";
+
 struct Xyz = {
     number_as_string: String
 } impl {
@@ -20,6 +22,28 @@ struct Lol = {
         std::io::println(self.kek);
     }
 
+    fn copy_me() -> Self {
+        return Lol {
+            kek: self.kek,
+            xyz: self.xyz,
+        };
+    }
+
+    fn copy_me2() -> Lol {
+        return Self {
+            kek: self.kek,
+            xyz: self.xyz,
+        };
+    }
+
+    fn copy_me3() -> Self {
+        return self.copy_me2();
+    }
+
+    fn copy_me4() -> Lol {
+        return self.copy_me();
+    }
+
     fn get_kek() -> String {
         return self.kek;
     }
@@ -40,6 +64,13 @@ fn get_s() -> String {
     return "im a string";
 }
 
+fn print_with_go(x: {}) {
+    go {
+        y, _ := x.(*Lol)
+        fmt.Println(y.kek, y.xyz)
+    }
+}
+
 fn main() {
     let v: Lol = Lol { kek: "Yo", xyz: Xyz { number_as_string: "100" } };
     let v2: Lol = Lol { kek: "Ich bin ein anderse objekt", xyz: Xyz { number_as_string: "999"} };
@@ -57,4 +88,9 @@ fn main() {
         ->v.print_and_return()
         ->v.print_and_return()
         ->v.get_xyz().concat_and_print(" <- this string is before me");
+
+    v.copy_me()->print_with_go();
+    v.copy_me2()->print_with_go();
+    v.copy_me3()->print_with_go();
+    v.copy_me4()->print_with_go();
 }
