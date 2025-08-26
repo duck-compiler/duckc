@@ -474,7 +474,7 @@ pub fn mangle_value_expr(
         ValueExpr::Duck(items) => items.iter_mut().for_each(|(_, value_expr)| {
             mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
         }),
-        ValueExpr::Struct(_, items) => items.iter_mut().for_each(|(_, value_expr)| {
+        ValueExpr::Struct { fields, .. } => fields.iter_mut().for_each(|(_, value_expr)| {
             mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
         }),
         ValueExpr::FieldAccess { target_obj, .. } => {

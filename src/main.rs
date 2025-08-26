@@ -363,7 +363,7 @@ fn parse_src_file(
                     typename_reset_global_value_expr(&mut field.1.0);
                 }
             }
-            ValueExpr::Struct(_, fields) => {
+            ValueExpr::Struct { fields, .. } => {
                 for field in fields {
                     typename_reset_global_value_expr(&mut field.1.0);
                 }

@@ -1,7 +1,9 @@
 use std::process;
 
+use chumsky::container::Seq;
 use colored::Colorize;
 
+use crate::parse::struct_parser::StructDefinition;
 use crate::parse::type_parser::{Duck, TypeExpr};
 use crate::parse::{Field, SS, failure_with_occurence};
 use crate::parse::{
@@ -142,9 +144,13 @@ impl TypeExpr {
 
                 TypeExpr::Tuple(vec![])
             }
-            ValueExpr::Struct(name, value_expr_fields) => {
+            ValueExpr::Struct { name, fields: value_expr_fields, type_params } => {
+                if type_params.is_some() {
+                    panic!("compiler error: type params should be omitted by now")
+                }
+
                 let type_expr = type_env.resolve_type_alias(name);
-                let TypeExpr::Struct(struct_def) = type_expr else {
+                let TypeExpr::Struct(struct_def) = dbg!(type_expr) else {
                     panic!("is not a struct");
                 };
 
@@ -559,6 +565,14 @@ impl TypeExpr {
             };
             return !variants.iter().any(|variant| !variant.0.is_string());
         };
+    }
+
+    pub fn is_generic_struct(&self) -> bool {
+        if let TypeExpr::Struct(StructDefinition { generics: Some(generics), .. }) = self {
+            return true
+        }
+
+        return false
     }
 
     pub fn is_array(&self) -> bool {

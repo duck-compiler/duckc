@@ -865,7 +865,7 @@ impl ValueExpr {
 
                 (res, as_rvar(res_var))
             }
-            ValueExpr::Struct(_, fields) => {
+            ValueExpr::Struct { fields, .. } => {
                 let name =
                     TypeExpr::from_value_expr(self, type_env).as_clean_go_type_name(type_env);
 

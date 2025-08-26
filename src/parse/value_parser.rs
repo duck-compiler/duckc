@@ -4,6 +4,7 @@ use crate::parse::{
     lexer::FmtStringContents,
     source_file_parser::SourceFile,
     type_parser::{type_expression_parser, type_expression_parser_without_array},
+    generics_parser::generics_parser
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
@@ -65,7 +66,11 @@ pub enum ValueExpr {
     Break,
     Continue,
     Duck(Vec<(String, Spanned<ValueExpr>)>),
-    Struct(String, Vec<(String, Spanned<ValueExpr>)>),
+    Struct {
+        name: String,
+        fields: Vec<(String, Spanned<ValueExpr>)>,
+        type_params: Option<Vec<Spanned<TypeParam>>>,
+    },
     FieldAccess {
         target_obj: Box<Spanned<ValueExpr>>,
         field_name: String,
@@ -137,7 +142,7 @@ impl ValueExpr {
             | ValueExpr::Break
             | ValueExpr::Continue
             | ValueExpr::Return(..)
-            | ValueExpr::Struct(..)
+            | ValueExpr::Struct { .. }
             | ValueExpr::VarDecl(..)
             | ValueExpr::VarAssign(..)
             | ValueExpr::BoolNegate(..)
@@ -299,7 +304,18 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
+            let struct_type_params_parser = just(Token::ControlChar('<'))
+                .ignore_then(
+                    type_expression_parser()
+                        .separated_by(just(Token::ControlChar(',')))
+                        .allow_trailing()
+                        .at_least(1)
+                        .collect::<Vec<_>>()
+                )
+                .then_ignore(just(Token::ControlChar('>')));
+
             let struct_expression = select_ref! { Token::Ident(identifier) => identifier.clone() }
+                .then(struct_type_params_parser.or_not())
                 .then(
                     select_ref! { Token::Ident(ident) => ident.to_owned() }
                         .then_ignore(just(Token::ControlChar(':')))
@@ -309,7 +325,7 @@ where
                         .collect::<Vec<_>>()
                         .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}'))),
                 )
-                .map(|(identifier, values)| ValueExpr::Struct(identifier, values))
+                .map(|((identifier, generics), values)| ValueExpr::Struct { name: identifier, fields: values, type_params: generics })
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
@@ -887,7 +903,7 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
             }
         }
         ValueExpr::Return(Some(v)) => value_expr_into_empty_range(v),
-        ValueExpr::Struct(_, fields) => {
+        ValueExpr::Struct { fields, .. } => {
             for field in fields {
                 value_expr_into_empty_range(&mut field.1);
             }
@@ -1236,27 +1252,30 @@ mod tests {
             ("false", ValueExpr::Bool(false)),
             (
                 "MyStruct { x: 5 }",
-                ValueExpr::Struct(
-                    "MyStruct".to_string(),
-                    vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())],
-                ),
+                ValueExpr::Struct {
+                    name: "MyStruct".to_string(),
+                    fields: vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())],
+                    type_params: None
+                },
             ),
             (
                 "Outer { x: 5, y: Inner { x: 5 } }",
-                ValueExpr::Struct(
-                    "Outer".to_string(),
-                    vec![
+                ValueExpr::Struct {
+                    name: "Outer".to_string(),
+                    fields: vec![
                         ("x".to_string(), ValueExpr::Int(5).into_empty_span()),
                         (
                             "y".to_string(),
-                            ValueExpr::Struct(
-                                "Inner".to_string(),
-                                vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())],
-                            )
+                            ValueExpr::Struct {
+                                name: "Inner".to_string(),
+                                fields: vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())],
+                                type_params: None,
+                            }
                             .into_empty_span(),
                         ),
                     ],
-                ),
+                    type_params: None,
+                },
             ),
             ("{}", empty_duck()),
             (
