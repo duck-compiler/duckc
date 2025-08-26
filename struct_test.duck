@@ -21,8 +21,9 @@ struct Lol = {
     fn get_xyz() -> Xyz {
         return self.xyz;
     }
-
 };
+
+type StructInDuck = { s: Lol };
 
 fn main() {
     let v: Lol = Lol { kek: "Yo", xyz: Xyz { number_as_string: "100" } };
@@ -32,4 +33,8 @@ fn main() {
 
     v.get_kek()->std::io::println();
     v.get_xyz().give_number()->std::io::println();
+
+    let x1: StructInDuck = { s: v };
+    x1.s.get_kek()->std::io::println();
+    x1.s.get_xyz().give_number()->std::io::println();
 }

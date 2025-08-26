@@ -458,7 +458,7 @@ impl TypeEnv {
         concrete_type_expr
     }
 
-    pub fn resolve_type_alias(&self, alias: &String) -> TypeExpr {
+    pub fn try_resolve_type_alias(&self, alias: &String) -> Option<TypeExpr> {
         for scope in self.type_aliases.iter().rev() {
             if let Some(type_expr) = scope.get(alias) {
                 let mut res = type_expr.clone();
@@ -470,14 +470,18 @@ impl TypeEnv {
                     }
                 }
 
-                return res;
+                return Some(res);
             }
         }
 
-        panic!(
+        None
+    }
+
+    pub fn resolve_type_alias(&self, alias: &String) -> TypeExpr {
+        self.try_resolve_type_alias(alias).expect(&format!(
             "Couldn't resolve type alias {alias} on stack #{}",
             self.type_aliases.len()
-        );
+        ))
     }
 
     fn flatten_types(

@@ -174,7 +174,10 @@ fn walk_access(
                             .iter()
                             .find(|x| x.name == field_name)
                             .expect("Field doesn't exist");
-                        if found_field.type_expr.0.is_array() || found_field.type_expr.0.is_duck() {
+                        if found_field.type_expr.0.is_array()
+                            || found_field.type_expr.0.is_duck()
+                            || found_field.type_expr.0.is_struct()
+                        {
                             s.push_front(format!("Get{field_name}()"));
                         } else {
                             s.push_front(format!("GetPtr{field_name}()"));
@@ -185,7 +188,7 @@ fn walk_access(
                 }
                 current_obj = target_obj.0;
             }
-            _ => panic!("need var"),
+            _ => panic!("need var, got {current_obj:?}"),
         }
     }
     (
@@ -690,11 +693,18 @@ impl ValueExpr {
                 type_params: _,
             } => {
                 // todo: type_params
-                let (mut instr, res) = walk_access(v_target.0.clone(), type_env, env);
-                if res.is_none() {
-                    return (instr, None);
-                }
 
+                let mut res = v_target.0.direct_emit(type_env, env);
+
+                let mut instr = Vec::new();
+                if res.is_none() {
+                    let (walk_instr, walk_res) = walk_access(v_target.0.clone(), type_env, env);
+                    if walk_res.is_none() {
+                        return (instr, None);
+                    }
+                    res = walk_res.map(IrValue::Var);
+                    instr.extend(walk_instr);
+                }
                 let call_target = res.unwrap();
 
                 let mut v_p_res = Vec::new();
@@ -722,14 +732,14 @@ impl ValueExpr {
                     ));
                     instr.push(IrInstruction::FunCall(
                         Some(res.clone()),
-                        IrValue::Var(call_target),
+                        call_target,
                         v_p_res,
                     ));
                     (instr, Some(IrValue::Var(res)))
                 } else {
                     instr.push(IrInstruction::FunCall(
                         None,
-                        IrValue::Var(call_target),
+                        call_target,
                         v_p_res,
                     ));
                     (instr, None)
@@ -998,18 +1008,6 @@ mod tests {
                         IrValue::Int(1),
                         IrValue::Int(2),
                         TypeExpr::Int,
-                    ),
-                ],
-            ),
-            // todo(@Mvmo): adjust the underlying test to not have any as type
-            // beforehand the issue, that it actually returns any must be fixed
-            (
-                "S { x: 123 }",
-                vec![
-                    decl("var_0", "Any"),
-                    IrInstruction::VarAssignment(
-                        "var_0".into(),
-                        IrValue::Struct("Any".into(), vec![("x".into(), IrValue::Int(123))]),
                     ),
                 ],
             ),
