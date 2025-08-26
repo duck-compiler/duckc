@@ -169,9 +169,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                     ));
                 }
 
-                dbg!(&s.name);
                 for method in &s.methods {
-                    dbg!(&s);
                     out.push(method.emit(
                         Some(("self".to_string(), format!("*{}", s.name))),
                         type_env,

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, panic::Location, process};
+use std::{collections::HashMap, process};
 
 use crate::{
     parse::{
@@ -89,28 +89,16 @@ impl TypeEnv {
         self.type_aliases.pop();
     }
 
-    #[track_caller]
     pub fn push_identifier_types(&mut self) {
         let cloned_hash_map = self
             .identifier_types
             .last()
             .expect("Expect at least one env.")
             .clone();
-        println!(
-            "push {} {}",
-            Location::caller(),
-            cloned_hash_map.contains_key("T")
-        );
         self.identifier_types.push(cloned_hash_map);
     }
 
-    #[track_caller]
     pub fn pop_identifier_types(&mut self) {
-        println!(
-            "pop {} {}",
-            Location::caller(),
-            self.identifier_types.last().unwrap().contains_key("T")
-        );
         self.identifier_types.pop();
     }
 
@@ -303,8 +291,6 @@ impl TypeEnv {
                 );
                 process::exit(1);
             });
-
-        println!("{name} {generic_def:?}");
 
         match generic_def {
             GenericDefinition::Type(type_def) => {
@@ -589,12 +575,7 @@ impl TypeEnv {
 
     pub fn summarize(&mut self) -> TypesSummary {
         let mut all_types = self.all_types.clone();
-        dbg!(
-            all_types
-                .iter()
-                .filter(|x| x.is_struct())
-                .collect::<Vec<_>>()
-        );
+        // dbg!(all_types.iter().filter(|x| x.is_struct() && x.type_id(self).contains("Xyz")).collect::<Vec<_>>());
         all_types.extend(TypeExpr::primitives());
         all_types.push(TypeExpr::Tuple(vec![]));
         let mut param_names_used = Vec::new();
@@ -686,7 +667,6 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
                     resolve_all_aliases_type_expr(&mut type_param.0, env);
                 }
                 if env.generic_definitions.contains_key(name) {
-                    println!("hello {name}");
                     // todo: add span for generic types
                     *expr = env.instantiate_generic_type(name, type_params, empty_range());
                 }
@@ -1031,10 +1011,11 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 }
 
                 type_env.insert_identifier_type("self".to_string(), ty_expr.clone());
-                dbg!(1);
                 typeresolve_value_expr(&mut m.value_expr.0, type_env);
                 type_env.pop_identifier_types();
             }
+            let ty_expr = TypeExpr::Struct(struct_definition.clone());
+            type_env.all_types.insert(0, ty_expr);
         });
 
     source_file

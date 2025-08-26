@@ -350,7 +350,8 @@ impl TypeExpr {
             }
             ValueExpr::Variable(_, ident, type_expr) => {
                 let s = Location::caller();
-                let a = type_expr
+
+                type_expr
                     .as_ref()
                     .cloned()
                     .or(type_env.get_identifier_type(ident.clone()))
@@ -358,12 +359,10 @@ impl TypeExpr {
                         panic!(
                             "{} - {s}",
                             format!("Expected type but didn't get one {ident} {type_expr:?}")
-                                .leak()
-                                .to_string(),
+                                .leak(),
                         )
                     })
-                    .clone();
-                a
+                    .clone()
             }
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(
