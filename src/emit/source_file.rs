@@ -37,16 +37,6 @@ impl SourceFile {
             instructions.push(f.emit(None, type_env, &mut to_ir));
         }
 
-        for s in self.struct_definitions {
-            for method in &s.methods {
-                instructions.push(method.emit(
-                    Some(("self".to_string(), format!("*{}", s.name))),
-                    type_env,
-                    &mut to_ir,
-                ));
-            }
-        }
-
         instructions.extend(type_definitions);
 
         instructions
