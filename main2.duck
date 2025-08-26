@@ -1,0 +1,38 @@
+use std::io::{println};
+
+use go "strconv";
+
+struct M<T> = {
+    val: T,
+    converter: fn(v: T) -> String,
+} impl {
+    fn y() {
+        println(self.converter(self.val));
+    }
+};
+
+fn int_to_string(x: Int) -> String {
+    go {
+        return ConcDuckString { strconv.Itoa(x.as_dgo_int()) }
+    }
+    return "";
+}
+
+fn main() {
+    let strings: M<String> = M<String> {
+        val: "Ich bin ein String",
+        converter: fn(v: String) -> String { return v; }
+    };
+    let ints: M<Int> = M<Int> {
+        val: 100,
+        converter: fn(v: Int) -> String { return int_to_string(v); }
+    };
+    let ints2: M<Int> = M<Int> {
+        val: 200,
+        converter: int_to_string,
+    };
+
+    strings.y();
+    ints.y();
+    ints2.y();
+}

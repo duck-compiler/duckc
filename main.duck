@@ -4,12 +4,11 @@ struct M<T> = {
     name: T,
 } impl {
     fn y() {
-        println("hallo");
+        println(self.name);
     }
 };
 
 fn main() {
     let x: M<String> = M<String> { name: "Hallo" };
-    println(x.name);
     x.y();
 }

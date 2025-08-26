@@ -11,7 +11,7 @@ impl SourceFile {
     pub fn emit(self, pkg_name: String, type_env: &mut TypeEnv) -> Vec<IrInstruction> {
         let mut to_ir = ToIr::default();
 
-        let type_definitions = emit_type_definitions(type_env);
+        let type_definitions = emit_type_definitions(type_env, &mut to_ir);
 
         let mut instructions = Vec::new();
         instructions.push(IrInstruction::GoPackage(pkg_name));

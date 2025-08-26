@@ -1,3 +1,4 @@
+use std::panic::Location;
 use std::process;
 
 use chumsky::container::Seq;
@@ -28,6 +29,7 @@ impl TypeExpr {
         res
     }
 
+    #[track_caller]
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
             ValueExpr::RawVariable(_x, p) => panic!("{}", p.join(" ").leak()),
@@ -150,7 +152,7 @@ impl TypeExpr {
                 }
 
                 let type_expr = type_env.resolve_type_alias(name);
-                let TypeExpr::Struct(struct_def) = dbg!(type_expr) else {
+                let TypeExpr::Struct(struct_def) = type_expr else {
                     panic!("is not a struct");
                 };
 
@@ -342,19 +344,23 @@ impl TypeExpr {
 
                 return ty;
             }
-            ValueExpr::Variable(_, ident, type_expr) => type_expr
+            ValueExpr::Variable(_, ident, type_expr) => {
+                let s = Location::caller();
+                let a = type_expr
                 .as_ref()
                 .cloned()
                 .or(type_env.get_identifier_type(ident.clone()))
                 .unwrap_or_else(|| {
                     panic!(
-                        "{}",
+                        "{} - {s}",
                         format!("Expected type but didn't get one {ident} {type_expr:?}")
                             .leak()
-                            .to_string()
+                            .to_string(),
                     )
                 })
-                .clone(),
+                .clone();
+                a
+            },
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(
                     &(
