@@ -214,12 +214,12 @@ impl ValueExpr {
 
                 let mut rparams = Vec::new();
                 for p in params {
-                    rparams.push((p.0.clone(), p.1.0.as_clean_go_type_name(type_env)));
+                    rparams.push((p.0.clone(), p.1.0.as_go_type_annotation(type_env)));
                 }
 
                 let return_type = return_type
                     .as_ref()
-                    .map(|(x, _)| x.as_clean_go_type_name(type_env));
+                    .map(|(x, _)| x.as_go_type_annotation(type_env));
 
                 let (mut b_instr, b_res) = value_expr.0.emit(type_env, env);
                 if return_type.is_some()

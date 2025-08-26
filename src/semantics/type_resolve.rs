@@ -1339,7 +1339,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         ValueExpr::Lambda(b) => {
             let LambdaFunctionExpr {
                 params,
-                return_type: _,
+                return_type,
                 value_expr,
             } = &mut **b;
 
@@ -1347,6 +1347,10 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
 
             for (name, ty) in params {
                 type_env.insert_identifier_type(name.to_owned(), ty.0.clone());
+            }
+
+            if let Some(return_type) = return_type {
+                resolve_all_aliases_type_expr(&mut return_type.0, type_env);
             }
 
             typeresolve_value_expr(&mut value_expr.0, type_env);

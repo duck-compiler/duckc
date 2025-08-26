@@ -1,3 +1,4 @@
+use std::io::{println};
 use go "fmt";
 
 struct Xyz = {
@@ -23,6 +24,7 @@ struct Lol = {
     }
 
     fn copy_me() -> Self {
+        println("1");
         return Lol {
             kek: self.kek,
             xyz: self.xyz,
@@ -30,6 +32,7 @@ struct Lol = {
     }
 
     fn copy_me2() -> Lol {
+        println("2");
         return Self {
             kek: self.kek,
             xyz: self.xyz,
@@ -37,11 +40,39 @@ struct Lol = {
     }
 
     fn copy_me3() -> Self {
+        println("3");
         return self.copy_me2();
     }
 
     fn copy_me4() -> Lol {
+        println("4");
         return self.copy_me();
+    }
+
+    fn copy_me5() -> Lol {
+        println("5");
+        let res: Self = Lol {
+            kek: self.kek,
+            xyz: self.xyz,
+        };
+        return res;
+    }
+
+    fn copy_me6() -> Lol {
+        println("6");
+        let res: Self = Lol {
+            kek: self.kek,
+            xyz: self.xyz,
+        };
+        let res2: Lol = res;
+        let res3: Self = res2;
+        let res4: Lol = res3;
+        return res4;
+    }
+
+    fn copy_me7() -> Lol {
+        println("7");
+        return (fn() -> Self { return self.copy_me() })();
     }
 
     fn get_kek() -> String {
@@ -93,4 +124,7 @@ fn main() {
     v.copy_me2()->print_with_go();
     v.copy_me3()->print_with_go();
     v.copy_me4()->print_with_go();
+    v.copy_me5()->print_with_go();
+    v.copy_me6()->print_with_go();
+    v.copy_me7()->print_with_go();
 }
