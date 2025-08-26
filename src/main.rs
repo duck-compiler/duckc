@@ -21,7 +21,15 @@ use tags::Tag;
 
 use crate::{
     parse::{
-        function_parser::LambdaFunctionExpr, lexer::lex_parser, make_input, parse_failure, source_file_parser::source_file_parser, struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}, use_statement_parser::UseStatement, value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr}, Context, SS
+        Context, SS,
+        function_parser::LambdaFunctionExpr,
+        lexer::lex_parser,
+        make_input, parse_failure,
+        source_file_parser::source_file_parser,
+        struct_parser::StructDefinition,
+        type_parser::{Duck, TypeExpr},
+        use_statement_parser::UseStatement,
+        value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr},
     },
     semantics::type_resolve::{self, TypeEnv},
 };
@@ -210,8 +218,13 @@ fn parse_src_file(
                 for field in fields {
                     typename_reset_global(&mut field.type_expr.0);
                 }
-            },
-            TypeExpr::Struct(StructDefinition { name: _, fields, methods: _, generics: _ }) => {
+            }
+            TypeExpr::Struct(StructDefinition {
+                name: _,
+                fields,
+                methods: _,
+                generics: _,
+            }) => {
                 for field in fields {
                     typename_reset_global(&mut field.type_expr.0);
                 }

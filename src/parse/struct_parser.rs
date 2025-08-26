@@ -3,7 +3,10 @@ use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
 use crate::parse::{
-    function_parser::{function_definition_parser, FunctionDefintion}, generics_parser::{generics_parser, Generic}, type_parser::type_expression_parser, Field, Spanned, SS
+    Field, SS, Spanned,
+    function_parser::{FunctionDefintion, function_definition_parser},
+    generics_parser::{Generic, generics_parser},
+    type_parser::type_expression_parser,
 };
 
 use super::lexer::Token;
@@ -17,9 +20,8 @@ pub struct StructDefinition {
 }
 
 pub fn struct_definition_parser<'src, M, I>(
-    make_input: M
-)
--> impl Parser<'src, I, StructDefinition, extra::Err<Rich<'src, Token, SS>>> + Clone
+    make_input: M,
+) -> impl Parser<'src, I, StructDefinition, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
     M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
@@ -35,7 +37,7 @@ where
             function_definition_parser(make_input)
                 .repeated()
                 .at_least(0)
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
         )
         .then_ignore(just(Token::ControlChar('}')))
         .or_not()
@@ -50,26 +52,25 @@ where
             field_parser
                 .separated_by(just(Token::ControlChar(',')))
                 .allow_trailing()
-                .collect()
+                .collect(),
         )
         .then_ignore(just(Token::ControlChar('}')))
         .then(impl_parser)
         .then_ignore(just(Token::ControlChar(';')))
-        .map(|(((identifier, generics), fields), methods)| StructDefinition {
-            name: identifier,
-            fields,
-            methods,
-            generics,
-        })
+        .map(
+            |(((identifier, generics), fields), methods)| StructDefinition {
+                name: identifier,
+                fields,
+                methods,
+                generics,
+            },
+        )
 }
 
 #[cfg(test)]
 pub mod tests {
     use crate::parse::{
-        generics_parser::Generic,
-        lexer::lex_parser,
-        make_input,
-        type_parser::TypeExpr,
+        generics_parser::Generic, lexer::lex_parser, make_input, type_parser::TypeExpr,
         value_parser::empty_range,
     };
     use chumsky::Parser;
@@ -98,9 +99,7 @@ pub mod tests {
                     .collect(),
                 return_type.map(|rt_box| Box::new(strip_spans(*rt_box))),
             ),
-            TypeExpr::Or(variants) => {
-                TypeExpr::Or(variants.into_iter().map(strip_spans).collect())
-            }
+            TypeExpr::Or(variants) => TypeExpr::Or(variants.into_iter().map(strip_spans).collect()),
             TypeExpr::TypeName(is_global, type_name, Some(generics)) => TypeExpr::TypeName(
                 is_global,
                 type_name,
@@ -111,16 +110,18 @@ pub mod tests {
                         .collect::<Vec<_>>(),
                 ),
             ),
-            TypeExpr::RawTypeName(is_global, raw_type_name, Some(generics)) => TypeExpr::RawTypeName(
-                is_global,
-                raw_type_name,
-                Some(
-                    generics
-                        .into_iter()
-                        .map(|generic| strip_spans(generic))
-                        .collect::<Vec<_>>()
-                ),
-            ),
+            TypeExpr::RawTypeName(is_global, raw_type_name, Some(generics)) => {
+                TypeExpr::RawTypeName(
+                    is_global,
+                    raw_type_name,
+                    Some(
+                        generics
+                            .into_iter()
+                            .map(|generic| strip_spans(generic))
+                            .collect::<Vec<_>>(),
+                    ),
+                )
+            }
             TypeExpr::Array(type_expr) => {
                 TypeExpr::Array(Box::new(strip_spans(type_expr.as_ref().clone())))
             }
@@ -143,8 +144,7 @@ pub mod tests {
 
     fn assert_struct_definition(input_str: &str, expected_def: StructDefinition) {
         println!("lexing and parsing struct definition: \"{}\"", input_str);
-        let lexer_parse_result = lex_parser("test", "")
-            .parse(input_str);
+        let lexer_parse_result = lex_parser("test", "").parse(input_str);
 
         assert!(
             !lexer_parse_result.has_errors(),
@@ -158,8 +158,8 @@ pub mod tests {
 
         let tokens = lexer_parse_result.output().unwrap();
 
-        let parse_result = struct_definition_parser(make_input)
-            .parse(make_input(empty_range(), &tokens));
+        let parse_result =
+            struct_definition_parser(make_input).parse(make_input(empty_range(), &tokens));
 
         assert!(
             !parse_result.has_errors(),
@@ -279,8 +279,10 @@ pub mod tests {
                             false,
                             vec!["Entry".to_string()],
                             Some(vec![
-                                TypeExpr::RawTypeName(false, vec!["K".to_string()], None).into_empty_span(),
-                                TypeExpr::RawTypeName(false, vec!["V".to_string()], None).into_empty_span(),
+                                TypeExpr::RawTypeName(false, vec!["K".to_string()], None)
+                                    .into_empty_span(),
+                                TypeExpr::RawTypeName(false, vec!["V".to_string()], None)
+                                    .into_empty_span(),
                             ]),
                         )
                         .into_empty_span(),
@@ -317,7 +319,8 @@ pub mod tests {
             println!("testing invalid struct: \"{}\"", invalid);
             let lexer_parse_result = lex_parser("test", "").parse(invalid);
             let tokens = lexer_parse_result.output().unwrap();
-            let parse_result = struct_definition_parser(make_input).parse(make_input(empty_range(), &tokens));
+            let parse_result =
+                struct_definition_parser(make_input).parse(make_input(empty_range(), &tokens));
             assert!(parse_result.has_errors());
         }
     }

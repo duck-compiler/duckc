@@ -5,7 +5,10 @@ use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
 use crate::parse::{
-    generics_parser::{generics_parser, Generic}, struct_parser::StructDefinition, value_parser::{empty_range, TypeParam}, Field, Spanned, SS
+    Field, SS, Spanned,
+    generics_parser::{Generic, generics_parser},
+    struct_parser::StructDefinition,
+    value_parser::{TypeParam, empty_range},
 };
 
 use super::lexer::Token;
@@ -22,7 +25,9 @@ impl Display for TypeExpr {
         match self {
             TypeExpr::Any => write!(f, "any"),
             TypeExpr::InlineGo => write!(f, "inline_go"),
-            TypeExpr::Struct(s) => { write!(f, "struct {}", s.name) }
+            TypeExpr::Struct(s) => {
+                write!(f, "struct {}", s.name)
+            }
             TypeExpr::Go(s) => write!(f, "go {s}"),
             TypeExpr::Duck(d) => write!(f, "{d}"), // Delegates to Duck's Display impl
             TypeExpr::Tuple(elements) => {
@@ -57,7 +62,7 @@ impl Display for TypeExpr {
 
                 Ok(())
             }
-            TypeExpr::RawTypeName(is_global, path, generics)  => {
+            TypeExpr::RawTypeName(is_global, path, generics) => {
                 if *is_global {
                     write!(f, "::")?;
                 }
@@ -66,7 +71,7 @@ impl Display for TypeExpr {
                 if let Some(params) = generics {
                     write!(f, "<")?;
                     params.iter().enumerate().try_for_each(|(i, param)| {
-                         if i > 0 {
+                        if i > 0 {
                             write!(f, ", ")?;
                         }
                         write!(f, "{}", param.0)
@@ -84,25 +89,26 @@ impl Display for TypeExpr {
             TypeExpr::Bool => write!(f, "Bool"),
             TypeExpr::Char => write!(f, "Char"),
             TypeExpr::Float => write!(f, "Float"),
-            TypeExpr::Or(variants) => {
-                variants.iter().enumerate().try_for_each(|(i, variant)| {
-                    if i > 0 {
-                        write!(f, " | ")?;
-                    }
-                    write!(f, "{}", variant.0)
-                })
-            }
+            TypeExpr::Or(variants) => variants.iter().enumerate().try_for_each(|(i, variant)| {
+                if i > 0 {
+                    write!(f, " | ")?;
+                }
+                write!(f, "{}", variant.0)
+            }),
             TypeExpr::Fun(params, return_type) => {
                 write!(f, "fn(")?;
-                params.iter().enumerate().try_for_each(|(i, (name, type_expr))| {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    if let Some(n) = name {
-                        write!(f, "{n}: ")?;
-                    }
-                    write!(f, "{}", type_expr.0)
-                })?;
+                params
+                    .iter()
+                    .enumerate()
+                    .try_for_each(|(i, (name, type_expr))| {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        if let Some(n) = name {
+                            write!(f, "{n}: ")?;
+                        }
+                        write!(f, "{}", type_expr.0)
+                    })?;
                 write!(f, ")")?;
                 if let Some(rt) = return_type {
                     write!(f, " -> {}", rt.0)?;
@@ -213,8 +219,8 @@ where
                 .ignore_then(go_type_identifier)
                 .map(TypeExpr::Go);
 
-            let string_literal = select_ref! { Token::ConstString(str) => str.clone() }
-                .map(TypeExpr::ConstString);
+            let string_literal =
+                select_ref! { Token::ConstString(str) => str.clone() }.map(TypeExpr::ConstString);
 
             let bool_literal =
                 select_ref! { Token::ConstBool(bool) => *bool }.map(TypeExpr::ConstBool);
@@ -311,10 +317,7 @@ where
                 .collect::<Vec<Spanned<TypeExpr>>>()
                 .map_with(|elements, e| {
                     if elements.len() == 1 {
-                        elements
-                            .into_iter()
-                            .next()
-                            .unwrap()
+                        elements.into_iter().next().unwrap()
                     } else {
                         let mut elems = Vec::new();
                         let expr = (TypeExpr::Or(elements), e.span());
@@ -383,8 +386,8 @@ where
                     _ => TypeExpr::Any,
                 });
 
-            let string_literal = select_ref! { Token::ConstString(str) => str.clone() }
-                .map(TypeExpr::ConstString);
+            let string_literal =
+                select_ref! { Token::ConstString(str) => str.clone() }.map(TypeExpr::ConstString);
             let bool_literal =
                 select_ref! { Token::ConstBool(bool) => *bool }.map(TypeExpr::ConstBool);
             let int_literal = select_ref! { Token::ConstInt(int) => *int }
@@ -480,10 +483,7 @@ where
                 .collect::<Vec<Spanned<TypeExpr>>>()
                 .map_with(|elements, e| {
                     if elements.len() == 1 {
-                        elements
-                            .into_iter()
-                            .next()
-                            .unwrap()
+                        elements.into_iter().next().unwrap()
                     } else {
                         let mut elems = Vec::new();
                         let expr = (TypeExpr::Or(elements), e.span());
@@ -1408,11 +1408,17 @@ pub mod tests {
             "{ x: \"hallo\" } | { x: \"bye\" }",
             TypeExpr::Or(vec![
                 TypeExpr::Duck(Duck {
-                    fields: vec![Field::new("x".to_string(), TypeExpr::ConstString("hallo".to_string()).into_empty_span())],
+                    fields: vec![Field::new(
+                        "x".to_string(),
+                        TypeExpr::ConstString("hallo".to_string()).into_empty_span(),
+                    )],
                 })
                 .into_empty_span(),
                 TypeExpr::Duck(Duck {
-                    fields: vec![Field::new("x".to_string(), TypeExpr::ConstString("bye".to_string()).into_empty_span())],
+                    fields: vec![Field::new(
+                        "x".to_string(),
+                        TypeExpr::ConstString("bye".to_string()).into_empty_span(),
+                    )],
                 })
                 .into_empty_span(),
             ]),

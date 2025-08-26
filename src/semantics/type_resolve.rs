@@ -2,7 +2,12 @@ use std::{collections::HashMap, panic::Location, process};
 
 use crate::{
     parse::{
-        function_parser::{FunctionDefintion, LambdaFunctionExpr}, source_file_parser::SourceFile, struct_parser::StructDefinition, type_parser::{Duck, TypeDefinition, TypeExpr}, value_parser::{empty_range, Assignment, Declaration, ValFmtStringContents, ValueExpr}, Spanned, SS
+        SS, Spanned,
+        function_parser::{FunctionDefintion, LambdaFunctionExpr},
+        source_file_parser::SourceFile,
+        struct_parser::StructDefinition,
+        type_parser::{Duck, TypeDefinition, TypeExpr},
+        value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr, empty_range},
     },
     semantics::ident_mangler::mangle,
     tags::Tag,
@@ -91,13 +96,21 @@ impl TypeEnv {
             .last()
             .expect("Expect at least one env.")
             .clone();
-        println!("push {} {}", Location::caller(), cloned_hash_map.contains_key("self"));
+        println!(
+            "push {} {}",
+            Location::caller(),
+            cloned_hash_map.contains_key("self")
+        );
         self.identifier_types.push(cloned_hash_map);
     }
 
     #[track_caller]
     pub fn pop_identifier_types(&mut self) {
-        println!("pop {} {}", Location::caller(), self.identifier_types.last().unwrap().contains_key("self"));
+        println!(
+            "pop {} {}",
+            Location::caller(),
+            self.identifier_types.last().unwrap().contains_key("self")
+        );
         self.identifier_types.pop();
     }
 
@@ -299,7 +312,7 @@ impl TypeEnv {
                     name
                 );
                 process::exit(1);
-            },
+            }
             GenericDefinition::Struct(_) => {
                 println!(
                     "{}{}{}Expected '{}' to be a generic type, but it's a struct.",
@@ -395,7 +408,7 @@ impl TypeEnv {
                     name
                 );
                 process::exit(1);
-            },
+            }
             GenericDefinition::Function(_) => {
                 println!(
                     "{}{}{}Expected '{}' to be a generic type, but it's a function.",
@@ -405,7 +418,7 @@ impl TypeEnv {
                     name
                 );
                 process::exit(1);
-            },
+            }
         };
 
         let generics = type_def.generics.as_ref().unwrap();
@@ -478,10 +491,12 @@ impl TypeEnv {
     }
 
     pub fn resolve_type_alias(&self, alias: &String) -> TypeExpr {
-        self.try_resolve_type_alias(alias).expect(&format!(
-            "Couldn't resolve type alias {alias} on stack #{}",
-            self.type_aliases.len()
-        ))
+        self.try_resolve_type_alias(alias).unwrap_or_else(|| {
+            panic!(
+                "Couldn't resolve type alias {alias} on stack #{}",
+                self.type_aliases.len()
+            )
+        })
     }
 
     fn flatten_types(
@@ -615,7 +630,12 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
                 resolve_all_aliases_type_expr(&mut field.type_expr.0, env);
             }
         }
-        TypeExpr::Struct(StructDefinition { name: _, fields, methods: _, generics: _ }) => {
+        TypeExpr::Struct(StructDefinition {
+            name: _,
+            fields,
+            methods: _,
+            generics: _,
+        }) => {
             fields.sort_by_key(|x| x.name.clone());
             for field in fields {
                 resolve_all_aliases_type_expr(&mut field.type_expr.0, env);
@@ -801,7 +821,12 @@ fn sort_fields_type_expr(expr: &mut TypeExpr) {
                 sort_fields_type_expr(&mut field.type_expr.0);
             }
         }
-        TypeExpr::Struct(StructDefinition { name: _, fields, methods: _, generics: _ }) => {
+        TypeExpr::Struct(StructDefinition {
+            name: _,
+            fields,
+            methods: _,
+            generics: _,
+        }) => {
             for field in fields {
                 sort_fields_type_expr(&mut field.type_expr.0);
             }
@@ -864,19 +889,28 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     println!("{} insert type definitions", Tag::TypeResolve,);
 
-    println!("source file struct defs: {}", source_file.struct_definitions.len());
+    println!(
+        "source file struct defs: {}",
+        source_file.struct_definitions.len()
+    );
     // Step 2: Insert type definitions
     source_file
         .struct_definitions
         .iter()
         .for_each(|struct_definition| {
             if struct_definition.generics.is_some() {
-                type_env.insert_generic_definition(struct_definition.name.clone(), GenericDefinition::Struct(struct_definition.clone()));
+                type_env.insert_generic_definition(
+                    struct_definition.name.clone(),
+                    GenericDefinition::Struct(struct_definition.clone()),
+                );
                 return;
             }
 
             println!("insert {}", struct_definition.name);
-            type_env.insert_type_alias(struct_definition.name.clone(), TypeExpr::Struct(struct_definition.clone()));
+            type_env.insert_type_alias(
+                struct_definition.name.clone(),
+                TypeExpr::Struct(struct_definition.clone()),
+            );
         });
 
     source_file
@@ -884,7 +918,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .iter()
         .for_each(|type_definition| {
             if type_definition.generics.is_some() {
-                type_env.insert_generic_definition(type_definition.name.clone(), GenericDefinition::Type(type_definition.clone()));
+                type_env.insert_generic_definition(
+                    type_definition.name.clone(),
+                    GenericDefinition::Type(type_definition.clone()),
+                );
                 return;
             }
 
@@ -1662,7 +1699,12 @@ pub fn replace_generics_in_type_expr(
                 *type_expr = (*concrete_type).clone();
             }
         }
-        TypeExpr::Struct(StructDefinition { name: _, fields, methods: _, generics: _ }) => {
+        TypeExpr::Struct(StructDefinition {
+            name: _,
+            fields,
+            methods: _,
+            generics: _,
+        }) => {
             for field in fields {
                 replace_generics_in_type_expr(
                     &mut field.type_expr.0,

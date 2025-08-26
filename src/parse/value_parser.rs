@@ -1,6 +1,9 @@
-
 use crate::parse::{
-    function_parser::{LambdaFunctionExpr, Param}, lexer::{FmtStringContents}, source_file_parser::SourceFile, type_parser::{type_expression_parser, type_expression_parser_without_array}, Context, Spanned, SS
+    Context, SS, Spanned,
+    function_parser::{LambdaFunctionExpr, Param},
+    lexer::FmtStringContents,
+    source_file_parser::SourceFile,
+    type_parser::{type_expression_parser, type_expression_parser_without_array},
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
@@ -304,7 +307,7 @@ where
                         .separated_by(just(Token::ControlChar(',')))
                         .allow_trailing()
                         .collect::<Vec<_>>()
-                        .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
+                        .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}'))),
                 )
                 .map(|(identifier, values)| ValueExpr::Struct(identifier, values))
                 .map_with(|x, e| (x, e.span()))
@@ -928,9 +931,15 @@ mod tests {
     use chumsky::prelude::*;
 
     use crate::parse::{
-        function_parser::LambdaFunctionExpr, lexer::lex_parser, make_input, type_parser::{Duck, TypeExpr}, value_parser::{
-            empty_duck, empty_range, empty_tuple, type_expr_into_empty_range, value_expr_into_empty_range, value_expr_parser, Assignment, Declaration, MatchArm
-        }, Field, Spanned
+        Field, Spanned,
+        function_parser::LambdaFunctionExpr,
+        lexer::lex_parser,
+        make_input,
+        type_parser::{Duck, TypeExpr},
+        value_parser::{
+            Assignment, Declaration, MatchArm, empty_duck, empty_range, empty_tuple,
+            type_expr_into_empty_range, value_expr_into_empty_range, value_expr_parser,
+        },
     };
 
     use super::ValueExpr;
@@ -1227,21 +1236,27 @@ mod tests {
             ("false", ValueExpr::Bool(false)),
             (
                 "MyStruct { x: 5 }",
-                ValueExpr::Struct("MyStruct".to_string(), vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())]),
+                ValueExpr::Struct(
+                    "MyStruct".to_string(),
+                    vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())],
+                ),
             ),
             (
                 "Outer { x: 5, y: Inner { x: 5 } }",
-                ValueExpr::Struct("Outer".to_string(), vec![
-                    ("x".to_string(), ValueExpr::Int(5).into_empty_span()),
-                    (
-                        "y".to_string(),
-                        ValueExpr::Struct("Inner".to_string(), vec![(
-                            "x".to_string(),
-                            ValueExpr::Int(5).into_empty_span(),
-                        )])
-                        .into_empty_span(),
-                    ),
-                ]),
+                ValueExpr::Struct(
+                    "Outer".to_string(),
+                    vec![
+                        ("x".to_string(), ValueExpr::Int(5).into_empty_span()),
+                        (
+                            "y".to_string(),
+                            ValueExpr::Struct(
+                                "Inner".to_string(),
+                                vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())],
+                            )
+                            .into_empty_span(),
+                        ),
+                    ],
+                ),
             ),
             ("{}", empty_duck()),
             (

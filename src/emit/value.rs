@@ -156,7 +156,7 @@ fn walk_access(
                         panic!("need var");
                     };
 
-                    s.push_front(format!("{res}"));
+                    s.push_front(res.to_string());
                 } else {
                     return (res_instr.into(), None);
                 }
@@ -183,8 +183,8 @@ fn walk_access(
                             s.push_front(format!("GetPtr{field_name}()"));
                         }
                     }
-                    TypeExpr::Struct(..) => s.push_front(format!("{field_name}")),
-                    a @ _ => panic!("can only access object like {a:?} {:?}", target_obj.0),
+                    TypeExpr::Struct(..) => s.push_front(field_name.to_string()),
+                    a => panic!("can only access object like {a:?} {:?}", target_obj.0),
                 }
                 current_obj = target_obj.0;
             }
@@ -737,11 +737,7 @@ impl ValueExpr {
                     ));
                     (instr, Some(IrValue::Var(res)))
                 } else {
-                    instr.push(IrInstruction::FunCall(
-                        None,
-                        call_target,
-                        v_p_res,
-                    ));
+                    instr.push(IrInstruction::FunCall(None, call_target, v_p_res));
                     (instr, None)
                 }
             }
@@ -825,7 +821,7 @@ impl ValueExpr {
                             let f = fields
                                 .iter()
                                 .find(|f| f.name == field_name)
-                                .expect(&format!("{field_name} {fields:?}"));
+                                .unwrap_or_else(|| panic!("{field_name} {fields:?}"));
                             let res = env.new_var();
                             i.push(IrInstruction::VarDecl(
                                 res.clone(),

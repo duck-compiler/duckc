@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use tree_sitter::{Node, Parser};
 
 use crate::parse::{
-    function_parser::LambdaFunctionExpr, struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}, value_parser::{ValFmtStringContents, ValueExpr}
+    function_parser::LambdaFunctionExpr,
+    struct_parser::StructDefinition,
+    type_parser::{Duck, TypeExpr},
+    value_parser::{ValFmtStringContents, ValueExpr},
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -220,7 +223,12 @@ pub fn mangle_type_expression(
             }
             *type_expr = TypeExpr::TypeName(true, mangle(path), type_params.clone());
         }
-        TypeExpr::Struct(StructDefinition { name: _, fields, methods, generics: _ }) => {
+        TypeExpr::Struct(StructDefinition {
+            name: _,
+            fields,
+            methods,
+            generics: _,
+        }) => {
             for f in fields {
                 mangle_type_expression(&mut f.type_expr.0, prefix, mangle_env);
             }

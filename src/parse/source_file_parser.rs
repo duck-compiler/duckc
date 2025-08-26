@@ -4,10 +4,16 @@ use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::{
     parse::{
-        function_parser::{function_definition_parser, FunctionDefintion}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, type_parser::{type_definition_parser, TypeDefinition}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, Context, Spanned, SS
+        Context, SS, Spanned,
+        function_parser::{FunctionDefintion, function_definition_parser},
+        lexer::{Token, lex_parser},
+        make_input, parse_failure,
+        struct_parser::{StructDefinition, struct_definition_parser},
+        type_parser::{TypeDefinition, type_definition_parser},
+        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
     },
     semantics::ident_mangler::{
-        mangle, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
+        MangleEnv, mangle, mangle_type_expression, mangle_value_expr, unmangle,
     },
 };
 
@@ -182,7 +188,12 @@ impl SourceFile {
                             mangle_env.insert_ident(name.clone());
                         }
                     }
-                    mangle_value_expr(&mut func.value_expr.0, global_prefix, prefix, &mut mangle_env);
+                    mangle_value_expr(
+                        &mut func.value_expr.0,
+                        global_prefix,
+                        prefix,
+                        &mut mangle_env,
+                    );
                     mangle_env.pop_idents();
                     //result.function_definitions.push(f);
                 }
@@ -255,7 +266,7 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
             })
     } else {
         let src_text = std::fs::read_to_string(format!("{}.duck", joined.to_str().unwrap()))
-            .expect(joined.to_str().unwrap())
+            .unwrap_or_else(|_| panic!("{}", joined.to_str().unwrap().to_string()))
             .leak() as &'static str;
         let target_path = joined.to_string_lossy();
         let target_path_leaked = target_path.to_string().leak() as &str;
@@ -372,11 +383,18 @@ mod tests {
 
     use chumsky::Parser;
 
-    use crate::{
-        parse::{
-            function_parser::FunctionDefintion, lexer::lex_parser, make_input, source_file_parser::{source_file_parser, SourceFile}, struct_parser::StructDefinition, type_parser::{Duck, TypeDefinition, TypeExpr}, use_statement_parser::{Indicator, UseStatement}, value_parser::{
-                empty_range, source_file_into_empty_range, value_expr_into_empty_range, IntoBlock, ValueExpr
-            }, Field
+    use crate::parse::{
+        Field,
+        function_parser::FunctionDefintion,
+        lexer::lex_parser,
+        make_input,
+        source_file_parser::{SourceFile, source_file_parser},
+        struct_parser::StructDefinition,
+        type_parser::{Duck, TypeDefinition, TypeExpr},
+        use_statement_parser::{Indicator, UseStatement},
+        value_parser::{
+            IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
+            value_expr_into_empty_range,
         },
     };
 
@@ -441,7 +459,10 @@ mod tests {
                 SourceFile {
                     struct_definitions: vec![StructDefinition {
                         name: "X".into(),
-                        fields: vec![Field::new("x".to_string(), TypeExpr::String.into_empty_span())],
+                        fields: vec![Field::new(
+                            "x".to_string(),
+                            TypeExpr::String.into_empty_span(),
+                        )],
                         methods: vec![],
                         generics: None,
                     }],

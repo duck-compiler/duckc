@@ -15,7 +15,10 @@ impl TypeExpr {
         return format!("{self}");
     }
 
-    pub fn from_value_expr_resolved_type_name(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
+    pub fn from_value_expr_resolved_type_name(
+        value_expr: &ValueExpr,
+        type_env: &mut TypeEnv,
+    ) -> TypeExpr {
         let mut res = TypeExpr::from_value_expr(value_expr, type_env);
         if let TypeExpr::TypeName(_, name, _) = &res {
             res = type_env.resolve_type_alias(name);
@@ -337,7 +340,14 @@ impl TypeExpr {
                 .as_ref()
                 .cloned()
                 .or(type_env.get_identifier_type(ident.clone()))
-                .expect(format!("Expected type but didn't get one {ident} {type_expr:?}").leak())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{}",
+                        format!("Expected type but didn't get one {ident} {type_expr:?}")
+                            .leak()
+                            .to_string()
+                    )
+                })
                 .clone(),
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(
@@ -377,7 +387,8 @@ impl TypeExpr {
                 target_obj,
                 field_name,
             } => {
-                let target_obj_type_expr = TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
+                let target_obj_type_expr =
+                    TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
                 require(
                     target_obj_type_expr.is_object_like(),
                     format!(
