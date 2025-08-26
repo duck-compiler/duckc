@@ -2,7 +2,8 @@
 #![allow(
     clippy::needless_return,
     clippy::match_like_matches_macro,
-    clippy::only_used_in_recursion
+    clippy::only_used_in_recursion,
+    clippy::large_enum_variant
 )]
 
 use std::{

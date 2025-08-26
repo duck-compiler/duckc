@@ -155,8 +155,9 @@ impl TypeExpr {
                     panic!("compiler error: type params should be omitted by now")
                 }
 
-                let type_expr = type_env.resolve_type_alias(name);
-                let TypeExpr::Struct(struct_def) = type_expr else {
+                let type_expr = type_env.try_resolve_type_expr(&type_env.resolve_type_alias(name));
+                dbg!(&type_env);
+                let TypeExpr::Struct(struct_def) = dbg!(type_expr) else {
                     panic!("is not a struct");
                 };
 

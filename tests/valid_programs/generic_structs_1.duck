@@ -6,6 +6,10 @@ struct M<T> = {
     fn y() {
         println(self.name);
     }
+
+    fn copy() -> Self {
+        return Self { name: self.name };
+    }
 };
 
 fn main() {

@@ -388,6 +388,16 @@ impl TypeEnv {
                 struct_definition.name = mangled_name.clone();
                 struct_definition.generics = None;
 
+                self.insert_type_alias(
+                    struct_definition.name.clone(),
+                    TypeExpr::Struct(struct_definition.clone()),
+                );
+
+                self.insert_type_alias(
+                    "Self".to_string(),
+                    TypeExpr::TypeNameInternal(struct_definition.name.clone()),
+                );
+
                 for m in &mut struct_definition.methods {
                     if let Some((return_type, _)) = &mut m.return_type {
                         resolve_all_aliases_type_expr(return_type, self);
@@ -422,6 +432,7 @@ impl TypeEnv {
                     self.insert_identifier_type("self".to_string(), concrete_type_expr.clone());
                     println!("resolving method {}", m.name);
                     typeresolve_value_expr(&mut m.value_expr.0, self);
+                    println!("done resolving method {}", m.name);
                     dbg!(&mut m.value_expr.0);
                     self.pop_identifier_types();
                 }
@@ -1383,6 +1394,14 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             type_params: maybe_type_params,
         } => {
             let is_generic_struct = type_env.generic_definitions.contains_key(name);
+
+            if let Some(TypeExpr::Struct(s)) = type_env
+                .try_resolve_type_alias(name)
+                .map(|e| type_env.try_resolve_type_expr(&e))
+            {
+                *name = s.name;
+            }
+
             if is_generic_struct && maybe_type_params.is_none() {
                 panic!("expected generics but didn't receive them");
             } else if maybe_type_params.is_some() && !is_generic_struct {
