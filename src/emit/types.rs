@@ -93,7 +93,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                             vec![],
                             Some(format!(
                                 "*{}",
-                                dbg!(field.type_expr.0.as_go_type_annotation(type_env))
+                                field.type_expr.0.as_go_type_annotation(type_env)
                             )),
                             vec![IrInstruction::Return(Some(IrValue::Pointer(
                                 IrValue::FieldAccess(

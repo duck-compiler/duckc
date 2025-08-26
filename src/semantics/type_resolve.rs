@@ -1010,8 +1010,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 type_env.insert_identifier_type("self".to_string(), ty_expr.clone());
                 typeresolve_value_expr(&mut m.value_expr.0, type_env);
                 type_env.pop_identifier_types();
-
-                dbg!(&m.value_expr.0);
             }
         });
 
@@ -1324,8 +1322,6 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             let type_expr = type_env
                 .get_identifier_type(identifier.clone())
                 .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));
-
-            dbg!(&identifier, &type_expr);
 
             *type_expr_opt = Some(type_expr)
         }

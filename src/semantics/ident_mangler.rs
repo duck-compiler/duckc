@@ -232,7 +232,6 @@ pub fn mangle_type_expression(
             for f in fields {
                 mangle_type_expression(&mut f.type_expr.0, prefix, mangle_env);
             }
-            dbg!(methods.len());
             for m in methods {
                 if let Some(params) = &mut m.params {
                     for (_, param_type) in params {

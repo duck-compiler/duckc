@@ -483,7 +483,6 @@ impl ValueExpr {
                         };
 
                         let target_ty = TypeExpr::from_value_expr(&target_obj.0, type_env);
-                        dbg!(&target_ty);
                         match target_ty {
                             TypeExpr::Duck(_) => {
                                 res.push(IrInstruction::FunCall(
@@ -898,7 +897,6 @@ impl ValueExpr {
             | ValueExpr::String(..) => {
                 if let Some(d) = self.direct_emit(type_env, env) {
                     let res_var = env.new_var();
-                    dbg!(&res_var);
                     (
                         vec![
                             IrInstruction::VarDecl(
