@@ -1,0 +1,4 @@
+{
+    "stdout": "&{[{yo} {moin}]}\nlist at index 0 &{[{ich} {bin} {liste} {1}]}\nlist at index 1 &{[{yo} {moin}]}\n",
+    "stderr": ""
+}

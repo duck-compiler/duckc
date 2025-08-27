@@ -221,6 +221,13 @@ pub fn mangle_type_expression(
                 *path = mangle_env.global_prefix.clone();
                 path.extend(mangled);
             }
+
+            if let Some(type_params) = type_params {
+                for (type_param, _) in type_params {
+                    mangle_type_expression(type_param, prefix, mangle_env);
+                }
+            }
+
             *type_expr = TypeExpr::TypeName(true, mangle(path), type_params.clone());
         }
         TypeExpr::Struct(StructDefinition {
@@ -474,9 +481,21 @@ pub fn mangle_value_expr(
         ValueExpr::Duck(items) => items.iter_mut().for_each(|(_, value_expr)| {
             mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
         }),
-        ValueExpr::Struct { fields, .. } => fields.iter_mut().for_each(|(_, value_expr)| {
-            mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
-        }),
+        ValueExpr::Struct {
+            fields,
+            type_params,
+            ..
+        } => {
+            fields.iter_mut().for_each(|(_, value_expr)| {
+                mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
+            });
+
+            if let Some(type_params) = type_params {
+                for (g, _) in type_params {
+                    mangle_type_expression(g, prefix, mangle_env);
+                }
+            }
+        }
         ValueExpr::FieldAccess { target_obj, .. } => {
             mangle_value_expr(&mut target_obj.0, global_prefix, prefix, mangle_env);
         }

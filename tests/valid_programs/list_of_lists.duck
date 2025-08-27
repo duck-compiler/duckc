@@ -1,0 +1,34 @@
+struct List<T> = {
+    elems: T[],
+} impl {
+    fn push(e: T) {
+        go {
+            self.elems = append(self.elems, e)
+        }
+    }
+};
+
+fn print_with_go(x: {}) {
+    go {
+        fmt.Println(x)
+    }
+}
+
+fn main() {
+    let list: List<String> = List<String> { elems: .String[] };
+    list.push("yo");
+    list.push("moin");
+    print_with_go(list);
+
+    let list_of_list: List<List<String>> = List<List<String>> { elems: .List<String>[] };
+    list_of_list.push(List<String> {
+        elems: ["ich", "bin", "liste", "1"],
+    });
+    list_of_list.push(list);
+
+    go {
+        for i := range list_of_list.elems {
+            fmt.Println("list at index", i, list_of_list.elems[i])
+        }
+    }
+}

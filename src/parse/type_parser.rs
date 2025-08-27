@@ -286,15 +286,29 @@ where
                         .at_least(1)
                         .collect::<Vec<_>>(),
                 )
-                .map(|(is_global, identifier)| match identifier[0].as_str() {
-                    "Int" => TypeExpr::Int,
-                    "Float" => TypeExpr::Float,
-                    "Bool" => TypeExpr::Bool,
-                    "String" => TypeExpr::String,
-                    "Char" => TypeExpr::Char,
-                    // TODO: generic type name
-                    _ => TypeExpr::RawTypeName(is_global.is_some(), identifier, None),
-                });
+                .then(
+                    just(Token::ControlChar('<'))
+                        .ignore_then(
+                            p.clone()
+                                .separated_by(just(Token::ControlChar(',')))
+                                .allow_trailing()
+                                .at_least(1)
+                                .collect::<Vec<Spanned<TypeParam>>>(),
+                        )
+                        .then_ignore(just(Token::ControlChar('>')))
+                        .or_not(),
+                )
+                .map(
+                    |((is_global, identifier), type_params)| match identifier[0].as_str() {
+                        "Int" => TypeExpr::Int,
+                        "Float" => TypeExpr::Float,
+                        "Bool" => TypeExpr::Bool,
+                        "String" => TypeExpr::String,
+                        "Char" => TypeExpr::Char,
+                        _ => TypeExpr::RawTypeName(is_global.is_some(), identifier, type_params),
+                    },
+                );
+
 
             let term_type_expr = p
                 .clone()

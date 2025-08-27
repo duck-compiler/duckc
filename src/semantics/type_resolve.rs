@@ -430,9 +430,7 @@ impl TypeEnv {
                     }
 
                     self.insert_identifier_type("self".to_string(), concrete_type_expr.clone());
-                    println!("resolving method from struct {} {}", struct_definition.name, m.name);
                     typeresolve_value_expr(&mut m.value_expr.0, self);
-                    println!("done resolving method {}", m.name);
                     self.pop_identifier_types();
                 }
 
@@ -1348,7 +1346,11 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             typeresolve_value_expr(&mut target.0, type_env);
             typeresolve_value_expr(&mut idx.0, type_env);
         }
-        ValueExpr::Array(_, exprs) => {
+        ValueExpr::Array(ty, exprs) => {
+            if let Some(ty) = ty {
+                resolve_all_aliases_type_expr(&mut ty.0, type_env);
+            }
+
             for expr in exprs {
                 typeresolve_value_expr(&mut expr.0, type_env);
             }
@@ -1367,6 +1369,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
 
             for (name, ty) in params {
                 type_env.insert_identifier_type(name.to_owned(), ty.0.clone());
+                resolve_all_aliases_type_expr(&mut ty.0, type_env);
             }
 
             if let Some(return_type) = return_type {
@@ -1467,13 +1470,11 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                    resolve_all_aliases_type_expr(type_param, type_env);
                 }
 
-                dbg!(1, &type_params);
                 let type_expr = type_env.instantiate_generic_type(
                     name,
                     type_params,
                     type_params.first().unwrap().1,
                 );
-                dbg!(2);
 
                 let TypeExpr::Struct(struct_def) = type_expr else {
                     panic!("compiler error: expected struct type expr")
@@ -1718,10 +1719,17 @@ pub fn replace_generics_in_value_expr(
                 replace_generics_in_value_expr(&mut field_val.0, generics_to_concrete_type_map);
             }
         }
-        ValueExpr::Struct { fields, .. } => {
+        ValueExpr::Struct { fields, type_params, .. } => {
             for (_, field_val) in fields {
                 replace_generics_in_value_expr(&mut field_val.0, generics_to_concrete_type_map);
             }
+
+            if let Some(type_params) = type_params {
+                for (ty, _) in type_params {
+                    replace_generics_in_type_expr(ty, generics_to_concrete_type_map);
+                }
+            }
+
         }
         ValueExpr::BoolNegate(e) => {
             replace_generics_in_value_expr(&mut e.0, generics_to_concrete_type_map);

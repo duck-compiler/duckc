@@ -8,6 +8,7 @@ struct M<T> = {
 } impl {
     fn y() {
         println(self.converter(self.val));
+        self.val->self.converter()->println();
     }
 };
 
@@ -32,7 +33,19 @@ fn main() {
         converter: int_to_string,
     };
 
+    let nested: M<M<Int>> = M<M<Int>> {
+        val: ints,
+        converter: fn(v: M<Int>) -> String { return "I'm the nested converter!" },
+    };
+
+    let nested_nested: M<M<M<Int>>> = M<M<M<Int>>> {
+        val: nested,
+        converter: fn(v: M<M<Int>>) -> String { return "I'm the double nested converter!" },
+    };
+
     strings.y();
     ints.y();
     ints2.y();
+    nested.y();
+    nested_nested.y();
 }

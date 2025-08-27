@@ -1,4 +1,4 @@
 {
-    "stdout": "Ich bin ein String\n100\n200\n",
+    "stdout": "Ich bin ein String\nIch bin ein String\n100\n100\n200\n200\nI'm the nested converter!\nI'm the nested converter!\nI'm the double nested converter!\nI'm the double nested converter!\n",
     "stderr": ""
 }
