@@ -388,6 +388,10 @@ impl TypeEnv {
                 struct_definition.name = mangled_name.clone();
                 struct_definition.generics = None;
 
+                for f in &mut struct_definition.fields {
+                    resolve_all_aliases_type_expr(&mut f.type_expr.0, self);
+                }
+
                 self.insert_type_alias(
                     struct_definition.name.clone(),
                     TypeExpr::Struct(struct_definition.clone()),
@@ -408,10 +412,6 @@ impl TypeEnv {
                             resolve_all_aliases_type_expr(&mut param_type_expr.0, self);
                         }
                     }
-                }
-
-                for f in &mut struct_definition.fields {
-                    resolve_all_aliases_type_expr(&mut f.type_expr.0, self);
                 }
 
                 let mut concrete_type_expr = TypeExpr::Struct(struct_definition.clone());
@@ -1467,7 +1467,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
 
             if let Some(type_params) = maybe_type_params.as_mut() {
                 for (type_param, _) in type_params.iter_mut() {
-                   resolve_all_aliases_type_expr(type_param, type_env);
+                    resolve_all_aliases_type_expr(type_param, type_env);
                 }
 
                 let type_expr = type_env.instantiate_generic_type(
@@ -1484,9 +1484,9 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 *maybe_type_params = None;
             }
 
-            fields
-                .iter_mut()
-                .for_each(|(_, value_expr)| typeresolve_value_expr(&mut value_expr.0, type_env));
+            fields.iter_mut().for_each(|(f_name, value_expr)| {
+                typeresolve_value_expr(&mut value_expr.0, type_env);
+            });
             let ty = TypeExpr::from_value_expr(value_expr as &ValueExpr, type_env);
             type_env.insert_type(ty);
         }
@@ -1719,7 +1719,11 @@ pub fn replace_generics_in_value_expr(
                 replace_generics_in_value_expr(&mut field_val.0, generics_to_concrete_type_map);
             }
         }
-        ValueExpr::Struct { fields, type_params, .. } => {
+        ValueExpr::Struct {
+            fields,
+            type_params,
+            ..
+        } => {
             for (_, field_val) in fields {
                 replace_generics_in_value_expr(&mut field_val.0, generics_to_concrete_type_map);
             }
@@ -1729,7 +1733,6 @@ pub fn replace_generics_in_value_expr(
                     replace_generics_in_type_expr(ty, generics_to_concrete_type_map);
                 }
             }
-
         }
         ValueExpr::BoolNegate(e) => {
             replace_generics_in_value_expr(&mut e.0, generics_to_concrete_type_map);

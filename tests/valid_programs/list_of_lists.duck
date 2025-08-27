@@ -6,6 +6,13 @@ struct List<T> = {
             self.elems = append(self.elems, e)
         }
     }
+
+    fn empty_copy() -> List<T> {
+        return List<T> {
+            elems: .T[],
+        };
+    }
+
 };
 
 fn print_with_go(x: {}) {
