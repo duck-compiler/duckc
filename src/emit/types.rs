@@ -170,6 +170,20 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                 }
 
                 for method in &s.methods {
+                    if method.generics.is_some() {
+                        println!("skip out {}", method.name);
+                        continue;
+                    }
+                    println!("outing {} for {}", method.name, s.name);
+                    out.push(method.emit(
+                        Some(("self".to_string(), format!("*{}", s.name))),
+                        type_env,
+                        to_ir,
+                    ));
+                }
+
+                for method in type_env.get_generic_methods(typename.clone()).clone() {
+                    println!("outing instance {} for {}", method.name, s.name);
                     out.push(method.emit(
                         Some(("self".to_string(), format!("*{}", s.name))),
                         type_env,

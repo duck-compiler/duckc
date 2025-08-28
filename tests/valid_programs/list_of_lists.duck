@@ -7,6 +7,16 @@ struct List<T> = {
         }
     }
 
+    fn map<U>(f: fn(v: T) -> U) -> List<U> {
+        let res: List<U> = List<U> { elems: .U[] };
+        go {
+            for _, e := range self.elems {
+                res.elems = append(res.elems, f(e))
+            }
+        }
+        return res;
+    }
+
     fn empty_copy() -> List<T> {
         return List<T> {
             elems: .T[],
@@ -23,8 +33,19 @@ fn print_with_go(x: {}) {
 
 fn main() {
     let list: List<String> = List<String> { elems: .String[] };
+
     list.push("yo");
     list.push("moin");
+
+    print_with_go(
+        list.map<Int>(fn(v: String) -> Int { return 100; })
+            .map<String>(fn (v: Int) -> String { return "yooo"; })
+    );
+    print_with_go(list.map<Float>(fn(v: String) -> Float { return 100.0 }));
+    print_with_go(list.map<Bool>(fn(v: String) -> Bool { return true }));
+    print_with_go(list.map<String>(fn(v: String) -> String { return "" }));
+    //print_with_go(list.map<List<String>>(fn(v: String) -> List<String> { return List<String> { elems: .List<String>[] } }));
+
     print_with_go(list);
 
     let list_of_list: List<List<String>> = List<List<String>> { elems: .List<String>[] };

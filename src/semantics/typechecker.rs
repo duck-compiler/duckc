@@ -152,7 +152,9 @@ impl TypeExpr {
                 type_params,
             } => {
                 if type_params.is_some() {
-                    panic!("compiler error: type params should be omitted by now")
+                    panic!(
+                        "compiler error: type params should be omitted by now {name} {type_params:?}"
+                    )
                 }
 
                 let type_expr = type_env.try_resolve_type_expr(&type_env.resolve_type_alias(name));
@@ -281,7 +283,7 @@ impl TypeExpr {
             ValueExpr::FunctionCall {
                 target,
                 params,
-                type_params: _,
+                type_params,
             } => {
                 // todo: type_params
                 let in_param_types = params
@@ -411,9 +413,15 @@ impl TypeExpr {
                         target_obj_type_expr.as_go_type_annotation(type_env)
                     ),
                 );
+                println!("HALLO LOL ABC!");
+                std::fs::write(
+                    "yoo.txt",
+                    format!("{:?}", type_env.generic_methods_generated),
+                )
+                .unwrap();
                 require(
                     target_obj_type_expr.has_field_by_name(field_name.clone())
-                        || target_obj_type_expr.has_method_by_name(field_name.clone()),
+                        || target_obj_type_expr.has_method_by_name(field_name.clone(), type_env),
                     format!(
                         "{:?} {} doesn't have a field with name {}",
                         &target_obj_type_expr,
@@ -422,7 +430,7 @@ impl TypeExpr {
                     ),
                 );
 
-                target_obj_type_expr.typeof_field(field_name.to_string())
+                target_obj_type_expr.typeof_field(field_name.to_string(), type_env)
             }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(&condition.0, type_env);
@@ -482,9 +490,12 @@ impl TypeExpr {
         }
     }
 
-    fn has_method_by_name(&self, name: String) -> bool {
+    fn has_method_by_name(&self, name: String, type_env: &TypeEnv) -> bool {
         match self {
-            Self::Struct(r#struct) => r#struct.methods.iter().any(|method| *method.name == name),
+            Self::Struct(r#struct) => {
+                r#struct.methods.iter().any(|method| *method.name == name)
+                    || type_env.has_generic_method(r#struct.name.as_str(), name.as_str())
+            }
             _ => false,
         }
     }
@@ -504,7 +515,7 @@ impl TypeExpr {
         }
     }
 
-    fn typeof_field(&self, field_name: String) -> TypeExpr {
+    fn typeof_field(&self, field_name: String, type_env: &TypeEnv) -> TypeExpr {
         match self {
             Self::Tuple(fields) => fields[field_name.parse::<usize>().unwrap()].0.clone(),
             Self::Struct(r#struct) => r#struct
@@ -525,6 +536,27 @@ impl TypeExpr {
                         ),
                     )
                 }))
+                .chain(
+                    type_env
+                        .generic_methods_generated
+                        .get(r#struct.name.as_str())
+                        .unwrap_or(&vec![])
+                        .iter()
+                        .map(|x| {
+                            (
+                                x.name.clone(),
+                                TypeExpr::Fun(
+                                    x.params
+                                        .clone()
+                                        .unwrap_or_default()
+                                        .iter()
+                                        .map(|x| (Some(x.0.clone()), x.1.clone()))
+                                        .collect(),
+                                    x.return_type.clone().map(Box::new),
+                                ),
+                            )
+                        }),
+                )
                 .find(|struct_field| struct_field.0 == field_name)
                 .expect("Tried to access field that doesn't exist")
                 .1
@@ -633,6 +665,7 @@ impl TypeExpr {
 fn require(condition: bool, fail_message: String) {
     if !condition {
         println!("TypeError: {fail_message}");
+        panic!();
         process::exit(2);
     }
 }
