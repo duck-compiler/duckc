@@ -31,10 +31,7 @@ impl FunctionDefintion {
                 .as_ref()
                 .unwrap()
                 .iter()
-                .map(|(name, (ty, _))| {
-                    let r = (name.clone(), ty.as_go_type_annotation(type_env));
-                   r
-                })
+                .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
                 .collect::<Vec<_>>(),
             if self.name == "main" {
                 None
