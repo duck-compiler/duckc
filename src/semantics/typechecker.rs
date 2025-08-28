@@ -413,12 +413,6 @@ impl TypeExpr {
                         target_obj_type_expr.as_go_type_annotation(type_env)
                     ),
                 );
-                println!("HALLO LOL ABC!");
-                std::fs::write(
-                    "yoo.txt",
-                    format!("{:?}", type_env.generic_methods_generated),
-                )
-                .unwrap();
                 require(
                     target_obj_type_expr.has_field_by_name(field_name.clone())
                         || target_obj_type_expr.has_method_by_name(field_name.clone(), type_env),

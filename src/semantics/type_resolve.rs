@@ -748,16 +748,6 @@ fn resolve_all_aliases_type_expr(
             _ => false,
         }
     };
-    let should_ignore_params = |s: &Option<Vec<(TypeExpr, SS)>>| -> bool {
-        if let Some(generics) = s {
-            for (g, _) in generics {
-                if should_ignore_expr(g) {
-                    return true;
-                }
-            }
-        }
-        false
-    };
 
     match expr {
         TypeExpr::GenericToBeReplaced(name) => {
@@ -773,11 +763,18 @@ fn resolve_all_aliases_type_expr(
                 panic!()
             }
 
-            if should_ignore_params(generic_params) {
-                return;
+            if let Some(generic_params) = generic_params {
+                for (g, _) in generic_params {
+                    if should_ignore_expr(g) {
+                       continue;
+                    }
+                    resolve_all_aliases_type_expr(g, env, generics_to_ignore);
+                }
             }
 
-            *expr = env.resolve_type_alias(typename.first().unwrap());
+            if !should_ignore(typename.first().unwrap()) {
+                *expr = env.resolve_type_alias(typename.first().unwrap());
+            }
         }
         TypeExpr::Duck(Duck { fields }) => {
             fields.sort_by_key(|x| x.name.clone());
@@ -1499,16 +1496,6 @@ fn typeresolve_value_expr(
             _ => false,
         }
     };
-    let should_ignore_params = |s: &Option<Vec<(TypeExpr, SS)>>| -> bool {
-        if let Some(generics) = s {
-            for (g, _) in generics {
-                if should_ignore_expr(g) {
-                    return true;
-                }
-            }
-        }
-        false
-    };
     match value_expr {
         ValueExpr::RawVariable(_, path) => {
             let ident = mangle(path);
@@ -1602,6 +1589,11 @@ fn typeresolve_value_expr(
                     } => {
                         let target_ty =
                             TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
+
+                        for t in type_params_vec.iter_mut() {
+                            resolve_all_aliases_type_expr(&mut t.0, type_env, generics_to_ignore);
+                        }
+
                         let mangled_name = format!(
                             "{}_{}",
                             field_name,
@@ -1670,7 +1662,6 @@ fn typeresolve_value_expr(
                                         "inserting {} {:?}",
                                         generic_param.0.name, concrete_type.0
                                     );
-                                    // generics_to_ignore.push(generic_param.0.name.clone());
                                     type_env.insert_type_alias(
                                         generic_param.0.name.clone(),
                                         concrete_type.0.clone(),

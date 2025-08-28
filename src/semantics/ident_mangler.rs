@@ -431,13 +431,18 @@ pub fn mangle_value_expr(
         ValueExpr::FunctionCall {
             target,
             params,
-            type_params: _,
+            type_params,
         } => {
             // TODO: type params
             mangle_value_expr(&mut target.0, global_prefix, prefix, mangle_env);
             params.iter_mut().for_each(|param| {
                 mangle_value_expr(&mut param.0, global_prefix, prefix, mangle_env)
             });
+            if let Some(type_params) = type_params {
+                for param in type_params {
+                    mangle_type_expression(&mut param.0, prefix, mangle_env);
+                }
+            }
         }
         ValueExpr::RawVariable(is_global, path) => {
             if let Some(mangled) = mangle_env.mangle_ident(*is_global, prefix, path) {
