@@ -181,14 +181,11 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                 }
 
                 for method in type_env.get_generic_methods(typename.clone()).clone() {
-                    println!("emitting {}", method.name);
-
                     out.push(method.emit(
                         Some(("self".to_string(), format!("*{}", s.name))),
                         type_env,
                         to_ir,
                     ));
-                    println!("emitting done {}", method.name);
                 }
 
                 out

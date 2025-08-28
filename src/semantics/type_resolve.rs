@@ -415,9 +415,7 @@ impl TypeEnv {
                         if m.name == "map" {
                             // println!("return before = {return_type:?}");
                         }
-                        println!("abc {} {v:?}", struct_definition.name);
                         resolve_all_aliases_type_expr(return_type, self, &v);
-                        println!("xyz");
                         if m.name == "map" {
                             // println!("return = {return_type:?}");
                         }
@@ -459,9 +457,7 @@ impl TypeEnv {
                             if m.name == "map" {
                                 // println!("return before = {return_type:?}");
                             }
-                            println!("hier {}", m.name);
                             resolve_all_aliases_type_expr(return_type, self, &generics_to_ignore);
-                            println!("hier fertig {}", m.name);
                             if m.name == "map" {
                                 // println!("return = {return_type:?}");
                             }
@@ -481,9 +477,7 @@ impl TypeEnv {
                 }
 
                 let mut concrete_type_expr = TypeExpr::Struct(struct_definition.clone());
-                println!("loli");
                 resolve_all_aliases_type_expr(&mut concrete_type_expr, self, &vec![]);
-                println!("loli 2");
 
                 for m in &mut struct_definition.methods {
                     self.push_type_aliases();
@@ -495,19 +489,6 @@ impl TypeEnv {
                         .map(|x| x.iter().cloned().map(|x| x.0.name).collect::<Vec<_>>())
                         .unwrap_or_default();
 
-                    let should_ignore = |s: &str| -> bool {
-                        generics_to_be_ignored.iter().any(|x| x.as_str() == s)
-                    };
-                    let should_ignore_expr = |g: &TypeExpr| -> bool {
-                        match g {
-                            TypeExpr::TypeName(_, name, _) => generics_to_be_ignored.contains(name),
-                            TypeExpr::RawTypeName(_, name, _) => {
-                                generics_to_be_ignored.contains(name.first().unwrap())
-                            }
-                            _ => false,
-                        }
-                    };
-
                     if let Some(params) = m.params.as_mut() {
                         for (param_name, param_type) in params {
                             self.insert_identifier_type(
@@ -518,9 +499,7 @@ impl TypeEnv {
                     }
 
                     self.insert_identifier_type("self".to_string(), concrete_type_expr.clone());
-                    println!("ANDERS");
                     typeresolve_value_expr(&mut m.value_expr.0, self, &generics_to_be_ignored);
-                    println!("ANDERS ENDE");
                     self.pop_identifier_types();
                     self.pop_type_aliases();
                 }
@@ -827,10 +806,8 @@ fn resolve_all_aliases_type_expr(
             }
         }
         TypeExpr::Tuple(fields) => {
-            for (i, field) in fields.iter_mut().enumerate() {
-                println!("resolving field {i} {field:?}");
+            for (_i, field) in fields.iter_mut().enumerate() {
                 resolve_all_aliases_type_expr(&mut field.0, env, generics_to_ignore);
-                println!("done resolving field {i} {field:?}");
             }
         }
         TypeExpr::TypeName(_, name, type_params_opt) => {
@@ -1569,115 +1546,128 @@ fn typeresolve_value_expr(
                     let target_ty =
                         TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
 
+                    let mut ignored = false;
+
                     for t in type_params_vec.iter_mut() {
+                        if should_ignore_expr(&t.0) {
+                            ignored = true;
+                            continue;
+                        }
                         resolve_all_aliases_type_expr(&mut t.0, type_env, generics_to_ignore);
                     }
 
-                    let mangled_name = format!(
-                        "{}_{}",
-                        field_name,
-                        type_params_vec
-                            .iter()
-                            .map(|type_param| type_param.0.as_clean_go_type_name(type_env))
-                            .collect::<Vec<_>>()
-                            .join("_")
-                    );
+                    if !ignored {
+                        let mangled_name = format!(
+                            "{}_{}",
+                            field_name,
+                            type_params_vec
+                                .iter()
+                                .map(|type_param| type_param.0.as_clean_go_type_name(type_env))
+                                .collect::<Vec<_>>()
+                                .join("_")
+                        );
 
-                    let TypeExpr::Struct(StructDefinition {
-                        name,
-                        fields: _,
-                        methods: _,
-                        generics: _,
-                    }) = target_ty.clone()
-                    else {
-                        panic!()
-                    };
-
-                    for i in 0..type_env.all_types.len() {
-                        let s_name = match &type_env.all_types[i] {
-                            TypeExpr::Struct(StructDefinition {
-                                name: s_name,
-                                fields: _,
-                                methods: _,
-                                generics,
-                            }) if name.as_str() == s_name.as_str() && generics.is_none() => {
-                                s_name.clone()
-                            }
-                            _ => continue,
+                        let TypeExpr::Struct(StructDefinition {
+                            name,
+                            fields: _,
+                            methods: _,
+                            generics: _,
+                        }) = target_ty.clone()
+                        else {
+                            panic!()
                         };
 
-                        if type_env.has_generic_method(s_name.as_str(), mangled_name.as_str()) {
-                            continue;
-                        }
+                        for i in 0..type_env.all_types.len() {
+                            let s_name = match &type_env.all_types[i] {
+                                TypeExpr::Struct(StructDefinition {
+                                    name: s_name,
+                                    fields: _,
+                                    methods: _,
+                                    generics,
+                                }) if name.as_str() == s_name.as_str() && generics.is_none() => {
+                                    s_name.clone()
+                                }
+                                _ => continue,
+                            };
 
-                        let elem = &type_env.all_types[i];
-
-                        if let TypeExpr::Struct(def) = elem {
-                            let s_name = def.name.clone();
-                            let mut raw_method = def
-                                .methods
-                                .iter()
-                                .find(|method_def| &method_def.name == field_name)
-                                .expect("couldn't find raw method")
-                                .clone();
-
-                            type_env.push_type_aliases();
-                            type_env.push_identifier_types();
-
-                            for (generic_param, concrete_type) in raw_method
-                                .generics
-                                .as_ref()
-                                .expect("raw method is not generic")
-                                .iter()
-                                .zip(type_params_vec.iter())
-                            {
-                                type_env.insert_type_alias(
-                                    generic_param.0.name.clone(),
-                                    concrete_type.0.clone(),
-                                );
+                            if type_env.has_generic_method(s_name.as_str(), mangled_name.as_str()) {
+                                continue;
                             }
 
-                            if let Some(params) = raw_method.params.as_mut() {
-                                for (param_name, param_type_expr) in params {
+                            let elem = &type_env.all_types[i];
+
+                            if let TypeExpr::Struct(def) = elem {
+                                let s_name = def.name.clone();
+                                let mut raw_method = def
+                                    .methods
+                                    .iter()
+                                    .find(|method_def| &method_def.name == field_name)
+                                    .expect("couldn't find raw method")
+                                    .clone();
+
+                                type_env.push_type_aliases();
+                                type_env.push_identifier_types();
+
+                                for (generic_param, concrete_type) in raw_method
+                                    .generics
+                                    .as_ref()
+                                    .expect("raw method is not generic")
+                                    .iter()
+                                    .zip(type_params_vec.iter())
+                                {
+                                    type_env.insert_type_alias(
+                                        generic_param.0.name.clone(),
+                                        concrete_type.0.clone(),
+                                    );
+                                }
+
+                                if let Some(params) = raw_method.params.as_mut() {
+                                    for (param_name, param_type_expr) in params {
+                                        resolve_all_aliases_type_expr(
+                                            &mut param_type_expr.0,
+                                            type_env,
+                                            generics_to_ignore,
+                                        );
+                                        type_env.insert_identifier_type(
+                                            param_name.clone(),
+                                            param_type_expr.0.clone(),
+                                        );
+                                    }
+                                }
+
+                                if let Some(return_type) = raw_method.return_type.as_mut() {
                                     resolve_all_aliases_type_expr(
-                                        &mut param_type_expr.0,
+                                        &mut return_type.0,
                                         type_env,
                                         generics_to_ignore,
                                     );
-                                    type_env.insert_identifier_type(
-                                        param_name.clone(),
-                                        param_type_expr.0.clone(),
-                                    );
                                 }
-                            }
 
-                            if let Some(return_type) = raw_method.return_type.as_mut() {
-                                resolve_all_aliases_type_expr(
-                                    &mut return_type.0,
+                                typeresolve_value_expr(
+                                    &mut raw_method.value_expr.0,
                                     type_env,
                                     generics_to_ignore,
                                 );
+
+                                raw_method.name = mangled_name.clone();
+                                type_env.get_generic_methods(s_name).push(raw_method);
+
+                                type_env.pop_identifier_types();
+                                type_env.pop_type_aliases();
                             }
-
-                            typeresolve_value_expr(
-                                &mut raw_method.value_expr.0,
-                                type_env,
-                                generics_to_ignore,
-                            );
-
-                            raw_method.name = mangled_name.clone();
-                            type_env.get_generic_methods(s_name).push(raw_method);
-
-                            type_env.pop_identifier_types();
-                            type_env.pop_type_aliases();
                         }
+                        *field_name = mangled_name;
+                        *type_params = None;
                     }
-                    *field_name = mangled_name;
                 }
-                *type_params = None;
             }
 
-            assert_eq!(*type_params, None, "type_params should be omitted by now");
+            assert!(
+                type_params
+                    .as_ref()
+                    .is_none_or(|x| x.iter().all(|x| should_ignore_expr(&x.0))),
+                "type_params should be omitted by now"
+            );
 
             params.iter_mut().for_each(|param| {
                 typeresolve_value_expr(&mut param.0, type_env, generics_to_ignore)

@@ -1,0 +1,4 @@
+{
+    "stdout": "&{{100} {a string}}\n&{{100} {a string}}\n&{{100} {a string}}\n&{{true} {a string}}\n&{{100} {true}}\n&{{1} {true}}\n&{{100} {false}}\n",
+    "stderr": ""
+}
