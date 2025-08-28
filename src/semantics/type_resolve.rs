@@ -375,14 +375,6 @@ impl TypeEnv {
                     process::exit(1);
                 }
 
-                println!(
-                    "contains = {}",
-                    struct_definition
-                        .methods
-                        .iter()
-                        .any(|x| x.name.starts_with("map_"))
-                );
-
                 let mangled_name = format!(
                     "{}_{}",
                     struct_definition.name,
@@ -400,16 +392,6 @@ impl TypeEnv {
                     .contains_key(&mangled_name)
                 {
                     let res = self.resolve_type_alias(&mangled_name);
-                    println!(
-                        "{mangled_name} contains = {}",
-                        match &res {
-                            TypeExpr::Struct(s) => s.clone(),
-                            _ => panic!(),
-                        }
-                        .methods
-                        .iter()
-                        .any(|x| x.name.starts_with("map_"))
-                    );
                     return res;
                 }
 
@@ -447,11 +429,11 @@ impl TypeEnv {
                     }
                     if let Some((return_type, _)) = &mut m.return_type {
                         if m.name == "map" {
-                            println!("return before = {return_type:?}");
+                            // println!("return before = {return_type:?}");
                         }
                         resolve_all_aliases_type_expr(return_type, self, &v);
                         if m.name == "map" {
-                            println!("return = {return_type:?}");
+                            // println!("return = {return_type:?}");
                         }
                     }
 
@@ -480,7 +462,6 @@ impl TypeEnv {
                     TypeExpr::TypeNameInternal(struct_definition.name.clone()),
                 );
 
-                println!("ABC");
                 for m in &mut struct_definition.methods {
                     self.push_type_aliases();
                     if let Some(generics) = &m.generics {
@@ -488,14 +469,13 @@ impl TypeEnv {
                             .iter()
                             .map(|x| x.0.name.to_owned())
                             .collect::<Vec<_>>();
-                        dbg!(&generics_to_ignore);
                         if let Some((return_type, _)) = &mut m.return_type {
                             if m.name == "map" {
-                                println!("return before = {return_type:?}");
+                                // println!("return before = {return_type:?}");
                             }
                             resolve_all_aliases_type_expr(return_type, self, &generics_to_ignore);
                             if m.name == "map" {
-                                println!("return = {return_type:?}");
+                                // println!("return = {return_type:?}");
                             }
                         }
 
@@ -511,15 +491,9 @@ impl TypeEnv {
                     }
                     self.pop_type_aliases();
                 }
-                println!("ABC 2");
 
-                println!("T");
                 let mut concrete_type_expr = TypeExpr::Struct(struct_definition.clone());
-                println!("T 2");
-
-                println!("T 3");
                 resolve_all_aliases_type_expr(&mut concrete_type_expr, self, &vec![]);
-                println!("T 4");
 
                 for m in &mut struct_definition.methods {
                     self.push_type_aliases();
@@ -541,9 +515,7 @@ impl TypeEnv {
                     }
 
                     self.insert_identifier_type("self".to_string(), concrete_type_expr.clone());
-                    println!("x");
                     typeresolve_value_expr(&mut m.value_expr.0, self, &generics_to_be_ignored);
-                    println!("y");
                     self.pop_identifier_types();
                     self.pop_type_aliases();
                 }
@@ -553,13 +525,6 @@ impl TypeEnv {
                 self.pop_type_aliases();
 
                 self.insert_type_alias(mangled_name.clone(), concrete_type_expr.clone());
-                println!(
-                    "final contains {mangled_name} = {}",
-                    struct_definition
-                        .methods
-                        .iter()
-                        .any(|x| x.name.starts_with("map_"))
-                );
                 self.all_types.insert(0, concrete_type_expr.clone());
 
                 return concrete_type_expr;
@@ -715,6 +680,9 @@ impl TypeEnv {
 
         all_types.append(&mut to_push);
 
+        // todo: fix this panic workaround
+        let org = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
         all_types = all_types
             .into_iter()
             .filter(|e| {
@@ -722,6 +690,7 @@ impl TypeEnv {
                 std::panic::catch_unwind(move || e.type_id(&mut cloned)).is_ok()
             })
             .collect();
+        std::panic::set_hook(org);
 
         all_types.sort_by_key(|type_expr| type_expr.type_id(self));
         all_types.dedup_by_key(|type_expr| type_expr.type_id(self));
@@ -766,7 +735,7 @@ fn resolve_all_aliases_type_expr(
             if let Some(generic_params) = generic_params {
                 for (g, _) in generic_params {
                     if should_ignore_expr(g) {
-                       continue;
+                        continue;
                     }
                     resolve_all_aliases_type_expr(g, env, generics_to_ignore);
                 }
@@ -840,9 +809,7 @@ fn resolve_all_aliases_type_expr(
             }
 
             params.iter_mut().for_each(|(_, x)| {
-                println!("resolving param {x:?}");
                 resolve_all_aliases_type_expr(&mut x.0, env, generics_to_ignore);
-                println!("end resolving param {x:?}");
             });
         }
         TypeExpr::Or(exprs) => {
@@ -1606,34 +1573,30 @@ fn typeresolve_value_expr(
 
                         let TypeExpr::Struct(StructDefinition {
                             name,
-                            fields,
-                            methods,
-                            generics,
+                            fields: _,
+                            methods: _,
+                            generics: _,
                         }) = target_ty.clone()
                         else {
                             panic!()
                         };
 
-                        let id = target_ty.type_id(type_env);
-
                         for i in 0..type_env.all_types.len() {
-                            println!("loop begin");
-
                             let s_name = match &type_env.all_types[i] {
                                 TypeExpr::Struct(StructDefinition {
                                     name: s_name,
-                                    fields,
-                                    methods,
+                                    fields: _,
+                                    methods: _,
                                     generics,
-                                }) if name.as_str() == s_name.as_str() && generics.is_none() => s_name.clone(),
+                                }) if name.as_str() == s_name.as_str() && generics.is_none() => {
+                                    s_name.clone()
+                                }
                                 _ => continue,
                             };
 
                             if type_env.has_generic_method(s_name.as_str(), mangled_name.as_str()) {
                                 continue;
                             }
-
-                            println!("after check");
 
                             let elem = &type_env.all_types[i];
 
@@ -1649,8 +1612,6 @@ fn typeresolve_value_expr(
                                 type_env.push_type_aliases();
                                 type_env.push_identifier_types();
 
-                                let mut generics_to_ignore = generics_to_ignore.clone();
-
                                 for (generic_param, concrete_type) in raw_method
                                     .generics
                                     .as_ref()
@@ -1658,17 +1619,12 @@ fn typeresolve_value_expr(
                                     .iter()
                                     .zip(type_params_vec.iter())
                                 {
-                                    println!(
-                                        "inserting {} {:?}",
-                                        generic_param.0.name, concrete_type.0
-                                    );
                                     type_env.insert_type_alias(
                                         generic_param.0.name.clone(),
                                         concrete_type.0.clone(),
                                     );
                                 }
 
-                                println!("1 {generics_to_ignore:?}");
                                 if let Some(params) = raw_method.params.as_mut() {
                                     for (param_name, param_type_expr) in params {
                                         resolve_all_aliases_type_expr(
@@ -1683,7 +1639,6 @@ fn typeresolve_value_expr(
                                     }
                                 }
 
-                                println!("2");
                                 if let Some(return_type) = raw_method.return_type.as_mut() {
                                     resolve_all_aliases_type_expr(
                                         &mut return_type.0,
@@ -1692,25 +1647,17 @@ fn typeresolve_value_expr(
                                     );
                                 }
 
-                                println!("abc");
-
                                 typeresolve_value_expr(
                                     &mut raw_method.value_expr.0,
                                     type_env,
                                     &generics_to_ignore,
                                 );
 
-                                println!("GENERIC METHOD = {:?}", raw_method);
-
                                 raw_method.name = mangled_name.clone();
-                                println!("done lol {} for {}", raw_method.name, s_name);
                                 type_env.get_generic_methods(s_name).push(raw_method);
-                                println!("100");
-                                println!("200");
 
                                 type_env.pop_identifier_types();
                                 type_env.pop_type_aliases();
-                                println!("300");
                             }
                         }
                         *field_name = mangled_name;
@@ -1784,7 +1731,6 @@ fn typeresolve_value_expr(
             type_params: maybe_type_params,
         } => {
             let is_generic_struct = type_env.generic_definitions.contains_key(name);
-            println!("hallo {generics_to_ignore:?}");
 
             let mut ignore = should_ignore(name);
 
@@ -1793,11 +1739,8 @@ fn typeresolve_value_expr(
                     .try_resolve_type_alias(name)
                     .map(|e| type_env.try_resolve_type_expr(&e))
             {
-                println!("replacing {name} with {}", s.name);
                 *name = s.name;
             }
-
-            println!("lol");
 
             if is_generic_struct && maybe_type_params.is_none() {
                 panic!("expected generics but didn't receive them");
@@ -1814,34 +1757,24 @@ fn typeresolve_value_expr(
                     resolve_all_aliases_type_expr(type_param, type_env, generics_to_ignore);
                 }
 
-                println!("lol 2");
-
                 if !ignore {
-                    println!("not ignoring");
                     let type_expr = type_env.instantiate_generic_type(
                         name,
                         type_params,
                         type_params.first().unwrap().1,
                     );
-                    println!("instantiated {name} with {type_expr:?}");
 
-                    println!("lol 3");
                     let TypeExpr::Struct(struct_def) = type_expr else {
                         panic!("compiler error: expected struct type expr")
                     };
 
-                    println!("gone {name} with {}", struct_def.name);
                     *name = struct_def.name;
                     *maybe_type_params = None;
-                } else {
-                    println!("ignoring");
                 }
             }
 
-            fields.iter_mut().for_each(|(f_name, value_expr)| {
-                println!("field resolve {f_name}");
+            fields.iter_mut().for_each(|(_field_name, value_expr)| {
                 typeresolve_value_expr(&mut value_expr.0, type_env, generics_to_ignore);
-                println!("done field resolve {f_name}");
             });
 
             if !ignore {

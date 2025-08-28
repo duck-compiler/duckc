@@ -283,7 +283,7 @@ impl TypeExpr {
             ValueExpr::FunctionCall {
                 target,
                 params,
-                type_params,
+                type_params: _,
             } => {
                 // todo: type_params
                 let in_param_types = params
@@ -659,7 +659,6 @@ impl TypeExpr {
 fn require(condition: bool, fail_message: String) {
     if !condition {
         println!("TypeError: {fail_message}");
-        panic!();
         process::exit(2);
     }
 }
