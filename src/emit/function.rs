@@ -22,7 +22,7 @@ impl FunctionDefintion {
             // emitted_body.push(IrInstruction::Return(r));
         }
 
-        let result = IrInstruction::FunDef(
+        IrInstruction::FunDef(
             self.name.clone(),
             receiver,
             self.params
@@ -39,7 +39,6 @@ impl FunctionDefintion {
                     .map(|x| x.0.as_go_type_annotation(type_env))
             },
             emitted_body,
-        );
-        result
+        )
     }
 }

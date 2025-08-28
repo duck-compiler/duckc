@@ -309,7 +309,6 @@ where
                     },
                 );
 
-
             let term_type_expr = p
                 .clone()
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
