@@ -1,0 +1,23 @@
+use std::io::{println};
+
+use go "strconv";
+
+struct M<T> = {
+    val: T,
+} impl {
+    fn y() {
+    }
+};
+
+fn int_to_string(x: Int) -> String {
+    go {
+        return ConcDuckString { strconv.Itoa(x.as_dgo_int()) }
+    }
+    return "";
+}
+
+fn main() {
+    let nested: M<M<Int>> = M<M<Int>> {
+        val: M<Int> { val: 100 },
+    };
+}

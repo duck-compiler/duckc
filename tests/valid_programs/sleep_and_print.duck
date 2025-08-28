@@ -25,13 +25,17 @@ fn ff() -> String | { x: Int } {
     return "X";
 }
 
+struct MyStruct = {
+    y: Int
+};
+
 fn main() {
     "before sleep"->println();
     let dura: std::time::Duration = { seconds: 1 };
     sleep(dura);
     "after sleep"->println();
 
-    let x: struct { y: Int } = .{ y: 10 };
+    let x: MyStruct = MyStruct { y: 10 };
     let y: { x: { x: Int } } = { x: { x: 20 } };
 
     abc(y.x.x);

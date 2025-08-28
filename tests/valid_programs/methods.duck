@@ -1,0 +1,130 @@
+use std::io::{println};
+use go "fmt";
+
+struct Xyz = {
+    number_as_string: String
+} impl {
+    fn give_number() -> String {
+        return self.number_as_string;
+    }
+
+    fn concat_and_print(s1: String, s2: String) -> String {
+        let concatenated: String = f"{s1}{s2}";
+        std::io::println(concatenated);
+        return concatenated;
+    }
+};
+
+struct Lol = {
+    kek: String,
+    xyz: Xyz,
+} impl {
+    fn fisch() {
+        std::io::println(self.kek);
+    }
+
+    fn copy_me() -> Self {
+        println("1");
+        return Lol {
+            kek: self.kek,
+            xyz: self.xyz,
+        };
+    }
+
+    fn copy_me2() -> Lol {
+        println("2");
+        return Self {
+            kek: self.kek,
+            xyz: self.xyz,
+        };
+    }
+
+    fn copy_me3() -> Self {
+        println("3");
+        return self.copy_me2();
+    }
+
+    fn copy_me4() -> Lol {
+        println("4");
+        return self.copy_me();
+    }
+
+    fn copy_me5() -> Lol {
+        println("5");
+        let res: Self = Lol {
+            kek: self.kek,
+            xyz: self.xyz,
+        };
+        return res;
+    }
+
+    fn copy_me6() -> Lol {
+        println("6");
+        let res: Self = Lol {
+            kek: self.kek,
+            xyz: self.xyz,
+        };
+        let res2: Lol = res;
+        let res3: Self = res2;
+        let res4: Lol = res3;
+        return res4;
+    }
+
+    fn copy_me7() -> Lol {
+        println("7");
+        return (fn() -> Self { return self.copy_me() })();
+    }
+
+    fn get_kek() -> String {
+        return self.kek;
+    }
+
+    fn get_xyz() -> Xyz {
+        return self.xyz;
+    }
+
+    fn print_and_return(s: String) -> String {
+        std::io::println(s);
+        return s;
+    }
+};
+
+type StructInDuck = { s: Lol };
+
+fn get_s() -> String {
+    return "im a string";
+}
+
+fn print_with_go(x: {}) {
+    go {
+        y, _ := x.(*Lol)
+        fmt.Println(y.kek, y.xyz)
+    }
+}
+
+fn main() {
+    let v: Lol = Lol { kek: "Yo", xyz: Xyz { number_as_string: "100" } };
+    let v2: Lol = Lol { kek: "Ich bin ein anderse objekt", xyz: Xyz { number_as_string: "999"} };
+    v.fisch();
+    v2.fisch();
+
+    v.get_kek()->std::io::println();
+    v.get_xyz().give_number()->std::io::println();
+
+    let x1: StructInDuck = { s: v };
+    x1.s.get_kek()->std::io::println();
+    x1.s.get_xyz().give_number()->std::io::println();
+
+    get_s()
+        ->v.print_and_return()
+        ->v.print_and_return()
+        ->v.get_xyz().concat_and_print(" <- this string is before me");
+
+    v.copy_me()->print_with_go();
+    v.copy_me2()->print_with_go();
+    v.copy_me3()->print_with_go();
+    v.copy_me4()->print_with_go();
+    v.copy_me5()->print_with_go();
+    v.copy_me6()->print_with_go();
+    v.copy_me7()->print_with_go();
+}

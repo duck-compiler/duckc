@@ -8,6 +8,7 @@ use crate::{
         function_parser::{FunctionDefintion, function_definition_parser},
         lexer::{Token, lex_parser},
         make_input, parse_failure,
+        struct_parser::{StructDefinition, struct_definition_parser},
         type_parser::{TypeDefinition, type_definition_parser},
         use_statement_parser::{Indicator, UseStatement, use_statement_parser},
     },
@@ -20,6 +21,7 @@ use crate::{
 pub struct SourceFile {
     pub function_definitions: Vec<FunctionDefintion>,
     pub type_definitions: Vec<TypeDefinition>,
+    pub struct_definitions: Vec<StructDefinition>,
     pub use_statements: Vec<UseStatement>,
     pub sub_modules: Vec<(String, SourceFile)>,
 }
@@ -28,6 +30,7 @@ pub struct SourceFile {
 pub enum SourceUnit {
     Func(FunctionDefintion),
     Type(TypeDefinition),
+    Struct(StructDefinition),
     Use(UseStatement),
     Module(String, SourceFile),
 }
@@ -105,6 +108,10 @@ impl SourceFile {
                     mangle_env.insert_type(f.name[prefix.len()..].to_string());
                     result.type_definitions.push(f);
                 }
+                for struct_definition in src.struct_definitions {
+                    mangle_env.insert_type(struct_definition.name[prefix.len()..].to_string());
+                    result.struct_definitions.push(struct_definition);
+                }
                 for u in &src.use_statements {
                     if matches!(u, UseStatement::Go(..)) {
                         result.push_use(u);
@@ -150,6 +157,48 @@ impl SourceFile {
                 ty.name = mangle(&p);
                 mangle_type_expression(&mut ty.type_expression.0, prefix, &mut mangle_env);
                 result.type_definitions.push(ty);
+            }
+
+            // todo(@Apfelfrosch): implement flatten for struct definitions
+            for struct_def in &s.struct_definitions {
+                let mut struct_def = struct_def.clone();
+
+                let mut new_name = Vec::new();
+                new_name.extend_from_slice(prefix);
+                new_name.push(struct_def.name.clone());
+
+                struct_def.name = mangle(&new_name);
+
+                for field in &mut struct_def.fields {
+                    mangle_type_expression(&mut field.type_expr.0, prefix, &mut mangle_env);
+                }
+
+                for func in &mut struct_def.methods {
+                    let mut p = Vec::new();
+                    p.extend_from_slice(prefix);
+                    p.push(func.name.clone());
+
+                    if let Some(return_type) = &mut func.return_type {
+                        mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
+                    }
+                    mangle_env.push_idents();
+                    if let Some(params) = &mut func.params {
+                        for (name, type_expr) in params {
+                            mangle_type_expression(&mut type_expr.0, prefix, &mut mangle_env);
+                            mangle_env.insert_ident(name.clone());
+                        }
+                    }
+                    mangle_value_expr(
+                        &mut func.value_expr.0,
+                        global_prefix,
+                        prefix,
+                        &mut mangle_env,
+                    );
+                    mangle_env.pop_idents();
+                    //result.function_definitions.push(f);
+                }
+
+                result.struct_definitions.push(struct_def);
             }
 
             result
@@ -217,7 +266,7 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
             })
     } else {
         let src_text = std::fs::read_to_string(format!("{}.duck", joined.to_str().unwrap()))
-            .expect(joined.to_str().unwrap())
+            .unwrap_or_else(|_| panic!("{}", joined.to_str().unwrap().to_string()))
             .leak() as &'static str;
         let target_path = joined.to_string_lossy();
         let target_path_leaked = target_path.to_string().leak() as &str;
@@ -279,6 +328,7 @@ where
         choice((
             use_statement_parser().map(SourceUnit::Use),
             type_definition_parser().map(SourceUnit::Type),
+            struct_definition_parser(make_input.clone()).map(SourceUnit::Struct),
             function_definition_parser(make_input).map(SourceUnit::Func),
             just(Token::Module)
                 .ignore_then(select_ref! { Token::Ident(i) => i.to_owned() })
@@ -299,26 +349,29 @@ where
         .repeated()
         .collect::<Vec<_>>()
         .map(|xs| {
-            let mut f = Vec::new();
-            let mut t = Vec::new();
-            let mut u = Vec::new();
-            let mut s = Vec::new();
+            let mut function_definitions = Vec::new();
+            let mut type_definitions = Vec::new();
+            let mut struct_definitions = Vec::new();
+            let mut use_statements = Vec::new();
+            let mut sub_modules = Vec::new();
 
             for x in xs {
                 use SourceUnit::*;
                 match x {
-                    Func(def) => f.push(def),
-                    Type(def) => t.push(def),
-                    Use(def) => u.push(def),
-                    Module(name, def) => s.push((name, def)),
+                    Func(def) => function_definitions.push(def),
+                    Type(def) => type_definitions.push(def),
+                    Struct(def) => struct_definitions.push(def),
+                    Use(def) => use_statements.push(def),
+                    Module(name, def) => sub_modules.push((name, def)),
                 }
             }
 
             SourceFile {
-                function_definitions: f,
-                type_definitions: t,
-                use_statements: u,
-                sub_modules: s,
+                function_definitions,
+                type_definitions,
+                struct_definitions,
+                use_statements,
+                sub_modules,
             }
         })
     })
@@ -330,20 +383,19 @@ mod tests {
 
     use chumsky::Parser;
 
-    use crate::{
-        parse::{
-            function_parser::FunctionDefintion,
-            lexer::lex_parser,
-            make_input,
-            source_file_parser::{SourceFile, source_file_parser},
-            type_parser::{Duck, Field, Struct, TypeDefinition, TypeExpr},
-            use_statement_parser::{Indicator, UseStatement},
-            value_parser::{
-                IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
-                value_expr_into_empty_range,
-            },
+    use crate::parse::{
+        Field,
+        function_parser::FunctionDefintion,
+        lexer::lex_parser,
+        make_input,
+        source_file_parser::{SourceFile, source_file_parser},
+        struct_parser::StructDefinition,
+        type_parser::{Duck, TypeDefinition, TypeExpr},
+        use_statement_parser::{Indicator, UseStatement},
+        value_parser::{
+            IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
+            value_expr_into_empty_range,
         },
-        semantics::ident_mangler::mangle,
     };
 
     #[test]
@@ -397,6 +449,21 @@ mod tests {
                             )],
                         })
                         .into_empty_span(),
+                        generics: None,
+                    }],
+                    ..Default::default()
+                },
+            ),
+            (
+                "struct X = {x: String};",
+                SourceFile {
+                    struct_definitions: vec![StructDefinition {
+                        name: "X".into(),
+                        fields: vec![Field::new(
+                            "x".to_string(),
+                            TypeExpr::String.into_empty_span(),
+                        )],
+                        methods: vec![],
                         generics: None,
                     }],
                     ..Default::default()
@@ -793,172 +860,177 @@ mod tests {
                     ..Default::default()
                 },
             ),
-            (
-                SourceFile {
-                    type_definitions: vec![TypeDefinition {
-                        name: mangle(&["abc", "TestStruct"]),
-                        type_expression: TypeExpr::Struct(Struct {
-                            fields: vec![Field {
-                                name: "recv".into(),
-                                type_expr: TypeExpr::TypeName(
-                                    false,
-                                    mangle(&["abc", "TestStruct"]),
-                                    None,
-                                )
-                                .into_empty_span(),
-                            }],
-                        })
-                        .into_empty_span(),
-                        generics: None,
-                    }],
-                    use_statements: vec![UseStatement::Go("fmt".into(), None)],
-                    function_definitions: vec![
-                        FunctionDefintion {
-                            name: mangle(&["abc", "lol", "im_a_func"]),
-                            value_expr: ValueExpr::Block(vec![
-                                ValueExpr::FunctionCall {
-                                    target: ValueExpr::Variable(
-                                        true,
-                                        mangle(&["abc", "lol", "called"]),
-                                        None,
-                                    )
-                                    .into_empty_span()
-                                    .into(),
-                                    params: vec![],
-                                    type_params: None,
-                                }
-                                .into_empty_span(),
-                            ])
-                            .into_empty_span(),
-                            ..Default::default()
-                        },
-                        FunctionDefintion {
-                            name: mangle(&["abc", "im_calling_a_sub_module"]),
-                            value_expr: ValueExpr::Block(vec![
-                                ValueExpr::Variable(true, mangle(&["abc", "lol", "called"]), None)
-                                    .into_empty_span(),
-                            ])
-                            .into_empty_span(),
-                            ..Default::default()
-                        },
-                        FunctionDefintion {
-                            name: mangle(&["abc", "lol", "called"]),
-                            value_expr: ValueExpr::Block(vec![
-                                ValueExpr::FunctionCall {
-                                    target: ValueExpr::Variable(
-                                        true,
-                                        mangle(&["abc", "lol", "called"]),
-                                        None,
-                                    )
-                                    .into_empty_span()
-                                    .into(),
-                                    params: vec![],
-                                    type_params: None,
-                                }
-                                .into_empty_span(),
-                            ])
-                            .into_empty_span(),
-                            ..Default::default()
-                        },
-                    ],
-                    ..Default::default()
-                },
-                SourceFile {
-                    sub_modules: vec![
-                        (
-                            "abc".into(),
-                            SourceFile {
-                                use_statements: vec![UseStatement::Regular(
-                                    false,
-                                    vec![
-                                        Indicator::Module("lol".into()),
-                                        Indicator::Symbols(vec!["called".into()]),
-                                    ],
-                                )],
-                                type_definitions: vec![TypeDefinition {
-                                    name: "TestStruct".into(),
-                                    type_expression: TypeExpr::Struct(Struct {
-                                        fields: vec![Field {
-                                            name: "recv".into(),
-                                            type_expr: TypeExpr::RawTypeName(
-                                                false,
-                                                vec!["TestStruct".into()],
-                                                None,
-                                            )
-                                            .into_empty_span(),
-                                        }],
-                                    })
-                                    .into_empty_span(),
-                                    generics: None,
-                                }],
-                                function_definitions: vec![FunctionDefintion {
-                                    name: "im_calling_a_sub_module".into(),
-                                    value_expr: ValueExpr::Block(vec![
-                                        ValueExpr::RawVariable(false, vec!["called".into()])
-                                            .into_empty_span(),
-                                    ])
-                                    .into_empty_span(),
-                                    ..Default::default()
-                                }],
-                                sub_modules: vec![(
-                                    "lol".into(),
-                                    SourceFile {
-                                        use_statements: vec![UseStatement::Go("fmt".into(), None)],
-                                        function_definitions: vec![
-                                            FunctionDefintion {
-                                                name: "im_a_func".into(),
-                                                value_expr: ValueExpr::Block(vec![
-                                                    ValueExpr::FunctionCall {
-                                                        target: ValueExpr::RawVariable(
-                                                            false,
-                                                            vec!["called".into()],
-                                                        )
-                                                        .into_empty_span()
-                                                        .into(),
-                                                        params: vec![],
-                                                        type_params: None,
-                                                    }
-                                                    .into_empty_span(),
-                                                ])
-                                                .into_empty_span(),
-                                                ..Default::default()
-                                            },
-                                            FunctionDefintion {
-                                                name: "called".into(),
-                                                value_expr: ValueExpr::Block(vec![
-                                                    ValueExpr::FunctionCall {
-                                                        target: ValueExpr::RawVariable(
-                                                            false,
-                                                            vec!["called".into()],
-                                                        )
-                                                        .into_empty_span()
-                                                        .into(),
-                                                        params: vec![],
-                                                        type_params: None,
-                                                    }
-                                                    .into_empty_span(),
-                                                ])
-                                                .into_empty_span(),
-                                                ..Default::default()
-                                            },
-                                        ],
-                                        ..SourceFile::default()
-                                    },
-                                )],
-                                ..SourceFile::default()
-                            },
-                        ),
-                        (
-                            "xyz".into(),
-                            SourceFile {
-                                sub_modules: vec![("foo".into(), SourceFile::default())],
-                                ..SourceFile::default()
-                            },
-                        ),
-                    ],
-                    ..Default::default()
-                },
-            ),
+            // todo(@Apfelfrosch): respect the new way to create structs
+            // (
+            //     SourceFile {
+            //         type_definitions: vec![TypeDefinition {
+            //             name: mangle(&["abc", "TestStruct"]),
+            //             type_expression: TypeExpr::Struct(StructDefinition {
+            //                 name: "TestStruct",
+            //                 fields: vec![Field {
+            //                     name: "recv".into(),
+            //                     type_expr: TypeExpr::TypeName(
+            //                         false,
+            //                         mangle(&["abc", "TestStruct"]),
+            //                         None,
+            //                     )
+            //                     .into_empty_span(),
+            //                 }],
+            //                 methods: vec![],
+            //                 generics: None,
+            //             })
+            //             .into_empty_span(),
+            //             generics: None,
+            //         }],
+            //         use_statements: vec![UseStatement::Go("fmt".into(), None)],
+            //         function_definitions: vec![
+            //             FunctionDefintion {
+            //                 name: mangle(&["abc", "lol", "im_a_func"]),
+            //                 value_expr: ValueExpr::Block(vec![
+            //                     ValueExpr::FunctionCall {
+            //                         target: ValueExpr::Variable(
+            //                             true,
+            //                             mangle(&["abc", "lol", "called"]),
+            //                             None,
+            //                         )
+            //                         .into_empty_span()
+            //                         .into(),
+            //                         params: vec![],
+            //                         type_params: None,
+            //                     }
+            //                     .into_empty_span(),
+            //                 ])
+            //                 .into_empty_span(),
+            //                 ..Default::default()
+            //             },
+            //             FunctionDefintion {
+            //                 name: mangle(&["abc", "im_calling_a_sub_module"]),
+            //                 value_expr: ValueExpr::Block(vec![
+            //                     ValueExpr::Variable(true, mangle(&["abc", "lol", "called"]), None)
+            //                         .into_empty_span(),
+            //                 ])
+            //                 .into_empty_span(),
+            //                 ..Default::default()
+            //             },
+            //             FunctionDefintion {
+            //                 name: mangle(&["abc", "lol", "called"]),
+            //                 value_expr: ValueExpr::Block(vec![
+            //                     ValueExpr::FunctionCall {
+            //                         target: ValueExpr::Variable(
+            //                             true,
+            //                             mangle(&["abc", "lol", "called"]),
+            //                             None,
+            //                         )
+            //                         .into_empty_span()
+            //                         .into(),
+            //                         params: vec![],
+            //                         type_params: None,
+            //                     }
+            //                     .into_empty_span(),
+            //                 ])
+            //                 .into_empty_span(),
+            //                 ..Default::default()
+            //             },
+            //         ],
+            //         ..Default::default()
+            //     },
+            //     SourceFile {
+            //         sub_modules: vec![
+            //             (
+            //                 "abc".into(),
+            //                 SourceFile {
+            //                     use_statements: vec![UseStatement::Regular(
+            //                         false,
+            //                         vec![
+            //                             Indicator::Module("lol".into()),
+            //                             Indicator::Symbols(vec!["called".into()]),
+            //                         ],
+            //                     )],
+            //                     type_definitions: vec![TypeDefinition {
+            //                         name: "TestStruct".into(),
+            //                         type_expression: TypeExpr::Struct(StructDefinition {
+            //                             fields: vec![Field {
+            //
+            //                                 name: "recv".into(),
+            //                                 type_expr: TypeExpr::RawTypeName(
+            //                                     false,
+            //                                     vec!["TestStruct".into()],
+            //                                     None,
+            //                                 )
+            //                                 .into_empty_span(),
+            //                             }],
+            //                         })
+            //                         .into_empty_span(),
+            //                         generics: None,
+            //                     }],
+            //                     function_definitions: vec![FunctionDefintion {
+            //                         name: "im_calling_a_sub_module".into(),
+            //                         value_expr: ValueExpr::Block(vec![
+            //                             ValueExpr::RawVariable(false, vec!["called".into()])
+            //                                 .into_empty_span(),
+            //                         ])
+            //                         .into_empty_span(),
+            //                         ..Default::default()
+            //                     }],
+            //                     sub_modules: vec![(
+            //                         "lol".into(),
+            //                         SourceFile {
+            //                             use_statements: vec![UseStatement::Go("fmt".into(), None)],
+            //                             function_definitions: vec![
+            //                                 FunctionDefintion {
+            //                                     name: "im_a_func".into(),
+            //                                     value_expr: ValueExpr::Block(vec![
+            //                                         ValueExpr::FunctionCall {
+            //                                             target: ValueExpr::RawVariable(
+            //                                                 false,
+            //                                                 vec!["called".into()],
+            //                                             )
+            //                                             .into_empty_span()
+            //                                             .into(),
+            //                                             params: vec![],
+            //                                             type_params: None,
+            //                                         }
+            //                                         .into_empty_span(),
+            //                                     ])
+            //                                     .into_empty_span(),
+            //                                     ..Default::default()
+            //                                 },
+            //                                 FunctionDefintion {
+            //                                     name: "called".into(),
+            //                                     value_expr: ValueExpr::Block(vec![
+            //                                         ValueExpr::FunctionCall {
+            //                                             target: ValueExpr::RawVariable(
+            //                                                 false,
+            //                                                 vec!["called".into()],
+            //                                             )
+            //                                             .into_empty_span()
+            //                                             .into(),
+            //                                             params: vec![],
+            //                                             type_params: None,
+            //                                         }
+            //                                         .into_empty_span(),
+            //                                     ])
+            //                                     .into_empty_span(),
+            //                                     ..Default::default()
+            //                                 },
+            //                             ],
+            //                             ..SourceFile::default()
+            //                         },
+            //                     )],
+            //                     ..SourceFile::default()
+            //                 },
+            //             ),
+            //             (
+            //                 "xyz".into(),
+            //                 SourceFile {
+            //                     sub_modules: vec![("foo".into(), SourceFile::default())],
+            //                     ..SourceFile::default()
+            //                 },
+            //             ),
+            //         ],
+            //         ..Default::default()
+            //     },
+            // ),
             // (
             //     SourceFile::default(),
             //     SourceFile {

@@ -1,0 +1,4 @@
+{
+    "stdout": "Yo\nIch bin ein anderse objekt\nYo\n100\nYo\n100\nim a string\nim a string\nim a string <- this string is before me\n1\n{Yo} &{{100}}\n2\n{Yo} &{{100}}\n3\n2\n{Yo} &{{100}}\n4\n1\n{Yo} &{{100}}\n5\n{Yo} &{{100}}\n6\n{Yo} &{{100}}\n7\n1\n{Yo} &{{100}}\n",
+    "stderr": ""
+}

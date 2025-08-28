@@ -1,0 +1,4 @@
+{
+    "stdout": "Hallo\n1\n&{{Hallo}}\n2\n&{{Hallo}}\n3\n2\n&{{Hallo}}\n4\n1\n&{{Hallo}}\n5\n&{{Hallo}}\n6\n&{{Hallo}}\n7\n1\n&{{Hallo}}\nHallo\n",
+    "stderr": ""
+}

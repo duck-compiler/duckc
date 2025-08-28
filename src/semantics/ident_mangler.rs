@@ -4,7 +4,8 @@ use tree_sitter::{Node, Parser};
 
 use crate::parse::{
     function_parser::LambdaFunctionExpr,
-    type_parser::{Duck, Struct, TypeExpr},
+    struct_parser::StructDefinition,
+    type_parser::{Duck, TypeExpr},
     value_parser::{ValFmtStringContents, ValueExpr},
 };
 
@@ -220,11 +221,36 @@ pub fn mangle_type_expression(
                 *path = mangle_env.global_prefix.clone();
                 path.extend(mangled);
             }
+
+            if let Some(type_params) = type_params {
+                for (type_param, _) in type_params {
+                    mangle_type_expression(type_param, prefix, mangle_env);
+                }
+            }
+
             *type_expr = TypeExpr::TypeName(true, mangle(path), type_params.clone());
         }
-        TypeExpr::Struct(Struct { fields }) => {
+        TypeExpr::Struct(StructDefinition {
+            name: _,
+            fields,
+            methods,
+            generics: _,
+        }) => {
             for f in fields {
                 mangle_type_expression(&mut f.type_expr.0, prefix, mangle_env);
+            }
+            for m in methods {
+                if let Some(params) = &mut m.params {
+                    for (_, param_type) in params {
+                        mangle_type_expression(&mut param_type.0, prefix, mangle_env);
+                    }
+                }
+                if let Some(return_type) = &mut m.return_type {
+                    mangle_type_expression(&mut return_type.0, prefix, mangle_env);
+                }
+                mangle_env.push_idents();
+                mangle_value_expr(&mut m.value_expr.0, prefix, prefix, mangle_env);
+                mangle_env.pop_idents();
             }
         }
         TypeExpr::Duck(Duck { fields }) => {
@@ -405,13 +431,18 @@ pub fn mangle_value_expr(
         ValueExpr::FunctionCall {
             target,
             params,
-            type_params: _,
+            type_params,
         } => {
             // TODO: type params
             mangle_value_expr(&mut target.0, global_prefix, prefix, mangle_env);
             params.iter_mut().for_each(|param| {
                 mangle_value_expr(&mut param.0, global_prefix, prefix, mangle_env)
             });
+            if let Some(type_params) = type_params {
+                for param in type_params {
+                    mangle_type_expression(&mut param.0, prefix, mangle_env);
+                }
+            }
         }
         ValueExpr::RawVariable(is_global, path) => {
             if let Some(mangled) = mangle_env.mangle_ident(*is_global, prefix, path) {
@@ -455,9 +486,21 @@ pub fn mangle_value_expr(
         ValueExpr::Duck(items) => items.iter_mut().for_each(|(_, value_expr)| {
             mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
         }),
-        ValueExpr::Struct(items) => items.iter_mut().for_each(|(_, value_expr)| {
-            mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
-        }),
+        ValueExpr::Struct {
+            fields,
+            type_params,
+            ..
+        } => {
+            fields.iter_mut().for_each(|(_, value_expr)| {
+                mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
+            });
+
+            if let Some(type_params) = type_params {
+                for (g, _) in type_params {
+                    mangle_type_expression(g, prefix, mangle_env);
+                }
+            }
+        }
         ValueExpr::FieldAccess { target_obj, .. } => {
             mangle_value_expr(&mut target_obj.0, global_prefix, prefix, mangle_env);
         }

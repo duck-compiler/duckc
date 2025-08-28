@@ -22,6 +22,7 @@ pub enum Token {
     Type,
     Go,
     Struct,
+    Impl,
     Duck,
     Function,
     Return,
@@ -54,6 +55,7 @@ impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = match self {
             Token::FormatStringLiteral(s) => &format!("f-string {s:?}"),
+            Token::Impl => "impl",
             Token::ScopeRes => "::",
             Token::ThinArrow => "->",
             Token::Use => "use",
@@ -124,6 +126,7 @@ pub fn lex_single<'a>(
         let keyword_or_ident = text::ident().map(|str| match str {
             "module" => Token::Module,
             "use" => Token::Use,
+            "impl" => Token::Impl,
             "type" => Token::Type,
             "duck" => Token::Duck,
             "go" => Token::Go,
@@ -554,6 +557,7 @@ mod tests {
             ),
             ("()", vec![Token::ControlChar('('), Token::ControlChar(')')]),
             ("->", vec![Token::ThinArrow]),
+            ("impl", vec![Token::Impl]),
             ("fn", vec![Token::Function]),
             ("\"\"", vec![Token::ConstString(String::from(""))]),
             ("\"XX\"", vec![Token::ConstString(String::from("XX"))]),

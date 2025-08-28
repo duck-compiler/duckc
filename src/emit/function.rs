@@ -5,9 +5,16 @@ use crate::{
 };
 
 impl FunctionDefintion {
-    pub fn emit(&self, type_env: &mut TypeEnv, to_ir: &mut ToIr) -> IrInstruction {
+    pub fn emit(
+        &self,
+        receiver: Option<(String, String)>,
+        type_env: &mut TypeEnv,
+        to_ir: &mut ToIr,
+    ) -> IrInstruction {
         // what's r?
+        // println!("value_body {:?}", self.value_expr.0);
         let (emitted_body, _r) = self.value_expr.0.emit(type_env, to_ir);
+        // println!("end value_body");
 
         // TODO mvmo - 03.07.2025: this should check if the last is without a semicolon
         if self.return_type.is_some()
@@ -19,7 +26,7 @@ impl FunctionDefintion {
 
         IrInstruction::FunDef(
             self.name.clone(),
-            None,
+            receiver,
             self.params
                 .as_ref()
                 .unwrap()
