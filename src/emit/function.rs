@@ -12,7 +12,9 @@ impl FunctionDefintion {
         to_ir: &mut ToIr,
     ) -> IrInstruction {
         // what's r?
+        println!("value_body {:?}", self.value_expr.0);
         let (emitted_body, _r) = self.value_expr.0.emit(type_env, to_ir);
+        println!("end value_body");
 
         // TODO mvmo - 03.07.2025: this should check if the last is without a semicolon
         if self.return_type.is_some()
@@ -29,7 +31,12 @@ impl FunctionDefintion {
                 .as_ref()
                 .unwrap()
                 .iter()
-                .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
+                .map(|(name, (ty, _))| {
+                    println!("param emitting {name}");
+                    let r = (name.clone(), ty.as_go_type_annotation(type_env));
+                   println!("param done emitting {name}") ;
+                   r
+                })
                 .collect::<Vec<_>>(),
             if self.name == "main" {
                 None

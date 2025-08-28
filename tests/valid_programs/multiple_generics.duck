@@ -1,0 +1,33 @@
+use go "fmt";
+
+struct Pair<A, B> = {
+    a: A,
+    b: B,
+} impl {
+    fn get_a() -> A { return self.a; }
+    fn get_b() -> B { return self.b; }
+    fn get_both() -> (A, B) { return (self.a, self.b); }
+
+    fn replace_b<H>(new_b: H) -> (H,)
+    { return (new_b,); }
+};
+
+fn print_with_go(x: {}) {
+    go {
+        fmt.Println(x)
+    }
+}
+
+type PairWhereFirstIsInt<B> = Pair<Int, B>;
+type PairWhereFirstIsInt2<X> = Pair<Int, X>;
+
+fn main() {
+    let int_string_pair: Pair<Int, String> = Pair<Int, String> { a: 100, b: "a string" };
+    let int_string_pair2: PairWhereFirstIsInt<String> = PairWhereFirstIsInt<String> { a: 100, b: "a string" };
+    let int_string_pair3: PairWhereFirstIsInt2<String> = PairWhereFirstIsInt2<String> { a: 100, b: "a string" };
+
+    print_with_go(int_string_pair);
+    print_with_go(int_string_pair2);
+    print_with_go(int_string_pair3);
+    print_with_go(int_string_pair3.replace_b<Bool>(true));
+}

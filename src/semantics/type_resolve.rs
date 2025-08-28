@@ -123,21 +123,8 @@ impl TypeEnv {
     }
 
     pub fn insert_type(&mut self, type_expr: TypeExpr) -> TypeExpr {
-        match &type_expr {
-            TypeExpr::TypeName(_, ident, None) => {
-                let resolved = self.resolve_type_alias(ident);
-                self.all_types.push(resolved.clone());
-                resolved
-            }
-            TypeExpr::TypeName(_, ident, Some(_)) => TypeExpr::TypeNameInternal(ident.clone()),
-            ty => {
-                if ty.is_generic_struct() {
-                    return type_expr;
-                }
-                self.all_types.push(type_expr.clone());
-                type_expr
-            }
-        }
+        self.all_types.push(type_expr.clone());
+        return type_expr;
     }
 
     pub fn get_identifier_type(&self, identifier: String) -> Option<TypeExpr> {
@@ -428,7 +415,9 @@ impl TypeEnv {
                         if m.name == "map" {
                             // println!("return before = {return_type:?}");
                         }
+                        println!("abc {} {v:?}", struct_definition.name);
                         resolve_all_aliases_type_expr(return_type, self, &v);
+                        println!("xyz");
                         if m.name == "map" {
                             // println!("return = {return_type:?}");
                         }
@@ -470,7 +459,9 @@ impl TypeEnv {
                             if m.name == "map" {
                                 // println!("return before = {return_type:?}");
                             }
+                            println!("hier {}", m.name);
                             resolve_all_aliases_type_expr(return_type, self, &generics_to_ignore);
+                            println!("hier fertig {}", m.name);
                             if m.name == "map" {
                                 // println!("return = {return_type:?}");
                             }
@@ -490,7 +481,9 @@ impl TypeEnv {
                 }
 
                 let mut concrete_type_expr = TypeExpr::Struct(struct_definition.clone());
+                println!("loli");
                 resolve_all_aliases_type_expr(&mut concrete_type_expr, self, &vec![]);
+                println!("loli 2");
 
                 for m in &mut struct_definition.methods {
                     self.push_type_aliases();
@@ -502,6 +495,19 @@ impl TypeEnv {
                         .map(|x| x.iter().cloned().map(|x| x.0.name).collect::<Vec<_>>())
                         .unwrap_or_default();
 
+                    let should_ignore = |s: &str| -> bool {
+                        generics_to_be_ignored.iter().any(|x| x.as_str() == s)
+                    };
+                    let should_ignore_expr = |g: &TypeExpr| -> bool {
+                        match g {
+                            TypeExpr::TypeName(_, name, _) => generics_to_be_ignored.contains(name),
+                            TypeExpr::RawTypeName(_, name, _) => {
+                                generics_to_be_ignored.contains(name.first().unwrap())
+                            }
+                            _ => false,
+                        }
+                    };
+
                     if let Some(params) = m.params.as_mut() {
                         for (param_name, param_type) in params {
                             self.insert_identifier_type(
@@ -512,7 +518,9 @@ impl TypeEnv {
                     }
 
                     self.insert_identifier_type("self".to_string(), concrete_type_expr.clone());
+                    println!("ANDERS");
                     typeresolve_value_expr(&mut m.value_expr.0, self, &generics_to_be_ignored);
+                    println!("ANDERS ENDE");
                     self.pop_identifier_types();
                     self.pop_type_aliases();
                 }
@@ -523,6 +531,7 @@ impl TypeEnv {
 
                 self.insert_type_alias(mangled_name.clone(), concrete_type_expr.clone());
                 self.all_types.insert(0, concrete_type_expr.clone());
+                // println!("returning {} = {struct_definition:?}", struct_definition.name);
 
                 return concrete_type_expr;
             }
@@ -682,7 +691,13 @@ impl TypeEnv {
         std::panic::set_hook(Box::new(|_| {}));
         all_types.retain(|e| {
             let mut cloned = self.clone();
-            std::panic::catch_unwind(move || e.type_id(&mut cloned)).is_ok()
+            std::panic::catch_unwind(move || {
+                e.type_id(&mut cloned);
+                e.as_clean_go_type_name(&mut cloned);
+                e.as_go_type_annotation(&mut cloned);
+                e.as_clean_user_faced_type_name();
+            })
+            .is_ok()
         });
         std::panic::set_hook(org);
 
@@ -812,8 +827,10 @@ fn resolve_all_aliases_type_expr(
             }
         }
         TypeExpr::Tuple(fields) => {
-            for field in fields {
+            for (i, field) in fields.iter_mut().enumerate() {
+                println!("resolving field {i} {field:?}");
                 resolve_all_aliases_type_expr(&mut field.0, env, generics_to_ignore);
+                println!("done resolving field {i} {field:?}");
             }
         }
         TypeExpr::TypeName(_, name, type_params_opt) => {
@@ -1460,9 +1477,10 @@ fn typeresolve_value_expr(
     match value_expr {
         ValueExpr::RawVariable(_, path) => {
             let ident = mangle(path);
-            let type_expr = type_env
+            let mut type_expr = type_env
                 .get_identifier_type(ident.clone())
                 .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {ident}"));
+            resolve_all_aliases_type_expr(&mut type_expr, type_env, generics_to_ignore);
             *value_expr = ValueExpr::Variable(true, ident, Some(type_expr));
         }
         ValueExpr::VarDecl(declaration) => {
@@ -1666,13 +1684,14 @@ fn typeresolve_value_expr(
             });
         }
         ValueExpr::Variable(_, identifier, type_expr_opt) => {
-            if type_expr_opt.is_some() {
+            if let Some(type_expr) = type_expr_opt {
+                resolve_all_aliases_type_expr(type_expr, type_env, generics_to_ignore);
                 return;
             }
             let type_expr = type_env
                 .get_identifier_type(identifier.clone())
                 .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));
-
+            //resolve_all_aliases_type_expr(&mut type_expr, type_env, generics_to_ignore);
             *type_expr_opt = Some(type_expr)
         }
         ValueExpr::If {

@@ -27,18 +27,24 @@ struct List<T> = {
 
 fn print_with_go(x: {}) {
     go {
-        switch x.(type) {
-            case *List_List_DuckString:
-                y, _ := x.(*List_List_DuckString)
-                fmt.Println(y)
-            default:
-                fmt.Println(x)
-        }
+        fmt.Println(x)
     }
 }
 
+type StringList = List<String>;
+type ArrayList<T> = List<T>;
+type AryList<L> = List<L>;
+
 fn main() {
     let list: List<String> = List<String> { elems: .String[] };
+    let other: StringList = list;
+    print_with_go(other.map<Int>(fn (v: String) -> Int { return 200 }));
+
+    let other2: ArrayList<String> = list;
+    print_with_go(other2.map<Int>(fn (v: String) -> Int { return 200 }));
+
+    let other3: AryList<String> = list;
+    print_with_go(other3.map<Int>(fn (v: String) -> Int { return 200 }));
 
     list.push("yo");
     list.push("moin");
