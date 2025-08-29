@@ -25,6 +25,16 @@ struct List<T> = {
 
 };
 
+struct X<E> = {
+    a: E,
+} impl {
+    fn give_me_a_list() -> List<E> {
+        let res: List<E> = List<E> { elems: .E[] };
+        res.map<E>(fn(v: E) -> E { return v; });
+        return res;
+    }
+};
+
 fn print_with_go(x: {}) {
     go {
         fmt.Println(x)
@@ -36,6 +46,9 @@ type ArrayList<T> = List<T>;
 type AryList<L> = List<L>;
 
 fn main() {
+    let inst: X<Float> = X<Float> {a: 1.0};
+    print_with_go(inst.give_me_a_list());
+
     let list: List<String> = List<String> { elems: .String[] };
     let other: StringList = list;
     print_with_go(other.map<Int>(fn (v: String) -> Int { return 200 }));
