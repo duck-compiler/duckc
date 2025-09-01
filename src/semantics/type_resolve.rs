@@ -515,6 +515,9 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                         }
 
                         for m in &mut cloned_def.methods {
+                            if m.generics.is_some() {
+                                continue;
+                            }
                             for ty in m.return_type.iter_mut().chain(
                                 m.params
                                     .iter_mut()
@@ -984,6 +987,9 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
                     }
 
                     for m in &mut cloned_def.methods {
+                        if m.generics.is_some() {
+                            continue;
+                        }
                         for ty in m.return_type.iter_mut().chain(
                             m.params
                                 .iter_mut()
@@ -1388,6 +1394,9 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             }
 
             for m in &mut struct_definition.methods {
+                if m.generics.is_some() {
+                    continue;
+                }
                 if let Some(return_type) = &mut m.return_type {
                     resolve_all_aliases_type_expr(&mut return_type.0, type_env);
                 }
@@ -1402,6 +1411,9 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             let ty_expr = TypeExpr::Struct(struct_definition.clone());
 
             for m in &mut struct_definition.methods {
+                if m.generics.is_some() {
+                    continue;
+                }
                 type_env.push_identifier_types();
 
                 if let Some(params) = m.params.clone().as_mut() {

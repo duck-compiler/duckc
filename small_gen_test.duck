@@ -14,6 +14,10 @@ struct C<T, E, U, I> = {
     fn get_f() -> Other<E> {
         return Other<E>{s: self.f};
     }
+
+    fn get_x<X2>(x: X2) -> X2 {
+        return x;
+    }
 };
 
 fn main() {
