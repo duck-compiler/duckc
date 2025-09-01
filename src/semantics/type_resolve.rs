@@ -55,7 +55,9 @@ pub struct TypeEnv {
     pub identifier_types: Vec<HashMap<String, TypeExpr>>,
     pub type_aliases: Vec<HashMap<String, TypeExpr>>,
     pub all_types: Vec<TypeExpr>,
-    pub generic_fns_generated: HashMap<String, (FunctionDefintion, TypeExpr)>,
+
+    pub function_definitions: Vec<FunctionDefintion>,
+    pub generic_fns_generated: Vec<FunctionDefintion>,
     pub generic_structs_generated: Vec<StructDefinition>,
     pub generic_methods_generated: HashMap<String, Vec<FunctionDefintion>>,
     pub prevent_struct_generation: HashSet<String>,
@@ -67,7 +69,8 @@ impl Default for TypeEnv {
             identifier_types: vec![HashMap::new()],
             type_aliases: vec![HashMap::new()],
             all_types: vec![],
-            generic_fns_generated: HashMap::new(),
+            function_definitions: Vec::new(),
+            generic_fns_generated: Vec::new(),
             generic_structs_generated: Vec::new(),
             generic_methods_generated: HashMap::new(),
             prevent_struct_generation: HashSet::new(),
@@ -838,14 +841,14 @@ fn mangle_generics_name(
     params: &[Spanned<TypeExpr>],
     type_env: &mut TypeEnv,
 ) -> String {
-    format!(
-        "{base}_{}",
-        params
+    format!("{base}{}", {
+        let r = params
             .iter()
             .map(|x| x.0.as_clean_go_type_name(type_env))
             .collect::<Vec<_>>()
-            .join("_")
-    )
+            .join("_");
+        if r.is_empty() { r } else { format!("_{r}") }
+    })
 }
 
 fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv) {
@@ -899,11 +902,71 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
             type_params,
         } => {
             instantiate_generics_value_expr(&mut target.0, type_env);
-            for t in type_params.as_mut().iter_mut().flat_map(|x| x.iter_mut()) {
+            for t in type_params.iter_mut().flat_map(|x| x.iter_mut()) {
                 instantiate_generics_type_expr(&mut t.0, type_env);
             }
             for p in params {
                 instantiate_generics_value_expr(&mut p.0, type_env);
+            }
+
+            println!("LOOOOOOL");
+
+            if let ValueExpr::Variable(_, var_name, _) = &mut target.0 {
+                let mangled_name = mangle_generics_name(
+                    var_name.as_str(),
+                    type_params.as_ref().unwrap_or(&vec![]).as_slice(),
+                    type_env,
+                );
+                let fn_def = type_env
+                    .function_definitions
+                    .iter()
+                    .find(|x| x.name.as_str() == var_name.as_str());
+                if let Some(fn_def) = fn_def {
+                    if !type_env.prevent_struct_generation.contains(&mangled_name) {
+                        type_env
+                            .prevent_struct_generation
+                            .push(mangled_name.clone());
+
+                        let generics_instance = fn_def
+                            .generics
+                            .as_ref()
+                            .unwrap_or(&vec![])
+                            .iter()
+                            .map(|x| &x.0.name)
+                            .zip(type_params.as_ref().unwrap_or(&vec![]).iter().map(|x| &x.0))
+                            .fold(HashMap::new(), |mut acc, (param_name, param_inst)| {
+                                acc.insert(param_name.clone(), param_inst.clone());
+                                acc
+                            });
+
+                        let mut cloned_def = fn_def.clone();
+                        cloned_def.name = mangled_name.clone();
+                        cloned_def.generics = None;
+
+                        for t in cloned_def
+                            .params
+                            .iter_mut()
+                            .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0))
+                            .chain(cloned_def.return_type.iter_mut().map(|x| &mut x.0))
+                        {
+                            replace_generics_in_type_expr(t, &generics_instance);
+                            instantiate_generics_type_expr(t, type_env);
+                        }
+
+                        replace_generics_in_value_expr(
+                            &mut cloned_def.value_expr.0,
+                            &generics_instance,
+                        );
+                        instantiate_generics_value_expr(&mut cloned_def.value_expr.0, type_env);
+
+                        type_env.generic_fns_generated.push(cloned_def);
+                        *var_name = mangled_name;
+                        *type_params = None;
+                    } else {
+                        *var_name = mangled_name;
+                        *type_params = None;
+                    }
+                }
             }
         }
         ValueExpr::If {
@@ -1299,32 +1362,35 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             );
         });
 
-    source_file.function_definitions.iter().for_each(|fn_def| {
-        let fn_type = TypeExpr::Fun(
-            fn_def
-                .params
-                .as_ref()
-                .unwrap_or(&Vec::new())
-                .iter()
-                .map(|(identifier, type_expr)| (Some(identifier.clone()), type_expr.clone()))
-                .collect::<Vec<_>>(),
-            fn_def.return_type.as_ref().map(|spanned_type_expr| {
-                Box::new((spanned_type_expr.0.clone(), spanned_type_expr.1.clone()))
-            }),
-        );
-
-        type_env.insert_type_alias(fn_def.name.clone(), fn_type);
-    });
-
-    // Step 3: Find generic instantiations
-    source_file.function_definitions.iter_mut().for_each(|x| {
-        instantiate_generics_value_expr(&mut x.value_expr.0, type_env);
-    });
+    for fn_def in &source_file.function_definitions {
+        type_env.function_definitions.push(fn_def.clone());
+    }
 
     println!(
         "{} resolve aliases in function signatures and prepare function types",
         Tag::TypeResolve,
     );
+
+    // Step 3: Find generic instantiations
+    source_file.function_definitions.iter_mut().for_each(|x| {
+        if x.generics.is_some() {
+            return;
+        }
+        for t in x
+            .params
+            .iter_mut()
+            .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0))
+            .chain(x.return_type.iter_mut().map(|x| &mut x.0))
+        {
+            instantiate_generics_type_expr(t, type_env);
+        }
+
+        instantiate_generics_value_expr(&mut x.value_expr.0, type_env);
+    });
+
+    for func in &type_env.generic_fns_generated {
+        source_file.function_definitions.push(func.clone());
+    }
 
     // Step 3: Resolve aliases in function signatures and prepare function types
     source_file
@@ -1337,11 +1403,13 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
             if let Some(params) = function_definition.params.as_mut() {
                 for (_, p) in params {
+                    instantiate_generics_type_expr(&mut p.0, type_env);
                     resolve_all_aliases_type_expr(&mut p.0, type_env);
                 }
             }
 
             if let Some(r) = function_definition.return_type.as_mut() {
+                instantiate_generics_type_expr(&mut r.0, type_env);
                 resolve_all_aliases_type_expr(&mut r.0, type_env);
             }
 
@@ -1366,7 +1434,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
             type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
         });
-
     println!("{} typeresolve functions", Tag::TypeResolve);
     println!("{} final resolve of all functions", Tag::TypeResolve);
 
@@ -1437,7 +1504,13 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .function_definitions
         .iter_mut()
         .for_each(|function_defintion| {
+            if function_defintion.generics.is_some() {
+                println!("skipping {}", function_defintion.name);
+                return;
+            }
+            type_env.push_identifier_types();
             typeresolve_function_definition(function_defintion, type_env);
+            println!("done resolve {}", function_defintion.name);
         });
 }
 
@@ -1658,10 +1731,10 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 .for_each(|param| typeresolve_value_expr(&mut param.0, type_env));
         }
         ValueExpr::Variable(_, identifier, type_expr_opt) => {
-            if let Some(type_expr) = type_expr_opt {
-                resolve_all_aliases_type_expr(type_expr, type_env);
-                return;
-            }
+            // if let Some(type_expr) = type_expr_opt {
+            //     resolve_all_aliases_type_expr(type_expr, type_env);
+            //     return;
+            // }
             let type_expr = type_env
                 .get_identifier_type(identifier.clone())
                 .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));

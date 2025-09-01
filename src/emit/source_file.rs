@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{
     emit::{
         types::emit_type_definitions,
@@ -24,17 +26,17 @@ impl SourceFile {
         }
         instructions.push(IrInstruction::GoImports(go_imports));
 
-        let mut generic_function_defs = type_env.generic_fns_generated.clone();
-        for f in generic_function_defs.iter_mut() {
-            instructions.push(f.1.0.emit(None, type_env, &mut to_ir));
-        }
+        let mut emitted = HashSet::new();
 
         for f in self.function_definitions {
             // generic functions shouldn't be emitted, as they have incomplete type information
             if f.generics.is_some() {
                 continue;
             }
-            instructions.push(f.emit(None, type_env, &mut to_ir));
+            if emitted.insert(f.name.clone()) {
+                println!("emitting {}", f.name);
+                instructions.push(f.emit(None, type_env, &mut to_ir));
+            }
         }
 
         instructions.extend(type_definitions);

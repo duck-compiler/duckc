@@ -20,7 +20,20 @@ struct C<T, E, U, I> = {
     }
 };
 
+fn extract(s: Other<String>) -> String {
+    return s.s;
+}
+
+fn gen_method<EE>(s: Other<EE>, x: Bool) -> EE {
+    if (x) {
+        return s.s;
+    } else {
+        return gen_method<EE>(s, true);
+    }
+}
+
 fn main() {
     let a: X<String> = X<String>{f: "hallo"};
     a.get_f().lol().s->std::io::println();
+    a.get_f().lol()->gen_method<String>(false)->std::io::println();
 }
