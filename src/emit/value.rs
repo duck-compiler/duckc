@@ -812,7 +812,7 @@ impl ValueExpr {
                             return (i, Some(IrValue::Var(res)));
                         }
                         TypeExpr::Struct(StructDefinition {
-                            name: _,
+                            name,
                             fields,
                             methods: _,
                             generics: _,
@@ -820,7 +820,7 @@ impl ValueExpr {
                             let f = fields
                                 .iter()
                                 .find(|f| f.name == field_name)
-                                .unwrap_or_else(|| panic!("{field_name} {fields:?}"));
+                                .unwrap_or_else(|| panic!("{field_name} {name} {fields:?}"));
                             let res = env.new_var();
                             i.push(IrInstruction::VarDecl(
                                 res.clone(),

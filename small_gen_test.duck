@@ -1,0 +1,22 @@
+type O = { x: String };
+type X<A> = B<Int, A>;
+type B<Z, ZZ> = C<O, ZZ, Float, Z>;
+
+struct Other<UUU> = {s: UUU} impl {
+    fn lol() -> Other<UUU> {
+        return { let x: Other<UUU> = Other<UUU>{s: self.s}; x.s->std::io::println(); x};
+    }
+};
+
+struct C<T, E, U, I> = {
+    f: E,
+} impl {
+    fn get_f() -> Other<E> {
+        return Other<E>{s: self.f};
+    }
+};
+
+fn main() {
+    let a: X<String> = X<String>{f: "hallo"};
+    a.get_f().lol().s->std::io::println();
+}

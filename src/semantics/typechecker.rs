@@ -190,7 +190,7 @@ impl TypeExpr {
                 });
 
                 if is_missing_field || struct_def.fields.len() != value_expr_fields.len() {
-                    panic!("invalid type from value expr")
+                    panic!("invalid type from value expr {is_missing_field}")
                 }
 
                 // TypeExpr::Struct(Struct { fields: types })
@@ -791,6 +791,7 @@ fn check_type_compatability(
     };
 
     match &required_type.0 {
+        TypeExpr::Alias(..) => panic!("alias should have been replaced"),
         TypeExpr::Any => return,
         TypeExpr::InlineGo => todo!("should inline go be typechecked?"),
         TypeExpr::Go(_) => return,
@@ -1085,8 +1086,7 @@ fn check_type_compatability(
         }
         TypeExpr::RawTypeName(..)
         | TypeExpr::TypeName(..)
-        | TypeExpr::TypeNameInternal(..)
-        | TypeExpr::GenericToBeReplaced(..) => {}
+        | TypeExpr::TypeNameInternal(..) => {}
     }
 }
 

@@ -23,6 +23,7 @@ pub struct TypeDefinition {
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            TypeExpr::Alias(def) => write!(f, "{def:?}"),
             TypeExpr::Any => write!(f, "any"),
             TypeExpr::InlineGo => write!(f, "inline_go"),
             TypeExpr::Struct(s) => {
@@ -116,7 +117,7 @@ impl Display for TypeExpr {
                 Ok(())
             }
             TypeExpr::Array(inner) => write!(f, "{}[]", inner.0),
-            TypeExpr::GenericToBeReplaced(s) => write!(f, "{s}"),
+
         }
     }
 }
@@ -153,6 +154,7 @@ pub enum TypeExpr {
     Duck(Duck),
     Tuple(Vec<Spanned<TypeExpr>>),
     RawTypeName(bool, Vec<String>, Option<Vec<Spanned<TypeParam>>>),
+    Alias(Box<TypeDefinition>),
     TypeName(bool, String, Option<Vec<Spanned<TypeParam>>>),
     TypeNameInternal(String),
     ConstString(String),
@@ -169,7 +171,6 @@ pub enum TypeExpr {
         Option<Box<Spanned<TypeExpr>>>,
     ),
     Array(Box<Spanned<TypeExpr>>),
-    GenericToBeReplaced(String),
 }
 
 impl TypeExpr {

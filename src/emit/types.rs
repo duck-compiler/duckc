@@ -355,9 +355,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
-            TypeExpr::GenericToBeReplaced(..) => {
-                panic!("shouldn't access the GenericToBeReplaced as go type annotation")
-            }
+            TypeExpr::Alias(def) => def.type_expression.0.as_go_type_annotation(type_env),
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::Array(t) => format!("[]{}", t.0.as_go_type_annotation(type_env)),
             TypeExpr::Any => "interface{}".to_string(),
@@ -431,7 +429,7 @@ impl TypeExpr {
 
     pub fn as_go_concrete_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
-            TypeExpr::GenericToBeReplaced(..) => panic!(),
+            TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
             TypeExpr::ConstBool(b) => primitive_type_name(&TypeExpr::ConstBool(*b)).to_string(),
@@ -522,7 +520,7 @@ impl TypeExpr {
 
     pub fn type_id(&self, type_env: &mut TypeEnv) -> String {
         return match self {
-            TypeExpr::GenericToBeReplaced(x) => x.clone(),
+            TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::RawTypeName(_, ident, _) => {
                 panic!("{ident:?}")
             }
@@ -599,7 +597,7 @@ impl TypeExpr {
 
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
-            TypeExpr::GenericToBeReplaced(x) => x.clone(),
+            TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::RawTypeName(_, ident, _) => {
                 panic!("{ident:?}")
             }
@@ -617,9 +615,14 @@ impl TypeExpr {
             TypeExpr::String => "DuckString".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
-            TypeExpr::TypeName(_, name, _type_params) => type_env
-                .resolve_type_alias(name)
-                .as_clean_go_type_name(type_env),
+            TypeExpr::TypeName(_, name, _type_params) => {
+                println!("resolving {name}");
+                let r = type_env
+                    .resolve_type_alias(name)
+                    .as_clean_go_type_name(type_env);
+                println!("resolved {name}");
+                r
+            }
             TypeExpr::TypeNameInternal(name) => name.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type) => format!(
