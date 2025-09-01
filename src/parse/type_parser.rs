@@ -117,7 +117,6 @@ impl Display for TypeExpr {
                 Ok(())
             }
             TypeExpr::Array(inner) => write!(f, "{}[]", inner.0),
-
         }
     }
 }

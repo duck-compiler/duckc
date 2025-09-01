@@ -174,12 +174,12 @@ impl TypeEnv {
             }
         }
 
-        if let Some(ref def) = self
+        if let Some(def) = self
             .generic_structs_generated
             .iter()
             .find(|x| x.name.as_str() == alias.as_str())
         {
-            return Some(TypeExpr::Struct((**def).clone()));
+            return Some(TypeExpr::Struct((*def).clone()));
         }
 
         None
@@ -1689,7 +1689,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                     type_env
                         .generic_methods_generated
                         .entry(name.clone())
-                        .or_insert(Vec::new())
+                        .or_default()
                         .push(cloned_def);
 
                     *field_name = mangled_name;
