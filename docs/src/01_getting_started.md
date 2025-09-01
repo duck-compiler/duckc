@@ -1,10 +1,5 @@
 $title = "Getting started"
 
-Table of contents
-    1.) Installation
-    2.) Project setup
-    3.) Hello, World!
-
 # 1. Installation
 Dargo is our buildtool, it comes with everything needed to setup and build a project.
 
