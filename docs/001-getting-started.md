@@ -4,10 +4,15 @@
 
 ---
 
+Table of contents
+    1.) Installation
+    2.) Project setup
+    3.) Hello, World!
+
 # 1. Installation
 Dargo is our buildtool, it comes with everything needed to setup and build a project.
 
-To install dargo, clone the master branch of our github repository
+To install dargo, clone the master branch ouf our github repository.
 
 ```sh
 git clone git@github.com:duck-compiler/duckc.git
@@ -19,18 +24,18 @@ navigate into the just cloned repository
 cd duckc
 ```
 
-install the project to your computer
+install the project to your computer.
 
 ```sh
 cargo install --path .
 ```
 
-to verify that your installation was successful run following command
+To verify that your installation was successful run following command
 ```sh
 dargo --help
 ```
 
-If your system tells you, that the given command was not found the installation didn't work. Please reach out to us on our [discord](todo)
+If your computer tells you, that the given command was not found the installation didn't work. Please reach out to us on our [discord](todo)
 
 # 2. Project setup
 
