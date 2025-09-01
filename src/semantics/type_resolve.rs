@@ -1626,99 +1626,78 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 let target_ty =
                     TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
 
-                for t in type_params_vec.iter_mut() {
-                    resolve_all_aliases_type_expr(&mut t.0, type_env);
-                }
-
-                let mangled_name = format!(
-                    "{}_{}",
-                    field_name,
-                    type_params_vec
-                        .iter()
-                        .map(|type_param| type_param.0.as_clean_go_type_name(type_env))
-                        .collect::<Vec<_>>()
-                        .join("_")
-                );
-
                 let TypeExpr::Struct(StructDefinition {
                     name,
                     fields: _,
-                    methods: _,
-                    generics: _,
+                    methods,
+                    generics,
                 }) = target_ty.clone()
                 else {
                     panic!()
                 };
 
-                for i in 0..type_env.all_types.len() {
-                    let s_name = match &type_env.all_types[i] {
-                        TypeExpr::Struct(StructDefinition {
-                            name: s_name,
-                            fields: _,
-                            methods: _,
-                            generics,
-                        }) if name.as_str() == s_name.as_str() && generics.is_none() => {
-                            s_name.clone()
-                        }
-                        _ => continue,
-                    };
+                assert!(generics.is_none());
 
-                    if type_env.has_generic_method(s_name.as_str(), mangled_name.as_str()) {
-                        continue;
+                let mangled_name =
+                    mangle_generics_name(field_name.as_str(), type_params_vec.as_slice(), type_env);
+
+                let mangled_name_to_check = format!("{name}_{mangled_name}");
+
+                let method_def = methods
+                    .iter()
+                    .find(|m| m.name.as_str() == field_name.as_str())
+                    .unwrap();
+                if !type_env
+                    .prevent_struct_generation
+                    .contains(&mangled_name_to_check)
+                {
+                    type_env
+                        .prevent_struct_generation
+                        .push(mangled_name_to_check);
+                    let generics_instance = method_def
+                        .generics
+                        .as_ref()
+                        .unwrap_or(&vec![])
+                        .iter()
+                        .map(|x| &x.0.name)
+                        .zip(type_params.as_ref().unwrap_or(&vec![]).iter().map(|x| &x.0))
+                        .fold(HashMap::new(), |mut acc, (param_name, param_inst)| {
+                            acc.insert(param_name.clone(), param_inst.clone());
+                            acc
+                        });
+
+                    let mut cloned_def = method_def.clone();
+                    cloned_def.name = mangled_name.clone();
+                    cloned_def.generics = None;
+
+                    for t in cloned_def
+                        .params
+                        .iter_mut()
+                        .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0))
+                        .chain(cloned_def.return_type.iter_mut().map(|x| &mut x.0))
+                    {
+                        replace_generics_in_type_expr(t, &generics_instance);
+                        instantiate_generics_type_expr(t, type_env);
                     }
 
-                    let elem = &type_env.all_types[i];
+                    replace_generics_in_value_expr(
+                        &mut cloned_def.value_expr.0,
+                        &generics_instance,
+                    );
+                    instantiate_generics_value_expr(&mut cloned_def.value_expr.0, type_env);
+                    typeresolve_value_expr(&mut cloned_def.value_expr.0, type_env);
+                    type_env
+                        .generic_methods_generated
+                        .entry(name.clone())
+                        .or_insert(Vec::new())
+                        .push(cloned_def);
 
-                    if let TypeExpr::Struct(def) = elem {
-                        let s_name = def.name.clone();
-                        let mut raw_method = def
-                            .methods
-                            .iter()
-                            .find(|method_def| &method_def.name == field_name)
-                            .expect("couldn't find raw method")
-                            .clone();
-
-                        type_env.push_type_aliases();
-                        type_env.push_identifier_types();
-
-                        for (generic_param, concrete_type) in raw_method
-                            .generics
-                            .as_ref()
-                            .expect("raw method is not generic")
-                            .iter()
-                            .zip(type_params_vec.iter())
-                        {
-                            type_env.insert_type_alias(
-                                generic_param.0.name.clone(),
-                                concrete_type.0.clone(),
-                            );
-                        }
-
-                        if let Some(params) = raw_method.params.as_mut() {
-                            for (param_name, param_type_expr) in params {
-                                resolve_all_aliases_type_expr(&mut param_type_expr.0, type_env);
-                                type_env.insert_identifier_type(
-                                    param_name.clone(),
-                                    param_type_expr.0.clone(),
-                                );
-                            }
-                        }
-
-                        if let Some(return_type) = raw_method.return_type.as_mut() {
-                            resolve_all_aliases_type_expr(&mut return_type.0, type_env);
-                        }
-
-                        typeresolve_value_expr(&mut raw_method.value_expr.0, type_env);
-
-                        raw_method.name = mangled_name.clone();
-                        type_env.get_generic_methods(s_name).push(raw_method);
-
-                        type_env.pop_identifier_types();
-                        type_env.pop_type_aliases();
-                    }
+                    *field_name = mangled_name;
+                    *type_params = None;
+                } else {
+                    *field_name = mangled_name;
+                    *type_params = None;
                 }
-                *field_name = mangled_name;
-                *type_params = None;
             }
 
             assert!(
