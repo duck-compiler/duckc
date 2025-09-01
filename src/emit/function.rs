@@ -1,5 +1,5 @@
 use crate::{
-    emit::value::{IrInstruction, ToIr},
+    emit::value::{IrInstruction, IrValue, ToIr},
     parse::function_parser::FunctionDefintion,
     semantics::type_resolve::TypeEnv,
 };
@@ -13,8 +13,11 @@ impl FunctionDefintion {
     ) -> IrInstruction {
         // what's r?
         // println!("value_body {:?}", self.value_expr.0);
-        let (emitted_body, _r) = self.value_expr.0.emit(type_env, to_ir);
+        let (mut emitted_body, _r) = self.value_expr.0.emit(type_env, to_ir);
         // println!("end value_body");
+        if self.return_type.is_some() {
+            emitted_body.push(IrInstruction::Return(Some(IrValue::Nil)));
+        }
 
         // TODO mvmo - 03.07.2025: this should check if the last is without a semicolon
         if self.return_type.is_some()

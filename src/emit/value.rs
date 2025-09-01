@@ -87,6 +87,7 @@ pub enum IrValue {
     ArrayAccess(Box<IrValue>, Box<IrValue>),
     Imm(String),
     Pointer(Box<IrValue>),
+    Nil,
 }
 
 impl IrValue {
@@ -604,36 +605,39 @@ impl ValueExpr {
                 (ir, as_rvar(var))
             }
             ValueExpr::Block(block_exprs) => {
-                let mut res = Vec::new();
+                let mut res_instr = Vec::new();
                 let mut res_var = None;
 
                 for (block_expr, _) in block_exprs {
                     let (block_instr, block_res) = block_expr.direct_or_with_instr(type_env, env);
 
                     for current in block_instr.iter() {
-                        res.push(current.clone());
+                        res_instr.push(current.clone());
                         if let IrInstruction::Return(_) = current {
                             res_var = None;
-                            return (res, res_var);
+                            return (res_instr, res_var);
                         }
                     }
 
                     res_var = block_res;
                 }
 
-                let mut f_res = Vec::new();
-                let ty = TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
+                let mut final_instr = Vec::new();
+                let self_return_type = TypeExpr::from_value_expr(self, type_env);
                 let fresvar = env.new_var();
 
                 res_var = res_var.or(Some(IrValue::Tuple("Tup_".into(), vec![])));
-                f_res.push(IrInstruction::VarDecl(fresvar.clone(), ty));
-                res.push(IrInstruction::VarAssignment(
+                final_instr.push(IrInstruction::VarDecl(
+                    fresvar.clone(),
+                    self_return_type.as_go_type_annotation(type_env),
+                ));
+                res_instr.push(IrInstruction::VarAssignment(
                     fresvar.clone(),
                     res_var.unwrap(),
                 ));
-                f_res.push(IrInstruction::Block(res));
+                final_instr.push(IrInstruction::Block(res_instr));
 
-                (f_res, Some(IrValue::Var(fresvar)))
+                (final_instr, Some(IrValue::Var(fresvar)))
             }
             ValueExpr::Tuple(fields) => {
                 let mut res = Vec::new();

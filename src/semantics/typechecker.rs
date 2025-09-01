@@ -460,6 +460,13 @@ impl TypeExpr {
         }
     }
 
+    pub fn is_unit(&self) -> bool {
+        match self {
+            Self::Tuple(v) => v.is_empty(),
+            _ => false,
+        }
+    }
+
     pub fn is_struct(&self) -> bool {
         match self {
             Self::Struct(..) => true,
@@ -1084,9 +1091,7 @@ fn check_type_compatability(
 
             check_type_compatability(content_type, &given_content_type, type_env);
         }
-        TypeExpr::RawTypeName(..)
-        | TypeExpr::TypeName(..)
-        | TypeExpr::TypeNameInternal(..) => {}
+        TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) | TypeExpr::TypeNameInternal(..) => {}
     }
 }
 
