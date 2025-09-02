@@ -1,0 +1,92 @@
+// this is an example of what implementing microservices could look like
+fn main() {
+    let x: String = "";
+
+    let user_input: String = std::io::prompt("Hello, what do you plan for today?\n > ");
+    if user_input.starts_with("add") {
+        std::io::println("Oh great, new tasks are always a great oppurtunity. Describe your task:");
+        let short_description = std::io::prompt("  Short Description: ");
+        let long_description = std::io::prompt("  Long Description: ");
+    }
+}
+
+fn fetchInfoFrom() {
+    fetch();
+}
+
+tests {
+    state DatabaseInit = {
+        key: String = "value",
+    }
+
+    fn my_test() {
+        let redis_url = redis::create_instance();
+        my_service(redis_url);
+    }
+}
+
+microservice my_service(
+    REDIS_URL: String,
+) {
+    use std::db::mongodb;
+    use std::microservice;
+
+    state ServiceState = {
+        redis_client: redis::Connection = redis::establish_connection(redis_url),
+        database_connection: mongodb::ConnectionPool = {
+            let try = fn (url: String, ttl: Int, timeout_in_seconds: Int) -> mongodb::ConnectionPool | mongodb::PoolingError {
+                let result: mongodb::ConnectionPool | mongodb::PoolingError = mongodb::create_connection_pool(url);
+                match result {
+                    MongoConnectionPool pool -> return pool,
+                    PoolingError err -> {
+                        if ttl <= 0 {
+                            return err;
+                        }
+
+                        std::thread::sleep(timeout_in_seconds, Duration.Seconds);
+                        return try(ttl - 1);
+                    },
+                }
+            };
+
+            let result = try("mongodb://whatever", 10, 10);
+            match result {
+                MongoConnectionPool pool -> return pool,
+                PoolingError err -> {
+                    microservice::shutdown_gracefully("couldn't establish connection with mongodb: ${err->to_str()}")
+                }
+            }
+        },
+        log_collection: database_connection.collection("service-logs")
+    }
+
+    fn startup() {
+        ServiceState.log_collection.insert({
+            event_type: "service started",
+            message: "The service has been started",
+            runningOnNode: {
+                f"${microservice::get_ip()}",
+                f"${microservice::get_id()}
+            }
+        })
+
+        start_webserver()
+            .handle_get("/home", fn (req: Req) -> Res {
+                return Res.text("Hallo");
+            })
+    }
+
+    fn shutdown() {
+
+    }
+}
+
+client(
+    service: my_service,
+    SERVICE_URL: String
+) {
+    fn get_home() {
+        let url = service.get_node_url();
+        return fetch(f"${url}")
+    }
+}
