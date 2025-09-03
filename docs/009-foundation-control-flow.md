@@ -39,7 +39,7 @@ fn main() {
     let x: Any = 5;
     match (x) {
         String str -> std::io::println(str),
-        else -> std::io::println("unmatched"),
+        else v -> std::io::println("unmatched"),
     }
 }
 ```
