@@ -220,16 +220,6 @@ fn parse_src_file(
                     typename_reset_global(&mut field.type_expr.0);
                 }
             }
-            TypeExpr::Struct(StructDefinition {
-                name: _,
-                fields,
-                methods: _,
-                generics: _,
-            }) => {
-                for field in fields {
-                    typename_reset_global(&mut field.type_expr.0);
-                }
-            }
             TypeExpr::Tuple(fields) => {
                 for field in fields {
                     typename_reset_global(&mut field.0);

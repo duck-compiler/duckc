@@ -27,7 +27,7 @@ impl Display for TypeExpr {
             TypeExpr::Any => write!(f, "any"),
             TypeExpr::InlineGo => write!(f, "inline_go"),
             TypeExpr::Struct(s) => {
-                write!(f, "struct {}", s.name)
+                write!(f, "struct {s}")
             }
             TypeExpr::Go(s) => write!(f, "go {s}"),
             TypeExpr::Duck(d) => write!(f, "{d}"), // Delegates to Duck's Display impl
@@ -148,7 +148,7 @@ pub struct Struct {
 pub enum TypeExpr {
     Any,
     InlineGo,
-    Struct(StructDefinition),
+    Struct(String),
     Go(String),
     Duck(Duck),
     Tuple(Vec<Spanned<TypeExpr>>),

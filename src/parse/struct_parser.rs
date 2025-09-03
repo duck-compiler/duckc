@@ -80,7 +80,6 @@ pub mod tests {
     fn strip_spans(spanned_type_expr: Spanned<TypeExpr>) -> Spanned<TypeExpr> {
         let (expr, _span) = spanned_type_expr;
         let stripped_expr = match expr {
-            TypeExpr::Struct(s) => TypeExpr::Struct(strip_struct_definition_spans(s)),
             TypeExpr::Duck(d) => TypeExpr::Duck(crate::parse::type_parser::Duck {
                 fields: d
                     .fields

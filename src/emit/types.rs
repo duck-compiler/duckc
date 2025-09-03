@@ -122,73 +122,88 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                 })
                 .collect::<Vec<_>>(),
             TypeExpr::Struct(s) => {
-                if s.generics.is_some() {
+                let StructDefinition {
+                    name: struct_name,
+                    fields,
+                    methods,
+                    generics,
+                } = type_env.get_struct_def(s.as_str()).clone();
+
+                if generics.is_some() {
                     return Vec::new();
                 }
 
-                let mut out = Vec::new();
-                for field in &s.fields {
-                    out.push(IrInstruction::FunDef(
-                        format!("Get{}", field.name),
-                        Some(("self".into(), format!("*{}", typename.clone()))),
-                        vec![],
-                        Some(field.type_expr.0.as_go_type_annotation(type_env)),
-                        vec![IrInstruction::Return(Some(IrValue::FieldAccess(
-                            IrValue::Var("self".into()).into(),
-                            field.name.clone(),
-                        )))],
-                    ));
-                    out.push(IrInstruction::FunDef(
-                        format!("GetPtr{}", field.name),
-                        Some(("self".into(), format!("*{}", typename.clone()))),
-                        vec![],
-                        Some(format!(
-                            "*{}",
-                            field.type_expr.0.as_go_type_annotation(type_env)
-                        )),
-                        vec![IrInstruction::Return(Some(IrValue::Pointer(
-                            IrValue::FieldAccess(
-                                IrValue::Var("self".into()).into(),
-                                field.name.clone(),
-                            )
-                            .into(),
-                        )))],
-                    ));
-                    out.push(IrInstruction::FunDef(
-                        format!("Set{}", field.name),
-                        Some(("self".into(), format!("*{}", typename.clone()))),
-                        vec![(
-                            "param".into(),
-                            field.type_expr.0.as_go_type_annotation(type_env),
-                        )],
-                        None,
-                        vec![IrInstruction::VarAssignment(
-                            format!("self.{}", field.name),
-                            IrValue::Var("param".into()),
-                        )],
-                    ));
-                }
+                let mut instructions: Vec<IrInstruction> = fields
+                    .iter()
+                    .flat_map(|field| {
+                        vec![
+                            IrInstruction::FunDef(
+                                format!("Get{}", field.name),
+                                Some(("self".into(), format!("*{}", typename.clone()))),
+                                vec![],
+                                Some(field.type_expr.0.as_go_type_annotation(type_env)),
+                                vec![IrInstruction::Return(Some(IrValue::FieldAccess(
+                                    IrValue::Var("self".into()).into(),
+                                    field.name.clone(),
+                                )))],
+                            ),
+                            IrInstruction::FunDef(
+                                format!("GetPtr{}", field.name),
+                                Some(("self".into(), format!("*{}", typename.clone()))),
+                                vec![],
+                                Some(format!(
+                                    "*{}",
+                                    field.type_expr.0.as_go_type_annotation(type_env)
+                                )),
+                                vec![IrInstruction::Return(Some(IrValue::Pointer(
+                                    IrValue::FieldAccess(
+                                        IrValue::Var("self".into()).into(),
+                                        field.name.clone(),
+                                    )
+                                    .into(),
+                                )))],
+                            ),
+                            IrInstruction::FunDef(
+                                format!("Set{}", field.name),
+                                Some(("self".into(), format!("*{}", typename.clone()))),
+                                vec![(
+                                    "param".into(),
+                                    field.type_expr.0.as_go_type_annotation(type_env),
+                                )],
+                                None,
+                                vec![IrInstruction::VarAssignment(
+                                    format!("self.{}", field.name),
+                                    IrValue::Var("param".into()),
+                                )],
+                            ),
+                        ]
+                        .into_iter()
+                    })
+                    .collect();
 
-                for method in &s.methods {
-                    if method.generics.is_some() {
+                for m in methods.iter() {
+                    if m.generics.is_some() {
                         continue;
                     }
-                    out.push(method.emit(
-                        Some(("self".to_string(), format!("*{}", s.name))),
+                    if m.name == "fisch" {
+                        println!("method {} {:?}", m.name, m.value_expr.0);
+                    }
+                    instructions.push(m.emit(
+                        Some(("self".to_string(), format!("*{}", struct_name))),
                         type_env,
                         to_ir,
                     ));
                 }
 
-                for method in type_env.get_generic_methods(typename.clone()).clone() {
-                    out.push(method.emit(
-                        Some(("self".to_string(), format!("*{}", s.name))),
+                for m in type_env.get_generic_methods(struct_name.clone()).clone() {
+                    instructions.push(m.emit(
+                        Some(("self".to_string(), format!("*{}", struct_name))),
                         type_env,
                         to_ir,
                     ));
                 }
 
-                out
+                instructions
             }
 
             _ => {
@@ -309,20 +324,29 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                         .map(|(i, x)| (format!("field_{i}"), x.0.as_go_type_annotation(type_env)))
                         .collect::<Vec<_>>(),
                 ),
-                TypeExpr::Struct(StructDefinition { fields, .. }) => IrInstruction::StructDef(
-                    type_name,
-                    fields
-                        .iter()
-                        .map(
-                            |Field {
-                                 name,
-                                 type_expr: (type_expr, _),
-                             }| {
-                                (name.clone(), type_expr.as_go_type_annotation(type_env))
-                            },
-                        )
-                        .collect::<Vec<_>>(),
-                ),
+                TypeExpr::Struct(struct_name) => {
+                    let StructDefinition {
+                        name: _,
+                        fields,
+                        methods: _,
+                        generics: _,
+                    } = type_env.get_struct_def(struct_name.as_str()).clone();
+
+                    IrInstruction::StructDef(
+                        type_name,
+                        fields
+                            .iter()
+                            .map(
+                                |Field {
+                                     name,
+                                     type_expr: (type_expr, _),
+                                 }| {
+                                    (name.clone(), type_expr.as_go_type_annotation(type_env))
+                                },
+                            )
+                            .collect::<Vec<_>>(),
+                    )
+                }
                 TypeExpr::Duck(Duck { fields }) => IrInstruction::StructDef(
                     type_name,
                     fields
@@ -479,18 +503,7 @@ impl TypeExpr {
                     .collect::<Vec<_>>()
                     .join("\n")
             ),
-            TypeExpr::Struct(StructDefinition { fields, .. }) => format!(
-                "struct {{\n{}\n}}",
-                fields
-                    .iter()
-                    .map(|field| format!(
-                        "   {} {}",
-                        field.name,
-                        field.type_expr.0.as_go_type_annotation(type_env)
-                    ))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ),
+            TypeExpr::Struct(s) => s.clone(),
             TypeExpr::Tuple(fields) => {
                 format!(
                     "struct {{\n{}\n}}",
@@ -557,7 +570,7 @@ impl TypeExpr {
                     .map(|type_expr| format!("_To_{}", type_expr.0.as_clean_go_type_name(type_env)))
                     .unwrap_or_else(|| "".to_string())
             ),
-            TypeExpr::Struct(s) => s.name.clone(),
+            TypeExpr::Struct(s) => s.clone(),
             TypeExpr::Duck(duck) => format!(
                 "Duck_{}",
                 duck.fields
@@ -641,7 +654,7 @@ impl TypeExpr {
                     .map(|type_expr| format!("_To_{}", type_expr.0.as_clean_go_type_name(type_env)))
                     .unwrap_or_else(|| "".to_string())
             ),
-            TypeExpr::Struct(s) => s.name.clone(),
+            TypeExpr::Struct(s) => s.clone(),
             TypeExpr::Duck(duck) => format!(
                 "Duck_{}",
                 duck.fields

@@ -815,15 +815,17 @@ impl ValueExpr {
                             ));
                             return (i, Some(IrValue::Var(res)));
                         }
-                        TypeExpr::Struct(StructDefinition {
-                            name,
-                            fields,
-                            methods: _,
-                            generics: _,
-                        }) => {
+                        TypeExpr::Struct(struct_name) => {
+                            let StructDefinition {
+                                name,
+                                fields,
+                                methods: _,
+                                generics: _,
+                            } = type_env.get_struct_def(struct_name.as_str());
                             let f = fields
                                 .iter()
                                 .find(|f| f.name == field_name)
+                                .cloned()
                                 .unwrap_or_else(|| panic!("{field_name} {name} {fields:?}"));
                             let res = env.new_var();
                             i.push(IrInstruction::VarDecl(

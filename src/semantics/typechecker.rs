@@ -162,6 +162,8 @@ impl TypeExpr {
                     panic!("is not a struct");
                 };
 
+                let struct_def = type_env.get_struct_def(struct_def.as_str()).clone();
+
                 let value_expr_fields = value_expr_fields
                     .iter()
                     .map(|(name, (value_expr, span))| {
@@ -195,7 +197,7 @@ impl TypeExpr {
 
                 // TypeExpr::Struct(Struct { fields: types })
                 // TODO: require name and implement typing for structs
-                TypeExpr::Struct(struct_def)
+                TypeExpr::Struct(struct_def.name.clone())
             }
             ValueExpr::Tuple(fields) => {
                 let types = fields
@@ -414,7 +416,7 @@ impl TypeExpr {
                     ),
                 );
                 require(
-                    target_obj_type_expr.has_field_by_name(field_name.clone())
+                    target_obj_type_expr.has_field_by_name(field_name.clone(), type_env)
                         || target_obj_type_expr.has_method_by_name(field_name.clone(), type_env),
                     format!(
                         "{:?} {} doesn't have a field with name {}",
@@ -485,29 +487,45 @@ impl TypeExpr {
     pub fn has_field(&self, field: Field) -> bool {
         match self {
             Self::Tuple(fields) => fields.len() > field.name.parse::<usize>().unwrap(),
-            Self::Struct(r#struct) => r#struct.fields.contains(&field),
+            Self::Struct(r#struct) => todo!(),
             Self::Duck(duck) => duck.fields.contains(&field),
             _ => false,
         }
     }
 
-    fn has_method_by_name(&self, name: String, type_env: &TypeEnv) -> bool {
+    fn has_method_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
         match self {
             Self::Struct(r#struct) => {
-                r#struct.methods.iter().any(|method| *method.name == name)
-                    || type_env.has_generic_method(r#struct.name.as_str(), name.as_str())
+                let StructDefinition {
+                    name: struct_name,
+                    fields: _,
+                    methods,
+                    generics: _,
+                } = type_env.get_struct_def(r#struct.as_str());
+
+                methods.iter().any(|f| f.name.as_str() == name.as_str())
+                    || type_env
+                        .get_generic_methods(struct_name.clone())
+                        .iter()
+                        .any(|x| x.name.as_str() == name.as_str())
             }
             _ => false,
         }
     }
 
-    fn has_field_by_name(&self, name: String) -> bool {
+    fn has_field_by_name(&self, name: String, type_env: &TypeEnv) -> bool {
         match self {
             Self::Tuple(fields) => fields.len() > name.parse::<usize>().unwrap(),
-            Self::Struct(r#struct) => r#struct
-                .fields
-                .iter()
-                .any(|struct_field| *struct_field.name == name),
+            Self::Struct(r#struct) => {
+                let StructDefinition {
+                    name: _,
+                    fields,
+                    methods,
+                    generics,
+                } = type_env.get_struct_def(r#struct.as_str());
+
+                fields.iter().any(|f| f.name.as_str() == name.as_str())
+            }
             Self::Duck(duck) => duck
                 .fields
                 .iter()
@@ -519,49 +537,57 @@ impl TypeExpr {
     fn typeof_field(&self, field_name: String, type_env: &TypeEnv) -> TypeExpr {
         match self {
             Self::Tuple(fields) => fields[field_name.parse::<usize>().unwrap()].0.clone(),
-            Self::Struct(r#struct) => r#struct
-                .fields
-                .iter()
-                .map(|x| (x.name.clone(), x.type_expr.0.clone()))
-                .chain(r#struct.methods.iter().map(|x| {
-                    (
-                        x.name.clone(),
-                        TypeExpr::Fun(
-                            x.params
-                                .clone()
-                                .unwrap_or_default()
-                                .iter()
-                                .map(|x| (Some(x.0.clone()), x.1.clone()))
-                                .collect(),
-                            x.return_type.clone().map(Box::new),
-                        ),
+            Self::Struct(r#struct) => {
+                let StructDefinition {
+                    name,
+                    fields,
+                    methods,
+                    generics: _,
+                } = type_env.get_struct_def(r#struct.as_str());
+
+                fields
+                    .iter()
+                    .map(|x| (x.name.clone(), x.type_expr.0.clone()))
+                    .chain(methods.iter().map(|x| {
+                        (
+                            x.name.clone(),
+                            TypeExpr::Fun(
+                                x.params
+                                    .clone()
+                                    .unwrap_or_default()
+                                    .iter()
+                                    .map(|x| (Some(x.0.clone()), x.1.clone()))
+                                    .collect(),
+                                x.return_type.clone().map(Box::new),
+                            ),
+                        )
+                    }))
+                    .chain(
+                        type_env
+                            .generic_methods_generated
+                            .get(name.as_str())
+                            .unwrap_or(&vec![])
+                            .iter()
+                            .map(|x| {
+                                (
+                                    x.name.clone(),
+                                    TypeExpr::Fun(
+                                        x.params
+                                            .clone()
+                                            .unwrap_or_default()
+                                            .iter()
+                                            .map(|x| (Some(x.0.clone()), x.1.clone()))
+                                            .collect(),
+                                        x.return_type.clone().map(Box::new),
+                                    ),
+                                )
+                            }),
                     )
-                }))
-                .chain(
-                    type_env
-                        .generic_methods_generated
-                        .get(r#struct.name.as_str())
-                        .unwrap_or(&vec![])
-                        .iter()
-                        .map(|x| {
-                            (
-                                x.name.clone(),
-                                TypeExpr::Fun(
-                                    x.params
-                                        .clone()
-                                        .unwrap_or_default()
-                                        .iter()
-                                        .map(|x| (Some(x.0.clone()), x.1.clone()))
-                                        .collect(),
-                                    x.return_type.clone().map(Box::new),
-                                ),
-                            )
-                        }),
-                )
-                .find(|struct_field| struct_field.0 == field_name)
-                .expect("Tried to access field that doesn't exist")
-                .1
-                .clone(),
+                    .find(|struct_field| struct_field.0 == field_name)
+                    .expect("Tried to access field that doesn't exist")
+                    .1
+                    .clone()
+            }
             Self::Duck(duck) => duck
                 .fields
                 .iter()
@@ -607,18 +633,6 @@ impl TypeExpr {
             };
             return !variants.iter().any(|variant| !variant.0.is_string());
         };
-    }
-
-    pub fn is_generic_struct(&self) -> bool {
-        if let TypeExpr::Struct(StructDefinition {
-            generics: Some(_generics),
-            ..
-        }) = self
-        {
-            return true;
-        }
-
-        return false;
     }
 
     pub fn is_array(&self) -> bool {
