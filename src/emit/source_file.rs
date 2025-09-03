@@ -34,7 +34,6 @@ impl SourceFile {
                 continue;
             }
             if emitted.insert(f.name.clone()) {
-                println!("emitting {}", f.name);
                 instructions.push(f.emit(None, type_env, &mut to_ir));
             }
         }

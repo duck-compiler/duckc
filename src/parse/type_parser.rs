@@ -7,7 +7,6 @@ use chumsky::prelude::*;
 use crate::parse::{
     Field, SS, Spanned,
     generics_parser::{Generic, generics_parser},
-    struct_parser::StructDefinition,
     value_parser::{TypeParam, empty_range},
 };
 
