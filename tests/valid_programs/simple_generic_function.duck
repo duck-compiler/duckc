@@ -8,5 +8,4 @@ fn gen_func<T>(x: T) {
 
 fn main() {
     gen_func<String>("hallo");
-    let y: String = zz;
 }
