@@ -27,7 +27,6 @@ use crate::{
         lexer::lex_parser,
         make_input, parse_failure,
         source_file_parser::source_file_parser,
-        struct_parser::StructDefinition,
         type_parser::{Duck, TypeExpr},
         use_statement_parser::UseStatement,
         value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr},

@@ -487,7 +487,7 @@ impl TypeExpr {
     pub fn has_field(&self, field: Field) -> bool {
         match self {
             Self::Tuple(fields) => fields.len() > field.name.parse::<usize>().unwrap(),
-            Self::Struct(r#struct) => todo!(),
+            Self::Struct(_struct) => todo!(),
             Self::Duck(duck) => duck.fields.contains(&field),
             _ => false,
         }
@@ -520,8 +520,8 @@ impl TypeExpr {
                 let StructDefinition {
                     name: _,
                     fields,
-                    methods,
-                    generics,
+                    methods: _,
+                    generics: _,
                 } = type_env.get_struct_def(r#struct.as_str());
 
                 fields.iter().any(|f| f.name.as_str() == name.as_str())

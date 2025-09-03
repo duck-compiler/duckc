@@ -8,10 +8,10 @@ use crate::{
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         source_file_parser::SourceFile,
         struct_parser::StructDefinition,
-        type_parser::{Duck, TypeDefinition, TypeExpr, type_expression_parser},
+        type_parser::{Duck, TypeDefinition, TypeExpr},
         value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr},
     },
-    semantics::{ident_mangler::mangle, type_resolve},
+    semantics::ident_mangler::mangle,
     tags::Tag,
 };
 
@@ -92,14 +92,14 @@ impl TypeEnv {
             .iter()
             .chain(self.generic_structs_generated.iter())
             .find(|x| x.name.as_str() == name)
-            .expect(&format!("Could not find struct {name}"))
+            .unwrap_or_else(|| panic!("Could not find struct {name}"))
     }
 
     pub fn get_struct_def_mut<'a>(&'a mut self, name: &str) -> &'a mut StructDefinition {
         self.struct_definitions
             .iter_mut()
             .find(|x| x.name.as_str() == name)
-            .expect(&format!("Could not find struct {name}"))
+            .unwrap_or_else(|| panic!("Could not find struct {name}"))
     }
 
     pub fn get_generic_methods(&mut self, type_name: String) -> &mut Vec<FunctionDefintion> {
@@ -460,7 +460,6 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                         cloned_def.name = mangled_name.clone();
                         cloned_def.generics = None;
                         replace_generics_in_struct_definition(&mut cloned_def, &generics_instance);
-
 
                         // println!("AAAAA replaced: {cloned_def:?}");
                         type_env.generic_structs_generated.push(cloned_def.clone());
@@ -965,7 +964,6 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
                     cloned_def.generics = None;
                     replace_generics_in_struct_definition(&mut cloned_def, &generics_instance);
 
-
                     // println!("replaced: {cloned_def:?}");
 
                     type_env.generic_structs_generated.push(cloned_def.clone());
@@ -1404,15 +1402,15 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     println!("{} typeresolve functions", Tag::TypeResolve);
     println!("{} final resolve of all functions", Tag::TypeResolve);
 
-        source_file
-            .function_definitions
-            .iter_mut()
-            .for_each(|function_defintion| {
-                if function_defintion.generics.is_some() {
-                    return;
-                }
-                typeresolve_function_definition(function_defintion, type_env);
-            });
+    source_file
+        .function_definitions
+        .iter_mut()
+        .for_each(|function_defintion| {
+            if function_defintion.generics.is_some() {
+                return;
+            }
+            typeresolve_function_definition(function_defintion, type_env);
+        });
 
     for s in &type_env.generic_structs_generated {
         source_file.struct_definitions.push(s.clone());
