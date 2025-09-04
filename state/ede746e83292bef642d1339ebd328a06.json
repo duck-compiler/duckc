@@ -1,7 +1,7 @@
 {
     "id": "ede746e83292bef642d1339ebd328a06",
     "file_path": "../../src/parse/type_parser.rs",
-    "line_number": 1120,
+    "line_number": 1126,
     "title": "Here's an TODO, which had no title.",
     "tag": "todo",
     "module_tag": "parse",

@@ -1,6 +1,16 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-09-04T22:01:53.512690",
+        "issue_id": "0086b69c22ddbacd6a9a2c01661b3395",
+        "issue_title": "retrieve correct span for function defintions typeexpr",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-09-04T19:31:54.192973",
         "issue_id": "359f26cb5c9ff8e568aaf6bf6f397729",
         "issue_title": "respect additional identifer scopes like blocks and lambdas",

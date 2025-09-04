@@ -1,7 +1,7 @@
 {
     "id": "7ca202446ad9d30d5c9dd75fcc8f32cb",
     "file_path": "../../src/emit/function.rs",
-    "line_number": 29,
+    "line_number": 37,
     "title": "mvmo - 03.07.2025: this should check if the last is without a semicolon",
     "tag": "todo",
     "module_tag": "emit",
