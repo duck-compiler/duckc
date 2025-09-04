@@ -1,7 +1,7 @@
 {
     "id": "69b37346e3eac68781c08fc1a401d903",
     "file_path": "../../src/parse/source_file_parser.rs",
-    "line_number": 162,
+    "line_number": 167,
     "title": "implement flatten for struct definitions",
     "tag": "todo",
     "module_tag": "parse",

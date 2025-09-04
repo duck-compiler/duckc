@@ -1,10 +1,10 @@
 {
-    "id": "d5e513c591a5789260576a8da04f76f0",
-    "file_path": "../../src/emit/types.rs",
-    "line_number": 621,
+    "id": "036f9af09249885c01979f9b1e07dbb0",
+    "file_path": "../../src/parse/source_file_parser.rs",
+    "line_number": 459,
     "title": "type params",
     "tag": "todo",
-    "module_tag": "emit",
+    "module_tag": "parse",
     "user": null,
     "issue_ref": null,
     "description": "",
@@ -12,8 +12,8 @@
         "name": "Apfelfrosch",
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
-    "source_line": "// todo: type params",
+    "source_line": "// TODO: type params",
     "status": "open",
-    "first_seen": "2025-07-14T09:44:03.705199",
+    "first_seen": "2025-09-04T19:31:54.197529",
     "history": []
 }

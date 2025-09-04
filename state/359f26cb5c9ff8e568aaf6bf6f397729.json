@@ -1,10 +1,10 @@
 {
-    "id": "d1adb05842916005a85d085735ffd01a",
-    "file_path": "../../src/semantics/ident_mangler.rs",
-    "line_number": 364,
+    "id": "359f26cb5c9ff8e568aaf6bf6f397729",
+    "file_path": "../../src/parse/source_file_parser.rs",
+    "line_number": 409,
     "title": "respect additional identifer scopes like blocks and lambdas",
     "tag": "todo",
-    "module_tag": "semantics",
+    "module_tag": "parse",
     "user": null,
     "issue_ref": null,
     "description": "",
@@ -14,6 +14,6 @@
     },
     "source_line": "// TODO: respect additional identifer scopes like blocks and lambdas",
     "status": "open",
-    "first_seen": "2025-07-09T23:22:20.783105",
+    "first_seen": "2025-09-04T19:31:54.197355",
     "history": []
 }

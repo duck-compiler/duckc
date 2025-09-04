@@ -1,6 +1,26 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-09-04T19:31:54.192973",
+        "issue_id": "359f26cb5c9ff8e568aaf6bf6f397729",
+        "issue_title": "respect additional identifer scopes like blocks and lambdas",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-09-04T19:31:54.192973",
+        "issue_id": "036f9af09249885c01979f9b1e07dbb0",
+        "issue_title": "type params",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-09-04T13:57:50.797180",
         "issue_id": "6ea3f5e1bb98d03f9bd37d524217fe17",
         "issue_title": "require name and implement typing for structs",
