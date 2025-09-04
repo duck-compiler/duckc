@@ -5,7 +5,7 @@ use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
 use crate::parse::{
-    SS, Spanned,
+    Field, SS, Spanned,
     generics_parser::{Generic, generics_parser},
     value_parser::{TypeParam, empty_range},
 };
@@ -19,26 +19,14 @@ pub struct TypeDefinition {
     pub generics: Option<Vec<Spanned<Generic>>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Field {
-    pub name: String,
-    pub type_expr: Spanned<TypeExpr>,
-}
-
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            TypeExpr::Alias(def) => write!(f, "{def:?}"),
             TypeExpr::Any => write!(f, "any"),
             TypeExpr::InlineGo => write!(f, "inline_go"),
             TypeExpr::Struct(s) => {
-                write!(f, "struct {{ ")?;
-                s.fields.iter().enumerate().try_for_each(|(i, field)| {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{}: {}", field.name, field.type_expr.0)
-                })?;
-                write!(f, " }}")
+                write!(f, "struct {s}")
             }
             TypeExpr::Go(s) => write!(f, "go {s}"),
             TypeExpr::Duck(d) => write!(f, "{d}"), // Delegates to Duck's Display impl
@@ -74,7 +62,7 @@ impl Display for TypeExpr {
 
                 Ok(())
             }
-            TypeExpr::RawTypeName(is_global, path, generics)  => {
+            TypeExpr::RawTypeName(is_global, path, generics) => {
                 if *is_global {
                     write!(f, "::")?;
                 }
@@ -83,7 +71,7 @@ impl Display for TypeExpr {
                 if let Some(params) = generics {
                     write!(f, "<")?;
                     params.iter().enumerate().try_for_each(|(i, param)| {
-                         if i > 0 {
+                        if i > 0 {
                             write!(f, ", ")?;
                         }
                         write!(f, "{}", param.0)
@@ -101,25 +89,26 @@ impl Display for TypeExpr {
             TypeExpr::Bool => write!(f, "Bool"),
             TypeExpr::Char => write!(f, "Char"),
             TypeExpr::Float => write!(f, "Float"),
-            TypeExpr::Or(variants) => {
-                variants.iter().enumerate().try_for_each(|(i, variant)| {
-                    if i > 0 {
-                        write!(f, " | ")?;
-                    }
-                    write!(f, "{}", variant.0)
-                })
-            }
+            TypeExpr::Or(variants) => variants.iter().enumerate().try_for_each(|(i, variant)| {
+                if i > 0 {
+                    write!(f, " | ")?;
+                }
+                write!(f, "{}", variant.0)
+            }),
             TypeExpr::Fun(params, return_type) => {
                 write!(f, "fn(")?;
-                params.iter().enumerate().try_for_each(|(i, (name, type_expr))| {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    if let Some(n) = name {
-                        write!(f, "{n}: ")?;
-                    }
-                    write!(f, "{}", type_expr.0)
-                })?;
+                params
+                    .iter()
+                    .enumerate()
+                    .try_for_each(|(i, (name, type_expr))| {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        if let Some(n) = name {
+                            write!(f, "{n}: ")?;
+                        }
+                        write!(f, "{}", type_expr.0)
+                    })?;
                 write!(f, ")")?;
                 if let Some(rt) = return_type {
                     write!(f, " -> {}", rt.0)?;
@@ -127,7 +116,6 @@ impl Display for TypeExpr {
                 Ok(())
             }
             TypeExpr::Array(inner) => write!(f, "{}[]", inner.0),
-            TypeExpr::GenericToBeReplaced(s) => write!(f, "{s}"),
         }
     }
 }
@@ -145,18 +133,6 @@ impl Display for Duck {
     }
 }
 
-impl PartialEq for Field {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl Field {
-    pub fn new(name: String, type_expr: Spanned<TypeExpr>) -> Self {
-        return Self { name, type_expr };
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Duck {
     pub fields: Vec<Field>,
@@ -171,11 +147,12 @@ pub struct Struct {
 pub enum TypeExpr {
     Any,
     InlineGo,
-    Struct(Struct),
+    Struct(String),
     Go(String),
     Duck(Duck),
     Tuple(Vec<Spanned<TypeExpr>>),
     RawTypeName(bool, Vec<String>, Option<Vec<Spanned<TypeParam>>>),
+    Alias(Box<TypeDefinition>),
     TypeName(bool, String, Option<Vec<Spanned<TypeParam>>>),
     TypeNameInternal(String),
     ConstString(String),
@@ -192,7 +169,6 @@ pub enum TypeExpr {
         Option<Box<Spanned<TypeExpr>>>,
     ),
     Array(Box<Spanned<TypeExpr>>),
-    GenericToBeReplaced(String),
 }
 
 impl TypeExpr {
@@ -228,12 +204,6 @@ where
                 .allow_trailing()
                 .collect::<Vec<(String, Spanned<TypeExpr>)>>();
 
-            let struct_fields = field
-                .separated_by(just(Token::ControlChar(',')))
-                .at_least(1)
-                .allow_trailing()
-                .collect::<Vec<(String, Spanned<TypeExpr>)>>();
-
             let function_fields = duck_fields.clone();
 
             let go_type_identifier: impl Parser<'src, I, String, extra::Err<Rich<'src, Token, SS>>> =
@@ -248,29 +218,14 @@ where
                 .ignore_then(go_type_identifier)
                 .map(TypeExpr::Go);
 
-            let string_literal = select_ref! { Token::ConstString(str) => str.clone() }
-                .map(TypeExpr::ConstString);
+            let string_literal =
+                select_ref! { Token::ConstString(str) => str.clone() }.map(TypeExpr::ConstString);
+
             let bool_literal =
                 select_ref! { Token::ConstBool(bool) => *bool }.map(TypeExpr::ConstBool);
+
             let int_literal = select_ref! { Token::ConstInt(int) => *int }
                 .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
-
-            let r#struct = just(Token::Struct)
-                .ignore_then(just(Token::ControlChar('{')))
-                .ignore_then(struct_fields)
-                .then_ignore(just(Token::ControlChar('}')))
-                .map(|fields| {
-                    TypeExpr::Struct(Struct {
-                        fields: fields
-                            .iter()
-                            .cloned()
-                            .map(|(name, (type_expr, e))| Field {
-                                name,
-                                type_expr: (type_expr, e),
-                            })
-                            .collect(),
-                    })
-                });
 
             let duck = just(Token::Duck)
                 .or_not()
@@ -330,15 +285,28 @@ where
                         .at_least(1)
                         .collect::<Vec<_>>(),
                 )
-                .map(|(is_global, identifier)| match identifier[0].as_str() {
-                    "Int" => TypeExpr::Int,
-                    "Float" => TypeExpr::Float,
-                    "Bool" => TypeExpr::Bool,
-                    "String" => TypeExpr::String,
-                    "Char" => TypeExpr::Char,
-                    // TODO: generic type name
-                    _ => TypeExpr::RawTypeName(is_global.is_some(), identifier, None),
-                });
+                .then(
+                    just(Token::ControlChar('<'))
+                        .ignore_then(
+                            p.clone()
+                                .separated_by(just(Token::ControlChar(',')))
+                                .allow_trailing()
+                                .at_least(1)
+                                .collect::<Vec<Spanned<TypeParam>>>(),
+                        )
+                        .then_ignore(just(Token::ControlChar('>')))
+                        .or_not(),
+                )
+                .map(
+                    |((is_global, identifier), type_params)| match identifier[0].as_str() {
+                        "Int" => TypeExpr::Int,
+                        "Float" => TypeExpr::Float,
+                        "Bool" => TypeExpr::Bool,
+                        "String" => TypeExpr::String,
+                        "Char" => TypeExpr::Char,
+                        _ => TypeExpr::RawTypeName(is_global.is_some(), identifier, type_params),
+                    },
+                );
 
             let term_type_expr = p
                 .clone()
@@ -349,7 +317,6 @@ where
                     bool_literal,
                     go_type,
                     type_name,
-                    r#struct,
                     duck,
                     function,
                     tuple,
@@ -391,12 +358,6 @@ where
                 .allow_trailing()
                 .collect::<Vec<(String, Spanned<TypeExpr>)>>();
 
-            let struct_fields = field
-                .separated_by(just(Token::ControlChar(',')))
-                .at_least(1)
-                .allow_trailing()
-                .collect::<Vec<(String, Spanned<TypeExpr>)>>();
-
             let function_fields = duck_fields.clone();
 
             let go_type_identifier: impl Parser<'src, I, String, extra::Err<Rich<'src, Token, SS>>> =
@@ -410,23 +371,6 @@ where
             let go_type = just(Token::Go)
                 .ignore_then(go_type_identifier)
                 .map(TypeExpr::Go);
-
-            let r#struct = just(Token::Struct)
-                .ignore_then(just(Token::ControlChar('{')))
-                .ignore_then(struct_fields)
-                .then_ignore(just(Token::ControlChar('}')))
-                .map(|fields| {
-                    TypeExpr::Struct(Struct {
-                        fields: fields
-                            .iter()
-                            .cloned()
-                            .map(|(name, (type_expr, e))| Field {
-                                name,
-                                type_expr: (type_expr, e),
-                            })
-                            .collect(),
-                    })
-                });
 
             let duck = just(Token::Duck)
                 .or_not()
@@ -454,8 +398,8 @@ where
                     _ => TypeExpr::Any,
                 });
 
-            let string_literal = select_ref! { Token::ConstString(str) => str.clone() }
-                .map(TypeExpr::ConstString);
+            let string_literal =
+                select_ref! { Token::ConstString(str) => str.clone() }.map(TypeExpr::ConstString);
             let bool_literal =
                 select_ref! { Token::ConstBool(bool) => *bool }.map(TypeExpr::ConstBool);
             let int_literal = select_ref! { Token::ConstInt(int) => *int }
@@ -525,7 +469,6 @@ where
                     string_literal,
                     go_type,
                     type_name,
-                    r#struct,
                     duck,
                     function,
                     tuple,
@@ -606,16 +549,7 @@ pub mod tests {
     fn strip_spans(spanned_type_expr: Spanned<TypeExpr>) -> Spanned<TypeExpr> {
         let (expr, _span) = spanned_type_expr;
         let stripped_expr = match expr {
-            TypeExpr::Struct(s) => TypeExpr::Struct(Struct {
-                fields: s
-                    .fields
-                    .into_iter()
-                    .map(|field| Field {
-                        name: field.name,
-                        type_expr: strip_spans(field.type_expr),
-                    })
-                    .collect(),
-            }),
+            TypeExpr::Struct(_s) => todo!("strip the struct spans"),
             TypeExpr::Duck(d) => TypeExpr::Duck(Duck {
                 fields: d
                     .fields
@@ -1003,23 +937,6 @@ pub mod tests {
             ),
         );
 
-        assert_type_expression(
-            "Wrapper<struct { success: Bool, value: Float }>",
-            TypeExpr::RawTypeName(
-                false,
-                vec!["Wrapper".to_string()],
-                Some(vec![
-                    TypeExpr::Struct(Struct {
-                        fields: vec![
-                            Field::new("success".to_string(), TypeExpr::Bool.into_empty_span()),
-                            Field::new("value".to_string(), TypeExpr::Float.into_empty_span()),
-                        ],
-                    })
-                    .into_empty_span(),
-                ]),
-            ),
-        );
-
         // TODO: discuss unnamed paramters in fn typeexpr
         //      fn (String) -> Int
         // without the x:
@@ -1306,31 +1223,6 @@ pub mod tests {
         );
 
         assert_type_expression(
-            "fn(input: struct { id: Int }) -> struct { success: Bool }",
-            TypeExpr::Fun(
-                vec![(
-                    "input".to_string().into(),
-                    TypeExpr::Struct(Struct {
-                        fields: vec![Field::new(
-                            "id".to_string(),
-                            TypeExpr::Int.into_empty_span(),
-                        )],
-                    })
-                    .into_empty_span(),
-                )],
-                Some(Box::new(
-                    TypeExpr::Struct(Struct {
-                        fields: vec![Field::new(
-                            "success".to_string(),
-                            TypeExpr::Bool.into_empty_span(),
-                        )],
-                    })
-                    .into_empty_span(),
-                )),
-            ),
-        );
-
-        assert_type_expression(
             "fn() -> (Int, duck { val: Char })",
             TypeExpr::Fun(
                 vec![],
@@ -1357,52 +1249,6 @@ pub mod tests {
         assert_type_expression(
             "go sync.WaitGroup",
             TypeExpr::Go("sync.WaitGroup".to_string()),
-        );
-
-        assert_type_expression(
-            "struct { x: String }",
-            TypeExpr::Struct(Struct {
-                fields: vec![Field::new(
-                    "x".to_string(),
-                    TypeExpr::String.into_empty_span(),
-                )],
-            }),
-        );
-
-        assert_type_expression(
-            "struct { a: Int, b: Bool }",
-            TypeExpr::Struct(Struct {
-                fields: vec![
-                    Field::new("a".to_string(), TypeExpr::Int.into_empty_span()),
-                    Field::new("b".to_string(), TypeExpr::Bool.into_empty_span()),
-                ],
-            }),
-        );
-
-        assert_type_expression(
-            "struct { nested: struct { inner: Float } }",
-            TypeExpr::Struct(Struct {
-                fields: vec![Field::new(
-                    "nested".to_string(),
-                    TypeExpr::Struct(Struct {
-                        fields: vec![Field::new(
-                            "inner".to_string(),
-                            TypeExpr::Float.into_empty_span(),
-                        )],
-                    })
-                    .into_empty_span(),
-                )],
-            }),
-        );
-
-        assert_type_expression(
-            "struct { x: String, }",
-            TypeExpr::Struct(Struct {
-                fields: vec![Field::new(
-                    "x".to_string(),
-                    TypeExpr::String.into_empty_span(),
-                )],
-            }),
         );
 
         assert_type_expression(
@@ -1571,31 +1417,20 @@ pub mod tests {
         );
 
         assert_type_expression(
-            "duck { x: Int } | struct { y: String }",
-            TypeExpr::Or(vec![
-                TypeExpr::Duck(Duck {
-                    fields: vec![Field::new("x".to_string(), TypeExpr::Int.into_empty_span())],
-                })
-                .into_empty_span(),
-                TypeExpr::Struct(Struct {
-                    fields: vec![Field::new(
-                        "y".to_string(),
-                        TypeExpr::String.into_empty_span(),
-                    )],
-                })
-                .into_empty_span(),
-            ]),
-        );
-
-        assert_type_expression(
             "{ x: \"hallo\" } | { x: \"bye\" }",
             TypeExpr::Or(vec![
                 TypeExpr::Duck(Duck {
-                    fields: vec![Field::new("x".to_string(), TypeExpr::ConstString("hallo".to_string()).into_empty_span())],
+                    fields: vec![Field::new(
+                        "x".to_string(),
+                        TypeExpr::ConstString("hallo".to_string()).into_empty_span(),
+                    )],
                 })
                 .into_empty_span(),
                 TypeExpr::Duck(Duck {
-                    fields: vec![Field::new("x".to_string(), TypeExpr::ConstString("bye".to_string()).into_empty_span())],
+                    fields: vec![Field::new(
+                        "x".to_string(),
+                        TypeExpr::ConstString("bye".to_string()).into_empty_span(),
+                    )],
                 })
                 .into_empty_span(),
             ]),
@@ -1621,9 +1456,6 @@ pub mod tests {
             "type Tup = (Int, String, (Float, {x: String}),);",
             "type Tup = go fmt;",
             "type Tup = go sync.WaitGroup;",
-            "type Struct = struct { x: String };",
-            "type Struct = struct { x: String, y: String, z: String, };",
-            "type Struct = struct { x: String, y: String, z: String, };",
             "type X = ::String;",
             "type X = String::ABC::C;",
             "type X = ::String::ABC::C;",
@@ -1701,6 +1533,7 @@ pub mod tests {
             "x: String }",
             "{ x: duck { }",
             "struct {}",
+            "struct { name: String }",
             "struct {,}",
             "::",
             "X:Y:Z:",

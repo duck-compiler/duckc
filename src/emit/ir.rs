@@ -250,15 +250,12 @@ impl IrValue {
             IrValue::Int(i) => format!("ConcDuckInt {{ value: {i} }}"),
             IrValue::Float(f) => format!("ConcDuckFloat {{ value: {f} }}"),
             IrValue::Char(c) => format!("ConcDuckChar {{ value: '{c}' }}"),
-            IrValue::String(s) => format!(
-                "ConstString_{} {{ \"{s}\" }}",
-                escape_string_literal(s)
-            ),
+            IrValue::String(s) => format!("ConstString_{} {{ \"{s}\" }}", escape_string_literal(s)),
             IrValue::Var(v) => v.to_string(),
             IrValue::Struct(s, fields) => {
                 format!(
                     // TODO: check if this should be a reference
-                    "{s}{{{}}}",
+                    "&{s}{{{}}}",
                     fields
                         .iter()
                         .map(|x| format!("{}: {}", x.0, x.1.emit_as_go()))
@@ -280,6 +277,17 @@ impl IrValue {
             IrValue::FieldAccess(o, field_name) => {
                 format!("{}.{field_name}", o.emit_as_go())
             }
+            IrValue::MethodCall(o, method_name, params) => {
+                format!(
+                    "{}.{method_name}({})",
+                    o.emit_as_go(),
+                    params
+                        .iter()
+                        .map(|x| x.emit_as_go())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
             IrValue::Tuple(go_struct, fields) => {
                 format!(
                     "{go_struct}{{{}}}",
@@ -290,6 +298,7 @@ impl IrValue {
                         .join(", ")
                 )
             }
+            IrValue::Nil => "nil".to_string(),
             IrValue::BoolNegate(o) => format!("!{}", o.emit_as_go()),
             IrValue::Lambda(params, return_type, body) => format!(
                 "func({}) {} {{\n{}\n}} ",

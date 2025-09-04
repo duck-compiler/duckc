@@ -2,7 +2,8 @@
 #![allow(
     clippy::needless_return,
     clippy::match_like_matches_macro,
-    clippy::only_used_in_recursion
+    clippy::only_used_in_recursion,
+    clippy::large_enum_variant
 )]
 
 use std::{
@@ -26,7 +27,7 @@ use crate::{
         lexer::lex_parser,
         make_input, parse_failure,
         source_file_parser::source_file_parser,
-        type_parser::{Duck, Struct, TypeExpr},
+        type_parser::{Duck, TypeExpr},
         use_statement_parser::UseStatement,
         value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr},
     },
@@ -213,7 +214,7 @@ fn parse_src_file(
             TypeExpr::TypeName(_global, _, Some(_)) => todo!("type params"),
             TypeExpr::TypeName(global, _, None) => *global = false,
             TypeExpr::Array(t) => typename_reset_global(&mut t.0),
-            TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => {
+            TypeExpr::Duck(Duck { fields }) => {
                 for field in fields {
                     typename_reset_global(&mut field.type_expr.0);
                 }
@@ -347,7 +348,12 @@ fn parse_src_file(
                     typename_reset_global_value_expr(&mut field.0);
                 }
             }
-            ValueExpr::Duck(fields) | ValueExpr::Struct(fields) => {
+            ValueExpr::Duck(fields) => {
+                for field in fields {
+                    typename_reset_global_value_expr(&mut field.1.0);
+                }
+            }
+            ValueExpr::Struct { fields, .. } => {
                 for field in fields {
                     typename_reset_global_value_expr(&mut field.1.0);
                 }

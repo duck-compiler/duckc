@@ -1,6 +1,10 @@
 use crate::{
-    emit::value::{IrInstruction, IrValue},
-    parse::type_parser::{Duck, Field, Struct, TypeExpr},
+    emit::value::{IrInstruction, IrValue, ToIr},
+    parse::{
+        Field,
+        struct_parser::StructDefinition,
+        type_parser::{Duck, TypeExpr},
+    },
     semantics::type_resolve::TypeEnv,
 };
 
@@ -59,13 +63,14 @@ pub fn primitive_type_name(primitive_type_expr: &TypeExpr) -> &'static str {
     }
 }
 
-pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
+pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<IrInstruction> {
     let summary = type_env.summarize();
 
     fn interface_implementations(
         typename: String,
         type_expr: &TypeExpr,
         type_env: &mut TypeEnv,
+        to_ir: &mut ToIr,
     ) -> Vec<IrInstruction> {
         return match type_expr {
             TypeExpr::Duck(duck) => duck
@@ -116,22 +121,91 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                     .into_iter()
                 })
                 .collect::<Vec<_>>(),
-            TypeExpr::Struct(r#struct) => r#struct
-                .fields
-                .iter()
-                .map(|field| {
-                    IrInstruction::FunDef(
-                        format!("Get{}", field.name),
-                        Some(("self".into(), typename.clone())),
-                        vec![],
-                        Some(field.type_expr.0.as_go_type_annotation(type_env)),
-                        vec![IrInstruction::Return(Some(IrValue::FieldAccess(
-                            IrValue::Var("self".into()).into(),
-                            field.name.clone(),
-                        )))],
-                    )
-                })
-                .collect::<Vec<_>>(),
+            TypeExpr::Struct(s) => {
+                let StructDefinition {
+                    name: struct_name,
+                    fields,
+                    methods,
+                    generics,
+                } = type_env.get_struct_def(s.as_str()).clone();
+
+                if generics.is_some() {
+                    return Vec::new();
+                }
+
+                let mut instructions: Vec<IrInstruction> = fields
+                    .iter()
+                    .flat_map(|field| {
+                        vec![
+                            IrInstruction::FunDef(
+                                format!("Get{}", field.name),
+                                Some(("self".into(), format!("*{}", typename.clone()))),
+                                vec![],
+                                Some(field.type_expr.0.as_go_type_annotation(type_env)),
+                                vec![IrInstruction::Return(Some(IrValue::FieldAccess(
+                                    IrValue::Var("self".into()).into(),
+                                    field.name.clone(),
+                                )))],
+                            ),
+                            IrInstruction::FunDef(
+                                format!("GetPtr{}", field.name),
+                                Some(("self".into(), format!("*{}", typename.clone()))),
+                                vec![],
+                                Some(format!(
+                                    "*{}",
+                                    field.type_expr.0.as_go_type_annotation(type_env)
+                                )),
+                                vec![IrInstruction::Return(Some(IrValue::Pointer(
+                                    IrValue::FieldAccess(
+                                        IrValue::Var("self".into()).into(),
+                                        field.name.clone(),
+                                    )
+                                    .into(),
+                                )))],
+                            ),
+                            IrInstruction::FunDef(
+                                format!("Set{}", field.name),
+                                Some(("self".into(), format!("*{}", typename.clone()))),
+                                vec![(
+                                    "param".into(),
+                                    field.type_expr.0.as_go_type_annotation(type_env),
+                                )],
+                                None,
+                                vec![IrInstruction::VarAssignment(
+                                    format!("self.{}", field.name),
+                                    IrValue::Var("param".into()),
+                                )],
+                            ),
+                        ]
+                        .into_iter()
+                    })
+                    .collect();
+
+                for m in methods.iter() {
+                    if m.generics.is_some() {
+                        continue;
+                    }
+                    if m.name == "fisch" {
+                        println!("method {} {:?}", m.name, m.value_expr.0);
+                    }
+                    instructions.push(m.emit(
+                        Some(("self".to_string(), format!("*{struct_name}"))),
+                        type_env,
+                        to_ir,
+                    ));
+                }
+
+                for m in type_env.get_generic_methods(struct_name.clone()).clone() {
+                    instructions.push(m.emit(
+                        Some(("self".to_string(), format!("*{struct_name}"))),
+                        type_env,
+                        to_ir,
+                    ));
+                }
+
+                instructions
+            }
+
             _ => {
                 vec![]
             }
@@ -236,10 +310,11 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
         .iter()
         .filter(|type_expr| type_expr.is_object_like())
         .map(|type_expr| {
+            let type_expr = type_env.try_resolve_type_expr(type_expr);
             let type_name = type_expr.as_clean_go_type_name(type_env);
 
             let mut instructions =
-                interface_implementations(type_name.clone(), type_expr, type_env);
+                interface_implementations(type_name.clone(), &type_expr, type_env, to_ir);
 
             instructions.push(match type_expr {
                 TypeExpr::Tuple(t) => IrInstruction::StructDef(
@@ -249,7 +324,14 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                         .map(|(i, x)| (format!("field_{i}"), x.0.as_go_type_annotation(type_env)))
                         .collect::<Vec<_>>(),
                 ),
-                TypeExpr::Struct(Struct { fields }) | TypeExpr::Duck(Duck { fields }) => {
+                TypeExpr::Struct(struct_name) => {
+                    let StructDefinition {
+                        name: _,
+                        fields,
+                        methods: _,
+                        generics: _,
+                    } = type_env.get_struct_def(struct_name.as_str()).clone();
+
                     IrInstruction::StructDef(
                         type_name,
                         fields
@@ -265,6 +347,20 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
                             .collect::<Vec<_>>(),
                     )
                 }
+                TypeExpr::Duck(Duck { fields }) => IrInstruction::StructDef(
+                    type_name,
+                    fields
+                        .iter()
+                        .map(
+                            |Field {
+                                 name,
+                                 type_expr: (type_expr, _),
+                             }| {
+                                (name.clone(), type_expr.as_go_type_annotation(type_env))
+                            },
+                        )
+                        .collect::<Vec<_>>(),
+                ),
                 _ => panic!("cant create for {type_name}"),
             });
             instructions
@@ -283,9 +379,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv) -> Vec<IrInstruction> {
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
-            TypeExpr::GenericToBeReplaced(..) => {
-                panic!("shouldn't access the GenericToBeReplaced as go type annotation")
-            }
+            TypeExpr::Alias(def) => def.type_expression.0.as_go_type_annotation(type_env),
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::Array(t) => format!("[]{}", t.0.as_go_type_annotation(type_env)),
             TypeExpr::Any => "interface{}".to_string(),
@@ -302,11 +396,15 @@ impl TypeExpr {
             TypeExpr::Char => "DuckChar".to_string(),
             TypeExpr::String => "DuckString".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeNameInternal(name) => name.clone(),
+            TypeExpr::TypeNameInternal(name) => type_env
+                .try_resolve_type_alias(name)
+                .map(|x| x.as_go_type_annotation(type_env))
+                .unwrap_or(name.clone()),
             // todo: type params
             TypeExpr::TypeName(_, name, _) => type_env
-                .resolve_type_alias(name)
-                .as_go_type_annotation(type_env),
+                .try_resolve_type_alias(name)
+                .map(|x| x.as_go_type_annotation(type_env))
+                .unwrap_or(name.clone()),
             TypeExpr::Fun(params, return_type) => format!(
                 "func({}) {}",
                 params
@@ -330,7 +428,7 @@ impl TypeExpr {
                         .0
                         .as_go_type_annotation(type_env))
             ),
-            TypeExpr::Struct(_struct) => self.as_clean_go_type_name(type_env),
+            TypeExpr::Struct(_struct) => format!("*{}", self.as_clean_go_type_name(type_env)),
             TypeExpr::Duck(duck) => {
                 let mut fields = duck.fields.clone();
                 fields.sort_by_key(|field| field.name.clone());
@@ -348,16 +446,14 @@ impl TypeExpr {
                         .join("\n"),
                 )
             }
-            TypeExpr::Tuple(_fields) => {
-                self.as_clean_go_type_name(type_env)
-            }
+            TypeExpr::Tuple(_fields) => self.as_clean_go_type_name(type_env),
             TypeExpr::Or(_variants) => "any".to_string(),
         };
     }
 
     pub fn as_go_concrete_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
-            TypeExpr::GenericToBeReplaced(..) => panic!(),
+            TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
             TypeExpr::ConstBool(b) => primitive_type_name(&TypeExpr::ConstBool(*b)).to_string(),
@@ -395,7 +491,7 @@ impl TypeExpr {
                         .0
                         .as_go_type_annotation(type_env))
             ),
-            TypeExpr::Duck(Duck { fields }) | TypeExpr::Struct(Struct { fields }) => format!(
+            TypeExpr::Duck(Duck { fields }) => format!(
                 "struct {{\n{}\n}}",
                 fields
                     .iter()
@@ -407,6 +503,7 @@ impl TypeExpr {
                     .collect::<Vec<_>>()
                     .join("\n")
             ),
+            TypeExpr::Struct(s) => s.clone(),
             TypeExpr::Tuple(fields) => {
                 format!(
                     "struct {{\n{}\n}}",
@@ -434,9 +531,9 @@ impl TypeExpr {
         }
     }
 
-    pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
+    pub fn type_id(&self, type_env: &mut TypeEnv) -> String {
         return match self {
-            TypeExpr::GenericToBeReplaced(x) => x.clone(),
+            TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::RawTypeName(_, ident, _) => {
                 panic!("{ident:?}")
             }
@@ -454,8 +551,91 @@ impl TypeExpr {
             TypeExpr::String => "DuckString".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
-            TypeExpr::TypeName(_, name, _type_params) => type_env.resolve_type_alias(name)
-                .as_clean_go_type_name(type_env),
+            TypeExpr::TypeName(_, name, _type_params) => name.clone(),
+            TypeExpr::TypeNameInternal(name) => name.clone(),
+            TypeExpr::InlineGo => "InlineGo".to_string(),
+            TypeExpr::Fun(params, return_type) => format!(
+                "Fun_From_{}{}",
+                params
+                    .iter()
+                    .map(|(name, type_expr)| format!(
+                        "{}_{}",
+                        name.clone().unwrap_or_else(|| "".to_string()),
+                        type_expr.0.type_id(type_env)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("_"),
+                return_type
+                    .as_ref()
+                    .map(|type_expr| format!("_To_{}", type_expr.0.as_clean_go_type_name(type_env)))
+                    .unwrap_or_else(|| "".to_string())
+            ),
+            TypeExpr::Struct(s) => s.clone(),
+            TypeExpr::Duck(duck) => format!(
+                "Duck_{}",
+                duck.fields
+                    .iter()
+                    .map(|field| format!(
+                        "{}_{}",
+                        field.name,
+                        field.type_expr.0.unconst().type_id(type_env)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("_")
+            ),
+            TypeExpr::Tuple(fields) => {
+                format!(
+                    "Tup_{}",
+                    fields
+                        .iter()
+                        .map(|type_expr| type_expr.0.unconst().type_id(type_env))
+                        .collect::<Vec<_>>()
+                        .join("_")
+                )
+            }
+            TypeExpr::Or(variants) => {
+                // mvmo 03.07.25: Check for double sort
+                let mut variants = variants
+                    .clone()
+                    .iter()
+                    .map(|variant| variant.0.type_id(type_env))
+                    .collect::<Vec<_>>();
+
+                variants.sort();
+
+                return format!("Union_{}", variants.join("_or_"));
+            }
+        };
+    }
+
+    pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
+        return match self {
+            TypeExpr::Alias(..) => panic!("alias should be replaced"),
+            TypeExpr::RawTypeName(_, ident, _) => {
+                panic!("{ident:?}")
+            }
+            TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
+            TypeExpr::ConstBool(b) => primitive_type_name(&TypeExpr::ConstBool(*b)).to_string(),
+            TypeExpr::ConstString(str) => {
+                primitive_type_name(&TypeExpr::ConstString(str.clone())).to_string()
+            }
+            TypeExpr::Array(t) => format!("Array_{}", t.0.as_clean_go_type_name(type_env)),
+            TypeExpr::Any => "Any".to_string(),
+            TypeExpr::Bool => "DuckBool".to_string(),
+            TypeExpr::Int => "DuckInt".to_string(),
+            TypeExpr::Float => "DuckFloat".to_string(),
+            TypeExpr::Char => "DuckChar".to_string(),
+            TypeExpr::String => "DuckString".to_string(),
+            TypeExpr::Go(identifier) => identifier.clone(),
+            // todo: type params
+            TypeExpr::TypeName(_, name, _type_params) => {
+                println!("resolving {name}");
+                let r = type_env
+                    .resolve_type_alias(name)
+                    .as_clean_go_type_name(type_env);
+                println!("resolved {name} {r:?}");
+                r
+            }
             TypeExpr::TypeNameInternal(name) => name.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type) => format!(
@@ -474,20 +654,7 @@ impl TypeExpr {
                     .map(|type_expr| format!("_To_{}", type_expr.0.as_clean_go_type_name(type_env)))
                     .unwrap_or_else(|| "".to_string())
             ),
-            TypeExpr::Struct(r#struct) if r#struct.fields.is_empty() => "Any".to_string(),
-            TypeExpr::Struct(r#struct) => format!(
-                "Struct_{}",
-                r#struct
-                    .fields
-                    .iter()
-                    .map(|field| format!(
-                        "{}_{}",
-                        field.name,
-                        field.type_expr.0.unconst().as_clean_go_type_name(type_env)
-                    ))
-                    .collect::<Vec<_>>()
-                    .join("_")
-            ),
+            TypeExpr::Struct(s) => s.clone(),
             TypeExpr::Duck(duck) => format!(
                 "Duck_{}",
                 duck.fields
@@ -505,7 +672,11 @@ impl TypeExpr {
                     "Tup_{}",
                     fields
                         .iter()
-                        .map(|type_expr| type_expr.0.unconst().as_clean_go_type_name(type_env).to_string())
+                        .map(|type_expr| type_expr
+                            .0
+                            .unconst()
+                            .as_clean_go_type_name(type_env)
+                            .to_string())
                         .collect::<Vec<_>>()
                         .join("_")
                 )

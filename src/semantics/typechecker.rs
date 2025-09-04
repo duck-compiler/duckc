@@ -1,9 +1,12 @@
+use std::panic::Location;
 use std::process;
 
+use chumsky::container::Seq;
 use colored::Colorize;
 
-use crate::parse::type_parser::{Duck, Field, Struct, TypeExpr};
-use crate::parse::{SS, failure_with_occurence};
+use crate::parse::struct_parser::StructDefinition;
+use crate::parse::type_parser::{Duck, TypeExpr};
+use crate::parse::{Field, SS, failure_with_occurence};
 use crate::parse::{
     Spanned, failure,
     value_parser::{ValFmtStringContents, ValueExpr},
@@ -15,9 +18,21 @@ impl TypeExpr {
         return format!("{self}");
     }
 
+    pub fn from_value_expr_resolved_type_name(
+        value_expr: &ValueExpr,
+        type_env: &mut TypeEnv,
+    ) -> TypeExpr {
+        let mut res = TypeExpr::from_value_expr(value_expr, type_env);
+        if let TypeExpr::TypeName(_, name, _) = &res {
+            res = type_env.resolve_type_alias(name);
+        }
+        res
+    }
+
+    #[track_caller]
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
-            ValueExpr::RawVariable(..) => panic!(),
+            ValueExpr::RawVariable(_x, p) => panic!("{}", p.join(" ").leak()),
             ValueExpr::FormattedString(contents) => {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {
@@ -131,8 +146,25 @@ impl TypeExpr {
 
                 TypeExpr::Tuple(vec![])
             }
-            ValueExpr::Struct(fields) => {
-                let types = fields
+            ValueExpr::Struct {
+                name,
+                fields: value_expr_fields,
+                type_params,
+            } => {
+                if type_params.is_some() {
+                    panic!(
+                        "compiler error: type params should be omitted by now {name} {type_params:?}"
+                    )
+                }
+
+                let type_expr = type_env.try_resolve_type_expr(&type_env.resolve_type_alias(name));
+                let TypeExpr::Struct(struct_def) = type_expr else {
+                    panic!("is not a struct");
+                };
+
+                let struct_def = type_env.get_struct_def(struct_def.as_str()).clone();
+
+                let value_expr_fields = value_expr_fields
                     .iter()
                     .map(|(name, (value_expr, span))| {
                         Field::new(
@@ -142,7 +174,30 @@ impl TypeExpr {
                     })
                     .collect::<Vec<Field>>();
 
-                TypeExpr::Struct(Struct { fields: types })
+                let is_missing_field = !struct_def.fields.iter().all(|field| {
+                    let field_from_value_expr = value_expr_fields
+                        .iter()
+                        .find(|value_expr_field| value_expr_field.name == field.name);
+
+                    let Some(field_from_value_expr) = field_from_value_expr else {
+                        return false;
+                    };
+
+                    check_type_compatability(
+                        &field.type_expr,
+                        &field_from_value_expr.type_expr,
+                        type_env,
+                    );
+                    return true;
+                });
+
+                if is_missing_field || struct_def.fields.len() != value_expr_fields.len() {
+                    panic!("invalid type from value expr {is_missing_field}")
+                }
+
+                // TypeExpr::Struct(Struct { fields: types })
+                // TODO: require name and implement typing for structs
+                TypeExpr::Struct(struct_def.name.clone())
             }
             ValueExpr::Tuple(fields) => {
                 let types = fields
@@ -297,12 +352,22 @@ impl TypeExpr {
 
                 return ty;
             }
-            ValueExpr::Variable(_, ident, type_expr) => type_expr
-                .as_ref()
-                .cloned()
-                .or(type_env.get_identifier_type(ident.clone()))
-                .expect("Expected type but didn't get one")
-                .clone(),
+            ValueExpr::Variable(_, ident, type_expr) => {
+                let s = Location::caller();
+
+                type_expr
+                    .as_ref()
+                    .cloned()
+                    .or(type_env.get_identifier_type(ident.clone()))
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "{} - {s}",
+                            format!("Expected type but didn't get one {ident} {type_expr:?}")
+                                .leak(),
+                        )
+                    })
+                    .clone()
+            }
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(
                     &(
@@ -341,16 +406,18 @@ impl TypeExpr {
                 target_obj,
                 field_name,
             } => {
-                let target_obj_type_expr = TypeExpr::from_value_expr(&target_obj.0, type_env);
+                let target_obj_type_expr =
+                    TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
                 require(
                     target_obj_type_expr.is_object_like(),
                     format!(
-                        "the target of a field access must be of type duck, struct or tuple. Got {}",
+                        "the target of a field access must be of type duck, struct or tuple. Got {target_obj_type_expr:?} {}",
                         target_obj_type_expr.as_go_type_annotation(type_env)
                     ),
                 );
                 require(
-                    target_obj_type_expr.has_field_by_name(field_name.clone()),
+                    target_obj_type_expr.has_field_by_name(field_name.clone(), type_env)
+                        || target_obj_type_expr.has_method_by_name(field_name.clone(), type_env),
                     format!(
                         "{:?} {} doesn't have a field with name {}",
                         &target_obj_type_expr,
@@ -359,7 +426,7 @@ impl TypeExpr {
                     ),
                 );
 
-                target_obj_type_expr.typeof_field(field_name.to_string())
+                target_obj_type_expr.typeof_field(field_name.to_string(), type_env)
             }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(&condition.0, type_env);
@@ -395,6 +462,13 @@ impl TypeExpr {
         }
     }
 
+    pub fn is_unit(&self) -> bool {
+        match self {
+            Self::Tuple(v) => v.is_empty(),
+            _ => false,
+        }
+    }
+
     pub fn is_struct(&self) -> bool {
         match self {
             Self::Struct(..) => true,
@@ -413,19 +487,45 @@ impl TypeExpr {
     pub fn has_field(&self, field: Field) -> bool {
         match self {
             Self::Tuple(fields) => fields.len() > field.name.parse::<usize>().unwrap(),
-            Self::Struct(r#struct) => r#struct.fields.contains(&field),
+            Self::Struct(_struct) => todo!(),
             Self::Duck(duck) => duck.fields.contains(&field),
             _ => false,
         }
     }
 
-    fn has_field_by_name(&self, name: String) -> bool {
+    fn has_method_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
+        match self {
+            Self::Struct(r#struct) => {
+                let StructDefinition {
+                    name: struct_name,
+                    fields: _,
+                    methods,
+                    generics: _,
+                } = type_env.get_struct_def(r#struct.as_str());
+
+                methods.iter().any(|f| f.name.as_str() == name.as_str())
+                    || type_env
+                        .get_generic_methods(struct_name.clone())
+                        .iter()
+                        .any(|x| x.name.as_str() == name.as_str())
+            }
+            _ => false,
+        }
+    }
+
+    fn has_field_by_name(&self, name: String, type_env: &TypeEnv) -> bool {
         match self {
             Self::Tuple(fields) => fields.len() > name.parse::<usize>().unwrap(),
-            Self::Struct(r#struct) => r#struct
-                .fields
-                .iter()
-                .any(|struct_field| *struct_field.name == name),
+            Self::Struct(r#struct) => {
+                let StructDefinition {
+                    name: _,
+                    fields,
+                    methods: _,
+                    generics: _,
+                } = type_env.get_struct_def(r#struct.as_str());
+
+                fields.iter().any(|f| f.name.as_str() == name.as_str())
+            }
             Self::Duck(duck) => duck
                 .fields
                 .iter()
@@ -434,17 +534,60 @@ impl TypeExpr {
         }
     }
 
-    fn typeof_field(&self, field_name: String) -> TypeExpr {
+    fn typeof_field(&self, field_name: String, type_env: &TypeEnv) -> TypeExpr {
         match self {
             Self::Tuple(fields) => fields[field_name.parse::<usize>().unwrap()].0.clone(),
-            Self::Struct(r#struct) => r#struct
-                .fields
-                .iter()
-                .find(|struct_field| *struct_field.name == field_name)
-                .expect("Tried to access field that doesn't exist")
-                .type_expr
-                .0
-                .clone(),
+            Self::Struct(r#struct) => {
+                let StructDefinition {
+                    name,
+                    fields,
+                    methods,
+                    generics: _,
+                } = type_env.get_struct_def(r#struct.as_str());
+
+                fields
+                    .iter()
+                    .map(|x| (x.name.clone(), x.type_expr.0.clone()))
+                    .chain(methods.iter().map(|x| {
+                        (
+                            x.name.clone(),
+                            TypeExpr::Fun(
+                                x.params
+                                    .clone()
+                                    .unwrap_or_default()
+                                    .iter()
+                                    .map(|x| (Some(x.0.clone()), x.1.clone()))
+                                    .collect(),
+                                x.return_type.clone().map(Box::new),
+                            ),
+                        )
+                    }))
+                    .chain(
+                        type_env
+                            .generic_methods_generated
+                            .get(name.as_str())
+                            .unwrap_or(&vec![])
+                            .iter()
+                            .map(|x| {
+                                (
+                                    x.name.clone(),
+                                    TypeExpr::Fun(
+                                        x.params
+                                            .clone()
+                                            .unwrap_or_default()
+                                            .iter()
+                                            .map(|x| (Some(x.0.clone()), x.1.clone()))
+                                            .collect(),
+                                        x.return_type.clone().map(Box::new),
+                                    ),
+                                )
+                            }),
+                    )
+                    .find(|struct_field| struct_field.0 == field_name)
+                    .expect("Tried to access field that doesn't exist")
+                    .1
+                    .clone()
+            }
             Self::Duck(duck) => duck
                 .fields
                 .iter()
@@ -640,6 +783,8 @@ fn check_type_compatability(
     given_type: &Spanned<TypeExpr>,
     type_env: &mut TypeEnv,
 ) {
+    let mut given_type = given_type.clone();
+    given_type.0 = type_env.try_resolve_type_expr(&given_type.0);
     let fail_requirement = |explain_required: String, explain_given: String| {
         let (smaller, larger) = if required_type.1.start <= given_type.1.start {
             (required_type.1, given_type.1)
@@ -667,6 +812,7 @@ fn check_type_compatability(
     };
 
     match &required_type.0 {
+        TypeExpr::Alias(..) => panic!("alias should have been replaced"),
         TypeExpr::Any => return,
         TypeExpr::InlineGo => todo!("should inline go be typechecked?"),
         TypeExpr::Go(_) => return,
@@ -678,7 +824,7 @@ fn check_type_compatability(
                         format!("{}", required_type.0).bright_yellow(),
                     ),
                     format!(
-                        "because of the fact, that the required type {} is a struct. The value you need to pass must be a duck aswell, but it isn't.",
+                        "because of the fact, that the required type {} is a struct. The value you need to pass must be a  aswell, but it isn't.",
                         format!("{}", required_type.0).bright_yellow(),
                     ),
                 )
@@ -893,7 +1039,7 @@ fn check_type_compatability(
             }
         }
         TypeExpr::Or(..) => {
-            require_subset_of_variant_type(required_type, given_type, type_env);
+            require_subset_of_variant_type(required_type, &given_type, type_env);
         }
         TypeExpr::Fun(required_params, required_return_type) => {
             if !given_type.0.is_fun() {
@@ -959,10 +1105,7 @@ fn check_type_compatability(
 
             check_type_compatability(content_type, &given_content_type, type_env);
         }
-        TypeExpr::RawTypeName(..)
-        | TypeExpr::TypeName(..)
-        | TypeExpr::TypeNameInternal(..)
-        | TypeExpr::GenericToBeReplaced(..) => {}
+        TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) | TypeExpr::TypeNameInternal(..) => {}
     }
 }
 
@@ -975,7 +1118,6 @@ mod test {
             lexer::lex_parser,
             make_input,
             source_file_parser::SourceFile,
-            type_parser::Field,
             value_parser::{empty_range, type_expr_into_empty_range, value_expr_parser},
         },
         semantics::type_resolve::{TypesSummary, typeresolve_source_file},

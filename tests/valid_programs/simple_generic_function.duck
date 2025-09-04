@@ -1,0 +1,11 @@
+use go "fmt";
+
+fn gen_func<T>(x: T) {
+    go {
+        fmt.Println(x)
+    }
+}
+
+fn main() {
+    gen_func<String>("hallo");
+}
