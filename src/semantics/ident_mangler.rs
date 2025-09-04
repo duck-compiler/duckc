@@ -77,7 +77,9 @@ impl MangleEnv {
     ) -> Option<Vec<String>> {
         let prefix = if is_global { &[] } else { prefix };
 
-        if let Some((is_glob, import_path)) = self.resolve_import(ident.first()?.clone()) {
+        if !is_global
+            && let Some((is_glob, import_path)) = self.resolve_import(ident.first()?.clone())
+        {
             let mut res = Vec::new();
 
             if !is_glob {
@@ -463,10 +465,16 @@ pub fn mangle_value_expr(
             mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
         }),
         ValueExpr::Struct {
+            name,
             fields,
             type_params,
-            ..
         } => {
+            if let Some(mangled) = mangle_env.mangle_type(false, prefix, &[name.clone()]) {
+                let mut m = mangle_env.global_prefix.clone();
+                m.extend(mangled);
+                *name = mangle(&m);
+            }
+
             fields.iter_mut().for_each(|(_, value_expr)| {
                 mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
             });

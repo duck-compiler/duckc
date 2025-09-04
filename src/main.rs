@@ -211,8 +211,13 @@ fn parse_src_file(
 
     fn typename_reset_global(t: &mut TypeExpr) {
         match t {
-            TypeExpr::TypeName(_global, _, Some(_)) => todo!("type params"),
-            TypeExpr::TypeName(global, _, None) => *global = false,
+            TypeExpr::TypeName(global, _, type_params) => {
+                type_params
+                    .iter_mut()
+                    .flat_map(|x| x.iter_mut().map(|x| &mut x.0))
+                    .for_each(typename_reset_global);
+                *global = false;
+            }
             TypeExpr::Array(t) => typename_reset_global(&mut t.0),
             TypeExpr::Duck(Duck { fields }) => {
                 for field in fields {
@@ -404,6 +409,9 @@ fn parse_src_file(
     }
     for s in &std_src_file.type_definitions {
         result.type_definitions.push(s.clone());
+    }
+    for s in &std_src_file.struct_definitions {
+        result.struct_definitions.push(s.clone());
     }
     for s in &std_src_file.use_statements {
         if let UseStatement::Go(..) = s {

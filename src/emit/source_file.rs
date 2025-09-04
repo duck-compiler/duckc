@@ -5,7 +5,7 @@ use crate::{
         types::emit_type_definitions,
         value::{IrInstruction, ToIr},
     },
-    parse::{source_file_parser::SourceFile, use_statement_parser::UseStatement},
+    parse::{source_file_parser::SourceFile, type_parser::TypeExpr, use_statement_parser::UseStatement},
     semantics::type_resolve::TypeEnv,
 };
 
@@ -28,11 +28,16 @@ impl SourceFile {
 
         let mut emitted = HashSet::new();
 
-        for f in self.function_definitions {
+        for mut f in self.function_definitions {
             // generic functions shouldn't be emitted, as they have incomplete type information
             if f.generics.is_some() {
                 continue;
             }
+
+            if f.return_type.is_none() {
+                f.return_type = Some(TypeExpr::Tuple(vec![]).into_empty_span());
+            }
+
             if emitted.insert(f.name.clone()) {
                 instructions.push(f.emit(None, type_env, &mut to_ir));
             }

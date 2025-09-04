@@ -1,0 +1,10 @@
+use std::col::{ArrayList, new_array_list};
+use std::io::{println};
+
+fn main() {
+    let x: ArrayList<String> = new_array_list<String>();
+    x.push("Hallo").push("Welt");
+    x.for_each(fn(x: String) -> () { println(x); });
+    x.map<Int>(fn (val: String) -> Int { return std::string::to_int(val); })
+        .for_each(fn(x: Int) -> () { x->std::string::from_int()->println(); });
+}

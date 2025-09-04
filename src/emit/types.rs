@@ -185,9 +185,6 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                     if m.generics.is_some() {
                         continue;
                     }
-                    if m.name == "fisch" {
-                        println!("method {} {:?}", m.name, m.value_expr.0);
-                    }
                     instructions.push(m.emit(
                         Some(("self".to_string(), format!("*{struct_name}"))),
                         type_env,
@@ -418,13 +415,7 @@ impl TypeExpr {
                     .join(","),
                 return_type
                     .clone()
-                    .filter(|x| {
-                        match &x.0 {
-                            TypeExpr::Tuple(fields) if fields.is_empty() => false,
-                            _ => true,
-                        }
-                    })
-                    .map_or("".to_string(), |return_type| return_type
+                    .map_or("Tup_".to_string(), |return_type| return_type
                         .0
                         .as_go_type_annotation(type_env))
             ),

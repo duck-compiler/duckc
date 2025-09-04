@@ -1,0 +1,34 @@
+struct ArrayList<T> = {
+    elems: T[]
+} impl {
+    fn push(new_elem: T) -> ArrayList<T> {
+        go {
+            self.elems = append(self.elems, new_elem)
+        }
+        return self;
+    }
+
+    fn map<U>(f: fn(x: T) -> U) -> ArrayList<U> {
+        let res: ArrayList<U> = new_array_list<U>();
+        go {
+            for _, e := range self.elems {
+                res.elems = append(res.elems, f(e))
+            }
+        }
+        return res;
+    }
+
+    fn for_each(f: fn(e: T) -> ()) {
+        go {
+            for _, e := range self.elems {
+                f(e)
+            }
+        }
+    }
+};
+
+fn new_array_list<T>() -> ArrayList<T> {
+    return ArrayList<T> {
+        elems: .T[],
+    };
+}
