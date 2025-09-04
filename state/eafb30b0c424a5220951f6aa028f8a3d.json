@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "resolve implicit type and attach it to variables for type inference",
     "blame": {
-        "name": "Maurice Schmidt",
+        "name": "Mvmo",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo(@mvmo): typeinference",
