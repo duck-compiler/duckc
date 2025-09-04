@@ -306,7 +306,7 @@ impl IrValue {
                     .iter()
                     .map(|(name, ty)| format!("{name} {ty}"))
                     .collect::<Vec<_>>()
-                    .join(" "),
+                    .join(", "),
                 return_type.clone().unwrap_or_default(),
                 body.iter()
                     .map(IrInstruction::emit_as_go)
