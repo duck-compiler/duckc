@@ -1,0 +1,20 @@
+struct Y = {
+    name: String,
+} impl {
+    fn clone() -> Y {
+        return Y {
+            name: self.name,
+        }
+    }
+};
+
+type Cloneable<T> = { clone: fn() -> T };
+
+fn cloneable<T>(with: Cloneable<T>) -> T {
+    return with.clone();
+}
+
+fn main() {
+    let y: Y = Y { name: "yo" };
+    cloneable<Y>(y).name->std::io::println();
+}
