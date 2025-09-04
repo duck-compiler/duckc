@@ -5,10 +5,17 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValueExpr}, Context, Spanned, SS
+        Context, SS, Spanned,
+        function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
+        lexer::{Token, lex_parser},
+        make_input, parse_failure,
+        struct_parser::{StructDefinition, struct_definition_parser},
+        type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
+        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
+        value_parser::{ValFmtStringContents, ValueExpr},
     },
     semantics::ident_mangler::{
-        mangle, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
+        MangleEnv, mangle, mangle_type_expression, mangle_value_expr, unmangle,
     },
 };
 
@@ -451,9 +458,9 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
         } => {
             // TODO: type params
             append_global_prefix_value_expr(&mut target.0, mangle_env);
-            params.iter_mut().for_each(|param| {
-                append_global_prefix_value_expr(&mut param.0, mangle_env)
-            });
+            params
+                .iter_mut()
+                .for_each(|param| append_global_prefix_value_expr(&mut param.0, mangle_env));
             if let Some(type_params) = type_params {
                 for param in type_params {
                     append_global_prefix_type_expr(&mut param.0, mangle_env);
@@ -466,7 +473,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
                 let mut v = Vec::new();
                 v.extend_from_slice(&mangle_env.global_prefix);
                 v.push(name.clone());
-               *name = mangle(&v);
+                *name = mangle(&v);
             }
         }
         ValueExpr::If {
@@ -491,9 +498,9 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             append_global_prefix_value_expr(&mut body.0, mangle_env);
             mangle_env.pop_idents();
         }
-        ValueExpr::Tuple(value_exprs) => value_exprs.iter_mut().for_each(|value_expr| {
-            append_global_prefix_value_expr(&mut value_expr.0, mangle_env)
-        }),
+        ValueExpr::Tuple(value_exprs) => value_exprs
+            .iter_mut()
+            .for_each(|value_expr| append_global_prefix_value_expr(&mut value_expr.0, mangle_env)),
         ValueExpr::Block(value_exprs) => {
             mangle_env.push_idents();
             value_exprs.iter_mut().for_each(|value_expr| {
@@ -533,14 +540,8 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             append_global_prefix_value_expr(&mut value_expr.0, mangle_env)
         }
         ValueExpr::VarAssign(assignment) => {
-            append_global_prefix_value_expr(
-                &mut assignment.0.target.0,
-                mangle_env,
-            );
-            append_global_prefix_value_expr(
-                &mut assignment.0.value_expr.0,
-                mangle_env,
-            );
+            append_global_prefix_value_expr(&mut assignment.0.target.0, mangle_env);
+            append_global_prefix_value_expr(&mut assignment.0.value_expr.0, mangle_env);
         }
         ValueExpr::VarDecl(declaration) => {
             let declaration = &mut declaration.0;

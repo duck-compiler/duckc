@@ -5,7 +5,9 @@ use crate::{
         types::emit_type_definitions,
         value::{IrInstruction, ToIr},
     },
-    parse::{source_file_parser::SourceFile, type_parser::TypeExpr, use_statement_parser::UseStatement},
+    parse::{
+        source_file_parser::SourceFile, type_parser::TypeExpr, use_statement_parser::UseStatement,
+    },
     semantics::type_resolve::TypeEnv,
 };
 

@@ -469,7 +469,8 @@ pub fn mangle_value_expr(
             fields,
             type_params,
         } => {
-            if let Some(mangled) = mangle_env.mangle_type(false, prefix, &[name.clone()]) {
+            if let Some(mangled) = mangle_env.mangle_type(false, prefix, std::slice::from_ref(name))
+            {
                 let mut m = mangle_env.global_prefix.clone();
                 m.extend(mangled);
                 *name = mangle(&m);
