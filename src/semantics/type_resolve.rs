@@ -1464,6 +1464,16 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             typeresolve_struct_def(struct_definition, type_env);
         });
 
+    for x in &type_env.generic_fns_generated {
+        if !source_file
+            .function_definitions
+            .iter()
+            .any(|y| x.name.as_str() == y.name.as_str())
+        {
+            source_file.function_definitions.push(x.clone());
+        }
+    }
+
     type_env.struct_definitions = source_file.struct_definitions.clone();
     type_env.function_definitions = source_file.function_definitions.clone();
 }
@@ -1571,6 +1581,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         } => {
             typeresolve_value_expr(&mut target.0, type_env);
 
+            // generic method call
             if let Some(type_params_vec) = type_params
                 && let ValueExpr::FieldAccess {
                     target_obj,
@@ -1646,6 +1657,26 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                         typeresolve_struct_def(s, type_env);
                     }
                     type_env.generic_structs_generated = cloned;
+
+                    let mut cloned = type_env.generic_fns_generated.clone();
+                    for s in cloned.iter_mut() {
+                        typeresolve_function_definition(s, type_env);
+                    }
+                    type_env.generic_fns_generated = cloned;
+
+                    let mut cloned = type_env.generic_methods_generated.clone();
+                    for (s_name, values) in cloned.iter_mut() {
+                        for v in values {
+                            type_env.push_identifier_types();
+                            type_env.insert_identifier_type(
+                                "self".to_string(),
+                                TypeExpr::Struct(s_name.clone()),
+                            );
+                            typeresolve_function_definition(v, type_env);
+                            type_env.push_identifier_types();
+                        }
+                    }
+                    type_env.generic_methods_generated = cloned;
 
                     type_env.push_identifier_types();
                     type_env
