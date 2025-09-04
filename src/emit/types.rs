@@ -188,14 +188,21 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
 
                     let func_type_str = format!(
                         "func ({}) {}",
-                        method.params
+                        method
+                            .params
                             .iter()
                             .flat_map(|params| params.iter())
-                            .map(|param| format!("{} {}", param.0, param.1.0.as_go_type_annotation(type_env)))
+                            .map(|param| format!(
+                                "{} {}",
+                                param.0,
+                                param.1.0.as_go_type_annotation(type_env)
+                            ))
                             .collect::<Vec<_>>()
                             .join(","),
-                        method.return_type
+                        method
+                            .return_type
                             .as_ref()
+                            .filter(|x| !x.0.is_unit())
                             .map(|(type_expr, _)| type_expr.as_go_type_annotation(type_env))
                             .unwrap_or_default()
                     );
@@ -205,54 +212,64 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                             format!("Get{}", method.name),
                             Some(("self".into(), format!("*{}", typename.clone()))),
                             vec![],
-                            Some(method.type_expr().0.as_go_type_annotation(type_env)),
+                            Some(method.type_expr().0.as_go_return_type(type_env)),
                             vec![
                                 IrInstruction::VarDecl("result".to_string(), func_type_str.clone()),
-                                IrInstruction::VarAssignment("result".to_string(), IrValue::Lambda(
-                                    method.params
-                                        .iter()
-                                        .flat_map(|params| params.iter())
-                                        .map(|param| (param.0.clone(), param.1.0.as_go_type_annotation(type_env)))
-                                        .collect::<Vec<_>>(),
-                                    method.return_type
-                                        .as_ref()
-                                        .map(|return_type| return_type.0.as_go_type_annotation(type_env)),
-                                    vec![
-                                        IrInstruction::InlineGo(format!(
+                                IrInstruction::VarAssignment(
+                                    "result".to_string(),
+                                    IrValue::Lambda(
+                                        method
+                                            .params
+                                            .iter()
+                                            .flat_map(|params| params.iter())
+                                            .map(|param| {
+                                                (
+                                                    param.0.clone(),
+                                                    param.1.0.as_go_type_annotation(type_env),
+                                                )
+                                            })
+                                            .collect::<Vec<_>>(),
+                                        method.return_type.as_ref().map(|return_type| {
+                                            return_type.0.as_go_type_annotation(type_env)
+                                        }),
+                                        vec![IrInstruction::InlineGo(format!(
                                             "{} self.{}({})",
-                                            if method.return_type.is_some() { "return" } else { "" },
+                                            if method.return_type.is_some() {
+                                                "return"
+                                            } else {
+                                                ""
+                                            },
                                             method.name,
-                                            method.params
+                                            method
+                                                .params
                                                 .iter()
                                                 .flat_map(|params| params.iter())
                                                 .map(|param| param.0.clone())
                                                 .collect::<Vec<_>>()
                                                 .join(", "),
-                                        ))
-                                    ]
-                                )),
-                                IrInstruction::Return(Some(IrValue::Var("result".to_string())))
+                                        ))],
+                                    ),
+                                ),
+                                IrInstruction::Return(Some(IrValue::Var("result".to_string()))),
                             ],
                         ),
                         IrInstruction::FunDef(
                             format!("GetPtr{}", method.name),
                             Some(("self".into(), format!("*{}", typename.clone()))),
                             vec![],
-                            Some(format!("*{}", method.type_expr().0.as_go_type_annotation(type_env))),
-                            vec![
-                                IrInstruction::Return(Some(IrValue::Nil))
-                            ],
+                            Some(format!(
+                                "*{}",
+                                method.type_expr().0.as_go_return_type(type_env)
+                            )),
+                            vec![IrInstruction::Return(Some(IrValue::Nil))],
                         ),
                         IrInstruction::FunDef(
                             format!("Set{}", method.name),
                             Some(("self".into(), format!("*{}", typename.clone()))),
-                            vec![(
-                                "param".into(),
-                                func_type_str,
-                            )],
+                            vec![("param".into(), func_type_str)],
                             None,
                             vec![],
-                        )
+                        ),
                     ];
 
                     instructions.extend(instructions_to_be_duck_conform);
@@ -486,10 +503,9 @@ impl TypeExpr {
                     .collect::<Vec<_>>()
                     .join(","),
                 return_type
-                    .clone()
-                    .map_or("Tup_".to_string(), |return_type| return_type
-                        .0
-                        .as_go_type_annotation(type_env))
+                    .as_ref()
+                    .map(|x| x.0.as_go_return_type(type_env))
+                    .unwrap_or_default(),
             ),
             TypeExpr::Struct(_struct) => format!("*{}", self.as_clean_go_type_name(type_env)),
             TypeExpr::Duck(duck) => {
