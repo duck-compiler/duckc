@@ -1,6 +1,6 @@
 # Control Flow
 
-[< Previous](008-foundation-comments.md) | [Home](README.md) | [Next >](010-advanced-intro.md)
+[< Previous](008-foundation-comments.md) | [Home](README.md) | [Next >](010-foundation-structs.md)
 
 ---
 
@@ -39,13 +39,13 @@ fn main() {
     let x: Any = 5;
     match (x) {
         String str -> std::io::println(str),
-        else -> std::io::println("unmatched"),
+        else v -> std::io::println("unmatched"),
     }
 }
 ```
 
 ---
 
-[< Previous](008-foundation-comments.md) | [Home](README.md) | [Next >](010-advanced-intro.md)
+[< Previous](008-foundation-comments.md) | [Home](README.md) | [Next >](010-foundation-structs.md)
 
 <div align="center">🦆</div>

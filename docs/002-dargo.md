@@ -18,7 +18,8 @@ The clean command cleans all build artifacts and ensures a clean build, without 
 ## compile
 The compile command allows to compile a given file
 
-...
+## build
+Build the project with all of it's dependencies
 
 ---
 
