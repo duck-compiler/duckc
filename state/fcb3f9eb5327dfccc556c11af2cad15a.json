@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Robin F\u00fcllgraf",
-        "email": "robin@fuellgraf.dev"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo!(\"combine then and else, then return combined type\");",
     "status": "open",

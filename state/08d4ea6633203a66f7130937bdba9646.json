@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "26.06.2025: Return type of last expression as type of block?",
     "blame": {
-        "name": "Robin F\u00fcllgraf",
-        "email": "robin@fuellgraf.dev"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO: add correct return type of block",
     "status": "open",

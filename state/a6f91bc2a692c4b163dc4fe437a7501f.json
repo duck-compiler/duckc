@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "At the moment type definitions are just tested by if they parse or not.\nThey should be tested against their structure, so doing asserts on the actual TypeDefinition.\nJust as we do it everywhere else",
     "blame": {
-        "name": "Robin F\u00fcllgraf",
-        "email": "robin@fuellgraf.dev"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO(@mvmo): type definition testing",
     "status": "open",
