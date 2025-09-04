@@ -4,11 +4,9 @@ use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
-use crate::parse::{
-    Field, SS, Spanned,
-    generics_parser::{Generic, generics_parser},
-    value_parser::{TypeParam, empty_range},
-};
+use crate::{parse::{
+    generics_parser::{generics_parser, Generic}, value_parser::{empty_range, TypeParam}, Field, Spanned, SS
+}, semantics::type_resolve::TypeEnv};
 
 use super::lexer::Token;
 
@@ -165,8 +163,8 @@ pub enum TypeExpr {
     Float,
     Or(Vec<Spanned<TypeExpr>>),
     Fun(
-        Vec<(Option<String>, Spanned<TypeExpr>)>,
-        Option<Box<Spanned<TypeExpr>>>,
+        Vec<(Option<String>, Spanned<TypeExpr>)>, // params
+        Option<Box<Spanned<TypeExpr>>>, // return type
     ),
     Array(Box<Spanned<TypeExpr>>),
 }
@@ -174,6 +172,14 @@ pub enum TypeExpr {
 impl TypeExpr {
     pub fn into_empty_span(self) -> Spanned<TypeExpr> {
         (self, empty_range())
+    }
+
+    pub fn as_go_return_type(&self, type_env: &mut TypeEnv) -> String {
+        if self.is_unit() {
+            String::new()
+        } else {
+            self.as_go_type_annotation(type_env)
+        }
     }
 
     pub fn primitives() -> Vec<TypeExpr> {

@@ -1,0 +1,16 @@
+struct MyStruct = {
+    num: Int,
+} impl {
+    fn do_something(param_one: String) -> Int {
+        return self.num;
+    }
+};
+
+fn just_do_it(with: { do_something: fn (param_one: String) -> Int }) -> Int {
+    return with.do_something("hallo");
+}
+
+fn main() {
+    let my_struct_val: MyStruct = MyStruct { num: 5 };
+    just_do_it(my_struct_val)->std::string::from_int()->std::io::println();
+}

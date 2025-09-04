@@ -76,7 +76,11 @@ pub enum IrValue {
     Bool(bool),
     Char(char),
     Array(String, Vec<IrValue>),
-    Lambda(Vec<(String, String)>, Option<String>, Vec<IrInstruction>),
+    Lambda(
+        Vec<(String, String)>, // params
+        Option<String>,        // return type
+        Vec<IrInstruction>,    // body
+    ),
     Tuple(String, Vec<IrValue>),
     Duck(String, Vec<(String, IrValue)>),
     Struct(String, Vec<(String, IrValue)>),
@@ -167,8 +171,9 @@ fn walk_access(
                 target_obj,
                 field_name,
             } => {
-                let t = TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
-                match t {
+                let type_expr =
+                    TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
+                match type_expr {
                     TypeExpr::Tuple(..) => s.push_front(format!("field_{field_name}")),
                     TypeExpr::Duck(Duck { fields }) => {
                         let found_field = fields
@@ -178,6 +183,7 @@ fn walk_access(
                         if found_field.type_expr.0.is_array()
                             || found_field.type_expr.0.is_duck()
                             || found_field.type_expr.0.is_struct()
+                            || found_field.type_expr.0.is_fun()
                         {
                             s.push_front(format!("Get{field_name}()"));
                         } else {
@@ -296,14 +302,16 @@ impl ValueExpr {
                     None => return (instructions, None),
                 };
 
-                let result_type_annotation =
-                    TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
+                let result_type = TypeExpr::from_value_expr(self, type_env);
+                let result_type_annotation = result_type.as_go_type_annotation(type_env);
 
                 let result_var_name = env.new_var();
-                instructions.push(IrInstruction::VarDecl(
-                    result_var_name.clone(),
-                    result_type_annotation,
-                ));
+                if !result_type.is_unit() {
+                    instructions.push(IrInstruction::VarDecl(
+                        result_var_name.clone(),
+                        result_type_annotation,
+                    ));
+                }
 
                 let mut cases = Vec::new();
                 for arm in arms {
@@ -311,7 +319,9 @@ impl ValueExpr {
 
                     let (mut arm_instrs, arm_res) =
                         arm.value_expr.0.direct_or_with_instr(type_env, env);
-                    if let Some(res) = arm_res {
+                    if !result_type.is_unit()
+                        && let Some(res) = arm_res
+                    {
                         arm_instrs.push(IrInstruction::VarAssignment(result_var_name.clone(), res));
                     }
 
@@ -323,7 +333,14 @@ impl ValueExpr {
                 }
 
                 instructions.push(IrInstruction::SwitchType(match_on_value, cases));
-                (instructions, as_rvar(result_var_name))
+                (
+                    instructions,
+                    if result_type.is_unit() {
+                        None
+                    } else {
+                        as_rvar(result_var_name)
+                    },
+                )
             }
             ValueExpr::ArrayAccess(target, idx) => {
                 let (target_instr, target_res) = target.0.direct_or_with_instr(type_env, env);
@@ -407,10 +424,7 @@ impl ValueExpr {
                 }
                 (v, Some(IrValue::empty_tuple()))
             }
-            ValueExpr::InlineGo(s) => (
-                vec![IrInstruction::InlineGo(s.clone())],
-                Some(IrValue::Tuple("struct {\n\n}".into(), vec![])),
-            ),
+            ValueExpr::InlineGo(s) => (vec![IrInstruction::InlineGo(s.clone())], None),
             ValueExpr::While { condition, body } => {
                 let (mut cond_instr, cond_res) = condition.0.direct_or_with_instr(type_env, env);
                 if cond_res.is_none() {
@@ -432,18 +446,24 @@ impl ValueExpr {
                 then,
                 r#else,
             } => {
-                let res_type =
-                    TypeExpr::from_value_expr(self, type_env).as_go_type_annotation(type_env);
+                let res_type = TypeExpr::from_value_expr(self, type_env);
                 let (mut i, cond_res) = condition.0.direct_or_with_instr(type_env, env);
                 if cond_res.is_none() {
                     return (i, None);
                 }
 
                 let res_var_name = env.new_var();
-                i.push(IrInstruction::VarDecl(res_var_name.clone(), res_type));
+                if !res_type.is_unit() {
+                    i.push(IrInstruction::VarDecl(
+                        res_var_name.clone(),
+                        res_type.as_go_type_annotation(type_env),
+                    ));
+                }
 
                 let (mut then_instr, then_res) = then.0.direct_or_with_instr(type_env, env);
-                if let Some(then_res) = then_res {
+                if !res_type.is_unit()
+                    && let Some(then_res) = then_res
+                {
                     then_instr.push(IrInstruction::VarAssignment(res_var_name.clone(), then_res));
                 }
 
@@ -451,7 +471,9 @@ impl ValueExpr {
                     .clone()
                     .map(|x| x.0.direct_or_with_instr(type_env, env))
                     .map(|mut x| {
-                        if let Some(o) = x.1 {
+                        if !res_type.is_unit()
+                            && let Some(o) = x.1
+                        {
                             x.0.push(IrInstruction::VarAssignment(res_var_name.clone(), o));
                         }
                         x.0
@@ -608,12 +630,24 @@ impl ValueExpr {
                 let mut res_instr = Vec::new();
                 let mut res_var = None;
 
-                for (block_expr, _) in block_exprs {
+                for (i, (block_expr, _)) in block_exprs.iter().enumerate() {
+                    if i == block_exprs.len() - 1
+                        && let ValueExpr::Tuple(t) = block_expr
+                        && t.is_empty()
+                    {
+                        res_var = None;
+                        continue;
+                    }
                     let (block_instr, block_res) = block_expr.direct_or_with_instr(type_env, env);
 
                     for current in block_instr.iter() {
                         res_instr.push(current.clone());
-                        if let IrInstruction::Return(_) = current {
+                        if matches!(
+                            current,
+                            IrInstruction::Return(..)
+                                | IrInstruction::Break
+                                | IrInstruction::Continue
+                        ) {
                             res_var = None;
                             return (res_instr, res_var);
                         }
@@ -624,20 +658,24 @@ impl ValueExpr {
 
                 let mut final_instr = Vec::new();
                 let self_return_type = TypeExpr::from_value_expr(self, type_env);
-                let fresvar = env.new_var();
+                if !self_return_type.is_unit() {
+                    let fresvar = env.new_var();
 
-                res_var = res_var.or(Some(IrValue::Tuple("Tup_".into(), vec![])));
-                final_instr.push(IrInstruction::VarDecl(
-                    fresvar.clone(),
-                    self_return_type.as_go_type_annotation(type_env),
-                ));
-                res_instr.push(IrInstruction::VarAssignment(
-                    fresvar.clone(),
-                    res_var.unwrap(),
-                ));
-                final_instr.push(IrInstruction::Block(res_instr));
-
-                (final_instr, Some(IrValue::Var(fresvar)))
+                    res_var = res_var.or(Some(IrValue::Tuple("Tup_".into(), vec![])));
+                    final_instr.push(IrInstruction::VarDecl(
+                        fresvar.clone(),
+                        self_return_type.as_go_type_annotation(type_env),
+                    ));
+                    res_instr.push(IrInstruction::VarAssignment(
+                        fresvar.clone(),
+                        res_var.unwrap(),
+                    ));
+                    res_var = Some(IrValue::Var(fresvar))
+                }
+                if !res_instr.is_empty() {
+                    final_instr.push(IrInstruction::Block(res_instr));
+                }
+                (final_instr, res_var)
             }
             ValueExpr::Tuple(fields) => {
                 let mut res = Vec::new();
@@ -902,17 +940,23 @@ impl ValueExpr {
             | ValueExpr::Float(..)
             | ValueExpr::String(..) => {
                 if let Some(d) = self.direct_emit(type_env, env) {
+                    let ty = TypeExpr::from_value_expr(self, type_env);
                     let res_var = env.new_var();
+                    let mut instr = Vec::new();
+                    if !ty.is_unit() {
+                        instr.push(IrInstruction::VarDecl(
+                            res_var.clone(),
+                            ty.as_go_type_annotation(type_env),
+                        ));
+                        instr.push(IrInstruction::VarAssignment(res_var.clone(), d))
+                    }
                     (
-                        vec![
-                            IrInstruction::VarDecl(
-                                res_var.clone(),
-                                TypeExpr::from_value_expr(self, type_env)
-                                    .as_go_type_annotation(type_env),
-                            ),
-                            IrInstruction::VarAssignment(res_var.clone(), d),
-                        ],
-                        Some(IrValue::Var(res_var)),
+                        instr,
+                        if ty.is_unit() {
+                            None
+                        } else {
+                            Some(IrValue::Var(res_var))
+                        },
                     )
                 } else {
                     todo!()
@@ -975,17 +1019,7 @@ mod tests {
                     IrInstruction::VarAssignment("a".into(), IrValue::String("A".into())),
                 ],
             ),
-            (
-                "{1;}",
-                vec![
-                    decl("var_1", "Tup_"),
-                    IrInstruction::Block(vec![
-                        decl("var_0", "Tup_"),
-                        IrInstruction::VarAssignment("var_0".into(), IrValue::empty_tuple()),
-                        IrInstruction::VarAssignment("var_1".into(), IrValue::Var("var_0".into())),
-                    ]),
-                ],
-            ),
+            ("{1;}", vec![]),
             (
                 "!true",
                 vec![
@@ -1062,7 +1096,7 @@ mod tests {
             (
                 "match (1) { Int x -> 2 }",
                 vec![
-                    decl("var_0", "Tup_"),
+                    decl("var_0", "DuckInt"),
                     IrInstruction::SwitchType(
                         IrValue::Int(1),
                         vec![Case {
@@ -1077,7 +1111,7 @@ mod tests {
                 ],
             ),
             (
-                "match (1 + 1) { Int x -> x }",
+                "match (1 + 1) { Int x -> 100 }",
                 vec![
                     decl("var_0", "DuckInt"),
                     IrInstruction::Add(
@@ -1086,14 +1120,14 @@ mod tests {
                         IrValue::Int(1),
                         TypeExpr::Int,
                     ),
-                    decl("var_1", "Tup_"),
+                    decl("var_1", "DuckInt"),
                     IrInstruction::SwitchType(
                         IrValue::Var("var_0".into()),
                         vec![Case {
                             type_name: "DuckInt".into(),
                             instrs: vec![IrInstruction::VarAssignment(
                                 "var_1".into(),
-                                IrValue::Var("x".into()),
+                                IrValue::Int(100),
                             )],
                             bound_to_identifier: "x".into(),
                         }],
