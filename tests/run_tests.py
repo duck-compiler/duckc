@@ -229,10 +229,10 @@ def path_to_filename(path: str) -> str:
     sanitized = re.sub(r'__+', '_', sanitized)
     sanitized = sanitized.strip('_')
 
-    return sanitized
+    return sanitized.removeprefix("._")
 
 def verify_snapshot(test_name, actual_stdout, actual_stderr):
-    snapshot_path = f".snapshots/{path_to_filename(test_name)}.snap"
+    snapshot_path = f"snapshots/{path_to_filename(test_name)}.snap"
     snapshot_data = {
         "stdout": actual_stdout,
         "stderr": actual_stderr,
