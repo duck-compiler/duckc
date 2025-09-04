@@ -1,8 +1,8 @@
 {
-    "id": "fcb3f9eb5327dfccc556c11af2cad15a",
+    "id": "6ea3f5e1bb98d03f9bd37d524217fe17",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 401,
-    "title": "!(\"combine then and else, then return combined type\");",
+    "line_number": 199,
+    "title": "require name and implement typing for structs",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Apfelfrosch",
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
-    "source_line": "// todo!(\"combine then and else, then return combined type\");",
+    "source_line": "// TODO: require name and implement typing for structs",
     "status": "open",
-    "first_seen": "2025-07-09T23:15:12.305571",
+    "first_seen": "2025-09-04T13:57:50.797742",
     "history": []
 }

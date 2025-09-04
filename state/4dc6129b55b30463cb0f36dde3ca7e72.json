@@ -1,8 +1,8 @@
 {
-    "id": "a9b77426019384d5443b8c48cd58c136",
+    "id": "4dc6129b55b30463cb0f36dde3ca7e72",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 1119,
-    "title": "type_params",
+    "line_number": 288,
+    "title": "fix this panic workaround",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Apfelfrosch",
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
-    "source_line": "// todo: type_params",
+    "source_line": "// todo: fix this panic workaround",
     "status": "open",
-    "first_seen": "2025-07-14T09:44:03.706713",
+    "first_seen": "2025-09-04T13:57:50.799660",
     "history": []
 }

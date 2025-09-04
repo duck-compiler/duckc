@@ -1,6 +1,86 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-09-04T13:57:50.797180",
+        "issue_id": "6ea3f5e1bb98d03f9bd37d524217fe17",
+        "issue_title": "require name and implement typing for structs",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-09-04T13:57:50.797180",
+        "issue_id": "4dc6129b55b30463cb0f36dde3ca7e72",
+        "issue_title": "fix this panic workaround",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-09-04T13:57:50.797180",
+        "issue_id": "69b37346e3eac68781c08fc1a401d903",
+        "issue_title": "implement flatten for struct definitions",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-09-04T13:57:50.797180",
+        "issue_id": "6c9939b8b0a29c64f5c2bffbdcf4a555",
+        "issue_title": "respect the new way to create structs",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-09-04T13:57:50.797180",
+        "issue_id": "202b2ce4592d068b06fc02af378d6ce3",
+        "issue_title": "generic type name",
+        "author_info": {
+            "name": "Mvmo",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-09-04T13:57:50.797180",
+        "issue_id": "ef80848b952d1bcd90960a8f1f295cd2",
+        "issue_title": "let's discuss if we should use asserts for compiler internal errors.",
+        "author_info": {
+            "name": "Mvmo",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-09-04T13:57:50.797180",
+        "issue_id": "cfd712843928e94008314c58c4efabb7",
+        "issue_title": "discuss if we enable generic functions being called from go and how",
+        "author_info": {
+            "name": "Mvmo",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-09-04T13:57:50.797180",
+        "issue_id": "29732f89deff9557a011fb6fe3d1d8d6",
+        "issue_title": "add span for generic types",
+        "author_info": {
+            "name": "Mvmo",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-08-24T22:43:39.032967",
         "issue_id": "0bf1fe21fe0b13b6e5303ca5ec7e0fc7",
         "issue_title": "handle indices of type ! properly (do it in rest of emit too)",

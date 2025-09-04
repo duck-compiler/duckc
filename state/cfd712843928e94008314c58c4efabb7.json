@@ -13,7 +13,8 @@
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: discuss if we enable generic functions being called from go and how",
-    "status": "open",
+    "status": "closed",
     "first_seen": "2025-08-13T00:29:24.232373",
-    "history": []
+    "history": [],
+    "closed_at": "2025-09-04T13:57:50.804677"
 }

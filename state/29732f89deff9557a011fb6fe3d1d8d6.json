@@ -13,7 +13,8 @@
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: add span for generic types",
-    "status": "open",
+    "status": "closed",
     "first_seen": "2025-08-13T00:29:24.231966",
-    "history": []
+    "history": [],
+    "closed_at": "2025-09-04T13:57:50.805101"
 }
