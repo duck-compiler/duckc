@@ -443,8 +443,24 @@ impl TypeExpr {
             // TODO: Match Expressions need to be type resolved just as the function defs
             ValueExpr::Match {
                 value_expr: _,
-                arms: _,
-            } => return TypeExpr::Tuple(vec![]),
+                arms,
+            } => {
+                let mut arm_types = Vec::new();
+                for arm in arms {
+                    let arm_type = TypeExpr::from_value_expr(&arm.value_expr.0, type_env);
+                    if !arm_types.iter().any(|(x, _)| x == &arm_type) {
+                        arm_types.push((arm_type, arm.value_expr.1));
+                    }
+                }
+
+                if arm_types.is_empty() {
+                    TypeExpr::Tuple(vec![])
+                } else if arm_types.len() == 1 {
+                    arm_types.first().cloned().unwrap().0
+                } else {
+                    TypeExpr::Or(arm_types)
+                }
+            }
         };
     }
 
@@ -833,113 +849,111 @@ fn check_type_compatability(
 
             // todo: check against identity of struct in typechecking
         }
-        TypeExpr::Duck(duck) => {
-            match &given_type.0 {
-                TypeExpr::Duck(given_duck) => {
-                    let required_duck = duck;
+        TypeExpr::Duck(duck) => match &given_type.0 {
+            TypeExpr::Duck(given_duck) => {
+                let required_duck = duck;
 
-                    for required_field in required_duck.fields.iter() {
-                        let companion_field = given_duck
-                            .fields
-                            .iter()
-                            .find(|field| field.name == required_field.name);
+                for required_field in required_duck.fields.iter() {
+                    let companion_field = given_duck
+                        .fields
+                        .iter()
+                        .find(|field| field.name == required_field.name);
 
-                        if companion_field.is_none() {
-                            fail_requirement(
-                                format!(
-                                    "this type states that it has requires a field {} of type {}",
-                                    required_field.name.bright_purple(),
-                                    format!("{}", required_field.type_expr.0).bright_yellow(),
-                                ),
-                                format!(
-                                    "the given type doesn't have a field {}",
-                                    required_field.name.bright_purple(),
-                                ),
-                            )
-                        }
-
-                        let companion_field = companion_field.unwrap();
-
-                        check_type_compatability(
-                            &required_field.type_expr,
-                            &companion_field.type_expr,
-                            type_env,
-                        );
+                    if companion_field.is_none() {
+                        fail_requirement(
+                            format!(
+                                "this type states that it has requires a field {} of type {}",
+                                required_field.name.bright_purple(),
+                                format!("{}", required_field.type_expr.0).bright_yellow(),
+                            ),
+                            format!(
+                                "the given type doesn't have a field {}",
+                                required_field.name.bright_purple(),
+                            ),
+                        )
                     }
-                },
-                TypeExpr::Struct(struct_name) => {
-                    let struct_def = type_env.get_struct_def(struct_name).clone();
 
-                    for required_field in duck.fields.iter() {
-                        if required_field.type_expr.0.is_fun() {
-                            let companion_method = struct_def
-                                .methods
-                                .iter()
-                                .find(|method| method.name == required_field.name);
+                    let companion_field = companion_field.unwrap();
 
-                            if companion_method.is_none() {
-                                fail_requirement(
-                                    format!(
-                                        "this type states that it requires a field {} of type {}",
-                                        required_field.name.bright_purple(),
-                                        format!("{}", required_field.type_expr.0).bright_yellow(),
-                                    ),
-                                    format!(
-                                        "the given type doesn't have a field or method with name {}",
-                                        required_field.name.bright_purple(),
-                                    ),
-                                )
-                            }
-
-                            let companion_method = companion_method.unwrap();
-                            check_type_compatability(
-                                &required_field.type_expr,
-                                &companion_method.type_expr(),
-                                type_env
-                            );
-                            return
-                        }
-
-                        let companion_field = struct_def
-                            .fields
-                            .iter()
-                            .find(|field| field.name == required_field.name);
-
-                        if companion_field.is_none() {
-                            fail_requirement(
-                                format!(
-                                    "this type states that it has requires a field {} of type {}",
-                                    required_field.name.bright_purple(),
-                                    format!("{}", required_field.type_expr.0).bright_yellow(),
-                                ),
-                                format!(
-                                    "the given type doesn't have a field {}",
-                                    required_field.name.bright_purple(),
-                                ),
-                            )
-                        }
-
-                        let companion_field = companion_field.unwrap();
-
-                        check_type_compatability(
-                            &required_field.type_expr,
-                            &companion_field.type_expr,
-                            type_env,
-                        );
-                    }
+                    check_type_compatability(
+                        &required_field.type_expr,
+                        &companion_field.type_expr,
+                        type_env,
+                    );
                 }
-                _ => fail_requirement(
-                    format!(
-                        "the required type {} is a duck",
-                        format!("{}", required_type.0).bright_yellow(),
-                    ),
-                    format!(
-                        "because of the fact, that the required type {} is a duck. The value you need to pass must be a duck aswell, but it isn't.",
-                        format!("{}", required_type.0).bright_yellow(),
-                    ),
-                )
             }
-        }
+            TypeExpr::Struct(struct_name) => {
+                let struct_def = type_env.get_struct_def(struct_name).clone();
+
+                for required_field in duck.fields.iter() {
+                    if required_field.type_expr.0.is_fun() {
+                        let companion_method = struct_def
+                            .methods
+                            .iter()
+                            .find(|method| method.name == required_field.name);
+
+                        if companion_method.is_none() {
+                            fail_requirement(
+                                format!(
+                                    "this type states that it requires a field {} of type {}",
+                                    required_field.name.bright_purple(),
+                                    format!("{}", required_field.type_expr.0).bright_yellow(),
+                                ),
+                                format!(
+                                    "the given type doesn't have a field or method with name {}",
+                                    required_field.name.bright_purple(),
+                                ),
+                            )
+                        }
+
+                        let companion_method = companion_method.unwrap();
+                        check_type_compatability(
+                            &required_field.type_expr,
+                            &companion_method.type_expr(),
+                            type_env,
+                        );
+                        return;
+                    }
+
+                    let companion_field = struct_def
+                        .fields
+                        .iter()
+                        .find(|field| field.name == required_field.name);
+
+                    if companion_field.is_none() {
+                        fail_requirement(
+                            format!(
+                                "this type states that it has requires a field {} of type {}",
+                                required_field.name.bright_purple(),
+                                format!("{}", required_field.type_expr.0).bright_yellow(),
+                            ),
+                            format!(
+                                "the given type doesn't have a field {}",
+                                required_field.name.bright_purple(),
+                            ),
+                        )
+                    }
+
+                    let companion_field = companion_field.unwrap();
+
+                    check_type_compatability(
+                        &required_field.type_expr,
+                        &companion_field.type_expr,
+                        type_env,
+                    );
+                }
+            }
+            _ => fail_requirement(
+                format!(
+                    "the required type {} is a duck",
+                    format!("{}", required_type.0).bright_yellow(),
+                ),
+                format!(
+                    "because of the fact, that the required type {} is a duck. The value you need to pass must be a duck aswell, but it isn't.",
+                    format!("{}", required_type.0).bright_yellow(),
+                ),
+            ),
+        },
         TypeExpr::Tuple(item_types) => {
             if !given_type.0.is_tuple() {
                 fail_requirement(
