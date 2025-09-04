@@ -833,19 +833,6 @@ fn check_type_compatability(
             // todo: check against identity of struct in typechecking
         }
         TypeExpr::Duck(duck) => {
-            if !given_type.0.is_object_like() {
-                fail_requirement(
-                    format!(
-                        "the required type {} is a duck",
-                        format!("{}", required_type.0).bright_yellow(),
-                    ),
-                    format!(
-                        "because of the fact, that the required type {} is a duck. The value you need to pass must be a duck aswell, but it isn't.",
-                        format!("{}", required_type.0).bright_yellow(),
-                    ),
-                )
-            }
-
             match &given_type.0 {
                 TypeExpr::Duck(given_duck) => {
                     let required_duck = duck;
