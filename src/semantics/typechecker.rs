@@ -835,6 +835,8 @@ fn check_type_compatability(
         TypeExpr::Duck(duck) => {
             match &given_type.0 {
                 TypeExpr::Duck(given_duck) => {
+                    println!("as duck");
+                    dbg!(&given_duck);
                     let required_duck = duck;
 
                     for required_field in required_duck.fields.iter() {
@@ -870,6 +872,35 @@ fn check_type_compatability(
                     let struct_def = type_env.get_struct_def(struct_name).clone();
 
                     for required_field in duck.fields.iter() {
+                        if required_field.type_expr.0.is_fun() {
+                            let companion_method = struct_def
+                                .methods
+                                .iter()
+                                .find(|method| dbg!(&method.name) == dbg!(&required_field.name));
+
+                            if companion_method.is_none() {
+                                fail_requirement(
+                                    format!(
+                                        "this type states that it requires a field {} of type {}",
+                                        required_field.name.bright_purple(),
+                                        format!("{}", required_field.type_expr.0).bright_yellow(),
+                                    ),
+                                    format!(
+                                        "the given type doesn't have a field or method with name {}",
+                                        required_field.name.bright_purple(),
+                                    ),
+                                )
+                            }
+
+                            let companion_method = companion_method.unwrap();
+                            check_type_compatability(
+                                &required_field.type_expr,
+                                &companion_method.type_expr(),
+                                type_env
+                            );
+                            return
+                        }
+
                         let companion_field = struct_def
                             .fields
                             .iter()

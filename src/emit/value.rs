@@ -76,7 +76,11 @@ pub enum IrValue {
     Bool(bool),
     Char(char),
     Array(String, Vec<IrValue>),
-    Lambda(Vec<(String, String)>, Option<String>, Vec<IrInstruction>),
+    Lambda(
+        Vec<(String, String)>, // params
+        Option<String>,        // return type
+        Vec<IrInstruction>     // body
+    ),
     Tuple(String, Vec<IrValue>),
     Duck(String, Vec<(String, IrValue)>),
     Struct(String, Vec<(String, IrValue)>),
@@ -167,8 +171,8 @@ fn walk_access(
                 target_obj,
                 field_name,
             } => {
-                let t = TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
-                match t {
+                let type_expr = TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
+                match type_expr {
                     TypeExpr::Tuple(..) => s.push_front(format!("field_{field_name}")),
                     TypeExpr::Duck(Duck { fields }) => {
                         let found_field = fields
@@ -178,6 +182,7 @@ fn walk_access(
                         if found_field.type_expr.0.is_array()
                             || found_field.type_expr.0.is_duck()
                             || found_field.type_expr.0.is_struct()
+                            || found_field.type_expr.0.is_fun()
                         {
                             s.push_front(format!("Get{field_name}()"));
                         } else {

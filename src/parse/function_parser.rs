@@ -24,6 +24,25 @@ pub struct FunctionDefintion {
     pub generics: Option<Vec<Spanned<Generic>>>,
 }
 
+impl FunctionDefintion {
+    pub fn type_expr(&self) -> Spanned<TypeExpr> {
+        // todo: retrieve correct span for function defintions typeexpr
+        return (TypeExpr::Fun(
+            self.params
+                .clone()
+                .or_else(|| Some(Vec::new()))
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|(name, type_expr)| (Some(name.to_owned()), type_expr.to_owned()))
+                .collect::<Vec<_>>(),
+            self.return_type
+                .clone()
+                .map(Box::new)
+        ), self.value_expr.1)
+    }
+}
+
 impl Default for FunctionDefintion {
     fn default() -> Self {
         FunctionDefintion {

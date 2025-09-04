@@ -165,8 +165,8 @@ pub enum TypeExpr {
     Float,
     Or(Vec<Spanned<TypeExpr>>),
     Fun(
-        Vec<(Option<String>, Spanned<TypeExpr>)>,
-        Option<Box<Spanned<TypeExpr>>>,
+        Vec<(Option<String>, Spanned<TypeExpr>)>, // params
+        Option<Box<Spanned<TypeExpr>>>, // return type
     ),
     Array(Box<Spanned<TypeExpr>>),
 }
