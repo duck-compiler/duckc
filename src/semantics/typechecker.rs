@@ -465,6 +465,7 @@ impl TypeExpr {
     pub fn is_unit(&self) -> bool {
         match self {
             Self::Tuple(v) => v.is_empty(),
+            Self::InlineGo => true,
             _ => false,
         }
     }
@@ -874,7 +875,7 @@ fn check_type_compatability(
                             let companion_method = struct_def
                                 .methods
                                 .iter()
-                                .find(|method| &method.name == &required_field.name);
+                                .find(|method| method.name == required_field.name);
 
                             if companion_method.is_none() {
                                 fail_requirement(

@@ -204,7 +204,7 @@ where
                     .map(|((params, return_type), mut value_expr)| {
                         value_expr = match value_expr {
                             (ValueExpr::Duck(x), loc) if x.is_empty() => {
-                                (ValueExpr::Tuple(vec![]), loc).into_block()
+                                (ValueExpr::Block(vec![]), loc)
                             }
                             _ => value_expr,
                         };
@@ -361,7 +361,7 @@ where
                         }
                     }
 
-                    if exprs.is_empty() || exprs.last().unwrap().1.is_some() {
+                    if !exprs.is_empty() && exprs.last().unwrap().1.is_some() {
                         exprs.push((empty_tuple().into_empty_span(), None));
                     }
 
@@ -740,6 +740,7 @@ where
     )
 }
 
+#[allow(dead_code)]
 fn empty_tuple() -> ValueExpr {
     ValueExpr::Tuple(Vec::new())
 }
@@ -1718,7 +1719,7 @@ mod tests {
                 "while (true) {}",
                 ValueExpr::While {
                     condition: ValueExpr::Bool(true).into_empty_span().into(),
-                    body: empty_tuple().into_empty_span_and_block().into(),
+                    body: ValueExpr::Block(vec![]).into_empty_span().into(),
                 },
             ),
             (
@@ -1731,7 +1732,7 @@ mod tests {
                     }
                     .into_empty_span()
                     .into(),
-                    body: empty_tuple().into_empty_span_and_block().into(),
+                    body: ValueExpr::Block(vec![]).into_empty_span().into(),
                 },
             ),
             (
@@ -2227,10 +2228,7 @@ mod tests {
                     LambdaFunctionExpr {
                         params: vec![],
                         return_type: None,
-                        value_expr: ValueExpr::Block(vec![
-                            ValueExpr::Tuple(vec![]).into_empty_span(),
-                        ])
-                        .into_empty_span(),
+                        value_expr: ValueExpr::Block(vec![]).into_empty_span(),
                     }
                     .into(),
                 ),

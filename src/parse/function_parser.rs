@@ -3,7 +3,6 @@ use chumsky::{input::BorrowInput, prelude::*};
 use crate::parse::{
     SS, Spanned,
     generics_parser::{Generic, generics_parser},
-    value_parser::IntoBlock,
 };
 
 use super::{
@@ -27,19 +26,20 @@ pub struct FunctionDefintion {
 impl FunctionDefintion {
     pub fn type_expr(&self) -> Spanned<TypeExpr> {
         // todo: retrieve correct span for function defintions typeexpr
-        return (TypeExpr::Fun(
-            self.params
-                .clone()
-                .or_else(|| Some(Vec::new()))
-                .as_ref()
-                .unwrap()
-                .iter()
-                .map(|(name, type_expr)| (Some(name.to_owned()), type_expr.to_owned()))
-                .collect::<Vec<_>>(),
-            self.return_type
-                .clone()
-                .map(Box::new)
-        ), self.value_expr.1)
+        return (
+            TypeExpr::Fun(
+                self.params
+                    .clone()
+                    .or_else(|| Some(Vec::new()))
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|(name, type_expr)| (Some(name.to_owned()), type_expr.to_owned()))
+                    .collect::<Vec<_>>(),
+                self.return_type.clone().map(Box::new),
+            ),
+            self.value_expr.1,
+        );
     }
 }
 
@@ -49,7 +49,7 @@ impl Default for FunctionDefintion {
             name: Default::default(),
             return_type: None,
             params: Some(Default::default()),
-            value_expr: ValueExpr::Tuple(vec![]).into_empty_span_and_block(),
+            value_expr: ValueExpr::Block(vec![]).into_empty_span(),
             generics: None,
         }
     }
@@ -101,9 +101,7 @@ where
                 }
 
                 value_expr = match value_expr {
-                    (ValueExpr::Duck(x), loc) if x.is_empty() => {
-                        (ValueExpr::Tuple(vec![]), loc).into_block()
-                    }
+                    (ValueExpr::Duck(x), loc) if x.is_empty() => (ValueExpr::Block(vec![]), loc),
                     x @ (ValueExpr::Block(_), _) => x,
                     _ => panic!("Function must be block"),
                 };
