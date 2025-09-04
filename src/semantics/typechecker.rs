@@ -835,8 +835,6 @@ fn check_type_compatability(
         TypeExpr::Duck(duck) => {
             match &given_type.0 {
                 TypeExpr::Duck(given_duck) => {
-                    println!("as duck");
-                    dbg!(&given_duck);
                     let required_duck = duck;
 
                     for required_field in required_duck.fields.iter() {
@@ -876,7 +874,7 @@ fn check_type_compatability(
                             let companion_method = struct_def
                                 .methods
                                 .iter()
-                                .find(|method| dbg!(&method.name) == dbg!(&required_field.name));
+                                .find(|method| &method.name == &required_field.name);
 
                             if companion_method.is_none() {
                                 fail_requirement(
