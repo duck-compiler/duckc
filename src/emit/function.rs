@@ -15,7 +15,7 @@ impl FunctionDefintion {
         // println!("value_body {:?}", self.value_expr.0);
         let (mut emitted_body, _r) = self.value_expr.0.emit(type_env, to_ir);
         // println!("end value_body");
-        if self.return_type.is_some() {
+        if self.return_type.is_some() && self.name != "main" {
             emitted_body.push(IrInstruction::InlineGo(format!(
                 "return *new({})",
                 self.return_type

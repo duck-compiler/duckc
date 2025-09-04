@@ -1,16 +1,18 @@
 use std::{collections::HashMap, fs::File, path::PathBuf};
 
 use chumsky::{input::BorrowInput, prelude::*};
+use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
         Context, SS, Spanned,
-        function_parser::{FunctionDefintion, function_definition_parser},
+        function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
         lexer::{Token, lex_parser},
         make_input, parse_failure,
         struct_parser::{StructDefinition, struct_definition_parser},
-        type_parser::{TypeDefinition, type_definition_parser},
+        type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
         use_statement_parser::{Indicator, UseStatement, use_statement_parser},
+        value_parser::{ValFmtStringContents, ValueExpr},
     },
     semantics::ident_mangler::{
         MangleEnv, mangle, mangle_type_expression, mangle_value_expr, unmangle,
@@ -88,10 +90,10 @@ impl SourceFile {
                     s.type_definitions
                         .iter()
                         .map(|x| x.name.clone())
+                        .chain(s.struct_definitions.iter().map(|x| x.name.clone()))
                         .collect::<Vec<_>>(),
                 ],
             };
-
             let mut result = SourceFile::default();
 
             for (name, sub_module) in &s.sub_modules {
@@ -104,14 +106,17 @@ impl SourceFile {
                     mangle_env.insert_ident(f.name[prefix.len()..].to_string());
                     result.function_definitions.push(f);
                 }
-                for f in src.type_definitions {
-                    mangle_env.insert_type(f.name[prefix.len()..].to_string());
-                    result.type_definitions.push(f);
+
+                for t in src.type_definitions {
+                    mangle_env.insert_type(t.name[prefix.len()..].to_string());
+                    result.type_definitions.push(t);
                 }
+
                 for struct_definition in src.struct_definitions {
                     mangle_env.insert_type(struct_definition.name[prefix.len()..].to_string());
                     result.struct_definitions.push(struct_definition);
                 }
+
                 for u in &src.use_statements {
                     if matches!(u, UseStatement::Go(..)) {
                         result.push_use(u);
@@ -174,10 +179,6 @@ impl SourceFile {
                 }
 
                 for func in &mut struct_def.methods {
-                    let mut p = Vec::new();
-                    p.extend_from_slice(prefix);
-                    p.push(func.name.clone());
-
                     if let Some(return_type) = &mut func.return_type {
                         mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
                     }
@@ -195,7 +196,6 @@ impl SourceFile {
                         &mut mangle_env,
                     );
                     mangle_env.pop_idents();
-                    //result.function_definitions.push(f);
                 }
 
                 result.struct_definitions.push(struct_def);
@@ -206,19 +206,367 @@ impl SourceFile {
 
         let mut r = flatten0(self, global_prefix, &vec![], with_std);
 
+        let mut mangle_env = MangleEnv {
+            sub_mods: Vec::new(),
+            global_prefix: global_prefix.clone(),
+            imports: HashMap::new(),
+            names: vec![
+                r.function_definitions
+                    .iter()
+                    .map(|x| x.name.clone())
+                    .collect::<Vec<_>>(),
+            ],
+            types: vec![
+                r.type_definitions
+                    .iter()
+                    .map(|x| x.name.clone())
+                    .chain(r.struct_definitions.iter().map(|x| x.name.clone()))
+                    .collect::<Vec<_>>(),
+            ],
+        };
+
         for f in &mut r.function_definitions {
             let mut c = global_prefix.clone();
             c.extend(unmangle(&f.name));
             f.name = mangle(&c);
+
+            for t in f.return_type.iter_mut().map(|x| &mut x.0).chain(
+                f.params
+                    .iter_mut()
+                    .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0)),
+            ) {
+                append_global_prefix_type_expr(t, &mut mangle_env);
+            }
+
+            append_global_prefix_value_expr(&mut f.value_expr.0, &mut mangle_env);
         }
 
         for t in &mut r.type_definitions {
             let mut c = global_prefix.clone();
             c.extend(unmangle(&t.name));
             t.name = mangle(&c);
+
+            append_global_prefix_type_expr(&mut t.type_expression.0, &mut mangle_env);
         }
 
+        for s in &mut r.struct_definitions {
+            let mut c = global_prefix.clone();
+            c.extend(unmangle(&s.name));
+            s.name = mangle(&c);
+
+            for m in &mut s.methods {
+                for t in m.return_type.iter_mut().map(|x| &mut x.0).chain(
+                    m.params
+                        .iter_mut()
+                        .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0)),
+                ) {
+                    append_global_prefix_type_expr(t, &mut mangle_env);
+                }
+
+                append_global_prefix_value_expr(&mut m.value_expr.0, &mut mangle_env);
+            }
+        }
         r
+    }
+}
+
+fn append_global_prefix_type_expr(type_expr: &mut TypeExpr, mangle_env: &mut MangleEnv) {
+    match type_expr {
+        TypeExpr::TypeName(_, name, _) => {
+            if mangle_env.is_top_level_type(name) {
+                let mut v = Vec::new();
+                v.extend_from_slice(&mangle_env.global_prefix);
+                v.extend(unmangle(name));
+                *name = mangle(&v);
+            }
+        }
+        TypeExpr::RawTypeName(..) => panic!("raw type name shouldnt be here"),
+        TypeExpr::Duck(Duck { fields }) => {
+            for f in fields {
+                append_global_prefix_type_expr(&mut f.type_expr.0, mangle_env);
+            }
+        }
+        TypeExpr::Tuple(fields) => {
+            for f in fields {
+                append_global_prefix_type_expr(&mut f.0, mangle_env);
+            }
+        }
+        TypeExpr::Fun(params, return_type) => {
+            for (_, param_type) in params {
+                append_global_prefix_type_expr(&mut param_type.0, mangle_env);
+            }
+
+            if let Some(return_type) = return_type {
+                append_global_prefix_type_expr(&mut return_type.0, mangle_env);
+            }
+        }
+        TypeExpr::Or(s) => {
+            for t in s {
+                append_global_prefix_type_expr(&mut t.0, mangle_env);
+            }
+        }
+        TypeExpr::Array(t) => {
+            append_global_prefix_type_expr(&mut t.0, mangle_env);
+        }
+        _ => {}
+    }
+}
+
+fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut MangleEnv) {
+    match value_expr {
+        ValueExpr::Int(..)
+        | ValueExpr::String(..)
+        | ValueExpr::Bool(..)
+        | ValueExpr::Float(..)
+        | ValueExpr::Return(None)
+        | ValueExpr::Char(..) => {}
+        ValueExpr::Continue => {}
+        ValueExpr::Break => {}
+        ValueExpr::ArrayAccess(target, idx) => {
+            append_global_prefix_value_expr(&mut target.0, mangle_env);
+            append_global_prefix_value_expr(&mut idx.0, mangle_env);
+        }
+        ValueExpr::Match { value_expr, arms } => {
+            append_global_prefix_value_expr(&mut value_expr.0, mangle_env);
+            for arm in arms {
+                append_global_prefix_type_expr(&mut arm.type_case.0, mangle_env);
+                mangle_env.push_idents();
+                mangle_env.insert_ident(arm.bound_to_identifier.clone());
+                append_global_prefix_value_expr(&mut arm.value_expr.0, mangle_env);
+                mangle_env.pop_idents();
+            }
+        }
+        ValueExpr::FormattedString(contents) => {
+            for c in contents {
+                if let ValFmtStringContents::Expr(e) = c {
+                    append_global_prefix_value_expr(&mut e.0, mangle_env);
+                }
+            }
+        }
+        ValueExpr::Array(ty, exprs) => {
+            if let Some(ty) = ty {
+                append_global_prefix_type_expr(&mut ty.0, mangle_env);
+            }
+
+            for expr in exprs {
+                append_global_prefix_value_expr(&mut expr.0, mangle_env);
+            }
+        }
+        ValueExpr::InlineGo(t) => {
+            let mut parser = TSParser::new();
+            parser
+                .set_language(&tree_sitter_go::LANGUAGE.into())
+                .expect("Couldn't set go grammar");
+
+            let src = parser.parse(t.as_bytes(), None).unwrap();
+            let root_node = src.root_node();
+
+            fn trav(
+                s: &Node,
+                t: &[u8],
+                e: &mut MangleEnv,
+                out: &mut Vec<(tree_sitter::Range, String)>,
+            ) {
+                fn extract_all_ident(t: &[u8], n: &Node) -> Vec<(tree_sitter::Range, String)> {
+                    if n.grammar_name() == "selector_expression" {
+                        return vec![(n.range(), n.utf8_text(t).unwrap().to_string())];
+                    }
+
+                    if n.grammar_name() == "identifier" {
+                        return vec![(n.range(), n.utf8_text(t).unwrap().to_string())];
+                    }
+
+                    let mut res = Vec::new();
+                    for i in 0..n.child_count() {
+                        let x = extract_all_ident(t, &n.child(i).unwrap().clone());
+                        res.extend(x);
+                    }
+
+                    res
+                }
+
+                let declared_var_ident = match s.grammar_name() {
+                    "short_var_declaration" => {
+                        Some(s.child(0).unwrap().utf8_text(t).unwrap().to_string())
+                    }
+                    "var_declaration" => Some(
+                        s.child(1)
+                            .unwrap()
+                            .child(0)
+                            .unwrap()
+                            .utf8_text(t)
+                            .unwrap()
+                            .to_string(),
+                    ),
+                    _ => None,
+                };
+
+                if s.grammar_name() == "expression_statement" {
+                    let i = extract_all_ident(t, s);
+                    out.extend(i);
+                }
+
+                // TODO: respect additional identifer scopes like blocks and lambdas
+                if let Some(i) = declared_var_ident {
+                    e.insert_ident(i);
+                }
+
+                for i in 0..s.child_count() {
+                    trav(&s.child(i).unwrap(), t, e, out);
+                }
+            }
+
+            let mut o = Vec::new();
+            trav(&root_node, t.as_bytes(), mangle_env, &mut o);
+
+            let mut translation = 0;
+            for (range, ident) in o {
+                if mangle_env.is_top_level_ident(&ident) {
+                    let mut v = Vec::new();
+                    v.extend_from_slice(&mangle_env.global_prefix);
+                    v.push(ident.clone());
+                    let mangled = mangle(&v);
+                    let size_diff = mangled.len() - ident.len();
+
+                    t.drain((range.start_byte + translation)..(range.end_byte + translation));
+                    t.insert_str(range.start_byte + translation, &mangled);
+
+                    translation += size_diff;
+                }
+            }
+        }
+        ValueExpr::Lambda(lambda_expr) => {
+            let LambdaFunctionExpr {
+                params,
+                return_type,
+                value_expr,
+            } = &mut **lambda_expr;
+            for (_, param_type) in params {
+                append_global_prefix_type_expr(&mut param_type.0, mangle_env);
+            }
+            if let Some(return_type) = return_type {
+                append_global_prefix_type_expr(&mut return_type.0, mangle_env);
+            }
+            mangle_env.push_idents();
+            append_global_prefix_value_expr(&mut value_expr.0, mangle_env);
+            mangle_env.pop_idents();
+        }
+        ValueExpr::FunctionCall {
+            target,
+            params,
+            type_params,
+        } => {
+            // TODO: type params
+            append_global_prefix_value_expr(&mut target.0, mangle_env);
+            params
+                .iter_mut()
+                .for_each(|param| append_global_prefix_value_expr(&mut param.0, mangle_env));
+            if let Some(type_params) = type_params {
+                for param in type_params {
+                    append_global_prefix_type_expr(&mut param.0, mangle_env);
+                }
+            }
+        }
+        ValueExpr::RawVariable(..) => panic!("raw variable shouldn't be here"),
+        ValueExpr::Variable(_, name, _) => {
+            if mangle_env.is_top_level_ident(name) {
+                let mut v = Vec::new();
+                v.extend_from_slice(&mangle_env.global_prefix);
+                v.push(name.clone());
+                *name = mangle(&v);
+            }
+        }
+        ValueExpr::If {
+            condition,
+            then,
+            r#else,
+        } => {
+            append_global_prefix_value_expr(&mut condition.0, mangle_env);
+
+            mangle_env.push_idents();
+            append_global_prefix_value_expr(&mut then.0, mangle_env);
+            mangle_env.pop_idents();
+
+            if let Some(r#else) = r#else {
+                mangle_env.push_idents();
+                append_global_prefix_value_expr(&mut r#else.0, mangle_env);
+            }
+        }
+        ValueExpr::While { condition, body } => {
+            append_global_prefix_value_expr(&mut condition.0, mangle_env);
+            mangle_env.push_idents();
+            append_global_prefix_value_expr(&mut body.0, mangle_env);
+            mangle_env.pop_idents();
+        }
+        ValueExpr::Tuple(value_exprs) => value_exprs
+            .iter_mut()
+            .for_each(|value_expr| append_global_prefix_value_expr(&mut value_expr.0, mangle_env)),
+        ValueExpr::Block(value_exprs) => {
+            mangle_env.push_idents();
+            value_exprs.iter_mut().for_each(|value_expr| {
+                append_global_prefix_value_expr(&mut value_expr.0, mangle_env)
+            });
+            mangle_env.pop_idents();
+        }
+        ValueExpr::Duck(items) => items.iter_mut().for_each(|(_, value_expr)| {
+            append_global_prefix_value_expr(&mut value_expr.0, mangle_env)
+        }),
+        ValueExpr::Struct {
+            name,
+            fields,
+            type_params,
+        } => {
+            if mangle_env.is_top_level_type(name) {
+                let mut v = Vec::new();
+                v.extend_from_slice(&mangle_env.global_prefix);
+                v.push(name.clone());
+                *name = mangle(&v);
+            }
+
+            fields.iter_mut().for_each(|(_, value_expr)| {
+                append_global_prefix_value_expr(&mut value_expr.0, mangle_env)
+            });
+
+            if let Some(type_params) = type_params {
+                for (g, _) in type_params {
+                    append_global_prefix_type_expr(g, mangle_env);
+                }
+            }
+        }
+        ValueExpr::FieldAccess { target_obj, .. } => {
+            append_global_prefix_value_expr(&mut target_obj.0, mangle_env);
+        }
+        ValueExpr::Return(Some(value_expr)) => {
+            append_global_prefix_value_expr(&mut value_expr.0, mangle_env)
+        }
+        ValueExpr::VarAssign(assignment) => {
+            append_global_prefix_value_expr(&mut assignment.0.target.0, mangle_env);
+            append_global_prefix_value_expr(&mut assignment.0.value_expr.0, mangle_env);
+        }
+        ValueExpr::VarDecl(declaration) => {
+            let declaration = &mut declaration.0;
+            append_global_prefix_type_expr(&mut declaration.type_expr.0, mangle_env);
+            mangle_env.insert_ident(declaration.name.clone());
+
+            if let Some(value_expr) = &mut declaration.initializer {
+                append_global_prefix_value_expr(&mut value_expr.0, mangle_env);
+            }
+        }
+        ValueExpr::Add(lhs, rhs) => {
+            append_global_prefix_value_expr(&mut lhs.0, mangle_env);
+            append_global_prefix_value_expr(&mut rhs.0, mangle_env);
+        }
+        ValueExpr::Mul(lhs, rhs) => {
+            append_global_prefix_value_expr(&mut lhs.0, mangle_env);
+            append_global_prefix_value_expr(&mut rhs.0, mangle_env);
+        }
+        ValueExpr::Equals(lhs, rhs) => {
+            append_global_prefix_value_expr(&mut lhs.0, mangle_env);
+            append_global_prefix_value_expr(&mut rhs.0, mangle_env);
+        }
+        ValueExpr::BoolNegate(value_expr) => {
+            append_global_prefix_value_expr(&mut value_expr.0, mangle_env);
+        }
     }
 }
 
@@ -255,11 +603,12 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
                     ),
                 )
             })
-            .fold(SourceFile::default(), |mut acc, (i, x)| {
-                if i {
+            .fold(SourceFile::default(), |mut acc, (internal, x)| {
+                if internal {
                     acc.function_definitions.extend(x.function_definitions);
                     acc.type_definitions.extend(x.type_definitions);
                     acc.sub_modules.extend(x.sub_modules);
+                    acc.struct_definitions.extend(x.struct_definitions);
                 }
                 acc.use_statements.extend(x.use_statements);
                 acc
