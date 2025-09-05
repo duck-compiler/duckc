@@ -275,6 +275,12 @@ impl IrValue {
                         .join(", ")
                 )
             }
+            IrValue::Tag(identifier) => {
+                format!(
+                    // TODO: check if this should be a reference
+                    "{identifier}{{}}",
+                )
+            }
             IrValue::Duck(s, fields) => {
                 format!(
                     // TODO: check if this should be a reference

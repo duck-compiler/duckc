@@ -318,6 +318,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
         | ValueExpr::String(..)
         | ValueExpr::Bool(..)
         | ValueExpr::Float(..)
+        | ValueExpr::Tag(..)
         | ValueExpr::Return(None)
         | ValueExpr::Char(..) => {}
         ValueExpr::Continue => {}

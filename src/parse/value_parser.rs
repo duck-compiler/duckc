@@ -65,6 +65,7 @@ pub enum ValueExpr {
     Break,
     Continue,
     Duck(Vec<(String, Spanned<ValueExpr>)>),
+    Tag(String),
     Struct {
         name: String,
         fields: Vec<(String, Spanned<ValueExpr>)>,
@@ -127,6 +128,7 @@ impl ValueExpr {
             ValueExpr::Match { .. } => false,
             ValueExpr::Add(..)
             | ValueExpr::Mul(..)
+            | ValueExpr::Tag(..)
             | ValueExpr::Duck(..)
             | ValueExpr::Int(..)
             | ValueExpr::String(..)
@@ -443,6 +445,7 @@ where
                 })
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
+
             let char_expr = select_ref! { Token::CharLiteral(c) => *c }
                 .map(ValueExpr::Char)
                 .map_with(|x, e| (x, e.span()))
@@ -454,6 +457,12 @@ where
                 .map(|(pre, frac)| {
                     ValueExpr::Float(format!("{pre}.{frac}").parse::<f64>().unwrap())
                 })
+                .map_with(|x, e| (x, e.span()))
+                .boxed();
+
+            let tag_expr = just(Token::ControlChar('.'))
+                .ignore_then(select_ref! { Token::Ident(ident) => ident.to_string() })
+                .map(|identifier| ValueExpr::Tag(identifier.clone()))
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
@@ -549,6 +558,7 @@ where
                             float_expr,
                             int,
                             fmt_string,
+                            tag_expr,
                             bool_val,
                             string_val,
                             struct_expression,

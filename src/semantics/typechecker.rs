@@ -32,6 +32,7 @@ impl TypeExpr {
     #[track_caller]
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
+            ValueExpr::Tag(identifier) => TypeExpr::Tag(identifier.clone()),
             ValueExpr::RawVariable(_x, p) => panic!("{}", p.join(" ").leak()),
             ValueExpr::FormattedString(contents) => {
                 for c in contents {
@@ -698,6 +699,13 @@ impl TypeExpr {
             _ => false,
         };
     }
+
+    pub fn is_tag(&self) -> bool {
+        return match *self {
+            TypeExpr::Tag(..) => true,
+            _ => false,
+        };
+    }
 }
 
 fn require(condition: bool, fail_message: String) {
@@ -839,6 +847,37 @@ fn check_type_compatability(
         TypeExpr::Any => return,
         TypeExpr::InlineGo => todo!("should inline go be typechecked?"),
         TypeExpr::Go(_) => return,
+        TypeExpr::Tag(required_identifier) => {
+            if let TypeExpr::Tag(given_identifier) = &given_type.0 {
+                if given_identifier != required_identifier {
+                    fail_requirement(
+                        format!(
+                            "the required tag is {}",
+                            format!(".{}", required_identifier).bright_yellow(),
+                        ),
+                        format!(
+                            "but you've provided the tag {}",
+                            format!(".{}", given_identifier).bright_yellow(),
+                        ),
+                    )
+                }
+
+                // everything's okay
+                return
+            }
+
+            // todo: produce snapshot for the given error
+            fail_requirement(
+                format!(
+                    "the required type {} is a tag",
+                    format!("{}", required_type.0).bright_yellow(),
+                ),
+                format!(
+                    "because of the fact, that the required type {} is a tag. The value you need to pass must be a tag aswell, but it isn't.",
+                    format!("{}", required_type.0).bright_yellow(),
+                ),
+            )
+        }
         TypeExpr::Struct(_strct) => {
             if !given_type.0.is_struct() {
                 fail_requirement(

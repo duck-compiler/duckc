@@ -391,6 +391,22 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
 
     instructions.append(&mut primitive_types_instructions);
 
+    let mut tag_type_instructions = summary
+        .types_used
+        .iter()
+        .filter(|type_expr| type_expr.is_tag())
+        .flat_map(|primitive_type_expr| {
+            return vec![
+                IrInstruction::StructDef(
+                    primitive_type_expr.as_clean_go_type_name(type_env),
+                    vec![],
+                ),
+            ];
+        })
+        .collect::<Vec<_>>();
+
+    instructions.append(&mut tag_type_instructions);
+
     summary
         .types_used
         .iter()
@@ -471,6 +487,7 @@ impl TypeExpr {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
             TypeExpr::ConstBool(b) => primitive_type_name(&TypeExpr::ConstBool(*b)).to_string(),
+            TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
             TypeExpr::ConstString(_str) => {
                 // primitive_type_name(&TypeExpr::ConstString(str.clone())).to_string()
                 "DuckString".to_string()
@@ -533,6 +550,7 @@ impl TypeExpr {
     pub fn as_go_concrete_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
+            TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
             TypeExpr::ConstBool(b) => primitive_type_name(&TypeExpr::ConstBool(*b)).to_string(),
@@ -628,6 +646,7 @@ impl TypeExpr {
             TypeExpr::Float => "DuckFloat".to_string(),
             TypeExpr::Char => "DuckChar".to_string(),
             TypeExpr::String => "DuckString".to_string(),
+            TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
             TypeExpr::TypeName(_, name, _type_params) => name.clone(),
@@ -705,6 +724,7 @@ impl TypeExpr {
             TypeExpr::Float => "DuckFloat".to_string(),
             TypeExpr::Char => "DuckChar".to_string(),
             TypeExpr::String => "DuckString".to_string(),
+            TypeExpr::Tag(identifier) => format!("Tag__{identifier}"),
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
             TypeExpr::TypeName(_, name, _type_params) => {
