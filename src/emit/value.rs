@@ -294,7 +294,11 @@ impl ValueExpr {
 
                 (instr, Some(IrValue::Var(res_name)))
             }
-            ValueExpr::Match { value_expr, arms, else_arm } => {
+            ValueExpr::Match {
+                value_expr,
+                arms,
+                else_arm,
+            } => {
                 let (mut instructions, match_on_res) =
                     value_expr.0.direct_or_with_instr(type_env, env);
                 let match_on_value = match match_on_res {

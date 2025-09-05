@@ -281,7 +281,11 @@ pub fn mangle_value_expr(
             mangle_value_expr(&mut target.0, global_prefix, prefix, mangle_env);
             mangle_value_expr(&mut idx.0, global_prefix, prefix, mangle_env);
         }
-        ValueExpr::Match { value_expr, arms, else_arm } => {
+        ValueExpr::Match {
+            value_expr,
+            arms,
+            else_arm,
+        } => {
             mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env);
             for arm in arms {
                 mangle_type_expression(&mut arm.type_case.0, prefix, mangle_env);

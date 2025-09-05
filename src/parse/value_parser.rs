@@ -256,10 +256,7 @@ where
                 });
 
             let r#match = just(Token::Match)
-                .ignore_then(
-                    value_expr_parser
-                        .clone()
-                )
+                .ignore_then(value_expr_parser.clone())
                 .then(
                     match_arm
                         .separated_by(just(Token::ControlChar(',')))
@@ -948,7 +945,11 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
         } => {
             value_expr_into_empty_range(target_obj);
         }
-        ValueExpr::Match { value_expr, arms, else_arm } => {
+        ValueExpr::Match {
+            value_expr,
+            arms,
+            else_arm,
+        } => {
             value_expr_into_empty_range(value_expr);
             arms.iter_mut().for_each(|arm| {
                 type_expr_into_empty_range(&mut arm.type_case);

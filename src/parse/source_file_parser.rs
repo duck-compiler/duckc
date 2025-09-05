@@ -326,7 +326,11 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             append_global_prefix_value_expr(&mut target.0, mangle_env);
             append_global_prefix_value_expr(&mut idx.0, mangle_env);
         }
-        ValueExpr::Match { value_expr, arms, else_arm } => {
+        ValueExpr::Match {
+            value_expr,
+            arms,
+            else_arm,
+        } => {
             append_global_prefix_value_expr(&mut value_expr.0, mangle_env);
             for arm in arms {
                 append_global_prefix_type_expr(&mut arm.type_case.0, mangle_env);
