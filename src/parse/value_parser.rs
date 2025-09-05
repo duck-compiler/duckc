@@ -27,8 +27,8 @@ pub enum ValFmtStringContents {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Declaration {
     pub name: String,
-    pub type_expr: Spanned<TypeExpr>,
-    pub initializer: Option<Spanned<ValueExpr>>,
+    pub type_expr: Option<Spanned<TypeExpr>>,
+    pub initializer: Spanned<ValueExpr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -293,6 +293,10 @@ where
 
             let initializer = just(Token::ControlChar('='))
                 .ignore_then(value_expr_parser.clone())
+                .boxed();
+
+            let declare_type = just(Token::ControlChar(':'))
+                .ignore_then(type_expression_parser())
                 .or_not()
                 .boxed();
 
@@ -301,10 +305,9 @@ where
                     select_ref! { Token::Ident(identifier) => identifier.to_string() }
                         .map_with(|x, e| (x, e.span())),
                 )
-                .then_ignore(just(Token::ControlChar(':')))
-                .then(type_expression_parser())
+                .then(declare_type)
                 .then(initializer)
-                .map(|(((ident, ident_span), type_expr), initializer)| {
+                .map(|(((ident, _), type_expr), initializer)| {
                     ValueExpr::VarDecl(
                         (
                             Declaration {
@@ -312,7 +315,7 @@ where
                                 type_expr,
                                 initializer: initializer.clone(),
                             },
-                            initializer.map(|x| x.1).unwrap_or(ident_span),
+                            initializer.1,
                         )
                             .into(),
                     )
@@ -938,10 +941,10 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
         }
         ValueExpr::VarDecl(b) => {
             b.1 = empty_range();
-            if let Some(init) = &mut b.0.initializer {
-                value_expr_into_empty_range(init);
+            value_expr_into_empty_range(&mut b.0.initializer);
+            if let Some(type_expr) = &mut b.0.type_expr {
+                type_expr_into_empty_range(type_expr);
             }
-            type_expr_into_empty_range(&mut b.0.type_expr);
         }
         ValueExpr::VarAssign(a) => {
             a.1 = empty_range();
@@ -2047,13 +2050,13 @@ mod tests {
                 ValueExpr::Return(Some(Box::new(ValueExpr::Int(123).into_empty_span().into()))),
             ),
             (
-                "let x: String",
+                "let x: String = \"\"",
                 ValueExpr::VarDecl(
                     (
                         Declaration {
                             name: "x".into(),
-                            initializer: None,
-                            type_expr: TypeExpr::String.into_empty_span(),
+                            initializer: ValueExpr::String("".to_string()).into_empty_span(),
+                            type_expr: Some(TypeExpr::String.into_empty_span()),
                         },
                         empty_range(),
                     )
@@ -2498,30 +2501,30 @@ mod tests {
     pub fn test_declaration_parser() {
         let inputs_and_expected_outputs = vec![
             (
-                "let x: String",
+                "let x: String = \"\"",
                 Declaration {
                     name: "x".to_string(),
-                    type_expr: TypeExpr::String.into_empty_span(),
-                    initializer: None,
+                    type_expr: Some(TypeExpr::String.into_empty_span()),
+                    initializer: ValueExpr::String("".to_string()).into_empty_span(),
                 },
             ),
             (
                 "let y: { x: Int } = {}",
                 Declaration {
                     name: "y".to_string(),
-                    type_expr: TypeExpr::Duck(Duck {
+                    type_expr: Some(TypeExpr::Duck(Duck {
                         fields: vec![Field::new("x".to_string(), TypeExpr::Int.into_empty_span())],
                     })
-                    .into_empty_span(),
-                    initializer: Some(ValueExpr::Duck(vec![]).into_empty_span()),
+                    .into_empty_span()),
+                    initializer: ValueExpr::Duck(vec![]).into_empty_span(),
                 },
             ),
             (
-                "let z: {}",
+                "let z: {} = {}",
                 Declaration {
                     name: "z".to_string(),
-                    type_expr: TypeExpr::Any.into_empty_span(),
-                    initializer: None,
+                    type_expr: Some(TypeExpr::Any.into_empty_span()),
+                    initializer: empty_duck().into_empty_span(),
                 },
             ),
         ];
@@ -2546,11 +2549,11 @@ mod tests {
                 unreachable!()
             };
 
-            declaration.0.initializer.as_mut().map(|x| {
-                value_expr_into_empty_range(x);
-                x
-            });
-            type_expr_into_empty_range(&mut declaration.0.type_expr);
+            value_expr_into_empty_range(&mut declaration.0.initializer);
+
+            if let Some(type_expr) = &mut declaration.0.type_expr {
+                type_expr_into_empty_range(type_expr);
+            }
 
             assert_eq!(declaration.0, expected_output.into());
         }

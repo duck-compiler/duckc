@@ -525,12 +525,13 @@ pub fn mangle_value_expr(
         }
         ValueExpr::VarDecl(declaration) => {
             let declaration = &mut declaration.0;
-            mangle_type_expression(&mut declaration.type_expr.0, prefix, mangle_env);
+            if let Some(type_expr) = &mut declaration.type_expr {
+                mangle_type_expression(&mut type_expr.0, prefix, mangle_env);
+            }
+
             mangle_env.insert_ident(declaration.name.clone());
 
-            if let Some(value_expr) = &mut declaration.initializer {
-                mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env);
-            }
+            mangle_value_expr(&mut declaration.initializer.0, global_prefix, prefix, mangle_env);
         }
         ValueExpr::Add(lhs, rhs) => {
             mangle_value_expr(&mut lhs.0, global_prefix, prefix, mangle_env);

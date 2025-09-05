@@ -9,7 +9,7 @@ struct ArrayList<T> = {
     }
 
     fn pop() -> T {
-        let popped_val: T;
+        let popped_val: T | "none" = "none";
         go {
             var index = len(self.elems) - 1;
             popped_val = self.elems[index];
@@ -22,7 +22,7 @@ struct ArrayList<T> = {
         index: Int
     ) -> None | T | "error: index out of bounds" {
         let index_out_of_bounds: "error: index out of bounds" = "error: index out of bounds";
-        let elem: T;
+        let elem: T | "none" = "none";
         go {
             if index.as_dgo_int() < 0 || index.as_dgo_int() >= self.len().as_dgo_int() {
                 return index_out_of_bounds;
@@ -48,7 +48,7 @@ struct ArrayList<T> = {
     }
 
     fn len() -> Int {
-        let l: Int;
+        let l: Int = 0;
         go {
             l = ConcDuckInt { value: len(self.elems) };
         }
@@ -56,7 +56,7 @@ struct ArrayList<T> = {
     }
 
     fn is_empty() -> Bool {
-        let empty: Bool;
+        let empty: Bool = true;
         go {
             empty = ConcDuckBool { value: len(self.elems) == 0 }
         }

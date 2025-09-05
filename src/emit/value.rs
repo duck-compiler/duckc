@@ -434,16 +434,18 @@ impl ValueExpr {
                     initializer,
                 } = &b.0;
 
-                let ty = type_expr.0.as_go_type_annotation(type_env);
+                let type_expression = type_expr
+                    .as_ref()
+                    .expect("compiler error: i expect that the type should be replaced by now")
+                    .0
+                    .as_go_type_annotation(type_env);
 
                 let mut v = Vec::new();
-                v.push(IrInstruction::VarDecl(name.clone(), ty));
-                if let Some(initializer) = initializer {
-                    let (init_r, inti_r_res) = initializer.0.direct_or_with_instr(type_env, env);
-                    v.extend(init_r);
-                    if let Some(init_r_res) = inti_r_res {
-                        v.push(IrInstruction::VarAssignment(name.clone(), init_r_res));
-                    }
+                v.push(IrInstruction::VarDecl(name.clone(), type_expression));
+                let (init_r, inti_r_res) = initializer.0.direct_or_with_instr(type_env, env);
+                v.extend(init_r);
+                if let Some(init_r_res) = inti_r_res {
+                    v.push(IrInstruction::VarAssignment(name.clone(), init_r_res));
                 }
                 (v, Some(IrValue::empty_tuple()))
             }

@@ -345,11 +345,12 @@ fn parse_src_file(
                     type_expr,
                     initializer,
                 } = &mut b.0;
-                typename_reset_global(&mut type_expr.0);
 
-                if let Some(initializer) = initializer {
-                    typename_reset_global_value_expr(&mut initializer.0);
+                if let Some(type_expr) = type_expr.as_mut() {
+                    typename_reset_global(&mut type_expr.0);
                 }
+
+                typename_reset_global_value_expr(&mut initializer.0);
             }
             ValueExpr::VarAssign(b) => {
                 let Assignment { target, value_expr } = &mut b.0;

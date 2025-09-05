@@ -137,13 +137,11 @@ impl TypeExpr {
             ValueExpr::VarAssign(_assignment) => TypeExpr::Tuple(vec![]),
             ValueExpr::VarDecl(decl) => {
                 let decl = decl.as_ref();
-                if let Some(init) = &decl.0.initializer {
-                    check_type_compatability(
-                        &decl.0.type_expr,
-                        &(TypeExpr::from_value_expr(&init.0, type_env), init.1),
-                        type_env,
-                    );
-                }
+                check_type_compatability(
+                    &decl.0.type_expr.as_ref().expect("compiler error: i expect the implicit types to be resolved by now"),
+                    &(TypeExpr::from_value_expr(&decl.0.initializer.0, type_env), decl.0.initializer.1),
+                    type_env,
+                );
 
                 TypeExpr::Tuple(vec![])
             }
