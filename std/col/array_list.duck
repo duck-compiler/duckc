@@ -8,14 +8,96 @@ struct ArrayList<T> = {
         return self;
     }
 
+    fn pop() -> T {
+        let popped_val: T;
+        go {
+            var index = len(self.elems) - 1;
+            popped_val = self.elems[index];
+            self.elems = self.elems[:index];
+        }
+        return popped_val;
+    }
+
+    fn get(
+        index: Int
+    ) -> None | T | "error: index out of bounds" {
+        let index_out_of_bounds: "error: index out of bounds" = "error: index out of bounds";
+        let elem: T;
+        go {
+            if index.as_dgo_int() < 0 || index.as_dgo_int() >= self.len().as_dgo_int() {
+                return index_out_of_bounds;
+            }
+
+            elem = self.elems[index.as_dgo_int()]
+        }
+        return elem;
+    }
+
+    fn set(index: Int, value: T) -> ArrayList<T> {
+        go {
+            self.elems[index.as_dgo_int()] = value
+        }
+        return self;
+    }
+
+    fn remove(index: Int) -> ArrayList<T> {
+        go {
+            self.elems = append(self.elems[:index.as_dgo_int()], self.elems[index.as_dgo_int()+1:]...)
+        }
+        return self;
+    }
+
+    fn len() -> Int {
+        let l: Int;
+        go {
+            l = ConcDuckInt { value: len(self.elems) };
+        }
+        return l;
+    }
+
+    fn is_empty() -> Bool {
+        let empty: Bool;
+        go {
+            empty = ConcDuckBool { value: len(self.elems) == 0 }
+        }
+        return empty;
+    }
+
+    fn clear() -> ArrayList<T> {
+        self.elems = .T[];
+        return self;
+    }
+
     fn map<U>(f: fn(x: T) -> U) -> ArrayList<U> {
-        let res: ArrayList<U> = new_array_list<U>();
+        let res: ArrayList<U> = empty_array_list<U>();
         go {
             for _, e := range self.elems {
                 res.elems = append(res.elems, f(e))
             }
         }
         return res;
+    }
+
+    fn filter(f: fn(x: T) -> Bool) -> ArrayList<T> {
+        let res: ArrayList<T> = empty_array_list<T>();
+        go {
+            for _, e := range self.elems {
+                if f(e).as_dgo_bool() {
+                    res.elems = append(res.elems, e)
+                }
+            }
+        }
+        return res;
+    }
+
+    fn reduce<U>(f: fn(acc: U, x: T) -> U, initial_value: U) -> U {
+        let acc: U = initial_value;
+        go {
+            for _, e := range self.elems {
+                acc = f(acc, e)
+            }
+        }
+        return acc;
     }
 
     fn for_each(f: fn(e: T) -> ()) {
@@ -25,10 +107,45 @@ struct ArrayList<T> = {
             }
         }
     }
+
+    fn find(f: fn(x: T) -> Bool) -> T | "none" {
+        let result: T | "none" = "none";
+        go {
+            for _, e := range self.elems {
+                if f(e).as_dgo_bool() {
+                    result = e
+                    break
+                }
+            }
+        }
+        return result;
+    }
+
+    fn find_index(
+        predicate: fn(element: T) -> Bool
+    ) -> Int | "none" {
+        let result: Int | "none" = "none";
+        go {
+            for i, elem := range self.elems {
+                if predicate(elem).as_dgo_bool() {
+                    result = ConcDuckInt { value: i };
+                    break
+                }
+            }
+        }
+        return result;
+    }
+
 };
 
-fn new_array_list<T>() -> ArrayList<T> {
+fn empty_array_list<T>() -> ArrayList<T> {
     return ArrayList<T> {
         elems: .T[],
+    };
+}
+
+fn array_of<T>(initial_elements: T[]) -> ArrayList<T> {
+    return ArrayList<T> {
+        elems: initial_elements
     };
 }
