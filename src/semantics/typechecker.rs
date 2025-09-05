@@ -869,12 +869,13 @@ fn check_type_compatability(
             // todo: produce snapshot for the given error
             fail_requirement(
                 format!(
-                    "the required type {} is a tag",
+                    "the required type is {}",
                     format!("{}", required_type.0).bright_yellow(),
                 ),
                 format!(
-                    "because of the fact, that the required type {} is a tag. The value you need to pass must be a tag aswell, but it isn't.",
+                    "because of the fact, that the required type is {}. The value you need to pass must be a tag aswell, but it is a {}",
                     format!("{}", required_type.0).bright_yellow(),
+                    format!("{}", given_type.0).bright_yellow(),
                 ),
             )
         }
