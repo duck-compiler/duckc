@@ -1867,11 +1867,13 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         ValueExpr::String(str) => {
             type_env.insert_type(TypeExpr::ConstString(str.clone()));
         }
+        ValueExpr::Tag(tag) => {
+            type_env.insert_type(TypeExpr::Tag(tag.clone()));
+        }
         ValueExpr::Int(..)
         | ValueExpr::Bool(..)
         | ValueExpr::Char(..)
         | ValueExpr::Float(..)
-        | ValueExpr::Tag(..)
         | ValueExpr::Break
         | ValueExpr::Return(None)
         | ValueExpr::Continue => {}
