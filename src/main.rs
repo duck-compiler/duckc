@@ -244,11 +244,15 @@ fn parse_src_file(
 
     fn typename_reset_global_value_expr(t: &mut ValueExpr) {
         match t {
-            ValueExpr::Match { value_expr, arms } => {
+            ValueExpr::Match { value_expr, arms, else_arm } => {
                 typename_reset_global_value_expr(&mut value_expr.0);
                 for arm in arms {
                     typename_reset_global_value_expr(&mut arm.value_expr.0);
                     typename_reset_global(&mut arm.type_case.0);
+                }
+                if let Some(else_arm) = else_arm {
+                    typename_reset_global_value_expr(&mut else_arm.value_expr.0);
+                    typename_reset_global(&mut else_arm.type_case.0);
                 }
             }
             ValueExpr::Block(exprs) => {
