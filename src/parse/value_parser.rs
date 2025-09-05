@@ -259,7 +259,6 @@ where
                 .ignore_then(
                     value_expr_parser
                         .clone()
-                        .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
                 )
                 .then(
                     match_arm
