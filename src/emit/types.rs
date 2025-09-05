@@ -589,30 +589,30 @@ impl TypeExpr {
                         .as_go_type_annotation(type_env))
             ),
             TypeExpr::Duck(Duck { fields }) => format!(
-                "struct {{\n{}\n}}",
+                "Duck_{}",
                 fields
                     .iter()
                     .map(|field| format!(
-                        "   {} {}",
+                        "{}_{}",
                         field.name,
-                        field.type_expr.0.as_go_type_annotation(type_env)
+                        field.type_expr.0.unconst().as_clean_go_type_name(type_env)
                     ))
                     .collect::<Vec<_>>()
-                    .join("\n")
+                    .join("_")
             ),
             TypeExpr::Struct(s) => s.clone(),
             TypeExpr::Tuple(fields) => {
                 format!(
-                    "struct {{\n{}\n}}",
+                    "Tup_{}",
                     fields
                         .iter()
-                        .enumerate()
-                        .map(|(i, type_expr)| format!(
-                            "field_{i} {}",
-                            type_expr.0.as_go_type_annotation(type_env)
-                        ))
+                        .map(|type_expr| type_expr
+                            .0
+                            .unconst()
+                            .as_clean_go_type_name(type_env)
+                            .to_string())
                         .collect::<Vec<_>>()
-                        .join("\n")
+                        .join("_")
                 )
             }
             TypeExpr::Or(_) => "any".to_string(),

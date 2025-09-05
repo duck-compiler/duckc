@@ -320,7 +320,7 @@ impl ValueExpr {
 
                 let mut cases = Vec::new();
                 for arm in arms {
-                    let type_name = arm.type_case.0.as_clean_go_type_name(type_env);
+                    let type_name = arm.type_case.0.as_go_concrete_annotation(type_env);
 
                     let (mut arm_instrs, arm_res) =
                         arm.value_expr.0.direct_or_with_instr(type_env, env);
@@ -1136,7 +1136,7 @@ mod tests {
                     IrInstruction::SwitchType(
                         IrValue::Int(1),
                         vec![Case {
-                            type_name: "DuckInt".into(),
+                            type_name: "ConcDuckInt".into(),
                             instrs: vec![IrInstruction::VarAssignment(
                                 "var_0".into(),
                                 IrValue::Int(2),
@@ -1160,7 +1160,7 @@ mod tests {
                     IrInstruction::SwitchType(
                         IrValue::Var("var_0".into()),
                         vec![Case {
-                            type_name: "DuckInt".into(),
+                            type_name: "ConcDuckInt".into(),
                             instrs: vec![IrInstruction::VarAssignment(
                                 "var_1".into(),
                                 IrValue::Int(100),

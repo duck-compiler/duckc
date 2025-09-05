@@ -1,0 +1,7 @@
+use go "log";
+
+fn panic(m: {}) {
+    go {
+        log.Fatal(m)
+    }
+}

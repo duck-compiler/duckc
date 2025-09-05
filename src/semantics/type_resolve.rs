@@ -1706,7 +1706,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                                 TypeExpr::Struct(s_name.clone()),
                             );
                             typeresolve_function_definition(v, type_env);
-                            type_env.push_identifier_types();
+                            type_env.pop_identifier_types();
                         }
                     }
                     type_env.generic_methods_generated = cloned;

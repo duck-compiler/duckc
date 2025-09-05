@@ -317,7 +317,10 @@ impl IrValue {
                 )
             }
             IrValue::Nil => "nil".to_string(),
-            IrValue::BoolNegate(o) => format!("!{}", o.emit_as_go()),
+            IrValue::BoolNegate(o) => format!(
+                "ConcDuckBool {{ value: !{}.as_dgo_bool() }}",
+                o.emit_as_go()
+            ),
             IrValue::Lambda(params, return_type, body) => format!(
                 "func({}) {} {{\n{}\n}} ",
                 params
