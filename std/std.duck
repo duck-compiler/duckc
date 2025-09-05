@@ -6,3 +6,4 @@ module task;
 module time;
 module string;
 module col;
+module error;

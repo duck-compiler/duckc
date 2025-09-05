@@ -1,0 +1,79 @@
+use std::io::{debug};
+
+struct Opt<T> = {
+    inner: T | "empty",
+} impl {
+    fn filter(f: fn(x: T) -> Bool) -> Opt<T> {
+        return match self.inner {
+            T @ value -> if (f(value)) { self } else { empty_opt<T>() },
+            "empty" -> empty_opt<T>(),
+        };
+    }
+
+    fn map<U>(f: fn(x: T) -> U) -> Opt<U> {
+        return match self.inner {
+            T @ value -> some<U>(f(value)),
+            "empty" -> empty_opt<U>(),
+        };
+    }
+
+    fn is_empty() -> Bool {
+        return match self.inner {
+            T -> true,
+            "empty" -> false,
+        };
+    }
+
+    fn is_some() -> Bool {
+        return !self.is_empty();
+    }
+
+    fn zip<U>(other: Opt<U>) -> Opt<(T, U)> {
+        return match self.inner {
+            T @ first -> match other.inner {
+                U @ second -> some<(T, U)>((first, second)),
+                "empty" -> empty_opt<(T, U)>(),
+            },
+            "empty" -> empty_opt<(T, U)>(),
+        };
+    }
+
+    fn unwrap() -> T {
+        match self.inner {
+            T @ val -> return val,
+            "empty" -> std::error::panic("empty optional"),
+        }
+    }
+
+    fn expect(s: String) -> T {
+        match self.inner {
+            T @ val -> return val,
+            "empty" -> std::error::panic(s),
+        }
+    }
+};
+
+fn empty_opt<T>() -> Opt<T> {
+    return Opt<T> { inner: "empty" };
+}
+
+fn some<T>(v: T) -> Opt<T> {
+    return Opt<T> { inner: v };
+}
+
+fn main() {
+    let v: String = "abc";
+
+    let o: Opt<String> = some<String>("Yo");
+    let o2: Opt<Int> = some<Int>(200);
+
+    debug(o.filter(fn(x: String) -> Bool { return true }));
+    debug(o.filter(fn(x: String) -> Bool { return false }));
+    debug(o.map<Int>(fn(x: String) -> Int { return 100 }));
+    debug(o.map<Int>(fn(x: String) -> Int { return 100 }).is_empty());
+    debug(o.map<Int>(fn(x: String) -> Int { return 100 }).is_some());
+    debug(o.zip<Int>(o2));
+    debug(o.zip<Int>(o2).is_some());
+    debug(o.zip<Int>(empty_opt<Int>()).is_empty());
+    debug(empty_opt<String>().unwrap());
+}

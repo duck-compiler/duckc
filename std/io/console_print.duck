@@ -5,3 +5,9 @@ fn println(str: String) {
         fmt.Println(str.as_dgo_string());
     }
 }
+
+fn debug(x: {}) {
+    go {
+        fmt.Println(x)
+    }
+}

@@ -715,7 +715,7 @@ fn require(condition: bool, fail_message: String) {
     }
 }
 
-fn types_are_compatible(one: &TypeExpr, two: &TypeExpr, _type_env: &mut TypeEnv) -> bool {
+fn types_are_compatible(one: &TypeExpr, two: &TypeExpr, type_env: &mut TypeEnv) -> bool {
     if one.is_string() && two.is_string() {
         return true;
     }
@@ -730,6 +730,24 @@ fn types_are_compatible(one: &TypeExpr, two: &TypeExpr, _type_env: &mut TypeEnv)
 
     if one.is_number() || two.is_number() {
         return false;
+    }
+
+    if one.is_tuple() && two.is_tuple() {
+        let TypeExpr::Tuple(types_one) = one.clone() else {
+            panic!("not a tuple?")
+        };
+        let TypeExpr::Tuple(types_two) = two.clone() else {
+            panic!("not a tuple?")
+        };
+
+        if types_one.len() == types_two.len()
+            && types_one
+                .iter()
+                .zip(types_two.iter())
+                .all(|(a, b)| types_are_compatible(&a.0, &b.0, type_env))
+        {
+            return true;
+        }
     }
 
     one == two
