@@ -2,7 +2,7 @@ use go "strings";
 use go "strconv";
 
 fn to_upper(s: String) -> String {
-    let res: String;
+    let res: String = "";
     go {
         res = ConcDuckString { value: strings.ToUpper(s.as_dgo_string()) }
     }
@@ -10,7 +10,7 @@ fn to_upper(s: String) -> String {
 }
 
 fn to_lower(s: String) -> String {
-    let res: String;
+    let res: String = "";
     go {
         res = ConcDuckString { value: strings.ToLower(s.as_dgo_string()) }
     }
@@ -18,7 +18,7 @@ fn to_lower(s: String) -> String {
 }
 
 fn from_int(x: Int) -> String {
-    let res: String;
+    let res: String = "";
     go {
         tmp := strconv.Itoa(x.as_dgo_int())
         res = ConcDuckString { value: tmp }
@@ -27,7 +27,7 @@ fn from_int(x: Int) -> String {
 }
 
 fn to_int(x: String) -> Int {
-    let res: Int;
+    let res: Int = 0;
     go {
         tmp, _ := strconv.Atoi(x.as_dgo_string())
         res = ConcDuckInt { value: tmp }

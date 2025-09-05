@@ -242,7 +242,7 @@ where
 
             let tag = just(Token::ControlChar('.'))
                 .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
-                .map(|identifier| TypeExpr::Tag(identifier));
+                .map(TypeExpr::Tag);
 
             let duck = just(Token::Duck)
                 .or_not()
@@ -425,7 +425,7 @@ where
 
             let tag = just(Token::ControlChar('.'))
                 .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
-                .map(|identifier| TypeExpr::Tag(identifier));
+                .map(TypeExpr::Tag);
 
             let function = just(Token::Function)
                 .ignore_then(just(Token::ControlChar('(')))

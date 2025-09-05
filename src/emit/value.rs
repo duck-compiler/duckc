@@ -434,16 +434,18 @@ impl ValueExpr {
                     initializer,
                 } = &b.0;
 
-                let ty = type_expr.0.as_go_type_annotation(type_env);
+                let type_expression = type_expr
+                    .as_ref()
+                    .expect("compiler error: i expect that the type should be replaced by now")
+                    .0
+                    .as_go_type_annotation(type_env);
 
                 let mut v = Vec::new();
-                v.push(IrInstruction::VarDecl(name.clone(), ty));
-                if let Some(initializer) = initializer {
-                    let (init_r, inti_r_res) = initializer.0.direct_or_with_instr(type_env, env);
-                    v.extend(init_r);
-                    if let Some(init_r_res) = inti_r_res {
-                        v.push(IrInstruction::VarAssignment(name.clone(), init_r_res));
-                    }
+                v.push(IrInstruction::VarDecl(name.clone(), type_expression));
+                let (init_r, inti_r_res) = initializer.0.direct_or_with_instr(type_env, env);
+                v.extend(init_r);
+                if let Some(init_r_res) = inti_r_res {
+                    v.push(IrInstruction::VarAssignment(name.clone(), init_r_res));
                 }
                 (v, Some(IrValue::empty_tuple()))
             }
@@ -957,18 +959,18 @@ impl ValueExpr {
                 (res, as_rvar(res_var))
             }
             ValueExpr::Tag(..) => {
-                let type_name = TypeExpr::from_value_expr(self, type_env)
-                    .as_clean_go_type_name(type_env);
+                let type_name =
+                    TypeExpr::from_value_expr(self, type_env).as_clean_go_type_name(type_env);
 
                 let mut res = Vec::new();
                 let res_var = env.new_var();
                 res.extend([
-                    IrInstruction::VarDecl(res_var.clone(), format!("{type_name}")),
+                    IrInstruction::VarDecl(res_var.clone(), type_name.to_string()),
                     IrInstruction::VarAssignment(res_var.clone(), IrValue::Tag(type_name)),
                 ]);
 
                 (res, as_rvar(res_var))
-            },
+            }
             ValueExpr::Int(..)
             | ValueExpr::Char(..)
             | ValueExpr::Lambda(..)

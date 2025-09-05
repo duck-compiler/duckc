@@ -562,12 +562,12 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
         }
         ValueExpr::VarDecl(declaration) => {
             let declaration = &mut declaration.0;
-            append_global_prefix_type_expr(&mut declaration.type_expr.0, mangle_env);
+            if let Some(type_expr) = &mut declaration.type_expr {
+                append_global_prefix_type_expr(&mut type_expr.0, mangle_env);
+            }
             mangle_env.insert_ident(declaration.name.clone());
 
-            if let Some(value_expr) = &mut declaration.initializer {
-                append_global_prefix_value_expr(&mut value_expr.0, mangle_env);
-            }
+            append_global_prefix_value_expr(&mut declaration.initializer.0, mangle_env);
         }
         ValueExpr::Add(lhs, rhs) => {
             append_global_prefix_value_expr(&mut lhs.0, mangle_env);

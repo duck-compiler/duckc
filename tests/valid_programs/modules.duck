@@ -37,7 +37,7 @@ module X {
 
         module XXX {
             fn zz() {
-                let x: go any;
+                let x: go any | .none = .none;
                 go {
                     x = xxx;
                 }

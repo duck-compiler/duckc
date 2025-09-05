@@ -396,12 +396,10 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
         .iter()
         .filter(|type_expr| type_expr.is_tag())
         .flat_map(|primitive_type_expr| {
-            return vec![
-                IrInstruction::StructDef(
-                    primitive_type_expr.as_clean_go_type_name(type_env),
-                    vec![],
-                ),
-            ];
+            return vec![IrInstruction::StructDef(
+                primitive_type_expr.as_clean_go_type_name(type_env),
+                vec![],
+            )];
         })
         .collect::<Vec<_>>();
 

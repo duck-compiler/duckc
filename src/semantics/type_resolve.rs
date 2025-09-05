@@ -627,10 +627,10 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
             replace_generics_in_value_expr(&mut body.0, set_params);
         }
         ValueExpr::VarDecl(decl) => {
-            replace_generics_in_type_expr(&mut decl.0.type_expr.0, set_params);
-            if let Some(init) = decl.0.initializer.as_mut() {
-                replace_generics_in_value_expr(&mut init.0, set_params);
+            if let Some(type_expr) = &mut decl.0.type_expr {
+                replace_generics_in_type_expr(&mut type_expr.0, set_params);
             }
+            replace_generics_in_value_expr(&mut decl.0.initializer.0, set_params);
         }
         ValueExpr::VarAssign(a) => {
             replace_generics_in_value_expr(&mut a.0.target.0, set_params);
@@ -1041,11 +1041,11 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
             instantiate_generics_value_expr(&mut body.0, type_env);
         }
         ValueExpr::VarDecl(decl) => {
-            instantiate_generics_type_expr(&mut decl.0.type_expr.0, type_env);
-
-            if let Some(init) = decl.0.initializer.as_mut() {
-                instantiate_generics_value_expr(&mut init.0, type_env);
+            if let Some(type_expr) = &mut decl.0.type_expr {
+                instantiate_generics_type_expr(&mut type_expr.0, type_env);
             }
+
+            instantiate_generics_value_expr(&mut decl.0.initializer.0, type_env);
         }
         ValueExpr::VarAssign(a) => {
             instantiate_generics_value_expr(&mut a.0.target.0, type_env);
@@ -1098,10 +1098,11 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
                 type_expr,
                 initializer,
             } = &mut d.0;
-            sort_fields_type_expr(&mut type_expr.0);
-            if let Some(e) = initializer {
-                sort_fields_value_expr(&mut e.0);
+            if let Some(type_expr) = type_expr {
+                sort_fields_type_expr(&mut type_expr.0);
             }
+
+            sort_fields_value_expr(&mut initializer.0);
         }
         ValueExpr::Lambda(l) => {
             let LambdaFunctionExpr {
@@ -1551,14 +1552,16 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             let declaration = &mut declaration.0;
 
             // Resolve the type expression on the declaration
-            resolve_all_aliases_type_expr(&mut declaration.type_expr.0, type_env);
-
-            type_env
-                .insert_identifier_type(declaration.name.clone(), declaration.type_expr.0.clone());
-
-            if let Some(initializer) = &mut declaration.initializer {
-                typeresolve_value_expr(&mut initializer.0, type_env);
+            if let Some(type_expr) = &mut declaration.type_expr {
+                resolve_all_aliases_type_expr(&mut type_expr.0, type_env);
+                type_env.insert_identifier_type(declaration.name.clone(), type_expr.0.clone());
+            } else {
+                let type_expr = TypeExpr::from_value_expr(&declaration.initializer.0, type_env);
+                declaration.type_expr = Some((type_expr.clone(), declaration.initializer.1));
+                type_env.insert_identifier_type(declaration.name.clone(), type_expr);
             }
+
+            typeresolve_value_expr(&mut declaration.initializer.0, type_env);
         }
         ValueExpr::FormattedString(contents) => {
             for c in contents {
@@ -1862,11 +1865,13 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         ValueExpr::String(str) => {
             type_env.insert_type(TypeExpr::ConstString(str.clone()));
         }
+        ValueExpr::Tag(tag) => {
+            type_env.insert_type(TypeExpr::Tag(tag.clone()));
+        }
         ValueExpr::Int(..)
         | ValueExpr::Bool(..)
         | ValueExpr::Char(..)
         | ValueExpr::Float(..)
-        | ValueExpr::Tag(..)
         | ValueExpr::Break
         | ValueExpr::Return(None)
         | ValueExpr::Continue => {}
@@ -1931,14 +1936,7 @@ fn resolve_implicit_function_return_type(
                 );
             }
             ValueExpr::VarDecl(declaration) => {
-                declaration
-                    .as_ref()
-                    .0
-                    .initializer
-                    .as_ref()
-                    .inspect(|initializer| {
-                        flatten_returns(&initializer.0, return_types_found, type_env);
-                    });
+                flatten_returns(&declaration.0.initializer.0, return_types_found, type_env);
             }
             ValueExpr::Add(left, right) => {
                 flatten_returns(&left.as_ref().0, return_types_found, type_env);
