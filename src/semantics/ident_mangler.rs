@@ -531,7 +531,12 @@ pub fn mangle_value_expr(
 
             mangle_env.insert_ident(declaration.name.clone());
 
-            mangle_value_expr(&mut declaration.initializer.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(
+                &mut declaration.initializer.0,
+                global_prefix,
+                prefix,
+                mangle_env,
+            );
         }
         ValueExpr::Add(lhs, rhs) => {
             mangle_value_expr(&mut lhs.0, global_prefix, prefix, mangle_env);

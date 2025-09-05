@@ -1554,13 +1554,11 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             // Resolve the type expression on the declaration
             if let Some(type_expr) = &mut declaration.type_expr {
                 resolve_all_aliases_type_expr(&mut type_expr.0, type_env);
-                type_env
-                    .insert_identifier_type(declaration.name.clone(), type_expr.0.clone());
+                type_env.insert_identifier_type(declaration.name.clone(), type_expr.0.clone());
             } else {
                 let type_expr = TypeExpr::from_value_expr(&declaration.initializer.0, type_env);
                 declaration.type_expr = Some((type_expr.clone(), declaration.initializer.1));
-                type_env
-                    .insert_identifier_type(declaration.name.clone(), type_expr);
+                type_env.insert_identifier_type(declaration.name.clone(), type_expr);
             }
 
             typeresolve_value_expr(&mut declaration.initializer.0, type_env);

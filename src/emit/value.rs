@@ -959,8 +959,8 @@ impl ValueExpr {
                 (res, as_rvar(res_var))
             }
             ValueExpr::Tag(..) => {
-                let type_name = TypeExpr::from_value_expr(self, type_env)
-                    .as_clean_go_type_name(type_env);
+                let type_name =
+                    TypeExpr::from_value_expr(self, type_env).as_clean_go_type_name(type_env);
 
                 let mut res = Vec::new();
                 let res_var = env.new_var();
@@ -970,7 +970,7 @@ impl ValueExpr {
                 ]);
 
                 (res, as_rvar(res_var))
-            },
+            }
             ValueExpr::Int(..)
             | ValueExpr::Char(..)
             | ValueExpr::Lambda(..)

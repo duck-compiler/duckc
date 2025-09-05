@@ -138,8 +138,13 @@ impl TypeExpr {
             ValueExpr::VarDecl(decl) => {
                 let decl = decl.as_ref();
                 check_type_compatability(
-                    &decl.0.type_expr.as_ref().expect("compiler error: i expect the implicit types to be resolved by now"),
-                    &(TypeExpr::from_value_expr(&decl.0.initializer.0, type_env), decl.0.initializer.1),
+                    &decl.0.type_expr.as_ref().expect(
+                        "compiler error: i expect the implicit types to be resolved by now",
+                    ),
+                    &(
+                        TypeExpr::from_value_expr(&decl.0.initializer.0, type_env),
+                        decl.0.initializer.1,
+                    ),
                     type_env,
                 );
 
@@ -879,7 +884,7 @@ fn check_type_compatability(
                 }
 
                 // everything's okay
-                return
+                return;
             }
 
             // todo: produce snapshot for the given error

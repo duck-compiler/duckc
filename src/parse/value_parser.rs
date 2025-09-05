@@ -2512,10 +2512,15 @@ mod tests {
                 "let y: { x: Int } = {}",
                 Declaration {
                     name: "y".to_string(),
-                    type_expr: Some(TypeExpr::Duck(Duck {
-                        fields: vec![Field::new("x".to_string(), TypeExpr::Int.into_empty_span())],
-                    })
-                    .into_empty_span()),
+                    type_expr: Some(
+                        TypeExpr::Duck(Duck {
+                            fields: vec![Field::new(
+                                "x".to_string(),
+                                TypeExpr::Int.into_empty_span(),
+                            )],
+                        })
+                        .into_empty_span(),
+                    ),
                     initializer: ValueExpr::Duck(vec![]).into_empty_span(),
                 },
             ),
