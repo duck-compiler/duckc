@@ -444,7 +444,13 @@ impl TypeExpr {
             ValueExpr::Match {
                 value_expr: _,
                 arms,
+                else_arm,
             } => {
+                let mut arms = arms.clone();
+                if let Some(arm) = else_arm {
+                    arms.push(arm.as_ref().clone());
+                }
+
                 let mut arm_types = Vec::new();
                 for arm in arms {
                     let arm_type = TypeExpr::from_value_expr(&arm.value_expr.0, type_env);

@@ -30,6 +30,7 @@ where
             select_ref! { Token::Ident(identifier) => identifier.to_string() }
                 .separated_by(just(Token::ControlChar(',')))
                 .at_least(1)
+                .allow_trailing()
                 .collect::<Vec<String>>(),
         )
         .then_ignore(just(Token::ControlChar('}')))

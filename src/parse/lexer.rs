@@ -145,7 +145,7 @@ pub fn lex_single<'a>(
             _ => Token::Ident(str.to_string()),
         });
 
-        let ctrl = one_of("!=:{};,&()-<>.+-*/%|[]").map(Token::ControlChar);
+        let ctrl = one_of("!=:{};,&()-<>.+-*/%|[]@").map(Token::ControlChar);
 
         let string = string_lexer();
         let r#bool = choice((

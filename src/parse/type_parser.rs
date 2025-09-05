@@ -4,9 +4,14 @@ use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
-use crate::{parse::{
-    generics_parser::{generics_parser, Generic}, value_parser::{empty_range, TypeParam}, Field, Spanned, SS
-}, semantics::type_resolve::TypeEnv};
+use crate::{
+    parse::{
+        Field, SS, Spanned,
+        generics_parser::{Generic, generics_parser},
+        value_parser::{TypeParam, empty_range},
+    },
+    semantics::type_resolve::TypeEnv,
+};
 
 use super::lexer::Token;
 
@@ -164,7 +169,7 @@ pub enum TypeExpr {
     Or(Vec<Spanned<TypeExpr>>),
     Fun(
         Vec<(Option<String>, Spanned<TypeExpr>)>, // params
-        Option<Box<Spanned<TypeExpr>>>, // return type
+        Option<Box<Spanned<TypeExpr>>>,           // return type
     ),
     Array(Box<Spanned<TypeExpr>>),
 }

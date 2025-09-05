@@ -14,7 +14,7 @@ pub type TypeParam = TypeExpr;
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm {
     pub type_case: Spanned<TypeExpr>,
-    pub bound_to_identifier: String,
+    pub identifier_binding: Option<String>,
     pub value_expr: Spanned<ValueExpr>,
 }
 
@@ -88,6 +88,7 @@ pub enum ValueExpr {
     Match {
         value_expr: Box<Spanned<ValueExpr>>,
         arms: Vec<MatchArm>,
+        else_arm: Option<Box<MatchArm>>,
     },
     FormattedString(Vec<ValFmtStringContents>),
 }
@@ -228,32 +229,46 @@ where
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                 .boxed();
 
+            let match_arm_identifier_binding = just(Token::ControlChar('@'))
+                .ignore_then(select_ref! { Token::Ident(ident) => ident.to_string() })
+                .or_not();
+
             let match_arm = type_expression_parser()
-                .then(select_ref! { Token::Ident(ident) => ident.to_string() })
+                .then(match_arm_identifier_binding.clone())
                 .then_ignore(just(Token::ThinArrow))
                 .then(value_expr_parser.clone())
                 .map(|((type_expr, identifier), value_expr)| MatchArm {
                     type_case: type_expr,
-                    bound_to_identifier: identifier,
+                    identifier_binding: identifier,
+                    value_expr,
+                });
+
+            let else_arm = just(Token::Else)
+                .then(match_arm_identifier_binding)
+                .then_ignore(just(Token::ThinArrow))
+                .then(value_expr_parser.clone())
+                // todo: add span of else
+                .map(|((_, identifier), value_expr)| MatchArm {
+                    // todo: check if typeexpr::any is correct for the else arm in pattern matching
+                    type_case: (TypeExpr::Any, value_expr.1),
+                    identifier_binding: identifier,
                     value_expr,
                 });
 
             let r#match = just(Token::Match)
-                .ignore_then(
-                    value_expr_parser
-                        .clone()
-                        .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
-                )
+                .ignore_then(value_expr_parser.clone())
                 .then(
                     match_arm
                         .separated_by(just(Token::ControlChar(',')))
                         .allow_trailing()
                         .collect::<Vec<_>>()
+                        .then(else_arm.map(Box::new).or_not())
                         .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}'))),
                 )
-                .map(|(value_expr, arms)| ValueExpr::Match {
+                .map(|(value_expr, (arms, else_arm))| ValueExpr::Match {
                     value_expr: Box::new(value_expr),
                     arms,
+                    else_arm,
                 })
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
@@ -930,12 +945,21 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
         } => {
             value_expr_into_empty_range(target_obj);
         }
-        ValueExpr::Match { value_expr, arms } => {
+        ValueExpr::Match {
+            value_expr,
+            arms,
+            else_arm,
+        } => {
             value_expr_into_empty_range(value_expr);
             arms.iter_mut().for_each(|arm| {
                 type_expr_into_empty_range(&mut arm.type_case);
                 value_expr_into_empty_range(&mut arm.value_expr);
             });
+
+            if let Some(arm) = else_arm {
+                type_expr_into_empty_range(&mut arm.type_case);
+                value_expr_into_empty_range(&mut arm.value_expr);
+            }
         }
         _ => {}
     }
@@ -2318,36 +2342,38 @@ mod tests {
                 },
             ),
             (
-                "match (5) { Int i -> i }",
+                "match (5) { Int @i -> i }",
                 ValueExpr::Match {
                     value_expr: Box::new(ValueExpr::Int(5).into_empty_span()),
                     arms: vec![MatchArm {
                         type_case: TypeExpr::Int.into_empty_span(),
-                        bound_to_identifier: "i".to_string(),
+                        identifier_binding: Some("i".to_string()),
                         value_expr: *var("i"),
                     }],
+                    else_arm: None,
                 },
             ),
             (
-                "match (\"Hallo\") { String s -> s, Int i -> i }",
+                "match (\"Hallo\") { String @s -> s, Int @i -> i }",
                 ValueExpr::Match {
                     value_expr: Box::new(ValueExpr::String("Hallo".to_string()).into_empty_span()),
                     arms: vec![
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),
-                            bound_to_identifier: "s".to_string(),
+                            identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
-                            bound_to_identifier: "i".to_string(),
+                            identifier_binding: Some("i".to_string()),
                             value_expr: *var("i"),
                         },
                     ],
+                    else_arm: None,
                 },
             ),
             (
-                "match (\"Hallo\") { String s -> s, Int i -> i, Other o -> {
+                "match (\"Hallo\") { String @s -> s, Int @i -> i, Other @o -> {
                 return o
                 } }",
                 ValueExpr::Match {
@@ -2355,36 +2381,37 @@ mod tests {
                     arms: vec![
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),
-                            bound_to_identifier: "s".to_string(),
+                            identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
-                            bound_to_identifier: "i".to_string(),
+                            identifier_binding: Some("i".to_string()),
                             value_expr: *var("i"),
                         },
                         MatchArm {
                             type_case: TypeExpr::RawTypeName(false, vec!["Other".into()], None)
                                 .into_empty_span(),
-                            bound_to_identifier: "o".to_string(),
+                            identifier_binding: Some("o".to_string()),
                             value_expr: ValueExpr::Block(vec![
                                 ValueExpr::Return(Some(var("o"))).into_empty_span(),
                             ])
                             .into_empty_span(),
                         },
                     ],
+                    else_arm: None,
                 },
             ),
             (
                 "match (\"Hallo\") {
-                String s -> s,
-                Int i -> i,
-                Other o -> {
+                String @s -> s,
+                Int @i -> i,
+                Other @o -> {
                 return o
                 },
-                Other o -> {
+                Other @o -> {
                 match (o) {
-                String s -> s
+                String @s -> s
                 }
                 },
                 }",
@@ -2393,18 +2420,18 @@ mod tests {
                     arms: vec![
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),
-                            bound_to_identifier: "s".to_string(),
+                            identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
-                            bound_to_identifier: "i".to_string(),
+                            identifier_binding: Some("i".to_string()),
                             value_expr: *var("i"),
                         },
                         MatchArm {
                             type_case: TypeExpr::RawTypeName(false, vec!["Other".into()], None)
                                 .into_empty_span(),
-                            bound_to_identifier: "o".to_string(),
+                            identifier_binding: Some("o".to_string()),
                             value_expr: ValueExpr::Block(vec![
                                 ValueExpr::Return(Some(var("o"))).into_empty_span(),
                             ])
@@ -2413,21 +2440,23 @@ mod tests {
                         MatchArm {
                             type_case: TypeExpr::RawTypeName(false, vec!["Other".into()], None)
                                 .into_empty_span(),
-                            bound_to_identifier: "o".to_string(),
+                            identifier_binding: Some("o".to_string()),
                             value_expr: ValueExpr::Block(vec![
                                 ValueExpr::Match {
                                     value_expr: var("o"),
                                     arms: vec![MatchArm {
                                         type_case: TypeExpr::String.into_empty_span(),
-                                        bound_to_identifier: "s".to_string(),
+                                        identifier_binding: Some("s".to_string()),
                                         value_expr: *var("s"),
                                     }],
+                                    else_arm: None,
                                 }
                                 .into_empty_span(),
                             ])
                             .into_empty_span(),
                         },
                     ],
+                    else_arm: None,
                 },
             ),
         ];

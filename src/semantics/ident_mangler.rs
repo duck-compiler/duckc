@@ -281,12 +281,28 @@ pub fn mangle_value_expr(
             mangle_value_expr(&mut target.0, global_prefix, prefix, mangle_env);
             mangle_value_expr(&mut idx.0, global_prefix, prefix, mangle_env);
         }
-        ValueExpr::Match { value_expr, arms } => {
+        ValueExpr::Match {
+            value_expr,
+            arms,
+            else_arm,
+        } => {
             mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env);
             for arm in arms {
                 mangle_type_expression(&mut arm.type_case.0, prefix, mangle_env);
                 mangle_env.push_idents();
-                mangle_env.insert_ident(arm.bound_to_identifier.clone());
+                if let Some(identifier) = &arm.identifier_binding {
+                    mangle_env.insert_ident(identifier.clone());
+                }
+                mangle_value_expr(&mut arm.value_expr.0, global_prefix, prefix, mangle_env);
+                mangle_env.pop_idents();
+            }
+
+            if let Some(arm) = else_arm {
+                mangle_type_expression(&mut arm.type_case.0, prefix, mangle_env);
+                mangle_env.push_idents();
+                if let Some(identifier) = &arm.identifier_binding {
+                    mangle_env.insert_ident(identifier.clone());
+                }
                 mangle_value_expr(&mut arm.value_expr.0, global_prefix, prefix, mangle_env);
                 mangle_env.pop_idents();
             }
