@@ -1,3 +1,5 @@
+use ::{Opt};
+
 struct ArrayList<T> = {
     elems: T[]
 } impl {
@@ -8,12 +10,14 @@ struct ArrayList<T> = {
         return self;
     }
 
-    fn pop() -> T {
-        let popped_val: T | "none" = "none";
+    fn pop() -> Opt<T> {
+        let popped_val: Opt<T> = .none;
         go {
-            var index = len(self.elems) - 1;
-            popped_val = self.elems[index];
-            self.elems = self.elems[:index];
+            if (len(self.elems) > 0) {
+                var index = len(self.elems) - 1;
+                popped_val = self.elems[index];
+                self.elems = self.elems[:index];
+            }
         }
         return popped_val;
     }
