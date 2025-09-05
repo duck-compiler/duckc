@@ -2341,7 +2341,7 @@ mod tests {
                 },
             ),
             (
-                "match (5) { Int i -> i }",
+                "match (5) { Int @i -> i }",
                 ValueExpr::Match {
                     value_expr: Box::new(ValueExpr::Int(5).into_empty_span()),
                     arms: vec![MatchArm {
@@ -2353,7 +2353,7 @@ mod tests {
                 },
             ),
             (
-                "match (\"Hallo\") { String s -> s, Int i -> i }",
+                "match (\"Hallo\") { String @s -> s, Int @i -> i }",
                 ValueExpr::Match {
                     value_expr: Box::new(ValueExpr::String("Hallo".to_string()).into_empty_span()),
                     arms: vec![
@@ -2372,7 +2372,7 @@ mod tests {
                 },
             ),
             (
-                "match (\"Hallo\") { String s -> s, Int i -> i, Other o -> {
+                "match (\"Hallo\") { String @s -> s, Int @i -> i, Other @o -> {
                 return o
                 } }",
                 ValueExpr::Match {
@@ -2403,14 +2403,14 @@ mod tests {
             ),
             (
                 "match (\"Hallo\") {
-                String s -> s,
-                Int i -> i,
-                Other o -> {
+                String @s -> s,
+                Int @i -> i,
+                Other @o -> {
                 return o
                 },
-                Other o -> {
+                Other @o -> {
                 match (o) {
-                String s -> s
+                String @s -> s
                 }
                 },
                 }",

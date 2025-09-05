@@ -1112,7 +1112,7 @@ mod tests {
                 ],
             ),
             (
-                "match (1) { Int x -> 2 }",
+                "match (1) { Int @x -> 2 }",
                 vec![
                     decl("var_0", "DuckInt"),
                     IrInstruction::SwitchType(
@@ -1129,7 +1129,7 @@ mod tests {
                 ],
             ),
             (
-                "match (1 + 1) { Int x -> 100 }",
+                "match (1 + 1) { Int @x -> 100 }",
                 vec![
                     decl("var_0", "DuckInt"),
                     IrInstruction::Add(
