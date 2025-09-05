@@ -65,7 +65,7 @@ pub enum IrInstruction {
 pub struct Case {
     pub type_name: String,
     pub instrs: Vec<IrInstruction>,
-    pub bound_to_identifier: String,
+    pub identifier_binding: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -328,7 +328,7 @@ impl ValueExpr {
                     cases.push(Case {
                         type_name,
                         instrs: arm_instrs,
-                        bound_to_identifier: arm.bound_to_identifier.clone(),
+                        identifier_binding: arm.identifier_binding.clone(),
                     });
                 }
 
@@ -1105,7 +1105,7 @@ mod tests {
                                 "var_0".into(),
                                 IrValue::Int(2),
                             )],
-                            bound_to_identifier: "x".into(),
+                            identifier_binding: Some("x".into()),
                         }],
                     ),
                 ],
@@ -1129,7 +1129,7 @@ mod tests {
                                 "var_1".into(),
                                 IrValue::Int(100),
                             )],
-                            bound_to_identifier: "x".into(),
+                            identifier_binding: Some("x".into()),
                         }],
                     ),
                 ],

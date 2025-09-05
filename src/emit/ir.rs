@@ -23,17 +23,23 @@ impl IrInstruction {
             IrInstruction::SwitchType(against, type_cases) => {
                 // TODO: should this be mangled???? LOLOLOLO I DON"T THINK SO
                 fn emit_case_go(case: &Case, actual: &str) -> String {
-                    format!(
-                        "case {}:\n{}\n{}",
-                        case.type_name,
+                    let binding_str = if let Some(identifier) = &case.identifier_binding {
                         format!(
                             "var {} {} = {}.({})\n_={}\n",
-                            case.bound_to_identifier,
+                            identifier,
                             case.type_name,
                             actual,
                             case.type_name,
-                            case.bound_to_identifier
-                        ),
+                            identifier,
+                        )
+                    } else {
+                        String::new()
+                    };
+
+                    format!(
+                        "case {}:\n{}\n{}",
+                        case.type_name,
+                        binding_str,
                         case.instrs
                             .iter()
                             .map(IrInstruction::emit_as_go)

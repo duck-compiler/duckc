@@ -286,7 +286,9 @@ pub fn mangle_value_expr(
             for arm in arms {
                 mangle_type_expression(&mut arm.type_case.0, prefix, mangle_env);
                 mangle_env.push_idents();
-                mangle_env.insert_ident(arm.bound_to_identifier.clone());
+                if let Some(identifier) = &arm.identifier_binding {
+                    mangle_env.insert_ident(identifier.clone());
+                }
                 mangle_value_expr(&mut arm.value_expr.0, global_prefix, prefix, mangle_env);
                 mangle_env.pop_idents();
             }

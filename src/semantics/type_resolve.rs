@@ -1806,10 +1806,12 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             typeresolve_value_expr(&mut value_expr.0, type_env);
             arms.iter_mut().for_each(|arm| {
                 type_env.push_identifier_types();
-                type_env.insert_identifier_type(
-                    arm.bound_to_identifier.clone(),
-                    arm.type_case.0.clone(),
-                );
+                if let Some(identifier) = &arm.identifier_binding {
+                    type_env.insert_identifier_type(
+                        identifier.clone(),
+                        arm.type_case.0.clone(),
+                    );
+                }
                 typeresolve_value_expr(&mut arm.value_expr.0, type_env);
                 type_env.pop_identifier_types();
             });

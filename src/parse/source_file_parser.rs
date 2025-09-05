@@ -331,7 +331,9 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             for arm in arms {
                 append_global_prefix_type_expr(&mut arm.type_case.0, mangle_env);
                 mangle_env.push_idents();
-                mangle_env.insert_ident(arm.bound_to_identifier.clone());
+                if let Some(identifier) = &arm.identifier_binding {
+                    mangle_env.insert_ident(identifier.clone());
+                }
                 append_global_prefix_value_expr(&mut arm.value_expr.0, mangle_env);
                 mangle_env.pop_idents();
             }

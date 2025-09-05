@@ -14,7 +14,7 @@ pub type TypeParam = TypeExpr;
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm {
     pub type_case: Spanned<TypeExpr>,
-    pub bound_to_identifier: String,
+    pub identifier_binding: Option<String>,
     pub value_expr: Spanned<ValueExpr>,
 }
 
@@ -228,13 +228,17 @@ where
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                 .boxed();
 
+            let match_arm_identifier_binding = just(Token::ControlChar('@'))
+                .ignore_then(select_ref! { Token::Ident(ident) => ident.to_string() })
+                .or_not();
+
             let match_arm = type_expression_parser()
-                .then(select_ref! { Token::Ident(ident) => ident.to_string() })
+                .then(match_arm_identifier_binding)
                 .then_ignore(just(Token::ThinArrow))
                 .then(value_expr_parser.clone())
                 .map(|((type_expr, identifier), value_expr)| MatchArm {
                     type_case: type_expr,
-                    bound_to_identifier: identifier,
+                    identifier_binding: identifier,
                     value_expr,
                 });
 
@@ -2323,7 +2327,7 @@ mod tests {
                     value_expr: Box::new(ValueExpr::Int(5).into_empty_span()),
                     arms: vec![MatchArm {
                         type_case: TypeExpr::Int.into_empty_span(),
-                        bound_to_identifier: "i".to_string(),
+                        identifier_binding: Some("i".to_string()),
                         value_expr: *var("i"),
                     }],
                 },
@@ -2335,12 +2339,12 @@ mod tests {
                     arms: vec![
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),
-                            bound_to_identifier: "s".to_string(),
+                            identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
-                            bound_to_identifier: "i".to_string(),
+                            identifier_binding: Some("i".to_string()),
                             value_expr: *var("i"),
                         },
                     ],
@@ -2355,18 +2359,18 @@ mod tests {
                     arms: vec![
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),
-                            bound_to_identifier: "s".to_string(),
+                            identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
-                            bound_to_identifier: "i".to_string(),
+                            identifier_binding: Some("i".to_string()),
                             value_expr: *var("i"),
                         },
                         MatchArm {
                             type_case: TypeExpr::RawTypeName(false, vec!["Other".into()], None)
                                 .into_empty_span(),
-                            bound_to_identifier: "o".to_string(),
+                            identifier_binding: Some("o".to_string()),
                             value_expr: ValueExpr::Block(vec![
                                 ValueExpr::Return(Some(var("o"))).into_empty_span(),
                             ])
@@ -2393,18 +2397,18 @@ mod tests {
                     arms: vec![
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),
-                            bound_to_identifier: "s".to_string(),
+                            identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
-                            bound_to_identifier: "i".to_string(),
+                            identifier_binding: Some("i".to_string()),
                             value_expr: *var("i"),
                         },
                         MatchArm {
                             type_case: TypeExpr::RawTypeName(false, vec!["Other".into()], None)
                                 .into_empty_span(),
-                            bound_to_identifier: "o".to_string(),
+                            identifier_binding: Some("o".to_string()),
                             value_expr: ValueExpr::Block(vec![
                                 ValueExpr::Return(Some(var("o"))).into_empty_span(),
                             ])
@@ -2413,13 +2417,13 @@ mod tests {
                         MatchArm {
                             type_case: TypeExpr::RawTypeName(false, vec!["Other".into()], None)
                                 .into_empty_span(),
-                            bound_to_identifier: "o".to_string(),
+                            identifier_binding: Some("o".to_string()),
                             value_expr: ValueExpr::Block(vec![
                                 ValueExpr::Match {
                                     value_expr: var("o"),
                                     arms: vec![MatchArm {
                                         type_case: TypeExpr::String.into_empty_span(),
-                                        bound_to_identifier: "s".to_string(),
+                                        identifier_binding: Some("s".to_string()),
                                         value_expr: *var("s"),
                                     }],
                                 }
