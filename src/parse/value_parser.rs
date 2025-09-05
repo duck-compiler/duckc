@@ -2055,7 +2055,7 @@ mod tests {
                     (
                         Declaration {
                             name: "x".into(),
-                            initializer: ValueExpr::String("".to_string()).into_empty_span(),
+                            initializer: ValueExpr::String("".to_string(), true).into_empty_span(),
                             type_expr: Some(TypeExpr::String.into_empty_span()),
                         },
                         empty_range(),
@@ -2369,7 +2369,9 @@ mod tests {
             (
                 "match (\"Hallo\") { String @s -> s, Int @i -> i }",
                 ValueExpr::Match {
-                    value_expr: Box::new(ValueExpr::String("Hallo".to_string(), true).into_empty_span()),
+                    value_expr: Box::new(
+                        ValueExpr::String("Hallo".to_string(), true).into_empty_span(),
+                    ),
                     arms: vec![
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),
@@ -2390,7 +2392,9 @@ mod tests {
                 return o
                 } }",
                 ValueExpr::Match {
-                    value_expr: Box::new(ValueExpr::String("Hallo".to_string(), true).into_empty_span()),
+                    value_expr: Box::new(
+                        ValueExpr::String("Hallo".to_string(), true).into_empty_span(),
+                    ),
                     arms: vec![
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),
@@ -2429,7 +2433,9 @@ mod tests {
                 },
                 }",
                 ValueExpr::Match {
-                    value_expr: Box::new(ValueExpr::String("Hallo".to_string(), true).into_empty_span()),
+                    value_expr: Box::new(
+                        ValueExpr::String("Hallo".to_string(), true).into_empty_span(),
+                    ),
                     arms: vec![
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),
@@ -2505,7 +2511,7 @@ mod tests {
                 Declaration {
                     name: "x".to_string(),
                     type_expr: Some(TypeExpr::String.into_empty_span()),
-                    initializer: ValueExpr::String("".to_string()).into_empty_span(),
+                    initializer: ValueExpr::String("".to_string(), true).into_empty_span(),
                 },
             ),
             (
