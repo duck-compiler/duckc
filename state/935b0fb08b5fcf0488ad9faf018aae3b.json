@@ -1,0 +1,19 @@
+{
+    "id": "935b0fb08b5fcf0488ad9faf018aae3b",
+    "file_path": "../../src/parse/value_parser.rs",
+    "line_number": 250,
+    "title": "add span of else",
+    "tag": "todo",
+    "module_tag": "parse",
+    "user": null,
+    "issue_ref": null,
+    "description": "",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// todo: add span of else",
+    "status": "open",
+    "first_seen": "2025-09-05T03:39:39.966595",
+    "history": []
+}

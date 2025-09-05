@@ -1,0 +1,19 @@
+{
+    "id": "a3650f4444ab9ce81767373110a1ce59",
+    "file_path": "../../src/parse/value_parser.rs",
+    "line_number": 252,
+    "title": "check if typeexpr::any is correct for the else arm in pattern matching",
+    "tag": "todo",
+    "module_tag": "parse",
+    "user": null,
+    "issue_ref": null,
+    "description": "",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// todo: check if typeexpr::any is correct for the else arm in pattern matching",
+    "status": "open",
+    "first_seen": "2025-09-05T03:39:39.966694",
+    "history": []
+}

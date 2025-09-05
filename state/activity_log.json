@@ -1,6 +1,36 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-09-05T03:39:39.962118",
+        "issue_id": "935b0fb08b5fcf0488ad9faf018aae3b",
+        "issue_title": "add span of else",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-09-05T03:39:39.962118",
+        "issue_id": "a3650f4444ab9ce81767373110a1ce59",
+        "issue_title": "check if typeexpr::any is correct for the else arm in pattern matching",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-09-05T03:39:39.962118",
+        "issue_id": "aa19c8b208294bd4019d3488cc77a473",
+        "issue_title": "maybe don't to this string __else",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-09-04T22:01:53.512690",
         "issue_id": "0086b69c22ddbacd6a9a2c01661b3395",
         "issue_title": "retrieve correct span for function defintions typeexpr",

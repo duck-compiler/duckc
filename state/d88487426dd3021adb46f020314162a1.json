@@ -1,7 +1,7 @@
 {
     "id": "d88487426dd3021adb46f020314162a1",
     "file_path": "../../src/main.rs",
-    "line_number": 288,
+    "line_number": 296,
     "title": "type_params",
     "tag": "todo",
     "module_tag": "root",
@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Mvmo",
+        "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: type_params",

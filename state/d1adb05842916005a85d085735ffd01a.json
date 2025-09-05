@@ -1,7 +1,7 @@
 {
     "id": "d1adb05842916005a85d085735ffd01a",
     "file_path": "../../src/semantics/ident_mangler.rs",
-    "line_number": 364,
+    "line_number": 380,
     "title": "respect additional identifer scopes like blocks and lambdas",
     "tag": "todo",
     "module_tag": "semantics",
@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Mvmo",
+        "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO: respect additional identifer scopes like blocks and lambdas",

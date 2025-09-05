@@ -1,7 +1,7 @@
 {
     "id": "98b8f42243c552b825f2f86f536dee5b",
     "file_path": "../../src/emit/ir.rs",
-    "line_number": 68,
+    "line_number": 80,
     "title": "check if this is correct",
     "tag": "todo",
     "module_tag": "emit",
@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Mvmo",
+        "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO: check if this is correct",

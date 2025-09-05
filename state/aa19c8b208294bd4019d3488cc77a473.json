@@ -1,8 +1,8 @@
 {
-    "id": "55858862493c535dec82e483d164ad99",
+    "id": "aa19c8b208294bd4019d3488cc77a473",
     "file_path": "../../src/emit/ir.rs",
-    "line_number": 280,
-    "title": "check if this should be a reference",
+    "line_number": 26,
+    "title": "maybe don't to this string __else",
     "tag": "todo",
     "module_tag": "emit",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
-    "source_line": "// TODO: check if this should be a reference",
+    "source_line": "// todo: maybe don't to this string __else",
     "status": "open",
-    "first_seen": "2025-07-09T23:15:12.304910",
+    "first_seen": "2025-09-05T03:39:39.968062",
     "history": []
 }
