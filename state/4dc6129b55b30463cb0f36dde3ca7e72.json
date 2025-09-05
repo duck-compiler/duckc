@@ -1,7 +1,7 @@
 {
     "id": "4dc6129b55b30463cb0f36dde3ca7e72",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 288,
+    "line_number": 322,
     "title": "fix this panic workaround",
     "tag": "todo",
     "module_tag": "semantics",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Maurice Schmidt",
-        "email": "mvmogo@gmail.com"
+        "name": "Apfelfrosch",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "// todo: fix this panic workaround",
     "status": "open",
