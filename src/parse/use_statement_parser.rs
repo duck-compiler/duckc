@@ -46,7 +46,6 @@ where
                 .or(wildcard_indicator_parser)
                 .separated_by(just(Token::ScopeRes))
                 .at_least(1)
-                .allow_trailing()
                 .collect::<Vec<Indicator>>(),
         )
         .then_ignore(just(Token::ControlChar(';')))
