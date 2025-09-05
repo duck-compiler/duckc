@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+    <body>
+        <script type="module">
+            import { h, render } from "https://esm.sh/preact";
+            import { useState } from "https://esm.sh/preact/hooks";
+            import htm from "https://esm.sh/htm";
+
+            // Initialize htm with Preact
+            const html = htm.bind(h);
+
+            function abc(props) {
+              return html`YOOOO ${props.fisch}`;
+            }
+
+            function Counter() {
+                const [value, setValue] = useState(0);
+
+                return html`
+                    <div>Counter: ${value}</div>
+                    <button onClick=${() => setValue(value + 1)}>Increment</button>
+                    <button onClick=${() => setValue(value - 1)}>Decrement</button>
+                    <${abc} fisch="yo moin this is the shit"/>
+                `;
+            }
+
+            render(html`<${Counter}/>`, document.body);
+        </script>
+    </body>
+</html>

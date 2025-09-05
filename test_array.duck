@@ -1,0 +1,18 @@
+type Html = (.html, String);
+type Json = (.json, String);
+
+type Res = Html | Json;
+
+fn main() {
+
+    let user_name = "der_boss";
+
+    jsx {
+        <h1>Hallo, $user_name</h1>
+    }
+
+    let b: .html = .html;
+    let c: .json = .json;
+    let a: Res[] = .Res[(.html, "<h1>hallo</h1>"), (.json, "{xx}")];
+    std::io::debug(a);
+}
