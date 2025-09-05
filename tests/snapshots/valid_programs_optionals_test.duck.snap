@@ -1,0 +1,4 @@
+{
+    "stdout": "{true}\n&{{Yo}}\n&{{empty}}\n&{{100}}\n{false}\n{true}\n&{{{Yo} {200}}}\n{true}\n{true}\npanic: {empty optional}\n",
+    "stderr": ""
+}

@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Deref,
+};
 
 use chumsky::container::Container;
 
@@ -51,11 +54,18 @@ impl GenericDefinition {
 }
 
 #[derive(Debug, Clone)]
+pub struct FunHeader {
+    pub params: Vec<Spanned<TypeExpr>>,
+    pub return_type: Option<Spanned<TypeExpr>>,
+}
+
+#[derive(Debug, Clone)]
 pub struct TypeEnv {
     pub identifier_types: Vec<HashMap<String, TypeExpr>>,
     pub type_aliases: Vec<HashMap<String, TypeExpr>>,
     pub all_types: Vec<TypeExpr>,
 
+    pub function_headers: HashMap<String, FunHeader>,
     pub function_definitions: Vec<FunctionDefintion>,
     pub struct_definitions: Vec<StructDefinition>,
     pub generic_fns_generated: Vec<FunctionDefintion>,
@@ -70,6 +80,7 @@ impl Default for TypeEnv {
             identifier_types: vec![HashMap::new()],
             type_aliases: vec![HashMap::new()],
             all_types: vec![],
+            function_headers: HashMap::new(),
             function_definitions: Vec::new(),
             struct_definitions: Vec::new(),
             generic_fns_generated: Vec::new(),
@@ -87,6 +98,29 @@ pub struct TypesSummary {
 }
 
 impl TypeEnv {
+    pub fn has_method_header(&self, name: &str) -> bool {
+        self.function_headers.contains_key(name)
+    }
+
+    pub fn get_method_header(&self, name: &str) -> FunHeader {
+        self.function_headers
+            .get(name)
+            .cloned()
+            .or_else(|| {
+                self.function_definitions
+                    .iter()
+                    .find(|x| x.name.as_str() == name)
+                    .map(|x| x.to_header())
+            })
+            .or_else(|| {
+                self.generic_fns_generated
+                    .iter()
+                    .find(|x| x.name.as_str() == name)
+                    .map(|x| x.to_header())
+            })
+            .unwrap()
+    }
+
     pub fn get_struct_def<'a>(&'a self, name: &str) -> &'a StructDefinition {
         self.struct_definitions
             .iter()
@@ -1512,6 +1546,18 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     type_env.function_definitions = source_file.function_definitions.clone();
 }
 
+pub fn replace_if_const(def_type: &TypeExpr, v: &mut ValueExpr) {
+    if let ValueExpr::String(_, is_const @ true) = v
+        && let TypeExpr::String = def_type
+    {
+        *is_const = false;
+    } else if let ValueExpr::Variable(_, _, Some(ty @ TypeExpr::ConstString(..))) = v
+        && let TypeExpr::String = def_type
+    {
+        *ty = TypeExpr::String;
+    }
+}
+
 fn typeresolve_function_definition(
     function_definition: &mut FunctionDefintion,
     type_env: &mut TypeEnv,
@@ -1583,6 +1629,9 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             }
 
             for expr in exprs {
+                if let Some(ty) = ty {
+                    replace_if_const(&ty.0, &mut expr.0);
+                }
                 typeresolve_value_expr(&mut expr.0, type_env);
             }
             let ty = TypeExpr::from_value_expr(value_expr as &ValueExpr, type_env);
@@ -1617,6 +1666,8 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         } => {
             typeresolve_value_expr(&mut target.0, type_env);
 
+            let header: FunHeader;
+
             // generic method call
             if let Some(type_params_vec) = type_params
                 && let ValueExpr::FieldAccess {
@@ -1649,13 +1700,8 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                     .iter()
                     .find(|m| m.name.as_str() == field_name.as_str())
                     .unwrap();
-                if !type_env
-                    .prevent_struct_generation
-                    .contains(&mangled_name_to_check)
-                {
-                    type_env
-                        .prevent_struct_generation
-                        .push(mangled_name_to_check);
+
+                if !type_env.has_method_header(mangled_name_to_check.as_str()) {
                     let generics_instance = method_def
                         .generics
                         .as_ref()
@@ -1687,6 +1733,10 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                         &generics_instance,
                     );
                     instantiate_generics_value_expr(&mut cloned_def.value_expr.0, type_env);
+
+                    type_env
+                        .function_headers
+                        .insert(mangled_name_to_check.clone(), cloned_def.to_header());
 
                     let mut cloned = type_env.generic_structs_generated.clone();
                     for s in cloned.iter_mut() {
@@ -1720,6 +1770,8 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                     typeresolve_function_definition(&mut cloned_def, type_env);
                     type_env.pop_identifier_types();
 
+                    header = cloned_def.to_header();
+
                     type_env
                         .generic_methods_generated
                         .entry(name.clone())
@@ -1729,9 +1781,19 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                     *field_name = mangled_name;
                     *type_params = None;
                 } else {
+                    header = type_env.get_method_header(mangled_name_to_check.as_str());
                     *field_name = mangled_name;
                     *type_params = None;
                 }
+            } else {
+                let TypeExpr::Fun(params, ret) = TypeExpr::from_value_expr(&target.0, type_env)
+                else {
+                    panic!("not a func??")
+                };
+                header = FunHeader {
+                    params: params.iter().map(|x| x.1.clone()).collect(),
+                    return_type: ret.as_ref().map(|x| x.deref().clone()),
+                };
             }
 
             assert!(
@@ -1739,9 +1801,15 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 "type_params should be omitted by now"
             );
 
+            // println!("{:?}", header);
+
             params
                 .iter_mut()
-                .for_each(|param| typeresolve_value_expr(&mut param.0, type_env));
+                .zip(header.params.iter())
+                .for_each(|(param, param_def)| {
+                    replace_if_const(&param_def.0, &mut param.0);
+                    typeresolve_value_expr(&mut param.0, type_env);
+                });
         }
         ValueExpr::Variable(_, identifier, type_expr_opt) => {
             // if let Some(type_expr) = type_expr_opt {
@@ -1808,9 +1876,14 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 *name = s;
             }
 
-            fields.iter_mut().for_each(|(_field_name, value_expr)| {
-                typeresolve_value_expr(&mut value_expr.0, type_env);
-            });
+            let def = type_env.get_struct_def(name.as_str()).clone();
+
+            fields.iter_mut().zip(def.fields.iter()).for_each(
+                |((_field_name, value_expr), field_def)| {
+                    replace_if_const(&field_def.type_expr.0, &mut value_expr.0);
+                    typeresolve_value_expr(&mut value_expr.0, type_env);
+                },
+            );
 
             let ty = TypeExpr::from_value_expr(value_expr as &ValueExpr, type_env);
             type_env.insert_type(ty);
@@ -1821,6 +1894,8 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         ValueExpr::Return(Some(value_expr)) => typeresolve_value_expr(&mut value_expr.0, type_env),
         ValueExpr::VarAssign(assignment) => {
             typeresolve_value_expr(&mut assignment.0.target.0, type_env);
+            let target_type = TypeExpr::from_value_expr(&assignment.0.target.0, type_env);
+            replace_if_const(&target_type, &mut assignment.0.value_expr.0);
             typeresolve_value_expr(&mut assignment.0.value_expr.0, type_env);
         }
         ValueExpr::Add(lhs, rhs) => {
@@ -1862,7 +1937,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 type_env.pop_identifier_types();
             }
         }
-        ValueExpr::String(str) => {
+        ValueExpr::String(str, _) => {
             type_env.insert_type(TypeExpr::ConstString(str.clone()));
         }
         ValueExpr::Tag(tag) => {

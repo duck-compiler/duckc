@@ -1,7 +1,8 @@
-use go "log";
+use go "os";
 
 fn panic(m: {}) {
     go {
-        log.Fatal(m)
+        fmt.Println("panic:", m)
+        os.Exit(1)
     }
 }
