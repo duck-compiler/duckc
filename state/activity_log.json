@@ -1,6 +1,16 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-09-05T16:58:24.803655",
+        "issue_id": "12b446958d28cded3ceb4bdc148bbcc1",
+        "issue_title": "produce snapshot for the given error",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-09-05T03:39:39.962118",
         "issue_id": "935b0fb08b5fcf0488ad9faf018aae3b",
         "issue_title": "add span of else",

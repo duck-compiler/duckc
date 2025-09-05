@@ -1,7 +1,7 @@
 {
     "id": "6ea3f5e1bb98d03f9bd37d524217fe17",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 199,
+    "line_number": 200,
     "title": "require name and implement typing for structs",
     "tag": "todo",
     "module_tag": "semantics",

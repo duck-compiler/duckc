@@ -1,8 +1,8 @@
 {
-    "id": "1bc39227f7b86613ca803ab82b8f6b34",
+    "id": "12b446958d28cded3ceb4bdc148bbcc1",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 444,
-    "title": "Match Expressions need to be type resolved just as the function defs",
+    "line_number": 869,
+    "title": "produce snapshot for the given error",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
-    "source_line": "// TODO: Match Expressions need to be type resolved just as the function defs",
+    "source_line": "// todo: produce snapshot for the given error",
     "status": "open",
-    "first_seen": "2025-07-09T23:15:12.305651",
+    "first_seen": "2025-09-05T16:58:24.805592",
     "history": []
 }

@@ -1,7 +1,7 @@
 {
     "id": "fcb3f9eb5327dfccc556c11af2cad15a",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 401,
+    "line_number": 402,
     "title": "!(\"combine then and else, then return combined type\");",
     "tag": "todo",
     "module_tag": "semantics",
