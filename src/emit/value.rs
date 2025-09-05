@@ -333,7 +333,7 @@ impl ValueExpr {
                 }
 
                 if let Some(arm) = else_arm {
-                    let type_name = arm.type_case.0.as_clean_go_type_name(type_env);
+                    let _type_name = arm.type_case.0.as_clean_go_type_name(type_env);
 
                     let (mut arm_instrs, arm_res) =
                         arm.value_expr.0.direct_or_with_instr(type_env, env);

@@ -25,13 +25,6 @@ impl IrInstruction {
                 fn emit_case_go(case: &Case, actual: &str) -> String {
                     // todo: maybe don't to this string __else
                     let case_str = if case.type_name == "__else" {
-                        "default"
-                    } else {
-                        "case"
-                    };
-
-
-                    let case_str = if case.type_name == "__else" {
                         let binding_str = if let Some(identifier) = &case.identifier_binding {
                             format!(
                                 "var {} interface {{}} = {}\n_={}\n",

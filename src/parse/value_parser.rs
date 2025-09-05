@@ -247,10 +247,10 @@ where
                 .then(match_arm_identifier_binding)
                 .then_ignore(just(Token::ThinArrow))
                 .then(value_expr_parser.clone())
-                .map(|((f, identifier), value_expr)| MatchArm {
+                // todo: add span of else
+                .map(|((_, identifier), value_expr)| MatchArm {
                     // todo: check if typeexpr::any is correct for the else arm in pattern matching
                     type_case: (TypeExpr::Any, value_expr.1),
-                    // todo: add correct span
                     identifier_binding: identifier,
                     value_expr,
                 });
@@ -271,7 +271,7 @@ where
                 .map(|(value_expr, (arms, else_arm))| ValueExpr::Match {
                     value_expr: Box::new(value_expr),
                     arms,
-                    else_arm: else_arm,
+                    else_arm,
                 })
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
