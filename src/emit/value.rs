@@ -294,7 +294,7 @@ impl ValueExpr {
 
                 (instr, Some(IrValue::Var(res_name)))
             }
-            ValueExpr::Match { value_expr, arms } => {
+            ValueExpr::Match { value_expr, arms, else_arm } => {
                 let (mut instructions, match_on_res) =
                     value_expr.0.direct_or_with_instr(type_env, env);
                 let match_on_value = match match_on_res {
@@ -327,6 +327,24 @@ impl ValueExpr {
 
                     cases.push(Case {
                         type_name,
+                        instrs: arm_instrs,
+                        identifier_binding: arm.identifier_binding.clone(),
+                    });
+                }
+
+                if let Some(arm) = else_arm {
+                    let type_name = arm.type_case.0.as_clean_go_type_name(type_env);
+
+                    let (mut arm_instrs, arm_res) =
+                        arm.value_expr.0.direct_or_with_instr(type_env, env);
+                    if !result_type.is_unit()
+                        && let Some(res) = arm_res
+                    {
+                        arm_instrs.push(IrInstruction::VarAssignment(result_var_name.clone(), res));
+                    }
+
+                    cases.push(Case {
+                        type_name: "__else".to_string(),
                         instrs: arm_instrs,
                         identifier_binding: arm.identifier_binding.clone(),
                     });

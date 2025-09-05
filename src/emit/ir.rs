@@ -21,25 +21,47 @@ impl IrInstruction {
                 )
             }
             IrInstruction::SwitchType(against, type_cases) => {
-                // TODO: should this be mangled???? LOLOLOLO I DON"T THINK SO
+                // todo: should this be mangled???? LOLOLOLO I DON"T THINK SO
                 fn emit_case_go(case: &Case, actual: &str) -> String {
-                    let binding_str = if let Some(identifier) = &case.identifier_binding {
-                        format!(
-                            "var {} {} = {}.({})\n_={}\n",
-                            identifier,
-                            case.type_name,
-                            actual,
-                            case.type_name,
-                            identifier,
-                        )
+                    // todo: maybe don't to this string __else
+                    let case_str = if case.type_name == "__else" {
+                        "default"
                     } else {
-                        String::new()
+                        "case"
+                    };
+
+
+                    let case_str = if case.type_name == "__else" {
+                        let binding_str = if let Some(identifier) = &case.identifier_binding {
+                            format!(
+                                "var {} interface {{}} = {}\n_={}\n",
+                                identifier,
+                                actual,
+                                identifier,
+                            )
+                        } else {
+                            String::new()
+                        };
+                        format!("default:\n {binding_str}")
+                    } else {
+                        let binding_str = if let Some(identifier) = &case.identifier_binding {
+                            format!(
+                                "var {} {} = {}.({})\n_={}\n",
+                                identifier,
+                                case.type_name,
+                                actual,
+                                case.type_name,
+                                identifier,
+                            )
+                        } else {
+                            String::new()
+                        };
+                        format!("case {}:\n {binding_str}", case.type_name)
                     };
 
                     format!(
-                        "case {}:\n{}\n{}",
-                        case.type_name,
-                        binding_str,
+                        "{}\n{}",
+                        case_str,
                         case.instrs
                             .iter()
                             .map(IrInstruction::emit_as_go)

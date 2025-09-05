@@ -88,6 +88,7 @@ pub enum ValueExpr {
     Match {
         value_expr: Box<Spanned<ValueExpr>>,
         arms: Vec<MatchArm>,
+        else_arm: Option<Box<MatchArm>>,
     },
     FormattedString(Vec<ValFmtStringContents>),
 }
@@ -233,11 +234,23 @@ where
                 .or_not();
 
             let match_arm = type_expression_parser()
-                .then(match_arm_identifier_binding)
+                .then(match_arm_identifier_binding.clone())
                 .then_ignore(just(Token::ThinArrow))
                 .then(value_expr_parser.clone())
                 .map(|((type_expr, identifier), value_expr)| MatchArm {
                     type_case: type_expr,
+                    identifier_binding: identifier,
+                    value_expr,
+                });
+
+            let else_arm = just(Token::Else)
+                .then(match_arm_identifier_binding)
+                .then_ignore(just(Token::ThinArrow))
+                .then(value_expr_parser.clone())
+                .map(|((f, identifier), value_expr)| MatchArm {
+                    // todo: check if typeexpr::any is correct for the else arm in pattern matching
+                    type_case: (TypeExpr::Any, value_expr.1),
+                    // todo: add correct span
                     identifier_binding: identifier,
                     value_expr,
                 });
@@ -253,11 +266,13 @@ where
                         .separated_by(just(Token::ControlChar(',')))
                         .allow_trailing()
                         .collect::<Vec<_>>()
+                        .then(else_arm.map(Box::new).or_not())
                         .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}'))),
                 )
-                .map(|(value_expr, arms)| ValueExpr::Match {
+                .map(|(value_expr, (arms, else_arm))| ValueExpr::Match {
                     value_expr: Box::new(value_expr),
                     arms,
+                    else_arm: else_arm,
                 })
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
@@ -934,12 +949,17 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
         } => {
             value_expr_into_empty_range(target_obj);
         }
-        ValueExpr::Match { value_expr, arms } => {
+        ValueExpr::Match { value_expr, arms, else_arm } => {
             value_expr_into_empty_range(value_expr);
             arms.iter_mut().for_each(|arm| {
                 type_expr_into_empty_range(&mut arm.type_case);
                 value_expr_into_empty_range(&mut arm.value_expr);
             });
+
+            if let Some(arm) = else_arm {
+                type_expr_into_empty_range(&mut arm.type_case);
+                value_expr_into_empty_range(&mut arm.value_expr);
+            }
         }
         _ => {}
     }
@@ -2330,6 +2350,7 @@ mod tests {
                         identifier_binding: Some("i".to_string()),
                         value_expr: *var("i"),
                     }],
+                    else_arm: None,
                 },
             ),
             (
@@ -2348,6 +2369,7 @@ mod tests {
                             value_expr: *var("i"),
                         },
                     ],
+                    else_arm: None,
                 },
             ),
             (
@@ -2377,6 +2399,7 @@ mod tests {
                             .into_empty_span(),
                         },
                     ],
+                    else_arm: None,
                 },
             ),
             (
@@ -2426,12 +2449,14 @@ mod tests {
                                         identifier_binding: Some("s".to_string()),
                                         value_expr: *var("s"),
                                     }],
+                                    else_arm: None,
                                 }
                                 .into_empty_span(),
                             ])
                             .into_empty_span(),
                         },
                     ],
+                    else_arm: None,
                 },
             ),
         ];

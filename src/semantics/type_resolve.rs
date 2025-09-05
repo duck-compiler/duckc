@@ -635,9 +635,14 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
             replace_generics_in_value_expr(&mut a.0.target.0, set_params);
             replace_generics_in_value_expr(&mut a.0.value_expr.0, set_params);
         }
-        ValueExpr::Match { value_expr, arms } => {
+        ValueExpr::Match { value_expr, arms, else_arm } => {
             replace_generics_in_value_expr(&mut value_expr.0, set_params);
             for arm in arms {
+                replace_generics_in_type_expr(&mut arm.type_case.0, set_params);
+                replace_generics_in_value_expr(&mut arm.value_expr.0, set_params);
+            }
+
+            if let Some(arm) = else_arm {
                 replace_generics_in_type_expr(&mut arm.type_case.0, set_params);
                 replace_generics_in_value_expr(&mut arm.value_expr.0, set_params);
             }
@@ -1039,9 +1044,14 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
             instantiate_generics_value_expr(&mut a.0.target.0, type_env);
             instantiate_generics_value_expr(&mut a.0.value_expr.0, type_env);
         }
-        ValueExpr::Match { value_expr, arms } => {
+        ValueExpr::Match { value_expr, arms, else_arm } => {
             instantiate_generics_value_expr(&mut value_expr.0, type_env);
             for arm in arms {
+                instantiate_generics_type_expr(&mut arm.type_case.0, type_env);
+                instantiate_generics_value_expr(&mut arm.value_expr.0, type_env);
+            }
+
+            if let Some(arm) = else_arm {
                 instantiate_generics_type_expr(&mut arm.type_case.0, type_env);
                 instantiate_generics_value_expr(&mut arm.value_expr.0, type_env);
             }
@@ -1149,9 +1159,14 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
                 sort_fields_value_expr(&mut r#else.0);
             }
         }
-        ValueExpr::Match { value_expr, arms } => {
+        ValueExpr::Match { value_expr, arms, else_arm } => {
             sort_fields_value_expr(&mut value_expr.0);
             for arm in arms {
+                sort_fields_type_expr(&mut arm.type_case.0);
+                sort_fields_value_expr(&mut arm.value_expr.0);
+            }
+
+            if let Some(arm) = else_arm {
                 sort_fields_type_expr(&mut arm.type_case.0);
                 sort_fields_value_expr(&mut arm.value_expr.0);
             }
@@ -1802,9 +1817,22 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         ValueExpr::BoolNegate(value_expr) => {
             typeresolve_value_expr(&mut value_expr.0, type_env);
         }
-        ValueExpr::Match { value_expr, arms } => {
+        ValueExpr::Match { value_expr, arms, else_arm } => {
             typeresolve_value_expr(&mut value_expr.0, type_env);
-            arms.iter_mut().for_each(|arm| {
+            arms.iter_mut()
+                .for_each(|arm| {
+                    type_env.push_identifier_types();
+                    if let Some(identifier) = &arm.identifier_binding {
+                        type_env.insert_identifier_type(
+                            identifier.clone(),
+                            arm.type_case.0.clone(),
+                        );
+                    }
+                    typeresolve_value_expr(&mut arm.value_expr.0, type_env);
+                    type_env.pop_identifier_types();
+                });
+
+            if let Some(arm) = else_arm {
                 type_env.push_identifier_types();
                 if let Some(identifier) = &arm.identifier_binding {
                     type_env.insert_identifier_type(
@@ -1814,7 +1842,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 }
                 typeresolve_value_expr(&mut arm.value_expr.0, type_env);
                 type_env.pop_identifier_types();
-            });
+            }
         }
         ValueExpr::String(str) => {
             type_env.insert_type(TypeExpr::ConstString(str.clone()));
