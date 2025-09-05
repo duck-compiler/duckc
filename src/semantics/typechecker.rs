@@ -138,7 +138,7 @@ impl TypeExpr {
             ValueExpr::VarDecl(decl) => {
                 let decl = decl.as_ref();
                 check_type_compatability(
-                    &decl.0.type_expr.as_ref().expect(
+                    decl.0.type_expr.as_ref().expect(
                         "compiler error: i expect the implicit types to be resolved by now",
                     ),
                     &(
@@ -874,11 +874,11 @@ fn check_type_compatability(
                     fail_requirement(
                         format!(
                             "the required tag is {}",
-                            format!(".{}", required_identifier).bright_yellow(),
+                            format!(".{required_identifier}").bright_yellow(),
                         ),
                         format!(
                             "but you've provided the tag {}",
-                            format!(".{}", given_identifier).bright_yellow(),
+                            format!(".{given_identifier}").bright_yellow(),
                         ),
                     )
                 }

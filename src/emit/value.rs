@@ -965,7 +965,7 @@ impl ValueExpr {
                 let mut res = Vec::new();
                 let res_var = env.new_var();
                 res.extend([
-                    IrInstruction::VarDecl(res_var.clone(), format!("{type_name}")),
+                    IrInstruction::VarDecl(res_var.clone(), type_name.to_string()),
                     IrInstruction::VarAssignment(res_var.clone(), IrValue::Tag(type_name)),
                 ]);
 
