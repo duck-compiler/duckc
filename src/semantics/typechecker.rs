@@ -1376,15 +1376,17 @@ mod test {
         let primitive_and_main_len = TypeExpr::primitives().len() + 1 /* main fn type */ + 1 /* main fn return type -> () */;
         let src_and_summary_check_funs: Vec<(&str, Box<dyn FnOnce(&TypesSummary)>)> = vec![
             (
-                "{ let y: { x: String, y: Int }; }",
+                "{ let y: { x: String, y: Int } = { x: \"\", y: 0 }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
+                    // 2 because of the const string
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
-                "{ let y: { x: String, y: Int, a: { b: { c: { d: { e: String }}}} }; }",
+                "{ let y: { x: String, y: Int, a: { b: { c: { d: { e: String }}}} } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 5 + primitive_and_main_len);
+                    // +1 because of the empty duck
+                    assert_eq!(summary.types_used.len(), 5 + 1 + primitive_and_main_len);
                 }),
             ),
             (
@@ -1394,75 +1396,87 @@ mod test {
                 }),
             ),
             (
-                "{ let x: { a: Char, b: Char }; }",
+                "{ let x: { a: Char, b: Char } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
+                    // +1 because of empty duck
+                    assert_eq!(summary.types_used.len(), 1 + 1 + primitive_and_main_len);
                 }),
             ),
             (
-                "{ let y: { x: { y: Int } }; }",
+                "{ let y: { x: { y: Int } } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
+                    // + 1 because of empty duck
+                    assert_eq!(summary.types_used.len(), 1 + 2 + primitive_and_main_len);
                 }),
             ),
             (
-                "{ let y: { x: Int }; }",
+                // + 1 because of empty duck
+                "{ let y: { x: Int } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 1 + 1 + primitive_and_main_len);
                 }),
             ),
             (
-                "{ let y: { x: Int, y: String, z: { x: Int } }; }",
+                "{ let y: { x: Int, y: String, z: { x: Int } } = { }; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
+                    // + 1 because of empty duck
+                    assert_eq!(summary.types_used.len(), 2 + 1 + primitive_and_main_len);
                 }),
             ),
             (
-                "{ let y: { x: Int, y: String, z: { x: Int }, w: () }; }",
+                // + 1 because of empty duck
+                "{ let y: { x: Int, y: String, z: { x: Int }, w: () } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 2 + 1 + primitive_and_main_len);
                 }),
             ),
             (
-                "{ let a: { b: { c: { d: { e: { f: { a: Int }}}}}}; }",
+                "{ let a: { b: { c: { d: { e: { f: { a: Int }}}}}} = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len() - primitive_and_main_len, 6);
+                    // + 1 because of empty duck
+                    assert_eq!(summary.types_used.len() - primitive_and_main_len, 7);
                 }),
             ),
             (
-                "{ let y: { x: String } | { y: String }; }",
+                "{ let y: { x: String } | { y: String } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 3 + primitive_and_main_len);
+                    // + 1 because of empty duck
+                    assert_eq!(summary.types_used.len(), 3 + 1 + primitive_and_main_len);
                 }),
             ),
             (
-                "{ let y: { x: String } | { y: String } | { z: String }; }",
+                "{ let y: { x: String } | { y: String } | { z: String } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 4 + primitive_and_main_len);
+                    // +1 because of empty duck
+                    assert_eq!(summary.types_used.len(), 4 + 1 + primitive_and_main_len);
                 }),
             ),
             (
-                "{ let y: { x: { x: String } | { y: String } | { z: String } } }",
+                "{ let y: { x: { x: String } | { y: String } | { z: String } }  = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len() - primitive_and_main_len, 5);
+                    // +1 because of empty duck
+                    assert_eq!(summary.types_used.len() - primitive_and_main_len, 5 + 1);
                 }),
             ),
             (
-                "{ let y: { x: String } | { y: String } | { z: String } | { u: String } | { v: String } | { w: String }; }",
+                "{ let y: { x: String } | { y: String } | { z: String } | { u: String } | { v: String } | { w: String } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 7 + primitive_and_main_len);
+                    // +1 because of empty duck
+                    assert_eq!(summary.types_used.len(), 7 + 1 + primitive_and_main_len);
                 }),
             ),
             (
-                "{ let y: { x: String } | { x: String } | { x: String } | { x: String } | { x: String } | { x: String }; }",
+                "{ let y: { x: String } | { x: String } | { x: String } | { x: String } | { x: String } | { x: String } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
+                    // +1 because of empty duck
+                    assert_eq!(summary.types_used.len(), 2 + 1 + primitive_and_main_len);
                 }),
             ),
             (
-                "{ let y: { abc: { x: String, y: String }, abc2: { x: String, y: String } }; }",
+                "{ let y: { abc: { x: String, y: String }, abc2: { x: String, y: String } } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
+                    // +1 because of empty duck
+                    assert_eq!(summary.types_used.len(), 2 + 1 + primitive_and_main_len);
                 }),
             ),
         ];

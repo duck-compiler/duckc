@@ -2559,17 +2559,17 @@ mod tests {
         }
 
         let valid_declarations = vec![
-            "let x: String",
-            "let x: { x: String, y: String }",
-            "let y: { x: String, y: String }",
-            "let z: { h: String, x: { y: String }}",
+            "let x: String = \"\"",
+            "let x: { x: String, y: String } = { x: \"\", y: \"\" }",
+            "let y: { x: String, y: String } = { x: \"\", y: \"\" }",
+            "let z: { h: String, x: { y: String }} = {}",
             "let x: { h: String, x: { y: String }} = 0",
             "let x: { h: String, x: { y: String }} = true",
             "let x: { h: String, x: { y: String }} = false",
             "let x: { h: Int, x: { y: Int }} = { h: 4, x: { y: 8 } }",
             "let x: Int = false",
             "let x: String = \"Hallo, Welt!\"",
-            "let x: go sync.WaitGroup",
+            "let x: go sync.WaitGroup = {}",
         ];
 
         for valid_declaration in valid_declarations {
