@@ -45,7 +45,7 @@ pub enum ValueExpr {
         type_params: Option<Vec<Spanned<TypeParam>>>,
     },
     Int(i64),
-    String(String),
+    String(String, bool),
     Bool(bool),
     Float(f64),
     Char(char),
@@ -418,7 +418,7 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
             let string_val = select_ref! { Token::ConstString(s) => s.to_owned() }
-                .map(ValueExpr::String)
+                .map(|s| ValueExpr::String(s, true))
                 .map_with(|x, e| (x, e.span()));
             let if_expr = if_with_condition_and_body
                 .clone()
@@ -1455,8 +1455,8 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("print"),
                     params: vec![
-                        ValueExpr::String("hallo".into()).into_empty_span(),
-                        ValueExpr::String("moin".into()).into_empty_span(),
+                        ValueExpr::String("hallo".into(), true).into_empty_span(),
+                        ValueExpr::String("moin".into(), true).into_empty_span(),
                     ],
                     type_params: None,
                 },
@@ -1519,7 +1519,7 @@ mod tests {
                     ValueExpr::Int(1).into_empty_span(),
                     ValueExpr::Bool(true).into_empty_span(),
                     ValueExpr::Int(2).into_empty_span(),
-                    ValueExpr::String("hallo".into()).into_empty_span(),
+                    ValueExpr::String("hallo".into(), true).into_empty_span(),
                 ]),
             ),
             (
@@ -2325,7 +2325,7 @@ mod tests {
                             ValueExpr::Int(4).into_empty_span(),
                         ])
                         .into_empty_span(),
-                        ValueExpr::String("s".into()).into_empty_span(),
+                        ValueExpr::String("s".into(), true).into_empty_span(),
                     ])
                     .into_empty_span()
                     .into(),
@@ -2369,7 +2369,7 @@ mod tests {
             (
                 "match (\"Hallo\") { String @s -> s, Int @i -> i }",
                 ValueExpr::Match {
-                    value_expr: Box::new(ValueExpr::String("Hallo".to_string()).into_empty_span()),
+                    value_expr: Box::new(ValueExpr::String("Hallo".to_string(), true).into_empty_span()),
                     arms: vec![
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),
@@ -2390,7 +2390,7 @@ mod tests {
                 return o
                 } }",
                 ValueExpr::Match {
-                    value_expr: Box::new(ValueExpr::String("Hallo".to_string()).into_empty_span()),
+                    value_expr: Box::new(ValueExpr::String("Hallo".to_string(), true).into_empty_span()),
                     arms: vec![
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),
@@ -2429,7 +2429,7 @@ mod tests {
                 },
                 }",
                 ValueExpr::Match {
-                    value_expr: Box::new(ValueExpr::String("Hallo".to_string()).into_empty_span()),
+                    value_expr: Box::new(ValueExpr::String("Hallo".to_string(), true).into_empty_span()),
                     arms: vec![
                         MatchArm {
                             type_case: TypeExpr::String.into_empty_span(),

@@ -1011,7 +1011,7 @@ mod tests {
                             function_definitions: vec![
                                 FunctionDefintion {
                                     name: "some_abc_func".into(),
-                                    value_expr: ValueExpr::String("Hello from module".into())
+                                    value_expr: ValueExpr::String("Hello from module".into(), true)
                                         .into_empty_span()
                                         .into_block(),
                                     ..Default::default()
@@ -1038,7 +1038,7 @@ mod tests {
                                 function_definitions: vec![
                                     FunctionDefintion {
                                         name: "some_abc_func".into(),
-                                        value_expr: ValueExpr::String("Hello from module".into())
+                                        value_expr: ValueExpr::String("Hello from module".into(), true)
                                             .into_empty_span_and_block(),
                                         ..Default::default()
                                     },
@@ -1097,7 +1097,7 @@ mod tests {
                                 function_definitions: vec![
                                     FunctionDefintion {
                                         name: "some_abc_func".into(),
-                                        value_expr: ValueExpr::String("Hello from module".into())
+                                        value_expr: ValueExpr::String("Hello from module".into(), true)
                                             .into_empty_span_and_block(),
                                         ..Default::default()
                                     },

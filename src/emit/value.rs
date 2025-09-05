@@ -72,7 +72,7 @@ pub struct Case {
 pub enum IrValue {
     Int(i64),
     Float(f64),
-    String(String),
+    String(String, bool),
     Bool(bool),
     Char(char),
     Array(String, Vec<IrValue>),
@@ -212,7 +212,7 @@ impl ValueExpr {
             ValueExpr::Char(c) => Some(IrValue::Char(*c)),
             ValueExpr::Int(i) => Some(IrValue::Int(*i)),
             ValueExpr::Float(f) => Some(IrValue::Float(*f)),
-            ValueExpr::String(s) => Some(IrValue::String(s.clone())),
+            ValueExpr::String(s, is_const) => Some(IrValue::String(s.clone(), *is_const)),
             ValueExpr::Lambda(b) => {
                 let LambdaFunctionExpr {
                     params,
@@ -269,7 +269,7 @@ impl ValueExpr {
                 for c in contents {
                     match c {
                         ValFmtStringContents::String(s) => {
-                            concat_params.push(IrValue::String(s.to_owned()))
+                            concat_params.push(IrValue::String(s.to_owned(), false))
                         }
                         ValFmtStringContents::Expr(expr) => {
                             template.push_str("%s");
@@ -1054,7 +1054,7 @@ mod tests {
                 "let a: String = \"A\"",
                 vec![
                     IrInstruction::VarDecl("a".into(), "DuckString".into()),
-                    IrInstruction::VarAssignment("a".into(), IrValue::String("A".into())),
+                    IrInstruction::VarAssignment("a".into(), IrValue::String("A".into(), true)),
                 ],
             ),
             ("{1;}", vec![]),

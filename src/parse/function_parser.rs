@@ -1,8 +1,11 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
-use crate::parse::{
-    SS, Spanned,
-    generics_parser::{Generic, generics_parser},
+use crate::{
+    parse::{
+        SS, Spanned,
+        generics_parser::{Generic, generics_parser},
+    },
+    semantics::type_resolve::FunHeader,
 };
 
 use super::{
@@ -24,6 +27,18 @@ pub struct FunctionDefintion {
 }
 
 impl FunctionDefintion {
+    pub fn to_header(&self) -> FunHeader {
+        FunHeader {
+            params: self
+                .params
+                .iter()
+                .flat_map(|x| x.iter())
+                .map(|x| x.1.clone())
+                .collect(),
+            return_type: self.return_type.clone(),
+        }
+    }
+
     pub fn type_expr(&self) -> Spanned<TypeExpr> {
         // todo: retrieve correct span for function defintions typeexpr
         return (

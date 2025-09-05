@@ -262,7 +262,7 @@ impl IrValue {
             IrValue::Int(i) => format!("ConcDuckInt {{ value: {i} }}"),
             IrValue::Float(f) => format!("ConcDuckFloat {{ value: {f} }}"),
             IrValue::Char(c) => format!("ConcDuckChar {{ value: '{c}' }}"),
-            IrValue::String(s) => format!("ConstString_{} {{ \"{s}\" }}", escape_string_literal(s)),
+            IrValue::String(s, is_const) => if *is_const { format!("ConstString_{} {{ \"{s}\" }}", escape_string_literal(s))} else { format!("ConcDuckString {{ value: \"{s}\" }}") },
             IrValue::Var(v) => v.to_string(),
             IrValue::Struct(s, fields) => {
                 format!(

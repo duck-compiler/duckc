@@ -127,7 +127,13 @@ impl TypeExpr {
             ValueExpr::Bool(..) => TypeExpr::Bool,
             ValueExpr::Char(..) => TypeExpr::Char,
             ValueExpr::Float(..) => TypeExpr::Float,
-            ValueExpr::String(str_value) => TypeExpr::ConstString(str_value.clone()),
+            ValueExpr::String(str_value, is_const) => {
+                if *is_const {
+                    TypeExpr::ConstString(str_value.clone())
+                } else {
+                    TypeExpr::String
+                }
+            }
             ValueExpr::Break => TypeExpr::Tuple(vec![]),
             ValueExpr::Continue => TypeExpr::Tuple(vec![]),
             ValueExpr::Return(Some(value_expr)) => {
