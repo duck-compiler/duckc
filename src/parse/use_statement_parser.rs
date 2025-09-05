@@ -30,6 +30,7 @@ where
             select_ref! { Token::Ident(identifier) => identifier.to_string() }
                 .separated_by(just(Token::ControlChar(',')))
                 .at_least(1)
+                .allow_trailing()
                 .collect::<Vec<String>>(),
         )
         .then_ignore(just(Token::ControlChar('}')))
@@ -45,6 +46,7 @@ where
                 .or(wildcard_indicator_parser)
                 .separated_by(just(Token::ScopeRes))
                 .at_least(1)
+                .allow_trailing()
                 .collect::<Vec<Indicator>>(),
         )
         .then_ignore(just(Token::ControlChar(';')))
