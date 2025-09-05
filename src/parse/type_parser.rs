@@ -25,6 +25,7 @@ pub struct TypeDefinition {
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            TypeExpr::Tag(identifier) => write!(f, ".{identifier}"),
             TypeExpr::Alias(def) => write!(f, "{def:?}"),
             TypeExpr::Any => write!(f, "any"),
             TypeExpr::InlineGo => write!(f, "inline_go"),
@@ -158,6 +159,7 @@ pub enum TypeExpr {
     Alias(Box<TypeDefinition>),
     TypeName(bool, String, Option<Vec<Spanned<TypeParam>>>),
     TypeNameInternal(String),
+    Tag(String),
     ConstString(String),
     ConstInt(i32),
     ConstBool(bool),
@@ -237,6 +239,10 @@ where
 
             let int_literal = select_ref! { Token::ConstInt(int) => *int }
                 .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
+
+            let tag = just(Token::ControlChar('.'))
+                .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
+                .map(|identifier| TypeExpr::Tag(identifier));
 
             let duck = just(Token::Duck)
                 .or_not()
@@ -326,6 +332,7 @@ where
                     string_literal,
                     int_literal,
                     bool_literal,
+                    tag,
                     go_type,
                     type_name,
                     duck,
@@ -416,6 +423,10 @@ where
             let int_literal = select_ref! { Token::ConstInt(int) => *int }
                 .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
 
+            let tag = just(Token::ControlChar('.'))
+                .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
+                .map(|identifier| TypeExpr::Tag(identifier));
+
             let function = just(Token::Function)
                 .ignore_then(just(Token::ControlChar('(')))
                 .ignore_then(function_fields)
@@ -478,6 +489,7 @@ where
                     int_literal,
                     bool_literal,
                     string_literal,
+                    tag,
                     go_type,
                     type_name,
                     duck,

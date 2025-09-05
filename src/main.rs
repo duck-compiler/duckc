@@ -242,8 +242,8 @@ fn parse_src_file(
         }
     }
 
-    fn typename_reset_global_value_expr(t: &mut ValueExpr) {
-        match t {
+    fn typename_reset_global_value_expr(type_expr: &mut ValueExpr) {
+        match type_expr {
             ValueExpr::Match {
                 value_expr,
                 arms,
@@ -380,6 +380,7 @@ fn parse_src_file(
             | ValueExpr::Bool(..)
             | ValueExpr::Variable(..)
             | ValueExpr::RawVariable(..)
+            | ValueExpr::Tag(..)
             | ValueExpr::Return(..)
             | ValueExpr::InlineGo(..) => {}
         }

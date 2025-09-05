@@ -503,6 +503,7 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
         | TypeExpr::ConstInt(..)
         | TypeExpr::ConstString(..)
         | TypeExpr::Float
+        | TypeExpr::Tag(..)
         | TypeExpr::Go(..)
         | TypeExpr::RawTypeName(..)
         | TypeExpr::String
@@ -661,6 +662,7 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
         | ValueExpr::Int(..)
         | ValueExpr::RawVariable(..)
         | ValueExpr::Return(..)
+        | ValueExpr::Tag(..)
         | ValueExpr::Variable(..) => {}
     }
 }
@@ -719,6 +721,7 @@ fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &HashMap<Strin
         | TypeExpr::Int
         | TypeExpr::Struct(..)
         | TypeExpr::TypeNameInternal(..)
+        | TypeExpr::Tag(..)
         | TypeExpr::InlineGo => {}
     }
 }
@@ -1074,6 +1077,7 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
         | ValueExpr::Int(..)
         | ValueExpr::RawVariable(..)
         | ValueExpr::Return(..)
+        | ValueExpr::Tag(..)
         | ValueExpr::Variable(..) => {}
     }
 }
@@ -1216,6 +1220,7 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
         | ValueExpr::String(..)
         | ValueExpr::Char(..)
         | ValueExpr::Float(..)
+        | ValueExpr::Tag(..)
         | ValueExpr::Bool(..) => {}
     }
 }
@@ -1264,6 +1269,7 @@ fn sort_fields_type_expr(expr: &mut TypeExpr) {
         | TypeExpr::ConstString(_)
         | TypeExpr::TypeName(..)
         | TypeExpr::Struct(..)
+        | TypeExpr::Tag(..)
         | TypeExpr::TypeNameInternal(..) => {}
     }
 }
@@ -1860,6 +1866,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         | ValueExpr::Bool(..)
         | ValueExpr::Char(..)
         | ValueExpr::Float(..)
+        | ValueExpr::Tag(..)
         | ValueExpr::Break
         | ValueExpr::Return(None)
         | ValueExpr::Continue => {}
@@ -1892,24 +1899,6 @@ fn resolve_implicit_function_return_type(
                     flatten_returns(&expr.0, return_types_found, type_env);
                 }
             }
-            ValueExpr::FunctionCall { .. }
-            | ValueExpr::Int(..)
-            | ValueExpr::InlineGo(..)
-            | ValueExpr::String(..)
-            | ValueExpr::Bool(..)
-            | ValueExpr::Float(..)
-            | ValueExpr::Char(..)
-            | ValueExpr::Tuple(..)
-            | ValueExpr::Break
-            | ValueExpr::Continue
-            | ValueExpr::Duck(..)
-            | ValueExpr::Struct { .. }
-            | ValueExpr::FieldAccess { .. }
-            | ValueExpr::Lambda(..)
-            | ValueExpr::Variable(..)
-            | ValueExpr::RawVariable(..)
-            | ValueExpr::Match { .. }
-            | ValueExpr::ArrayAccess(..) => {}
             ValueExpr::If {
                 condition,
                 then,
@@ -1966,6 +1955,25 @@ fn resolve_implicit_function_return_type(
                 flatten_returns(&left.as_ref().0, return_types_found, type_env);
                 flatten_returns(&right.as_ref().0, return_types_found, type_env);
             }
+            ValueExpr::FunctionCall { .. }
+            | ValueExpr::Int(..)
+            | ValueExpr::InlineGo(..)
+            | ValueExpr::String(..)
+            | ValueExpr::Bool(..)
+            | ValueExpr::Float(..)
+            | ValueExpr::Char(..)
+            | ValueExpr::Tuple(..)
+            | ValueExpr::Break
+            | ValueExpr::Continue
+            | ValueExpr::Duck(..)
+            | ValueExpr::Struct { .. }
+            | ValueExpr::FieldAccess { .. }
+            | ValueExpr::Lambda(..)
+            | ValueExpr::Variable(..)
+            | ValueExpr::RawVariable(..)
+            | ValueExpr::Tag(..)
+            | ValueExpr::Match { .. }
+            | ValueExpr::ArrayAccess(..) => {}
         }
     }
 

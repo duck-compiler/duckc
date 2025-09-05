@@ -274,6 +274,7 @@ pub fn mangle_value_expr(
         | ValueExpr::Bool(..)
         | ValueExpr::Float(..)
         | ValueExpr::Return(None)
+        | ValueExpr::Tag(..)
         | ValueExpr::Char(..) => {}
         ValueExpr::Continue => {}
         ValueExpr::Break => {}
