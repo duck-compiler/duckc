@@ -27,10 +27,7 @@ impl IrInstruction {
                     let case_str = if case.type_name == "__else" {
                         let binding_str = if let Some(identifier) = &case.identifier_binding {
                             format!(
-                                "var {} interface {{}} = {}\n_={}\n",
-                                identifier,
-                                actual,
-                                identifier,
+                                "var {identifier} interface {{}} = {actual}\n_={identifier}\n",
                             )
                         } else {
                             String::new()
