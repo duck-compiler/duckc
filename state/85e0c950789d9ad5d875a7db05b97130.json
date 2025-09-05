@@ -1,7 +1,7 @@
 {
     "id": "85e0c950789d9ad5d875a7db05b97130",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 1994,
+    "line_number": 1992,
     "title": "add spans",
     "tag": "todo",
     "module_tag": "semantics",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Apfelfrosch",
-        "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO add spans",
     "status": "open",
