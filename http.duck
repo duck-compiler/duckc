@@ -1,10 +1,13 @@
+component Lol tsx {
+}
+
 component Counter tsx {
 	const [value, setValue] = useState(0);
 
 	return (
 		<>
 			<div>Counter: {value}</div>
-			<Lol/>
+			<Lol lol="fwalfkawk"/>
 			<button onClick={() => setValue(value + 1)}>Increment</button>
 			<button onClick={() => setValue(value - 1)}>Decrement</button>
 		</>
