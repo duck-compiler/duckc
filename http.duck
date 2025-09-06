@@ -1,4 +1,4 @@
-component Counter() {
+component Counter tsx {
 	const [value, setValue] = useState(0);
 
 	return (
@@ -9,3 +9,5 @@ component Counter() {
 		</>
 	);
 }
+
+fn main() {}

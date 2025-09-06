@@ -440,6 +440,9 @@ fn parse_src_file(
             result.push_use(s);
         }
     }
+    for s in &std_src_file.tsx_components {
+        result.tsx_components.push(s.clone());
+    }
 
     result
 }

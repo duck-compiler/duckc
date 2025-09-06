@@ -196,10 +196,16 @@ impl SourceFile {
                 result.struct_definitions.push(struct_def);
             }
 
+            for c in &s.tsx_components {
+                // todo: mangle components in tsx
+                result.tsx_components.push(c.clone());
+            }
+
             result
         }
 
         let mut r = flatten0(self, global_prefix, &vec![], with_std);
+
 
         let mut mangle_env = MangleEnv {
             sub_mods: Vec::new(),
@@ -261,6 +267,13 @@ impl SourceFile {
                 append_global_prefix_value_expr(&mut m.value_expr.0, &mut mangle_env);
             }
         }
+
+        for s in &mut r.tsx_components {
+            let mut c = global_prefix.clone();
+            c.extend(unmangle(&s.name));
+            s.name = mangle(&c);
+        }
+
         r
     }
 }
