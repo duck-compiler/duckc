@@ -1,4 +1,4 @@
-type None = "none";
+type None = .none;
 type Opt<T> = T | None;
 
 module io;
@@ -7,3 +7,11 @@ module time;
 module string;
 module col;
 module error;
+
+component Lol(params: {}) {
+    const [x, setX] = useState(false);
+
+    return (
+        <div></div>
+    )
+}
