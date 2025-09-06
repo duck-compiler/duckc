@@ -4,6 +4,7 @@ component Counter tsx {
 	return (
 		<>
 			<div>Counter: {value}</div>
+			<Lol/>
 			<button onClick={() => setValue(value + 1)}>Increment</button>
 			<button onClick={() => setValue(value - 1)}>Decrement</button>
 		</>

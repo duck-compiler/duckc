@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use tree_sitter::{Node, Parser};
 
 use crate::parse::{
+    component_parser::TsxComponent,
     function_parser::LambdaFunctionExpr,
     type_parser::{Duck, TypeExpr},
     value_parser::{ValFmtStringContents, ValueExpr},
@@ -15,6 +16,7 @@ pub struct MangleEnv {
     pub global_prefix: Vec<String>,
     pub names: Vec<Vec<String>>,
     pub types: Vec<Vec<String>>,
+    pub components: Vec<String>,
 }
 
 pub const MANGLE_SEP: &str = "_____";
@@ -260,6 +262,128 @@ pub fn mangle_type_expression(
         }
         _ => {}
     }
+}
+
+pub fn mangle_tsx_component(
+    comp: &mut TsxComponent,
+    global_prefix: &Vec<String>,
+    prefix: &Vec<String>,
+    mangle_env: &mut MangleEnv,
+) {
+    let mut parser = Parser::new();
+    parser
+        .set_language(&tree_sitter_javascript::LANGUAGE.into())
+        .expect("Couldn't set js grammar");
+
+    let src = parser
+        .parse(comp.typescript_source.0.as_bytes(), None)
+        .unwrap();
+    let root_node = src.root_node();
+
+    #[derive(Debug, Clone)]
+    enum Unit {
+        Jsx,
+        OpeningJsx,
+        ClosingJsx,
+        Expression,
+    }
+
+    fn trav(
+        node: &Node,
+        text: &[u8],
+        already_in_jsx: bool,
+        e: &mut MangleEnv,
+        out: &mut Vec<(tree_sitter::Range, Unit)>,
+    ) {
+        if node.grammar_name() == "jsx_opening_element"
+            && node.utf8_text(text).is_ok_and(|x| x == "<>")
+        {
+            out.push((node.range(), Unit::OpeningJsx));
+        } else if node.grammar_name() == "jsx_closing_element"
+            && node.utf8_text(text).is_ok_and(|x| x == "</>")
+        {
+            out.push((node.range(), Unit::ClosingJsx));
+        } else if node.grammar_name() == "jsx_expression" {
+            out.push((node.range(), Unit::Expression));
+        }
+
+        if node.grammar_name().starts_with("jsx_") {
+            if !already_in_jsx {
+                out.push((node.range(), Unit::Jsx));
+            }
+            for i in 0..node.child_count() {
+                trav(node.child(i).as_ref().unwrap(), text, true, e, out);
+            }
+        } else {
+            for i in 0..node.child_count() {
+                trav(
+                    node.child(i).as_ref().unwrap(),
+                    text,
+                    already_in_jsx,
+                    e,
+                    out,
+                );
+            }
+        }
+    }
+
+    let mut o = Vec::new();
+    trav(
+        &root_node,
+        comp.typescript_source.0.as_bytes(),
+        false,
+        mangle_env,
+        &mut o,
+    );
+
+    enum Edit {
+        Insert(String),
+        Delete(usize),
+        // Replace(String),
+    }
+
+    let mut edits = Vec::new();
+
+    for (range, unit) in o.iter() {
+        match unit {
+            Unit::Jsx => {
+                edits.push((range.start_byte, Edit::Insert("html`".to_string())));
+                edits.push((range.end_byte, Edit::Insert("`".to_string())));
+            }
+            Unit::OpeningJsx => edits.push((range.start_byte, Edit::Delete(2))),
+            Unit::ClosingJsx => edits.push((range.start_byte, Edit::Delete(3))),
+            Unit::Expression => edits.push((range.start_byte, Edit::Insert("$".to_string()))),
+        }
+    }
+
+    edits.sort_by_key(|x| x.0);
+
+    let mut shift: isize = 0;
+
+    let mut out_string = comp.typescript_source.0.clone();
+
+    for (pos, edit) in edits.iter() {
+        let edit_size = match edit {
+            Edit::Insert(s) => s.len() as isize,
+            Edit::Delete(amount) => -(*amount as isize),
+        };
+
+        let pos = (*pos as isize) + shift;
+
+        match edit {
+            Edit::Insert(s) => out_string.insert_str(pos as usize, s.as_str()),
+            Edit::Delete(amount) => {
+                out_string.drain((pos as usize)..((pos as usize) + *amount));
+            }
+        }
+
+        shift += edit_size;
+    }
+
+    std::fs::write("out.txt", out_string).unwrap();
+
+    dbg!(&root_node.to_sexp());
+    std::process::exit(0);
 }
 
 pub fn mangle_value_expr(
