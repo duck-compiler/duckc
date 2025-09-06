@@ -5,17 +5,10 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        Context, SS, Spanned,
-        function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
-        lexer::{Token, lex_parser},
-        make_input, parse_failure,
-        struct_parser::{StructDefinition, struct_definition_parser},
-        type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
-        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
-        value_parser::{ValFmtStringContents, ValueExpr},
+        component_parser::{self, tsx_component_parser, TsxComponent}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValueExpr}, Context, Spanned, SS
     },
     semantics::ident_mangler::{
-        MangleEnv, mangle, mangle_type_expression, mangle_value_expr, unmangle,
+        mangle, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
     },
 };
 
@@ -26,12 +19,15 @@ pub struct SourceFile {
     pub struct_definitions: Vec<StructDefinition>,
     pub use_statements: Vec<UseStatement>,
     pub sub_modules: Vec<(String, SourceFile)>,
+    // @here: hier bin ich stehen geblieben,
+    pub tsx_components: Vec<TsxComponent>,
 }
 
 #[derive(Debug, Clone)]
 pub enum SourceUnit {
     Func(FunctionDefintion),
     Type(TypeDefinition),
+    Component(TsxComponent),
     Struct(StructDefinition),
     Use(UseStatement),
     Module(String, SourceFile),
@@ -701,6 +697,7 @@ where
         choice((
             use_statement_parser().map(SourceUnit::Use),
             type_definition_parser().map(SourceUnit::Type),
+            tsx_component_parser().map(SourceUnit::Component),
             struct_definition_parser(make_input.clone()).map(SourceUnit::Struct),
             function_definition_parser(make_input).map(SourceUnit::Func),
             just(Token::Module)
@@ -721,21 +718,23 @@ where
         ))
         .repeated()
         .collect::<Vec<_>>()
-        .map(|xs| {
+        .map(|source_units| {
             let mut function_definitions = Vec::new();
             let mut type_definitions = Vec::new();
             let mut struct_definitions = Vec::new();
             let mut use_statements = Vec::new();
             let mut sub_modules = Vec::new();
+            let mut tsx_components = Vec::new();
 
-            for x in xs {
+            for source_unit in source_units {
                 use SourceUnit::*;
-                match x {
+                match source_unit {
                     Func(def) => function_definitions.push(def),
                     Type(def) => type_definitions.push(def),
                     Struct(def) => struct_definitions.push(def),
                     Use(def) => use_statements.push(def),
                     Module(name, def) => sub_modules.push((name, def)),
+                    Component(tsx_component) => tsx_components.push(tsx_component),
                 }
             }
 
@@ -778,6 +777,16 @@ mod tests {
                 "fn abc(){}",
                 SourceFile {
                     function_definitions: vec![FunctionDefintion {
+                        name: "abc".into(),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            ),
+            (
+                "fn abc(){}",
+                SourceFile {
+                    struct_definitions: vec![FunctionDefintion {
                         name: "abc".into(),
                         ..Default::default()
                     }],
