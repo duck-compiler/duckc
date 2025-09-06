@@ -5,10 +5,19 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        component_parser::{tsx_component_parser, TsxComponent}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValueExpr}, Context, Spanned, SS
+        Context, SS, Spanned,
+        component_parser::{TsxComponent, tsx_component_parser},
+        function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
+        lexer::{Token, lex_parser},
+        make_input, parse_failure,
+        struct_parser::{StructDefinition, struct_definition_parser},
+        type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
+        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
+        value_parser::{ValFmtStringContents, ValueExpr},
     },
     semantics::ident_mangler::{
-        mangle, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
+        MangleEnv, mangle, mangle_tsx_component, mangle_type_expression, mangle_value_expr,
+        unmangle,
     },
 };
 
@@ -49,6 +58,7 @@ impl SourceFile {
             let mut mangle_env = MangleEnv {
                 sub_mods: s.sub_modules.iter().map(|x| x.0.clone()).collect(),
                 global_prefix: global_prefix.clone(),
+                components: s.tsx_components.iter().map(|x| x.name.clone()).collect(),
                 imports: {
                     let mut imports = HashMap::new();
                     if with_std {
@@ -198,6 +208,8 @@ impl SourceFile {
 
             for c in &s.tsx_components {
                 // todo: mangle components in tsx
+                let mut c = c.clone();
+                mangle_tsx_component(&mut c, global_prefix, prefix, &mut mangle_env);
                 result.tsx_components.push(c.clone());
             }
 
@@ -206,10 +218,10 @@ impl SourceFile {
 
         let mut r = flatten0(self, global_prefix, &vec![], with_std);
 
-
         let mut mangle_env = MangleEnv {
             sub_mods: Vec::new(),
             global_prefix: global_prefix.clone(),
+            components: r.tsx_components.iter().map(|x| x.name.clone()).collect(),
             imports: HashMap::new(),
             names: vec![
                 r.function_definitions
@@ -756,7 +768,7 @@ where
                 struct_definitions,
                 use_statements,
                 sub_modules,
-                tsx_components
+                tsx_components,
             }
         })
     })
@@ -769,9 +781,19 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        component_parser::TsxComponent, function_parser::FunctionDefintion, lexer::lex_parser, make_input, source_file_parser::{source_file_parser, SourceFile}, struct_parser::StructDefinition, type_parser::{Duck, TypeDefinition, TypeExpr}, use_statement_parser::{Indicator, UseStatement}, value_parser::{
-            empty_range, source_file_into_empty_range, value_expr_into_empty_range, IntoBlock, ValueExpr
-        }, Field
+        Field,
+        component_parser::TsxComponent,
+        function_parser::FunctionDefintion,
+        lexer::lex_parser,
+        make_input,
+        source_file_parser::{SourceFile, source_file_parser},
+        struct_parser::StructDefinition,
+        type_parser::{Duck, TypeDefinition, TypeExpr},
+        use_statement_parser::{Indicator, UseStatement},
+        value_parser::{
+            IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
+            value_expr_into_empty_range,
+        },
     };
 
     #[test]
@@ -793,7 +815,10 @@ mod tests {
                     tsx_components: vec![TsxComponent {
                         name: "MyComp".to_string(),
                         params: None,
-                        typescript_source: ("console.log('hallo, welt')".to_string(), empty_range())
+                        typescript_source: (
+                            "console.log('hallo, welt')".to_string(),
+                            empty_range(),
+                        ),
                     }],
                     ..Default::default()
                 },
