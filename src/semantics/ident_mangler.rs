@@ -33,6 +33,50 @@ pub fn unmangle(s: &str) -> Vec<String> {
 }
 
 impl MangleEnv {
+    pub fn mangle_component(&self, prefix: &[String], comp: &str) -> Option<Vec<String>> {
+        let is_global = comp.starts_with("::");
+        let ident = if is_global && comp.len() >= 3 {
+            &comp[2..]
+        } else {
+            comp
+        }
+        .split("::")
+        .map(String::from)
+        .collect::<Vec<_>>();
+        let prefix = if is_global { &[] } else { prefix };
+
+        dbg!(&ident);
+        if !is_global
+            && let Some((is_glob, import_path)) = self.resolve_import(ident.first()?.clone())
+        {
+            let mut res = Vec::new();
+
+            if !is_glob {
+                res.extend_from_slice(prefix);
+            } else {
+                // res.extend_from_slice(&self.global_prefix);
+            }
+
+            res.extend(import_path);
+            res.extend(ident);
+
+            return Some(res);
+        }
+
+        if self.components.contains(ident.first().unwrap()) {
+            let mut x = Vec::new();
+            if is_global {
+                // x.extend_from_slice(&self.global_prefix);
+            } else {
+                x.extend_from_slice(prefix);
+            }
+            x.extend_from_slice(&ident);
+            return Some(x);
+        }
+
+        None
+    }
+
     pub fn is_imported_name(&self, x: &String) -> bool {
         self.is_top_level_ident(x) && self.imports.contains_key(x)
     }
@@ -286,6 +330,7 @@ pub fn mangle_tsx_component(
         OpeningJsx,
         ClosingJsx,
         Expression,
+        Ident,
     }
 
     fn trav(
@@ -295,7 +340,9 @@ pub fn mangle_tsx_component(
         e: &mut MangleEnv,
         out: &mut Vec<(tree_sitter::Range, Unit)>,
     ) {
-        if node.grammar_name() == "jsx_opening_element"
+        if node.grammar_name() == "identifier" {
+            out.push((node.range(), Unit::Ident));
+        } else if node.grammar_name() == "jsx_opening_element"
             && node.utf8_text(text).is_ok_and(|x| x == "<>")
         {
             out.push((node.range(), Unit::OpeningJsx));
@@ -353,37 +400,47 @@ pub fn mangle_tsx_component(
             Unit::OpeningJsx => edits.push((range.start_byte, Edit::Delete(2))),
             Unit::ClosingJsx => edits.push((range.start_byte, Edit::Delete(3))),
             Unit::Expression => edits.push((range.start_byte, Edit::Insert("$".to_string()))),
+            Unit::Ident => {
+                let old_ident = &comp.typescript_source.0[range.start_byte..range.end_byte];
+                let ident_str = mangle_env.mangle_component(prefix, old_ident);
+
+                if let Some(ident_str) = ident_str {
+                    edits.push((range.start_byte, Edit::Delete(old_ident.len())));
+                    edits.push((
+                        range.start_byte,
+                        Edit::Insert(format!("${{{}}}", mangle(&ident_str))),
+                    ));
+                }
+            }
         }
     }
 
     edits.sort_by_key(|x| x.0);
 
-    let mut shift: isize = 0;
+    let mut inserted: usize = 0;
+    let mut deleted: usize = 0;
 
     let mut out_string = comp.typescript_source.0.clone();
 
     for (pos, edit) in edits.iter() {
-        let edit_size = match edit {
-            Edit::Insert(s) => s.len() as isize,
-            Edit::Delete(amount) => -(*amount as isize),
-        };
-
-        let pos = (*pos as isize) + shift;
+        let pos = *pos + inserted - deleted;
 
         match edit {
             Edit::Insert(s) => out_string.insert_str(pos as usize, s.as_str()),
             Edit::Delete(amount) => {
-                out_string.drain((pos as usize)..((pos as usize) + *amount));
+                out_string
+                    .drain((pos as usize)..((pos as usize) + *amount))
+                    .for_each(drop);
             }
         }
 
-        shift += edit_size;
+        match edit {
+            Edit::Insert(s) => inserted += s.len(),
+            Edit::Delete(amount) => deleted += *amount,
+        }
     }
 
     std::fs::write("out.txt", out_string).unwrap();
-
-    dbg!(&root_node.to_sexp());
-    std::process::exit(0);
 }
 
 pub fn mangle_value_expr(
