@@ -50,7 +50,7 @@ pub enum Token {
     Comment(String),
     DocComment(String),
     Sus,
-    Component
+    Component,
 }
 
 impl Display for Token {
@@ -393,17 +393,22 @@ mod tests {
                     Token::DocComment("hallo ich bin ein dokkommentar".to_string()),
                 ],
             ),
-            (
-                "component",
-                vec![
-                    Token::Component,
-                ],
-            ),
+            ("component", vec![Token::Component]),
             (
                 "tsx {console.log(\"Hallo, Welt\")}",
-                vec![
-                    Token::InlineTsx("console.log(\"Hallo, Welt\")".to_string()),
-                ],
+                vec![Token::InlineTsx("console.log(\"Hallo, Welt\")".to_string())],
+            ),
+            (
+                "tsx {{console.log(\"Hallo, Welt\")}}",
+                vec![Token::InlineTsx(
+                    "{console.log(\"Hallo, Welt\")}".to_string(),
+                )],
+            ),
+            (
+                "tsx {<MyComponent name=\"lol\"/>\n<h1>hallo</h1>}",
+                vec![Token::InlineTsx(
+                    "<MyComponent name=\"lol\"/>\n<h1>hallo</h1>".to_string(),
+                )],
             ),
             (
                 "/// hallo ich bin ein dokkommentar",
