@@ -925,6 +925,10 @@ pub fn source_file_into_empty_range(v: &mut SourceFile) {
     for x in &mut v.sub_modules {
         source_file_into_empty_range(&mut x.1);
     }
+
+    for x in &mut v.tsx_components {
+        x.typescript_source.1 = empty_range()
+    }
 }
 
 pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {

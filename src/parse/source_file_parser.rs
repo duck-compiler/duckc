@@ -5,7 +5,7 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        component_parser::{self, tsx_component_parser, TsxComponent}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValueExpr}, Context, Spanned, SS
+        component_parser::{tsx_component_parser, TsxComponent}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValueExpr}, Context, Spanned, SS
     },
     semantics::ident_mangler::{
         mangle, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
@@ -19,7 +19,6 @@ pub struct SourceFile {
     pub struct_definitions: Vec<StructDefinition>,
     pub use_statements: Vec<UseStatement>,
     pub sub_modules: Vec<(String, SourceFile)>,
-    // @here: hier bin ich stehen geblieben,
     pub tsx_components: Vec<TsxComponent>,
 }
 
@@ -744,6 +743,7 @@ where
                 struct_definitions,
                 use_statements,
                 sub_modules,
+                tsx_components
             }
         })
     })
@@ -756,18 +756,9 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        Field,
-        function_parser::FunctionDefintion,
-        lexer::lex_parser,
-        make_input,
-        source_file_parser::{SourceFile, source_file_parser},
-        struct_parser::StructDefinition,
-        type_parser::{Duck, TypeDefinition, TypeExpr},
-        use_statement_parser::{Indicator, UseStatement},
-        value_parser::{
-            IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
-            value_expr_into_empty_range,
-        },
+        component_parser::TsxComponent, function_parser::FunctionDefintion, lexer::lex_parser, make_input, source_file_parser::{source_file_parser, SourceFile}, struct_parser::StructDefinition, type_parser::{Duck, TypeDefinition, TypeExpr}, use_statement_parser::{Indicator, UseStatement}, value_parser::{
+            empty_range, source_file_into_empty_range, value_expr_into_empty_range, IntoBlock, ValueExpr
+        }, Field
     };
 
     #[test]
@@ -784,11 +775,12 @@ mod tests {
                 },
             ),
             (
-                "fn abc(){}",
+                "component MyComp tsx {console.log('hallo, welt')}",
                 SourceFile {
-                    struct_definitions: vec![FunctionDefintion {
-                        name: "abc".into(),
-                        ..Default::default()
+                    tsx_components: vec![TsxComponent {
+                        name: "MyComp".to_string(),
+                        params: None,
+                        typescript_source: ("console.log('hallo, welt')".to_string(), empty_range())
                     }],
                     ..Default::default()
                 },
