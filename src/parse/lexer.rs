@@ -43,12 +43,14 @@ pub enum Token {
     Continue,
     As,
     InlineGo(String),
+    InlineTsx(String),
     Module,
     ScopeRes,
     ThinArrow,
     Comment(String),
     DocComment(String),
     Sus,
+    Component
 }
 
 impl Display for Token {
@@ -63,6 +65,7 @@ impl Display for Token {
             Token::Go => "go",
             Token::Struct => "struct",
             Token::Duck => "duck",
+            Token::Component => "component",
             Token::Function => "fn",
             Token::Return => "return",
             Token::Ident(_) => "identifier",
@@ -80,6 +83,7 @@ impl Display for Token {
             Token::Continue => "continue",
             Token::As => "as",
             Token::InlineGo(_) => "inline go",
+            Token::InlineTsx(_) => "inline go",
             Token::Module => "module",
             Token::Match => "match",
             Token::DocComment(comment) => &format!("/// {comment}"),
@@ -133,6 +137,7 @@ pub fn lex_single<'a>(
             "struct" => Token::Struct,
             "fn" => Token::Function,
             "return" => Token::Return,
+            "component" => Token::Component,
             "let" => Token::Let,
             "if" => Token::If,
             "else" => Token::Else,
@@ -228,6 +233,7 @@ pub fn lex_single<'a>(
             });
 
         let token = inline_go_parser()
+            .or(inline_tsx_parser())
             .or(doc_comment)
             .or(comment)
             .or(fmt_string)
@@ -293,6 +299,16 @@ fn inline_go_parser<'src>()
         .ignore_then(just("{").rewind())
         .ignore_then(go_text_parser())
         .map(|x| Token::InlineGo(x[1..x.len() - 1].to_owned()))
+}
+
+fn inline_tsx_parser<'src>()
+-> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone {
+    just("tsx")
+        .ignore_then(whitespace().at_least(1))
+        .ignore_then(just("{").rewind())
+        // todo: [TSX] create tsx text parser
+        .ignore_then(go_text_parser())
+        .map(|x| Token::InlineTsx(x[1..x.len() - 1].to_owned()))
 }
 
 fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone
@@ -375,6 +391,18 @@ mod tests {
                 vec![
                     Token::Type,
                     Token::DocComment("hallo ich bin ein dokkommentar".to_string()),
+                ],
+            ),
+            (
+                "component",
+                vec![
+                    Token::Component,
+                ],
+            ),
+            (
+                "tsx {console.log(\"Hallo, Welt\")}",
+                vec![
+                    Token::InlineTsx("console.log(\"Hallo, Welt\")".to_string()),
                 ],
             ),
             (
