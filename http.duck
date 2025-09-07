@@ -1,17 +1,31 @@
-component Lol tsx {
+component Lol(props: { x: String, y: Int }) tsx {
+    const hello = false;
+    return (
+        <>
+            <h1>yoo</h1>
+            {props.lol.map(x => <h2>{<em>{x}</em>}</h2>)}
+            {hello ? <p>hello true</h1> : <p>hello false</p>}
+        </>
+    )
 }
 
-component Counter tsx {
+component Counter(x: String, y: Bool) tsx {
 	const [value, setValue] = useState(0);
 
 	return (
 		<>
-			<div>Counter: {value}</div>
-			<Lol lol="fwalfkawk"/>
+			<div>{x}: {value}</div>
+			{y ? <p>bool is true</p> : <p>bool is false</p>}
 			<button onClick={() => setValue(value + 1)}>Increment</button>
 			<button onClick={() => setValue(value - 1)}>Decrement</button>
+			<button onClick={() => console.log(x, y)}>Log</button>
 		</>
 	);
+}
+
+component ReactLayout() tsx {
+    return (
+    );
 }
 
 fn main() {}

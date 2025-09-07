@@ -1,13 +1,16 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
-use crate::parse::{type_parser::TypeExpr, Spanned, SS};
+use crate::parse::{
+    SS, Spanned,
+    type_parser::{TypeExpr, type_expression_parser},
+};
 
 use super::lexer::Token;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TsxComponent {
     pub name: String,
-    pub params: Option<Spanned<TypeExpr>>,
+    pub params: Vec<(String, Spanned<TypeExpr>)>,
     pub typescript_source: Spanned<String>,
 }
 
@@ -21,11 +24,22 @@ where
     // }
     just(Token::Component)
         .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() })
-        .then(select_ref! { Token::InlineTsx(tsx_source) => tsx_source.clone() }.map_with(|x, e| (x, e.span())))
-        .map(|(identifier, tsx_source)| TsxComponent {
+        .then(
+            select_ref! { Token::Ident(i) => i.clone() }
+                .then_ignore(just(Token::ControlChar(':')))
+                .then(type_expression_parser())
+                .separated_by(just(Token::ControlChar(',')))
+                .collect()
+                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
+        )
+        .then(
+            select_ref! { Token::InlineTsx(tsx_source) => tsx_source.clone() }
+                .map_with(|x, e| (x, e.span())),
+        )
+        .map(|((identifier, params), tsx_source)| TsxComponent {
             name: identifier.clone(),
-            params: None,
-            typescript_source: tsx_source.clone()
+            params,
+            typescript_source: tsx_source.clone(),
         })
 }
 
@@ -37,16 +51,14 @@ mod tests {
 
     #[test]
     fn test_component_parser() {
-        let src_and_expected_ast = vec![
-            (
-                "component T tsx {useState()}",
-                TsxComponent {
-                    name: "T".to_string(),
-                    params: None,
-                    typescript_source: ("useState()".to_string(), empty_range())
-                }
-            )
-        ];
+        let src_and_expected_ast = vec![(
+            "component T() tsx {useState()}",
+            TsxComponent {
+                name: "T".to_string(),
+                params: Vec::new(),
+                typescript_source: ("useState()".to_string(), empty_range()),
+            },
+        )];
 
         for (src, expected_ast) in src_and_expected_ast {
             println!("lexing {src}");
@@ -104,8 +116,8 @@ mod tests {
 
             println!("component parser try invalid {invalid_component_statement}");
 
-            let component_parse_result = tsx_component_parser()
-                .parse(make_input(empty_range(), tokens.as_slice()));
+            let component_parse_result =
+                tsx_component_parser().parse(make_input(empty_range(), tokens.as_slice()));
 
             assert_eq!(component_parse_result.has_errors(), true);
             assert_eq!(component_parse_result.has_output(), false);

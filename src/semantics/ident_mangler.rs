@@ -308,6 +308,13 @@ pub fn mangle_type_expression(
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Edit {
+    Insert(String),
+    Delete(usize),
+    // Replace(String),
+}
+
 pub fn mangle_tsx_component(
     comp: &mut TsxComponent,
     global_prefix: &Vec<String>,
@@ -352,6 +359,10 @@ pub fn mangle_tsx_component(
             out.push((node.range(), Unit::ClosingJsx));
         } else if node.grammar_name() == "jsx_expression" {
             out.push((node.range(), Unit::Expression));
+            for i in 0..node.child_count() {
+                trav(node.child(i).as_ref().unwrap(), text, false, e, out);
+            }
+            return;
         }
 
         if node.grammar_name().starts_with("jsx_") {
@@ -383,12 +394,6 @@ pub fn mangle_tsx_component(
         &mut o,
     );
 
-    enum Edit {
-        Insert(String),
-        Delete(usize),
-        // Replace(String),
-    }
-
     let mut edits = Vec::new();
 
     for (range, unit) in o.iter() {
@@ -415,15 +420,14 @@ pub fn mangle_tsx_component(
         }
     }
 
-    edits.sort_by_key(|x| x.0);
+    edits.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
 
-    let mut inserted: usize = 0;
-    let mut deleted: usize = 0;
+    let mut shift: usize = 0;
 
     let mut out_string = comp.typescript_source.0.clone();
 
     for (pos, edit) in edits.iter() {
-        let pos = *pos + inserted - deleted;
+        let pos = *pos + shift;
 
         match edit {
             Edit::Insert(s) => out_string.insert_str(pos as usize, s.as_str()),
@@ -435,12 +439,11 @@ pub fn mangle_tsx_component(
         }
 
         match edit {
-            Edit::Insert(s) => inserted += s.len(),
-            Edit::Delete(amount) => deleted += *amount,
+            Edit::Insert(s) => shift += s.len(),
+            Edit::Delete(amount) => shift -= *amount,
         }
     }
-
-    std::fs::write("out.txt", out_string).unwrap();
+    comp.typescript_source.0 = out_string;
 }
 
 pub fn mangle_value_expr(

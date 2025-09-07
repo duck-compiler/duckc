@@ -9,21 +9,34 @@
             // Initialize htm with Preact
             const html = htm.bind(h);
 
-            function abc(props) {
-              return (html`YOOOO ${props.fisch}`);
+
+            function Lol(props) {
+
+                const hello = false;
+                return (
+                    html`
+                        <h1>yoo</h1>
+                        ${props.lol.map(x => html`<h2>${html`<em>${x}</em>`}</h2>`)}
+                        ${hello ? html`<p>hello true</h1>` : html`<p>hello false</p>`}
+                    `
+                )
+
             }
 
-            function Counter() {
-              const [value, setValue] = useState(0);
+
+            function Counter(props) {
+
+	const [value, setValue] = useState(0);
 
 	return (
 		html`
 			<div>Counter: ${value}</div>
-			<Lol/>
+			<${Lol} lol=${[1, 2, 3, 4, 5]}/>
 			<button onClick=${() => setValue(value + 1)}>Increment</button>
 			<button onClick=${() => setValue(value - 1)}>Decrement</button>
 		`
 	);
+
             }
 
             render(html`<${Counter}/>`, document.body);

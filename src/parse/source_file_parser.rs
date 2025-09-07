@@ -781,19 +781,9 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        Field,
-        component_parser::TsxComponent,
-        function_parser::FunctionDefintion,
-        lexer::lex_parser,
-        make_input,
-        source_file_parser::{SourceFile, source_file_parser},
-        struct_parser::StructDefinition,
-        type_parser::{Duck, TypeDefinition, TypeExpr},
-        use_statement_parser::{Indicator, UseStatement},
-        value_parser::{
-            IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
-            value_expr_into_empty_range,
-        },
+        component_parser::TsxComponent, function_parser::FunctionDefintion, lexer::lex_parser, make_input, source_file_parser::{source_file_parser, SourceFile}, struct_parser::StructDefinition, type_parser::{Duck, TypeDefinition, TypeExpr}, use_statement_parser::{Indicator, UseStatement}, value_parser::{
+            empty_range, source_file_into_empty_range, type_expr_into_empty_range, value_expr_into_empty_range, IntoBlock, ValueExpr
+        }, Field
     };
 
     #[test]
@@ -810,11 +800,28 @@ mod tests {
                 },
             ),
             (
-                "component MyComp tsx {console.log('hallo, welt')}",
+                "component MyComp() tsx {console.log('hallo, welt')}",
                 SourceFile {
                     tsx_components: vec![TsxComponent {
                         name: "MyComp".to_string(),
-                        params: None,
+                        params: Vec::new(),
+                        typescript_source: (
+                            "console.log('hallo, welt')".to_string(),
+                            empty_range(),
+                        ),
+                    }],
+                    ..Default::default()
+                },
+            ),
+            (
+                "component MyComp(x: String, y: Int) tsx {console.log('hallo, welt')}",
+                SourceFile {
+                    tsx_components: vec![TsxComponent {
+                        name: "MyComp".to_string(),
+                        params: vec![
+                            ("x".to_string(), TypeExpr::String.into_empty_span()),
+                            ("y".to_string(), TypeExpr::Int.into_empty_span()),
+                        ],
                         typescript_source: (
                             "console.log('hallo, welt')".to_string(),
                             empty_range(),
@@ -982,6 +989,13 @@ mod tests {
                 .into_result()
                 .expect(src);
             source_file_into_empty_range(&mut parse);
+
+            for c in parse.tsx_components.iter_mut() {
+                for (_, ty) in c.params.iter_mut() {
+                    type_expr_into_empty_range(ty);
+                }
+            }
+
             assert_eq!(parse, exp, "{src}");
         }
     }

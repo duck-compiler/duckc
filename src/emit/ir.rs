@@ -1,5 +1,5 @@
 use crate::emit::{
-    types::{escape_string_literal, primitive_conc_type_name, primitive_native_type_name},
+    types::{string_to_byte_string, primitive_conc_type_name, primitive_native_type_name},
     value::{Case, IrInstruction, IrValue},
 };
 
@@ -357,7 +357,7 @@ impl IrValue {
             IrValue::Char(c) => format!("ConcDuckChar {{ value: '{c}' }}"),
             IrValue::String(s, is_const) => {
                 if *is_const {
-                    format!("ConstString_{} {{ \"{s}\" }}", escape_string_literal(s))
+                    format!("ConstString_{} {{ \"{s}\" }}", string_to_byte_string(s))
                 } else {
                     format!("ConcDuckString {{ value: \"{s}\" }}")
                 }

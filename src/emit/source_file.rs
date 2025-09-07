@@ -19,11 +19,19 @@ impl SourceFile {
         instructions.push(IrInstruction::GoPackage(pkg_name));
 
         let mut go_imports = Vec::new();
+
+        go_imports.push((None, "html".to_string()));
+        go_imports.push((None, "fmt".to_string()));
+
         for u in self.use_statements {
             if let UseStatement::Go(name, alias) = u {
+                if name == "html" || name == "fmt" {
+                    continue;
+                }
                 go_imports.push((alias, name));
             }
         }
+
         instructions.push(IrInstruction::GoImports(go_imports));
 
         let mut emitted = HashSet::new();
@@ -35,8 +43,24 @@ impl SourceFile {
             }
 
             if emitted.insert(f.name.clone()) {
-                instructions.push(f.emit(None, type_env, &mut to_ir));
+                let mut fn_instr = f.emit(None, type_env, &mut to_ir);
+
+                if f.name.as_str() == "main" {
+                    let IrInstruction::FunDef(_, _, _, _, body) = &mut fn_instr else {
+                        panic!("how")
+                    };
+                    body.insert(
+                        0,
+                        IrInstruction::InlineGo("_ = html.EscapeString(\"\")".to_string()),
+                    );
+                    body.insert(0, IrInstruction::InlineGo("_ = fmt.Sprintf(\"%d\", 1)".to_string()));
+                }
+                instructions.push(fn_instr);
             }
+        }
+
+        for c in self.tsx_components {
+            instructions.push(c.emit(type_env));
         }
 
         instructions.extend(type_definitions);

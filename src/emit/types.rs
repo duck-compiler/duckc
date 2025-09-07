@@ -22,7 +22,23 @@ pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str
     }
 }
 
-pub fn escape_string_literal(input_str: &str) -> String {
+pub fn escape_string_for_go(input_str: &str) -> String {
+    let mut out = String::new();
+    for c in input_str.chars() {
+        match c {
+            '\\' | '"' => out.push('\\'),
+            '\n' => {
+                out.push_str("\\n");
+                continue;
+            }
+            _ => {}
+        }
+        out.push(c);
+    }
+    out
+}
+
+pub fn string_to_byte_string(input_str: &str) -> String {
     input_str
         .chars()
         .map(|c| format!("{}_", c as u32))
@@ -39,7 +55,7 @@ pub fn primitive_conc_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
         TypeExpr::ConstInt(int) => Box::leak(Box::new(format!("ConstInt_{int}"))),
         TypeExpr::ConstString(str) => Box::leak(Box::new(format!(
             "ConstString_{}",
-            escape_string_literal(str)
+            string_to_byte_string(str)
         ))),
         TypeExpr::ConstBool(bool) => Box::leak(Box::new(format!("ConstBool_{bool}"))),
         _ => panic!("That's not a primitive"),
@@ -56,7 +72,7 @@ pub fn primitive_type_name(primitive_type_expr: &TypeExpr) -> &'static str {
         TypeExpr::ConstInt(int) => Box::leak(Box::new(format!("ConstInt_{int}"))),
         TypeExpr::ConstString(str) => Box::leak(Box::new(format!(
             "ConstString_{}",
-            escape_string_literal(str)
+            string_to_byte_string(str)
         ))),
         TypeExpr::ConstBool(bool) => Box::leak(Box::new(format!("ConstBool_{bool}"))),
         _ => panic!("That's not a primitive"),
