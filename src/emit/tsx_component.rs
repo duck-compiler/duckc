@@ -1,8 +1,5 @@
 use crate::{
-    TypeExpr,
-    emit::{types::escape_string_for_go, value::IrInstruction},
-    parse::{component_parser::TsxComponent, type_parser::Duck},
-    semantics::type_resolve::TypeEnv,
+    emit::{types::escape_string_for_go, value::IrInstruction}, parse::{tsx_component_parser::TsxComponent, type_parser::Duck}, semantics::type_resolve::TypeEnv, TypeExpr
 };
 
 fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {

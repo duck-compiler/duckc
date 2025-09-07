@@ -13,7 +13,6 @@ pub struct TsxComponent {
     pub name: String,
     pub props_type: Spanned<TypeExpr>,
     pub typescript_source: Spanned<String>,
-    pub is_server_component: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -40,10 +39,11 @@ pub enum Edit {
 pub fn do_edits(to_edit: &mut String, edits: &mut Vec<(usize, Edit)>) {
     edits.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
 
-    let mut shift: usize = 0;
+    let mut shift: isize = 0;
 
     for (pos, edit) in edits.iter() {
-        let pos = *pos + shift;
+        let pos = *pos as isize;
+        let pos = pos + shift;
 
         match edit {
             Edit::Insert(s) => to_edit.insert_str(pos as usize, s.as_str()),
@@ -55,8 +55,8 @@ pub fn do_edits(to_edit: &mut String, edits: &mut Vec<(usize, Edit)>) {
         }
 
         match edit {
-            Edit::Insert(s) => shift += s.len(),
-            Edit::Delete(amount) => shift -= *amount,
+            Edit::Insert(s) => shift += s.len() as isize,
+            Edit::Delete(amount) => shift -= (*amount as isize),
         }
     }
 }
@@ -130,31 +130,25 @@ where
     // component Name {
     //   %javascript source
     // }
-    choice((
-        just(Token::Component).map(|_| false),
-        just(Token::Template).map(|_| true),
-    ))
-    .then(select_ref! { Token::Ident(identifier) => identifier.clone() })
-    .then(
-        just(Token::Ident("props".to_string()))
-            .ignore_then(just(Token::ControlChar(':')))
-            .ignore_then(type_expression_parser())
-            .or_not()
-            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
-    )
-    .then(
-        select_ref! { Token::InlineTsx(tsx_source) => tsx_source.clone() }
-            .map_with(|x, e| (x, e.span())),
-    )
-    .map(
-        |(((is_server_component, identifier), props_type), tsx_source)| TsxComponent {
-            is_server_component,
-            name: identifier.clone(),
+    just(Token::Component)
+        .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() })
+        .then(
+            just(Token::Ident("props".to_string()))
+                .ignore_then(just(Token::ControlChar(':')))
+                .ignore_then(type_expression_parser())
+                .or_not()
+                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
+        )
+        .then(
+            select_ref! { Token::InlineTsx(tsx_source) => tsx_source.clone() }
+                .map_with(|x, e| (x, e.span())),
+        )
+        .map(|((ident, props_type), tsx_source)| TsxComponent {
+            name: ident.clone(),
             props_type: props_type
                 .unwrap_or(TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span()),
-            typescript_source: tsx_source.clone(),
-        },
-    )
+            typescript_source: tsx_source,
+        })
 }
 
 #[cfg(test)]
@@ -172,16 +166,6 @@ mod tests {
                     name: "T".to_string(),
                     props_type: TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span(),
                     typescript_source: ("useState()".to_string(), empty_range()),
-                    is_server_component: false,
-                },
-            ),
-            (
-                "template T() tsx {}",
-                TsxComponent {
-                    name: "T".to_string(),
-                    props_type: TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span(),
-                    typescript_source: ("".to_string(), empty_range()),
-                    is_server_component: true,
                 },
             ),
         ];

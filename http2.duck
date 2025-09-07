@@ -15,7 +15,6 @@ component Lol(props : { x: { x: String }, y: Bool, z: String[]}) tsx {
 component Counter(props: { initial: Int }) tsx {
 	const [value, setValue] = useState(0);
 	const y = true;
-
 	return (
 		<>
 		    <std::lol/>
@@ -28,22 +27,12 @@ component Counter(props: { initial: Int }) tsx {
 	);
 }
 
-template OtherTemplate(props: { id: String }) tsx {
-    return <p>{props.id}</p>;
-}
-
-template Page(props: { title: String, x: Int }) tsx {
-    const xx = 100;
+template Page(props: { title: String, x: F }) duckx {c0
     return (
         <>
-            <!DOCTYPE html>
             <html>
-            <head>
-                <title>{props.title}</title>
-            </head>
             <body>
-                <Counter initial={100}/>
-                <OtherTemplate id={props.x}/>
+                {}
             </body>
             </html>
         </>

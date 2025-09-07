@@ -5,19 +5,10 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        Context, SS, Spanned,
-        component_parser::{TsxComponent, tsx_component_parser},
-        function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
-        lexer::{Token, lex_parser},
-        make_input, parse_failure,
-        struct_parser::{StructDefinition, struct_definition_parser},
-        type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
-        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
-        value_parser::{ValFmtStringContents, ValueExpr},
+        tsx_component_parser::{tsx_component_parser, TsxComponent}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValueExpr}, Context, Spanned, SS
     },
     semantics::ident_mangler::{
-        MangleEnv, mangle, mangle_tsx_component, mangle_type_expression, mangle_value_expr,
-        unmangle,
+        mangle, mangle_tsx_component, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
     },
 };
 
@@ -782,7 +773,7 @@ mod tests {
 
     use crate::parse::{
         Field,
-        component_parser::TsxComponent,
+        tsx_component_parser::TsxComponent,
         function_parser::FunctionDefintion,
         lexer::lex_parser,
         make_input,
@@ -819,7 +810,6 @@ mod tests {
                             "console.log('hallo, welt')".to_string(),
                             empty_range(),
                         ),
-                        is_server_component: false,
                     }],
                     ..Default::default()
                 },
@@ -846,7 +836,6 @@ mod tests {
                             "console.log('hallo, welt')".to_string(),
                             empty_range(),
                         ),
-                        is_server_component: false,
                     }],
                     ..Default::default()
                 },

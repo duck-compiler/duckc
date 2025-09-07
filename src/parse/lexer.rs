@@ -17,6 +17,19 @@ pub enum FmtStringContents {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum HtmlStringContents {
+    String(String),
+    Tokens(Vec<Spanned<Token>>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RawHtmlStringContents {
+    Char(char),
+    Tokens(Vec<Spanned<Token>>),
+    Sub(Token),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Use,
     Type,
@@ -30,6 +43,7 @@ pub enum Token {
     ControlChar(char),
     ConstString(String),
     FormatStringLiteral(Vec<FmtStringContents>),
+    HtmlString(Vec<HtmlStringContents>),
     ConstInt(i64),
     ConstBool(bool),
     CharLiteral(char),
@@ -50,6 +64,7 @@ pub enum Token {
     As,
     InlineGo(String),
     InlineTsx(String),
+    InlineDuckx(Vec<Spanned<Token>>),
     Module,
     ScopeRes,
     ThinArrow,
@@ -97,9 +112,11 @@ impl Display for Token {
             Token::Continue => "continue",
             Token::As => "as",
             Token::InlineGo(_) => "inline go",
-            Token::InlineTsx(_) => "inline go",
+            Token::InlineTsx(_) => "inline tsx",
+            Token::InlineDuckx(_) => "inline duckx",
             Token::Module => "module",
             Token::Match => "match",
+            Token::HtmlString(..) => "html string",
             Token::DocComment(comment) => &format!("/// {comment}"),
             Token::Comment(comment) => &format!("// {comment}"),
             Token::Sus => "sus",
@@ -108,7 +125,7 @@ impl Display for Token {
     }
 }
 
-pub fn lex_fstring_tokens<'a>(
+pub fn tokens_in_curly_braces<'a>(
     lexer: impl Parser<'a, &'a str, Spanned<Token>, extra::Err<Rich<'a, char>>> + Clone + 'a,
 ) -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> + Clone {
     recursive(|e| {
@@ -133,6 +150,157 @@ pub fn lex_fstring_tokens<'a>(
                 v.push((Token::ControlChar('}'), empty_range()));
                 v
             })
+    })
+}
+
+#[derive(Debug, Clone)]
+pub struct HtmlAttribute {
+    pub name: String,
+}
+
+pub fn closing_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a, char>>> + Clone {
+    just("</")
+        .then(
+            any()
+                .filter(|c: &char| *c != '>')
+                .repeated()
+                .collect::<String>(),
+        )
+        .then(just(">"))
+        .map(|((pre, main), close)| format!("{pre}{main}{close}"))
+}
+
+pub fn opening_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a, char>>> + Clone {
+    just("<")
+        .and_is(just("</").not())
+        .then(
+            any()
+                .filter(|c: &char| *c != '>')
+                .repeated()
+                .collect::<String>(),
+        )
+        .then(just(">"))
+        .map(|((pre, main), close)| format!("{pre}{main}{close}"))
+}
+
+pub fn duckx_parse_html_string<'a>(
+    duckx_lexer: impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> + Clone + 'a,
+) -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, char>>> + Clone {
+    recursive(|e| {
+        opening_tag()
+            .then(
+                choice((
+                    just("{")
+                        .rewind()
+                        .ignore_then(duckx_lexer.clone())
+                        .map(|x| RawHtmlStringContents::Tokens(x)),
+                    opening_tag()
+                        .rewind()
+                        .ignore_then(e.clone())
+                        .map(|x| RawHtmlStringContents::Sub(dbg!(x))),
+                    any()
+                        .and_is(closing_tag().not())
+                        // .filter(|c: &char| *c != '{' && *c != '<')
+                        .map(|x| RawHtmlStringContents::Char(x)),
+                ))
+                .repeated()
+                .collect::<Vec<_>>(),
+            )
+            .then(closing_tag())
+            .map(
+                |((opening_tag, mut template_contents), closing_tag): (
+                    (String, Vec<RawHtmlStringContents>),
+                    String,
+                )| {
+                    let mut new_out = Vec::new();
+                    new_out.push(HtmlStringContents::String(opening_tag));
+                    let mut s_buf = String::new();
+
+                    // let mut to_extend = Vec::new();
+
+                    // template_contents.retain(|f| {
+                    //     if let RawHtmlStringContents::Sub(Token::HtmlString(sub)) = f {
+                    //         to_extend.extend_from_slice(sub);
+                    //         false
+                    //     } else {
+                    //         true
+                    //     }
+                    // });
+
+                    // new_out.extend(to_extend);
+
+                    for c in template_contents {
+                        match c {
+                            RawHtmlStringContents::Tokens(t) => {
+                                if !s_buf.is_empty() {
+                                    new_out.push(HtmlStringContents::String(s_buf));
+                                    s_buf = String::new();
+                                }
+                                new_out.push(HtmlStringContents::Tokens(t));
+                            }
+                            RawHtmlStringContents::Char(c) => {
+                                s_buf.push(c);
+                            }
+                            RawHtmlStringContents::Sub(Token::HtmlString(sub)) => {
+                                if !s_buf.is_empty() {
+                                    new_out.push(HtmlStringContents::String(s_buf));
+                                    s_buf = String::new();
+                                }
+                                new_out.extend(sub);
+                            }
+                            _ => panic!("invalid"),
+                        }
+                    }
+
+                    if !s_buf.is_empty() {
+                        new_out.push(HtmlStringContents::String(s_buf));
+                    }
+                    new_out.push(HtmlStringContents::String(closing_tag));
+
+                    Token::HtmlString(new_out)
+                },
+            )
+    })
+}
+
+pub fn duckx_contents_in_curly_braces<'a>(
+    file_name: &'static str,
+    file_contents: &'static str,
+    lexer: impl Parser<'a, &'a str, Spanned<Token>, extra::Err<Rich<'a, char>>> + Clone + 'a,
+) -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> + Clone {
+    recursive(|duckx_lexer| {
+        just("{")
+            .ignore_then(
+                choice((
+                    just("{").rewind().ignore_then(duckx_lexer.clone()),
+                    opening_tag()
+                        .rewind()
+                        .ignore_then(duckx_parse_html_string(duckx_lexer.clone()))
+                        .map_with(move |x, e| {
+                            vec![(
+                                x,
+                                SS {
+                                    start: e.span().start,
+                                    end: e.span().end,
+                                    context: Context {
+                                        file_name: file_name,
+                                        file_contents: file_contents,
+                                    },
+                                },
+                            )]
+                        }),
+                    any()
+                        .and_is(choice((just("{"), just("}"))).not())
+                        // .filter(|c| *c != '{' && *c != '}')
+                        .rewind()
+                        .ignore_then(lexer.clone())
+                        .map(|x| vec![x]),
+                ))
+                .repeated()
+                .collect::<Vec<_>>(),
+            )
+            .then_ignore(just("}"))
+            .map(|x: Vec<Vec<Spanned<Token>>>| x.into_iter().flatten().collect())
     })
 }
 
@@ -217,7 +385,7 @@ pub fn lex_single<'a>(
                 choice((
                     just("{")
                         .rewind()
-                        .ignore_then(lex_fstring_tokens(lexer.clone()))
+                        .ignore_then(tokens_in_curly_braces(lexer.clone()))
                         .map(|e| RawFmtStringContents::Tokens(e[1..e.len() - 1].to_vec())),
                     none_of("\\\"")
                         .or(choice((
@@ -259,6 +427,16 @@ pub fn lex_single<'a>(
 
         let token = inline_go_parser()
             .or(inline_tsx_parser())
+            .or(just("duckx")
+                .ignore_then(whitespace().at_least(1))
+                .ignore_then(just("{").rewind())
+                // todo: [TSX] create tsx text parser
+                .ignore_then(duckx_contents_in_curly_braces(
+                    file_name,
+                    file_contents,
+                    lexer.clone(),
+                ))
+                .map(|x| Token::InlineDuckx(x)))
             .or(doc_comment)
             .or(comment)
             .or(fmt_string)
@@ -405,6 +583,10 @@ pub fn token_empty_range(token_span: &mut Spanned<Token>) {
                 FmtStringContents::String(_) => {}
             }
         }
+    } else if let Token::InlineDuckx(contents) = &mut token_span.0 {
+        for content in contents {
+            token_empty_range(content);
+        }
     }
 }
 
@@ -417,6 +599,16 @@ mod tests {
     #[test]
     fn test_lex() {
         let test_cases = vec![
+            (
+                "duckx {let hello = <> {ti <span></span> tle} <h1> hallo moin  123</h1> abc </>;}",
+                vec![],
+            ),
+            (
+                "duckx {let hello = <> yo <h1> hallo moin  123</h1> abc </>;}",
+                vec![],
+            ),
+            ("duckx {let hello = <><h1>123</h1></>;}", vec![]),
+            ("duckx {let hello = {1};}", vec![]),
             (
                 "f\"{{{1}}}\"",
                 vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(

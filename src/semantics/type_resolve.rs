@@ -4,14 +4,17 @@ use std::{
 };
 
 use chumsky::container::Container;
+use tree_sitter::Parser as TSParser;
 
 use crate::{
     parse::{
         SS, Spanned,
-        component_parser::{Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits},
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         source_file_parser::SourceFile,
         struct_parser::StructDefinition,
+        tsx_component_parser::{
+            Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
+        },
         type_parser::{Duck, TypeDefinition, TypeExpr},
         value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr},
     },
@@ -28,48 +31,38 @@ pub enum GenericDefinition {
 
 fn typeresolve_tsx_component(c: &mut TsxComponent, type_env: &mut TypeEnv) {
     let units = c.find_units();
-    if c.is_server_component {
-        todo!()
-    } else {
-        let mut edits = Vec::new();
-        for (range, unit) in units.iter() {
-            match unit {
-                TsxSourceUnit::Jsx => {
-                    edits.push((range.start_byte, Edit::Insert("html`".to_string())));
-                    edits.push((range.end_byte, Edit::Insert("`".to_string())));
+    let mut edits = Vec::new();
+    for (range, unit) in units.iter() {
+        match unit {
+            TsxSourceUnit::Jsx => {
+                edits.push((range.start_byte, Edit::Insert("html`".to_string())));
+                edits.push((range.end_byte, Edit::Insert("`".to_string())));
+            }
+            TsxSourceUnit::OpeningJsx => edits.push((range.start_byte, Edit::Delete(2))),
+            TsxSourceUnit::ClosingJsx => edits.push((range.start_byte, Edit::Delete(3))),
+            TsxSourceUnit::Expression => {
+                if range.start_byte > 0
+                    && &c.typescript_source.0[range.start_byte - 1..(range.start_byte)] != "$"
+                {
+                    edits.push((range.start_byte, Edit::Insert("$".to_string())))
                 }
-                TsxSourceUnit::OpeningJsx => edits.push((range.start_byte, Edit::Delete(2))),
-                TsxSourceUnit::ClosingJsx => edits.push((range.start_byte, Edit::Delete(3))),
-                TsxSourceUnit::Expression => {
-                    if range.start_byte > 0
-                        && &c.typescript_source.0[range.start_byte - 1..(range.start_byte)] != "$"
-                    {
-                        edits.push((range.start_byte, Edit::Insert("$".to_string())))
-                    }
-                }
-                TsxSourceUnit::Ident => {
-                    // here we could implement rpc calls
-                    let ident = &c.typescript_source.0[range.start_byte..range.end_byte];
+            }
+            TsxSourceUnit::Ident => {
+                // here we could implement rpc calls
+                let ident = &c.typescript_source.0[range.start_byte..range.end_byte];
 
-                    if let Some(found_comp) = type_env.get_component(ident) {
-                        if !c.is_server_component && found_comp.is_server_component {
-                            panic!(
-                                "client component {} can't call server component {}",
-                                c.name, found_comp.name
-                            )
-                        }
-                        let found_name = found_comp.name.clone();
-                        println!("{} -> {}", c.name, found_name);
-                        type_env
-                            .get_component_dependencies(c.name.clone())
-                            .client_components
-                            .push(found_name);
-                    }
+                if let Some(found_comp) = type_env.get_component(ident) {
+                    let found_name = found_comp.name.clone();
+                    println!("{} -> {}", c.name, found_name);
+                    type_env
+                        .get_component_dependencies(c.name.clone())
+                        .client_components
+                        .push(found_name);
                 }
             }
         }
-        do_edits(&mut c.typescript_source.0, &mut edits);
     }
+    do_edits(&mut c.typescript_source.0, &mut edits);
 }
 
 impl GenericDefinition {

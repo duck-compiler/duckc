@@ -4,8 +4,8 @@ use colored::Colorize;
 use tree_sitter::{Node, Parser};
 
 use crate::parse::{
-    component_parser::{Edit, TsxComponent, TsxSourceUnit, do_edits},
     function_parser::LambdaFunctionExpr,
+    tsx_component_parser::{Edit, TsxComponent, TsxSourceUnit, do_edits},
     type_parser::{Duck, TypeExpr},
     value_parser::{ValFmtStringContents, ValueExpr},
 };
@@ -333,9 +333,10 @@ pub fn mangle_tsx_component(
                     ));
                 }
             }
-            _ => {},
+            _ => {}
         }
     }
+
     do_edits(&mut comp.typescript_source.0, &mut edits);
 }
 

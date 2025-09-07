@@ -36,7 +36,7 @@ fn serve_component<P>(
     tsx_component: TsxComponent<P>,
     prop_supplier: fn () -> P,
 ) {
-    let x = ::http::with_react;
+    let x = with_react;
     go {
         var h = x;
         http.HandleFunc(route.as_dgo_string(), func (w http.ResponseWriter, r *http.Request) {
