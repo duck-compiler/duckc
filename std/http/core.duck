@@ -1,0 +1,53 @@
+use go "net/http";
+
+type RenderedTsx = (
+    String,
+    String,
+);
+
+type TsxComponent<P> = fn (props: P) -> RenderedTsx;
+
+fn with_react(
+    rendered_tsx: RenderedTsx
+) -> String {
+    let layout: String = f"
+        <!DOCTYPE html>
+        <html>
+            <body>
+                <script type='module'>
+                    import \{ h, render } from 'https://esm.sh/preact';
+                    import \{ useState } from 'https://esm.sh/preact/hooks';
+                    import htm from 'https://esm.sh/htm';
+
+                    const html = htm.bind(h);
+
+                    {rendered_tsx.1}
+                    render(html`<$\{{rendered_tsx.0}} />`, document.body);
+                </script>
+            </body>
+        </html>
+    ";
+
+    return layout;
+}
+
+fn serve_component<P>(
+    route: String,
+    tsx_component: TsxComponent<P>,
+    prop_supplier: fn () -> P,
+) {
+    let x = ::http::with_react;
+    go {
+        var h = x;
+        http.HandleFunc(route.as_dgo_string(), func (w http.ResponseWriter, r *http.Request) {
+            var tsx = tsx_component(prop_supplier());
+            w.Write([]byte(h(tsx).as_dgo_string()))
+        })
+    }
+}
+
+fn listen(port: Int) {
+    go {
+        http.ListenAndServe(fmt.Sprintf(":%d", port.as_dgo_int()), nil);
+    }
+}
