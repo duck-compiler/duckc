@@ -341,7 +341,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
         .flat_map(|primitive_type_expr| {
             if primitive_type_expr.is_literal() {
                 let ir_value = IrValue::Imm(match primitive_type_expr.clone() {
-                    TypeExpr::ConstString(value) => format!("\"{value}\""),
+                    TypeExpr::ConstString(value) => format!("\"{}\"", value.replace("\n", "\\n")),
                     TypeExpr::ConstInt(int_value) => format!("{int_value}"),
                     TypeExpr::ConstBool(bool_value) => format!("{bool_value}"),
                     _ => unreachable!(),

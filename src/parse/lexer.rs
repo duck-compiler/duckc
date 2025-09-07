@@ -216,7 +216,7 @@ pub fn lex_single<'a>(
                         .rewind()
                         .ignore_then(lex_fstring_tokens(lexer.clone()))
                         .map(|e| RawFmtStringContents::Tokens(e[1..e.len() - 1].to_vec())),
-                    none_of("\\\n\t\"")
+                    none_of("\\\"")
                         .or(choice((
                             just("\\\\").to('\\'),
                             just("\\{").to('{'),
@@ -248,7 +248,7 @@ pub fn lex_single<'a>(
                 }
 
                 if !s.is_empty() {
-                    xx.push(FmtStringContents::String(s));
+                    xx.push(FmtStringContents::String(dbg!(s.replace("\n", "\\n"))));
                 }
 
                 Token::FormatStringLiteral(xx)

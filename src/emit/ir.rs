@@ -357,9 +357,9 @@ impl IrValue {
             IrValue::Char(c) => format!("ConcDuckChar {{ value: '{c}' }}"),
             IrValue::String(s, is_const) => {
                 if *is_const {
-                    format!("ConstString_{} {{ \"{s}\" }}", string_to_byte_string(s))
+                    format!("ConstString_{} {{ \"{}\" }}", string_to_byte_string(s), s.replace("\n", "\\n"))
                 } else {
-                    format!("ConcDuckString {{ value: \"{s}\" }}")
+                    format!("ConcDuckString {{ value: \"{}\" }}", s.replace("\n", "\\n"))
                 }
             }
             IrValue::Var(v) => v.to_string(),
