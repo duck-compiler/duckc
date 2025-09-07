@@ -1,7 +1,7 @@
 {
     "id": "ede746e83292bef642d1339ebd328a06",
     "file_path": "../../src/parse/type_parser.rs",
-    "line_number": 1143,
+    "line_number": 1153,
     "title": "Here's an TODO, which had no title.",
     "tag": "todo",
     "module_tag": "parse",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Apfelfrosch",
-        "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO(@Apfelfrosch): Here's an TODO, which had no title.",
     "status": "open",

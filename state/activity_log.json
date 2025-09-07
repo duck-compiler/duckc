@@ -1,6 +1,26 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-09-07T00:12:38.330850",
+        "issue_id": "b05a3be51e7023df2cd03e0cf204af27",
+        "issue_title": "HERE",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-09-07T00:12:38.330850",
+        "issue_id": "eaa4be15ded1bf103d5de778e31aa3cf",
+        "issue_title": "support generics in typeof",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-09-05T16:58:24.803655",
         "issue_id": "12b446958d28cded3ceb4bdc148bbcc1",
         "issue_title": "produce snapshot for the given error",

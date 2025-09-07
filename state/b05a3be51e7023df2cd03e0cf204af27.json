@@ -1,8 +1,8 @@
 {
-    "id": "85e0c950789d9ad5d875a7db05b97130",
+    "id": "b05a3be51e7023df2cd03e0cf204af27",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 2081,
-    "title": "add spans",
+    "line_number": 394,
+    "title": "HERE",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
-    "source_line": "// TODO add spans",
+    "source_line": "// TODO:: HERE",
     "status": "open",
-    "first_seen": "2025-07-09T23:15:12.305885",
+    "first_seen": "2025-09-07T00:12:38.333603",
     "history": []
 }

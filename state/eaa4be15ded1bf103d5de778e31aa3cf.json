@@ -1,8 +1,8 @@
 {
-    "id": "85e0c950789d9ad5d875a7db05b97130",
+    "id": "eaa4be15ded1bf103d5de778e31aa3cf",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 2081,
-    "title": "add spans",
+    "line_number": 429,
+    "title": "support generics in typeof",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
-    "source_line": "// TODO add spans",
+    "source_line": "// todo: support generics in typeof",
     "status": "open",
-    "first_seen": "2025-07-09T23:15:12.305885",
+    "first_seen": "2025-09-07T00:12:38.333733",
     "history": []
 }
