@@ -16,7 +16,9 @@ use crate::{
             Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
         },
         type_parser::{Duck, TypeDefinition, TypeExpr},
-        value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr},
+        value_parser::{
+            Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
+        },
     },
     semantics::ident_mangler::mangle,
     tags::Tag,
@@ -638,6 +640,14 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
         | ValueExpr::GreaterThanOrEquals(lhs, rhs)
         | ValueExpr::And(lhs, rhs)
         | ValueExpr::Or(lhs, rhs) => {
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    replace_generics_in_value_expr(&mut e.0, set_params);
+                }
+            }
+        }
+        ValueExpr::Add(lhs, rhs) | ValueExpr::Mul(lhs, rhs) | ValueExpr::Equals(lhs, rhs) => {
             replace_generics_in_value_expr(&mut lhs.0, set_params);
             replace_generics_in_value_expr(&mut rhs.0, set_params);
         }
@@ -927,6 +937,14 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
         | ValueExpr::GreaterThanOrEquals(lhs, rhs)
         | ValueExpr::And(lhs, rhs)
         | ValueExpr::Or(lhs, rhs) => {
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    instantiate_generics_value_expr(&mut e.0, type_env);
+                }
+            }
+        }
+        ValueExpr::Add(lhs, rhs) | ValueExpr::Mul(lhs, rhs) | ValueExpr::Equals(lhs, rhs) => {
             instantiate_generics_value_expr(&mut lhs.0, type_env);
             instantiate_generics_value_expr(&mut rhs.0, type_env);
         }
@@ -1218,6 +1236,13 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
 
 fn sort_fields_value_expr(expr: &mut ValueExpr) {
     match expr {
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    sort_fields_value_expr(&mut e.0);
+                }
+            }
+        }
         ValueExpr::Array(ty, exprs) => {
             if let Some(ty) = ty {
                 sort_fields_type_expr(&mut ty.0);
@@ -1724,6 +1749,13 @@ fn typeresolve_function_definition(
 
 fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
     match value_expr {
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    typeresolve_value_expr(&mut e.0, type_env);
+                }
+            }
+        }
         ValueExpr::RawVariable(_, path) => {
             let ident = mangle(path);
             let mut type_expr = type_env
@@ -2112,6 +2144,13 @@ fn resolve_implicit_function_return_type(
         type_env: &mut TypeEnv,
     ) {
         match value_expr {
+            ValueExpr::HtmlString(contents) => {
+                for c in contents {
+                    if let ValHtmlStringContents::Expr(e) = c {
+                        flatten_returns(&e.0, return_types_found, type_env);
+                    }
+                }
+            }
             ValueExpr::FormattedString(contents) => {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {

@@ -1,7 +1,7 @@
 use crate::parse::{
     Context, SS, Spanned,
     function_parser::{LambdaFunctionExpr, Param},
-    lexer::FmtStringContents,
+    lexer::{FmtStringContents, HtmlStringContents},
     source_file_parser::SourceFile,
     type_parser::{type_expression_parser, type_expression_parser_without_array},
 };
@@ -21,6 +21,18 @@ pub struct MatchArm {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValFmtStringContents {
     String(String),
+    Expr(Spanned<ValueExpr>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValHtmlStringContents {
+    String(String),
+    Expr(Spanned<ValueExpr>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DuckxContents {
+    HtmlString(Vec<ValHtmlStringContents>),
     Expr(Spanned<ValueExpr>),
 }
 
@@ -65,6 +77,7 @@ pub enum ValueExpr {
     Break,
     Continue,
     Duck(Vec<(String, Spanned<ValueExpr>)>),
+    HtmlString(Vec<ValHtmlStringContents>),
     Tag(String),
     Struct {
         name: String,
@@ -124,6 +137,7 @@ impl ValueExpr {
     }
     pub fn needs_semicolon(&self) -> bool {
         match self {
+            ValueExpr::HtmlString(..) => true,
             ValueExpr::If {
                 condition: _,
                 then: _,
@@ -500,6 +514,7 @@ where
                 select_ref! { Token::FormatStringLiteral(elements) => elements.clone() }
                     .map({
                         let value_expr_parser = value_expr_parser.clone();
+                        let make_input = make_input.clone();
                         move |contents| {
                             let contents = contents.leak();
                             let mut res = Vec::new();
@@ -522,6 +537,92 @@ where
                         }
                     })
                     .map_with(|x, e| (x, e.span()));
+
+            let html_string = select_ref! {
+                Token::HtmlString(s) => s.clone()
+            }
+            .map({
+                let value_expr_parser = value_expr_parser.clone();
+                let make_input = make_input.clone();
+                move |mut contents| {
+                    let mut out_contents = Vec::new();
+                    for c in contents {
+                        match c {
+                            HtmlStringContents::String(s) => {
+                                out_contents.push(ValHtmlStringContents::String(s))
+                            }
+                            HtmlStringContents::Tokens(mut t) => {
+                                t.insert(0, (Token::ControlChar('{'), empty_range()));
+                                t.push((Token::ControlChar('}'), empty_range()));
+                                let cl = t.clone();
+                                let expr = value_expr_parser
+                                    .parse(make_input(empty_range(), t.leak()))
+                                    .into_result()
+                                    .expect(&format!("invalid code {cl:?}"));
+                                out_contents.push(ValHtmlStringContents::Expr(expr));
+                            }
+                        }
+                    }
+                    ValueExpr::HtmlString(out_contents)
+                }
+            })
+            .map_with(|x, e| (x, e.span()));
+
+            let duckx = select_ref! {
+                Token::InlineDuckx(contents) => contents.clone()
+            }
+            .map({
+                let value_expr_parser = value_expr_parser.clone();
+                let make_input = make_input.clone();
+                move |mut x| {
+                    let mut res = Vec::new();
+                    while !x.is_empty() {
+                        let tokens = x
+                            .iter()
+                            .cloned()
+                            .take_while(|e| !matches!(&e.0, Token::HtmlString(..)))
+                            .collect::<Vec<_>>();
+                        if tokens.is_empty() {
+                            let (Token::HtmlString(contents), span) = x[0].clone() else {
+                                panic!("not html string? {x:?}")
+                            };
+                            let mut out_contents = Vec::new();
+                            for c in contents {
+                                match c {
+                                    HtmlStringContents::String(s) => {
+                                        out_contents.push(ValHtmlStringContents::String(s))
+                                    }
+                                    HtmlStringContents::Tokens(mut t) => {
+                                        t.insert(0, (Token::ControlChar('{'), empty_range()));
+                                        t.push((Token::ControlChar('}'), empty_range()));
+                                        let cl = t.clone();
+                                        let expr = value_expr_parser
+                                            .parse(make_input(empty_range(), t.leak()))
+                                            .into_result()
+                                            .expect(&format!("invalid code {cl:?}"));
+                                        out_contents.push(ValHtmlStringContents::Expr(expr));
+                                    }
+                                }
+                            }
+                            res.push((ValueExpr::HtmlString(out_contents), span).clone());
+                            x.drain(..1);
+                        } else {
+                            let l = tokens.len();
+                            let mut cl = tokens.clone();
+                            cl.insert(0, (Token::ControlChar('{'), empty_range()));
+                            cl.push((Token::ControlChar('}'), empty_range()));
+                            let expr = value_expr_parser
+                                .parse(make_input(empty_range(), cl.leak()))
+                                .into_result()
+                                .expect(&format!("invalid code {tokens:?}"));
+                            res.push(expr.clone());
+                            x.drain(..l);
+                        }
+                    }
+                    ValueExpr::Block(res)
+                }
+            })
+            .map_with(|x, e| (x, e.span()));
 
             let array = value_expr_parser
                 .clone()
@@ -581,6 +682,8 @@ where
                             float_expr,
                             int,
                             fmt_string,
+                            html_string,
+                            duckx,
                             tag_expr,
                             bool_val,
                             string_val,
@@ -1155,6 +1258,7 @@ mod tests {
     #[test]
     fn test_value_expression_parser() {
         let test_cases = vec![
+            ("duckx {5;<h1>{<p></p>}</h1>}", ValueExpr::Break),
             (
                 "a<String>()",
                 ValueExpr::FunctionCall {

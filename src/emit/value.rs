@@ -363,6 +363,7 @@ impl ValueExpr {
 
                 (ir, as_rvar(var))
             }
+            ValueExpr::HtmlString(_) => todo!(),
             ValueExpr::FormattedString(contents) => {
                 let mut instr = Vec::new();
 

@@ -5,9 +5,9 @@ use tree_sitter::{Node, Parser};
 
 use crate::parse::{
     function_parser::LambdaFunctionExpr,
-    tsx_component_parser::{Edit, TsxComponent, TsxSourceUnit, do_edits},
+    tsx_component_parser::{do_edits, Edit, TsxComponent, TsxSourceUnit},
     type_parser::{Duck, TypeExpr},
-    value_parser::{ValFmtStringContents, ValueExpr},
+    value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr},
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -347,6 +347,13 @@ pub fn mangle_value_expr(
     mangle_env: &mut MangleEnv,
 ) {
     match value_expr {
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    mangle_value_expr(&mut e.0, global_prefix, prefix, mangle_env);
+                }
+            }
+        }
         ValueExpr::Int(..)
         | ValueExpr::String(..)
         | ValueExpr::Bool(..)

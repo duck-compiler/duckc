@@ -5,7 +5,7 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        tsx_component_parser::{tsx_component_parser, TsxComponent}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValueExpr}, Context, Spanned, SS
+        function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, tsx_component_parser::{tsx_component_parser, TsxComponent}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{DuckxContents, ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, Spanned, SS
     },
     semantics::ident_mangler::{
         mangle, mangle_tsx_component, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
@@ -325,6 +325,13 @@ fn append_global_prefix_type_expr(type_expr: &mut TypeExpr, mangle_env: &mut Man
 
 fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut MangleEnv) {
     match value_expr {
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    append_global_prefix_value_expr(&mut e.0, mangle_env);
+                }
+            }
+        }
         ValueExpr::Int(..)
         | ValueExpr::String(..)
         | ValueExpr::Bool(..)
