@@ -479,6 +479,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::TypeOf(..) => panic!("typeof should be replace by now"),
             TypeExpr::Alias(def) => def.type_expression.0.as_go_type_annotation(type_env),
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::Array(t) => format!("[]{}", t.0.as_go_type_annotation(type_env)),
@@ -547,6 +548,7 @@ impl TypeExpr {
 
     pub fn as_go_concrete_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
             TypeExpr::RawTypeName(..) => panic!(),
@@ -628,6 +630,7 @@ impl TypeExpr {
 
     pub fn type_id(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::RawTypeName(_, ident, _) => {
                 panic!("{ident:?}")
@@ -706,6 +709,7 @@ impl TypeExpr {
 
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::RawTypeName(_, ident, _) => {
                 panic!("{ident:?}")

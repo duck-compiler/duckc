@@ -1,0 +1,6 @@
+fn main() {
+    let x: String = "Hallo, Welt";
+    let y: typeof x = "Yoo";
+
+    std::io::println("conversion did work");
+}
