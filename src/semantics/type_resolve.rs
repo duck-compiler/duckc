@@ -390,6 +390,16 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
         TypeExpr::TypeName(_, name, _) => {
             *expr = env.resolve_type_alias(name);
         }
+        TypeExpr::TypeOf(identifier) => {
+            // TODO:: HERE
+            let type_expr = env.identifier_types.last()
+                .expect("expected at least one identifiert types map to be on the stack")
+                .get(identifier)
+                .expect("sorry bro didn't work :(");
+
+
+            *expr = type_expr.clone()
+        }
         _ => {}
     }
 }
@@ -416,6 +426,8 @@ fn replace_generics_in_struct_definition(
 
 fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
     match expr {
+        // todo: support generics in typeof
+        TypeExpr::TypeOf(..) => {},
         TypeExpr::Alias(alias) => {
             instantiate_generics_type_expr(&mut alias.type_expression.0, type_env);
         }
@@ -703,6 +715,7 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
 
 fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &HashMap<String, TypeExpr>) {
     match expr {
+        TypeExpr::TypeOf(..) => {},
         TypeExpr::Alias(alias) => {
             replace_generics_in_type_expr(&mut alias.type_expression.0, set_params);
         }
@@ -1262,6 +1275,7 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
 
 fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
+        TypeExpr::TypeOf(..) => {}
         TypeExpr::Alias(t) => {
             sort_fields_type_expr(&mut t.type_expression.0);
         }

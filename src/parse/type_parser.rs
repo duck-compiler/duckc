@@ -6,9 +6,7 @@ use chumsky::prelude::*;
 
 use crate::{
     parse::{
-        Field, SS, Spanned,
-        generics_parser::{Generic, generics_parser},
-        value_parser::{TypeParam, empty_range},
+        generics_parser::{generics_parser, Generic}, value_parser::{empty_range, TypeParam}, Field, Spanned, SS
     },
     semantics::type_resolve::TypeEnv,
 };
@@ -26,6 +24,7 @@ impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             TypeExpr::Tag(identifier) => write!(f, ".{identifier}"),
+            TypeExpr::TypeOf(identifier) => write!(f, "typeof {identifier}"),
             TypeExpr::Alias(def) => write!(f, "{def:?}"),
             TypeExpr::Any => write!(f, "any"),
             TypeExpr::InlineGo => write!(f, "inline_go"),
@@ -174,6 +173,7 @@ pub enum TypeExpr {
         Option<Box<Spanned<TypeExpr>>>,           // return type
     ),
     Array(Box<Spanned<TypeExpr>>),
+    TypeOf(String),
 }
 
 impl TypeExpr {
@@ -226,6 +226,10 @@ where
                     .at_most(2)
                     .collect::<Vec<String>>()
                     .map(|str| str.join("."));
+
+            let typeof_expr = just(Token::TypeOf)
+                .ignore_then(select_ref!{ Token::Ident(identifier) => identifier.clone() })
+                .map(TypeExpr::TypeOf);
 
             let go_type = just(Token::Go)
                 .ignore_then(go_type_identifier)
@@ -333,6 +337,7 @@ where
                     int_literal,
                     bool_literal,
                     tag,
+                    typeof_expr,
                     go_type,
                     type_name,
                     duck,
@@ -390,6 +395,10 @@ where
                 .ignore_then(go_type_identifier)
                 .map(TypeExpr::Go);
 
+            let typeof_expr = just(Token::TypeOf)
+                .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() })
+                .map(TypeExpr::TypeOf);
+
             let duck = just(Token::Duck)
                 .or_not()
                 .ignore_then(just(Token::ControlChar('{')))
@@ -490,6 +499,7 @@ where
                     bool_literal,
                     string_literal,
                     tag,
+                    typeof_expr,
                     go_type,
                     type_name,
                     duck,
