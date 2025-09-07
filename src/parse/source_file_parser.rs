@@ -781,9 +781,19 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        component_parser::TsxComponent, function_parser::FunctionDefintion, lexer::lex_parser, make_input, source_file_parser::{source_file_parser, SourceFile}, struct_parser::StructDefinition, type_parser::{Duck, TypeDefinition, TypeExpr}, use_statement_parser::{Indicator, UseStatement}, value_parser::{
-            empty_range, source_file_into_empty_range, type_expr_into_empty_range, value_expr_into_empty_range, IntoBlock, ValueExpr
-        }, Field
+        Field,
+        component_parser::TsxComponent,
+        function_parser::FunctionDefintion,
+        lexer::lex_parser,
+        make_input,
+        source_file_parser::{SourceFile, source_file_parser},
+        struct_parser::StructDefinition,
+        type_parser::{Duck, TypeDefinition, TypeExpr},
+        use_statement_parser::{Indicator, UseStatement},
+        value_parser::{
+            IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
+            type_expr_into_empty_range, value_expr_into_empty_range,
+        },
     };
 
     #[test]
@@ -804,7 +814,7 @@ mod tests {
                 SourceFile {
                     tsx_components: vec![TsxComponent {
                         name: "MyComp".to_string(),
-                        props_type: Vec::new(),
+                        props_type: TypeExpr::Duck(Duck { fields: vec![] }).into_empty_span(),
                         typescript_source: (
                             "console.log('hallo, welt')".to_string(),
                             empty_range(),
@@ -814,14 +824,23 @@ mod tests {
                 },
             ),
             (
-                "component MyComp(x: String, y: Int) tsx {console.log('hallo, welt')}",
+                "component MyComp(props: {x: String, y: Int}) tsx {console.log('hallo, welt')}",
                 SourceFile {
                     tsx_components: vec![TsxComponent {
                         name: "MyComp".to_string(),
-                        props_type: vec![
-                            ("x".to_string(), TypeExpr::String.into_empty_span()),
-                            ("y".to_string(), TypeExpr::Int.into_empty_span()),
-                        ],
+                        props_type: TypeExpr::Duck(Duck {
+                            fields: vec![
+                                Field {
+                                    name: "x".to_string(),
+                                    type_expr: TypeExpr::String.into_empty_span(),
+                                },
+                                Field {
+                                    name: "y".to_string(),
+                                    type_expr: TypeExpr::Int.into_empty_span(),
+                                },
+                            ],
+                        })
+                        .into_empty_span(),
                         typescript_source: (
                             "console.log('hallo, welt')".to_string(),
                             empty_range(),
@@ -991,9 +1010,7 @@ mod tests {
             source_file_into_empty_range(&mut parse);
 
             for c in parse.tsx_components.iter_mut() {
-                for (_, ty) in c.props_type.iter_mut() {
-                    type_expr_into_empty_range(ty);
-                }
+                type_expr_into_empty_range(&mut c.props_type);
             }
 
             assert_eq!(parse, exp, "{src}");
