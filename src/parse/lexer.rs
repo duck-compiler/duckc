@@ -180,7 +180,19 @@ pub fn opening_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a,
                 .collect::<String>(),
         )
         .then(just(">"))
-        .map(|((pre, main), close)| format!("{pre}{main}{close}"))
+        .rewind()
+        .then(
+            just("<").and_is(just("</").not()).then(
+                any()
+                    .filter(|c: &char| *c != ' ' && *c != '>')
+                    .repeated()
+                    .collect::<String>(),
+            ),
+        )
+        .map(|(((pre, main), close), x)| {
+            let complete = format!("<{}", x.1);
+            complete
+        })
 }
 
 pub fn duckx_parse_html_string<'a>(
@@ -600,7 +612,7 @@ mod tests {
     fn test_lex() {
         let test_cases = vec![
             (
-                "duckx {let hello = <> {ti <span></span> tle} <h1> hallo moin  123</h1> abc </>;}",
+                "duckx {let hello = <> {ti <span id={props.id} hello={123}></span> tle} <h1> hallo moin  123</h1> abc </>;}",
                 vec![],
             ),
             (
