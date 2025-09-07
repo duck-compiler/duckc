@@ -1,6 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
-    ops::Deref,
+    collections::{HashMap, HashSet}, hash::Hash, ops::{Deref, DerefMut}
 };
 
 use chumsky::container::Container;
@@ -8,7 +7,7 @@ use chumsky::container::Container;
 use crate::{
     parse::{
         SS, Spanned,
-        component_parser::TsxComponent,
+        component_parser::{Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits},
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         source_file_parser::SourceFile,
         struct_parser::StructDefinition,
@@ -24,6 +23,48 @@ pub enum GenericDefinition {
     Function(FunctionDefintion),
     Type(TypeDefinition),
     Struct(StructDefinition),
+}
+
+fn typeresolve_tsx_component(c: &mut TsxComponent, type_env: &mut TypeEnv) {
+    let units = c.find_units();
+    if c.is_server_component {
+        todo!()
+    } else {
+        let mut edits = Vec::new();
+        for (range, unit) in units.iter() {
+            match unit {
+                TsxSourceUnit::Jsx => {
+                    edits.push((range.start_byte, Edit::Insert("html`".to_string())));
+                    edits.push((range.end_byte, Edit::Insert("`".to_string())));
+                }
+                TsxSourceUnit::OpeningJsx => edits.push((range.start_byte, Edit::Delete(2))),
+                TsxSourceUnit::ClosingJsx => edits.push((range.start_byte, Edit::Delete(3))),
+                TsxSourceUnit::Expression => {
+                    edits.push((range.start_byte, Edit::Insert("$".to_string())))
+                }
+                TsxSourceUnit::Ident => {
+                    // here we could implement rpc calls
+                    let ident = &c.typescript_source.0[range.start_byte..range.end_byte];
+
+                    if let Some(found_comp) = type_env.get_component(ident) {
+                        if !c.is_server_component && found_comp.is_server_component {
+                            panic!(
+                                "client component {} can't call server component {}",
+                                c.name, found_comp.name
+                            )
+                        }
+                        let found_name = found_comp.name.clone();
+                        println!("{} -> {}", c.name, found_name);
+                        type_env
+                            .get_component_dependencies(c.name.clone())
+                            .client_components
+                            .push(found_name);
+                    }
+                }
+            }
+        }
+        do_edits(&mut c.typescript_source.0, &mut edits);
+    }
 }
 
 impl GenericDefinition {
@@ -69,6 +110,7 @@ pub struct TypeEnv {
     pub function_headers: HashMap<String, FunHeader>,
     pub function_definitions: Vec<FunctionDefintion>,
     pub tsx_components: Vec<TsxComponent>,
+    pub tsx_component_dependencies: HashMap<String, TsxComponentDependencies>,
     pub struct_definitions: Vec<StructDefinition>,
     pub generic_fns_generated: Vec<FunctionDefintion>,
     pub generic_structs_generated: Vec<StructDefinition>,
@@ -83,6 +125,7 @@ impl Default for TypeEnv {
             type_aliases: vec![HashMap::new()],
             all_types: vec![],
             tsx_components: Vec::new(),
+            tsx_component_dependencies: HashMap::new(),
             function_headers: HashMap::new(),
             function_definitions: Vec::new(),
             struct_definitions: Vec::new(),
@@ -101,6 +144,18 @@ pub struct TypesSummary {
 }
 
 impl TypeEnv {
+    pub fn has_component(&self, name: &str) -> bool {
+        self.tsx_components.iter().any(|x| x.name.as_str() == name)
+    }
+
+    pub fn get_component_dependencies(&mut self, name: String) -> &mut TsxComponentDependencies {
+        self.tsx_component_dependencies.entry(name).or_default()
+    }
+
+    pub fn get_component(&self, name: &str) -> Option<&TsxComponent> {
+        self.tsx_components.iter().find(|x| x.name.as_str() == name)
+    }
+
     pub fn has_method_header(&self, name: &str) -> bool {
         self.function_headers.contains_key(name)
     }
@@ -401,11 +456,12 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
         }
         TypeExpr::TypeOf(identifier) => {
             // TODO:: HERE
-            let type_expr = env.identifier_types.last()
+            let type_expr = env
+                .identifier_types
+                .last()
                 .expect("expected at least one identifiert types map to be on the stack")
                 .get(identifier)
                 .expect("sorry bro didn't work :(");
-
 
             *expr = type_expr.clone()
         }
@@ -436,7 +492,7 @@ fn replace_generics_in_struct_definition(
 fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
     match expr {
         // todo: support generics in typeof
-        TypeExpr::TypeOf(..) => {},
+        TypeExpr::TypeOf(..) => {}
         TypeExpr::Alias(alias) => {
             instantiate_generics_type_expr(&mut alias.type_expression.0, type_env);
         }
@@ -736,7 +792,7 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
 
 fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &HashMap<String, TypeExpr>) {
     match expr {
-        TypeExpr::TypeOf(..) => {},
+        TypeExpr::TypeOf(..) => {}
         TypeExpr::Alias(alias) => {
             replace_generics_in_type_expr(&mut alias.type_expression.0, set_params);
         }
@@ -1469,18 +1525,21 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             );
         });
 
-    source_file
-        .tsx_components
-        .iter()
-        .for_each(|tsx_component| {
-            type_env.insert_identifier_type(
-                tsx_component.name.clone(),
-                TypeExpr::Fun(
-                    vec![(Some("props".to_string()), tsx_component.props_type.clone())],
-                    Some(Box::new((TypeExpr::Tuple(vec![(TypeExpr::String, tsx_component.typescript_source.1), (TypeExpr::String, tsx_component.typescript_source.1)]), tsx_component.typescript_source.1)))
-                )
-            );
-        });
+    source_file.tsx_components.iter().for_each(|tsx_component| {
+        type_env.insert_identifier_type(
+            tsx_component.name.clone(),
+            TypeExpr::Fun(
+                vec![(Some("props".to_string()), tsx_component.props_type.clone())],
+                Some(Box::new((
+                    TypeExpr::Tuple(vec![
+                        (TypeExpr::String, tsx_component.typescript_source.1),
+                        (TypeExpr::String, tsx_component.typescript_source.1),
+                    ]),
+                    tsx_component.typescript_source.1,
+                ))),
+            ),
+        );
+    });
 
     for fn_def in &source_file.function_definitions {
         type_env.function_definitions.push(fn_def.clone());
@@ -1560,6 +1619,11 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         });
     println!("{} typeresolve functions", Tag::TypeResolve);
     println!("{} final resolve of all functions", Tag::TypeResolve);
+
+    for s in &mut source_file.tsx_components {
+        typeresolve_tsx_component(s, type_env);
+    }
+    type_env.tsx_components = source_file.tsx_components.clone();
 
     source_file
         .function_definitions

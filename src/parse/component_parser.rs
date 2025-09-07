@@ -1,4 +1,5 @@
 use chumsky::{input::BorrowInput, prelude::*};
+use tree_sitter::{Node, Parser as TSParser};
 
 use crate::parse::{
     SS, Spanned,
@@ -12,6 +13,113 @@ pub struct TsxComponent {
     pub name: String,
     pub props_type: Spanned<TypeExpr>,
     pub typescript_source: Spanned<String>,
+    pub is_server_component: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TsxComponentDependencies {
+    pub client_components: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum TsxSourceUnit {
+    Jsx,
+    OpeningJsx,
+    ClosingJsx,
+    Expression,
+    Ident,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Edit {
+    Insert(String),
+    Delete(usize),
+    // Replace(String),
+}
+
+pub fn do_edits(to_edit: &mut String, edits: &mut Vec<(usize, Edit)>) {
+    edits.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+
+    let mut shift: usize = 0;
+
+    for (pos, edit) in edits.iter() {
+        let pos = *pos + shift;
+
+        match edit {
+            Edit::Insert(s) => to_edit.insert_str(pos as usize, s.as_str()),
+            Edit::Delete(amount) => {
+                to_edit
+                    .drain((pos as usize)..((pos as usize) + *amount))
+                    .for_each(drop);
+            }
+        }
+
+        match edit {
+            Edit::Insert(s) => shift += s.len(),
+            Edit::Delete(amount) => shift -= *amount,
+        }
+    }
+}
+
+impl TsxComponent {
+    pub fn find_units(&self) -> Vec<(tree_sitter::Range, TsxSourceUnit)> {
+        let mut parser = TSParser::new();
+        parser
+            .set_language(&tree_sitter_javascript::LANGUAGE.into())
+            .expect("Couldn't set js grammar");
+
+        let src = parser
+            .parse(self.typescript_source.0.as_bytes(), None)
+            .unwrap();
+        let root_node = src.root_node();
+
+        fn trav(
+            node: &Node,
+            text: &[u8],
+            already_in_jsx: bool,
+            out: &mut Vec<(tree_sitter::Range, TsxSourceUnit)>,
+        ) {
+            if node.grammar_name() == "identifier" {
+                out.push((node.range(), TsxSourceUnit::Ident));
+            } else if node.grammar_name() == "jsx_opening_element"
+                && node.utf8_text(text).is_ok_and(|x| x == "<>")
+            {
+                out.push((node.range(), TsxSourceUnit::OpeningJsx));
+            } else if node.grammar_name() == "jsx_closing_element"
+                && node.utf8_text(text).is_ok_and(|x| x == "</>")
+            {
+                out.push((node.range(), TsxSourceUnit::ClosingJsx));
+            } else if node.grammar_name() == "jsx_expression" {
+                out.push((node.range(), TsxSourceUnit::Expression));
+                for i in 0..node.child_count() {
+                    trav(node.child(i).as_ref().unwrap(), text, false, out);
+                }
+                return;
+            }
+
+            if node.grammar_name().starts_with("jsx_") {
+                if !already_in_jsx {
+                    out.push((node.range(), TsxSourceUnit::Jsx));
+                }
+                for i in 0..node.child_count() {
+                    trav(node.child(i).as_ref().unwrap(), text, true, out);
+                }
+            } else {
+                for i in 0..node.child_count() {
+                    trav(node.child(i).as_ref().unwrap(), text, already_in_jsx, out);
+                }
+            }
+        }
+
+        let mut out = Vec::new();
+        trav(
+            &root_node,
+            self.typescript_source.0.as_bytes(),
+            false,
+            &mut out,
+        );
+        out
+    }
 }
 
 pub fn tsx_component_parser<'src, I>()
@@ -22,25 +130,31 @@ where
     // component Name {
     //   %javascript source
     // }
-    just(Token::Component)
-        .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() })
-        .then(
-            just(Token::Ident("props".to_string()))
-                .ignore_then(just(Token::ControlChar(':')))
-                .ignore_then(type_expression_parser())
-                .or_not()
-                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
-        )
-        .then(
-            select_ref! { Token::InlineTsx(tsx_source) => tsx_source.clone() }
-                .map_with(|x, e| (x, e.span())),
-        )
-        .map(|((identifier, props_type), tsx_source)| TsxComponent {
+    choice((
+        just(Token::Component).map(|_| false),
+        just(Token::Template).map(|_| true),
+    ))
+    .then(select_ref! { Token::Ident(identifier) => identifier.clone() })
+    .then(
+        just(Token::Ident("props".to_string()))
+            .ignore_then(just(Token::ControlChar(':')))
+            .ignore_then(type_expression_parser())
+            .or_not()
+            .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
+    )
+    .then(
+        select_ref! { Token::InlineTsx(tsx_source) => tsx_source.clone() }
+            .map_with(|x, e| (x, e.span())),
+    )
+    .map(
+        |(((is_server_component, identifier), props_type), tsx_source)| TsxComponent {
+            is_server_component,
             name: identifier.clone(),
             props_type: props_type
                 .unwrap_or(TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span()),
             typescript_source: tsx_source.clone(),
-        })
+        },
+    )
 }
 
 #[cfg(test)]
@@ -51,14 +165,26 @@ mod tests {
 
     #[test]
     fn test_component_parser() {
-        let src_and_expected_ast = vec![(
-            "component T() tsx {useState()}",
-            TsxComponent {
-                name: "T".to_string(),
-                props_type: TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span(),
-                typescript_source: ("useState()".to_string(), empty_range()),
-            },
-        )];
+        let src_and_expected_ast = vec![
+            (
+                "component T() tsx {useState()}",
+                TsxComponent {
+                    name: "T".to_string(),
+                    props_type: TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span(),
+                    typescript_source: ("useState()".to_string(), empty_range()),
+                    is_server_component: false,
+                },
+            ),
+            (
+                "template T() tsx {}",
+                TsxComponent {
+                    name: "T".to_string(),
+                    props_type: TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span(),
+                    typescript_source: ("".to_string(), empty_range()),
+                    is_server_component: true,
+                },
+            ),
+        ];
 
         for (src, expected_ast) in src_and_expected_ast {
             println!("lexing {src}");

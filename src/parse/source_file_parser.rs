@@ -819,6 +819,7 @@ mod tests {
                             "console.log('hallo, welt')".to_string(),
                             empty_range(),
                         ),
+                        is_server_component: false,
                     }],
                     ..Default::default()
                 },
@@ -845,6 +846,7 @@ mod tests {
                             "console.log('hallo, welt')".to_string(),
                             empty_range(),
                         ),
+                        is_server_component: false,
                     }],
                     ..Default::default()
                 },

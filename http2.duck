@@ -18,14 +18,36 @@ component Counter(props: { initial: Int }) tsx {
 
 	return (
 		<>
+		    <std::lol/>
 			<div>{props.initial}: {value}</div>
 			{y ? <p>bool is true</p> : <p>bool is false</p>}
 			<button onClick={() => setValue(value + 1)}>Increment</button>
 			<button onClick={() => setValue(value - 1)}>Decrement</button>
 			<button onClick={() => console.log(x, y)}>Log</button>
-			<Lol x={{x:"hallo"}} y={100} z={["a"]}/>
 		</>
 	);
+}
+
+template OtherTemplate(props: { id: String }) tsx {
+    return <p>{props.id}</p>;
+}
+
+template Page(props: { title: String, x: Int }) tsx {
+    const xx = 100;
+    return (
+        <>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>{props.title}</title>
+            </head>
+            <body>
+                <Counter initial={100}/>
+                <OtherTemplate id={props.x}/>
+            </body>
+            </html>
+        </>
+    );
 }
 
 fn main() {

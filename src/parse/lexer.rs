@@ -57,6 +57,7 @@ pub enum Token {
     DocComment(String),
     Sus,
     Component,
+    Template,
 }
 
 impl Display for Token {
@@ -73,6 +74,7 @@ impl Display for Token {
             Token::Struct => "struct",
             Token::Duck => "duck",
             Token::Component => "component",
+            Token::Template => "template",
             Token::Function => "fn",
             Token::Return => "return",
             Token::Ident(_) => "identifier",
@@ -162,6 +164,7 @@ pub fn lex_single<'a>(
             "sus" => Token::Sus,
             "and" => Token::And,
             "or" => Token::Or,
+            "template" => Token::Template,
             _ => Token::Ident(str.to_string()),
         });
 

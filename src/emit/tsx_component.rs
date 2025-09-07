@@ -118,6 +118,13 @@ fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
 }
 
 impl TsxComponent {
+    fn emit_js(&self) -> String {
+        format!(
+            "function {}(props){{{}}}",
+            self.name, self.typescript_source.0
+        )
+    }
+
     pub fn emit(&self, type_env: &mut TypeEnv) -> IrInstruction {
         // let final_go_str = IrInstruction::InlineGo(format!(
         //     "return fmt.Sprintf(\"function {}(props){{{}\\n{}\\n}}\", {})",
@@ -148,14 +155,22 @@ impl TsxComponent {
             emitted_props
         );
         let all = format!(
-            "fmt.Sprintf(\"function {}(props2){{\\n%s\\n%s}}\", {props}, \"{}\")",
+            "fmt.Sprintf(\"{}\\nfunction {}(props2){{\\n%s\\n%s}}\", {props}, \"{}\")",
+            escape_string_for_go(
+                &type_env
+                    .get_component_dependencies(self.name.clone())
+                    .client_components
+                    .clone()
+                    .into_iter()
+                    .map(|x| type_env
+                        .get_component(x.as_str())
+                        .unwrap().emit_js())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
             self.name,
             escape_string_for_go(&self.typescript_source.0)
         );
-
-        println!("{emitted_props}");
-        println!("{props}");
-        println!("{all}");
 
         let ir_def = IrInstruction::FunDef(
             self.name.clone(),
@@ -165,7 +180,10 @@ impl TsxComponent {
                 self.props_type.0.as_go_type_annotation(type_env),
             )],
             Some("Tup_DuckString_DuckString".to_string()),
-            vec![IrInstruction::InlineGo(format!("return Tup_DuckString_DuckString {{ field_0: ConcDuckString {{ value: \"{}\" }}, field_1: ConcDuckString {{ value: {all} }} }}", self.name))],
+            vec![IrInstruction::InlineGo(format!(
+                "return Tup_DuckString_DuckString {{ field_0: ConcDuckString {{ value: \"{}\" }}, field_1: ConcDuckString {{ value: {all} }} }}",
+                self.name
+            ))],
         );
         ir_def
     }

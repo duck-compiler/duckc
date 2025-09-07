@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
+use colored::Colorize;
 use tree_sitter::{Node, Parser};
 
 use crate::parse::{
-    component_parser::TsxComponent,
+    component_parser::{Edit, TsxComponent, TsxSourceUnit, do_edits},
     function_parser::LambdaFunctionExpr,
     type_parser::{Duck, TypeExpr},
     value_parser::{ValFmtStringContents, ValueExpr},
@@ -308,106 +309,21 @@ pub fn mangle_type_expression(
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum Edit {
-    Insert(String),
-    Delete(usize),
-    // Replace(String),
-}
-
 pub fn mangle_tsx_component(
     comp: &mut TsxComponent,
     global_prefix: &Vec<String>,
     prefix: &Vec<String>,
     mangle_env: &mut MangleEnv,
 ) {
-    let mut parser = Parser::new();
-    parser
-        .set_language(&tree_sitter_javascript::LANGUAGE.into())
-        .expect("Couldn't set js grammar");
-
-    let src = parser
-        .parse(comp.typescript_source.0.as_bytes(), None)
-        .unwrap();
-    let root_node = src.root_node();
-
-    #[derive(Debug, Clone)]
-    enum Unit {
-        Jsx,
-        OpeningJsx,
-        ClosingJsx,
-        Expression,
-        Ident,
-    }
-
-    fn trav(
-        node: &Node,
-        text: &[u8],
-        already_in_jsx: bool,
-        e: &mut MangleEnv,
-        out: &mut Vec<(tree_sitter::Range, Unit)>,
-    ) {
-        if node.grammar_name() == "identifier" {
-            out.push((node.range(), Unit::Ident));
-        } else if node.grammar_name() == "jsx_opening_element"
-            && node.utf8_text(text).is_ok_and(|x| x == "<>")
-        {
-            out.push((node.range(), Unit::OpeningJsx));
-        } else if node.grammar_name() == "jsx_closing_element"
-            && node.utf8_text(text).is_ok_and(|x| x == "</>")
-        {
-            out.push((node.range(), Unit::ClosingJsx));
-        } else if node.grammar_name() == "jsx_expression" {
-            out.push((node.range(), Unit::Expression));
-            for i in 0..node.child_count() {
-                trav(node.child(i).as_ref().unwrap(), text, false, e, out);
-            }
-            return;
-        }
-
-        if node.grammar_name().starts_with("jsx_") {
-            if !already_in_jsx {
-                out.push((node.range(), Unit::Jsx));
-            }
-            for i in 0..node.child_count() {
-                trav(node.child(i).as_ref().unwrap(), text, true, e, out);
-            }
-        } else {
-            for i in 0..node.child_count() {
-                trav(
-                    node.child(i).as_ref().unwrap(),
-                    text,
-                    already_in_jsx,
-                    e,
-                    out,
-                );
-            }
-        }
-    }
-
-    let mut o = Vec::new();
-    trav(
-        &root_node,
-        comp.typescript_source.0.as_bytes(),
-        false,
-        mangle_env,
-        &mut o,
-    );
-
+    let units = comp.find_units();
     let mut edits = Vec::new();
 
-    for (range, unit) in o.iter() {
+    for (range, unit) in units.iter() {
         match unit {
-            Unit::Jsx => {
-                edits.push((range.start_byte, Edit::Insert("html`".to_string())));
-                edits.push((range.end_byte, Edit::Insert("`".to_string())));
-            }
-            Unit::OpeningJsx => edits.push((range.start_byte, Edit::Delete(2))),
-            Unit::ClosingJsx => edits.push((range.start_byte, Edit::Delete(3))),
-            Unit::Expression => edits.push((range.start_byte, Edit::Insert("$".to_string()))),
-            Unit::Ident => {
+            TsxSourceUnit::Ident => {
                 let old_ident = &comp.typescript_source.0[range.start_byte..range.end_byte];
-                let ident_str = mangle_env.mangle_component(prefix, old_ident);
+                //todo(@Apfelfrosch): use our scope resolution syntax
+                let ident_str = mangle_env.mangle_component(prefix, &old_ident.replace("--", "::"));
 
                 if let Some(ident_str) = ident_str {
                     edits.push((range.start_byte, Edit::Delete(old_ident.len())));
@@ -417,33 +333,10 @@ pub fn mangle_tsx_component(
                     ));
                 }
             }
+            _ => {},
         }
     }
-
-    edits.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
-
-    let mut shift: usize = 0;
-
-    let mut out_string = comp.typescript_source.0.clone();
-
-    for (pos, edit) in edits.iter() {
-        let pos = *pos + shift;
-
-        match edit {
-            Edit::Insert(s) => out_string.insert_str(pos as usize, s.as_str()),
-            Edit::Delete(amount) => {
-                out_string
-                    .drain((pos as usize)..((pos as usize) + *amount))
-                    .for_each(drop);
-            }
-        }
-
-        match edit {
-            Edit::Insert(s) => shift += s.len(),
-            Edit::Delete(amount) => shift -= *amount,
-        }
-    }
-    comp.typescript_source.0 = out_string;
+    do_edits(&mut comp.typescript_source.0, &mut edits);
 }
 
 pub fn mangle_value_expr(
