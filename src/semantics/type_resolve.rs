@@ -1477,7 +1477,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 tsx_component.name.clone(),
                 TypeExpr::Fun(
                     vec![(Some("props".to_string()), tsx_component.props_type.clone())],
-                    Some(Box::new((TypeExpr::String, tsx_component.typescript_source.1)))
+                    Some(Box::new((TypeExpr::Tuple(vec![(TypeExpr::String, tsx_component.typescript_source.1), (TypeExpr::String, tsx_component.typescript_source.1)]), tsx_component.typescript_source.1)))
                 )
             );
         });

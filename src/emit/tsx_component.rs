@@ -164,8 +164,8 @@ impl TsxComponent {
                 "props".to_string(),
                 self.props_type.0.as_go_type_annotation(type_env),
             )],
-            Some("DuckString".to_string()),
-            vec![IrInstruction::InlineGo(format!("return ConcDuckString {{ value: {all} }}",))],
+            Some("Tup_DuckString_DuckString".to_string()),
+            vec![IrInstruction::InlineGo(format!("return Tup_DuckString_DuckString {{ field_0: ConcDuckString {{ value: \"{}\" }}, field_1: ConcDuckString {{ value: {all} }} }}", self.name))],
         );
         ir_def
     }
