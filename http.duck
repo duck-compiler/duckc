@@ -1,20 +1,25 @@
-component Lol(props: { x: String, y: Int }) tsx {
-    const hello = false;
+component Lol(props : { x: { x: String }, y: Bool, z: String[]}) tsx {
+    const hello = props.y;
     return (
         <>
             <h1>yoo</h1>
-            {props.lol.map(x => <h2>{<em>{x}</em>}</h2>)}
-            {hello ? <p>hello true</h1> : <p>hello false</p>}
+            {props.x.x}
+            {props.z.map(x => <p>{x}</p>)}
+            {props.y ? <p>hello true</h1> : <p>hello false</p>}
+            {!hello ? <p>hello true</h1> : <p>hello false</p>}
         </>
-    )
+    );
 }
 
-component Counter(x: String, y: Bool) tsx {
+component Counter() tsx {
 	const [value, setValue] = useState(0);
 
 	return (
 		<>
 			<div>{x}: {value}</div>
+
+			a({x: String})
+
 			{y ? <p>bool is true</p> : <p>bool is false</p>}
 			<button onClick={() => setValue(value + 1)}>Increment</button>
 			<button onClick={() => setValue(value - 1)}>Decrement</button>
@@ -28,4 +33,6 @@ component ReactLayout() tsx {
     );
 }
 
-fn main() {}
+fn main() {
+    let zz = { x: { x: "hallo" }, y: true, z: .String["yo", "ich", "bin", "arr"] };
+}

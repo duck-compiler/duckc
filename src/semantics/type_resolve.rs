@@ -8,6 +8,7 @@ use chumsky::container::Container;
 use crate::{
     parse::{
         SS, Spanned,
+        component_parser::TsxComponent,
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         source_file_parser::SourceFile,
         struct_parser::StructDefinition,
@@ -67,6 +68,7 @@ pub struct TypeEnv {
 
     pub function_headers: HashMap<String, FunHeader>,
     pub function_definitions: Vec<FunctionDefintion>,
+    pub tsx_components: Vec<TsxComponent>,
     pub struct_definitions: Vec<StructDefinition>,
     pub generic_fns_generated: Vec<FunctionDefintion>,
     pub generic_structs_generated: Vec<StructDefinition>,
@@ -80,6 +82,7 @@ impl Default for TypeEnv {
             identifier_types: vec![HashMap::new()],
             type_aliases: vec![HashMap::new()],
             all_types: vec![],
+            tsx_components: Vec::new(),
             function_headers: HashMap::new(),
             function_definitions: Vec::new(),
             struct_definitions: Vec::new(),
@@ -309,6 +312,12 @@ impl TypeEnv {
         let mut all_types = self.all_types.clone();
         // dbg!(all_types.iter().filter(|x| x.is_struct() && x.type_id(self).contains("Xyz")).collect::<Vec<_>>());
         all_types.extend(TypeExpr::primitives());
+        all_types.extend(
+            self.tsx_components
+                .iter()
+                .map(|x| x.props_type.0.clone())
+                .collect::<Vec<_>>(),
+        );
         all_types.push(TypeExpr::Tuple(vec![]));
         let mut param_names_used = Vec::new();
 
@@ -1462,6 +1471,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     for fn_def in &source_file.function_definitions {
         type_env.function_definitions.push(fn_def.clone());
+    }
+
+    for comp in &source_file.tsx_components {
+        type_env.tsx_components.push(comp.clone());
     }
 
     println!(

@@ -2,7 +2,7 @@ use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::parse::{
     SS, Spanned,
-    type_parser::{TypeExpr, type_expression_parser},
+    type_parser::{Duck, TypeExpr, type_expression_parser},
 };
 
 use super::lexer::Token;
@@ -10,7 +10,7 @@ use super::lexer::Token;
 #[derive(Debug, Clone, PartialEq)]
 pub struct TsxComponent {
     pub name: String,
-    pub params: Vec<(String, Spanned<TypeExpr>)>,
+    pub props_type: Spanned<TypeExpr>,
     pub typescript_source: Spanned<String>,
 }
 
@@ -25,20 +25,20 @@ where
     just(Token::Component)
         .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() })
         .then(
-            select_ref! { Token::Ident(i) => i.clone() }
-                .then_ignore(just(Token::ControlChar(':')))
-                .then(type_expression_parser())
-                .separated_by(just(Token::ControlChar(',')))
-                .collect()
+            just(Token::Ident("props".to_string()))
+                .ignore_then(just(Token::ControlChar(':')))
+                .ignore_then(type_expression_parser())
+                .or_not()
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
         )
         .then(
             select_ref! { Token::InlineTsx(tsx_source) => tsx_source.clone() }
                 .map_with(|x, e| (x, e.span())),
         )
-        .map(|((identifier, params), tsx_source)| TsxComponent {
+        .map(|((identifier, props_type), tsx_source)| TsxComponent {
             name: identifier.clone(),
-            params,
+            props_type: props_type
+                .unwrap_or(TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span()),
             typescript_source: tsx_source.clone(),
         })
 }
@@ -55,7 +55,7 @@ mod tests {
             "component T() tsx {useState()}",
             TsxComponent {
                 name: "T".to_string(),
-                params: Vec::new(),
+                props_type: TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span(),
                 typescript_source: ("useState()".to_string(), empty_range()),
             },
         )];

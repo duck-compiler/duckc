@@ -804,7 +804,7 @@ mod tests {
                 SourceFile {
                     tsx_components: vec![TsxComponent {
                         name: "MyComp".to_string(),
-                        params: Vec::new(),
+                        props_type: Vec::new(),
                         typescript_source: (
                             "console.log('hallo, welt')".to_string(),
                             empty_range(),
@@ -818,7 +818,7 @@ mod tests {
                 SourceFile {
                     tsx_components: vec![TsxComponent {
                         name: "MyComp".to_string(),
-                        params: vec![
+                        props_type: vec![
                             ("x".to_string(), TypeExpr::String.into_empty_span()),
                             ("y".to_string(), TypeExpr::Int.into_empty_span()),
                         ],
@@ -991,7 +991,7 @@ mod tests {
             source_file_into_empty_range(&mut parse);
 
             for c in parse.tsx_components.iter_mut() {
-                for (_, ty) in c.params.iter_mut() {
+                for (_, ty) in c.props_type.iter_mut() {
                     type_expr_into_empty_range(ty);
                 }
             }

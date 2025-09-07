@@ -18,6 +18,17 @@ impl TypeExpr {
         return format!("{self}");
     }
 
+    pub fn is_component_compatible(&self) -> bool {
+        match self {
+            TypeExpr::Duck(Duck { fields }) => fields
+                .iter()
+                .all(|x| x.type_expr.0.is_component_compatible()),
+            TypeExpr::Array(ty) => ty.0.is_component_compatible(),
+            TypeExpr::String | TypeExpr::Bool | TypeExpr::Float | TypeExpr::Int => true,
+            _ => false,
+        }
+    }
+
     pub fn from_value_expr_resolved_type_name(
         value_expr: &ValueExpr,
         type_env: &mut TypeEnv,
