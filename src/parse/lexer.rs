@@ -226,50 +226,45 @@ pub fn duckx_parse_html_string<'a>(
                 )| {
                     let mut new_out = Vec::new();
                     new_out.push(HtmlStringContents::String(opening_tag));
-                    let mut s_buf = String::new();
-
-                    // let mut to_extend = Vec::new();
-
-                    // template_contents.retain(|f| {
-                    //     if let RawHtmlStringContents::Sub(Token::HtmlString(sub)) = f {
-                    //         to_extend.extend_from_slice(sub);
-                    //         false
-                    //     } else {
-                    //         true
-                    //     }
-                    // });
-
-                    // new_out.extend(to_extend);
-
                     for c in template_contents {
                         match c {
                             RawHtmlStringContents::Tokens(t) => {
-                                if !s_buf.is_empty() {
-                                    new_out.push(HtmlStringContents::String(s_buf));
-                                    s_buf = String::new();
-                                }
                                 new_out.push(HtmlStringContents::Tokens(t));
                             }
                             RawHtmlStringContents::Char(c) => {
-                                s_buf.push(c);
+                                new_out.push(HtmlStringContents::String(c.to_string()));
                             }
                             RawHtmlStringContents::Sub(Token::HtmlString(sub)) => {
-                                if !s_buf.is_empty() {
-                                    new_out.push(HtmlStringContents::String(s_buf));
-                                    s_buf = String::new();
-                                }
                                 new_out.extend(sub);
                             }
                             _ => panic!("invalid"),
                         }
                     }
-
-                    if !s_buf.is_empty() {
-                        new_out.push(HtmlStringContents::String(s_buf));
-                    }
                     new_out.push(HtmlStringContents::String(closing_tag));
 
-                    Token::HtmlString(new_out)
+                    let mut s_buf = String::new();
+                    let mut final_out = Vec::new();
+
+                    for c in new_out {
+                        match c {
+                            HtmlStringContents::String(s) => {
+                                s_buf.push_str(&s);
+                            }
+                            HtmlStringContents::Tokens(tok) => {
+                                if !s_buf.is_empty() {
+                                    final_out.push(HtmlStringContents::String(s_buf));
+                                    s_buf = String::new();
+                                }
+                                final_out.push(HtmlStringContents::Tokens(tok));
+                            }
+                        }
+                    }
+
+                    if !s_buf.is_empty() {
+                        final_out.push(HtmlStringContents::String(s_buf));
+                    }
+
+                    Token::HtmlString(final_out)
                 },
             )
     })
