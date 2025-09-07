@@ -1,5 +1,6 @@
 use std::{
-    collections::{HashMap, HashSet}, hash::Hash, ops::{Deref, DerefMut}
+    collections::{HashMap, HashSet},
+    ops::Deref,
 };
 
 use chumsky::container::Container;
@@ -40,7 +41,11 @@ fn typeresolve_tsx_component(c: &mut TsxComponent, type_env: &mut TypeEnv) {
                 TsxSourceUnit::OpeningJsx => edits.push((range.start_byte, Edit::Delete(2))),
                 TsxSourceUnit::ClosingJsx => edits.push((range.start_byte, Edit::Delete(3))),
                 TsxSourceUnit::Expression => {
-                    edits.push((range.start_byte, Edit::Insert("$".to_string())))
+                    if range.start_byte > 0
+                        && &c.typescript_source.0[range.start_byte - 1..(range.start_byte)] != "$"
+                    {
+                        edits.push((range.start_byte, Edit::Insert("$".to_string())))
+                    }
                 }
                 TsxSourceUnit::Ident => {
                     // here we could implement rpc calls
