@@ -1469,6 +1469,19 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             );
         });
 
+    source_file
+        .tsx_components
+        .iter()
+        .for_each(|tsx_component| {
+            type_env.insert_identifier_type(
+                tsx_component.name.clone(),
+                TypeExpr::Fun(
+                    vec![(Some("props".to_string()), tsx_component.props_type.clone())],
+                    Some(Box::new((TypeExpr::String, tsx_component.typescript_source.1)))
+                )
+            );
+        });
+
     for fn_def in &source_file.function_definitions {
         type_env.function_definitions.push(fn_def.clone());
     }
