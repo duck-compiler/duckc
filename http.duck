@@ -1,3 +1,4 @@
+type LolProps = { x: { x: String }, y: Bool, z: String[]};
 component Lol(props : { x: { x: String }, y: Bool, z: String[]}) tsx {
     const hello = props.y;
     return (
@@ -11,7 +12,7 @@ component Lol(props : { x: { x: String }, y: Bool, z: String[]}) tsx {
     );
 }
 
-component Counter() tsx {
+component Counter(props: { initial: Int }) tsx {
 	const [value, setValue] = useState(0);
 
 	return (
@@ -28,11 +29,22 @@ component Counter() tsx {
 	);
 }
 
-component ReactLayout() tsx {
-    return (
-    );
-}
-
 fn main() {
-    let zz = { x: { x: "hallo" }, y: true, z: .String["yo", "ich", "bin", "arr"] };
+    std::http::serve_component<{ initial: Int }>(
+        "/",
+        Counter,
+        fn () -> { initial: Int } {
+            return { initial: 1337 };
+        }
+    );
+
+    std::http::serve_component<LolProps>(
+        "/lol",
+        Lol,
+        fn () -> LolProps {
+           return { x: { x: "Hallo" }, y: true, z: ["Hallo", "welt"] };
+        }
+    );
+
+    std::http::listen(8080);
 }
