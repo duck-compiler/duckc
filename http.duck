@@ -14,13 +14,11 @@ component Lol(props : { x: { x: String }, y: Bool, z: String[]}) tsx {
 
 component Counter(props: { initial: Int }) tsx {
 	const [value, setValue] = useState(0);
+	const y = true;
 
 	return (
 		<>
-			<div>{x}: {value}</div>
-
-			a({x: String})
-
+			<div>{props.initial}: {value}</div>
 			{y ? <p>bool is true</p> : <p>bool is false</p>}
 			<button onClick={() => setValue(value + 1)}>Increment</button>
 			<button onClick={() => setValue(value - 1)}>Decrement</button>
