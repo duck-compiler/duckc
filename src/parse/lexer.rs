@@ -263,9 +263,9 @@ pub fn lex_single<'a>(
             .or(and)
             .or(or)
             .or(keyword_or_ident)
+            .or(num)
             .or(ctrl)
             .or(string)
-            .or(num)
             .or(r#char);
 
         token
@@ -322,13 +322,17 @@ fn inline_go_parser<'src>()
         .map(|x| Token::InlineGo(x[1..x.len() - 1].to_owned()))
 }
 
-fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone
-{
-    let pre = text::int(10).try_map(|s: &str, span| {
-        s.parse::<i64>()
-            .map_err(|_| Rich::custom(span, "Invalid integer"))
-    });
-    pre.map(Token::ConstInt)
+fn num_literal<'src>()
+-> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone {
+    just('-')
+        .or_not()
+        .then(text::int(10))
+        .to_slice()
+        .try_map(|s: &str, span| {
+            s.parse::<i64>()
+                .map_err(|_| Rich::custom(span, "Invalid integer"))
+        })
+        .map(Token::ConstInt)
 }
 
 fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone {
@@ -392,6 +396,18 @@ mod tests {
                         (Token::ControlChar('{'), empty_range()),
                         (Token::ControlChar('{'), empty_range()),
                         (Token::ConstInt(1), empty_range()),
+                        (Token::ControlChar('}'), empty_range()),
+                        (Token::ControlChar('}'), empty_range()),
+                    ],
+                )])],
+            ),
+            (
+                "f\"{{{-1}}}\"",
+                vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
+                    vec![
+                        (Token::ControlChar('{'), empty_range()),
+                        (Token::ControlChar('{'), empty_range()),
+                        (Token::ConstInt(-1), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
                     ],
@@ -525,6 +541,12 @@ mod tests {
                 )])],
             ),
             (
+                "f\"{-1}\"",
+                vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
+                    vec![(Token::ConstInt(-1), empty_range())],
+                )])],
+            ),
+            (
                 "type Y = duck {};",
                 vec![
                     Token::Type,
@@ -605,7 +627,9 @@ mod tests {
                 ))],
             ),
             ("1", vec![Token::ConstInt(1)]),
+            ("-1", vec![Token::ConstInt(-1)]),
             ("2003", vec![Token::ConstInt(2003)]),
+            ("-2003", vec![Token::ConstInt(-2003)]),
             ("true", vec![Token::ConstBool(true)]),
             ("false", vec![Token::ConstBool(false)]),
             ("go { {} }", vec![Token::InlineGo(String::from(" {} "))]),
@@ -702,7 +726,6 @@ mod tests {
             ),
             ("ifelse", vec![Token::Ident("ifelse".to_string())]),
             (
-                // todo: discuss if π should be an valid identifier
                 "let π = 3;",
                 vec![
                     Token::Let,
@@ -713,12 +736,32 @@ mod tests {
                 ],
             ),
             (
+                // todo: discuss if π should be an valid identifier
+                "let π = -3;",
+                vec![
+                    Token::Let,
+                    Token::Ident("π".to_string()),
+                    Token::ControlChar('='),
+                    Token::ConstInt(-3),
+                    Token::ControlChar(';'),
+                ],
+            ),
+            (
                 // todo: divide token
                 "5 / 2",
                 vec![
                     Token::ConstInt(5),
                     Token::ControlChar('/'),
                     Token::ConstInt(2),
+                ],
+            ),
+            (
+                // todo: divide token
+                "-5 / -2",
+                vec![
+                    Token::ConstInt(-5),
+                    Token::ControlChar('/'),
+                    Token::ConstInt(-2),
                 ],
             ),
             (
@@ -741,9 +784,37 @@ mod tests {
                 ],
             ),
             (
+                "fn(x){if(true)-1 else -0;}",
+                vec![
+                    Token::Function,
+                    Token::ControlChar('('),
+                    Token::Ident("x".to_string()),
+                    Token::ControlChar(')'),
+                    Token::ControlChar('{'),
+                    Token::If,
+                    Token::ControlChar('('),
+                    Token::ConstBool(true),
+                    Token::ControlChar(')'),
+                    Token::ConstInt(-1),
+                    Token::Else,
+                    Token::ConstInt(-0),
+                    Token::ControlChar(';'),
+                    Token::ControlChar('}'),
+                ],
+            ),
+            (
                 "1.0// a float-like thing",
                 vec![
                     Token::ConstInt(1),
+                    Token::ControlChar('.'),
+                    Token::ConstInt(0),
+                    Token::Comment("a float-like thing".to_string()),
+                ],
+            ),
+            (
+                "-1.0// a float-like thing",
+                vec![
+                    Token::ConstInt(-1),
                     Token::ControlChar('.'),
                     Token::ConstInt(0),
                     Token::Comment("a float-like thing".to_string()),
