@@ -8,11 +8,18 @@ use tree_sitter::Parser as TSParser;
 
 use crate::{
     parse::{
-        duckx_component_parser::DuckxComponent, function_parser::{FunctionDefintion, LambdaFunctionExpr}, source_file_parser::SourceFile, struct_parser::StructDefinition, tsx_component_parser::{
-            do_edits, Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit
-        }, type_parser::{Duck, TypeDefinition, TypeExpr}, value_parser::{
+        SS, Spanned,
+        duckx_component_parser::DuckxComponent,
+        function_parser::{FunctionDefintion, LambdaFunctionExpr},
+        source_file_parser::SourceFile,
+        struct_parser::StructDefinition,
+        tsx_component_parser::{
+            Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
+        },
+        type_parser::{Duck, TypeDefinition, TypeExpr},
+        value_parser::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
-        }, Spanned, SS
+        },
     },
     semantics::ident_mangler::mangle,
     tags::Tag,
@@ -23,6 +30,13 @@ pub enum GenericDefinition {
     Function(FunctionDefintion),
     Type(TypeDefinition),
     Struct(StructDefinition),
+}
+
+fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
+    type_env.push_identifier_types();
+    type_env.insert_identifier_type("props".to_string(), c.props_type.0.clone());
+    typeresolve_value_expr(&mut c.value_expr.0, type_env);
+    type_env.pop_identifier_types();
 }
 
 fn typeresolve_tsx_component(c: &mut TsxComponent, type_env: &mut TypeEnv) {
@@ -104,7 +118,7 @@ pub struct TypeEnv {
     pub function_headers: HashMap<String, FunHeader>,
     pub function_definitions: Vec<FunctionDefintion>,
     pub tsx_components: Vec<TsxComponent>,
-    pub duckx_component: Vec<DuckxComponent>,
+    pub duckx_components: Vec<DuckxComponent>,
     pub tsx_component_dependencies: HashMap<String, TsxComponentDependencies>,
     pub struct_definitions: Vec<StructDefinition>,
     pub generic_fns_generated: Vec<FunctionDefintion>,
@@ -120,7 +134,7 @@ impl Default for TypeEnv {
             type_aliases: vec![HashMap::new()],
             all_types: vec![],
             tsx_components: Vec::new(),
-            duckx_component: Vec::new(),
+            duckx_components: Vec::new(),
             tsx_component_dependencies: HashMap::new(),
             function_headers: HashMap::new(),
             function_definitions: Vec::new(),
@@ -146,6 +160,21 @@ impl TypeEnv {
 
     pub fn get_component_dependencies(&mut self, name: String) -> &mut TsxComponentDependencies {
         self.tsx_component_dependencies.entry(name).or_default()
+    }
+
+    pub fn get_full_component_dependencies(&mut self, name: String) -> HashSet<String> {
+        self.tsx_component_dependencies
+            .entry(name)
+            .or_default()
+            .client_components
+            .clone()
+            .into_iter()
+            .flat_map(|dep| {
+                let mut v = self.get_full_component_dependencies(dep.clone());
+                v.push(dep.clone());
+                v.into_iter()
+            })
+            .collect::<HashSet<_>>()
     }
 
     pub fn get_component(&self, name: &str) -> Option<&TsxComponent> {
@@ -1498,7 +1527,7 @@ pub fn typeresolve_struct_def(def: &mut StructDefinition, type_env: &mut TypeEnv
 pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut TypeEnv) {
     type_env.push_type_aliases();
 
-    println!("{} sort fields", Tag::TypeResolve,);
+    println!("{} sort fields", Tag::TypeResolve);
 
     // Step 1: Sort fields
     source_file
@@ -1516,7 +1545,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             sort_fields_value_expr(&mut function_definition.value_expr.0);
         });
 
-    println!("{} insert type definitions", Tag::TypeResolve,);
+    println!("{} insert type definitions", Tag::TypeResolve);
 
     println!(
         "source file struct defs: {}",
@@ -1566,6 +1595,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     for comp in &source_file.tsx_components {
         type_env.tsx_components.push(comp.clone());
+    }
+
+    for comp in &source_file.duckx_components {
+        type_env.duckx_components.push(comp.clone());
     }
 
     println!(
@@ -1642,7 +1675,12 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     for s in &mut source_file.tsx_components {
         typeresolve_tsx_component(s, type_env);
     }
+
+    for s in &mut source_file.duckx_components {
+        typeresolve_duckx_component(s, type_env);
+    }
     type_env.tsx_components = source_file.tsx_components.clone();
+    type_env.duckx_components = source_file.duckx_components.clone();
 
     source_file
         .function_definitions

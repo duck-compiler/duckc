@@ -316,6 +316,8 @@ pub fn mangle_duckx_component(
     prefix: &Vec<String>,
     mangle_env: &mut MangleEnv,
 ) {
+    mangle_type_expression(&mut comp.props_type.0, prefix, mangle_env);
+    mangle_value_expr(&mut comp.value_expr.0, global_prefix, prefix, mangle_env);
 }
 
 pub fn mangle_tsx_component(

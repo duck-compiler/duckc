@@ -2,6 +2,7 @@ use crate::parse::{
     Context, SS, Spanned,
     function_parser::{LambdaFunctionExpr, Param},
     lexer::{FmtStringContents, HtmlStringContents},
+    make_input,
     source_file_parser::SourceFile,
     type_parser::{type_expression_parser, type_expression_parser_without_array},
 };
@@ -575,54 +576,20 @@ where
                 let value_expr_parser = value_expr_parser.clone();
                 let make_input = make_input.clone();
                 move |mut x| {
-                    let mut res = Vec::new();
-                    while !x.is_empty() {
-                        let tokens = x
-                            .iter()
-                            .cloned()
-                            .take_while(|e| !matches!(&e.0, Token::HtmlString(..)))
-                            .collect::<Vec<_>>();
-                        if tokens.is_empty() {
-                            let (Token::HtmlString(contents), span) = x[0].clone() else {
-                                panic!("not html string? {x:?}")
-                            };
-                            let mut out_contents = Vec::new();
-                            for c in contents {
-                                match c {
-                                    HtmlStringContents::String(s) => {
-                                        out_contents.push(ValHtmlStringContents::String(s))
-                                    }
-                                    HtmlStringContents::Tokens(mut t) => {
-                                        t.insert(0, (Token::ControlChar('{'), empty_range()));
-                                        t.push((Token::ControlChar('}'), empty_range()));
-                                        let cl = t.clone();
-                                        let expr = value_expr_parser
-                                            .parse(make_input(empty_range(), t.leak()))
-                                            .into_result()
-                                            .expect(&format!("invalid code {cl:?}"));
-                                        out_contents.push(ValHtmlStringContents::Expr(expr));
-                                    }
-                                }
-                            }
-                            res.push((ValueExpr::HtmlString(out_contents), span).clone());
-                            x.drain(..1);
-                        } else {
-                            let l = tokens.len();
-                            let mut cl = tokens.clone();
-                            cl.insert(0, (Token::ControlChar('{'), empty_range()));
-                            cl.push((Token::ControlChar('}'), empty_range()));
-                            let expr = value_expr_parser
-                                .parse(make_input(empty_range(), cl.leak()))
-                                .into_result()
-                                .expect(&format!("invalid code {tokens:?}"));
-                            res.push(expr.clone());
-                            x.drain(..l);
-                        }
-                    }
-                    ValueExpr::Block(res)
+                    // let mut res = Vec::new();
+                    x.insert(0, (Token::ControlChar('{'), empty_range()));
+                    x.push((Token::ControlChar('}'), empty_range()));
+
+                    let cl = x.clone();
+                    let expr = value_expr_parser
+                        .parse(make_input(empty_range(), x.leak()))
+                        .into_result()
+                        .expect(&format!("invavlid code {cl:?}"));
+
+                    expr
                 }
-            })
-            .map_with(|x, e| (x, e.span()));
+            });
+            // .map_with(|x, e| (x, e.span()));
 
             let array = value_expr_parser
                 .clone()

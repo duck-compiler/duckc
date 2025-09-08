@@ -170,6 +170,32 @@ pub fn closing_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a,
         .map(|((pre, main), close)| format!("{pre}{main}{close}"))
 }
 
+pub fn opening_self_closing<'a>()
+-> impl Parser<'a, &'a str, String, extra::Err<Rich<'a, char>>> + Clone {
+    just("<")
+        .and_is(just("</").not())
+        .then(
+            any()
+                .filter(|c: &char| *c != '/')
+                .repeated()
+                .collect::<String>(),
+        )
+        .then(just("/>"))
+        .rewind()
+        .then(
+            just("<").and_is(just("</").not()).then(
+                any()
+                    .filter(|c: &char| *c != ' ' && *c != '>')
+                    .repeated()
+                    .collect::<String>(),
+            ),
+        )
+        .map(|(((pre, main), close), x)| {
+            let complete = format!("<{}", x.1);
+            complete
+        })
+}
+
 pub fn opening_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a, char>>> + Clone {
     just("<")
         .and_is(just("</").not())
@@ -206,10 +232,15 @@ pub fn duckx_parse_html_string<'a>(
                         .rewind()
                         .ignore_then(duckx_lexer.clone())
                         .map(|x| RawHtmlStringContents::Tokens(x)),
+                    opening_self_closing().map(|y| {
+                        RawHtmlStringContents::Sub(Token::HtmlString(vec![
+                            HtmlStringContents::String(y),
+                        ]))
+                    }),
                     opening_tag()
                         .rewind()
                         .ignore_then(e.clone())
-                        .map(|x| RawHtmlStringContents::Sub(dbg!(x))),
+                        .map(|x| RawHtmlStringContents::Sub(x)),
                     any()
                         .and_is(closing_tag().not())
                         // .filter(|c: &char| *c != '{' && *c != '<')
@@ -606,6 +637,7 @@ mod tests {
     #[test]
     fn test_lex() {
         let test_cases = vec![
+            ("duckx {let hello = <Counter/>;}", vec![]),
             (
                 "duckx {let hello = <> {ti <span id={props.id} hello={123}></span> tle} <h1> hallo moin  123</h1> abc </>;}",
                 vec![],

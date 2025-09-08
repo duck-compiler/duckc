@@ -63,6 +63,10 @@ impl SourceFile {
             instructions.push(c.emit(type_env));
         }
 
+        for c in self.duckx_components {
+            instructions.push(c.emit(type_env));
+        }
+
         instructions.extend(type_definitions);
 
         instructions

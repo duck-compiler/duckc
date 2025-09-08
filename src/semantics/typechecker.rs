@@ -44,7 +44,7 @@ impl TypeExpr {
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
             ValueExpr::HtmlString(contents) => {
-                todo!()
+               TypeExpr::String
             }
             ValueExpr::Tag(identifier) => TypeExpr::Tag(identifier.clone()),
             ValueExpr::RawVariable(_x, p) => panic!("{}", p.join(" ").leak()),

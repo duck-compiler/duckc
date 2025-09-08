@@ -1,9 +1,13 @@
 use chumsky::{input::BorrowInput, prelude::*};
+use tree_sitter::{Node, Parser as TSParser};
 
-use crate::parse::{
-    SS, Spanned,
-    type_parser::{Duck, TypeExpr, type_expression_parser},
-    value_parser::{ValueExpr, value_expr_parser},
+use crate::{
+    parse::{
+        SS, Spanned,
+        type_parser::{Duck, TypeExpr, type_expression_parser},
+        value_parser::{ValHtmlStringContents, ValueExpr, value_expr_parser},
+    },
+    semantics::type_resolve::TypeEnv,
 };
 
 use super::lexer::Token;
@@ -18,6 +22,47 @@ pub struct DuckxComponent {
 #[derive(Debug, Clone, Default)]
 pub struct DuckxComponentDependencies {
     pub client_components: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum HtmlStringSourceUnit {
+    JsxOpen,
+    JsxClose,
+    Ident,
+}
+
+pub fn find_client_components(
+    obj: &mut Vec<ValHtmlStringContents>,
+    out: &mut Vec<String>,
+    type_env: &mut TypeEnv,
+) {
+    fn trav(n: &Node) {
+        if n.grammar_name() == "self_closing_tag" {
+            dbg!(n.child(1).unwrap().to_sexp());
+        } else {
+            for i in 0..n.child_count() {
+                trav(&n.child(i).unwrap());
+            }
+        }
+    }
+    for c in obj {
+        match c {
+            ValHtmlStringContents::Expr((ValueExpr::HtmlString(contents), _)) => {
+                find_client_components(contents, out, type_env);
+            }
+            ValHtmlStringContents::String(s) => {
+                let mut parser = TSParser::new();
+                parser
+                    .set_language(&tree_sitter_html::LANGUAGE.into())
+                    .expect("Couldn't set js grammar");
+
+                let src = parser.parse(s.as_bytes(), None).unwrap();
+                let root_node = src.root_node();
+                trav(&root_node);
+            }
+            _ => {}
+        }
+    }
 }
 
 pub fn duckx_component_parser<'src, I, M>(

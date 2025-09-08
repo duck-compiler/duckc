@@ -215,38 +215,26 @@ fn walk_access(
     )
 }
 
-fn find_client_components(
+pub fn find_client_components(
     obj: &Vec<ValHtmlStringContents>,
     out: &mut Vec<String>,
     type_env: &mut TypeEnv,
 ) {
+    let mut joined = String::new();
     for c in obj {
         match c {
             ValHtmlStringContents::Expr((ValueExpr::HtmlString(contents), _)) => {
                 find_client_components(contents, out, type_env);
+                joined.push_str("\"\"");
             }
             ValHtmlStringContents::String(s) => {
-                let begin = s.find("<");
-                if let Some(begin) = begin
-                    && begin < s.len() - 1
-                {
-                    let first = s[begin..].find(" ");
-                    let second = s[begin..].find(">");
-
-                    let end = if let Some(first) = first {
-                        second.unwrap_or(first).min(first)
-                    } else if let Some(second) = second {
-                        first.unwrap_or(second).min(second)
-                    } else {
-                        return;
-                    };
-
-                    let ident = &s[begin..end];
-                }
+                joined.push_str(&s);
             }
             _ => {}
         }
     }
+
+    dbg!(joined);
 }
 
 impl ValueExpr {
@@ -283,6 +271,7 @@ impl ValueExpr {
             }
             _ => None,
         }
+
     }
 
     pub fn direct_or_with_instr(
@@ -402,7 +391,7 @@ impl ValueExpr {
                 let mut out = Vec::new();
                 find_client_components(contents, &mut out, type_env);
                 dbg!(out);
-                std::process::exit(0);
+                (vec![], None)
             }
             ValueExpr::FormattedString(contents) => {
                 let mut instr = Vec::new();
