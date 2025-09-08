@@ -447,7 +447,7 @@ fn parse_src_file(
         result.duckx_components.push(s.clone());
     }
 
-    dbg!(result)
+    result
 }
 
 fn typecheck(src_file_ast: &mut SourceFile) -> TypeEnv {

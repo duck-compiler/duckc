@@ -2,10 +2,7 @@ use std::{collections::VecDeque, usize};
 
 use crate::{
     parse::{
-        function_parser::LambdaFunctionExpr,
-        struct_parser::StructDefinition,
-        type_parser::{Duck, TypeExpr},
-        value_parser::{Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr},
+        duckx_component_parser::find_client_components, function_parser::LambdaFunctionExpr, struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}, value_parser::{Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr}
     },
     semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
 };
@@ -213,28 +210,6 @@ fn walk_access(
         res_instr.into(),
         Some(Into::<Vec<String>>::into(s).join(".")),
     )
-}
-
-pub fn find_client_components(
-    obj: &Vec<ValHtmlStringContents>,
-    out: &mut Vec<String>,
-    type_env: &mut TypeEnv,
-) {
-    let mut joined = String::new();
-    for c in obj {
-        match c {
-            ValHtmlStringContents::Expr((ValueExpr::HtmlString(contents), _)) => {
-                find_client_components(contents, out, type_env);
-                joined.push_str("\"\"");
-            }
-            ValHtmlStringContents::String(s) => {
-                joined.push_str(&s);
-            }
-            _ => {}
-        }
-    }
-
-    dbg!(joined);
 }
 
 impl ValueExpr {

@@ -236,13 +236,13 @@ pub fn duckx_parse_html_string<'a>(
                         .map(|x| RawHtmlStringContents::Tokens(x)),
                     opening_self_closing().map(|in_html| {
                         RawHtmlStringContents::Sub(Token::HtmlString(vec![
-                            HtmlStringContents::String(dbg!(in_html)),
+                            HtmlStringContents::String(in_html),
                         ]))
                     }),
                     opening_tag()
                         .rewind()
                         .ignore_then(e.clone())
-                        .map(|in_html_open| RawHtmlStringContents::Sub(dbg!(in_html_open))),
+                        .map(|in_html_open| RawHtmlStringContents::Sub(in_html_open)),
                     any()
                         .and_is(closing_tag().not())
                         // .filter(|c: &char| *c != '{' && *c != '<')
@@ -314,7 +314,6 @@ pub fn duckx_contents_in_curly_braces<'a>(
                 choice((
                     just("{").rewind().ignore_then(duckx_lexer.clone()),
                     opening_self_closing().map(|x| {
-                        dbg!("in self close tag big", &x);
                         vec![(
                             Token::HtmlString(vec![HtmlStringContents::String(format!("{x}"))]),
                             empty_range(),
@@ -324,7 +323,6 @@ pub fn duckx_contents_in_curly_braces<'a>(
                         .rewind()
                         .ignore_then(duckx_parse_html_string(duckx_lexer.clone()))
                         .map_with(move |x, e| {
-                            dbg!("in open tag big");
                             vec![(
                                 x,
                                 SS {
@@ -467,7 +465,7 @@ pub fn lex_single<'a>(
                 }
 
                 if !s.is_empty() {
-                    xx.push(FmtStringContents::String(dbg!(s.replace("\n", "\\n"))));
+                    xx.push(FmtStringContents::String(s.replace("\n", "\\n")));
                 }
 
                 Token::FormatStringLiteral(xx)

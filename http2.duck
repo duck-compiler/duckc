@@ -33,7 +33,7 @@ template Page(props: { title: String, x: String[] }) duckx {
     return (
         <>
             <html>
-            <Counter initial={100}></Counter>
+            <Counter initial={100}/>
             <body>
             </body>
             </html>

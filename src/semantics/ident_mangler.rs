@@ -47,7 +47,6 @@ impl MangleEnv {
         .collect::<Vec<_>>();
         let prefix = if is_global { &[] } else { prefix };
 
-        dbg!(&ident);
         if !is_global
             && let Some((is_glob, import_path)) = self.resolve_import(ident.first()?.clone())
         {

@@ -32,7 +32,7 @@ pub enum HtmlStringSourceUnit {
 }
 
 pub fn find_client_components(
-    obj: &mut Vec<ValHtmlStringContents>,
+    obj: &Vec<ValHtmlStringContents>,
     out: &mut Vec<String>,
     type_env: &mut TypeEnv,
 ) {
@@ -45,24 +45,28 @@ pub fn find_client_components(
             }
         }
     }
+    let mut s = String::new();
     for c in obj {
         match c {
             ValHtmlStringContents::Expr((ValueExpr::HtmlString(contents), _)) => {
                 find_client_components(contents, out, type_env);
+                s.push_str("\"\"");
             }
-            ValHtmlStringContents::String(s) => {
-                let mut parser = TSParser::new();
-                parser
-                    .set_language(&tree_sitter_html::LANGUAGE.into())
-                    .expect("Couldn't set js grammar");
-
-                let src = parser.parse(s.as_bytes(), None).unwrap();
-                let root_node = src.root_node();
-                trav(&root_node);
+            ValHtmlStringContents::String(s_) => {
+               s.push_str(s_.as_str());
             }
             _ => {}
         }
     }
+    let mut parser = TSParser::new();
+    parser
+        .set_language(&tree_sitter_html::LANGUAGE.into())
+        .expect("Couldn't set js grammar");
+
+    let src = parser.parse(dbg!(s).as_bytes(), None).unwrap();
+    let root_node = src.root_node();
+    dbg!(root_node.to_sexp());
+    trav(&root_node);
 }
 
 pub fn duckx_component_parser<'src, I, M>(
