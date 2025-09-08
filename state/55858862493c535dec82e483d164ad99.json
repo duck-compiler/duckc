@@ -1,7 +1,7 @@
 {
     "id": "55858862493c535dec82e483d164ad99",
     "file_path": "../../src/emit/ir.rs",
-    "line_number": 292,
+    "line_number": 385,
     "title": "check if this should be a reference",
     "tag": "todo",
     "module_tag": "emit",
