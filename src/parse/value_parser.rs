@@ -844,7 +844,7 @@ where
                         .collect::<Vec<_>>(),
                 )
                 .map(|(init, additional)| {
-                    additional.into_iter().fold(init, |acc, (op, x)| {
+                    additional.into_iter().fold(init, |acc, (_, x)| {
                         let span = acc.1.union(x.1);
                         (ValueExpr::And(Box::new(acc), Box::new(x)), span)
                     })
@@ -860,7 +860,7 @@ where
                         .collect::<Vec<_>>(),
                 )
                 .map(|(init, additional)| {
-                    additional.into_iter().fold(init, |acc, (op, x)| {
+                    additional.into_iter().fold(init, |acc, (_, x)| {
                         let span = acc.1.union(x.1);
                         (ValueExpr::Or(Box::new(acc), Box::new(x)), span)
                     })
