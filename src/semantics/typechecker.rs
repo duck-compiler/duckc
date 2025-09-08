@@ -259,13 +259,83 @@ impl TypeExpr {
 
                 left_type_expr
             }
-            ValueExpr::Equals(left, right) => {
+            ValueExpr::Sub(left, right) => {
                 let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&left.0, type_env);
                 let right_type_expr: TypeExpr = TypeExpr::from_value_expr(&right.0, type_env);
 
+                require(
+                    left_type_expr.is_number(),
+                    format!(
+                        "Subtraction '-' is only allowed for numbers. You've used {} - {}.",
+                        left_type_expr.as_go_type_annotation(type_env),
+                        right_type_expr.as_go_type_annotation(type_env)
+                    ),
+                );
+
                 check_type_compatability(
-                    &(left_type_expr.clone(), left.1),
-                    &(right_type_expr, right.1),
+                    &(left_type_expr.clone(), left.as_ref().1),
+                    &(right_type_expr, right.as_ref().1),
+                    type_env,
+                );
+
+                left_type_expr
+            }
+            ValueExpr::Mod(left, right) => {
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&left.0, type_env);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(&right.0, type_env);
+
+                require(
+                    left_type_expr.is_number(),
+                    format!(
+                        "Modulo '-' is only allowed for numbers. You've used {} % {}.",
+                        left_type_expr.as_go_type_annotation(type_env),
+                        right_type_expr.as_go_type_annotation(type_env)
+                    ),
+                );
+
+                check_type_compatability(
+                    &(left_type_expr.clone(), left.as_ref().1),
+                    &(right_type_expr, right.as_ref().1),
+                    type_env,
+                );
+
+                left_type_expr
+            }
+            ValueExpr::Div(left, right) => {
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&left.0, type_env);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(&right.0, type_env);
+
+                require(
+                    left_type_expr.is_number(),
+                    format!(
+                        "Division '/' is only allowed for numbers. You've used {} / {}.",
+                        left_type_expr.as_go_type_annotation(type_env),
+                        right_type_expr.as_go_type_annotation(type_env)
+                    ),
+                );
+
+                check_type_compatability(
+                    &(left_type_expr.clone(), left.as_ref().1),
+                    &(right_type_expr, right.as_ref().1),
+                    type_env,
+                );
+
+                left_type_expr
+            }
+            ValueExpr::Equals(lhs, rhs)
+            | ValueExpr::NotEquals(lhs, rhs)
+            | ValueExpr::LessThan(lhs, rhs)
+            | ValueExpr::LessThanOrEquals(lhs, rhs)
+            | ValueExpr::GreaterThan(lhs, rhs)
+            | ValueExpr::GreaterThanOrEquals(lhs, rhs)
+            | ValueExpr::And(lhs, rhs)
+            | ValueExpr::Or(lhs, rhs) => {
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&lhs.0, type_env);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(&rhs.0, type_env);
+
+                check_type_compatability(
+                    &(left_type_expr.clone(), lhs.1),
+                    &(right_type_expr, rhs.1),
                     type_env,
                 );
 
@@ -1157,7 +1227,10 @@ fn check_type_compatability(
             if !given_type.0.is_number() {
                 fail_requirement(
                     "this expects an int.".to_string(),
-                    "this is not an int.".to_string(),
+                    format!(
+                        "this is not an int. it's a {}",
+                        given_type.0.as_clean_go_type_name(type_env).bright_yellow()
+                    )
                 )
             }
         }

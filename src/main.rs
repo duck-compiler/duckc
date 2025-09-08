@@ -264,7 +264,19 @@ fn parse_src_file(
                     typename_reset_global_value_expr(&mut expr.0);
                 }
             }
-            ValueExpr::Add(l, r) | ValueExpr::Mul(l, r) | ValueExpr::Equals(l, r) => {
+            ValueExpr::Add(l, r)
+            | ValueExpr::Mul(l, r)
+            | ValueExpr::Sub(l, r)
+            | ValueExpr::Div(l, r)
+            | ValueExpr::Mod(l, r)
+            | ValueExpr::Equals(l, r)
+            | ValueExpr::NotEquals(l, r)
+            | ValueExpr::LessThan(l, r)
+            | ValueExpr::LessThanOrEquals(l, r)
+            | ValueExpr::GreaterThan(l, r)
+            | ValueExpr::GreaterThanOrEquals(l, r)
+            | ValueExpr::And(l, r)
+            | ValueExpr::Or(l, r) => {
                 typename_reset_global_value_expr(&mut l.0);
                 typename_reset_global_value_expr(&mut r.0);
             }

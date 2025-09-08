@@ -1,0 +1,4 @@
+{
+    "stdout": "testing: `true and true`\nthe expected value is true\nthe actual value is true\n",
+    "stderr": ""
+}

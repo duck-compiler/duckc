@@ -1,0 +1,8 @@
+fn main() {
+    std::io::println("testing: `true and true`");
+    std::io::println("the expected value is true");
+
+    let actual = true and true;
+    f"the actual value is {actual->std::string::from_bool()}"
+        ->std::io::println();
+}

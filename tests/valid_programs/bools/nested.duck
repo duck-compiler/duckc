@@ -1,0 +1,9 @@
+fn main() {
+    std::io::println("testing: `((true and (false or true)) and (true || (false and false)))`");
+    std::io::println("evaluation: `((true and true) and (true or false))` -> `(true and true)` -> `true`");
+    std::io::println("expected value: true");
+
+    let actual = ((true and (false or true)) and (true or (false and false)));
+    f"actual value: {actual->std::string::from_bool()}"
+        ->std::io::println();
+}

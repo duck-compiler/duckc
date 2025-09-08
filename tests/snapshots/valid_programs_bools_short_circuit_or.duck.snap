@@ -1,0 +1,4 @@
+{
+    "stdout": "testing: `true or side_effect()`\nthe `side_effect` function should not execute. it print's something after this if it's executed you should only see expected and actual\nexpected value: true\nactual value: true\n",
+    "stderr": ""
+}

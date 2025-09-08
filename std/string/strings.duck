@@ -34,3 +34,12 @@ fn to_int(x: String) -> Int {
     }
     return res;
 }
+
+fn from_bool(x: Bool) -> String {
+    let res: String = "";
+    go {
+        tmp := strconv.FormatBool(x.as_dgo_bool())
+        res = ConcDuckString { value: tmp }
+    }
+    return res;
+}

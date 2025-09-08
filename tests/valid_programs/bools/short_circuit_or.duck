@@ -1,0 +1,14 @@
+fn side_effect() -> Bool {
+    std::io::println("!!! when you see this output the test has failed");
+    return true;
+}
+
+fn main() {
+    std::io::println("testing: `true or side_effect()`");
+    std::io::println("the `side_effect` function should not execute. it print's something after this if it's executed you should only see expected and actual");
+    std::io::println("expected value: true");
+
+    let actual = true or side_effect();
+    f"actual value: {actual->std::string::from_bool()}"
+        ->std::io::println();
+}

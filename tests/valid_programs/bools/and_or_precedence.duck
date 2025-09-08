@@ -1,0 +1,9 @@
+fn main() {
+    std::io::println("testing: `false or true and false`");
+    std::io::println("`and` has higher precedence, so it's `false or (true and false)` -> `false or false`");
+    std::io::println("expected value: false");
+
+    let actual = false or true and false;
+    f"the actual value is {actual->std::string::from_bool()}"
+        ->std::io::println();
+}

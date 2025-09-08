@@ -1,0 +1,11 @@
+fn b() -> Int {
+   return 3 ;
+}
+
+fn main() {
+    let z = { abc: 100 };
+    let w = { abc: { you: { f: (25, 5) } } };
+    let y: Int = (z.abc - w.abc.you.f.1 * b()) / 5 + w.abc.you.f.0 % 6;
+    y->std::string::from_int()->std::io::println();
+    std::io::println("expected result is 18");
+}

@@ -573,11 +573,18 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             append_global_prefix_value_expr(&mut lhs.0, mangle_env);
             append_global_prefix_value_expr(&mut rhs.0, mangle_env);
         }
-        ValueExpr::Mul(lhs, rhs) => {
-            append_global_prefix_value_expr(&mut lhs.0, mangle_env);
-            append_global_prefix_value_expr(&mut rhs.0, mangle_env);
-        }
-        ValueExpr::Equals(lhs, rhs) => {
+        ValueExpr::Equals(lhs, rhs)
+        | ValueExpr::NotEquals(lhs, rhs)
+        | ValueExpr::LessThan(lhs, rhs)
+        | ValueExpr::LessThanOrEquals(lhs, rhs)
+        | ValueExpr::GreaterThan(lhs, rhs)
+        | ValueExpr::GreaterThanOrEquals(lhs, rhs)
+        | ValueExpr::And(lhs, rhs)
+        | ValueExpr::Or(lhs, rhs)
+        | ValueExpr::Sub(lhs, rhs)
+        | ValueExpr::Div(lhs, rhs)
+        | ValueExpr::Mod(lhs, rhs)
+        | ValueExpr::Mul(lhs, rhs) => {
             append_global_prefix_value_expr(&mut lhs.0, mangle_env);
             append_global_prefix_value_expr(&mut rhs.0, mangle_env);
         }
