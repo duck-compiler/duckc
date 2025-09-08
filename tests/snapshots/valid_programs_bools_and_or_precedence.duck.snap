@@ -1,0 +1,4 @@
+{
+    "stdout": "testing: `false or true and false`\n`and` has higher precedence, so it's `false or (true and false)` -> `false or false`\nexpected value: false\nthe actual value is false\n",
+    "stderr": ""
+}

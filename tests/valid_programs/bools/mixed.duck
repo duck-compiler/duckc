@@ -1,0 +1,9 @@
+fn main() {
+    std::io::println("testing: `1 + 2 < 5 and 10 / 2 == 5 || 3 % 2 != 0`");
+    std::io::println("evaluation: `(3 < 5) and (5 == 5) or (1 != 0)` -> `true and true or true` -> `true or true`");
+    std::io::println("expected value: true");
+
+    let actual = 1 + 2 < 5 and 10 / 2 == 5 or 3 % 2 != 0;
+    f"actual value: {actual->std::string::from_bool()}"
+        ->std::io::println();
+}
