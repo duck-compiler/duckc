@@ -1,0 +1,5 @@
+fn main() {
+    let x: Int = -1337 + 1337;
+    f"expected result: 0, actual result: {x->std::string::from_int()}"
+        ->std::io::println()
+}
