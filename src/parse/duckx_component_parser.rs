@@ -1,9 +1,9 @@
 use chumsky::{input::BorrowInput, prelude::*};
-use tree_sitter::{Node, Parser as TSParser};
 
 use crate::parse::{
     SS, Spanned,
     type_parser::{Duck, TypeExpr, type_expression_parser},
+    value_parser::{ValueExpr, value_expr_parser},
 };
 
 use super::lexer::Token;
@@ -12,17 +12,20 @@ use super::lexer::Token;
 pub struct DuckxComponent {
     pub name: String,
     pub props_type: Spanned<TypeExpr>,
-    pub duck_tokens: Vec<Spanned<Token>>,
+    pub value_expr: Spanned<ValueExpr>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct DuckxComponentDependencies {
     pub client_components: Vec<String>,
 }
-pub fn duckx_component_parser<'src, I>()
--> impl Parser<'src, I, DuckxComponent, extra::Err<Rich<'src, Token, SS>>> + Clone
+
+pub fn duckx_component_parser<'src, I, M>(
+    make_input: M,
+) -> impl Parser<'src, I, DuckxComponent, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
+    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
 {
     // component Name {
     //   %javascript source
@@ -36,18 +39,22 @@ where
                 .or_not()
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
         )
-        .then(select_ref! { Token::InlineDuckx(tsx_source) => tsx_source.clone() })
-        .map(|((ident, props_type), tsx_source)| DuckxComponent {
+        .then(value_expr_parser(make_input))
+        .map(|((ident, props_type), src_tokens)| DuckxComponent {
             name: ident.clone(),
             props_type: props_type
                 .unwrap_or(TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span()),
-            duck_tokens: todo!(),
+            value_expr: src_tokens,
         })
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::{lexer::lex_parser, make_input, value_parser::empty_range};
+    use crate::parse::{
+        lexer::lex_parser,
+        make_input,
+        value_parser::{empty_range, value_expr_into_empty_range},
+    };
 
     use super::*;
 
@@ -58,7 +65,7 @@ mod tests {
             DuckxComponent {
                 name: "T".to_string(),
                 props_type: TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span(),
-                duck_tokens: vec![],
+                value_expr: ValueExpr::Block(vec![]).into_empty_span(),
             },
         )];
 
@@ -73,14 +80,15 @@ mod tests {
             };
 
             println!("parsing component statement {src}");
-            let component_parse_result =
-                duckx_component_parser().parse(make_input(empty_range(), tokens.as_slice()));
+            let component_parse_result = duckx_component_parser(make_input)
+                .parse(make_input(empty_range(), tokens.as_slice()));
             assert_eq!(component_parse_result.has_errors(), false);
             assert_eq!(component_parse_result.has_output(), true);
 
-            let Some(ast) = component_parse_result.into_output() else {
+            let Some(mut ast) = component_parse_result.into_output() else {
                 unreachable!()
             };
+            value_expr_into_empty_range(&mut ast.value_expr);
             assert_eq!(ast, expected_ast);
         }
 
@@ -114,8 +122,8 @@ mod tests {
 
             println!("component parser try invalid {invalid_component_statement}");
 
-            let component_parse_result =
-                duckx_component_parser().parse(make_input(empty_range(), tokens.as_slice()));
+            let component_parse_result = duckx_component_parser(make_input)
+                .parse(make_input(empty_range(), tokens.as_slice()));
 
             assert_eq!(component_parse_result.has_errors(), true);
             assert_eq!(component_parse_result.has_output(), false);

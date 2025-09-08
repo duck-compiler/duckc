@@ -1,11 +1,11 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, usize};
 
 use crate::{
     parse::{
         function_parser::LambdaFunctionExpr,
         struct_parser::StructDefinition,
         type_parser::{Duck, TypeExpr},
-        value_parser::{Declaration, ValFmtStringContents, ValueExpr},
+        value_parser::{Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr},
     },
     semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
 };
@@ -215,6 +215,36 @@ fn walk_access(
     )
 }
 
+fn find_client_components(obj: &Vec<ValHtmlStringContents>, out: &mut Vec<String>, type_env: &mut TypeEnv) {
+    for c in obj {
+        match c {
+            ValHtmlStringContents::Expr((ValueExpr::HtmlString(contents), _)) => {
+                find_client_components(contents, out, type_env);
+            }
+            ValHtmlStringContents::String(s) => {
+                let begin = s.find("<");
+                if let Some(begin) = begin
+                    && begin < s.len() - 1
+                {
+                    let first = s[begin..].find(" ");
+                    let second = s[begin..].find(">");
+
+                    let end = if let Some(first) = first {
+                        second.unwrap_or(first).min(first)
+                    } else if let Some(second) = second {
+                        first.unwrap_or(second).min(second)
+                    } else {
+                        return;
+                    };
+
+                    let ident = &s[begin..end];
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 impl ValueExpr {
     pub fn direct_emit(&self, type_env: &mut TypeEnv, env: &mut ToIr) -> Option<IrValue> {
         match self {
@@ -364,6 +394,12 @@ impl ValueExpr {
                 (ir, as_rvar(var))
             }
             ValueExpr::HtmlString(_) => todo!(),
+            ValueExpr::HtmlString(contents) => {
+                let mut out = Vec::new();
+                find_client_components(contents, &mut out);
+                dbg!(out);
+                std::process::exit(0);
+            }
             ValueExpr::FormattedString(contents) => {
                 let mut instr = Vec::new();
 

@@ -5,7 +5,7 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, tsx_component_parser::{tsx_component_parser, TsxComponent}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{DuckxContents, ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, Spanned, SS
+        duckx_component_parser::DuckxComponent, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, tsx_component_parser::{tsx_component_parser, TsxComponent}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{DuckxContents, ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, Spanned, SS
     },
     semantics::ident_mangler::{
         mangle, mangle_tsx_component, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
@@ -20,6 +20,7 @@ pub struct SourceFile {
     pub use_statements: Vec<UseStatement>,
     pub sub_modules: Vec<(String, SourceFile)>,
     pub tsx_components: Vec<TsxComponent>,
+    pub duckx_components: Vec<DuckxComponent>,
 }
 
 #[derive(Debug, Clone)]
@@ -27,6 +28,7 @@ pub enum SourceUnit {
     Func(FunctionDefintion),
     Type(TypeDefinition),
     Component(TsxComponent),
+    Template(DuckxComponent),
     Struct(StructDefinition),
     Use(UseStatement),
     Module(String, SourceFile),
@@ -747,6 +749,7 @@ where
             let mut use_statements = Vec::new();
             let mut sub_modules = Vec::new();
             let mut tsx_components = Vec::new();
+            let mut template_components  = Vec::new();
 
             for source_unit in source_units {
                 use SourceUnit::*;
@@ -757,6 +760,7 @@ where
                     Use(def) => use_statements.push(def),
                     Module(name, def) => sub_modules.push((name, def)),
                     Component(tsx_component) => tsx_components.push(tsx_component),
+                    Template(duckx_component) => template_components.push(tsx_component),
                 }
             }
 

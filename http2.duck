@@ -1,4 +1,5 @@
 type LolProps = { x: { x: String }, y: Bool, z: String[]};
+
 component Lol(props : { x: { x: String }, y: Bool, z: String[]}) tsx {
     const hello = props.y;
     return (
@@ -27,18 +28,8 @@ component Counter(props: { initial: Int }) tsx {
 	);
 }
 
-(string, env)
-
 template Page(props: { title: String, x: String[] }) duckx {
-    TemplEnv
-        client_components_to_send
-        render_calls
-
-<Counter fwafwa={100}>
     let x = <><div id="counter_piopiaf"></div></><>
-
-
-
     return (
         <>
             <html>
