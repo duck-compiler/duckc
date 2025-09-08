@@ -1082,58 +1082,60 @@ impl ValueExpr {
             ValueExpr::And(lhs, rhs) => {
                 let mut ir = Vec::new();
 
-                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env);
-                ir.extend(v1_instr);
-                if v1_res.is_none() {
-                    return (ir, None);
-                }
+                let (lhs_instr, lhs_res) = lhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(lhs_instr);
+                let lhs_val = match lhs_res {
+                    Some(val) => val,
+                    None => return (ir, None),
+                };
 
-                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env);
-                ir.extend(v2_instr);
-                if v2_res.is_none() {
-                    return (ir, None);
-                }
-
-                let var = env.new_var();
+                let result_var = env.new_var();
                 ir.extend([
-                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
-                    IrInstruction::And(
-                        var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(&lhs.0, type_env),
-                    ),
+                    IrInstruction::VarDecl(result_var.clone(), "DuckBool".into()),
+                    IrInstruction::VarAssignment(result_var.clone(), lhs_val),
                 ]);
 
-                (ir, as_rvar(var))
+                let (mut rhs_instr, rhs_res) = rhs.0.direct_or_with_instr(type_env, env);
+                let rhs_val = rhs_res.expect("The right-hand side of an 'and' expression must produce a value");
+
+                rhs_instr.push(IrInstruction::VarAssignment(result_var.clone(), rhs_val));
+
+                ir.push(IrInstruction::If(
+                    IrValue::Var(result_var.clone()),
+                    rhs_instr,
+                    None,
+                ));
+
+                (ir, as_rvar(result_var))
             }
             ValueExpr::Or(lhs, rhs) => {
                 let mut ir = Vec::new();
 
-                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env);
-                ir.extend(v1_instr);
-                if v1_res.is_none() {
-                    return (ir, None);
-                }
+                let (lhs_instr, lhs_res) = lhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(lhs_instr);
+                let lhs_val = match lhs_res {
+                    Some(val) => val,
+                    None => return (ir, None),
+                };
 
-                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env);
-                ir.extend(v2_instr);
-                if v2_res.is_none() {
-                    return (ir, None);
-                }
-
-                let var = env.new_var();
+                let result_var = env.new_var();
                 ir.extend([
-                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
-                    IrInstruction::Or(
-                        var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(&lhs.0, type_env),
-                    ),
+                    IrInstruction::VarDecl(result_var.clone(), "DuckBool".into()),
+                    IrInstruction::VarAssignment(result_var.clone(), lhs_val),
                 ]);
 
-                (ir, as_rvar(var))
+                let (mut rhs_instr, rhs_res) = rhs.0.direct_or_with_instr(type_env, env);
+                let rhs_val = rhs_res.expect("The right-hand side of an 'or' expression must produce a value");
+
+                rhs_instr.push(IrInstruction::VarAssignment(result_var.clone(), rhs_val));
+
+                ir.push(IrInstruction::If(
+                    IrValue::BoolNegate(Box::new(IrValue::Var(result_var.clone()))),
+                    rhs_instr,
+                    None,
+                ));
+
+                (ir, as_rvar(result_var))
             }
             ValueExpr::FieldAccess {
                 target_obj,
