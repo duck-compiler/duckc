@@ -322,13 +322,20 @@ impl TypeExpr {
 
                 left_type_expr
             }
-            ValueExpr::Equals(left, right) => {
-                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&left.0, type_env);
-                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(&right.0, type_env);
+            ValueExpr::Equals(lhs, rhs)
+            | ValueExpr::NotEquals(lhs, rhs)
+            | ValueExpr::LessThan(lhs, rhs)
+            | ValueExpr::LessThanOrEquals(lhs, rhs)
+            | ValueExpr::GreaterThan(lhs, rhs)
+            | ValueExpr::GreaterThanOrEquals(lhs, rhs)
+            | ValueExpr::And(lhs, rhs)
+            | ValueExpr::Or(lhs, rhs) => {
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&lhs.0, type_env);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(&rhs.0, type_env);
 
                 check_type_compatability(
-                    &(left_type_expr.clone(), left.1),
-                    &(right_type_expr, right.1),
+                    &(left_type_expr.clone(), lhs.1),
+                    &(right_type_expr, rhs.1),
                     type_env,
                 );
 

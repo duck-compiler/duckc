@@ -269,7 +269,14 @@ fn parse_src_file(
             | ValueExpr::Sub(l, r)
             | ValueExpr::Div(l, r)
             | ValueExpr::Mod(l, r)
-            | ValueExpr::Equals(l, r) => {
+            | ValueExpr::Equals(l, r)
+            | ValueExpr::NotEquals(l, r)
+            | ValueExpr::LessThan(l, r)
+            | ValueExpr::LessThanOrEquals(l, r)
+            | ValueExpr::GreaterThan(l, r)
+            | ValueExpr::GreaterThanOrEquals(l, r)
+            | ValueExpr::And(l, r)
+            | ValueExpr::Or(l, r) => {
                 typename_reset_global_value_expr(&mut l.0);
                 typename_reset_global_value_expr(&mut r.0);
             }

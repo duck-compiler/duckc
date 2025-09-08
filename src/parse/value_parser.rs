@@ -86,6 +86,13 @@ pub enum ValueExpr {
     Mod(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
     BoolNegate(Box<Spanned<ValueExpr>>),
     Equals(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
+    NotEquals(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
+    LessThan(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
+    LessThanOrEquals(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
+    GreaterThan(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
+    GreaterThanOrEquals(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
+    And(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
+    Or(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
     InlineGo(String),
     Lambda(Box<LambdaFunctionExpr>),
     ArrayAccess(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
@@ -152,6 +159,13 @@ impl ValueExpr {
             | ValueExpr::VarAssign(..)
             | ValueExpr::BoolNegate(..)
             | ValueExpr::Equals(..)
+            | ValueExpr::NotEquals(..)
+            | ValueExpr::LessThan(..)
+            | ValueExpr::LessThanOrEquals(..)
+            | ValueExpr::GreaterThan(..)
+            | ValueExpr::GreaterThanOrEquals(..)
+            | ValueExpr::And(..)
+            | ValueExpr::Or(..)
             | ValueExpr::Lambda(..)
             | ValueExpr::FormattedString(..)
             | ValueExpr::Sub(..)
@@ -772,12 +786,85 @@ where
                 })
                 .boxed();
 
-            let equals = add
+            let relation = add
                 .clone()
-                .then_ignore(just(Token::Equals))
-                .then(add.clone())
-                .map(|(x, y)| ValueExpr::Equals(x.into(), y.into()))
-                .map_with(|x, e| (x, e.span()))
+                .then(
+                    choice((
+                        just(Token::ControlChar('<')),
+                        just(Token::LessThanOrEquals),
+                        just(Token::ControlChar('>')),
+                        just(Token::GreaterThanOrEquals),
+                    ))
+                    .then(add.clone())
+                    .repeated()
+                    .collect::<Vec<_>>(),
+                )
+                .map(|(init, additional)| {
+                    additional.into_iter().fold(init, |acc, (op, x)| {
+                        let span = acc.1.union(x.1);
+                        let new_expr = match op {
+                            Token::ControlChar('<') => ValueExpr::LessThan(Box::new(acc), Box::new(x)),
+                            Token::LessThanOrEquals => ValueExpr::LessThanOrEquals(Box::new(acc), Box::new(x)),
+                            Token::ControlChar('>') => ValueExpr::GreaterThan(Box::new(acc), Box::new(x)),
+                            Token::GreaterThanOrEquals => ValueExpr::GreaterThanOrEquals(Box::new(acc), Box::new(x)),
+                            _ => unreachable!(),
+                        };
+                        (new_expr, span)
+                    })
+                })
+                .boxed();
+
+            let equality = relation
+                .clone()
+                .then(
+                    choice((just(Token::Equals), just(Token::NotEquals)))
+                        .then(relation.clone())
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(init, additional)| {
+                    additional.into_iter().fold(init, |acc, (op, x)| {
+                        let span = acc.1.union(x.1);
+                        let new_expr = match op {
+                            Token::Equals => ValueExpr::Equals(Box::new(acc), Box::new(x)),
+                            Token::NotEquals => ValueExpr::NotEquals(Box::new(acc), Box::new(x)),
+                            _ => unreachable!(),
+                        };
+                        (new_expr, span)
+                    })
+                })
+                .boxed();
+
+            let and = equality
+                .clone()
+                .then(
+                    just(Token::And)
+                        .then(equality.clone())
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(init, additional)| {
+                    additional.into_iter().fold(init, |acc, (op, x)| {
+                        let span = acc.1.union(x.1);
+                        (ValueExpr::And(Box::new(acc), Box::new(x)), span)
+                    })
+                })
+                .boxed();
+
+            let or = and
+                .clone()
+                .then(
+                    just(Token::Or)
+                        .then(and.clone())
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(init, additional)| {
+                    additional.into_iter().fold(init, |acc, (op, x)| {
+                        let span = acc.1.union(x.1);
+                        (ValueExpr::Or(Box::new(acc), Box::new(x)), span)
+                    })
+                })
                 .boxed();
 
             let inline_go = select_ref! { Token::InlineGo(x) => x.to_owned() }
@@ -785,9 +872,16 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            choice((inline_go, assignment, equals, add, declaration, pen, atom))
-                .labelled("expression")
-                .boxed()
+            choice((
+                inline_go,
+                assignment,
+                or,
+                declaration,
+                pen,
+                atom,
+            ))
+            .labelled("expression")
+            .boxed()
         },
     )
 }
@@ -945,9 +1039,16 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
                 value_expr_into_empty_range(field);
             }
         }
-        ValueExpr::Equals(v1, v2) => {
-            value_expr_into_empty_range(v1);
-            value_expr_into_empty_range(v2);
+        ValueExpr::Equals(lhs, rhs)
+        | ValueExpr::NotEquals(lhs, rhs)
+        | ValueExpr::LessThan(lhs, rhs)
+        | ValueExpr::LessThanOrEquals(lhs, rhs)
+        | ValueExpr::GreaterThan(lhs, rhs)
+        | ValueExpr::GreaterThanOrEquals(lhs, rhs)
+        | ValueExpr::And(lhs, rhs)
+        | ValueExpr::Or(lhs, rhs) => {
+            value_expr_into_empty_range(lhs);
+            value_expr_into_empty_range(rhs);
         }
         ValueExpr::Lambda(b) => {
             value_expr_into_empty_range(&mut b.value_expr);
@@ -2684,6 +2785,38 @@ mod tests {
         ValueExpr::Mod(lhs, rhs)
     }
 
+    fn eq(lhs: Box<Spanned<ValueExpr>>, rhs: Box<Spanned<ValueExpr>>) -> ValueExpr {
+        ValueExpr::Equals(lhs, rhs)
+    }
+
+    fn ne(lhs: Box<Spanned<ValueExpr>>, rhs: Box<Spanned<ValueExpr>>) -> ValueExpr {
+        ValueExpr::NotEquals(lhs, rhs)
+    }
+
+    fn lt(lhs: Box<Spanned<ValueExpr>>, rhs: Box<Spanned<ValueExpr>>) -> ValueExpr {
+        ValueExpr::LessThan(lhs, rhs)
+    }
+
+    fn lte(lhs: Box<Spanned<ValueExpr>>, rhs: Box<Spanned<ValueExpr>>) -> ValueExpr {
+        ValueExpr::LessThanOrEquals(lhs, rhs)
+    }
+
+    fn gt(lhs: Box<Spanned<ValueExpr>>, rhs: Box<Spanned<ValueExpr>>) -> ValueExpr {
+        ValueExpr::GreaterThan(lhs, rhs)
+    }
+
+    fn gte(lhs: Box<Spanned<ValueExpr>>, rhs: Box<Spanned<ValueExpr>>) -> ValueExpr {
+        ValueExpr::GreaterThanOrEquals(lhs, rhs)
+    }
+
+    fn and(lhs: Box<Spanned<ValueExpr>>, rhs: Box<Spanned<ValueExpr>>) -> ValueExpr {
+        ValueExpr::And(lhs, rhs)
+    }
+
+    fn or(lhs: Box<Spanned<ValueExpr>>, rhs: Box<Spanned<ValueExpr>>) -> ValueExpr {
+        ValueExpr::Or(lhs, rhs)
+    }
+
     #[test]
     fn test_arithmetic_expressions() {
         let test_cases = vec![
@@ -2793,6 +2926,70 @@ mod tests {
 
             value_expr_into_empty_range(&mut output);
             assert_eq!(output.0, expected_ast, "unexpected ast {i}: '{src}'");
+        }
+    }
+
+    #[test]
+    fn test_comparison_and_logical_expressions() {
+        let test_cases = vec![
+            ("1 < 2", lt(int(1), int(2))),
+            ("1 <= 1", lte(int(1), int(1))),
+            ("5 > 3", gt(int(5), int(3))),
+            ("5 >= 5", gte(int(5), int(5))),
+            ("1 == 2", eq(int(1), int(2))),
+            ("1 != 2", ne(int(1), int(2))),
+            ("true and false", and(ValueExpr::Bool(true).into_empty_span().into(), ValueExpr::Bool(false).into_empty_span().into())),
+            ("true or false", or(ValueExpr::Bool(true).into_empty_span().into(), ValueExpr::Bool(false).into_empty_span().into())),
+            ("1 + 2 < 4", lt(add(int(1), int(2)).into_empty_span().into(), int(4))),
+            (
+                "3 < 4 == true",
+                eq(
+                    lt(int(3), int(4)).into_empty_span().into(),
+                    ValueExpr::Bool(true).into_empty_span().into()
+                )
+            ),
+            (
+                "true == true and false",
+                and(
+                    eq(
+                        ValueExpr::Bool(true).into_empty_span().into(),
+                        ValueExpr::Bool(true).into_empty_span().into()
+                    ).into_empty_span().into(),
+                    ValueExpr::Bool(false).into_empty_span().into()
+                )
+            ),
+            (
+                "false or true and true",
+                or(
+                    ValueExpr::Bool(false).into_empty_span().into(),
+                    and(
+                        ValueExpr::Bool(true).into_empty_span().into(),
+                        ValueExpr::Bool(true).into_empty_span().into()
+                    ).into_empty_span().into()
+                )
+            ),
+            (
+                "1 < 2 and 3 > 1",
+                and(
+                    lt(int(1), int(2)).into_empty_span().into(),
+                    gt(int(3), int(1)).into_empty_span().into()
+                )
+            ),
+        ];
+
+        for (i, (src, expected_ast)) in test_cases.into_iter().enumerate() {
+            let lex_result = lex_parser("test", "").parse(src).into_result().unwrap_or_else(|_| panic!("Lexer failed on case {i}: '{src}'"));
+
+            let parse_result = value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
+            if parse_result.has_errors() {
+                panic!("parse failed for {i}: '{src}'. Errors: {:?}", parse_result.into_errors());
+            }
+
+            let mut output = parse_result.into_output().unwrap();
+
+            value_expr_into_empty_range(&mut output);
+
+            assert_eq!(output.0, expected_ast, "ast mismatch on {i}: '{src}'");
         }
     }
 }

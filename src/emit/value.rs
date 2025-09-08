@@ -36,6 +36,13 @@ pub enum IrInstruction {
     Mod(IrRes, IrValue, IrValue, TypeExpr),
     Div(IrRes, IrValue, IrValue, TypeExpr),
     Equals(IrRes, IrValue, IrValue, TypeExpr),
+    NotEquals(IrRes, IrValue, IrValue, TypeExpr),
+    LessThan(IrRes, IrValue, IrValue, TypeExpr),
+    LessThanOrEquals(IrRes, IrValue, IrValue, TypeExpr),
+    GreaterThan(IrRes, IrValue, IrValue, TypeExpr),
+    GreaterThanOrEquals(IrRes, IrValue, IrValue, TypeExpr),
+    And(IrRes, IrValue, IrValue, TypeExpr),
+    Or(IrRes, IrValue, IrValue, TypeExpr),
     Break,
     Continue,
     Return(Option<IrValue>),
@@ -927,6 +934,202 @@ impl ValueExpr {
                         v1_res.unwrap(),
                         v2_res.unwrap(),
                         TypeExpr::from_value_expr(&v1.0, type_env),
+                    ),
+                ]);
+
+                (ir, as_rvar(var))
+            }
+            ValueExpr::NotEquals(lhs, rhs) => {
+                let mut ir = Vec::new();
+
+                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v1_instr);
+                if v1_res.is_none() {
+                    return (ir, None);
+                }
+
+                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v2_instr);
+                if v2_res.is_none() {
+                    return (ir, None);
+                }
+
+                let var = env.new_var();
+                ir.extend([
+                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
+                    IrInstruction::NotEquals(
+                        var.clone(),
+                        v1_res.unwrap(),
+                        v2_res.unwrap(),
+                        TypeExpr::from_value_expr(&lhs.0, type_env),
+                    ),
+                ]);
+
+                (ir, as_rvar(var))
+            }
+            ValueExpr::LessThan(lhs, rhs) => {
+                let mut ir = Vec::new();
+
+                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v1_instr);
+                if v1_res.is_none() {
+                    return (ir, None);
+                }
+
+                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v2_instr);
+                if v2_res.is_none() {
+                    return (ir, None);
+                }
+
+                let var = env.new_var();
+                ir.extend([
+                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
+                    IrInstruction::LessThan(
+                        var.clone(),
+                        v1_res.unwrap(),
+                        v2_res.unwrap(),
+                        TypeExpr::from_value_expr(&lhs.0, type_env),
+                    ),
+                ]);
+
+                (ir, as_rvar(var))
+            }
+            ValueExpr::LessThanOrEquals(lhs, rhs) => {
+                let mut ir = Vec::new();
+
+                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v1_instr);
+                if v1_res.is_none() {
+                    return (ir, None);
+                }
+
+                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v2_instr);
+                if v2_res.is_none() {
+                    return (ir, None);
+                }
+
+                let var = env.new_var();
+                ir.extend([
+                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
+                    IrInstruction::LessThanOrEquals(
+                        var.clone(),
+                        v1_res.unwrap(),
+                        v2_res.unwrap(),
+                        TypeExpr::from_value_expr(&lhs.0, type_env),
+                    ),
+                ]);
+
+                (ir, as_rvar(var))
+            }
+            ValueExpr::GreaterThan(lhs, rhs) => {
+                let mut ir = Vec::new();
+
+                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v1_instr);
+                if v1_res.is_none() {
+                    return (ir, None);
+                }
+
+                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v2_instr);
+                if v2_res.is_none() {
+                    return (ir, None);
+                }
+
+                let var = env.new_var();
+                ir.extend([
+                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
+                    IrInstruction::GreaterThan(
+                        var.clone(),
+                        v1_res.unwrap(),
+                        v2_res.unwrap(),
+                        TypeExpr::from_value_expr(&lhs.0, type_env),
+                    ),
+                ]);
+
+                (ir, as_rvar(var))
+            }
+            ValueExpr::GreaterThanOrEquals(lhs, rhs) => {
+                let mut ir = Vec::new();
+
+                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v1_instr);
+                if v1_res.is_none() {
+                    return (ir, None);
+                }
+
+                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v2_instr);
+                if v2_res.is_none() {
+                    return (ir, None);
+                }
+
+                let var = env.new_var();
+                ir.extend([
+                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
+                    IrInstruction::GreaterThanOrEquals(
+                        var.clone(),
+                        v1_res.unwrap(),
+                        v2_res.unwrap(),
+                        TypeExpr::from_value_expr(&lhs.0, type_env),
+                    ),
+                ]);
+
+                (ir, as_rvar(var))
+            }
+            ValueExpr::And(lhs, rhs) => {
+                let mut ir = Vec::new();
+
+                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v1_instr);
+                if v1_res.is_none() {
+                    return (ir, None);
+                }
+
+                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v2_instr);
+                if v2_res.is_none() {
+                    return (ir, None);
+                }
+
+                let var = env.new_var();
+                ir.extend([
+                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
+                    IrInstruction::And(
+                        var.clone(),
+                        v1_res.unwrap(),
+                        v2_res.unwrap(),
+                        TypeExpr::from_value_expr(&lhs.0, type_env),
+                    ),
+                ]);
+
+                (ir, as_rvar(var))
+            }
+            ValueExpr::Or(lhs, rhs) => {
+                let mut ir = Vec::new();
+
+                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v1_instr);
+                if v1_res.is_none() {
+                    return (ir, None);
+                }
+
+                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v2_instr);
+                if v2_res.is_none() {
+                    return (ir, None);
+                }
+
+                let var = env.new_var();
+                ir.extend([
+                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
+                    IrInstruction::Or(
+                        var.clone(),
+                        v1_res.unwrap(),
+                        v2_res.unwrap(),
+                        TypeExpr::from_value_expr(&lhs.0, type_env),
                     ),
                 ]);
 

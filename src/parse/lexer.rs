@@ -34,6 +34,11 @@ pub enum Token {
     ConstBool(bool),
     CharLiteral(char),
     Equals,
+    NotEquals,
+    LessThanOrEquals,
+    GreaterThanOrEquals,
+    And,
+    Or,
     Match,
     If,
     TypeOf,
@@ -73,7 +78,12 @@ impl Display for Token {
             Token::ConstInt(_) => "int",
             Token::ConstBool(_) => "bool",
             Token::CharLiteral(_) => "char",
-            Token::Equals => "equals",
+            Token::Equals => "==",
+            Token::NotEquals => "!=",
+            Token::LessThanOrEquals => "<=",
+            Token::GreaterThanOrEquals => ">=",
+            Token::And => "and",
+            Token::Or => "or",
             Token::If => "if",
             Token::Else => "else",
             Token::Let => "let",
@@ -145,10 +155,13 @@ pub fn lex_single<'a>(
             "as" => Token::As,
             "match" => Token::Match,
             "sus" => Token::Sus,
+            "and" => Token::And,
+            "or" => Token::Or,
             _ => Token::Ident(str.to_string()),
         });
 
-        let ctrl = one_of("!=:{};,&()-<>.+-*/%|[]@").map(Token::ControlChar);
+        let ctrl = one_of("!=:{};,&()-<>.+-*/%|[]@")
+            .map(Token::ControlChar);
 
         let string = string_lexer();
         let r#bool = choice((
@@ -159,6 +172,12 @@ pub fn lex_single<'a>(
         let num = num_literal();
 
         let equals = just("==").to(Token::Equals);
+        let not_equals = just("!=").to(Token::NotEquals);
+        let less_than_or_equals = just("<=").to(Token::LessThanOrEquals);
+        let greater_than_or_equals = just(">=").to(Token::GreaterThanOrEquals);
+        let and = just("and").to(Token::And);
+        let or = just("or").to(Token::Or);
+
         let scope_res = just("::").to(Token::ScopeRes);
         let thin_arrow = just("->").to(Token::ThinArrow);
 
@@ -238,6 +257,11 @@ pub fn lex_single<'a>(
             .or(scope_res)
             .or(r#bool)
             .or(equals)
+            .or(not_equals)
+            .or(less_than_or_equals)
+            .or(greater_than_or_equals)
+            .or(and)
+            .or(or)
             .or(keyword_or_ident)
             .or(ctrl)
             .or(string)

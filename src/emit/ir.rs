@@ -134,6 +134,69 @@ impl IrInstruction {
                     primitive_native_type_name(type_expr)
                 )
             }
+            IrInstruction::NotEquals(r, v1, v2, type_expr) => {
+                format!(
+                    "{r} = ConcDuckBool {{ value: {}.as_dgo_{}() != {}.as_dgo_{}() }}",
+                    v1.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                    v2.emit_as_go(),
+                    primitive_native_type_name(type_expr)
+                )
+            }
+            IrInstruction::LessThan(r, v1, v2, type_expr) => {
+                format!(
+                    "{r} = ConcDuckBool {{ value: {}.as_dgo_{}() < {}.as_dgo_{}() }}",
+                    v1.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                    v2.emit_as_go(),
+                    primitive_native_type_name(type_expr)
+                )
+            }
+            IrInstruction::LessThanOrEquals(r, v1, v2, type_expr) => {
+                format!(
+                    "{r} = ConcDuckBool {{ value: {}.as_dgo_{}() <= {}.as_dgo_{}() }}",
+                    v1.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                    v2.emit_as_go(),
+                    primitive_native_type_name(type_expr)
+                )
+            }
+            IrInstruction::GreaterThan(r, v1, v2, type_expr) => {
+                format!(
+                    "{r} = ConcDuckBool {{ value: {}.as_dgo_{}() > {}.as_dgo_{}() }}",
+                    v1.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                    v2.emit_as_go(),
+                    primitive_native_type_name(type_expr)
+                )
+            }
+            IrInstruction::GreaterThanOrEquals(r, v1, v2, type_expr) => {
+                format!(
+                    "{r} = ConcDuckBool {{ value: {}.as_dgo_{}() >= {}.as_dgo_{}() }}",
+                    v1.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                    v2.emit_as_go(),
+                    primitive_native_type_name(type_expr)
+                )
+            }
+            IrInstruction::And(r, v1, v2, type_expr) => {
+                format!(
+                    "{r} = ConcDuckBool {{ value: {}.as_dgo_{}() && {}.as_dgo_{}() }}",
+                    v1.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                    v2.emit_as_go(),
+                    primitive_native_type_name(type_expr)
+                )
+            }
+            IrInstruction::Or(r, v1, v2, type_expr) => {
+                format!(
+                    "{r} = ConcDuckBool {{ value: {}.as_dgo_{}() || {}.as_dgo_{}() }}",
+                    v1.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                    v2.emit_as_go(),
+                    primitive_native_type_name(type_expr)
+                )
+            }
             IrInstruction::Block(block_instr) => {
                 format!("{{\n{}\n}}", join_ir(block_instr))
             }

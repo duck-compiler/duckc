@@ -567,7 +567,14 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
         | ValueExpr::Div(lhs, rhs)
         | ValueExpr::Sub(lhs, rhs)
         | ValueExpr::Mod(lhs, rhs)
-        | ValueExpr::Equals(lhs, rhs) => {
+        | ValueExpr::Equals(lhs, rhs)
+        | ValueExpr::NotEquals(lhs, rhs)
+        | ValueExpr::LessThan(lhs, rhs)
+        | ValueExpr::LessThanOrEquals(lhs, rhs)
+        | ValueExpr::GreaterThan(lhs, rhs)
+        | ValueExpr::GreaterThanOrEquals(lhs, rhs)
+        | ValueExpr::And(lhs, rhs)
+        | ValueExpr::Or(lhs, rhs) => {
             replace_generics_in_value_expr(&mut lhs.0, set_params);
             replace_generics_in_value_expr(&mut rhs.0, set_params);
         }
@@ -849,7 +856,14 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
         | ValueExpr::Mod(lhs, rhs)
         | ValueExpr::Sub(lhs, rhs)
         | ValueExpr::Div(lhs, rhs)
-        | ValueExpr::Equals(lhs, rhs) => {
+        | ValueExpr::Equals(lhs, rhs)
+        | ValueExpr::NotEquals(lhs, rhs)
+        | ValueExpr::LessThan(lhs, rhs)
+        | ValueExpr::LessThanOrEquals(lhs, rhs)
+        | ValueExpr::GreaterThan(lhs, rhs)
+        | ValueExpr::GreaterThanOrEquals(lhs, rhs)
+        | ValueExpr::And(lhs, rhs)
+        | ValueExpr::Or(lhs, rhs) => {
             instantiate_generics_value_expr(&mut lhs.0, type_env);
             instantiate_generics_value_expr(&mut rhs.0, type_env);
         }
@@ -1175,14 +1189,21 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
             }
             sort_fields_value_expr(&mut value_expr.0);
         }
-        ValueExpr::Add(l, r)
-        | ValueExpr::Mul(l, r)
-        | ValueExpr::Mod(l, r)
-        | ValueExpr::Sub(l, r)
-        | ValueExpr::Div(l, r)
-        | ValueExpr::Equals(l, r) => {
-            sort_fields_value_expr(&mut l.0);
-            sort_fields_value_expr(&mut r.0);
+        ValueExpr::Add(lhs, rhs)
+        | ValueExpr::Mul(lhs, rhs)
+        | ValueExpr::Mod(lhs, rhs)
+        | ValueExpr::Sub(lhs, rhs)
+        | ValueExpr::Div(lhs, rhs)
+        | ValueExpr::Equals(lhs, rhs)
+        | ValueExpr::NotEquals(lhs, rhs)
+        | ValueExpr::LessThan(lhs, rhs)
+        | ValueExpr::LessThanOrEquals(lhs, rhs)
+        | ValueExpr::GreaterThan(lhs, rhs)
+        | ValueExpr::GreaterThanOrEquals(lhs, rhs)
+        | ValueExpr::And(lhs, rhs)
+        | ValueExpr::Or(lhs, rhs) => {
+            sort_fields_value_expr(&mut lhs.0);
+            sort_fields_value_expr(&mut rhs.0);
         }
         ValueExpr::ArrayAccess(target, idx) => {
             sort_fields_value_expr(&mut target.0);
@@ -1935,7 +1956,14 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             typeresolve_value_expr(&mut lhs.0, type_env);
             typeresolve_value_expr(&mut rhs.0, type_env);
         }
-        ValueExpr::Equals(lhs, rhs) => {
+        ValueExpr::Equals(lhs, rhs)
+        | ValueExpr::NotEquals(lhs, rhs)
+        | ValueExpr::LessThan(lhs, rhs)
+        | ValueExpr::LessThanOrEquals(lhs, rhs)
+        | ValueExpr::GreaterThan(lhs, rhs)
+        | ValueExpr::GreaterThanOrEquals(lhs, rhs)
+        | ValueExpr::And(lhs, rhs)
+        | ValueExpr::Or(lhs, rhs) => {
             typeresolve_value_expr(&mut lhs.0, type_env);
             typeresolve_value_expr(&mut rhs.0, type_env);
         }
@@ -2053,9 +2081,16 @@ fn resolve_implicit_function_return_type(
             ValueExpr::BoolNegate(value_expr) => {
                 flatten_returns(&value_expr.as_ref().0, return_types_found, type_env);
             }
-            ValueExpr::Equals(left, right) => {
-                flatten_returns(&left.as_ref().0, return_types_found, type_env);
-                flatten_returns(&right.as_ref().0, return_types_found, type_env);
+            ValueExpr::Equals(lhs, rhs)
+            | ValueExpr::NotEquals(lhs, rhs)
+            | ValueExpr::LessThan(lhs, rhs)
+            | ValueExpr::LessThanOrEquals(lhs, rhs)
+            | ValueExpr::GreaterThan(lhs, rhs)
+            | ValueExpr::GreaterThanOrEquals(lhs, rhs)
+            | ValueExpr::And(lhs, rhs)
+            | ValueExpr::Or(lhs, rhs) => {
+                flatten_returns(&lhs.as_ref().0, return_types_found, type_env);
+                flatten_returns(&rhs.as_ref().0, return_types_found, type_env);
             }
             ValueExpr::FunctionCall { .. }
             | ValueExpr::Int(..)
