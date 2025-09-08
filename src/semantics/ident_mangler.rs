@@ -542,7 +542,10 @@ pub fn mangle_value_expr(
             mangle_value_expr(&mut lhs.0, global_prefix, prefix, mangle_env);
             mangle_value_expr(&mut rhs.0, global_prefix, prefix, mangle_env);
         }
-        ValueExpr::Mul(lhs, rhs) => {
+        ValueExpr::Mul(lhs, rhs)
+        | ValueExpr::Sub(lhs, rhs)
+        | ValueExpr::Mod(lhs, rhs)
+        | ValueExpr::Div(lhs, rhs) => {
             mangle_value_expr(&mut lhs.0, global_prefix, prefix, mangle_env);
             mangle_value_expr(&mut rhs.0, global_prefix, prefix, mangle_env);
         }

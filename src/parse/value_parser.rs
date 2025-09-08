@@ -80,7 +80,10 @@ pub enum ValueExpr {
     VarAssign(Box<Spanned<Assignment>>),
     VarDecl(Box<Spanned<Declaration>>),
     Add(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
+    Sub(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
     Mul(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
+    Div(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
+    Mod(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
     BoolNegate(Box<Spanned<ValueExpr>>),
     Equals(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
     InlineGo(String),
@@ -151,6 +154,9 @@ impl ValueExpr {
             | ValueExpr::Equals(..)
             | ValueExpr::Lambda(..)
             | ValueExpr::FormattedString(..)
+            | ValueExpr::Sub(..)
+            | ValueExpr::Div(..)
+            | ValueExpr::Mod(..)
             | ValueExpr::FunctionCall { .. } => true,
         }
     }
@@ -316,7 +322,7 @@ where
                                 initializer: initializer.clone(),
                             },
                             initializer.1,
-                        )
+                            )
                             .into(),
                     )
                 })
@@ -707,45 +713,63 @@ where
                                 value_expr: value_expr.clone(),
                             },
                             e.span(),
-                        )
+                            )
                             .into(),
                     )
                 })
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            let prod = pen
-                .clone()
-                .or(atom.clone())
+            let term = pen.clone().or(atom.clone());
+
+            let prod = term
                 .clone()
                 .then(
-                    just(Token::ControlChar('*'))
-                        .ignore_then(pen.clone().or(atom.clone()))
-                        .repeated()
-                        .collect::<Vec<_>>(),
+                    choice((
+                        just(Token::ControlChar('*')),
+                        just(Token::ControlChar('/')),
+                        just(Token::ControlChar('%')),
+                    ))
+                    .then(term)
+                    .repeated()
+                    .collect::<Vec<_>>(),
                 )
                 .map(|(init, additional)| {
-                    additional.into_iter().fold(init, |acc, x| {
-                        (ValueExpr::Mul(acc.into(), x.clone().into()), x.1)
+                    additional.into_iter().fold(init, |acc, (op, x)| {
+                        let span = acc.1.union(x.1);
+                        let new_expr = match op {
+                            Token::ControlChar('*') => ValueExpr::Mul(Box::new(acc), Box::new(x)),
+                            Token::ControlChar('/') => ValueExpr::Div(Box::new(acc), Box::new(x)),
+                            Token::ControlChar('%') => ValueExpr::Mod(Box::new(acc), Box::new(x)),
+                            _ => unreachable!(),
+                        };
+                        (new_expr, span)
                     })
                 })
-                .map_with(|x, e| (x.0, e.span()))
                 .boxed();
 
             let add = prod
                 .clone()
                 .then(
-                    just(Token::ControlChar('+'))
-                        .ignore_then(prod.clone())
-                        .repeated()
-                        .collect::<Vec<_>>(),
+                    choice((
+                        just(Token::ControlChar('+')),
+                        just(Token::ControlChar('-')),
+                    ))
+                    .then(prod.clone())
+                    .repeated()
+                    .collect::<Vec<_>>(),
                 )
                 .map(|(init, additional)| {
-                    additional.into_iter().fold(init, |acc, x| {
-                        (ValueExpr::Add(acc.into(), x.clone().into()), x.1)
+                    additional.into_iter().fold(init, |acc, (op, x)| {
+                        let span = acc.1.union(x.1);
+                        let new_expr = match op {
+                            Token::ControlChar('+') => ValueExpr::Add(Box::new(acc), Box::new(x)),
+                            Token::ControlChar('-') => ValueExpr::Sub(Box::new(acc), Box::new(x)),
+                            _ => unreachable!(),
+                        };
+                        (new_expr, span)
                     })
                 })
-                .map_with(|x, e| (x.0, e.span()))
                 .boxed();
 
             let equals = add
@@ -884,9 +908,12 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
                 })
             }
         }
-        ValueExpr::Add(v1, v2) => {
-            value_expr_into_empty_range(v1);
-            value_expr_into_empty_range(v2);
+        ValueExpr::Sub(lhs, rhs)
+        | ValueExpr::Mod(lhs, rhs)
+        | ValueExpr::Div(lhs, rhs)
+        | ValueExpr::Add(lhs, rhs) => {
+            value_expr_into_empty_range(lhs);
+            value_expr_into_empty_range(rhs);
         }
         ValueExpr::If {
             condition,
@@ -2630,6 +2657,142 @@ mod tests {
                 value_expr_parser(make_input).parse(make_input(empty_range(), tokens.as_slice()));
             assert_eq!(typedef_parse_result.has_errors(), false);
             assert_eq!(typedef_parse_result.has_output(), true);
+        }
+    }
+
+    fn int(i: i64) -> Box<Spanned<ValueExpr>> {
+        ValueExpr::Int(i).into_empty_span().into()
+    }
+
+    fn add(lhs: Box<Spanned<ValueExpr>>, rhs: Box<Spanned<ValueExpr>>) -> ValueExpr {
+        ValueExpr::Add(lhs, rhs)
+    }
+
+    fn sub(lhs: Box<Spanned<ValueExpr>>, rhs: Box<Spanned<ValueExpr>>) -> ValueExpr {
+        ValueExpr::Sub(lhs, rhs)
+    }
+
+    fn mul(lhs: Box<Spanned<ValueExpr>>, rhs: Box<Spanned<ValueExpr>>) -> ValueExpr {
+        ValueExpr::Mul(lhs, rhs)
+    }
+
+    fn div(lhs: Box<Spanned<ValueExpr>>, rhs: Box<Spanned<ValueExpr>>) -> ValueExpr {
+        ValueExpr::Div(lhs, rhs)
+    }
+
+    fn r#mod(lhs: Box<Spanned<ValueExpr>>, rhs: Box<Spanned<ValueExpr>>) -> ValueExpr {
+        ValueExpr::Mod(lhs, rhs)
+    }
+
+    #[test]
+    fn test_arithmetic_expressions() {
+        let test_cases = vec![
+            ("1 + 2", add(int(1), int(2))),
+            ("10 - 3", sub(int(10), int(3))),
+            ("4 * 5", mul(int(4), int(5))),
+            ("20 / 4", div(int(20), int(4))),
+            ("21 % 5", r#mod(int(21), int(5))),
+            ("2 + 3 * 4", add(int(2), mul(int(3), int(4)).into_empty_span().into())),
+            ("10 - 8 / 2", sub(int(10), div(int(8), int(2)).into_empty_span().into())),
+            ("1 + 10 % 3", add(int(1), r#mod(int(10), int(3)).into_empty_span().into())),
+            (
+                "10 - 2 + 3",
+                add(sub(int(10), int(2)).into_empty_span().into(), int(3)),
+            ),
+            (
+                "100 / 10 / 2",
+                div(div(int(100), int(10)).into_empty_span().into(), int(2)),
+            ),
+            (
+                "10 * 2 / 5 * 3",
+                mul(
+                    div(
+                        mul(int(10), int(2)).into_empty_span().into(),
+                        int(5),
+                    )
+                    .into_empty_span()
+                    .into(),
+                    int(3),
+                ),
+            ),
+            (
+                "(2 + 3) * 4",
+                mul(add(int(2), int(3)).into_empty_span().into(), int(4)),
+            ),
+            (
+                "2 * (3 + 4)",
+                mul(int(2), add(int(3), int(4)).into_empty_span().into()),
+            ),
+            (
+                "(100 - 5 * 3) / 5 + 25 % 6",
+                add(
+                    div(
+                        sub(int(100), mul(int(5), int(3)).into_empty_span().into())
+                            .into_empty_span()
+                            .into(),
+                        int(5),
+                    )
+                    .into_empty_span()
+                    .into(),
+                    r#mod(int(25), int(6)).into_empty_span().into(),
+                ),
+            ),
+            (
+                "a() + b() * c()",
+                add(
+                    ValueExpr::FunctionCall {
+                        target: var("a"),
+                        params: vec![],
+                        type_params: None
+                    }.into_empty_span().into(),
+                    mul(
+                        ValueExpr::FunctionCall {
+                            target: var("b"),
+                            params: vec![],
+                            type_params: None
+                        }.into_empty_span().into(),
+                        ValueExpr::FunctionCall {
+                            target: var("c"),
+                            params: vec![],
+                            type_params: None
+                        }.into_empty_span().into(),
+                    ).into_empty_span().into()
+                )
+            ),
+            (
+                "1 + (2 + (3 + 4))",
+                 add(
+                    int(1),
+                    add(
+                        int(2),
+                        add(int(3), int(4))
+                            .into_empty_span()
+                            .into()
+                    ).into_empty_span().into()
+                )
+            ),
+            (
+                "1 * 2 + 3 * 4",
+                add(
+                    mul(int(1), int(2)).into_empty_span().into(),
+                    mul(int(3), int(4)).into_empty_span().into()
+                )
+            )
+        ];
+
+        for (i, (src, expected_ast)) in test_cases.into_iter().enumerate() {
+            let lex_result = lex_parser("test", "").parse(src).into_result().unwrap_or_else(|_| panic!("Lexer failed on case {i}: '{src}'"));
+
+            let parse_result = value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
+
+            if parse_result.has_errors() {
+                panic!("parse failed for {i}: '{src}'. Errors: {:?}", parse_result.into_errors());
+            }
+
+            let mut output = parse_result.into_output().unwrap();
+
+            value_expr_into_empty_range(&mut output);
+            assert_eq!(output.0, expected_ast, "unexpected ast {i}: '{src}'");
         }
     }
 }

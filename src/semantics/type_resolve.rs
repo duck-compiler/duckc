@@ -562,7 +562,12 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
 
 fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<String, TypeExpr>) {
     match expr {
-        ValueExpr::Add(lhs, rhs) | ValueExpr::Mul(lhs, rhs) | ValueExpr::Equals(lhs, rhs) => {
+        ValueExpr::Add(lhs, rhs)
+        | ValueExpr::Mul(lhs, rhs)
+        | ValueExpr::Div(lhs, rhs)
+        | ValueExpr::Sub(lhs, rhs)
+        | ValueExpr::Mod(lhs, rhs)
+        | ValueExpr::Equals(lhs, rhs) => {
             replace_generics_in_value_expr(&mut lhs.0, set_params);
             replace_generics_in_value_expr(&mut rhs.0, set_params);
         }
@@ -839,7 +844,12 @@ fn mangle_generics_name(
 
 fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv) {
     match expr {
-        ValueExpr::Add(lhs, rhs) | ValueExpr::Mul(lhs, rhs) | ValueExpr::Equals(lhs, rhs) => {
+        ValueExpr::Add(lhs, rhs)
+        | ValueExpr::Mul(lhs, rhs)
+        | ValueExpr::Mod(lhs, rhs)
+        | ValueExpr::Sub(lhs, rhs)
+        | ValueExpr::Div(lhs, rhs)
+        | ValueExpr::Equals(lhs, rhs) => {
             instantiate_generics_value_expr(&mut lhs.0, type_env);
             instantiate_generics_value_expr(&mut rhs.0, type_env);
         }
@@ -1165,7 +1175,12 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
             }
             sort_fields_value_expr(&mut value_expr.0);
         }
-        ValueExpr::Add(l, r) | ValueExpr::Mul(l, r) | ValueExpr::Equals(l, r) => {
+        ValueExpr::Add(l, r)
+        | ValueExpr::Mul(l, r)
+        | ValueExpr::Mod(l, r)
+        | ValueExpr::Sub(l, r)
+        | ValueExpr::Div(l, r)
+        | ValueExpr::Equals(l, r) => {
             sort_fields_value_expr(&mut l.0);
             sort_fields_value_expr(&mut r.0);
         }
@@ -1912,11 +1927,11 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             replace_if_const(&target_type, &mut assignment.0.value_expr.0);
             typeresolve_value_expr(&mut assignment.0.value_expr.0, type_env);
         }
-        ValueExpr::Add(lhs, rhs) => {
-            typeresolve_value_expr(&mut lhs.0, type_env);
-            typeresolve_value_expr(&mut rhs.0, type_env);
-        }
-        ValueExpr::Mul(lhs, rhs) => {
+        ValueExpr::Add(lhs, rhs)
+        | ValueExpr::Sub(lhs, rhs)
+        | ValueExpr::Div(lhs, rhs)
+        | ValueExpr::Mul(lhs, rhs)
+        | ValueExpr::Mod(lhs, rhs) => {
             typeresolve_value_expr(&mut lhs.0, type_env);
             typeresolve_value_expr(&mut rhs.0, type_env);
         }
@@ -2027,11 +2042,11 @@ fn resolve_implicit_function_return_type(
             ValueExpr::VarDecl(declaration) => {
                 flatten_returns(&declaration.0.initializer.0, return_types_found, type_env);
             }
-            ValueExpr::Add(left, right) => {
-                flatten_returns(&left.as_ref().0, return_types_found, type_env);
-                flatten_returns(&right.as_ref().0, return_types_found, type_env);
-            }
-            ValueExpr::Mul(left, right) => {
+            ValueExpr::Add(left, right)
+            | ValueExpr::Sub(left, right)
+            | ValueExpr::Mod(left, right)
+            | ValueExpr::Div(left, right)
+            | ValueExpr::Mul(left, right) => {
                 flatten_returns(&left.as_ref().0, return_types_found, type_env);
                 flatten_returns(&right.as_ref().0, return_types_found, type_env);
             }

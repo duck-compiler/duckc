@@ -32,6 +32,9 @@ pub enum IrInstruction {
     StringConcat(IrRes, Vec<IrValue>),
     Add(IrRes, IrValue, IrValue, TypeExpr),
     Mul(IrRes, IrValue, IrValue, TypeExpr),
+    Sub(IrRes, IrValue, IrValue, TypeExpr),
+    Mod(IrRes, IrValue, IrValue, TypeExpr),
+    Div(IrRes, IrValue, IrValue, TypeExpr),
     Equals(IrRes, IrValue, IrValue, TypeExpr),
     Break,
     Continue,
@@ -260,6 +263,99 @@ impl ValueExpr {
         env: &mut ToIr,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
+            ValueExpr::Sub(lhs, rhs) => {
+                let mut ir = Vec::new();
+
+                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v1_instr);
+                if v1_res.is_none() {
+                    return (ir, None);
+                }
+                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v2_instr);
+                if v2_res.is_none() {
+                    return (ir, None);
+                }
+
+                let type_expr = TypeExpr::from_value_expr(&lhs.0, type_env);
+
+                let var = env.new_var();
+                ir.push(IrInstruction::VarDecl(
+                    var.clone(),
+                    type_expr.as_go_type_annotation(type_env),
+                ));
+
+                ir.push(IrInstruction::Sub(
+                    var.clone(),
+                    v1_res.unwrap(),
+                    v2_res.unwrap(),
+                    type_expr,
+                ));
+
+                (ir, as_rvar(var))
+            }
+            ValueExpr::Div(lhs, rhs) => {
+                let mut ir = Vec::new();
+
+                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v1_instr);
+                if v1_res.is_none() {
+                    return (ir, None);
+                }
+                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v2_instr);
+                if v2_res.is_none() {
+                    return (ir, None);
+                }
+
+                let type_expr = TypeExpr::from_value_expr(&lhs.0, type_env);
+
+                let var = env.new_var();
+                ir.push(IrInstruction::VarDecl(
+                    var.clone(),
+                    type_expr.as_go_type_annotation(type_env),
+                ));
+
+                ir.push(IrInstruction::Div(
+                    var.clone(),
+                    v1_res.unwrap(),
+                    v2_res.unwrap(),
+                    type_expr,
+                ));
+
+                (ir, as_rvar(var))
+            }
+            ValueExpr::Mod(lhs, rhs) => {
+                let mut ir = Vec::new();
+
+                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v1_instr);
+                if v1_res.is_none() {
+                    return (ir, None);
+                }
+                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env);
+                ir.extend(v2_instr);
+                if v2_res.is_none() {
+                    return (ir, None);
+                }
+
+                let type_expr = TypeExpr::from_value_expr(&lhs.0, type_env);
+
+                let var = env.new_var();
+                ir.push(IrInstruction::VarDecl(
+                    var.clone(),
+                    type_expr.as_go_type_annotation(type_env),
+                ));
+
+                ir.push(IrInstruction::Mod(
+                    var.clone(),
+                    v1_res.unwrap(),
+                    v2_res.unwrap(),
+                    type_expr,
+                ));
+
+                (ir, as_rvar(var))
+            }
             ValueExpr::FormattedString(contents) => {
                 let mut instr = Vec::new();
 

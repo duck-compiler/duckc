@@ -87,6 +87,36 @@ impl IrInstruction {
                     primitive_native_type_name(type_expr),
                 )
             }
+            IrInstruction::Sub(r, v1, v2, type_expr) => {
+                format!(
+                    "{r} = {} {{ {}.as_dgo_{}() - {}.as_dgo_{}() }}",
+                    primitive_conc_type_name(type_expr),
+                    v1.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                    v2.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                )
+            }
+            IrInstruction::Div(r, v1, v2, type_expr) => {
+                format!(
+                    "{r} = {} {{ {}.as_dgo_{}() / {}.as_dgo_{}() }}",
+                    primitive_conc_type_name(type_expr),
+                    v1.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                    v2.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                )
+            }
+            IrInstruction::Mod(r, v1, v2, type_expr) => {
+                format!(
+                    "{r} = {} {{ {}.as_dgo_{}() % {}.as_dgo_{}() }}",
+                    primitive_conc_type_name(type_expr),
+                    v1.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                    v2.emit_as_go(),
+                    primitive_native_type_name(type_expr),
+                )
+            }
             IrInstruction::Continue => "continue".to_string(),
             IrInstruction::Break => "break".to_string(),
             IrInstruction::Return(o) => format!(
