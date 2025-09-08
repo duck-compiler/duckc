@@ -5,10 +5,10 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        duckx_component_parser::DuckxComponent, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, tsx_component_parser::{tsx_component_parser, TsxComponent}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{DuckxContents, ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, Spanned, SS
+        duckx_component_parser::{duckx_component_parser, DuckxComponent}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, tsx_component_parser::{tsx_component_parser, TsxComponent}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, Spanned, SS
     },
     semantics::ident_mangler::{
-        mangle, mangle_tsx_component, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
+        mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
     },
 };
 
@@ -51,7 +51,8 @@ impl SourceFile {
             let mut mangle_env = MangleEnv {
                 sub_mods: s.sub_modules.iter().map(|x| x.0.clone()).collect(),
                 global_prefix: global_prefix.clone(),
-                components: s.tsx_components.iter().map(|x| x.name.clone()).collect(),
+                tsx_components: s.tsx_components.iter().map(|x| x.name.clone()).collect(),
+                duckx_components: s.duckx_components.iter().map(|x| x.name.clone()).collect(),
                 imports: {
                     let mut imports = HashMap::new();
                     if with_std {
@@ -113,6 +114,16 @@ impl SourceFile {
                 for struct_definition in src.struct_definitions {
                     mangle_env.insert_type(struct_definition.name[prefix.len()..].to_string());
                     result.struct_definitions.push(struct_definition);
+                }
+
+                for tsx_component in src.tsx_components {
+                    mangle_env.insert_ident(tsx_component.name[prefix.len()..].to_string());
+                    result.tsx_components.push(tsx_component);
+                }
+
+                for duck_component in src.duckx_components {
+                    mangle_env.insert_ident(duck_component.name[prefix.len()..].to_string());
+                    result.duckx_components.push(duck_component);
                 }
 
                 for u in &src.use_statements {
@@ -206,6 +217,13 @@ impl SourceFile {
                 result.tsx_components.push(c.clone());
             }
 
+            for c in &s.duckx_components {
+                // todo: mangle components in tsx
+                let mut c = c.clone();
+                mangle_duckx_component(&mut c, global_prefix, prefix, &mut mangle_env);
+                result.duckx_components.push(c.clone());
+            }
+
             result
         }
 
@@ -214,7 +232,8 @@ impl SourceFile {
         let mut mangle_env = MangleEnv {
             sub_mods: Vec::new(),
             global_prefix: global_prefix.clone(),
-            components: r.tsx_components.iter().map(|x| x.name.clone()).collect(),
+            tsx_components: r.tsx_components.iter().map(|x| x.name.clone()).collect(),
+            duckx_components: r.duckx_components.iter().map(|x| x.name.clone()).collect(),
             imports: HashMap::new(),
             names: vec![
                 r.function_definitions
@@ -271,6 +290,16 @@ impl SourceFile {
 
                 append_global_prefix_value_expr(&mut m.value_expr.0, &mut mangle_env);
             }
+        }
+
+        for s in &mut r.duckx_components {
+            let mut c = global_prefix.clone();
+
+            append_global_prefix_type_expr(&mut s.props_type.0, &mut mangle_env);
+            append_global_prefix_value_expr(&mut s.value_expr.0, &mut mangle_env);
+
+            c.extend(unmangle(&s.name));
+            s.name = mangle(&c);
         }
 
         for s in &mut r.tsx_components {
@@ -722,6 +751,7 @@ where
             use_statement_parser().map(SourceUnit::Use),
             type_definition_parser().map(SourceUnit::Type),
             tsx_component_parser().map(SourceUnit::Component),
+            duckx_component_parser(make_input.clone()).map(SourceUnit::Template),
             struct_definition_parser(make_input.clone()).map(SourceUnit::Struct),
             function_definition_parser(make_input).map(SourceUnit::Func),
             just(Token::Module)
@@ -749,7 +779,7 @@ where
             let mut use_statements = Vec::new();
             let mut sub_modules = Vec::new();
             let mut tsx_components = Vec::new();
-            let mut template_components  = Vec::new();
+            let mut template_components = Vec::new();
 
             for source_unit in source_units {
                 use SourceUnit::*;
@@ -760,7 +790,7 @@ where
                     Use(def) => use_statements.push(def),
                     Module(name, def) => sub_modules.push((name, def)),
                     Component(tsx_component) => tsx_components.push(tsx_component),
-                    Template(duckx_component) => template_components.push(tsx_component),
+                    Template(duckx_component) => template_components.push(duckx_component),
                 }
             }
 
@@ -771,6 +801,7 @@ where
                 use_statements,
                 sub_modules,
                 tsx_components,
+                duckx_components: template_components,
             }
         })
     })
@@ -784,12 +815,12 @@ mod tests {
 
     use crate::parse::{
         Field,
-        tsx_component_parser::TsxComponent,
         function_parser::FunctionDefintion,
         lexer::lex_parser,
         make_input,
         source_file_parser::{SourceFile, source_file_parser},
         struct_parser::StructDefinition,
+        tsx_component_parser::TsxComponent,
         type_parser::{Duck, TypeDefinition, TypeExpr},
         use_statement_parser::{Indicator, UseStatement},
         value_parser::{

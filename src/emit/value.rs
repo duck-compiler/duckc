@@ -215,7 +215,11 @@ fn walk_access(
     )
 }
 
-fn find_client_components(obj: &Vec<ValHtmlStringContents>, out: &mut Vec<String>, type_env: &mut TypeEnv) {
+fn find_client_components(
+    obj: &Vec<ValHtmlStringContents>,
+    out: &mut Vec<String>,
+    type_env: &mut TypeEnv,
+) {
     for c in obj {
         match c {
             ValHtmlStringContents::Expr((ValueExpr::HtmlString(contents), _)) => {
@@ -396,7 +400,7 @@ impl ValueExpr {
             ValueExpr::HtmlString(_) => todo!(),
             ValueExpr::HtmlString(contents) => {
                 let mut out = Vec::new();
-                find_client_components(contents, &mut out);
+                find_client_components(contents, &mut out, type_env);
                 dbg!(out);
                 std::process::exit(0);
             }

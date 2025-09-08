@@ -443,8 +443,11 @@ fn parse_src_file(
     for s in &std_src_file.tsx_components {
         result.tsx_components.push(s.clone());
     }
+    for s in &std_src_file.duckx_components {
+        result.duckx_components.push(s.clone());
+    }
 
-    result
+    dbg!(result)
 }
 
 fn typecheck(src_file_ast: &mut SourceFile) -> TypeEnv {

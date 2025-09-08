@@ -8,17 +8,11 @@ use tree_sitter::Parser as TSParser;
 
 use crate::{
     parse::{
-        SS, Spanned,
-        function_parser::{FunctionDefintion, LambdaFunctionExpr},
-        source_file_parser::SourceFile,
-        struct_parser::StructDefinition,
-        tsx_component_parser::{
-            Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
-        },
-        type_parser::{Duck, TypeDefinition, TypeExpr},
-        value_parser::{
+        duckx_component_parser::DuckxComponent, function_parser::{FunctionDefintion, LambdaFunctionExpr}, source_file_parser::SourceFile, struct_parser::StructDefinition, tsx_component_parser::{
+            do_edits, Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit
+        }, type_parser::{Duck, TypeDefinition, TypeExpr}, value_parser::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
-        },
+        }, Spanned, SS
     },
     semantics::ident_mangler::mangle,
     tags::Tag,
@@ -110,6 +104,7 @@ pub struct TypeEnv {
     pub function_headers: HashMap<String, FunHeader>,
     pub function_definitions: Vec<FunctionDefintion>,
     pub tsx_components: Vec<TsxComponent>,
+    pub duckx_component: Vec<DuckxComponent>,
     pub tsx_component_dependencies: HashMap<String, TsxComponentDependencies>,
     pub struct_definitions: Vec<StructDefinition>,
     pub generic_fns_generated: Vec<FunctionDefintion>,
@@ -125,6 +120,7 @@ impl Default for TypeEnv {
             type_aliases: vec![HashMap::new()],
             all_types: vec![],
             tsx_components: Vec::new(),
+            duckx_component: Vec::new(),
             tsx_component_dependencies: HashMap::new(),
             function_headers: HashMap::new(),
             function_definitions: Vec::new(),

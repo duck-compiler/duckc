@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use colored::Colorize;
 use tree_sitter::{Node, Parser};
 
 use crate::parse::{
+    duckx_component_parser::DuckxComponent,
     function_parser::LambdaFunctionExpr,
-    tsx_component_parser::{do_edits, Edit, TsxComponent, TsxSourceUnit},
+    tsx_component_parser::{Edit, TsxComponent, TsxSourceUnit, do_edits},
     type_parser::{Duck, TypeExpr},
     value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr},
 };
@@ -17,7 +17,8 @@ pub struct MangleEnv {
     pub global_prefix: Vec<String>,
     pub names: Vec<Vec<String>>,
     pub types: Vec<Vec<String>>,
-    pub components: Vec<String>,
+    pub tsx_components: Vec<String>,
+    pub duckx_components: Vec<String>,
 }
 
 pub const MANGLE_SEP: &str = "_____";
@@ -64,7 +65,7 @@ impl MangleEnv {
             return Some(res);
         }
 
-        if self.components.contains(ident.first().unwrap()) {
+        if self.tsx_components.contains(ident.first().unwrap()) {
             let mut x = Vec::new();
             if is_global {
                 // x.extend_from_slice(&self.global_prefix);
@@ -307,6 +308,14 @@ pub fn mangle_type_expression(
         }
         _ => {}
     }
+}
+
+pub fn mangle_duckx_component(
+    comp: &mut DuckxComponent,
+    global_prefix: &Vec<String>,
+    prefix: &Vec<String>,
+    mangle_env: &mut MangleEnv,
+) {
 }
 
 pub fn mangle_tsx_component(

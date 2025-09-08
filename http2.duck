@@ -29,7 +29,7 @@ component Counter(props: { initial: Int }) tsx {
 }
 
 template Page(props: { title: String, x: String[] }) duckx {
-    let x = <><div id="counter_piopiaf"></div></><>
+    let x = <><div id="counter_piopiaf"></div></>;
     return (
         <>
             <html>
