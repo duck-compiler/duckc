@@ -174,24 +174,25 @@ pub fn opening_self_closing<'a>()
 -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a, char>>> + Clone {
     just("<")
         .and_is(just("</").not())
-        .then(
+        .ignore_then(
             any()
-                .filter(|c: &char| *c != '/')
+                .and_is(just(">").not())
+                .and_is(just("/>").not())
                 .repeated()
                 .collect::<String>(),
         )
-        .then(just("/>"))
-        .rewind()
-        .then(
-            just("<").and_is(just("</").not()).then(
-                any()
-                    .filter(|c: &char| *c != ' ' && *c != '>')
-                    .repeated()
-                    .collect::<String>(),
-            ),
-        )
-        .map(|(((pre, main), close), x)| {
-            let complete = format!("<{}", x.1);
+        .then_ignore(just("/>"))
+        // .rewind()
+        // .then(
+        //     just("<").and_is(just("</").not()).then(
+        //         any()
+        //             .filter(|c: &char| *c != ' ' && *c != '>')
+        //             .repeated()
+        //             .collect::<String>(),
+        //     ),
+        // )
+        .map(|x| {
+            let complete = format!("<{}/>", x);
             complete
         })
 }
@@ -199,6 +200,7 @@ pub fn opening_self_closing<'a>()
 pub fn opening_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a, char>>> + Clone {
     just("<")
         .and_is(just("</").not())
+        .and_is(opening_self_closing().not())
         .then(
             any()
                 .filter(|c: &char| *c != '>')
@@ -232,15 +234,15 @@ pub fn duckx_parse_html_string<'a>(
                         .rewind()
                         .ignore_then(duckx_lexer.clone())
                         .map(|x| RawHtmlStringContents::Tokens(x)),
-                    opening_self_closing().map(|y| {
+                    opening_self_closing().map(|in_html| {
                         RawHtmlStringContents::Sub(Token::HtmlString(vec![
-                            HtmlStringContents::String(y),
+                            HtmlStringContents::String(dbg!(in_html)),
                         ]))
                     }),
                     opening_tag()
                         .rewind()
                         .ignore_then(e.clone())
-                        .map(|x| RawHtmlStringContents::Sub(x)),
+                        .map(|in_html_open| RawHtmlStringContents::Sub(dbg!(in_html_open))),
                     any()
                         .and_is(closing_tag().not())
                         // .filter(|c: &char| *c != '{' && *c != '<')
@@ -311,10 +313,18 @@ pub fn duckx_contents_in_curly_braces<'a>(
             .ignore_then(
                 choice((
                     just("{").rewind().ignore_then(duckx_lexer.clone()),
+                    opening_self_closing().map(|x| {
+                        dbg!("in self close tag big", &x);
+                        vec![(
+                            Token::HtmlString(vec![HtmlStringContents::String(format!("{x}"))]),
+                            empty_range(),
+                        )]
+                    }),
                     opening_tag()
                         .rewind()
                         .ignore_then(duckx_parse_html_string(duckx_lexer.clone()))
                         .map_with(move |x, e| {
+                            dbg!("in open tag big");
                             vec![(
                                 x,
                                 SS {
@@ -637,7 +647,7 @@ mod tests {
     #[test]
     fn test_lex() {
         let test_cases = vec![
-            ("duckx {let hello = <Counter/>;}", vec![]),
+            ("duckx {let hello = <> <Counter/> </>;}", vec![]),
             (
                 "duckx {let hello = <> {ti <span id={props.id} hello={123}></span> tle} <h1> hallo moin  123</h1> abc </>;}",
                 vec![],
