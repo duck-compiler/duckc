@@ -264,7 +264,12 @@ fn parse_src_file(
                     typename_reset_global_value_expr(&mut expr.0);
                 }
             }
-            ValueExpr::Add(l, r) | ValueExpr::Mul(l, r) | ValueExpr::Equals(l, r) => {
+            ValueExpr::Add(l, r)
+            | ValueExpr::Mul(l, r)
+            | ValueExpr::Sub(l, r)
+            | ValueExpr::Div(l, r)
+            | ValueExpr::Mod(l, r)
+            | ValueExpr::Equals(l, r) => {
                 typename_reset_global_value_expr(&mut l.0);
                 typename_reset_global_value_expr(&mut r.0);
             }
