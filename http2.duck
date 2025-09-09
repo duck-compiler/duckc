@@ -28,12 +28,28 @@ component Counter(props: { name: String }) tsx {
 	);
 }
 
+template Other3(props: {s: String}) duckx {
+    return <Counter name={props.s}/>;
+}
+
+template Other2(props: {x: Int}) duckx {
+    return <p>fiiiiiiiiiiisch {props.x}<Other3 s={"from other2"}/></p>;
+}
+
+template Other(props: {x: Int}) duckx {
+    return <><h1>Other {props.x}</h1><Other2 x={0}/><Other2 x={1}/></>;
+}
+
 template Page(props: { title: String, x: String[], color: String }) duckx {
+    let x = <h1 style="background-color: red">in var</h1>;
     return (
         <>
             <!doctype html>
             <html>
             <body>
+            <h1>{100}</h1>
+            <Other x={100}/>
+            {x}
             {<div style="background-color: {props.color}"><Counter name={"lol"}/></div>}
             {.Html[<h1>ich bin eine h1</h1>, <p>ich bin ein p</p>]}
             {.Html[<Counter name={"Counter in loop 1"}/>, <Counter name={"Counter in loop 2"}/>]}

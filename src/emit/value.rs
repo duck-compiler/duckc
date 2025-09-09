@@ -1,7 +1,9 @@
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     usize,
 };
+
+use chumsky::container::Container;
 
 use crate::{
     emit::types::escape_string_for_go,
@@ -498,7 +500,193 @@ impl ValueExpr {
                                             i -= 1;
                                         }
 
-                                        dbg!(html_str);
+                                        continue 'outer;
+                                    } else if true
+                                        && let Some(duckx_component) =
+                                            type_env.get_duckx_component(found).cloned()
+                                    {
+                                        let mut o = Vec::new();
+                                        let full_str = slice[..end_index].to_string();
+                                        o.push(ValHtmlStringContents::String(
+                                            full_str[1 + found.len()..].to_string(),
+                                        ));
+                                        s.drain(j..j + slice[..end_index].len());
+
+                                        let start = i + 1;
+                                        let mut i2 = start;
+
+                                        let mut props_init = HashMap::new();
+                                        let mut current_param = None::<String>;
+                                        while i2 < contents.len() {
+                                            let n = &mut contents[i2];
+                                            match n {
+                                                ValHtmlStringContents::Expr(_) => {
+                                                    o.push(n.clone());
+                                                }
+                                                ValHtmlStringContents::String(s) => {
+                                                    let close_tag = s.find("/>");
+                                                    if let Some(idx) = close_tag {
+                                                        let f = s
+                                                            .drain(..(idx + 2))
+                                                            .collect::<String>();
+                                                        o.push(ValHtmlStringContents::String(
+                                                            f[..f.len() - 2].to_string(),
+                                                        ));
+                                                        break;
+                                                    } else {
+                                                        o.push(ValHtmlStringContents::String(
+                                                            s.clone(),
+                                                        ));
+                                                    }
+                                                }
+                                            }
+                                            i2 += 1;
+                                        }
+
+                                        dbg!(&o);
+                                        for part in o {
+                                            match part {
+                                                ValHtmlStringContents::Expr(e) => {
+                                                    let current_param_name =
+                                                        current_param.expect("no param provided");
+                                                    current_param = None;
+                                                    let (e_instr, e_res) = e.0.emit(type_env, env);
+                                                    instr.extend(e_instr);
+                                                    if let Some(e_res) = e_res {
+                                                        let IrValue::Var(e_res) = e_res else {
+                                                            panic!("not a var? {e_res:?}")
+                                                        };
+                                                        println!(
+                                                            "pushing {current_param_name} {e_res}"
+                                                        );
+                                                        props_init.insert(
+                                                            current_param_name,
+                                                            (
+                                                                e_res,
+                                                                TypeExpr::from_value_expr(
+                                                                    &e.0, type_env,
+                                                                ),
+                                                            ),
+                                                        );
+                                                    } else {
+                                                        return (instr, None);
+                                                    }
+                                                }
+                                                ValHtmlStringContents::String(s) => {
+                                                    if s == "/>" {
+                                                        continue;
+                                                    }
+                                                    if let Some(param) = current_param.as_ref() {
+                                                        panic!("{param} has no value");
+                                                    }
+                                                    let first_non_space =
+                                                        s.find(|x: char| x != ' ');
+                                                    if let Some(first_non_space) = first_non_space {
+                                                        let slice = &s[first_non_space..];
+                                                        let end = slice
+                                                            .find(|x: char| x == ' ')
+                                                            .unwrap_or(slice.len());
+                                                        let slice = &slice[..end];
+                                                        if let Some(equals_idx) = slice.find('=') {
+                                                            if equals_idx == 0 {
+                                                                panic!("needs param name");
+                                                            }
+                                                            if slice
+                                                                .get(
+                                                                    equals_idx + 1..=equals_idx + 1,
+                                                                )
+                                                                .filter(|x| *x != " ")
+                                                                .is_some()
+                                                            {
+                                                                panic!("== not allowed");
+                                                            }
+                                                            current_param = Some(
+                                                                slice[..equals_idx].to_string(),
+                                                            );
+                                                        } else {
+                                                            panic!("wrong syntax (= missing)");
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        dbg!(&props_init);
+
+                                        let TypeExpr::Duck(Duck { fields }) =
+                                            duckx_component.props_type.0.clone()
+                                        else {
+                                            panic!("not taking a duck??")
+                                        };
+
+                                        if fields.iter().any(|f| !props_init.contains_key(&f.name))
+                                        {
+                                            panic!("missing fields");
+                                        }
+
+                                        if fields.len() != props_init.len() {
+                                            panic!("too many fields");
+                                        }
+
+                                        let id = format!("{}_{}", cloned_ident, env.new_var());
+                                        let html_to_return =
+                                            format!("<div duckx-render=\"{id}\"></div>");
+
+                                        let ValHtmlStringContents::String(s) = &mut contents[i]
+                                        else {
+                                            panic!()
+                                        };
+
+                                        contents.drain(start..i2);
+                                        contents.insert(
+                                            start,
+                                            ValHtmlStringContents::Expr(
+                                                ValueExpr::FunctionCall {
+                                                    target: ValueExpr::Variable(
+                                                        true,
+                                                        duckx_component.name.clone(),
+                                                        Some(TypeExpr::Fun(
+                                                            vec![(
+                                                                None,
+                                                                duckx_component.props_type.clone(),
+                                                            )],
+                                                            Some(
+                                                                TypeExpr::Html
+                                                                    .into_empty_span()
+                                                                    .into(),
+                                                            ),
+                                                        )),
+                                                    )
+                                                    .into_empty_span()
+                                                    .into(),
+                                                    params: vec![
+                                                        ValueExpr::Duck(
+                                                            props_init
+                                                                .into_iter()
+                                                                .map(|(a, b)| {
+                                                                    (
+                                                                        a,
+                                                                        ValueExpr::Variable(
+                                                                            true,
+                                                                            b.0.clone(),
+                                                                            Some(b.1),
+                                                                        )
+                                                                        .into_empty_span(),
+                                                                    )
+                                                                })
+                                                                .collect(),
+                                                        )
+                                                        .into_empty_span(),
+                                                    ],
+                                                    type_params: None,
+                                                }
+                                                .into_empty_span(),
+                                            ),
+                                        );
+
+                                        if i > 1 {
+                                            i -= 1;
+                                        }
+
                                         continue 'outer;
                                     }
                                 }
@@ -515,9 +703,6 @@ impl ValueExpr {
                     var_name.clone(),
                     "func (env *TemplEnv) string".to_string(),
                 ));
-
-                dbg!(component_dependencies.clone());
-                dbg!(render_calls_to_push.clone());
 
                 let mut return_printf = String::new();
                 let mut return_printf_vars = Vec::new();
@@ -549,7 +734,8 @@ impl ValueExpr {
                                             panic!("not a var {e_res_var:?}")
                                         };
                                         return_printf.push_str("%s");
-                                        return_printf_vars.push(format!("{var_name}.as_dgo_string()"));
+                                        return_printf_vars
+                                            .push(format!("{var_name}.as_dgo_string()"));
                                     } else {
                                         return (instr, None);
                                     }
@@ -561,7 +747,7 @@ impl ValueExpr {
                                         let IrValue::Var(var_name) = e_res_var else {
                                             panic!("not a var {e_res_var:?}")
                                         };
-                                        return_printf.push_str("%s");
+                                        return_printf.push_str("%v");
                                         return_printf_vars.push(format!("{var_name}.as_dgo_int()"));
                                     } else {
                                         return (instr, None);
@@ -574,8 +760,9 @@ impl ValueExpr {
                                         let IrValue::Var(var_name) = e_res_var else {
                                             panic!("not a var {e_res_var:?}")
                                         };
-                                        return_printf.push_str("%s");
-                                        return_printf_vars.push(format!("{var_name}.as_dgo_bool()"));
+                                        return_printf.push_str("%v");
+                                        return_printf_vars
+                                            .push(format!("{var_name}.as_dgo_bool()"));
                                     } else {
                                         return (instr, None);
                                     }
@@ -587,8 +774,9 @@ impl ValueExpr {
                                         let IrValue::Var(var_name) = e_res_var else {
                                             panic!("not a var {e_res_var:?}")
                                         };
-                                        return_printf.push_str("%s");
-                                        return_printf_vars.push(format!("{var_name}.as_dgo_float()"));
+                                        return_printf.push_str("%v");
+                                        return_printf_vars
+                                            .push(format!("{var_name}.as_dgo_float()"));
                                     } else {
                                         return (instr, None);
                                     }
@@ -601,14 +789,16 @@ impl ValueExpr {
                                             panic!("not a var {e_res_var:?}")
                                         };
                                         return_printf.push_str("%s");
-                                        return_printf_vars.push(format!(r#"
+                                        return_printf_vars.push(format!(
+                                            r#"
                                             func() string {{
                                                 res := ""
                                                 for _, e := range {var_name} {{
                                                     res += e(env)
                                                 }}
                                                 return res
-                                            }}()"#));
+                                            }}()"#
+                                        ));
                                     } else {
                                         return (instr, None);
                                     }
@@ -664,7 +854,6 @@ impl ValueExpr {
                     ]
                     .join("\n"),
                 ));
-                dbg!(format!("\"{}\"", escape_string_for_go(&return_printf)));
 
                 (instr, Some(IrValue::Var(var_name)))
             }

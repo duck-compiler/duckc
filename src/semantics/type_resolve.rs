@@ -162,6 +162,10 @@ impl TypeEnv {
         self.tsx_component_dependencies.entry(name).or_default()
     }
 
+    pub fn get_duckx_component(&self, name: &str) -> Option<&DuckxComponent> {
+        self.duckx_components.iter().find(|x| x.name == name)
+    }
+
     pub fn get_full_component_dependencies(&mut self, name: String) -> HashSet<String> {
         self.tsx_component_dependencies
             .entry(name.clone())
@@ -1600,8 +1604,14 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             type_env.insert_identifier_type(
                 duckx_component.name.clone(),
                 TypeExpr::Fun(
-                    vec![(Some("props".to_string()), duckx_component.props_type.clone())],
-                    Some(Box::new((TypeExpr::Html, duckx_component.value_expr.1.clone()))),
+                    vec![(
+                        Some("props".to_string()),
+                        duckx_component.props_type.clone(),
+                    )],
+                    Some(Box::new((
+                        TypeExpr::Html,
+                        duckx_component.value_expr.1.clone(),
+                    ))),
                 ),
             );
         });
