@@ -952,7 +952,22 @@ fn check_type_compatability(
     };
 
     match &required_type.0 {
-        TypeExpr::Html => {}
+        TypeExpr::Html => {
+            if let TypeExpr::Html = &given_type.0 {
+                return;
+            }
+            fail_requirement(
+                format!(
+                    "the required type is {}",
+                    format!("{}", required_type.0).bright_yellow(),
+                ),
+                format!(
+                    "because of the fact, that the required type is {}. The value you need to pass must be a tag aswell, but it is a {}",
+                    format!("{}", required_type.0).bright_yellow(),
+                    format!("{}", given_type.0).bright_yellow(),
+                ),
+            )
+        }
         TypeExpr::TypeOf(..) => panic!("typeof should have been replaced"),
         TypeExpr::Alias(..) => panic!("alias should have been replaced"),
         TypeExpr::Any => return,

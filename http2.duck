@@ -28,13 +28,15 @@ component Counter(props: { name: String }) tsx {
 	);
 }
 
-template Page(props: { title: String, x: String[] }) duckx {
+template Page(props: { title: String, x: String[], color: String }) duckx {
     return (
         <>
             <!doctype html>
             <html>
             <body>
-            {<Counter name={"lol"}/>}
+            {<div style="background-color: {props.color}"><Counter name={"lol"}/></div>}
+            {.Html[<h1>ich bin eine h1</h1>, <p>ich bin ein p</p>]}
+            {.Html[<Counter name={"Counter in loop 1"}/>, <Counter name={"Counter in loop 2"}/>]}
 
             <p>hallo ich stelle euch heute ein neues Rezept vor</p>
             <Counter name={"Counter 1"} yo moin={props.title}/>
@@ -77,6 +79,6 @@ fn render(renderer: Html) -> String {
 }
 
 fn main() {
-    std::http::serve_string("/", render(Page({title: "yo", x: .String[]})));
+    std::http::serve_string("/", render(Page({title: "yo", x: .String[], color: "green"})));
     std::http::listen(8080);
 }

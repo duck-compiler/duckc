@@ -541,6 +541,78 @@ impl ValueExpr {
                                         return (instr, None);
                                     }
                                 }
+                                TypeExpr::String => {
+                                    let (e_instr, e_res_var) = e.0.emit(type_env, env);
+                                    instr.extend(e_instr);
+                                    if let Some(e_res_var) = e_res_var {
+                                        let IrValue::Var(var_name) = e_res_var else {
+                                            panic!("not a var {e_res_var:?}")
+                                        };
+                                        return_printf.push_str("%s");
+                                        return_printf_vars.push(format!("{var_name}.as_dgo_string()"));
+                                    } else {
+                                        return (instr, None);
+                                    }
+                                }
+                                TypeExpr::Int => {
+                                    let (e_instr, e_res_var) = e.0.emit(type_env, env);
+                                    instr.extend(e_instr);
+                                    if let Some(e_res_var) = e_res_var {
+                                        let IrValue::Var(var_name) = e_res_var else {
+                                            panic!("not a var {e_res_var:?}")
+                                        };
+                                        return_printf.push_str("%s");
+                                        return_printf_vars.push(format!("{var_name}.as_dgo_int()"));
+                                    } else {
+                                        return (instr, None);
+                                    }
+                                }
+                                TypeExpr::Bool => {
+                                    let (e_instr, e_res_var) = e.0.emit(type_env, env);
+                                    instr.extend(e_instr);
+                                    if let Some(e_res_var) = e_res_var {
+                                        let IrValue::Var(var_name) = e_res_var else {
+                                            panic!("not a var {e_res_var:?}")
+                                        };
+                                        return_printf.push_str("%s");
+                                        return_printf_vars.push(format!("{var_name}.as_dgo_bool()"));
+                                    } else {
+                                        return (instr, None);
+                                    }
+                                }
+                                TypeExpr::Float => {
+                                    let (e_instr, e_res_var) = e.0.emit(type_env, env);
+                                    instr.extend(e_instr);
+                                    if let Some(e_res_var) = e_res_var {
+                                        let IrValue::Var(var_name) = e_res_var else {
+                                            panic!("not a var {e_res_var:?}")
+                                        };
+                                        return_printf.push_str("%s");
+                                        return_printf_vars.push(format!("{var_name}.as_dgo_float()"));
+                                    } else {
+                                        return (instr, None);
+                                    }
+                                }
+                                TypeExpr::Array(..) => {
+                                    let (e_instr, e_res_var) = e.0.emit(type_env, env);
+                                    instr.extend(e_instr);
+                                    if let Some(e_res_var) = e_res_var {
+                                        let IrValue::Var(var_name) = e_res_var else {
+                                            panic!("not a var {e_res_var:?}")
+                                        };
+                                        return_printf.push_str("%s");
+                                        return_printf_vars.push(format!(r#"
+                                            func() string {{
+                                                res := ""
+                                                for _, e := range {var_name} {{
+                                                    res += e(env)
+                                                }}
+                                                return res
+                                            }}()"#));
+                                    } else {
+                                        return (instr, None);
+                                    }
+                                }
                                 _ => panic!("not html string compatible"),
                             }
                         }

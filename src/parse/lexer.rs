@@ -727,7 +727,8 @@ mod tests {
     #[test]
     fn test_lex() {
         let test_cases = vec![
-            // ("duckx {<Counter initial={10} />}", vec![]),
+            ("duckx {<>{.Html[<Counter/>, <h1>abc</h1>]}</>}", vec![]),
+            ("duckx {<Counter initial={10} />}", vec![]),
             (
                 "duckx {let hello = <> <!doctype html>{<Counter intial={100}/>} </>;}",
                 vec![],
