@@ -1,30 +1,32 @@
 <!doctype html>
 <html>
     <body>
-        <script type="module">
-            import { h, render } from "https://esm.sh/preact";
-            import { useState } from "https://esm.sh/preact/hooks";
-            import htm from "https://esm.sh/htm";
+        <div duckx-render="counter-here"></div>
+        <div duckx-render="counter-here"></div>
+    </body>
+</html>
+<script type="module">
+    import { h, render } from "https://esm.sh/preact";
+    import { useState } from "https://esm.sh/preact/hooks";
+    import htm from "https://esm.sh/htm";
 
-            // Initialize htm with Preact
-            const html = htm.bind(h);
-
-
-            function Lol(props) {
-
-                const hello = false;
-                return (
-                    html`
-                        <h1>yoo</h1>
-                        ${props.lol.map(x => html`<h2>${html`<em>${x}</em>`}</h2>`)}
-                        ${hello ? html`<p>hello true</h1>` : html`<p>hello false</p>`}
-                    `
-                )
-
-            }
+    // Initialize htm with Preact
+    const html = htm.bind(h);
 
 
-            function Counter(props) {
+    function Lol(props) {
+        const hello = false;
+        return (
+            html`
+                ${props.lol.map(x => html`<h2>${html`<em>${x}</em>`}</h2>`)}
+                ${hello ? html`<p>hello true</h1>` : html`<p>hello false</p>`}
+            `
+        )
+
+    }
+
+
+    function Counter(props) {
 
 	const [value, setValue] = useState(0);
 
@@ -37,9 +39,6 @@
 		`
 	);
 
-            }
-
-            render(html`<${Counter} />`, document.getElementById('counteR_123091293'));
-        </script>
-    </body>
-</html>
+    }
+    document.querySelectorAll("[duckx-render=\"counter-here\"]").forEach(e => render(html`<${Counter}/>`, e))
+</script>

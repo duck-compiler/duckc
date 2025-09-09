@@ -46,6 +46,17 @@ fn serve_component<P>(
     }
 }
 
+fn serve_string(
+    route: String,
+    tsx_component: String,
+) {
+    go {
+        http.HandleFunc(route.as_dgo_string(), func (w http.ResponseWriter, r *http.Request) {
+            w.Write([]byte(tsx_component.as_dgo_string()))
+        })
+    }
+}
+
 fn listen(port: Int) {
     go {
         http.ListenAndServe(fmt.Sprintf(":%d", port.as_dgo_int()), nil);

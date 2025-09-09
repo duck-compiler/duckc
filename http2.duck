@@ -41,33 +41,39 @@ template Page(props: { title: String, x: String[] }) duckx {
     );
 }
 
-fn render(x: {}) -> (String, String) {
+fn render(x: {}) -> String {
     go {
         renderer, _ := x.(func (env *TemplEnv) string)
-	    env := &TemplEnv{[]string{}, []RenderCall{}}
-		return Tup_DuckString_DuckString { ConcDuckString { renderer(env) }, ConcDuckString { fmt.Sprintf("%s", *env) } }
+	    env := TemplEnv{[]string{}, []RenderCall{}}
+		res := renderer(&env)
+
+		prelude := `
+    <script type="module">
+    import { h, render } from "https://esm.sh/preact";
+    import { useState } from "https://esm.sh/preact/hooks";
+    import htm from "https://esm.sh/htm";
+
+    // Initialize htm with Preact
+    const html = htm.bind(h);
+    `
+
+        for _, e := range env.ClientComponents {
+            prelude += e
+            prelude += "\n"
+        }
+
+        for _, e := range env.RenderCalls {
+            prelude += fmt.Sprintf("document.querySelectorAll(\"[duckx-render=\\\"%s\\\").forEach(e => render(html`%s`, e)", e.Id, e.Jsx)
+        }
+
+        prelude += "\n</script>"
+
+		return ConcDuckString { res + prelude }
     }
 }
 
 fn main() {
-    let res = render(Page({title: "Hallo", x: .String[]}));
-    std::io::println(res.0);
-    std::io::println(res.1);
-    std::http::serve_component<{ initial: Int }>(
-        "/",
-        Counter,
-        fn () -> { initial: Int } {
-            return { initial: 1337 };
-        }
-    );
-
-    std::http::serve_component<LolProps>(
-        "/lol",
-        Lol,
-        fn () -> LolProps {
-           return { x: { x: "Hallo" }, y: true, z: ["Hallo", "welt"] };
-        }
-    );
+    std::http::serve_string("/", render(Page({title: "yo", x: .String[]})));
 
     std::http::listen(8080);
 }
