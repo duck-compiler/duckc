@@ -13,3 +13,6 @@ cargo install --path .
 ```
 
 This will install dargo onto your system.
+
+🚧 Under Construction
+At the current state of the compiler we don't allow any pull requests apart from out core team.
