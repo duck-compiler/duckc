@@ -517,6 +517,7 @@ fn replace_generics_in_struct_definition(
 
 fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
     match expr {
+        TypeExpr::Html => {}
         // todo: support generics in typeof
         TypeExpr::TypeOf(..) => {}
         TypeExpr::Alias(alias) => {
@@ -826,6 +827,7 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
 
 fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &HashMap<String, TypeExpr>) {
     match expr {
+        TypeExpr::Html => {}
         TypeExpr::TypeOf(..) => {}
         TypeExpr::Alias(alias) => {
             replace_generics_in_type_expr(&mut alias.type_expression.0, set_params);
@@ -1425,6 +1427,7 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
 
 fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
+        TypeExpr::Html => {}
         TypeExpr::TypeOf(..) => {}
         TypeExpr::Alias(t) => {
             sort_fields_type_expr(&mut t.type_expression.0);
@@ -1593,12 +1596,12 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     source_file
         .duckx_components
         .iter()
-        .for_each(|tsx_component| {
+        .for_each(|duckx_component| {
             type_env.insert_identifier_type(
-                tsx_component.name.clone(),
+                duckx_component.name.clone(),
                 TypeExpr::Fun(
-                    vec![(Some("props".to_string()), tsx_component.props_type.clone())],
-                    Some(Box::new(TypeExpr::Any.into_empty_span())),
+                    vec![(Some("props".to_string()), duckx_component.props_type.clone())],
+                    Some(Box::new((TypeExpr::Html, duckx_component.value_expr.1.clone()))),
                 ),
             );
         });

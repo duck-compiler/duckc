@@ -29,14 +29,11 @@ component Counter(props: { name: String }) tsx {
 }
 
 template Page(props: { title: String, x: String[] }) duckx {
-    let text = get_cms();
     return (
         <>
             <!doctype html>
             <html>
             <body>
-
-            {text}
             <Templte initla={}/>
 
             <p>hallo ich stelle euch heute ein neues Rezept vor</p>
@@ -48,9 +45,8 @@ template Page(props: { title: String, x: String[] }) duckx {
     );
 }
 
-fn render(x: {}) -> String {
+fn render(renderer: Html) -> String {
     go {
-        renderer, _ := x.(func (env *TemplEnv) string)
 	    env := TemplEnv{[]string{}, []RenderCall{}}
 		res := renderer(&env)
 

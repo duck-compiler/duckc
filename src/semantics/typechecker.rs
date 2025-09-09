@@ -954,6 +954,7 @@ fn check_type_compatability(
     };
 
     match &required_type.0 {
+        TypeExpr::Html => {}
         TypeExpr::TypeOf(..) => panic!("typeof should have been replaced"),
         TypeExpr::Alias(..) => panic!("alias should have been replaced"),
         TypeExpr::Any => return,
