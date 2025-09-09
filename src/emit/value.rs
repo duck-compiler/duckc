@@ -401,105 +401,104 @@ impl ValueExpr {
                                         }
                                     }
 
-                                    if let Some(end_index) = end_of_tag.or(Some(slice.len())) {
-                                        let end_of_ident =
-                                            slice[..end_index].find(" ").unwrap_or(end_index);
-                                        let found = &slice[1..end_of_ident];
-                                        let cloned_ident = found.to_string();
-                                        if component_dependencies.contains(found) {
-                                            let mut o = Vec::new();
-                                            let mut full_str = slice[..end_index].to_string();
-                                            full_str.insert_str(end_of_ident, "}");
-                                            full_str.insert_str(1, "${");
-                                            o.push(ValHtmlStringContents::String(full_str.clone()));
-                                            s.drain(j..j + slice[..end_index].len());
+                                    let end_index = end_of_tag.unwrap_or(slice.len());
+                                    let end_of_ident =
+                                        slice[..end_index].find(" ").unwrap_or(end_index);
+                                    let found = &slice[1..end_of_ident];
+                                    let cloned_ident = found.to_string();
+                                    if component_dependencies.contains(found) {
+                                        let mut o = Vec::new();
+                                        let mut full_str = slice[..end_index].to_string();
+                                        full_str.insert_str(end_of_ident, "}");
+                                        full_str.insert_str(1, "${");
+                                        o.push(ValHtmlStringContents::String(full_str.clone()));
+                                        s.drain(j..j + slice[..end_index].len());
 
-                                            let start = i + 1;
-                                            let mut i2 = start;
-                                            let mut e_count = 0;
-                                            while i2 < contents.len() {
-                                                let n = &mut contents[i2];
-                                                match n {
-                                                    ValHtmlStringContents::Expr(_) => {
-                                                        o.push(n.clone());
-                                                    }
-                                                    ValHtmlStringContents::String(s) => {
-                                                        let close_tag = s.find("/>");
-                                                        if let Some(idx) = close_tag {
-                                                            o.push(ValHtmlStringContents::String(
-                                                                s.drain(..(idx + 2)).collect(),
-                                                            ));
-                                                            break;
-                                                        } else {
-                                                            o.push(ValHtmlStringContents::String(
-                                                                s.clone(),
-                                                            ));
-                                                        }
-                                                    }
+                                        let start = i + 1;
+                                        let mut i2 = start;
+
+                                        while i2 < contents.len() {
+                                            let n = &mut contents[i2];
+                                            match n {
+                                                ValHtmlStringContents::Expr(_) => {
+                                                    o.push(n.clone());
                                                 }
-                                                i2 += 1;
-                                            }
-                                            let mut html_str = String::new();
-
-                                            let mut printf_vars = Vec::new();
-                                            let mut printf_str = String::new();
-
-                                            for part in o {
-                                                match part {
-                                                    ValHtmlStringContents::String(s) => {
-                                                        html_str.push_str(&s)
-                                                    }
-                                                    ValHtmlStringContents::Expr(e) => {
-                                                        let (e_instr, e_res) =
-                                                            e.0.emit(type_env, env);
-                                                        instr.extend(e_instr);
-                                                        if let Some(e_res) = e_res {
-                                                            let IrValue::Var(e_res) = e_res else {
-                                                                panic!("no var {e_res:?}")
-                                                            };
-                                                            html_str.push_str("${%s}");
-                                                            printf_vars.push(e_res);
-                                                        } else {
-                                                            return (instr, None);
-                                                        }
+                                                ValHtmlStringContents::String(s) => {
+                                                    let close_tag = s.find("/>");
+                                                    if let Some(idx) = close_tag {
+                                                        o.push(ValHtmlStringContents::String(
+                                                            s.drain(..(idx + 2)).collect(),
+                                                        ));
+                                                        break;
+                                                    } else {
+                                                        o.push(ValHtmlStringContents::String(
+                                                            s.clone(),
+                                                        ));
                                                     }
                                                 }
                                             }
-
-                                            let id = format!("{}_{}", cloned_ident, env.new_var());
-                                            let html_to_return = format!("<div duckx-render=\"{id}\"></div>");
-
-                                            render_calls_to_push.push((
-                                                format!(
-                                                    "fmt.Sprintf(\"{}\", {})",
-                                                    escape_string_for_go(&html_str),
-                                                    printf_vars
-                                                        .iter()
-                                                        .map(|x| format!(
-                                                            "emit_go_to_js({})",
-                                                            escape_string_for_go(&x)
-                                                        ))
-                                                        .collect::<Vec<_>>()
-                                                        .join(", "),
-                                                ),
-                                                id,
-                                            ));
-
-                                            let ValHtmlStringContents::String(s) = &mut contents[i]
-                                            else {
-                                                panic!()
-                                            };
-
-                                            s.insert_str(j, &html_to_return);
-
-                                            contents.drain(start..i2);
-                                            if i > 1 {
-                                                i -= 1;
-                                            }
-
-                                            dbg!(html_str);
-                                            continue 'outer;
+                                            i2 += 1;
                                         }
+                                        let mut html_str = String::new();
+
+                                        let mut printf_vars = Vec::new();
+                                        let mut printf_str = String::new();
+
+                                        for part in o {
+                                            match part {
+                                                ValHtmlStringContents::String(s) => {
+                                                    html_str.push_str(&s)
+                                                }
+                                                ValHtmlStringContents::Expr(e) => {
+                                                    let (e_instr, e_res) = e.0.emit(type_env, env);
+                                                    instr.extend(e_instr);
+                                                    if let Some(e_res) = e_res {
+                                                        let IrValue::Var(e_res) = e_res else {
+                                                            panic!("no var {e_res:?}")
+                                                        };
+                                                        html_str.push_str("${%s}");
+                                                        printf_vars.push(e_res);
+                                                    } else {
+                                                        return (instr, None);
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        let id = format!("{}_{}", cloned_ident, env.new_var());
+                                        let html_to_return =
+                                            format!("<div duckx-render=\"{id}\"></div>");
+
+                                        render_calls_to_push.push((
+                                            format!(
+                                                "fmt.Sprintf(\"{}\", {})",
+                                                escape_string_for_go(&html_str),
+                                                printf_vars
+                                                    .iter()
+                                                    .map(|x| format!(
+                                                        "emit_go_to_js({})",
+                                                        escape_string_for_go(&x)
+                                                    ))
+                                                    .collect::<Vec<_>>()
+                                                    .join(", "),
+                                            ),
+                                            id,
+                                        ));
+
+                                        let ValHtmlStringContents::String(s) = &mut contents[i]
+                                        else {
+                                            panic!()
+                                        };
+
+                                        s.insert_str(j, &html_to_return);
+
+                                        contents.drain(start..i2);
+                                        if i > 1 {
+                                            i -= 1;
+                                        }
+
+                                        dbg!(html_str);
+                                        continue 'outer;
                                     }
                                 }
                                 j += 1;
