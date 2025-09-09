@@ -338,12 +338,69 @@ pub fn duckx_contents_in_curly_braces<'a>(
                             empty_range(),
                         )]
                     }),
-                    opening_self_closing().map(|x| {
-                        vec![(
-                            Token::HtmlString(vec![HtmlStringContents::String(format!("{x}"))]),
-                            empty_range(),
-                        )]
-                    }),
+                    opening_self_closing()
+                        .then(
+                            choice((
+                                just("{")
+                                    .rewind()
+                                    .ignore_then(duckx_lexer.clone())
+                                    .map(|x| RawHtmlStringContents::Tokens(x)),
+                                any()
+                                    .and_is(just("/>").not())
+                                    .map(|x| RawHtmlStringContents::Char(x)),
+                            ))
+                            .repeated()
+                            .collect::<Vec<_>>(),
+                        )
+                        .map(|(x1, x2)| {
+                            let mut new_out = Vec::new();
+                            new_out.push(HtmlStringContents::String(x1));
+                            for c in x2 {
+                                match c {
+                                    RawHtmlStringContents::Tokens(t) => {
+                                        new_out.push(HtmlStringContents::Tokens(t));
+                                    }
+                                    RawHtmlStringContents::Char(c) => {
+                                        new_out.push(HtmlStringContents::String(c.to_string()));
+                                    }
+                                    RawHtmlStringContents::Sub(Token::HtmlString(sub)) => {
+                                        new_out.extend(sub);
+                                    }
+                                    _ => panic!("invalid"),
+                                }
+                            }
+                            new_out.push(HtmlStringContents::String("/>".to_string()));
+
+                            let mut s_buf = String::new();
+                            let mut final_out = Vec::new();
+
+                            for c in new_out {
+                                match c {
+                                    HtmlStringContents::String(s) => {
+                                        s_buf.push_str(&s);
+                                    }
+                                    HtmlStringContents::Tokens(tok) => {
+                                        if !s_buf.is_empty() {
+                                            final_out.push(HtmlStringContents::String(s_buf));
+                                            s_buf = String::new();
+                                        }
+                                        final_out.push(HtmlStringContents::Tokens(tok));
+                                    }
+                                }
+                            }
+
+                            if !s_buf.is_empty() {
+                                final_out.push(HtmlStringContents::String(s_buf));
+                            }
+
+                            vec![(Token::HtmlString(final_out), empty_range())]
+                            // vec![(
+                            //     Token::HtmlString(vec![HtmlStringContents::String(dbg!(format!(
+                            //         "{x1}{x2}/>"
+                            //     )))]),
+                            //     empty_range(),
+                            // )]
+                        }).then_ignore(just("/>")),
                     opening_tag()
                         .rewind()
                         .ignore_then(duckx_parse_html_string(duckx_lexer.clone()))
@@ -670,8 +727,9 @@ mod tests {
     #[test]
     fn test_lex() {
         let test_cases = vec![
+            // ("duckx {<Counter initial={10} />}", vec![]),
             (
-                "duckx {let hello = <> <!doctype html><Counter initial={100}/> </>;}",
+                "duckx {let hello = <> <!doctype html>{<Counter intial={100}/>} </>;}",
                 vec![],
             ),
             (
