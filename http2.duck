@@ -18,9 +18,8 @@ component Counter(props: { initial: Int }) tsx {
 	const y = true;
 	return (
 		<>
-		    <std::lol/>
 			<div>{props.initial}: {value}</div>
-			<Lol/>
+			<Lol x={{x: "hallo"}} y={true} z={["1", "y"]}/>
 			{y ? <p>bool is true</p> : <p>bool is false</p>}
 			<button onClick={() => setValue(value + 1)}>Increment</button>
 			<button onClick={() => setValue(value - 1)}>Decrement</button>
@@ -64,7 +63,7 @@ fn render(x: {}) -> String {
         }
 
         for _, e := range env.RenderCalls {
-            prelude += fmt.Sprintf("document.querySelectorAll(\"[duckx-render=\\\"%s\\\").forEach(e => render(html`%s`, e)", e.Id, e.Jsx)
+            prelude += fmt.Sprintf("document.querySelectorAll(\"[duckx-render=\\\"%s\\\"]\").forEach(e => render(html`%s`, e))", e.Id, e.Jsx)
         }
 
         prelude += "\n</script>"

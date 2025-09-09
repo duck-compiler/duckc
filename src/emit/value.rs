@@ -536,7 +536,13 @@ impl ValueExpr {
                         component_dependencies.clone().into_iter().fold(
                             String::new(),
                             |mut acc, x| {
-                                acc.push_str(&format!("env.push_client_component(\"{}\")\n", x));
+                                let src = type_env.get_component(x.as_str()).unwrap();
+                                let js_src = format!(
+                                    "function {}(props){{\n{}\n}}",
+                                    src.name,
+                                    src.typescript_source.0
+                                );
+                                acc.push_str(&format!("env.push_client_component(\"{}\")\n", escape_string_for_go(js_src.as_str())));
                                 acc
                             },
                         ),
