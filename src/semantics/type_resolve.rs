@@ -35,11 +35,13 @@ pub enum GenericDefinition {
 fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
     type_env.push_identifier_types();
     type_env.insert_identifier_type("props".to_string(), c.props_type.0.clone());
+    type_env.all_types.push(c.props_type.0.clone());
     typeresolve_value_expr(&mut c.value_expr.0, type_env);
     type_env.pop_identifier_types();
 }
 
 fn typeresolve_tsx_component(c: &mut TsxComponent, type_env: &mut TypeEnv) {
+    type_env.all_types.push(c.props_type.0.clone());
     let units = c.find_units();
     let mut edits = Vec::new();
     for (range, unit) in units.iter() {
@@ -403,6 +405,12 @@ impl TypeEnv {
         all_types.extend(TypeExpr::primitives());
         all_types.extend(
             self.tsx_components
+                .iter()
+                .map(|x| x.props_type.0.clone())
+                .collect::<Vec<_>>(),
+        );
+        all_types.extend(
+            self.duckx_components
                 .iter()
                 .map(|x| x.props_type.0.clone())
                 .collect::<Vec<_>>(),
@@ -1554,6 +1562,21 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .function_definitions
         .iter_mut()
         .for_each(|function_definition| {
+            sort_fields_value_expr(&mut function_definition.value_expr.0);
+        });
+
+    source_file
+        .tsx_components
+        .iter_mut()
+        .for_each(|function_definition| {
+            sort_fields_type_expr(&mut function_definition.props_type.0);
+        });
+
+    source_file
+        .duckx_components
+        .iter_mut()
+        .for_each(|function_definition| {
+            sort_fields_type_expr(&mut function_definition.props_type.0);
             sort_fields_value_expr(&mut function_definition.value_expr.0);
         });
 

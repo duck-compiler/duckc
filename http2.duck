@@ -40,12 +40,14 @@ template Other4() duckx {
     return <h1>OTHER4</h1>;
 }
 
-template Other3(props: {s: String}) duckx {
-    return <><Other4/><Other4/><Other4/></>;
+struct AStruct = {yy: Bool} impl { fn abc() -> String { return "hello from struct"; } };
+
+template Other3(props: {s: String, x: AStruct}) duckx {
+    return <><Other4/><Other4/><Other4/><h1 style="background-color: green">{props.x.yy}</h1></>;
 }
 
 template Other2(props: {x: Int}) duckx {
-    return <p>fiiiiiiiiiiisch {props.x}<Other3 s={"from other2"}/></p>;
+    return <div>fiiiiiiiiiiisch {props.x}<Other3 s={"from other2"} x={AStruct{yy: true}}/></div>;
 }
 
 template Other(props: {x: Int}) duckx {

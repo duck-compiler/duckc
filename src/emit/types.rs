@@ -750,11 +750,9 @@ impl TypeExpr {
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
             TypeExpr::TypeName(_, name, _type_params) => {
-                println!("resolving {name}");
                 let r = type_env
                     .resolve_type_alias(name)
                     .as_clean_go_type_name(type_env);
-                println!("resolved {name} {r:?}");
                 r
             }
             TypeExpr::TypeNameInternal(name) => name.clone(),

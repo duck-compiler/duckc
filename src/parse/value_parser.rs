@@ -553,8 +553,8 @@ where
                                 out_contents.push(ValHtmlStringContents::String(s))
                             }
                             HtmlStringContents::Tokens(mut t) => {
-                                t.insert(0, (Token::ControlChar('{'), empty_range()));
-                                t.push((Token::ControlChar('}'), empty_range()));
+                                // t.insert(0, (Token::ControlChar('{'), empty_range()));
+                                // t.push((Token::ControlChar('}'), empty_range()));
                                 let cl = t.clone();
                                 let expr = value_expr_parser
                                     .parse(make_input(empty_range(), t.leak()))

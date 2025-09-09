@@ -3,8 +3,6 @@ use std::{
     usize,
 };
 
-use chumsky::container::Container;
-
 use crate::{
     emit::types::escape_string_for_go,
     parse::{
@@ -636,6 +634,10 @@ impl ValueExpr {
                                         if fields.len() != props_init.len() {
                                             panic!("too many fields");
                                         }
+
+                                        let mut props_init =
+                                            props_init.into_iter().collect::<Vec<_>>();
+                                        props_init.sort_by_key(|f| f.0.clone());
 
                                         if !skip {
                                             contents.drain(start..i2);
@@ -1641,7 +1643,7 @@ impl ValueExpr {
                 let field_name = field_name.clone();
                 let (mut i, t_res) = target_obj.0.emit(type_env, env);
                 if let Some(t_res) = t_res {
-                    let target_type = TypeExpr::from_value_expr(&target_obj.0, type_env);
+                    let target_type = TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
                     match target_type {
                         TypeExpr::Duck(Duck { fields }) => {
                             let f = fields.iter().find(|f| f.name == field_name).unwrap();

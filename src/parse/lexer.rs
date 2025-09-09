@@ -329,7 +329,7 @@ pub fn duckx_contents_in_curly_braces<'a>(
 ) -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> + Clone {
     recursive(|duckx_lexer| {
         just("{")
-            .ignore_then(
+            .then(
                 choice((
                     just("{").rewind().ignore_then(duckx_lexer.clone()),
                     special_tag().map(|x| {
@@ -400,7 +400,8 @@ pub fn duckx_contents_in_curly_braces<'a>(
                             //     )))]),
                             //     empty_range(),
                             // )]
-                        }).then_ignore(just("/>")),
+                        })
+                        .then_ignore(just("/>")),
                     opening_tag()
                         .rewind()
                         .ignore_then(duckx_parse_html_string(duckx_lexer.clone()))
@@ -427,8 +428,13 @@ pub fn duckx_contents_in_curly_braces<'a>(
                 .repeated()
                 .collect::<Vec<_>>(),
             )
-            .then_ignore(just("}"))
-            .map(|x: Vec<Vec<Spanned<Token>>>| x.into_iter().flatten().collect())
+            .then(just("}"))
+            .map(|((a, x), b)| {
+                let mut v = x.into_iter().flatten().collect::<Vec<_>>();
+                v.insert(0, (Token::ControlChar('{'), empty_range()));
+                v.push((Token::ControlChar('}'), empty_range()));
+                v
+            })
     })
 }
 
@@ -727,7 +733,7 @@ mod tests {
     #[test]
     fn test_lex() {
         let test_cases = vec![
-            ("duckx {<>{.Html[<Counter/>, <h1>abc</h1>]}</>}", vec![]),
+            ("duckx {<>{{}}</>}", vec![]),
             ("duckx {<Counter initial={10} />}", vec![]),
             (
                 "duckx {let hello = <> <!doctype html>{<Counter intial={100}/>} </>;}",
