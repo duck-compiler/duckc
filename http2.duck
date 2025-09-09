@@ -28,8 +28,12 @@ component Counter(props: { name: String }) tsx {
 	);
 }
 
+template Other4() duckx {
+    return <h1>OTHER4</h1>;
+}
+
 template Other3(props: {s: String}) duckx {
-    return <Counter name={props.s}/>;
+    return <><Other4/><Other4/><Other4/></>;
 }
 
 template Other2(props: {x: Int}) duckx {

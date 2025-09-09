@@ -511,13 +511,19 @@ impl ValueExpr {
                                             full_str[1 + found.len()..].to_string(),
                                         ));
                                         s.drain(j..j + slice[..end_index].len());
+                                        let skip = s.starts_with("/>");
+
+                                        if skip {
+                                            s.drain(..2);
+                                        }
 
                                         let start = i + 1;
                                         let mut i2 = start;
 
                                         let mut props_init = HashMap::new();
                                         let mut current_param = None::<String>;
-                                        while i2 < contents.len() {
+
+                                        while !skip && i2 < contents.len() {
                                             let n = &mut contents[i2];
                                             match n {
                                                 ValHtmlStringContents::Expr(_) => {
@@ -543,7 +549,6 @@ impl ValueExpr {
                                             i2 += 1;
                                         }
 
-                                        dbg!(&o);
                                         for part in o {
                                             match part {
                                                 ValHtmlStringContents::Expr(e) => {
@@ -627,18 +632,17 @@ impl ValueExpr {
                                             panic!("too many fields");
                                         }
 
-                                        let id = format!("{}_{}", cloned_ident, env.new_var());
-                                        let html_to_return =
-                                            format!("<div duckx-render=\"{id}\"></div>");
-
                                         let ValHtmlStringContents::String(s) = &mut contents[i]
                                         else {
                                             panic!()
                                         };
+                                        dbg!(s);
 
-                                        contents.drain(start..i2);
+                                        if !skip {
+                                            contents.drain(start..i2);
+                                        }
                                         contents.insert(
-                                            start,
+                                            if skip { i } else { start },
                                             ValHtmlStringContents::Expr(
                                                 ValueExpr::FunctionCall {
                                                     target: ValueExpr::Variable(
