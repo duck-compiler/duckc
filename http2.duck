@@ -34,7 +34,7 @@ template Page(props: { title: String, x: String[] }) duckx {
             <!doctype html>
             <html>
             <body>
-            <Templte initla={}/>
+            {<Counter name={"lol"}/>}
 
             <p>hallo ich stelle euch heute ein neues Rezept vor</p>
             <Counter name={"Counter 1"} yo moin={props.title}/>

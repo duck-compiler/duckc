@@ -519,16 +519,33 @@ impl ValueExpr {
                 dbg!(component_dependencies.clone());
                 dbg!(render_calls_to_push.clone());
 
-                let joined = contents
-                    .clone()
-                    .into_iter()
-                    .fold(String::new(), |mut acc, elem| {
-                        match elem {
-                            ValHtmlStringContents::String(s) => acc.push_str(&s),
-                            ValHtmlStringContents::Expr(_) => {}
+                let mut return_printf = String::new();
+                let mut return_printf_vars = Vec::new();
+
+                for elem in &contents {
+                    match elem {
+                        ValHtmlStringContents::String(s) => return_printf.push_str(&s),
+                        ValHtmlStringContents::Expr(e) => {
+                            let ty = TypeExpr::from_value_expr(&e.0, type_env);
+                            match ty {
+                                TypeExpr::Html => {
+                                    let (e_instr, e_res_var) = e.0.emit(type_env, env);
+                                    instr.extend(e_instr);
+                                    if let Some(e_res_var) = e_res_var {
+                                        let IrValue::Var(var_name) = e_res_var else {
+                                            panic!("not a var {e_res_var:?}")
+                                        };
+                                        return_printf.push_str("%s");
+                                        return_printf_vars.push(format!("{var_name}(env)"));
+                                    } else {
+                                        return (instr, None);
+                                    }
+                                }
+                                _ => panic!("not html string compatible"),
+                            }
                         }
-                        acc
-                    });
+                    }
+                }
 
                 instr.push(IrInstruction::InlineGo(
                     [
@@ -539,10 +556,12 @@ impl ValueExpr {
                                 let src = type_env.get_component(x.as_str()).unwrap();
                                 let js_src = format!(
                                     "function {}(props){{\n{}\n}}",
-                                    src.name,
-                                    src.typescript_source.0
+                                    src.name, src.typescript_source.0
                                 );
-                                acc.push_str(&format!("env.push_client_component(\"{}\")\n", escape_string_for_go(js_src.as_str())));
+                                acc.push_str(&format!(
+                                    "env.push_client_component(\"{}\")\n",
+                                    escape_string_for_go(js_src.as_str())
+                                ));
                                 acc
                             },
                         ),
@@ -557,12 +576,23 @@ impl ValueExpr {
                                 acc
                             },
                         ),
-                        format!("return \"{}\"", escape_string_for_go(&joined)),
+                        if return_printf_vars.is_empty() {
+                            format!(
+                                "return fmt.Sprintf(\"{}\")",
+                                escape_string_for_go(&return_printf)
+                            )
+                        } else {
+                            format!(
+                                "return fmt.Sprintf(\"{}\", {})",
+                                escape_string_for_go(&return_printf),
+                                return_printf_vars.join(", ")
+                            )
+                        },
                         "}".to_string(),
                     ]
                     .join("\n"),
                 ));
-                dbg!(format!("\"{}\"", escape_string_for_go(&joined)));
+                dbg!(format!("\"{}\"", escape_string_for_go(&return_printf)));
 
                 (instr, Some(IrValue::Var(var_name)))
             }

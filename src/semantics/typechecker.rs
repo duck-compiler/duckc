@@ -43,9 +43,7 @@ impl TypeExpr {
     #[track_caller]
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
-            ValueExpr::HtmlString(contents) => {
-               TypeExpr::String
-            }
+            ValueExpr::HtmlString(..) => TypeExpr::Html,
             ValueExpr::Tag(identifier) => TypeExpr::Tag(identifier.clone()),
             ValueExpr::RawVariable(_x, p) => panic!("{}", p.join(" ").leak()),
             ValueExpr::FormattedString(contents) => {
