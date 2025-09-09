@@ -1,5 +1,13 @@
 type LolProps = { x: { x: String }, y: Bool, z: String[]};
 
+component NoProps() tsx {
+return <p>no props 2</p>;
+}
+
+component ABC() tsx {
+    return (<><h1>no props</h1><NoProps/></>);
+}
+
 component Lol(props : { x: { x: String }, y: Bool, z: String[]}) tsx {
     const hello = props.y;
     return (
@@ -51,6 +59,7 @@ template Page(props: { title: String, x: String[], color: String }) duckx {
             <!doctype html>
             <html>
             <body>
+            <ABC/>
             <h1>{100}</h1>
             <Other x={100}/>
             {x}
@@ -59,8 +68,6 @@ template Page(props: { title: String, x: String[], color: String }) duckx {
             {.Html[<Counter name={"Counter in loop 1"}/>, <Counter name={"Counter in loop 2"}/>]}
 
             <p>hallo ich stelle euch heute ein neues Rezept vor</p>
-            <Counter name={"Counter 1"} yo moin={props.title}/>
-            <Counter name={"Counter 2"} yo moin={props.title}/>
             </body>
             </html>
         </>

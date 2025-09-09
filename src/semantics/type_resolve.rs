@@ -167,7 +167,8 @@ impl TypeEnv {
     }
 
     pub fn get_full_component_dependencies(&mut self, name: String) -> HashSet<String> {
-        self.tsx_component_dependencies
+        let mut out = self
+            .tsx_component_dependencies
             .entry(name.clone())
             .or_default()
             .client_components
@@ -175,11 +176,14 @@ impl TypeEnv {
             .into_iter()
             .flat_map(|dep| {
                 let mut v = self.get_full_component_dependencies(dep.clone());
-                v.push(name.clone());
                 v.push(dep.clone());
                 v.into_iter()
             })
-            .collect::<HashSet<_>>()
+            .collect::<HashSet<_>>();
+        if self.get_component(name.as_str()).is_some() {
+            out.insert(name);
+        }
+        out
     }
 
     pub fn get_component(&self, name: &str) -> Option<&TsxComponent> {

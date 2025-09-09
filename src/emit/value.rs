@@ -417,10 +417,16 @@ impl ValueExpr {
                                         o.push(ValHtmlStringContents::String(full_str.clone()));
                                         s.drain(j..j + slice[..end_index].len());
 
+                                        let skip = s[j..].starts_with("/>");
+
+                                        if skip {
+                                            s.drain(j..j + 2);
+                                        }
+
                                         let start = i + 1;
                                         let mut i2 = start;
 
-                                        while i2 < contents.len() {
+                                        while !skip && i2 < contents.len() {
                                             let n = &mut contents[i2];
                                             match n {
                                                 ValHtmlStringContents::Expr(_) => {
@@ -467,6 +473,9 @@ impl ValueExpr {
                                                 }
                                             }
                                         }
+                                        if skip {
+                                            html_str.push_str("/>");
+                                        }
 
                                         let id = format!("{}_{}", cloned_ident, env.new_var());
                                         let html_to_return =
@@ -511,10 +520,10 @@ impl ValueExpr {
                                             full_str[1 + found.len()..].to_string(),
                                         ));
                                         s.drain(j..j + slice[..end_index].len());
-                                        let skip = s.starts_with("/>");
+                                        let skip = s[j..].starts_with("/>");
 
                                         if skip {
-                                            s.drain(..2);
+                                            s.drain(j..j + 2);
                                         }
 
                                         let start = i + 1;
@@ -561,9 +570,6 @@ impl ValueExpr {
                                                         let IrValue::Var(e_res) = e_res else {
                                                             panic!("not a var? {e_res:?}")
                                                         };
-                                                        println!(
-                                                            "pushing {current_param_name} {e_res}"
-                                                        );
                                                         props_init.insert(
                                                             current_param_name,
                                                             (
@@ -615,7 +621,6 @@ impl ValueExpr {
                                                 }
                                             }
                                         }
-                                        dbg!(&props_init);
 
                                         let TypeExpr::Duck(Duck { fields }) =
                                             duckx_component.props_type.0.clone()
@@ -631,12 +636,6 @@ impl ValueExpr {
                                         if fields.len() != props_init.len() {
                                             panic!("too many fields");
                                         }
-
-                                        let ValHtmlStringContents::String(s) = &mut contents[i]
-                                        else {
-                                            panic!()
-                                        };
-                                        dbg!(s);
 
                                         if !skip {
                                             contents.drain(start..i2);
@@ -730,7 +729,7 @@ impl ValueExpr {
                                         return (instr, None);
                                     }
                                 }
-                                TypeExpr::String => {
+                                TypeExpr::String | TypeExpr::ConstString(..) => {
                                     let (e_instr, e_res_var) = e.0.emit(type_env, env);
                                     instr.extend(e_instr);
                                     if let Some(e_res_var) = e_res_var {
@@ -744,7 +743,7 @@ impl ValueExpr {
                                         return (instr, None);
                                     }
                                 }
-                                TypeExpr::Int => {
+                                TypeExpr::Int | TypeExpr::ConstInt(..) => {
                                     let (e_instr, e_res_var) = e.0.emit(type_env, env);
                                     instr.extend(e_instr);
                                     if let Some(e_res_var) = e_res_var {
@@ -757,7 +756,7 @@ impl ValueExpr {
                                         return (instr, None);
                                     }
                                 }
-                                TypeExpr::Bool => {
+                                TypeExpr::Bool | TypeExpr::ConstBool(..) => {
                                     let (e_instr, e_res_var) = e.0.emit(type_env, env);
                                     instr.extend(e_instr);
                                     if let Some(e_res_var) = e_res_var {
@@ -807,7 +806,7 @@ impl ValueExpr {
                                         return (instr, None);
                                     }
                                 }
-                                _ => panic!("not html string compatible"),
+                                _ => panic!("not html string compatible {ty:?}"),
                             }
                         }
                     }

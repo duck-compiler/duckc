@@ -69,10 +69,29 @@ pub fn find_client_components(
                 s.push_str("\"\"");
             }
             ValHtmlStringContents::String(s_) => {
+                let mut x = s.as_str();
+                while let Some(idx) = x.find("<") {
+                    x = &x[idx + 1..];
+                    let end = x.find(|c: char| c == ' ' || c == '>').unwrap_or(x.len());
+                    let mut between = &x[..end];
+                    if between.ends_with("/") {
+                        between = &between[..between.len() - 1];
+                    }
+                    if type_env.get_component(between).is_some() {
+                        type_env
+                            .get_full_component_dependencies(between.to_string())
+                            .into_iter()
+                            .for_each(|s| {
+                                out.insert(s);
+                            })
+                    }
+                }
+
                 s.push_str(s_.as_str());
             }
         }
     }
+
     let mut parser = TSParser::new();
     parser
         .set_language(&tree_sitter_html::LANGUAGE.into())
