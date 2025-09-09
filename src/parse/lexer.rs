@@ -2,7 +2,10 @@ use std::fmt::Display;
 
 use chumsky::{prelude::*, text::whitespace};
 
-use crate::parse::{Context, SS, Spanned, value_parser::empty_range};
+use crate::{
+    dargo::compile::CompileErrKind,
+    parse::{Context, SS, Spanned, value_parser::empty_range},
+};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum RawFmtStringContents {
@@ -167,7 +170,12 @@ pub fn closing_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a,
                 .collect::<String>(),
         )
         .then(just(">"))
-        .map(|((pre, main), close)| format!("{pre}{main}{close}"))
+        .map(|((pre, main), close)| {
+            if main.is_empty() {
+                return String::new();
+            }
+            format!("{pre}{main}{close}")
+        })
 }
 
 pub fn opening_self_closing<'a>()
@@ -224,6 +232,11 @@ pub fn opening_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a,
         })
 }
 
+pub fn special_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a, char>>> + Clone {
+    just("<!DOCTYPE HTML>")
+        .map(|x| x.to_string())
+        .or(just("<!doctype html>").map(|x| x.to_string()))
+}
 pub fn duckx_parse_html_string<'a>(
     duckx_lexer: impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> + Clone + 'a,
 ) -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, char>>> + Clone {
@@ -235,6 +248,11 @@ pub fn duckx_parse_html_string<'a>(
                         .rewind()
                         .ignore_then(duckx_lexer.clone())
                         .map(|x| RawHtmlStringContents::Tokens(x)),
+                    special_tag().map(|x| {
+                        RawHtmlStringContents::Sub(Token::HtmlString(vec![
+                            HtmlStringContents::String(x),
+                        ]))
+                    }),
                     opening_self_closing().map(|in_html| {
                         RawHtmlStringContents::Sub(Token::HtmlString(vec![
                             HtmlStringContents::String(in_html),
@@ -314,6 +332,12 @@ pub fn duckx_contents_in_curly_braces<'a>(
             .ignore_then(
                 choice((
                     just("{").rewind().ignore_then(duckx_lexer.clone()),
+                    special_tag().map(|x| {
+                        vec![(
+                            Token::HtmlString(vec![HtmlStringContents::String(format!("{x}"))]),
+                            empty_range(),
+                        )]
+                    }),
                     opening_self_closing().map(|x| {
                         vec![(
                             Token::HtmlString(vec![HtmlStringContents::String(format!("{x}"))]),
@@ -646,7 +670,14 @@ mod tests {
     #[test]
     fn test_lex() {
         let test_cases = vec![
-            ("duckx {let hello = <> <Counter initial={100}/> </>;}", vec![]),
+            (
+                "duckx {let hello = <> <!doctype html><Counter initial={100}/> </>;}",
+                vec![],
+            ),
+            (
+                "duckx {let hello = <> <Counter initial={100}/> </>;}",
+                vec![],
+            ),
             (
                 "duckx {let hello = <> {ti <span id={props.id} hello={123}></span> tle} <h1> hallo moin  123</h1> abc </>;}",
                 vec![],

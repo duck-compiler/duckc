@@ -384,6 +384,7 @@ impl ValueExpr {
                     let current = &mut contents[i];
                     match current {
                         ValHtmlStringContents::String(s) => {
+                            *s = s.replace("<>", "").replace("</>", "");
                             let mut j = 0;
                             while j < s.len() - 1 {
                                 let slice = &s[j..];

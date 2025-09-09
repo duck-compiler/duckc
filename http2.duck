@@ -32,6 +32,7 @@ component Counter(props: { initial: Int }) tsx {
 template Page(props: { title: String, x: String[] }) duckx {
     return (
         <>
+            <!doctype html>
             <html>
             <Counter initial={} yo moin={props.title}/>
             <body>
