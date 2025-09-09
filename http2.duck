@@ -13,12 +13,12 @@ component Lol(props : { x: { x: String }, y: Bool, z: String[]}) tsx {
     );
 }
 
-component Counter(props: { initial: Int }) tsx {
+component Counter(props: { name: String }) tsx {
 	const [value, setValue] = useState(0);
 	const y = true;
 	return (
 		<>
-			<div>{props.initial}: {value}</div>
+			<div>{props.name}: {value}</div>
 			<Lol x={{x: "hallo"}} y={true} z={["1", "y"]}/>
 			{y ? <p>bool is true</p> : <p>bool is false</p>}
 			<button onClick={() => setValue(value + 1)}>Increment</button>
@@ -29,12 +29,19 @@ component Counter(props: { initial: Int }) tsx {
 }
 
 template Page(props: { title: String, x: String[] }) duckx {
+    let text = get_cms();
     return (
         <>
             <!doctype html>
             <html>
-            <Counter initial={} yo moin={props.title}/>
             <body>
+
+            {text}
+            <Templte initla={}/>
+
+            <p>hallo ich stelle euch heute ein neues Rezept vor</p>
+            <Counter name={"Counter 1"} yo moin={props.title}/>
+            <Counter name={"Counter 2"} yo moin={props.title}/>
             </body>
             </html>
         </>
@@ -64,6 +71,7 @@ fn render(x: {}) -> String {
 
         for _, e := range env.RenderCalls {
             prelude += fmt.Sprintf("document.querySelectorAll(\"[duckx-render=\\\"%s\\\"]\").forEach(e => render(html`%s`, e))", e.Id, e.Jsx)
+            prelude += "\n"
         }
 
         prelude += "\n</script>"
@@ -74,6 +82,5 @@ fn render(x: {}) -> String {
 
 fn main() {
     std::http::serve_string("/", render(Page({title: "yo", x: .String[]})));
-
     std::http::listen(8080);
 }

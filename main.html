@@ -1,5 +1,12 @@
 <!doctype html>
 <html>
+    <head>
+        <style>
+        .lol {
+            background-color: red;
+        }
+        </style>
+    </head>
     <body>
         <div duckx-render="counter-here"></div>
         <div duckx-render="counter-here"></div>
@@ -12,7 +19,6 @@
 
     // Initialize htm with Preact
     const html = htm.bind(h);
-
 
     function Lol(props) {
         const hello = false;
@@ -34,7 +40,7 @@
 		html`
 			<div>Counter: ${value}</div>
 			<${Lol} lol=${[1, 2, 3, 4, 5]}/>
-			<button onClick=${() => setValue(value + 1)}>Increment</button>
+			<button className="lol" onClick=${() => setValue(value + 1)}>Increment</button>
 			<button onClick=${() => setValue(value - 1)}>Decrement</button>
 		`
 	);
