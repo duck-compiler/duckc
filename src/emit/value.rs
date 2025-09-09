@@ -386,7 +386,7 @@ impl ValueExpr {
                         ValHtmlStringContents::String(s) => {
                             *s = s.replace("<>", "").replace("</>", "");
                             let mut j = 0;
-                            while j < s.len() - 1 {
+                            while !s.is_empty() && j < s.len() - 1 {
                                 let slice = &s[j..];
                                 if slice.starts_with("<") && !slice.starts_with("</") {
                                     let mut end_of_tag = None;
