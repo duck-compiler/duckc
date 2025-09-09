@@ -182,17 +182,18 @@ pub fn opening_self_closing<'a>()
                 .collect::<String>(),
         )
         .then_ignore(just("/>"))
-        // .rewind()
-        // .then(
-        //     just("<").and_is(just("</").not()).then(
-        //         any()
-        //             .filter(|c: &char| *c != ' ' && *c != '>')
-        //             .repeated()
-        //             .collect::<String>(),
-        //     ),
-        // )
+        .rewind()
+        .ignore_then(
+            just("<").and_is(just("</").not()).ignore_then(
+                any()
+                    .and_is(just(" ").not())
+                    .and_is(just("/>").not())
+                    .repeated()
+                    .collect::<String>(),
+            ),
+        )
         .map(|x| {
-            let complete = format!("<{}/>", x);
+            let complete = format!("<{}", x);
             complete
         })
 }
@@ -645,7 +646,7 @@ mod tests {
     #[test]
     fn test_lex() {
         let test_cases = vec![
-            ("duckx {let hello = <> <Counter/> </>;}", vec![]),
+            ("duckx {let hello = <> <Counter initial={100}/> </>;}", vec![]),
             (
                 "duckx {let hello = <> {ti <span id={props.id} hello={123}></span> tle} <h1> hallo moin  123</h1> abc </>;}",
                 vec![],

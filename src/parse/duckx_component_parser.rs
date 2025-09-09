@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use chumsky::{input::BorrowInput, prelude::*};
 use tree_sitter::{Node, Parser as TSParser};
 
@@ -31,31 +33,44 @@ pub enum HtmlStringSourceUnit {
     Ident,
 }
 
+// pub fn transform_html_string(html_string: &ValueExpr) -> ValueExpr {
+//     let ValueExpr::HtmlString(contents) = html_string else {
+//         panic!("not a html string")
+//     };
+
+//     let mut out = Vec::new();
+// }
+
 pub fn find_client_components(
     obj: &Vec<ValHtmlStringContents>,
-    out: &mut Vec<String>,
+    out: &mut HashSet<String>,
     type_env: &mut TypeEnv,
 ) {
-    fn trav(n: &Node) {
+    fn trav(n: &Node, t: &[u8], out: &mut HashSet<String>, type_env: &mut TypeEnv) {
         if n.grammar_name() == "self_closing_tag" {
-            dbg!(n.child(1).unwrap().to_sexp());
+            for comp in type_env.get_full_component_dependencies(
+                n.child(1).unwrap().utf8_text(t).unwrap().to_string(),
+            ) {
+                out.insert(comp);
+            }
         } else {
             for i in 0..n.child_count() {
-                trav(&n.child(i).unwrap());
+                trav(&n.child(i).unwrap(), t, out, type_env);
             }
         }
     }
     let mut s = String::new();
     for c in obj {
         match c {
-            ValHtmlStringContents::Expr((ValueExpr::HtmlString(contents), _)) => {
-                find_client_components(contents, out, type_env);
+            ValHtmlStringContents::Expr((e, _)) => {
+                if let ValueExpr::HtmlString(contents) = e {
+                    find_client_components(contents, out, type_env);
+                }
                 s.push_str("\"\"");
             }
             ValHtmlStringContents::String(s_) => {
-               s.push_str(s_.as_str());
+                s.push_str(s_.as_str());
             }
-            _ => {}
         }
     }
     let mut parser = TSParser::new();
@@ -63,10 +78,9 @@ pub fn find_client_components(
         .set_language(&tree_sitter_html::LANGUAGE.into())
         .expect("Couldn't set js grammar");
 
-    let src = parser.parse(dbg!(s).as_bytes(), None).unwrap();
+    let src = parser.parse(s.as_bytes(), None).unwrap();
     let root_node = src.root_node();
-    dbg!(root_node.to_sexp());
-    trav(&root_node);
+    trav(&root_node, s.as_bytes(), out, type_env);
 }
 
 pub fn duckx_component_parser<'src, I, M>(

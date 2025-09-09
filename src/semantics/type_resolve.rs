@@ -164,13 +164,14 @@ impl TypeEnv {
 
     pub fn get_full_component_dependencies(&mut self, name: String) -> HashSet<String> {
         self.tsx_component_dependencies
-            .entry(name)
+            .entry(name.clone())
             .or_default()
             .client_components
             .clone()
             .into_iter()
             .flat_map(|dep| {
                 let mut v = self.get_full_component_dependencies(dep.clone());
+                v.push(name.clone());
                 v.push(dep.clone());
                 v.into_iter()
             })
@@ -1588,6 +1589,19 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             ),
         );
     });
+
+    source_file
+        .duckx_components
+        .iter()
+        .for_each(|tsx_component| {
+            type_env.insert_identifier_type(
+                tsx_component.name.clone(),
+                TypeExpr::Fun(
+                    vec![(Some("props".to_string()), tsx_component.props_type.clone())],
+                    Some(Box::new(TypeExpr::Any.into_empty_span())),
+                ),
+            );
+        });
 
     for fn_def in &source_file.function_definitions {
         type_env.function_definitions.push(fn_def.clone());

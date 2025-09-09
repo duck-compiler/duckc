@@ -20,6 +20,7 @@ component Counter(props: { initial: Int }) tsx {
 		<>
 		    <std::lol/>
 			<div>{props.initial}: {value}</div>
+			<Lol/>
 			{y ? <p>bool is true</p> : <p>bool is false</p>}
 			<button onClick={() => setValue(value + 1)}>Increment</button>
 			<button onClick={() => setValue(value - 1)}>Decrement</button>
@@ -29,11 +30,10 @@ component Counter(props: { initial: Int }) tsx {
 }
 
 template Page(props: { title: String, x: String[] }) duckx {
-    let x = <><div id="counter_piopiaf"></div></>;
     return (
         <>
             <html>
-            <Counter initial={100}/>
+            <Counter initial={} yo moin={props.title}/>
             <body>
             </body>
             </html>
@@ -41,7 +41,18 @@ template Page(props: { title: String, x: String[] }) duckx {
     );
 }
 
+fn render(x: {}) -> (String, String) {
+    go {
+        renderer, _ := x.(func (env *TemplEnv) string)
+	    env := &TemplEnv{[]string{}, []RenderCall{}}
+		return Tup_DuckString_DuckString { ConcDuckString { renderer(env) }, ConcDuckString { fmt.Sprintf("%s", *env) } }
+    }
+}
+
 fn main() {
+    let res = render(Page({title: "Hallo", x: .String[]}));
+    std::io::println(res.0);
+    std::io::println(res.1);
     std::http::serve_component<{ initial: Int }>(
         "/",
         Counter,

@@ -1,8 +1,16 @@
-use std::{collections::VecDeque, usize};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    usize,
+};
 
 use crate::{
+    emit::types::escape_string_for_go,
     parse::{
-        duckx_component_parser::find_client_components, function_parser::LambdaFunctionExpr, struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}, value_parser::{Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr}
+        duckx_component_parser::find_client_components,
+        function_parser::LambdaFunctionExpr,
+        struct_parser::StructDefinition,
+        type_parser::{Duck, TypeExpr},
+        value_parser::{Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr},
     },
     semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
 };
@@ -246,7 +254,6 @@ impl ValueExpr {
             }
             _ => None,
         }
-
     }
 
     pub fn direct_or_with_instr(
@@ -363,10 +370,195 @@ impl ValueExpr {
             }
             ValueExpr::HtmlString(_) => todo!(),
             ValueExpr::HtmlString(contents) => {
-                let mut out = Vec::new();
-                find_client_components(contents, &mut out, type_env);
-                dbg!(out);
-                (vec![], None)
+                let mut component_dependencies = HashSet::new();
+                find_client_components(contents, &mut component_dependencies, type_env);
+
+                let mut contents = contents.clone();
+                let mut i = 0;
+
+                let mut instr = Vec::new();
+
+                let mut render_calls_to_push = Vec::new();
+
+                'outer: while i < contents.len() {
+                    let current = &mut contents[i];
+                    match current {
+                        ValHtmlStringContents::String(s) => {
+                            let mut j = 0;
+                            while j < s.len() - 1 {
+                                let slice = &s[j..];
+                                if slice.starts_with("<") && !slice.starts_with("</") {
+                                    let mut end_of_tag = None;
+                                    for tok in ["/>", ">"] {
+                                        let found = slice.find(tok);
+                                        if let Some(found) = found {
+                                            if let Some(min) = end_of_tag
+                                                && min < found
+                                            {
+                                                continue;
+                                            }
+                                            end_of_tag = Some(found);
+                                        }
+                                    }
+
+                                    if let Some(end_index) = end_of_tag.or(Some(slice.len())) {
+                                        let end_of_ident =
+                                            slice[..end_index].find(" ").unwrap_or(end_index);
+                                        let found = &slice[1..end_of_ident];
+                                        let cloned_ident = found.to_string();
+                                        if component_dependencies.contains(found) {
+                                            let mut o = Vec::new();
+                                            let mut full_str = slice[..end_index].to_string();
+                                            full_str.insert_str(end_of_ident, "}");
+                                            full_str.insert_str(1, "${");
+                                            o.push(ValHtmlStringContents::String(full_str.clone()));
+                                            s.drain(j..j + slice[..end_index].len());
+
+                                            let start = i + 1;
+                                            let mut i2 = start;
+                                            let mut e_count = 0;
+                                            while i2 < contents.len() {
+                                                let n = &mut contents[i2];
+                                                match n {
+                                                    ValHtmlStringContents::Expr(_) => {
+                                                        o.push(n.clone());
+                                                    }
+                                                    ValHtmlStringContents::String(s) => {
+                                                        let close_tag = s.find("/>");
+                                                        if let Some(idx) = close_tag {
+                                                            o.push(ValHtmlStringContents::String(
+                                                                s.drain(..(idx + 2)).collect(),
+                                                            ));
+                                                            break;
+                                                        } else {
+                                                            o.push(ValHtmlStringContents::String(
+                                                                s.clone(),
+                                                            ));
+                                                        }
+                                                    }
+                                                }
+                                                i2 += 1;
+                                            }
+                                            let mut html_str = String::new();
+
+                                            let mut printf_vars = Vec::new();
+                                            let mut printf_str = String::new();
+
+                                            for part in o {
+                                                match part {
+                                                    ValHtmlStringContents::String(s) => {
+                                                        html_str.push_str(&s)
+                                                    }
+                                                    ValHtmlStringContents::Expr(e) => {
+                                                        let (e_instr, e_res) =
+                                                            e.0.emit(type_env, env);
+                                                        instr.extend(e_instr);
+                                                        if let Some(e_res) = e_res {
+                                                            let IrValue::Var(e_res) = e_res else {
+                                                                panic!("no var {e_res:?}")
+                                                            };
+                                                            html_str.push_str("${%s}");
+                                                            printf_vars.push(e_res);
+                                                        } else {
+                                                            return (instr, None);
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            let id = format!("{}_{}", cloned_ident, env.new_var());
+                                            let html_to_return = format!("<div duckx-render=\"{id}\"></div>");
+
+                                            render_calls_to_push.push((
+                                                format!(
+                                                    "fmt.Sprintf(\"{}\", {})",
+                                                    escape_string_for_go(&html_str),
+                                                    printf_vars
+                                                        .iter()
+                                                        .map(|x| format!(
+                                                            "emit_go_to_js({})",
+                                                            escape_string_for_go(&x)
+                                                        ))
+                                                        .collect::<Vec<_>>()
+                                                        .join(", "),
+                                                ),
+                                                id,
+                                            ));
+
+                                            let ValHtmlStringContents::String(s) = &mut contents[i]
+                                            else {
+                                                panic!()
+                                            };
+
+                                            s.insert_str(j, &html_to_return);
+
+                                            contents.drain(start..i2);
+                                            if i > 1 {
+                                                i -= 1;
+                                            }
+
+                                            dbg!(html_str);
+                                            continue 'outer;
+                                        }
+                                    }
+                                }
+                                j += 1;
+                            }
+                        }
+                        ValHtmlStringContents::Expr(_) => {}
+                    }
+                    i += 1;
+                }
+
+                let var_name = env.new_var();
+                instr.push(IrInstruction::VarDecl(
+                    var_name.clone(),
+                    "func (env *TemplEnv) string".to_string(),
+                ));
+
+                dbg!(component_dependencies.clone());
+                dbg!(render_calls_to_push.clone());
+
+                let joined = contents
+                    .clone()
+                    .into_iter()
+                    .fold(String::new(), |mut acc, elem| {
+                        match elem {
+                            ValHtmlStringContents::String(s) => acc.push_str(&s),
+                            ValHtmlStringContents::Expr(_) => {}
+                        }
+                        acc
+                    });
+
+                instr.push(IrInstruction::InlineGo(
+                    [
+                        format!("{var_name} = func (env *TemplEnv) string {{"),
+                        component_dependencies.clone().into_iter().fold(
+                            String::new(),
+                            |mut acc, x| {
+                                acc.push_str(&format!("env.push_client_component(\"{}\")\n", x));
+                                acc
+                            },
+                        ),
+                        render_calls_to_push.clone().into_iter().fold(
+                            String::new(),
+                            |mut acc, (js, id)| {
+                                acc.push_str(&format!(
+                                    "env.push_render({}, \"{}\")\n",
+                                    js,
+                                    escape_string_for_go(&id)
+                                ));
+                                acc
+                            },
+                        ),
+                        format!("return \"{}\"", escape_string_for_go(&joined)),
+                        "}".to_string(),
+                    ]
+                    .join("\n"),
+                ));
+                dbg!(format!("\"{}\"", escape_string_for_go(&joined)));
+
+                (instr, Some(IrValue::Var(var_name)))
             }
             ValueExpr::FormattedString(contents) => {
                 let mut instr = Vec::new();
