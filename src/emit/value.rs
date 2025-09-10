@@ -1,11 +1,13 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::{
+    emit::types::escape_string_for_go,
     parse::{
+        duckx_component_parser::find_client_components,
         function_parser::LambdaFunctionExpr,
         struct_parser::StructDefinition,
         type_parser::{Duck, TypeExpr},
-        value_parser::{Declaration, ValFmtStringContents, ValueExpr},
+        value_parser::{Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr},
     },
     semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
 };
@@ -362,6 +364,497 @@ impl ValueExpr {
                 ));
 
                 (ir, as_rvar(var))
+            }
+            ValueExpr::HtmlString(contents) => {
+                let mut component_dependencies = HashSet::new();
+                find_client_components(contents, &mut component_dependencies, type_env);
+
+                let mut contents = contents.clone();
+                let mut i = 0;
+
+                let mut instr = Vec::new();
+
+                let mut render_calls_to_push = Vec::new();
+
+                'outer: while i < contents.len() {
+                    let current = &mut contents[i];
+                    match current {
+                        ValHtmlStringContents::String(s) => {
+                            *s = s.replace("<>", "").replace("</>", "");
+                            let mut j = 0;
+                            while !s.is_empty() && j < s.len() - 1 {
+                                let slice = &s[j..];
+                                if slice.starts_with("<") && !slice.starts_with("</") {
+                                    let mut end_of_tag = None;
+                                    for tok in ["/>", ">"] {
+                                        let found = slice.find(tok);
+                                        if let Some(found) = found {
+                                            if let Some(min) = end_of_tag
+                                                && min < found
+                                            {
+                                                continue;
+                                            }
+                                            end_of_tag = Some(found);
+                                        }
+                                    }
+
+                                    let end_index = end_of_tag.unwrap_or(slice.len());
+                                    let end_of_ident =
+                                        slice[..end_index].find(" ").unwrap_or(end_index);
+                                    let found = &slice[1..end_of_ident];
+                                    let cloned_ident = found.to_string();
+                                    if component_dependencies.contains(found) {
+                                        let mut o = Vec::new();
+                                        let mut full_str = slice[..end_index].to_string();
+                                        full_str.insert(end_of_ident, '}');
+                                        full_str.insert_str(1, "${");
+                                        o.push(ValHtmlStringContents::String(full_str.clone()));
+                                        s.drain(j..j + slice[..end_index].len());
+
+                                        let skip = s[j..].starts_with("/>");
+
+                                        if skip {
+                                            s.drain(j..j + 2);
+                                        }
+
+                                        let start = i + 1;
+                                        let mut i2 = start;
+
+                                        while !skip && i2 < contents.len() {
+                                            let n = &mut contents[i2];
+                                            match n {
+                                                ValHtmlStringContents::Expr(_) => {
+                                                    o.push(n.clone());
+                                                }
+                                                ValHtmlStringContents::String(s) => {
+                                                    let close_tag = s.find("/>");
+                                                    if let Some(idx) = close_tag {
+                                                        o.push(ValHtmlStringContents::String(
+                                                            s.drain(..(idx + 2)).collect(),
+                                                        ));
+                                                        break;
+                                                    } else {
+                                                        o.push(ValHtmlStringContents::String(
+                                                            s.clone(),
+                                                        ));
+                                                    }
+                                                }
+                                            }
+                                            i2 += 1;
+                                        }
+
+                                        let mut html_str = String::new();
+                                        let mut printf_vars = Vec::new();
+
+                                        for part in o {
+                                            match part {
+                                                ValHtmlStringContents::String(s) => {
+                                                    html_str.push_str(&s)
+                                                }
+                                                ValHtmlStringContents::Expr(e) => {
+                                                    let (e_instr, e_res) = e.0.emit(type_env, env);
+                                                    instr.extend(e_instr);
+                                                    if let Some(e_res) = e_res {
+                                                        let IrValue::Var(e_res) = e_res else {
+                                                            panic!("no var {e_res:?}")
+                                                        };
+                                                        html_str.push_str("${%s}");
+                                                        printf_vars.push(e_res);
+                                                    } else {
+                                                        return (instr, None);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if skip {
+                                            html_str.push_str("/>");
+                                        }
+
+                                        let id = format!("{}_{}", cloned_ident, env.new_var());
+                                        let html_to_return =
+                                            format!("<div duckx-render=\"{id}\"></div>");
+
+                                        render_calls_to_push.push((
+                                            format!(
+                                                "fmt.Sprintf(\"{}\", {})",
+                                                escape_string_for_go(&html_str),
+                                                printf_vars
+                                                    .iter()
+                                                    .map(|x| format!(
+                                                        "emit_go_to_js({})",
+                                                        escape_string_for_go(x)
+                                                    ))
+                                                    .collect::<Vec<_>>()
+                                                    .join(", "),
+                                            ),
+                                            id,
+                                        ));
+
+                                        let ValHtmlStringContents::String(s) = &mut contents[i]
+                                        else {
+                                            panic!()
+                                        };
+
+                                        s.insert_str(j, &html_to_return);
+
+                                        contents.drain(start..i2);
+                                        if i > 1 {
+                                            i -= 1;
+                                        }
+
+                                        continue 'outer;
+                                    } else if true
+                                        && let Some(duckx_component) =
+                                            type_env.get_duckx_component(found).cloned()
+                                    {
+                                        let mut o = Vec::new();
+                                        let full_str = slice[..end_index].to_string();
+                                        o.push(ValHtmlStringContents::String(
+                                            full_str[1 + found.len()..].to_string(),
+                                        ));
+                                        s.drain(j..j + slice[..end_index].len());
+                                        let skip = s[j..].starts_with("/>");
+
+                                        if skip {
+                                            s.drain(j..j + 2);
+                                        }
+
+                                        let start = i + 1;
+                                        let mut i2 = start;
+
+                                        let mut props_init = HashMap::new();
+                                        let mut current_param = None::<String>;
+
+                                        while !skip && i2 < contents.len() {
+                                            let n = &mut contents[i2];
+                                            match n {
+                                                ValHtmlStringContents::Expr(_) => {
+                                                    o.push(n.clone());
+                                                }
+                                                ValHtmlStringContents::String(s) => {
+                                                    let close_tag = s.find("/>");
+                                                    if let Some(idx) = close_tag {
+                                                        let f = s
+                                                            .drain(..(idx + 2))
+                                                            .collect::<String>();
+                                                        o.push(ValHtmlStringContents::String(
+                                                            f[..f.len() - 2].to_string(),
+                                                        ));
+                                                        break;
+                                                    } else {
+                                                        o.push(ValHtmlStringContents::String(
+                                                            s.clone(),
+                                                        ));
+                                                    }
+                                                }
+                                            }
+                                            i2 += 1;
+                                        }
+
+                                        for part in o {
+                                            match part {
+                                                ValHtmlStringContents::Expr(e) => {
+                                                    let current_param_name =
+                                                        current_param.expect("no param provided");
+                                                    current_param = None;
+                                                    let (e_instr, e_res) = e.0.emit(type_env, env);
+                                                    instr.extend(e_instr);
+                                                    if let Some(e_res) = e_res {
+                                                        let IrValue::Var(e_res) = e_res else {
+                                                            panic!("not a var? {e_res:?}")
+                                                        };
+                                                        props_init.insert(
+                                                            current_param_name,
+                                                            (
+                                                                e_res,
+                                                                TypeExpr::from_value_expr(
+                                                                    &e.0, type_env,
+                                                                ),
+                                                            ),
+                                                        );
+                                                    } else {
+                                                        return (instr, None);
+                                                    }
+                                                }
+                                                ValHtmlStringContents::String(s) => {
+                                                    if s == "/>" {
+                                                        continue;
+                                                    }
+                                                    if let Some(param) = current_param.as_ref() {
+                                                        panic!("{param} has no value");
+                                                    }
+                                                    let first_non_space =
+                                                        s.find(|x: char| x != ' ');
+                                                    if let Some(first_non_space) = first_non_space {
+                                                        let slice = &s[first_non_space..];
+                                                        let end =
+                                                            slice.find(' ').unwrap_or(slice.len());
+                                                        let slice = &slice[..end];
+                                                        if let Some(equals_idx) = slice.find('=') {
+                                                            if equals_idx == 0 {
+                                                                panic!("needs param name");
+                                                            }
+                                                            if slice
+                                                                .get(
+                                                                    equals_idx + 1..=equals_idx + 1,
+                                                                )
+                                                                .filter(|x| *x != " ")
+                                                                .is_some()
+                                                            {
+                                                                panic!("== not allowed");
+                                                            }
+                                                            current_param = Some(
+                                                                slice[..equals_idx].to_string(),
+                                                            );
+                                                        } else {
+                                                            panic!("wrong syntax (= missing)");
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        let TypeExpr::Duck(Duck { fields }) =
+                                            duckx_component.props_type.0.clone()
+                                        else {
+                                            panic!("not taking a duck??")
+                                        };
+
+                                        if fields.iter().any(|f| !props_init.contains_key(&f.name))
+                                        {
+                                            panic!("missing fields");
+                                        }
+
+                                        if fields.len() != props_init.len() {
+                                            panic!("too many fields");
+                                        }
+
+                                        let mut props_init =
+                                            props_init.into_iter().collect::<Vec<_>>();
+                                        props_init.sort_by_key(|f| f.0.clone());
+
+                                        if !skip {
+                                            contents.drain(start..i2);
+                                        }
+                                        contents.insert(
+                                            if skip { i } else { start },
+                                            ValHtmlStringContents::Expr(
+                                                ValueExpr::FunctionCall {
+                                                    target: ValueExpr::Variable(
+                                                        true,
+                                                        duckx_component.name.clone(),
+                                                        Some(TypeExpr::Fun(
+                                                            vec![(
+                                                                None,
+                                                                duckx_component.props_type.clone(),
+                                                            )],
+                                                            Some(
+                                                                TypeExpr::Html
+                                                                    .into_empty_span()
+                                                                    .into(),
+                                                            ),
+                                                        )),
+                                                    )
+                                                    .into_empty_span()
+                                                    .into(),
+                                                    params: vec![
+                                                        ValueExpr::Duck(
+                                                            props_init
+                                                                .into_iter()
+                                                                .map(|(a, b)| {
+                                                                    (
+                                                                        a,
+                                                                        ValueExpr::Variable(
+                                                                            true,
+                                                                            b.0.clone(),
+                                                                            Some(b.1),
+                                                                        )
+                                                                        .into_empty_span(),
+                                                                    )
+                                                                })
+                                                                .collect(),
+                                                        )
+                                                        .into_empty_span(),
+                                                    ],
+                                                    type_params: None,
+                                                }
+                                                .into_empty_span(),
+                                            ),
+                                        );
+
+                                        if i > 1 {
+                                            i -= 1;
+                                        }
+
+                                        continue 'outer;
+                                    }
+                                }
+                                j += 1;
+                            }
+                        }
+                        ValHtmlStringContents::Expr(_) => {}
+                    }
+                    i += 1;
+                }
+
+                let var_name = env.new_var();
+                instr.push(IrInstruction::VarDecl(
+                    var_name.clone(),
+                    "func (env *TemplEnv) string".to_string(),
+                ));
+
+                let mut return_printf = String::new();
+                let mut return_printf_vars = Vec::new();
+
+                for elem in &contents {
+                    match elem {
+                        ValHtmlStringContents::String(s) => return_printf.push_str(s),
+                        ValHtmlStringContents::Expr(e) => {
+                            let ty = TypeExpr::from_value_expr(&e.0, type_env);
+                            match ty {
+                                TypeExpr::Html => {
+                                    let (e_instr, e_res_var) = e.0.emit(type_env, env);
+                                    instr.extend(e_instr);
+                                    if let Some(e_res_var) = e_res_var {
+                                        let IrValue::Var(var_name) = e_res_var else {
+                                            panic!("not a var {e_res_var:?}")
+                                        };
+                                        return_printf.push_str("%s");
+                                        return_printf_vars.push(format!("{var_name}(env)"));
+                                    } else {
+                                        return (instr, None);
+                                    }
+                                }
+                                TypeExpr::String | TypeExpr::ConstString(..) => {
+                                    let (e_instr, e_res_var) = e.0.emit(type_env, env);
+                                    instr.extend(e_instr);
+                                    if let Some(e_res_var) = e_res_var {
+                                        let IrValue::Var(var_name) = e_res_var else {
+                                            panic!("not a var {e_res_var:?}")
+                                        };
+                                        return_printf.push_str("%s");
+                                        return_printf_vars
+                                            .push(format!("{var_name}.as_dgo_string()"));
+                                    } else {
+                                        return (instr, None);
+                                    }
+                                }
+                                TypeExpr::Int | TypeExpr::ConstInt(..) => {
+                                    let (e_instr, e_res_var) = e.0.emit(type_env, env);
+                                    instr.extend(e_instr);
+                                    if let Some(e_res_var) = e_res_var {
+                                        let IrValue::Var(var_name) = e_res_var else {
+                                            panic!("not a var {e_res_var:?}")
+                                        };
+                                        return_printf.push_str("%v");
+                                        return_printf_vars.push(format!("{var_name}.as_dgo_int()"));
+                                    } else {
+                                        return (instr, None);
+                                    }
+                                }
+                                TypeExpr::Bool | TypeExpr::ConstBool(..) => {
+                                    let (e_instr, e_res_var) = e.0.emit(type_env, env);
+                                    instr.extend(e_instr);
+                                    if let Some(e_res_var) = e_res_var {
+                                        let IrValue::Var(var_name) = e_res_var else {
+                                            panic!("not a var {e_res_var:?}")
+                                        };
+                                        return_printf.push_str("%v");
+                                        return_printf_vars
+                                            .push(format!("{var_name}.as_dgo_bool()"));
+                                    } else {
+                                        return (instr, None);
+                                    }
+                                }
+                                TypeExpr::Float => {
+                                    let (e_instr, e_res_var) = e.0.emit(type_env, env);
+                                    instr.extend(e_instr);
+                                    if let Some(e_res_var) = e_res_var {
+                                        let IrValue::Var(var_name) = e_res_var else {
+                                            panic!("not a var {e_res_var:?}")
+                                        };
+                                        return_printf.push_str("%v");
+                                        return_printf_vars
+                                            .push(format!("{var_name}.as_dgo_float()"));
+                                    } else {
+                                        return (instr, None);
+                                    }
+                                }
+                                TypeExpr::Array(..) => {
+                                    let (e_instr, e_res_var) = e.0.emit(type_env, env);
+                                    instr.extend(e_instr);
+                                    if let Some(e_res_var) = e_res_var {
+                                        let IrValue::Var(var_name) = e_res_var else {
+                                            panic!("not a var {e_res_var:?}")
+                                        };
+                                        return_printf.push_str("%s");
+                                        return_printf_vars.push(format!(
+                                            r#"
+                                            func() string {{
+                                                res := ""
+                                                for _, e := range {var_name} {{
+                                                    res += e(env)
+                                                }}
+                                                return res
+                                            }}()"#
+                                        ));
+                                    } else {
+                                        return (instr, None);
+                                    }
+                                }
+                                _ => panic!("not html string compatible {ty:?}"),
+                            }
+                        }
+                    }
+                }
+
+                instr.push(IrInstruction::InlineGo(
+                    [
+                        format!("{var_name} = func (env *TemplEnv) string {{"),
+                        component_dependencies.clone().into_iter().fold(
+                            String::new(),
+                            |mut acc, x| {
+                                let src = type_env.get_component(x.as_str()).unwrap();
+                                let js_src = format!(
+                                    "function {}(props){{\n{}\n}}",
+                                    src.name, src.typescript_source.0
+                                );
+                                acc.push_str(&format!(
+                                    "env.push_client_component(\"{}\")\n",
+                                    escape_string_for_go(js_src.as_str())
+                                ));
+                                acc
+                            },
+                        ),
+                        render_calls_to_push.clone().into_iter().fold(
+                            String::new(),
+                            |mut acc, (js, id)| {
+                                acc.push_str(&format!(
+                                    "env.push_render({}, \"{}\")\n",
+                                    js,
+                                    escape_string_for_go(&id)
+                                ));
+                                acc
+                            },
+                        ),
+                        if return_printf_vars.is_empty() {
+                            format!(
+                                "return fmt.Sprintf(\"{}\")",
+                                escape_string_for_go(&return_printf)
+                            )
+                        } else {
+                            format!(
+                                "return fmt.Sprintf(\"{}\", {})",
+                                escape_string_for_go(&return_printf),
+                                return_printf_vars.join(", ")
+                            )
+                        },
+                        "}".to_string(),
+                    ]
+                    .join("\n"),
+                ));
+
+                (instr, Some(IrValue::Var(var_name)))
             }
             ValueExpr::FormattedString(contents) => {
                 let mut instr = Vec::new();
@@ -1144,7 +1637,8 @@ impl ValueExpr {
                 let field_name = field_name.clone();
                 let (mut i, t_res) = target_obj.0.emit(type_env, env);
                 if let Some(t_res) = t_res {
-                    let target_type = TypeExpr::from_value_expr(&target_obj.0, type_env);
+                    let target_type =
+                        TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
                     match target_type {
                         TypeExpr::Duck(Duck { fields }) => {
                             let f = fields.iter().find(|f| f.name == field_name).unwrap();

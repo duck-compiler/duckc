@@ -22,14 +22,7 @@ use tags::Tag;
 
 use crate::{
     parse::{
-        Context, SS,
-        function_parser::LambdaFunctionExpr,
-        lexer::lex_parser,
-        make_input, parse_failure,
-        source_file_parser::source_file_parser,
-        type_parser::{Duck, TypeExpr},
-        use_statement_parser::UseStatement,
-        value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr},
+        function_parser::LambdaFunctionExpr, lexer::lex_parser, make_input, parse_failure, source_file_parser::source_file_parser, type_parser::{Duck, TypeExpr}, use_statement_parser::UseStatement, value_parser::{Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, SS
     },
     semantics::type_resolve::{self, TypeEnv},
 };
@@ -244,6 +237,13 @@ fn parse_src_file(
 
     fn typename_reset_global_value_expr(type_expr: &mut ValueExpr) {
         match type_expr {
+            ValueExpr::HtmlString(contents) => {
+                for c in contents {
+                    if let ValHtmlStringContents::Expr(e) = c {
+                        typename_reset_global_value_expr(&mut e.0);
+                    }
+                }
+            }
             ValueExpr::Match {
                 value_expr,
                 arms,
@@ -439,6 +439,12 @@ fn parse_src_file(
         if let UseStatement::Go(..) = s {
             result.push_use(s);
         }
+    }
+    for s in &std_src_file.tsx_components {
+        result.tsx_components.push(s.clone());
+    }
+    for s in &std_src_file.duckx_components {
+        result.duckx_components.push(s.clone());
     }
 
     result

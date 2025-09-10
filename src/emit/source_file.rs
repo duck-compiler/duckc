@@ -18,12 +18,28 @@ impl SourceFile {
         let mut instructions = Vec::new();
         instructions.push(IrInstruction::GoPackage(pkg_name));
 
-        let mut go_imports = Vec::new();
+        let mut go_imports = vec![
+            (None, "html".to_string()),
+            (None, "fmt".to_string()),
+            (None, "reflect".to_string()),
+            (None, "unsafe".to_string()),
+            (None, "slices".to_string()),
+        ];
+
         for u in self.use_statements {
             if let UseStatement::Go(name, alias) = u {
+                if name == "html"
+                    || name == "fmt"
+                    || name == "reflect"
+                    || name == "unsafe"
+                    || name == "slices"
+                {
+                    continue;
+                }
                 go_imports.push((alias, name));
             }
         }
+
         instructions.push(IrInstruction::GoImports(go_imports));
 
         let mut emitted = HashSet::new();
@@ -35,8 +51,183 @@ impl SourceFile {
             }
 
             if emitted.insert(f.name.clone()) {
-                instructions.push(f.emit(None, type_env, &mut to_ir));
+                let mut fn_instr = f.emit(None, type_env, &mut to_ir);
+
+                if f.name.as_str() == "main" {
+                    let IrInstruction::FunDef(_, _, _, _, body) = &mut fn_instr else {
+                        panic!("how")
+                    };
+                    body.insert(
+                        0,
+                        IrInstruction::InlineGo("_ = html.EscapeString(\"\")".to_string()),
+                    );
+                    body.insert(
+                        0,
+                        IrInstruction::InlineGo("_ = fmt.Sprintf(\"%d\", 1)".to_string()),
+                    );
+                    body.insert(0, IrInstruction::InlineGo("_ = reflect.Append".to_string()));
+                    body.insert(
+                        0,
+                        IrInstruction::InlineGo("_ = unsafe.Pointer(nil)".to_string()),
+                    );
+                }
+                instructions.push(fn_instr);
             }
+        }
+
+        instructions.push(IrInstruction::StructDef(
+            "RenderCall".to_string(),
+            vec![
+                ("Jsx".to_string(), "string".to_string()),
+                ("Id".to_string(), "string".to_string()),
+            ],
+        ));
+
+        instructions.push(IrInstruction::StructDef(
+            "TemplEnv".to_string(),
+            vec![
+                ("ClientComponents".to_string(), "[]string".to_string()),
+                ("RenderCalls".to_string(), "[]RenderCall".to_string()),
+            ],
+        ));
+
+        instructions.push(IrInstruction::FunDef(
+            "push_client_component".to_string(),
+            Some(("self".to_string(), ("*TemplEnv".to_string()))),
+            vec![("comp".to_string(), "string".to_string())],
+            None,
+            vec![IrInstruction::InlineGo(
+                r#"
+                    if !slices.Contains(self.ClientComponents, comp) {
+		self.ClientComponents = append(self.ClientComponents, comp)
+	}
+                    "#
+                .to_string(),
+            )],
+        ));
+
+        instructions.push(IrInstruction::FunDef(
+            "push_render".to_string(),
+            Some(("self".to_string(), ("*TemplEnv".to_string()))),
+            vec![
+                ("js".to_string(), "string".to_string()),
+                ("id".to_string(), "string".to_string()),
+            ],
+            None,
+            vec![IrInstruction::InlineGo(
+                r#"
+                    for _, e := range self.RenderCalls {
+		if e.Id == id {
+			return
+		}
+	}
+
+	self.RenderCalls = append(self.RenderCalls, RenderCall{js, id})
+                    "#
+                .to_string(),
+            )],
+        ));
+
+        instructions.push(IrInstruction::FunDef(
+            "emit_go_to_js".to_string(),
+            None,
+            vec![("target".to_string(), "any".to_string())],
+            Some("string".to_string()),
+            vec![IrInstruction::InlineGo(
+                r#"
+	switch target.(type) {
+	case string:
+		s := target.(string)
+		return fmt.Sprintf("\"%s\"", s)
+	case int:
+		s := target.(int)
+		return fmt.Sprintf("%d", s)
+	case float32:
+		s := target.(float32)
+		return fmt.Sprintf("%f", s)
+	case float64:
+		s := target.(float64)
+		return fmt.Sprintf("%f", s)
+	case bool:
+		s := target.(bool)
+		if s {
+			return "true"
+		} else {
+			return "false"
+		}
+	case ConcDuckString:
+		s := target.(ConcDuckString)
+		return fmt.Sprintf("\"%s\"", s.as_dgo_string())
+	case ConcDuckInt:
+		s := target.(ConcDuckInt)
+		return fmt.Sprintf("%d", s.as_dgo_int())
+	case ConcDuckFloat:
+		s := target.(ConcDuckFloat)
+		return fmt.Sprintf("%f", s.as_dgo_float32())
+	case ConcDuckBool:
+		s := target.(ConcDuckBool)
+		if s.as_dgo_bool() {
+			return "true"
+		} else {
+			return "false"
+		}
+	default:
+		v := reflect.ValueOf(target)
+		if v.Kind() == reflect.Array || v.Kind() == reflect.Slice {
+			arr_str := "["
+			l := v.Len()
+			for i := 0; i < l; i++ {
+				emitted := emit_go_to_js(v.Index(i).Interface())
+				arr_str += emitted
+				if i < l-1 {
+					arr_str += ","
+				}
+			}
+			arr_str += "]"
+			return arr_str
+		} else if v.Kind() == reflect.Pointer {
+			obj_str := "{"
+			v := v.Elem()
+			l := v.NumField()
+
+			for i := 0; i < l; i++ {
+				field_name := v.Type().Field(i).Name
+				v_field := v.Field(i)
+				field_ptr := unsafe.Pointer(v_field.UnsafeAddr())
+				field_value := reflect.NewAt(v_field.Type(), field_ptr).Elem().Interface()
+				obj_str += fmt.Sprintf("%s:%s", field_name, emit_go_to_js(field_value))
+				if i < l-1 {
+					obj_str += ","
+				}
+			}
+			obj_str += "}"
+			return obj_str
+			} else if v.Kind() == reflect.Struct {
+				t := v.Type()
+
+				if strings.HasPrefix(t.Name(), "Const") {
+					as_str := fmt.Sprintf("%s", target)
+					sliced := as_str[1:len(as_str)-1]
+					if strings.Contains(t.Name(), "String") {
+						return fmt.Sprintf("\"%s\"", sliced)
+					} else {
+						return fmt.Sprintf("%v", sliced)
+					}
+				}
+			}
+	}
+	panic(fmt.Sprintf("can't emit %v", target))
+                    "#
+                .to_string(),
+            )],
+        ));
+
+        for c in self.tsx_components {
+            instructions.push(c.emit(type_env));
+        }
+
+        for c in self.duckx_components {
+            instructions.push(c.emit(type_env, &mut to_ir));
         }
 
         instructions.extend(type_definitions);

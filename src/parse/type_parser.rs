@@ -23,6 +23,7 @@ pub struct TypeDefinition {
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            TypeExpr::Html => write!(f, "html"),
             TypeExpr::Tag(identifier) => write!(f, ".{identifier}"),
             TypeExpr::TypeOf(identifier) => write!(f, "typeof {identifier}"),
             TypeExpr::Alias(def) => write!(f, "{def:?}"),
@@ -148,6 +149,7 @@ pub struct Struct {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeExpr {
+    Html,
     Any,
     InlineGo,
     Struct(String),
@@ -325,6 +327,7 @@ where
                         "Bool" => TypeExpr::Bool,
                         "String" => TypeExpr::String,
                         "Char" => TypeExpr::Char,
+                        "Html" => TypeExpr::Html,
                         _ => TypeExpr::RawTypeName(is_global.is_some(), identifier, type_params),
                     },
                 );
@@ -487,6 +490,7 @@ where
                         "Bool" => TypeExpr::Bool,
                         "String" => TypeExpr::String,
                         "Char" => TypeExpr::Char,
+                        "Html" => TypeExpr::Html,
                         _ => TypeExpr::RawTypeName(is_global.is_some(), identifier, type_params),
                     },
                 );

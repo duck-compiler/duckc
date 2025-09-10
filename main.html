@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+    <head>
+        <style>
+        .lol {
+            background-color: red;
+        }
+        </style>
+    </head>
+    <body>
+        <div duckx-render="counter-here"></div>
+        <div duckx-render="counter-here"></div>
+    </body>
+    <script></script>
+</html>
+<script type="module">
+    import { h, render } from "https://esm.sh/preact";
+    import { useState } from "https://esm.sh/preact/hooks";
+    import htm from "https://esm.sh/htm";
+
+    // Initialize htm with Preact
+    const html = htm.bind(h);
+
+    function Lol(props) {
+        const hello = false;
+        return (
+            html`
+                ${props.lol.map(x => html`<h2>${html`<em>${x}</em>`}</h2>`)}
+                ${hello ? html`<p>hello true</h1>` : html`<p>hello false</p>`}
+            `
+        )
+
+    }
+
+
+    function Counter(props) {
+
+	const [value, setValue] = useState(0);
+
+	return (
+		html`
+			<div>Counter: ${value}</div>
+			<${Lol} lol=${[1, 2, 3, 4, 5]}/>
+			<button className="lol" onClick=${() => setValue(value + 1)}>Increment</button>
+			<button onClick=${() => setValue(value - 1)}>Decrement</button>
+		`
+	);
+
+    }
+    document.querySelectorAll("[duckx-render=\"counter-here\"]").forEach(e => render(html`<${Counter}/>`, e))
+</script>

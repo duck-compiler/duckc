@@ -5,17 +5,10 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        Context, SS, Spanned,
-        function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
-        lexer::{Token, lex_parser},
-        make_input, parse_failure,
-        struct_parser::{StructDefinition, struct_definition_parser},
-        type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
-        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
-        value_parser::{ValFmtStringContents, ValueExpr},
+        duckx_component_parser::{duckx_component_parser, DuckxComponent}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, tsx_component_parser::{tsx_component_parser, TsxComponent}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, Spanned, SS
     },
     semantics::ident_mangler::{
-        MangleEnv, mangle, mangle_type_expression, mangle_value_expr, unmangle,
+        mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
     },
 };
 
@@ -26,12 +19,16 @@ pub struct SourceFile {
     pub struct_definitions: Vec<StructDefinition>,
     pub use_statements: Vec<UseStatement>,
     pub sub_modules: Vec<(String, SourceFile)>,
+    pub tsx_components: Vec<TsxComponent>,
+    pub duckx_components: Vec<DuckxComponent>,
 }
 
 #[derive(Debug, Clone)]
 pub enum SourceUnit {
     Func(FunctionDefintion),
     Type(TypeDefinition),
+    Component(TsxComponent),
+    Template(DuckxComponent),
     Struct(StructDefinition),
     Use(UseStatement),
     Module(String, SourceFile),
@@ -54,6 +51,8 @@ impl SourceFile {
             let mut mangle_env = MangleEnv {
                 sub_mods: s.sub_modules.iter().map(|x| x.0.clone()).collect(),
                 global_prefix: global_prefix.clone(),
+                tsx_components: s.tsx_components.iter().map(|x| x.name.clone()).collect(),
+                duckx_components: s.duckx_components.iter().map(|x| x.name.clone()).collect(),
                 imports: {
                     let mut imports = HashMap::new();
                     if with_std {
@@ -115,6 +114,16 @@ impl SourceFile {
                 for struct_definition in src.struct_definitions {
                     mangle_env.insert_type(struct_definition.name[prefix.len()..].to_string());
                     result.struct_definitions.push(struct_definition);
+                }
+
+                for tsx_component in src.tsx_components {
+                    mangle_env.insert_ident(tsx_component.name[prefix.len()..].to_string());
+                    result.tsx_components.push(tsx_component);
+                }
+
+                for duck_component in src.duckx_components {
+                    mangle_env.insert_ident(duck_component.name[prefix.len()..].to_string());
+                    result.duckx_components.push(duck_component);
                 }
 
                 for u in &src.use_statements {
@@ -201,6 +210,20 @@ impl SourceFile {
                 result.struct_definitions.push(struct_def);
             }
 
+            for c in &s.tsx_components {
+                // todo: mangle components in tsx
+                let mut c = c.clone();
+                mangle_tsx_component(&mut c, global_prefix, prefix, &mut mangle_env);
+                result.tsx_components.push(c.clone());
+            }
+
+            for c in &s.duckx_components {
+                // todo: mangle components in tsx
+                let mut c = c.clone();
+                mangle_duckx_component(&mut c, global_prefix, prefix, &mut mangle_env);
+                result.duckx_components.push(c.clone());
+            }
+
             result
         }
 
@@ -209,6 +232,8 @@ impl SourceFile {
         let mut mangle_env = MangleEnv {
             sub_mods: Vec::new(),
             global_prefix: global_prefix.clone(),
+            tsx_components: r.tsx_components.iter().map(|x| x.name.clone()).collect(),
+            duckx_components: r.duckx_components.iter().map(|x| x.name.clone()).collect(),
             imports: HashMap::new(),
             names: vec![
                 r.function_definitions
@@ -266,6 +291,23 @@ impl SourceFile {
                 append_global_prefix_value_expr(&mut m.value_expr.0, &mut mangle_env);
             }
         }
+
+        for s in &mut r.duckx_components {
+            let mut c = global_prefix.clone();
+
+            append_global_prefix_type_expr(&mut s.props_type.0, &mut mangle_env);
+            append_global_prefix_value_expr(&mut s.value_expr.0, &mut mangle_env);
+
+            c.extend(unmangle(&s.name));
+            s.name = mangle(&c);
+        }
+
+        for s in &mut r.tsx_components {
+            let mut c = global_prefix.clone();
+            c.extend(unmangle(&s.name));
+            s.name = mangle(&c);
+        }
+
         r
     }
 }
@@ -314,6 +356,13 @@ fn append_global_prefix_type_expr(type_expr: &mut TypeExpr, mangle_env: &mut Man
 
 fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut MangleEnv) {
     match value_expr {
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    append_global_prefix_value_expr(&mut e.0, mangle_env);
+                }
+            }
+        }
         ValueExpr::Int(..)
         | ValueExpr::String(..)
         | ValueExpr::Bool(..)
@@ -701,6 +750,8 @@ where
         choice((
             use_statement_parser().map(SourceUnit::Use),
             type_definition_parser().map(SourceUnit::Type),
+            tsx_component_parser().map(SourceUnit::Component),
+            duckx_component_parser(make_input.clone()).map(SourceUnit::Template),
             struct_definition_parser(make_input.clone()).map(SourceUnit::Struct),
             function_definition_parser(make_input).map(SourceUnit::Func),
             just(Token::Module)
@@ -721,21 +772,25 @@ where
         ))
         .repeated()
         .collect::<Vec<_>>()
-        .map(|xs| {
+        .map(|source_units| {
             let mut function_definitions = Vec::new();
             let mut type_definitions = Vec::new();
             let mut struct_definitions = Vec::new();
             let mut use_statements = Vec::new();
             let mut sub_modules = Vec::new();
+            let mut tsx_components = Vec::new();
+            let mut template_components = Vec::new();
 
-            for x in xs {
+            for source_unit in source_units {
                 use SourceUnit::*;
-                match x {
+                match source_unit {
                     Func(def) => function_definitions.push(def),
                     Type(def) => type_definitions.push(def),
                     Struct(def) => struct_definitions.push(def),
                     Use(def) => use_statements.push(def),
                     Module(name, def) => sub_modules.push((name, def)),
+                    Component(tsx_component) => tsx_components.push(tsx_component),
+                    Template(duckx_component) => template_components.push(duckx_component),
                 }
             }
 
@@ -745,6 +800,8 @@ where
                 struct_definitions,
                 use_statements,
                 sub_modules,
+                tsx_components,
+                duckx_components: template_components,
             }
         })
     })
@@ -763,11 +820,12 @@ mod tests {
         make_input,
         source_file_parser::{SourceFile, source_file_parser},
         struct_parser::StructDefinition,
+        tsx_component_parser::TsxComponent,
         type_parser::{Duck, TypeDefinition, TypeExpr},
         use_statement_parser::{Indicator, UseStatement},
         value_parser::{
             IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
-            value_expr_into_empty_range,
+            type_expr_into_empty_range, value_expr_into_empty_range,
         },
     };
 
@@ -780,6 +838,46 @@ mod tests {
                     function_definitions: vec![FunctionDefintion {
                         name: "abc".into(),
                         ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            ),
+            (
+                "component MyComp() tsx {console.log('hallo, welt')}",
+                SourceFile {
+                    tsx_components: vec![TsxComponent {
+                        name: "MyComp".to_string(),
+                        props_type: TypeExpr::Duck(Duck { fields: vec![] }).into_empty_span(),
+                        typescript_source: (
+                            "console.log('hallo, welt')".to_string(),
+                            empty_range(),
+                        ),
+                    }],
+                    ..Default::default()
+                },
+            ),
+            (
+                "component MyComp(props: {x: String, y: Int}) tsx {console.log('hallo, welt')}",
+                SourceFile {
+                    tsx_components: vec![TsxComponent {
+                        name: "MyComp".to_string(),
+                        props_type: TypeExpr::Duck(Duck {
+                            fields: vec![
+                                Field {
+                                    name: "x".to_string(),
+                                    type_expr: TypeExpr::String.into_empty_span(),
+                                },
+                                Field {
+                                    name: "y".to_string(),
+                                    type_expr: TypeExpr::Int.into_empty_span(),
+                                },
+                            ],
+                        })
+                        .into_empty_span(),
+                        typescript_source: (
+                            "console.log('hallo, welt')".to_string(),
+                            empty_range(),
+                        ),
                     }],
                     ..Default::default()
                 },
@@ -943,6 +1041,11 @@ mod tests {
                 .into_result()
                 .expect(src);
             source_file_into_empty_range(&mut parse);
+
+            for c in parse.tsx_components.iter_mut() {
+                type_expr_into_empty_range(&mut c.props_type);
+            }
+
             assert_eq!(parse, exp, "{src}");
         }
     }

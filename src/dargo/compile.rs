@@ -87,7 +87,13 @@ pub fn compile(
     let src_file_file_contents: &'static str = fs::read_to_string(&src_file)
         .map_err(|err| {
             (
-                format!("{}{} couldn't read file\n -> {err}", *COMPILE_TAG, Tag::Err),
+                format!(
+                    "{}{} couldn't read file '{}'. msg='{}'",
+                    *COMPILE_TAG,
+                    Tag::Err,
+                    src_file_name.bright_blue(),
+                    err.to_string().bright_red()
+                ),
                 CompileErrKind::CannotReadFile,
             )
         })?

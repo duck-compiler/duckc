@@ -18,6 +18,17 @@ impl TypeExpr {
         return format!("{self}");
     }
 
+    pub fn is_component_compatible(&self) -> bool {
+        match self {
+            TypeExpr::Duck(Duck { fields }) => fields
+                .iter()
+                .all(|x| x.type_expr.0.is_component_compatible()),
+            TypeExpr::Array(ty) => ty.0.is_component_compatible(),
+            TypeExpr::String | TypeExpr::Bool | TypeExpr::Float | TypeExpr::Int => true,
+            _ => false,
+        }
+    }
+
     pub fn from_value_expr_resolved_type_name(
         value_expr: &ValueExpr,
         type_env: &mut TypeEnv,
@@ -32,6 +43,7 @@ impl TypeExpr {
     #[track_caller]
     pub fn from_value_expr(value_expr: &ValueExpr, type_env: &mut TypeEnv) -> TypeExpr {
         return match value_expr {
+            ValueExpr::HtmlString(..) => TypeExpr::Html,
             ValueExpr::Tag(identifier) => TypeExpr::Tag(identifier.clone()),
             ValueExpr::RawVariable(_x, p) => panic!("{}", p.join(" ").leak()),
             ValueExpr::FormattedString(contents) => {
@@ -940,6 +952,22 @@ fn check_type_compatability(
     };
 
     match &required_type.0 {
+        TypeExpr::Html => {
+            if let TypeExpr::Html = &given_type.0 {
+                return;
+            }
+            fail_requirement(
+                format!(
+                    "the required type is {}",
+                    format!("{}", required_type.0).bright_yellow(),
+                ),
+                format!(
+                    "because of the fact, that the required type is {}. The value you need to pass must be a tag aswell, but it is a {}",
+                    format!("{}", required_type.0).bright_yellow(),
+                    format!("{}", given_type.0).bright_yellow(),
+                ),
+            )
+        }
         TypeExpr::TypeOf(..) => panic!("typeof should have been replaced"),
         TypeExpr::Alias(..) => panic!("alias should have been replaced"),
         TypeExpr::Any => return,

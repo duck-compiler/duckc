@@ -22,7 +22,23 @@ pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str
     }
 }
 
-pub fn escape_string_literal(input_str: &str) -> String {
+pub fn escape_string_for_go(input_str: &str) -> String {
+    let mut out = String::new();
+    for c in input_str.chars() {
+        match c {
+            '\\' | '"' => out.push('\\'),
+            '\n' => {
+                out.push_str("\\n");
+                continue;
+            }
+            _ => {}
+        }
+        out.push(c);
+    }
+    out
+}
+
+pub fn string_to_byte_string(input_str: &str) -> String {
     input_str
         .chars()
         .map(|c| format!("{}_", c as u32))
@@ -39,7 +55,7 @@ pub fn primitive_conc_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
         TypeExpr::ConstInt(int) => Box::leak(Box::new(format!("ConstInt_{int}"))),
         TypeExpr::ConstString(str) => Box::leak(Box::new(format!(
             "ConstString_{}",
-            escape_string_literal(str)
+            string_to_byte_string(str)
         ))),
         TypeExpr::ConstBool(bool) => Box::leak(Box::new(format!("ConstBool_{bool}"))),
         _ => panic!("That's not a primitive"),
@@ -56,7 +72,7 @@ pub fn primitive_type_name(primitive_type_expr: &TypeExpr) -> &'static str {
         TypeExpr::ConstInt(int) => Box::leak(Box::new(format!("ConstInt_{int}"))),
         TypeExpr::ConstString(str) => Box::leak(Box::new(format!(
             "ConstString_{}",
-            escape_string_literal(str)
+            string_to_byte_string(str)
         ))),
         TypeExpr::ConstBool(bool) => Box::leak(Box::new(format!("ConstBool_{bool}"))),
         _ => panic!("That's not a primitive"),
@@ -325,7 +341,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
         .flat_map(|primitive_type_expr| {
             if primitive_type_expr.is_literal() {
                 let ir_value = IrValue::Imm(match primitive_type_expr.clone() {
-                    TypeExpr::ConstString(value) => format!("\"{value}\""),
+                    TypeExpr::ConstString(value) => format!("\"{}\"", value.replace("\n", "\\n")),
                     TypeExpr::ConstInt(int_value) => format!("{int_value}"),
                     TypeExpr::ConstBool(bool_value) => format!("{bool_value}"),
                     _ => unreachable!(),
@@ -479,6 +495,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replace by now"),
             TypeExpr::Alias(def) => def.type_expression.0.as_go_type_annotation(type_env),
             TypeExpr::RawTypeName(..) => panic!(),
@@ -548,6 +565,7 @@ impl TypeExpr {
 
     pub fn as_go_concrete_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
@@ -630,6 +648,7 @@ impl TypeExpr {
 
     pub fn type_id(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::RawTypeName(_, ident, _) => {
@@ -709,6 +728,7 @@ impl TypeExpr {
 
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::RawTypeName(_, ident, _) => {
@@ -730,12 +750,10 @@ impl TypeExpr {
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
             TypeExpr::TypeName(_, name, _type_params) => {
-                println!("resolving {name}");
-                let r = type_env
+                
+                type_env
                     .resolve_type_alias(name)
-                    .as_clean_go_type_name(type_env);
-                println!("resolved {name} {r:?}");
-                r
+                    .as_clean_go_type_name(type_env)
             }
             TypeExpr::TypeNameInternal(name) => name.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),

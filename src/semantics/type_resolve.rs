@@ -8,11 +8,17 @@ use chumsky::container::Container;
 use crate::{
     parse::{
         SS, Spanned,
+        duckx_component_parser::DuckxComponent,
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         source_file_parser::SourceFile,
         struct_parser::StructDefinition,
+        tsx_component_parser::{
+            Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
+        },
         type_parser::{Duck, TypeDefinition, TypeExpr},
-        value_parser::{Assignment, Declaration, ValFmtStringContents, ValueExpr},
+        value_parser::{
+            Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
+        },
     },
     semantics::ident_mangler::mangle,
     tags::Tag,
@@ -23,6 +29,51 @@ pub enum GenericDefinition {
     Function(FunctionDefintion),
     Type(TypeDefinition),
     Struct(StructDefinition),
+}
+
+fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
+    type_env.push_identifier_types();
+    type_env.insert_identifier_type("props".to_string(), c.props_type.0.clone());
+    type_env.all_types.push(c.props_type.0.clone());
+    typeresolve_value_expr(&mut c.value_expr.0, type_env);
+    type_env.pop_identifier_types();
+}
+
+fn typeresolve_tsx_component(c: &mut TsxComponent, type_env: &mut TypeEnv) {
+    type_env.all_types.push(c.props_type.0.clone());
+    let units = c.find_units();
+    let mut edits = Vec::new();
+    for (range, unit) in units.iter() {
+        match unit {
+            TsxSourceUnit::Jsx => {
+                edits.push((range.start_byte, Edit::Insert("html`".to_string())));
+                edits.push((range.end_byte, Edit::Insert("`".to_string())));
+            }
+            TsxSourceUnit::OpeningJsx => edits.push((range.start_byte, Edit::Delete(2))),
+            TsxSourceUnit::ClosingJsx => edits.push((range.start_byte, Edit::Delete(3))),
+            TsxSourceUnit::Expression => {
+                if range.start_byte > 0
+                    && &c.typescript_source.0[range.start_byte - 1..(range.start_byte)] != "$"
+                {
+                    edits.push((range.start_byte, Edit::Insert("$".to_string())))
+                }
+            }
+            TsxSourceUnit::Ident => {
+                // here we could implement rpc calls
+                let ident = &c.typescript_source.0[range.start_byte..range.end_byte];
+
+                if let Some(found_comp) = type_env.get_component(ident) {
+                    let found_name = found_comp.name.clone();
+                    println!("{} -> {}", c.name, found_name);
+                    type_env
+                        .get_component_dependencies(c.name.clone())
+                        .client_components
+                        .push(found_name);
+                }
+            }
+        }
+    }
+    do_edits(&mut c.typescript_source.0, &mut edits);
 }
 
 impl GenericDefinition {
@@ -67,6 +118,9 @@ pub struct TypeEnv {
 
     pub function_headers: HashMap<String, FunHeader>,
     pub function_definitions: Vec<FunctionDefintion>,
+    pub tsx_components: Vec<TsxComponent>,
+    pub duckx_components: Vec<DuckxComponent>,
+    pub tsx_component_dependencies: HashMap<String, TsxComponentDependencies>,
     pub struct_definitions: Vec<StructDefinition>,
     pub generic_fns_generated: Vec<FunctionDefintion>,
     pub generic_structs_generated: Vec<StructDefinition>,
@@ -80,6 +134,9 @@ impl Default for TypeEnv {
             identifier_types: vec![HashMap::new()],
             type_aliases: vec![HashMap::new()],
             all_types: vec![],
+            tsx_components: Vec::new(),
+            duckx_components: Vec::new(),
+            tsx_component_dependencies: HashMap::new(),
             function_headers: HashMap::new(),
             function_definitions: Vec::new(),
             struct_definitions: Vec::new(),
@@ -98,6 +155,42 @@ pub struct TypesSummary {
 }
 
 impl TypeEnv {
+    pub fn has_component(&self, name: &str) -> bool {
+        self.tsx_components.iter().any(|x| x.name.as_str() == name)
+    }
+
+    pub fn get_component_dependencies(&mut self, name: String) -> &mut TsxComponentDependencies {
+        self.tsx_component_dependencies.entry(name).or_default()
+    }
+
+    pub fn get_duckx_component(&self, name: &str) -> Option<&DuckxComponent> {
+        self.duckx_components.iter().find(|x| x.name == name)
+    }
+
+    pub fn get_full_component_dependencies(&mut self, name: String) -> HashSet<String> {
+        let mut out = self
+            .tsx_component_dependencies
+            .entry(name.clone())
+            .or_default()
+            .client_components
+            .clone()
+            .into_iter()
+            .flat_map(|dep| {
+                let mut v = self.get_full_component_dependencies(dep.clone());
+                v.push(dep.clone());
+                v.into_iter()
+            })
+            .collect::<HashSet<_>>();
+        if self.get_component(name.as_str()).is_some() {
+            out.insert(name);
+        }
+        out
+    }
+
+    pub fn get_component(&self, name: &str) -> Option<&TsxComponent> {
+        self.tsx_components.iter().find(|x| x.name.as_str() == name)
+    }
+
     pub fn has_method_header(&self, name: &str) -> bool {
         self.function_headers.contains_key(name)
     }
@@ -309,6 +402,18 @@ impl TypeEnv {
         let mut all_types = self.all_types.clone();
         // dbg!(all_types.iter().filter(|x| x.is_struct() && x.type_id(self).contains("Xyz")).collect::<Vec<_>>());
         all_types.extend(TypeExpr::primitives());
+        all_types.extend(
+            self.tsx_components
+                .iter()
+                .map(|x| x.props_type.0.clone())
+                .collect::<Vec<_>>(),
+        );
+        all_types.extend(
+            self.duckx_components
+                .iter()
+                .map(|x| x.props_type.0.clone())
+                .collect::<Vec<_>>(),
+        );
         all_types.push(TypeExpr::Tuple(vec![]));
         let mut param_names_used = Vec::new();
 
@@ -392,11 +497,12 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
         }
         TypeExpr::TypeOf(identifier) => {
             // TODO:: HERE
-            let type_expr = env.identifier_types.last()
+            let type_expr = env
+                .identifier_types
+                .last()
                 .expect("expected at least one identifiert types map to be on the stack")
                 .get(identifier)
                 .expect("sorry bro didn't work :(");
-
 
             *expr = type_expr.clone()
         }
@@ -426,8 +532,9 @@ fn replace_generics_in_struct_definition(
 
 fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
     match expr {
+        TypeExpr::Html => {}
         // todo: support generics in typeof
-        TypeExpr::TypeOf(..) => {},
+        TypeExpr::TypeOf(..) => {}
         TypeExpr::Alias(alias) => {
             instantiate_generics_type_expr(&mut alias.type_expression.0, type_env);
         }
@@ -578,6 +685,13 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
             replace_generics_in_value_expr(&mut lhs.0, set_params);
             replace_generics_in_value_expr(&mut rhs.0, set_params);
         }
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    replace_generics_in_value_expr(&mut e.0, set_params);
+                }
+            }
+        }
         ValueExpr::BoolNegate(e) | ValueExpr::Return(Some(e)) => {
             replace_generics_in_value_expr(&mut e.0, set_params)
         }
@@ -727,7 +841,8 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
 
 fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &HashMap<String, TypeExpr>) {
     match expr {
-        TypeExpr::TypeOf(..) => {},
+        TypeExpr::Html => {}
+        TypeExpr::TypeOf(..) => {}
         TypeExpr::Alias(alias) => {
             replace_generics_in_type_expr(&mut alias.type_expression.0, set_params);
         }
@@ -866,6 +981,13 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
         | ValueExpr::Or(lhs, rhs) => {
             instantiate_generics_value_expr(&mut lhs.0, type_env);
             instantiate_generics_value_expr(&mut rhs.0, type_env);
+        }
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    instantiate_generics_value_expr(&mut e.0, type_env);
+                }
+            }
         }
         ValueExpr::BoolNegate(e) | ValueExpr::Return(Some(e)) => {
             instantiate_generics_value_expr(&mut e.0, type_env)
@@ -1155,6 +1277,13 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
 
 fn sort_fields_value_expr(expr: &mut ValueExpr) {
     match expr {
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    sort_fields_value_expr(&mut e.0);
+                }
+            }
+        }
         ValueExpr::Array(ty, exprs) => {
             if let Some(ty) = ty {
                 sort_fields_type_expr(&mut ty.0);
@@ -1311,6 +1440,7 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
 
 fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
+        TypeExpr::Html => {}
         TypeExpr::TypeOf(..) => {}
         TypeExpr::Alias(t) => {
             sort_fields_type_expr(&mut t.type_expression.0);
@@ -1414,7 +1544,7 @@ pub fn typeresolve_struct_def(def: &mut StructDefinition, type_env: &mut TypeEnv
 pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut TypeEnv) {
     type_env.push_type_aliases();
 
-    println!("{} sort fields", Tag::TypeResolve,);
+    println!("{} sort fields", Tag::TypeResolve);
 
     // Step 1: Sort fields
     source_file
@@ -1432,7 +1562,22 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             sort_fields_value_expr(&mut function_definition.value_expr.0);
         });
 
-    println!("{} insert type definitions", Tag::TypeResolve,);
+    source_file
+        .tsx_components
+        .iter_mut()
+        .for_each(|function_definition| {
+            sort_fields_type_expr(&mut function_definition.props_type.0);
+        });
+
+    source_file
+        .duckx_components
+        .iter_mut()
+        .for_each(|function_definition| {
+            sort_fields_type_expr(&mut function_definition.props_type.0);
+            sort_fields_value_expr(&mut function_definition.value_expr.0);
+        });
+
+    println!("{} insert type definitions", Tag::TypeResolve);
 
     println!(
         "source file struct defs: {}",
@@ -1460,8 +1605,48 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             );
         });
 
+    source_file.tsx_components.iter().for_each(|tsx_component| {
+        type_env.insert_identifier_type(
+            tsx_component.name.clone(),
+            TypeExpr::Fun(
+                vec![(Some("props".to_string()), tsx_component.props_type.clone())],
+                Some(Box::new((
+                    TypeExpr::Tuple(vec![
+                        (TypeExpr::String, tsx_component.typescript_source.1),
+                        (TypeExpr::String, tsx_component.typescript_source.1),
+                    ]),
+                    tsx_component.typescript_source.1,
+                ))),
+            ),
+        );
+    });
+
+    source_file
+        .duckx_components
+        .iter()
+        .for_each(|duckx_component| {
+            type_env.insert_identifier_type(
+                duckx_component.name.clone(),
+                TypeExpr::Fun(
+                    vec![(
+                        Some("props".to_string()),
+                        duckx_component.props_type.clone(),
+                    )],
+                    Some(Box::new((TypeExpr::Html, duckx_component.value_expr.1))),
+                ),
+            );
+        });
+
     for fn_def in &source_file.function_definitions {
         type_env.function_definitions.push(fn_def.clone());
+    }
+
+    for comp in &source_file.tsx_components {
+        type_env.tsx_components.push(comp.clone());
+    }
+
+    for comp in &source_file.duckx_components {
+        type_env.duckx_components.push(comp.clone());
     }
 
     println!(
@@ -1534,6 +1719,16 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         });
     println!("{} typeresolve functions", Tag::TypeResolve);
     println!("{} final resolve of all functions", Tag::TypeResolve);
+
+    for s in &mut source_file.tsx_components {
+        typeresolve_tsx_component(s, type_env);
+    }
+
+    for s in &mut source_file.duckx_components {
+        typeresolve_duckx_component(s, type_env);
+    }
+    type_env.tsx_components = source_file.tsx_components.clone();
+    type_env.duckx_components = source_file.duckx_components.clone();
 
     source_file
         .function_definitions
@@ -1636,6 +1831,13 @@ fn typeresolve_function_definition(
 
 fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
     match value_expr {
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    typeresolve_value_expr(&mut e.0, type_env);
+                }
+            }
+        }
         ValueExpr::RawVariable(_, path) => {
             let ident = mangle(path);
             let mut type_expr = type_env
@@ -2024,6 +2226,13 @@ fn resolve_implicit_function_return_type(
         type_env: &mut TypeEnv,
     ) {
         match value_expr {
+            ValueExpr::HtmlString(contents) => {
+                for c in contents {
+                    if let ValHtmlStringContents::Expr(e) = c {
+                        flatten_returns(&e.0, return_types_found, type_env);
+                    }
+                }
+            }
             ValueExpr::FormattedString(contents) => {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {

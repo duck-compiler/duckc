@@ -3,9 +3,11 @@ use std::collections::HashMap;
 use tree_sitter::{Node, Parser};
 
 use crate::parse::{
+    duckx_component_parser::DuckxComponent,
     function_parser::LambdaFunctionExpr,
+    tsx_component_parser::{Edit, TsxComponent, TsxSourceUnit, do_edits},
     type_parser::{Duck, TypeExpr},
-    value_parser::{ValFmtStringContents, ValueExpr},
+    value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr},
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -15,6 +17,8 @@ pub struct MangleEnv {
     pub global_prefix: Vec<String>,
     pub names: Vec<Vec<String>>,
     pub types: Vec<Vec<String>>,
+    pub tsx_components: Vec<String>,
+    pub duckx_components: Vec<String>,
 }
 
 pub const MANGLE_SEP: &str = "_____";
@@ -31,6 +35,49 @@ pub fn unmangle(s: &str) -> Vec<String> {
 }
 
 impl MangleEnv {
+    pub fn mangle_component(&self, prefix: &[String], comp: &str) -> Option<Vec<String>> {
+        let is_global = comp.starts_with("::");
+        let ident = if is_global && comp.len() >= 3 {
+            &comp[2..]
+        } else {
+            comp
+        }
+        .split("::")
+        .map(String::from)
+        .collect::<Vec<_>>();
+        let prefix = if is_global { &[] } else { prefix };
+
+        if !is_global
+            && let Some((is_glob, import_path)) = self.resolve_import(ident.first()?.clone())
+        {
+            let mut res = Vec::new();
+
+            if !is_glob {
+                res.extend_from_slice(prefix);
+            } else {
+                // res.extend_from_slice(&self.global_prefix);
+            }
+
+            res.extend(import_path);
+            res.extend(ident);
+
+            return Some(res);
+        }
+
+        if self.tsx_components.contains(ident.first().unwrap()) {
+            let mut x = Vec::new();
+            if is_global {
+                // x.extend_from_slice(&self.global_prefix);
+            } else {
+                x.extend_from_slice(prefix);
+            }
+            x.extend_from_slice(&ident);
+            return Some(x);
+        }
+
+        None
+    }
+
     pub fn is_imported_name(&self, x: &String) -> bool {
         self.is_top_level_ident(x) && self.imports.contains_key(x)
     }
@@ -262,6 +309,44 @@ pub fn mangle_type_expression(
     }
 }
 
+pub fn mangle_duckx_component(
+    comp: &mut DuckxComponent,
+    global_prefix: &Vec<String>,
+    prefix: &Vec<String>,
+    mangle_env: &mut MangleEnv,
+) {
+    mangle_type_expression(&mut comp.props_type.0, prefix, mangle_env);
+    mangle_value_expr(&mut comp.value_expr.0, global_prefix, prefix, mangle_env);
+}
+
+pub fn mangle_tsx_component(
+    comp: &mut TsxComponent,
+    _global_prefix: &[String],
+    prefix: &[String],
+    mangle_env: &mut MangleEnv,
+) {
+    let units = comp.find_units();
+    let mut edits = Vec::new();
+
+    for (range, unit) in units.iter() {
+        if let TsxSourceUnit::Ident = unit {
+            let old_ident = &comp.typescript_source.0[range.start_byte..range.end_byte];
+            //todo(@Apfelfrosch): use our scope resolution syntax
+            let ident_str = mangle_env.mangle_component(prefix, &old_ident.replace("--", "::"));
+
+            if let Some(ident_str) = ident_str {
+                edits.push((range.start_byte, Edit::Delete(old_ident.len())));
+                edits.push((
+                    range.start_byte,
+                    Edit::Insert(format!("${{{}}}", mangle(&ident_str))),
+                ));
+            }
+        }
+    }
+
+    do_edits(&mut comp.typescript_source.0, &mut edits);
+}
+
 pub fn mangle_value_expr(
     value_expr: &mut ValueExpr,
     global_prefix: &Vec<String>,
@@ -269,6 +354,13 @@ pub fn mangle_value_expr(
     mangle_env: &mut MangleEnv,
 ) {
     match value_expr {
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    mangle_value_expr(&mut e.0, global_prefix, prefix, mangle_env);
+                }
+            }
+        }
         ValueExpr::Int(..)
         | ValueExpr::String(..)
         | ValueExpr::Bool(..)
