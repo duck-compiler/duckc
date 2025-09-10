@@ -1,8 +1,8 @@
 {
-    "id": "935b0fb08b5fcf0488ad9faf018aae3b",
-    "file_path": "../../src/parse/value_parser.rs",
-    "line_number": 286,
-    "title": "add span of else",
+    "id": "f5901928e8ad348259b064be2aa120b4",
+    "file_path": "../../src/parse/lexer.rs",
+    "line_number": 655,
+    "title": "[TSX] create tsx text parser",
     "tag": "todo",
     "module_tag": "parse",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Apfelfrosch",
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
-    "source_line": "// todo: add span of else",
+    "source_line": "// todo: [TSX] create tsx text parser",
     "status": "open",
-    "first_seen": "2025-09-05T03:39:39.966595",
+    "first_seen": "2025-09-10T23:16:09.459805",
     "history": []
 }

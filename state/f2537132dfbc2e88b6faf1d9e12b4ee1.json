@@ -1,8 +1,8 @@
 {
-    "id": "036f9af09249885c01979f9b1e07dbb0",
+    "id": "f2537132dfbc2e88b6faf1d9e12b4ee1",
     "file_path": "../../src/parse/source_file_parser.rs",
-    "line_number": 525,
-    "title": "type params",
+    "line_number": 221,
+    "title": "mangle components in tsx",
     "tag": "todo",
     "module_tag": "parse",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Apfelfrosch",
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
-    "source_line": "// TODO: type params",
+    "source_line": "// todo: mangle components in tsx",
     "status": "open",
-    "first_seen": "2025-09-04T19:31:54.197529",
+    "first_seen": "2025-09-10T23:16:09.461372",
     "history": []
 }

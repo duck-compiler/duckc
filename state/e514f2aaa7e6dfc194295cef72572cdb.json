@@ -1,19 +1,19 @@
 {
-    "id": "c7792e84ea51d671bb93a84f261caacb",
+    "id": "e514f2aaa7e6dfc194295cef72572cdb",
     "file_path": "../../src/semantics/ident_mangler.rs",
-    "line_number": 523,
-    "title": "type params",
+    "line_number": 334,
+    "title": "use our scope resolution syntax",
     "tag": "todo",
     "module_tag": "semantics",
-    "user": null,
+    "user": "@Apfelfrosch",
     "issue_ref": null,
     "description": "",
     "blame": {
         "name": "Apfelfrosch",
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
-    "source_line": "// TODO: type params",
+    "source_line": "//todo(@Apfelfrosch): use our scope resolution syntax",
     "status": "open",
-    "first_seen": "2025-07-14T09:44:03.707968",
+    "first_seen": "2025-09-10T23:16:09.458466",
     "history": []
 }

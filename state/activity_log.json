@@ -1,6 +1,36 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-09-10T23:16:09.456232",
+        "issue_id": "e514f2aaa7e6dfc194295cef72572cdb",
+        "issue_title": "use our scope resolution syntax",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-09-10T23:16:09.456232",
+        "issue_id": "f5901928e8ad348259b064be2aa120b4",
+        "issue_title": "[TSX] create tsx text parser",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-09-10T23:16:09.456232",
+        "issue_id": "f2537132dfbc2e88b6faf1d9e12b4ee1",
+        "issue_title": "mangle components in tsx",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-09-07T00:12:38.330850",
         "issue_id": "b05a3be51e7023df2cd03e0cf204af27",
         "issue_title": "HERE",
