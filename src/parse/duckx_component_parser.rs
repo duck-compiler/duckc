@@ -126,7 +126,13 @@ where
             name: ident.clone(),
             props_type: props_type
                 .unwrap_or(TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span()),
-            value_expr: src_tokens,
+            value_expr: if let ValueExpr::Duck(fields) = &src_tokens.0
+                && fields.is_empty()
+            {
+                (ValueExpr::Block(vec![]), src_tokens.1.clone())
+            } else {
+                src_tokens
+            },
         })
 }
 

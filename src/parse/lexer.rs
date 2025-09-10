@@ -170,12 +170,7 @@ pub fn closing_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a,
                 .collect::<String>(),
         )
         .then(just(">"))
-        .map(|((pre, main), close)| {
-            if main.is_empty() {
-                return String::new();
-            }
-            format!("{pre}{main}{close}")
-        })
+        .map(|((pre, main), close)| format!("{pre}{main}{close}"))
 }
 
 pub fn opening_self_closing<'a>()
@@ -721,6 +716,20 @@ pub fn token_empty_range(token_span: &mut Spanned<Token>) {
         for content in contents {
             token_empty_range(content);
         }
+    } else if let Token::HtmlString(contents) = &mut token_span.0 {
+        for content in contents {
+            if let HtmlStringContents::Tokens(contents) = content {
+                for content in contents {
+                    token_empty_range(content);
+                }
+            }
+        }
+    }
+}
+
+impl Token {
+    pub fn into_empty_span(&self) -> Spanned<Token> {
+        (self.clone(), empty_range())
     }
 }
 
@@ -730,29 +739,145 @@ mod tests {
 
     use super::*;
 
+    fn all_empty(v: Vec<Token>) -> Vec<Spanned<Token>> {
+        v.iter().map(|x| x.into_empty_span()).collect()
+    }
+
+    fn ctrl(c: char) -> Token {
+        Token::ControlChar(c)
+    }
+
+    fn left_brace() -> Token {
+        ctrl('{')
+    }
+
+    fn right_brace() -> Token {
+        ctrl('}')
+    }
+
     #[test]
     fn test_lex() {
         let test_cases = vec![
-            ("duckx {<>{{}}</>}", vec![]),
-            ("duckx {<Counter initial={10} />}", vec![]),
             (
-                "duckx {let hello = <> <!doctype html>{<Counter intial={100}/>} </>;}",
-                vec![],
+                "duckx {<>{{}}</>}",
+                vec![Token::InlineDuckx(vec![
+                    Token::ControlChar('{').into_empty_span(),
+                    Token::HtmlString(vec![
+                        HtmlStringContents::String("<>".to_string()),
+                        HtmlStringContents::Tokens(vec![
+                            Token::ControlChar('{').into_empty_span(),
+                            Token::ControlChar('{').into_empty_span(),
+                            Token::ControlChar('}').into_empty_span(),
+                            Token::ControlChar('}').into_empty_span(),
+                        ]),
+                        HtmlStringContents::String("</>".to_string()),
+                    ])
+                    .into_empty_span(),
+                    Token::ControlChar('}').into_empty_span(),
+                ])],
             ),
             (
-                "duckx {let hello = <> <Counter initial={100}/> </>;}",
-                vec![],
+                "duckx {<Counter initial={10} />}",
+                vec![Token::InlineDuckx(
+                    vec![
+                        Token::ControlChar('{'),
+                        Token::HtmlString(vec![
+                            HtmlStringContents::String("<Counter initial=".to_string()),
+                            HtmlStringContents::Tokens(all_empty(vec![
+                                Token::ControlChar('{'),
+                                Token::ConstInt(10),
+                                Token::ControlChar('}'),
+                            ])),
+                            HtmlStringContents::String(" />".to_string()),
+                        ]),
+                        Token::ControlChar('}'),
+                    ]
+                    .into_iter()
+                    .map(|x| x.into_empty_span())
+                    .collect(),
+                )],
+            ),
+            (
+                "duckx {let hello = <> <!doctype html>{<Counter initial={100}/>} </>;}",
+                vec![Token::InlineDuckx(all_empty(vec![
+                    left_brace(),
+                    Token::Let,
+                    Token::Ident("hello".to_string()),
+                    ctrl('='),
+                    Token::HtmlString(vec![
+                        HtmlStringContents::String("<> <!doctype html>".to_string()),
+                        HtmlStringContents::Tokens(all_empty(vec![
+                            left_brace(),
+                            Token::HtmlString(vec![
+                                HtmlStringContents::String("<Counter initial=".to_string()),
+                                HtmlStringContents::Tokens(all_empty(vec![
+                                    left_brace(),
+                                    Token::ConstInt(100),
+                                    right_brace(),
+                                ])),
+                                HtmlStringContents::String("/>".to_string()),
+                            ]),
+                            right_brace(),
+                        ])),
+                        HtmlStringContents::String(" </>".to_string()),
+                    ]),
+                    ctrl(';'),
+                    right_brace(),
+                ]))],
             ),
             (
                 "duckx {let hello = <> {ti <span id={props.id} hello={123}></span> tle} <h1> hallo moin  123</h1> abc </>;}",
-                vec![],
+                vec![Token::InlineDuckx(all_empty(vec![
+                    left_brace(),
+                    Token::Let,
+                    Token::Ident("hello".to_string()),
+                    ctrl('='),
+                    Token::HtmlString(vec![
+                        HtmlStringContents::String("<> ".to_string()),
+                        HtmlStringContents::Tokens(all_empty(vec![
+                            left_brace(),
+                            Token::Ident("ti".to_string()),
+                            Token::HtmlString(vec![
+                                HtmlStringContents::String("<span id=".to_string()),
+                                HtmlStringContents::Tokens(all_empty(vec![
+                                    left_brace(),
+                                    Token::Ident("props".to_string()),
+                                    ctrl('.'),
+                                    Token::Ident("id".to_string()),
+                                    right_brace(),
+                                ])),
+                                HtmlStringContents::String(" hello=".to_string()),
+                                HtmlStringContents::Tokens(all_empty(vec![
+                                    left_brace(),
+                                    Token::ConstInt(123),
+                                    right_brace(),
+                                ])),
+                                HtmlStringContents::String("></span>".to_string()),
+                            ]),
+                            Token::Ident("tle".to_string()),
+                            right_brace(),
+                        ])),
+                        HtmlStringContents::String(
+                            " <h1> hallo moin  123</h1> abc </>".to_string(),
+                        ),
+                    ]),
+                    ctrl(';'),
+                    right_brace(),
+                ]))],
             ),
-            (
-                "duckx {let hello = <> yo <h1> hallo moin  123</h1> abc </>;}",
-                vec![],
-            ),
-            ("duckx {let hello = <><h1>123</h1></>;}", vec![]),
-            ("duckx {let hello = {1};}", vec![]),
+            ("duckx {let hello = {1};}", vec![
+                Token::InlineDuckx(all_empty(vec![
+                    left_brace(),
+                    Token::Let,
+                    Token::Ident("hello".to_string()),
+                    ctrl('='),
+                    left_brace(),
+                    Token::ConstInt(1),
+                    right_brace(),
+                    ctrl(';'),
+                    right_brace(),
+                ]))
+            ]),
             (
                 "f\"{{{1}}}\"",
                 vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(

@@ -577,8 +577,8 @@ where
                 let make_input = make_input.clone();
                 move |mut x| {
                     // let mut res = Vec::new();
-                    x.insert(0, (Token::ControlChar('{'), empty_range()));
-                    x.push((Token::ControlChar('}'), empty_range()));
+                    // x.insert(0, (Token::ControlChar('{'), empty_range()));
+                    // x.push((Token::ControlChar('}'), empty_range()));
 
                     let cl = x.clone();
                     let expr = value_expr_parser
@@ -1176,6 +1176,13 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
                 value_expr_into_empty_range(&mut arm.value_expr);
             }
         }
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    value_expr_into_empty_range(e);
+                }
+            }
+        }
         _ => {}
     }
 }
@@ -1191,8 +1198,9 @@ mod tests {
         make_input,
         type_parser::{Duck, TypeExpr},
         value_parser::{
-            Assignment, Declaration, MatchArm, empty_duck, empty_range, empty_tuple,
-            type_expr_into_empty_range, value_expr_into_empty_range, value_expr_parser,
+            Assignment, Declaration, MatchArm, ValHtmlStringContents, empty_duck, empty_range,
+            empty_tuple, type_expr_into_empty_range, value_expr_into_empty_range,
+            value_expr_parser,
         },
     };
 
@@ -1225,7 +1233,26 @@ mod tests {
     #[test]
     fn test_value_expression_parser() {
         let test_cases = vec![
-            ("duckx {5;<h1>{<p></p>}</h1>}", ValueExpr::Break),
+            (
+                "duckx {5;<h1>{<p></p>}</h1>}",
+                ValueExpr::Block(vec![
+                    ValueExpr::Int(5).into_empty_span(),
+                    ValueExpr::HtmlString(vec![
+                        ValHtmlStringContents::String("<h1>".to_string()),
+                        ValHtmlStringContents::Expr(
+                            ValueExpr::Block(vec![
+                                ValueExpr::HtmlString(vec![ValHtmlStringContents::String(
+                                    "<p></p>".to_string(),
+                                )])
+                                .into_empty_span(),
+                            ])
+                            .into_empty_span(),
+                        ),
+                        ValHtmlStringContents::String("</h1>".to_string()),
+                    ])
+                    .into_empty_span(),
+                ]),
+            ),
             (
                 "a<String>()",
                 ValueExpr::FunctionCall {
