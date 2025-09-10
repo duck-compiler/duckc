@@ -462,8 +462,7 @@ pub fn lex_single<'a>(
             _ => Token::Ident(str.to_string()),
         });
 
-        let ctrl = one_of("!=:{};,&()-<>.+-*/%|[]@")
-            .map(Token::ControlChar);
+        let ctrl = one_of("!=:{};,&()-<>.+-*/%|[]@").map(Token::ControlChar);
 
         let string = string_lexer();
         let r#bool = choice((
@@ -635,8 +634,8 @@ fn inline_go_parser<'src>()
         .map(|x| Token::InlineGo(x[1..x.len() - 1].to_owned()))
 }
 
-fn num_literal<'src>()
--> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone {
+fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone
+{
     just('-')
         .or_not()
         .then(text::int(10))
@@ -656,15 +655,6 @@ fn inline_tsx_parser<'src>()
         // todo: [TSX] create tsx text parser
         .ignore_then(go_text_parser())
         .map(|x| Token::InlineTsx(x[1..x.len() - 1].to_owned()))
-}
-
-fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone
-{
-    let pre = text::int(10).try_map(|s: &str, span| {
-        s.parse::<i64>()
-            .map_err(|_| Rich::custom(span, "Invalid integer"))
-    });
-    pre.map(Token::ConstInt)
 }
 
 fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone {

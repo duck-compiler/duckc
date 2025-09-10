@@ -365,7 +365,6 @@ impl ValueExpr {
 
                 (ir, as_rvar(var))
             }
-            ValueExpr::HtmlString(_) => todo!(),
             ValueExpr::HtmlString(contents) => {
                 let mut component_dependencies = HashSet::new();
                 find_client_components(contents, &mut component_dependencies, type_env);

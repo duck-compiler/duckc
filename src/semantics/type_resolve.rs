@@ -682,16 +682,15 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
         | ValueExpr::GreaterThanOrEquals(lhs, rhs)
         | ValueExpr::And(lhs, rhs)
         | ValueExpr::Or(lhs, rhs) => {
+            replace_generics_in_value_expr(&mut lhs.0, set_params);
+            replace_generics_in_value_expr(&mut rhs.0, set_params);
+        }
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {
                     replace_generics_in_value_expr(&mut e.0, set_params);
                 }
             }
-        }
-        ValueExpr::Add(lhs, rhs) | ValueExpr::Mul(lhs, rhs) | ValueExpr::Equals(lhs, rhs) => {
-            replace_generics_in_value_expr(&mut lhs.0, set_params);
-            replace_generics_in_value_expr(&mut rhs.0, set_params);
         }
         ValueExpr::BoolNegate(e) | ValueExpr::Return(Some(e)) => {
             replace_generics_in_value_expr(&mut e.0, set_params)
@@ -980,16 +979,15 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
         | ValueExpr::GreaterThanOrEquals(lhs, rhs)
         | ValueExpr::And(lhs, rhs)
         | ValueExpr::Or(lhs, rhs) => {
+            instantiate_generics_value_expr(&mut lhs.0, type_env);
+            instantiate_generics_value_expr(&mut rhs.0, type_env);
+        }
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {
                     instantiate_generics_value_expr(&mut e.0, type_env);
                 }
             }
-        }
-        ValueExpr::Add(lhs, rhs) | ValueExpr::Mul(lhs, rhs) | ValueExpr::Equals(lhs, rhs) => {
-            instantiate_generics_value_expr(&mut lhs.0, type_env);
-            instantiate_generics_value_expr(&mut rhs.0, type_env);
         }
         ValueExpr::BoolNegate(e) | ValueExpr::Return(Some(e)) => {
             instantiate_generics_value_expr(&mut e.0, type_env)
@@ -1634,10 +1632,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                         Some("props".to_string()),
                         duckx_component.props_type.clone(),
                     )],
-                    Some(Box::new((
-                        TypeExpr::Html,
-                        duckx_component.value_expr.1,
-                    ))),
+                    Some(Box::new((TypeExpr::Html, duckx_component.value_expr.1))),
                 ),
             );
         });
