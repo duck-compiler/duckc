@@ -2,10 +2,7 @@ use std::fmt::Display;
 
 use chumsky::{prelude::*, text::whitespace};
 
-use crate::{
-    dargo::compile::CompileErrKind,
-    parse::{Context, SS, Spanned, value_parser::empty_range},
-};
+use crate::parse::{Context, SS, Spanned, value_parser::empty_range};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum RawFmtStringContents {
@@ -196,7 +193,7 @@ pub fn opening_self_closing<'a>()
             ),
         )
         .map(|x| {
-            let complete = format!("<{}", x);
+            let complete = format!("<{x}");
             complete
         })
 }
@@ -221,8 +218,8 @@ pub fn opening_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a,
                     .collect::<String>(),
             ),
         )
-        .map(|(((pre, main), close), x)| {
-            let complete = format!("<{}", x.1);
+        .map(|(((_pre, _main), _close), (_, x))| {
+            let complete = format!("<{x}");
             complete
         })
 }
@@ -242,7 +239,7 @@ pub fn duckx_parse_html_string<'a>(
                     just("{")
                         .rewind()
                         .ignore_then(duckx_lexer.clone())
-                        .map(|x| RawHtmlStringContents::Tokens(x)),
+                        .map(RawHtmlStringContents::Tokens),
                     special_tag().map(|x| {
                         RawHtmlStringContents::Sub(Token::HtmlString(vec![
                             HtmlStringContents::String(x),
@@ -256,18 +253,18 @@ pub fn duckx_parse_html_string<'a>(
                     opening_tag()
                         .rewind()
                         .ignore_then(e.clone())
-                        .map(|in_html_open| RawHtmlStringContents::Sub(in_html_open)),
+                        .map(RawHtmlStringContents::Sub),
                     any()
                         .and_is(closing_tag().not())
                         // .filter(|c: &char| *c != '{' && *c != '<')
-                        .map(|x| RawHtmlStringContents::Char(x)),
+                        .map(RawHtmlStringContents::Char),
                 ))
                 .repeated()
                 .collect::<Vec<_>>(),
             )
             .then(closing_tag())
             .map(
-                |((opening_tag, mut template_contents), closing_tag): (
+                |((opening_tag, template_contents), closing_tag): (
                     (String, Vec<RawHtmlStringContents>),
                     String,
                 )| {
@@ -329,7 +326,7 @@ pub fn duckx_contents_in_curly_braces<'a>(
                     just("{").rewind().ignore_then(duckx_lexer.clone()),
                     special_tag().map(|x| {
                         vec![(
-                            Token::HtmlString(vec![HtmlStringContents::String(format!("{x}"))]),
+                            Token::HtmlString(vec![HtmlStringContents::String(x.to_string())]),
                             empty_range(),
                         )]
                     }),
@@ -339,10 +336,10 @@ pub fn duckx_contents_in_curly_braces<'a>(
                                 just("{")
                                     .rewind()
                                     .ignore_then(duckx_lexer.clone())
-                                    .map(|x| RawHtmlStringContents::Tokens(x)),
+                                    .map(RawHtmlStringContents::Tokens),
                                 any()
                                     .and_is(just("/>").not())
-                                    .map(|x| RawHtmlStringContents::Char(x)),
+                                    .map(RawHtmlStringContents::Char),
                             ))
                             .repeated()
                             .collect::<Vec<_>>(),
@@ -407,8 +404,8 @@ pub fn duckx_contents_in_curly_braces<'a>(
                                     start: e.span().start,
                                     end: e.span().end,
                                     context: Context {
-                                        file_name: file_name,
-                                        file_contents: file_contents,
+                                        file_name,
+                                        file_contents,
                                     },
                                 },
                             )]
@@ -424,7 +421,7 @@ pub fn duckx_contents_in_curly_braces<'a>(
                 .collect::<Vec<_>>(),
             )
             .then(just("}"))
-            .map(|((a, x), b)| {
+            .map(|((_, x), _)| {
                 let mut v = x.into_iter().flatten().collect::<Vec<_>>();
                 v.insert(0, (Token::ControlChar('{'), empty_range()));
                 v.push((Token::ControlChar('}'), empty_range()));
@@ -565,7 +562,7 @@ pub fn lex_single<'a>(
                     file_contents,
                     lexer.clone(),
                 ))
-                .map(|x| Token::InlineDuckx(x)))
+                .map(Token::InlineDuckx))
             .or(doc_comment)
             .or(comment)
             .or(fmt_string)
@@ -865,8 +862,9 @@ mod tests {
                     right_brace(),
                 ]))],
             ),
-            ("duckx {let hello = {1};}", vec![
-                Token::InlineDuckx(all_empty(vec![
+            (
+                "duckx {let hello = {1};}",
+                vec![Token::InlineDuckx(all_empty(vec![
                     left_brace(),
                     Token::Let,
                     Token::Ident("hello".to_string()),
@@ -876,8 +874,8 @@ mod tests {
                     right_brace(),
                     ctrl(';'),
                     right_brace(),
-                ]))
-            ]),
+                ]))],
+            ),
             (
                 "f\"{{{1}}}\"",
                 vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(

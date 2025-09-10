@@ -148,8 +148,7 @@ impl TsxComponent {
         let emitted_props = emit_duck_to_js_obj(&self.props_type.0, vec!["props".to_string()]);
 
         let props = format!(
-            "fmt.Sprintf(\"const props = {{...%s,...props2}}\", {})",
-            emitted_props
+            "fmt.Sprintf(\"const props = {{...%s,...props2}}\", {emitted_props})"
         );
         let all = format!(
             "fmt.Sprintf(\"{}\\nfunction {}(props2){{\\n%s\\n%s}}\", {props}, \"{}\")",
@@ -169,7 +168,8 @@ impl TsxComponent {
             escape_string_for_go(&self.typescript_source.0)
         );
 
-        let ir_def = IrInstruction::FunDef(
+        
+        IrInstruction::FunDef(
             self.name.clone(),
             None,
             vec![(
@@ -181,7 +181,6 @@ impl TsxComponent {
                 "return Tup_DuckString_DuckString {{ field_0: ConcDuckString {{ value: \"{}\" }}, field_1: ConcDuckString {{ value: {all} }} }}",
                 self.name
             ))],
-        );
-        ir_def
+        )
     }
 }

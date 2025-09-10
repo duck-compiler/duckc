@@ -2,7 +2,6 @@ use crate::parse::{
     Context, SS, Spanned,
     function_parser::{LambdaFunctionExpr, Param},
     lexer::{FmtStringContents, HtmlStringContents},
-    make_input,
     source_file_parser::SourceFile,
     type_parser::{type_expression_parser, type_expression_parser_without_array},
 };
@@ -545,21 +544,21 @@ where
             .map({
                 let value_expr_parser = value_expr_parser.clone();
                 let make_input = make_input.clone();
-                move |mut contents| {
+                move |contents| {
                     let mut out_contents = Vec::new();
                     for c in contents {
                         match c {
                             HtmlStringContents::String(s) => {
                                 out_contents.push(ValHtmlStringContents::String(s))
                             }
-                            HtmlStringContents::Tokens(mut t) => {
+                            HtmlStringContents::Tokens(t) => {
                                 // t.insert(0, (Token::ControlChar('{'), empty_range()));
                                 // t.push((Token::ControlChar('}'), empty_range()));
                                 let cl = t.clone();
                                 let expr = value_expr_parser
                                     .parse(make_input(empty_range(), t.leak()))
                                     .into_result()
-                                    .expect(&format!("invalid code {cl:?}"));
+                                    .unwrap_or_else(|_| panic!("invalid code {cl:?}"));
                                 out_contents.push(ValHtmlStringContents::Expr(expr));
                             }
                         }
@@ -575,18 +574,18 @@ where
             .map({
                 let value_expr_parser = value_expr_parser.clone();
                 let make_input = make_input.clone();
-                move |mut x| {
+                move |x| {
                     // let mut res = Vec::new();
                     // x.insert(0, (Token::ControlChar('{'), empty_range()));
                     // x.push((Token::ControlChar('}'), empty_range()));
 
                     let cl = x.clone();
-                    let expr = value_expr_parser
+                    
+
+                    value_expr_parser
                         .parse(make_input(empty_range(), x.leak()))
                         .into_result()
-                        .expect(&format!("invavlid code {cl:?}"));
-
-                    expr
+                        .unwrap_or_else(|_| panic!("invavlid code {cl:?}"))
                 }
             });
             // .map_with(|x, e| (x, e.span()));

@@ -4,7 +4,6 @@ use std::{
 };
 
 use chumsky::container::Container;
-use tree_sitter::Parser as TSParser;
 
 use crate::{
     parse::{
@@ -1637,7 +1636,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     )],
                     Some(Box::new((
                         TypeExpr::Html,
-                        duckx_component.value_expr.1.clone(),
+                        duckx_component.value_expr.1,
                     ))),
                 ),
             );

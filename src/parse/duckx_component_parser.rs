@@ -72,7 +72,7 @@ pub fn find_client_components(
                 let mut x = s.as_str();
                 while let Some(idx) = x.find("<") {
                     x = &x[idx + 1..];
-                    let end = x.find(|c: char| c == ' ' || c == '>').unwrap_or(x.len());
+                    let end = x.find([' ', '>']).unwrap_or(x.len());
                     let mut between = &x[..end];
                     if between.ends_with("/") {
                         between = &between[..between.len() - 1];
@@ -129,7 +129,7 @@ where
             value_expr: if let ValueExpr::Duck(fields) = &src_tokens.0
                 && fields.is_empty()
             {
-                (ValueExpr::Block(vec![]), src_tokens.1.clone())
+                (ValueExpr::Block(vec![]), src_tokens.1)
             } else {
                 src_tokens
             },

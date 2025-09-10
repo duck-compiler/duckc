@@ -321,29 +321,26 @@ pub fn mangle_duckx_component(
 
 pub fn mangle_tsx_component(
     comp: &mut TsxComponent,
-    global_prefix: &Vec<String>,
-    prefix: &Vec<String>,
+    _global_prefix: &[String],
+    prefix: &[String],
     mangle_env: &mut MangleEnv,
 ) {
     let units = comp.find_units();
     let mut edits = Vec::new();
 
     for (range, unit) in units.iter() {
-        match unit {
-            TsxSourceUnit::Ident => {
-                let old_ident = &comp.typescript_source.0[range.start_byte..range.end_byte];
-                //todo(@Apfelfrosch): use our scope resolution syntax
-                let ident_str = mangle_env.mangle_component(prefix, &old_ident.replace("--", "::"));
+        if let TsxSourceUnit::Ident = unit {
+            let old_ident = &comp.typescript_source.0[range.start_byte..range.end_byte];
+            //todo(@Apfelfrosch): use our scope resolution syntax
+            let ident_str = mangle_env.mangle_component(prefix, &old_ident.replace("--", "::"));
 
-                if let Some(ident_str) = ident_str {
-                    edits.push((range.start_byte, Edit::Delete(old_ident.len())));
-                    edits.push((
-                        range.start_byte,
-                        Edit::Insert(format!("${{{}}}", mangle(&ident_str))),
-                    ));
-                }
+            if let Some(ident_str) = ident_str {
+                edits.push((range.start_byte, Edit::Delete(old_ident.len())));
+                edits.push((
+                    range.start_byte,
+                    Edit::Insert(format!("${{{}}}", mangle(&ident_str))),
+                ));
             }
-            _ => {}
         }
     }
 

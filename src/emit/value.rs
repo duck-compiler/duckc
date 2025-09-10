@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    usize,
-};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::{
     emit::types::escape_string_for_go,
@@ -410,7 +407,7 @@ impl ValueExpr {
                                     if component_dependencies.contains(found) {
                                         let mut o = Vec::new();
                                         let mut full_str = slice[..end_index].to_string();
-                                        full_str.insert_str(end_of_ident, "}");
+                                        full_str.insert(end_of_ident, '}');
                                         full_str.insert_str(1, "${");
                                         o.push(ValHtmlStringContents::String(full_str.clone()));
                                         s.drain(j..j + slice[..end_index].len());
@@ -446,10 +443,9 @@ impl ValueExpr {
                                             }
                                             i2 += 1;
                                         }
-                                        let mut html_str = String::new();
 
+                                        let mut html_str = String::new();
                                         let mut printf_vars = Vec::new();
-                                        let mut printf_str = String::new();
 
                                         for part in o {
                                             match part {
@@ -487,7 +483,7 @@ impl ValueExpr {
                                                     .iter()
                                                     .map(|x| format!(
                                                         "emit_go_to_js({})",
-                                                        escape_string_for_go(&x)
+                                                        escape_string_for_go(x)
                                                     ))
                                                     .collect::<Vec<_>>()
                                                     .join(", "),
@@ -592,9 +588,8 @@ impl ValueExpr {
                                                         s.find(|x: char| x != ' ');
                                                     if let Some(first_non_space) = first_non_space {
                                                         let slice = &s[first_non_space..];
-                                                        let end = slice
-                                                            .find(|x: char| x == ' ')
-                                                            .unwrap_or(slice.len());
+                                                        let end =
+                                                            slice.find(' ').unwrap_or(slice.len());
                                                         let slice = &slice[..end];
                                                         if let Some(equals_idx) = slice.find('=') {
                                                             if equals_idx == 0 {
@@ -714,7 +709,7 @@ impl ValueExpr {
 
                 for elem in &contents {
                     match elem {
-                        ValHtmlStringContents::String(s) => return_printf.push_str(&s),
+                        ValHtmlStringContents::String(s) => return_printf.push_str(s),
                         ValHtmlStringContents::Expr(e) => {
                             let ty = TypeExpr::from_value_expr(&e.0, type_env);
                             match ty {
@@ -1643,7 +1638,8 @@ impl ValueExpr {
                 let field_name = field_name.clone();
                 let (mut i, t_res) = target_obj.0.emit(type_env, env);
                 if let Some(t_res) = t_res {
-                    let target_type = TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
+                    let target_type =
+                        TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
                     match target_type {
                         TypeExpr::Duck(Duck { fields }) => {
                             let f = fields.iter().find(|f| f.name == field_name).unwrap();

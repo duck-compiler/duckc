@@ -18,13 +18,13 @@ impl SourceFile {
         let mut instructions = Vec::new();
         instructions.push(IrInstruction::GoPackage(pkg_name));
 
-        let mut go_imports = Vec::new();
-
-        go_imports.push((None, "html".to_string()));
-        go_imports.push((None, "fmt".to_string()));
-        go_imports.push((None, "reflect".to_string()));
-        go_imports.push((None, "unsafe".to_string()));
-        go_imports.push((None, "slices".to_string()));
+        let mut go_imports = vec![
+            (None, "html".to_string()),
+            (None, "fmt".to_string()),
+            (None, "reflect".to_string()),
+            (None, "unsafe".to_string()),
+            (None, "slices".to_string()),
+        ];
 
         for u in self.use_statements {
             if let UseStatement::Go(name, alias) = u {

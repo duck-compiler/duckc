@@ -36,7 +36,7 @@ pub enum Edit {
     // Replace(String),
 }
 
-pub fn do_edits(to_edit: &mut String, edits: &mut Vec<(usize, Edit)>) {
+pub fn do_edits(to_edit: &mut String, edits: &mut [(usize, Edit)]) {
     edits.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
 
     let mut shift: isize = 0;
@@ -56,7 +56,7 @@ pub fn do_edits(to_edit: &mut String, edits: &mut Vec<(usize, Edit)>) {
 
         match edit {
             Edit::Insert(s) => shift += s.len() as isize,
-            Edit::Delete(amount) => shift -= (*amount as isize),
+            Edit::Delete(amount) => shift -= *amount as isize,
         }
     }
 }
@@ -159,16 +159,14 @@ mod tests {
 
     #[test]
     fn test_component_parser() {
-        let src_and_expected_ast = vec![
-            (
-                "component T() tsx {useState()}",
-                TsxComponent {
-                    name: "T".to_string(),
-                    props_type: TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span(),
-                    typescript_source: ("useState()".to_string(), empty_range()),
-                },
-            ),
-        ];
+        let src_and_expected_ast = vec![(
+            "component T() tsx {useState()}",
+            TsxComponent {
+                name: "T".to_string(),
+                props_type: TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span(),
+                typescript_source: ("useState()".to_string(), empty_range()),
+            },
+        )];
 
         for (src, expected_ast) in src_and_expected_ast {
             println!("lexing {src}");
