@@ -15,6 +15,7 @@ pub type TypeParam = TypeExpr;
 pub struct MatchArm {
     pub type_case: Spanned<TypeExpr>,
     pub identifier_binding: Option<String>,
+    pub condition: Option<Spanned<ValueExpr>>,
     pub value_expr: Spanned<ValueExpr>,
 }
 
@@ -132,9 +133,11 @@ impl ValueExpr {
     pub fn into_empty_span(self) -> Spanned<ValueExpr> {
         (self, empty_range())
     }
+
     pub fn into_empty_span_and_block(self) -> Spanned<ValueExpr> {
         self.into_empty_span().into_block()
     }
+
     pub fn needs_semicolon(&self) -> bool {
         match self {
             ValueExpr::HtmlString(..) => true,
@@ -265,8 +268,13 @@ where
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                 .boxed();
 
+            let match_arm_condition = just(Token::If)
+                .ignore_then(value_expr_parser.clone())
+                .or_not();
+
             let match_arm_identifier_binding = just(Token::ControlChar('@'))
                 .ignore_then(select_ref! { Token::Ident(ident) => ident.to_string() })
+                .then(match_arm_condition)
                 .or_not();
 
             let match_arm = type_expression_parser()
@@ -275,7 +283,8 @@ where
                 .then(value_expr_parser.clone())
                 .map(|((type_expr, identifier), value_expr)| MatchArm {
                     type_case: type_expr,
-                    identifier_binding: identifier,
+                    identifier_binding: identifier.clone().map(|x| x.0),
+                    condition: identifier.map(|x| x.1).unwrap_or_else(|| None),
                     value_expr,
                 });
 
@@ -287,7 +296,8 @@ where
                 .map(|((_, identifier), value_expr)| MatchArm {
                     // todo: check if typeexpr::any is correct for the else arm in pattern matching
                     type_case: (TypeExpr::Any, value_expr.1),
-                    identifier_binding: identifier,
+                    identifier_binding: identifier.clone().map(|x| x.0),
+                    condition: identifier.map(|x| x.1).unwrap_or_else(|| None),
                     value_expr,
                 });
 
@@ -580,7 +590,7 @@ where
                     // x.push((Token::ControlChar('}'), empty_range()));
 
                     let cl = x.clone();
-                    
+
 
                     value_expr_parser
                         .parse(make_input(empty_range(), x.leak()))
