@@ -64,10 +64,8 @@ pub fn run(
         .map_err(|err| (format!("{}{} couldn't canonicalize path name of just compiled duck binary", Tag::IO, Tag::Err), RunErrKind::IOErr(err.kind())))?;
 
     Command::new(full_path_name.clone())
-        .spawn()
-        .map_err(|err| (format!("{}{}{} couldn't spawn duck process", Tag::Run, Tag::IO, Tag::Err), RunErrKind::IOErr(err.kind())))?
-        .wait()
-        .map_err(|err| (format!("{}{}{} couldn't wait for duck process", Tag::Run, Tag::IO, Tag::Err), RunErrKind::IOErr(err.kind())))?;
+        .output()
+        .map_err(|err| (format!("{}{}{} couldn't spawn duck process", Tag::Run, Tag::IO, Tag::Err), RunErrKind::IOErr(err.kind())))?;
 
     println!("{}{}{} Successfully run executable output of current workspace which is located at {}", Tag::Dargo, Tag::Run, Tag::Check, full_path_name.to_string_lossy());
 
