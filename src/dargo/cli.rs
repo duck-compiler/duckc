@@ -2,7 +2,7 @@ use clap::{Parser as CliParser, Subcommand};
 use std::path::PathBuf;
 
 use crate::{
-    dargo::{self, compile::CompileErrKind, init::InitErrKind},
+    dargo::{self, compile::CompileErrKind, init::InitErrKind, run::RunErrKind},
     tags::Tag,
 };
 
@@ -26,6 +26,7 @@ pub enum Commands {
     Compile(CompileArgs),
     Init(InitArgs),
     Clean,
+    Run,
 }
 
 #[derive(clap::Args, Debug)]
@@ -57,37 +58,46 @@ pub enum CliErrKind {
     Compile(CompileErrKind),
     Build(BuildErrKind),
     Clean(CleanErrKind),
+    Run(RunErrKind),
 }
 
 pub fn run_cli() -> Result<(), (String, CliErrKind)> {
     let args = DargoCliParser::parse();
     match args.command {
         Commands::Build(build_args) => {
-            build::build(&build_args).map_err(|err| {
-                (
+            build::build(&build_args)
+                .map_err(|err| (
                     format!("{}{}{}", Tag::Dargo, Tag::Build, err.0,),
                     CliErrKind::Build(err.1),
-                )
-            })?;
+                ))?;
         }
-        Commands::Compile(compile_args) => dargo::compile::compile(compile_args.file, None)
-            .map_err(|err| {
-                (
-                    format!("{}{}", Tag::Dargo, err.0),
-                    CliErrKind::Compile(err.1),
-                )
-            })?,
+        Commands::Compile(compile_args) => {
+            dargo::compile::compile(compile_args.file, None)
+                .map_err(|err| (
+                        format!("{}{}", Tag::Dargo, err.0),
+                        CliErrKind::Compile(err.1),
+                ))?;
+        }
         Commands::Init(_init_args) => {
             dargo::init::init_project(None)
-                .map_err(|err| (format!("{}{}", Tag::Dargo, err.0), CliErrKind::Init(err.1)))?;
+                .map_err(|err| (
+                    format!("{}{}", Tag::Dargo, err.0),
+                    CliErrKind::Init(err.1)
+                ))?;
         }
         Commands::Clean => {
-            dargo::clean::clean().map_err(|err| {
-                (
+            dargo::clean::clean()
+                .map_err(|err| (
                     format!("{}{} {}", Tag::Dargo, Tag::Clean, err.0,),
                     CliErrKind::Clean(err.1),
-                )
-            })?;
+                ))?;
+        }
+        Commands::Run => {
+            dargo::run::run()
+                .map_err(|err| (
+                    format!("{}{}{}", Tag::Dargo, Tag::Run, err.0,),
+                    CliErrKind::Run(err.1),
+                ))?;
         }
     }
 

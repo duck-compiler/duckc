@@ -24,10 +24,14 @@ lazy_static! {
     static ref COMPILE_TAG: String = " compile ".on_bright_black().bright_white().to_string();
 }
 
+pub struct CompileOutput {
+    pub binary_path: PathBuf,
+}
+
 pub fn compile(
     src_file: PathBuf,
     binary_output_name: Option<String>,
-) -> Result<(), (String, CompileErrKind)> {
+) -> Result<CompileOutput, (String, CompileErrKind)> {
     if src_file.is_dir() {
         let message = format!(
             "{}{} the path you provided is a directory. You need to provide a .duck file",
@@ -118,12 +122,11 @@ pub fn compile(
         target_file
     };
 
-    go_cli::build(&compile_output_target, &go_output_file).map_err(|err| {
-        (
+    go_cli::build(&compile_output_target, &go_output_file)
+        .map_err(|err| (
             format!("{}{}", *COMPILE_TAG, err.0),
             CompileErrKind::GoCli(err.1),
-        )
-    })?;
+        ))?;
 
     println!(
         "{}{}{} Successfully compiled binary",
@@ -132,5 +135,7 @@ pub fn compile(
         Tag::Check,
     );
 
-    return Ok(());
+    return Ok(CompileOutput {
+        binary_path: go_output_file
+    });
 }
