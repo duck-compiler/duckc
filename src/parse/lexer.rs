@@ -68,6 +68,7 @@ pub enum Token {
     Module,
     ScopeRes,
     ThinArrow,
+    ThickArrow,
     Comment(String),
     DocComment(String),
     Sus,
@@ -82,6 +83,7 @@ impl Display for Token {
             Token::Impl => "impl",
             Token::ScopeRes => "::",
             Token::ThinArrow => "->",
+            Token::ThickArrow => "=>",
             Token::Use => "use",
             Token::Type => "type",
             Token::Go => "go",
@@ -229,6 +231,7 @@ pub fn special_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a,
         .map(|x| x.to_string())
         .or(just("<!doctype html>").map(|x| x.to_string()))
 }
+
 pub fn duckx_parse_html_string<'a>(
     duckx_lexer: impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> + Clone + 'a,
 ) -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, char>>> + Clone {
@@ -481,6 +484,7 @@ pub fn lex_single<'a>(
 
         let scope_res = just("::").to(Token::ScopeRes);
         let thin_arrow = just("->").to(Token::ThinArrow);
+        let thick_arrow = just("=>").to(Token::ThickArrow);
 
         let doc_comment = just("///")
             .ignore_then(
@@ -566,6 +570,7 @@ pub fn lex_single<'a>(
             .or(comment)
             .or(fmt_string)
             .or(thin_arrow)
+            .or(thick_arrow)
             .or(scope_res)
             .or(r#bool)
             .or(equals)
