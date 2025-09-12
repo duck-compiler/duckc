@@ -26,7 +26,7 @@ pub enum Commands {
     Compile(CompileArgs),
     Init(InitArgs),
     Clean,
-    Run,
+    Run(RunArgs),
 }
 
 #[derive(clap::Args, Debug)]
@@ -41,6 +41,11 @@ pub struct BuildArgs {
 #[derive(clap::Args, Debug)]
 pub struct CompileArgs {
     pub file: PathBuf,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct RunArgs {
+    pub file: Option<PathBuf>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -92,8 +97,8 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
                     CliErrKind::Clean(err.1),
                 ))?;
         }
-        Commands::Run => {
-            dargo::run::run()
+        Commands::Run(run_args) => {
+            dargo::run::run(&run_args)
                 .map_err(|err| (
                     format!("{}{}{}", Tag::Dargo, Tag::Run, err.0,),
                     CliErrKind::Run(err.1),

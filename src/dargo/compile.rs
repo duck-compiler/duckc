@@ -136,6 +136,6 @@ pub fn compile(
     );
 
     return Ok(CompileOutput {
-        binary_path: go_output_file
+        binary_path: compile_output_target
     });
 }
