@@ -131,39 +131,175 @@ fn find_import_ranges(tree: &tree_sitter::Tree) -> Vec<Range> {
     import_ranges
 }
 
-fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<String> {
-    let mut used_imports = HashSet::new();
+fn find_local_variables(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<String> {
+    let mut local_variables = HashSet::new();
     let mut stack = vec![tree.root_node()];
 
-    while let Some(node) = stack.pop() {
+    fn extract_identifiers_from_node(node: &Node, go_source: &str) -> Vec<String> {
+        let mut identifiers = Vec::new();
+
         if node.kind() == "identifier" {
-            let text = &go_source[node.start_byte()..node.end_byte()];
-            used_imports.insert(text.to_string());
-        } else if node.kind() == "selector_expression" {
-            if let Some(package_node) = node.child(0)
-                && package_node.kind() == "identifier" {
-                    let package_name =
-                        &go_source[package_node.start_byte()..package_node.end_byte()];
-                    used_imports.insert(package_name.to_string());
+            if let Ok(name) = node.utf8_text(go_source.as_bytes()) {
+                identifiers.push(name.to_string());
+            }
+            return identifiers;
+        }
+
+        for child in node.children(&mut node.walk()) {
+            match child.kind() {
+                "identifier" => {
+                    if let Ok(name) = child.utf8_text(go_source.as_bytes()) {
+                        identifiers.push(name.to_string());
+                    }
                 }
-        } else if node.kind() == "call_expression" {
-            if let Some(function_node) = node.child(0)
-                && function_node.kind() == "selector_expression"
-                    && let Some(package_node) = function_node.child(0)
-                        && package_node.kind() == "identifier" {
-                            let package_name =
-                                &go_source[package_node.start_byte()..package_node.end_byte()];
-                            used_imports.insert(package_name.to_string());
+                "identifier_list" => {
+                    identifiers.extend(extract_identifiers_from_node(&child, go_source));
+                }
+                _ => {}
+            }
+        }
+        identifiers
+    }
+
+    while let Some(node) = stack.pop() {
+        match node.kind() {
+            "var_declaration" | "const_declaration" => {
+                for child in node.children(&mut node.walk()) {
+                    if matches!(child.kind(), "var_spec" | "const_spec") {
+                        if let Some(name_node) = child.child(0) {
+                            local_variables.extend(extract_identifiers_from_node(&name_node, go_source));
                         }
-        } else if node.kind() == "type_identifier"
-            && let Some(parent) = node.parent()
-                && parent.kind() == "selector_expression"
-                    && let Some(package_node) = parent.child(0)
-                        && package_node.kind() == "identifier" {
-                            let package_name =
-                                &go_source[package_node.start_byte()..package_node.end_byte()];
-                            used_imports.insert(package_name.to_string());
+                    }
+                }
+            }
+            "function_declaration" | "method_declaration" => {
+                if let Some(name_node) = node.child_by_field_name("name") {
+                    let name = name_node.utf8_text(go_source.as_bytes())
+                        .expect("compiler error: this string comes from rust so we expect that it's utf-8");
+                    local_variables.insert(name.to_string());
+                }
+
+                for child in node.children(&mut node.walk()) {
+                    if child.kind() != "parameter_list" {
+                        continue;
+                    }
+
+                    for param in child.children(&mut child.walk()) {
+                        if param.kind() != "parameter_declaration" {
+                            continue;
                         }
+
+                        match param.child_by_field_name("name") {
+                            Some(name_node) => local_variables.extend(extract_identifiers_from_node(&name_node, go_source)),
+                            None => local_variables.extend(extract_identifiers_from_node(&param, go_source)),
+                        }
+                    }
+                }
+            }
+            "type_declaration" => {
+                for child in node.children(&mut node.walk()) {
+                    if child.kind() != "type_spec" {
+                        continue
+                    }
+
+                    let Some(name_node) = child.child_by_field_name("name") else { continue };
+                    let Ok(name) = name_node.utf8_text(go_source.as_bytes()) else { continue };
+
+                    local_variables.insert(name.to_string());
+                }
+            }
+            "range_clause" => {
+                for child in node.children(&mut node.walk()) {
+                    if matches!(child.kind(), "expression_list" | "identifier_list") {
+                        local_variables.extend(extract_identifiers_from_node(&child, go_source));
+                        continue;
+                    }
+
+                    if child.kind() == "identifier" {
+                        let name = child.utf8_text(go_source.as_bytes())
+                            .expect("compiler error: this string comes from rust so we expect that it's utf-8");
+
+                        local_variables.insert(name.to_string());
+                    }
+                }
+            }
+            "short_var_declaration" => {
+                for child in node.children(&mut node.walk()) {
+                    if child.kind() == "expression_list" {
+                        local_variables.extend(extract_identifiers_from_node(&child, go_source));
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        for i in 0..node.child_count() {
+            if let Some(child) = node.child(i) {
+                stack.push(child);
+            }
+        }
+    }
+
+    local_variables
+}
+
+fn is_part_of_selector_expression(node: &Node) -> bool {
+    let Some(parent) = node.parent() else { return false };
+
+    if parent.kind() == "selector_expression" {
+        return true;
+    }
+
+    return is_part_of_selector_expression(&parent);
+}
+
+fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<String> {
+    let mut used_imports = HashSet::new();
+    let local_variables = find_local_variables(tree, go_source);
+    let mut stack = vec![tree.root_node()];
+
+    fn extract_package_name_from_node(node: &Node, go_source: &str) -> Option<String> {
+        return match node.kind() {
+            "identifier" => Some((&go_source[node.start_byte()..node.end_byte()]).to_string()),
+            _ => None
+        }
+    }
+
+    while let Some(node) = stack.pop() {
+        match node.kind() {
+            "identifier" => {
+                let text = &go_source[node.start_byte()..node.end_byte()];
+                if !local_variables.contains(text) && !is_part_of_selector_expression(&node) {
+                    used_imports.insert(text.to_string());
+                }
+            }
+            "selector_expression" => {
+                if let Some(package_node) = node.child(0) {
+                    if let Some(package_name) = extract_package_name_from_node(&package_node, go_source) {
+                        used_imports.insert(package_name);
+                    }
+                }
+            }
+            "call_expression" => {
+                if let Some(function_node) = node.child(0)
+                    && function_node.kind() == "selector_expression"
+                    && let Some(package_node) = function_node.child(0) {
+                        if let Some(package_name) = extract_package_name_from_node(&package_node, go_source) {
+                            used_imports.insert(package_name);
+                        }
+                    }
+            }
+            "type_identifier" => {
+                if let Some(parent) = node.parent()
+                    && parent.kind() == "selector_expression"
+                    && let Some(package_node) = parent.child(0) {
+                        if let Some(package_name) = extract_package_name_from_node(&package_node, go_source) {
+                            used_imports.insert(package_name);
+                        }
+                    }
+            }
+            _ => {}
+        }
 
         for i in 0..node.child_count() {
             if let Some(child) = node.child(i) {
@@ -1716,7 +1852,7 @@ mod tests {
         let tree = parse_go_code(code);
         let used = find_used_imports(&tree, code);
         assert!(used.contains("fmt"));
-        assert!(used.contains("main"));
+        // "main" is not an import, it's the package/function name, so it shouldn't be in used imports
     }
 
     #[test]
@@ -2777,6 +2913,217 @@ mod tests {
                 go consumer(ctx, messages, &wg)
 
                 wg.Wait()
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+
+    #[test]
+    fn test_local_variable_shadows_package_name() {
+        let input = r#"
+            package main
+
+            import (
+                "fmt"
+                "strings"
+                "os"
+            )
+
+            func main() {
+                var strings = "hello world"
+                fmt.Println(strings)
+
+                var os = "test"
+                fmt.Println(os)
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "fmt"
+            )
+
+            func main() {
+                var strings = "hello world"
+                fmt.Println(strings)
+
+                var os = "test"
+                fmt.Println(os)
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_function_parameter_shadows_package_name() {
+        let input = r#"
+            package main
+
+            import (
+                "fmt"
+                "strings"
+            )
+
+            func test(strings string) {
+                fmt.Println(strings)
+            }
+
+            func main() {
+                test("hello")
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "fmt"
+            )
+
+            func test(strings string) {
+                fmt.Println(strings)
+            }
+
+            func main() {
+                test("hello")
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_short_var_declaration_shadows_package_name() {
+        let input = r#"
+            package main
+
+            import (
+                "fmt"
+                "strings"
+                "os"
+            )
+
+            func main() {
+                strings := "local variable"
+                fmt.Println(strings)
+
+                os, err := "test", nil
+                fmt.Println(os, err)
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "fmt"
+            )
+
+            func main() {
+                strings := "local variable"
+                fmt.Println(strings)
+
+                os, err := "test", nil
+                fmt.Println(os, err)
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+
+    #[test]
+    fn test_range_variable_shadows_package_name() {
+        let input = r#"
+            package main
+
+            import (
+                "fmt"
+                "strings"
+            )
+
+            func main() {
+                items := []string{"a", "b", "c"}
+                for _, strings := range items {
+                    fmt.Println(strings)
+                }
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "fmt"
+            )
+
+            func main() {
+                items := []string{"a", "b", "c"}
+                for _, strings := range items {
+                    fmt.Println(strings)
+                }
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_mixed_usage_with_shadowing() {
+        let input = r#"
+            package main
+
+            import (
+                "fmt"
+                "strings"
+                "os"
+            )
+
+            func main() {
+                // Local variable shadows package
+                var strings = "local"
+                fmt.Println(strings)
+
+                // Actual package usage should be preserved
+                fmt.Println(strings.ToUpper("hello"))
+
+                // Another local variable
+                os := "test"
+                fmt.Println(os)
+
+                // Actual package usage
+                fmt.Println(os.Getenv("PATH"))
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "fmt"
+                "strings"
+                "os"
+            )
+
+            func main() {
+                // Local variable shadows package
+                var strings = "local"
+                fmt.Println(strings)
+
+                // Actual package usage should be preserved
+                fmt.Println(strings.ToUpper("hello"))
+
+                // Another local variable
+                os := "test"
+                fmt.Println(os)
+
+                // Actual package usage
+                fmt.Println(os.Getenv("PATH"))
             }
         "#;
 
