@@ -1,7 +1,7 @@
 {
     "id": "55858862493c535dec82e483d164ad99",
     "file_path": "../../src/emit/ir.rs",
-    "line_number": 385,
+    "line_number": 389,
     "title": "check if this should be a reference",
     "tag": "todo",
     "module_tag": "emit",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Apfelfrosch",
-        "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO: check if this should be a reference",
     "status": "open",

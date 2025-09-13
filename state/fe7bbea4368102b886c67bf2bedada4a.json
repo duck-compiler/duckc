@@ -1,7 +1,7 @@
 {
     "id": "fe7bbea4368102b886c67bf2bedada4a",
     "file_path": "../../src/dargo/build.rs",
-    "line_number": 107,
+    "line_number": 112,
     "title": "windows :(",
     "tag": "todo",
     "module_tag": "dargo",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Apfelfrosch",
-        "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO: windows :(",
     "status": "open",
