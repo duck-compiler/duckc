@@ -1,12 +1,12 @@
 use colored::Colorize;
 use lazy_static::lazy_static;
-use std::{ffi::OsString, fs, path::PathBuf, process::Command};
+use std::{process::Command};
 use std::io::ErrorKind as IOErrKind;
 
-use crate::dargo::cli::RunArgs;
+use crate::dargo::cli::{CompileArgs, RunArgs};
 use crate::dargo::compile::{compile, CompileErrKind};
 use crate::{
-    cli::go_cli::{self, GoCliErrKind}, dargo::build::{build, BuildErrKind}, emit::ir::join_ir, lex, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
+    dargo::build::{build, BuildErrKind}, tags::Tag,
 };
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ pub fn run(
 ) -> Result<(), (String, RunErrKind)> {
     if run_args.file.is_some() {
         let run_args_file = run_args.file.clone().unwrap();
-        let compile_result = compile(run_args_file.clone(), None)
+        let compile_result = compile(CompileArgs { file: run_args_file.clone(), output_name: None, optimize_go: run_args.optimize_go })
             .map_err(|err| (
                 format!(
                     "{}{} couldn't compile the code\n{}",
@@ -49,7 +49,7 @@ pub fn run(
         return Ok(());
     }
 
-    let build_result = build(&crate::dargo::cli::BuildArgs { })
+    let build_result = build(&crate::dargo::cli::BuildArgs { output_name: None, optimize_go: run_args.optimize_go })
         .map_err(|err| (
             format!(
                 "{}{} couldn't build the code\n{}",

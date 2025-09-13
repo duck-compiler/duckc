@@ -31,21 +31,28 @@ pub enum Commands {
 
 #[derive(clap::Args, Debug)]
 pub struct BuildArgs {
-    // Examples:
-    // #[arg(long, short = 'o')]
-    // optimize: bool,
     // #[arg(long, value_parser = ["x86", "arm"])]
     // arch: Option<String>
+    #[arg(long, short = 'o')]
+    pub output_name: Option<String>,
+    #[arg(long, short = 'G')]
+    pub optimize_go: bool,
 }
 
 #[derive(clap::Args, Debug)]
 pub struct CompileArgs {
     pub file: PathBuf,
+    #[arg(long, short = 'o')]
+    pub output_name: Option<String>,
+    #[arg(long, short = 'G')]
+    pub optimize_go: bool,
 }
 
 #[derive(clap::Args, Debug)]
 pub struct RunArgs {
     pub file: Option<PathBuf>,
+    #[arg(long, short = 'G')]
+    pub optimize_go: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -77,7 +84,7 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
                 ))?;
         }
         Commands::Compile(compile_args) => {
-            dargo::compile::compile(compile_args.file, None)
+            dargo::compile::compile(compile_args)
                 .map_err(|err| (
                         format!("{}{}", Tag::Dargo, err.0),
                         CliErrKind::Compile(err.1),

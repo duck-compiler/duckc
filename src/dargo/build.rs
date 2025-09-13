@@ -2,6 +2,7 @@ use std::io::ErrorKind as IOErrKind;
 use std::path::{Path, PathBuf};
 use std::{env, fs, os};
 
+use crate::dargo::cli::CompileArgs;
 use crate::DARGO_DOT_DIR;
 use crate::cli::git_cli::{self, GitCliErrKind};
 use crate::tags::Tag;
@@ -23,7 +24,7 @@ pub struct BuildOutput {
     pub binary_path: PathBuf,
 }
 
-pub fn build(_build_args: &BuildArgs) -> Result<BuildOutput, (String, BuildErrKind)> {
+pub fn build(build_args: &BuildArgs) -> Result<BuildOutput, (String, BuildErrKind)> {
     // this is to ensure that the dargo dot dir exists
     _ = DARGO_DOT_DIR.clone();
 
@@ -124,7 +125,7 @@ pub fn build(_build_args: &BuildArgs) -> Result<BuildOutput, (String, BuildErrKi
 
     let mut copy_target_clone = copy_target.to_path_buf();
     copy_target_clone.push("main.duck");
-    let compile_output = compile::compile(copy_target_clone, None)
+    let compile_output = compile::compile(CompileArgs { file: copy_target_clone, output_name: build_args.output_name.clone(), optimize_go: build_args.optimize_go })
         .map_err(|err| (
                 format!(
                     "{}{} couldn't compile the code\n{}",

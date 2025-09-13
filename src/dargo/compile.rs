@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use std::{ffi::OsString, fs, path::PathBuf};
 
 use crate::{
-    cli::go_cli::{self, GoCliErrKind}, emit::ir::join_ir, go_fixup::remove_unused_imports::remove_unused_imports, lex, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
+    cli::go_cli::{self, GoCliErrKind}, dargo::cli::CompileArgs, emit::ir::join_ir, go_fixup::remove_unused_imports::{cleanup_go_source, remove_unused_imports}, lex, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
 };
 
 #[derive(Debug)]
@@ -24,9 +24,11 @@ pub struct CompileOutput {
 }
 
 pub fn compile(
-    src_file: PathBuf,
-    binary_output_name: Option<String>,
+    compile_args: CompileArgs,
 ) -> Result<CompileOutput, (String, CompileErrKind)> {
+    let src_file: PathBuf = compile_args.file;
+    let binary_output_name: Option<String> = compile_args.output_name;
+
     if src_file.is_dir() {
         let message = format!(
             "{}{} the path you provided is a directory. You need to provide a .duck file",
@@ -102,10 +104,15 @@ pub fn compile(
     let tokens = lex(src_file_name, src_file_file_contents);
     let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
     let mut type_env = typecheck(&mut src_file_ast);
-    let go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env));
-    let go_code = remove_unused_imports(&go_code);
+    let mut go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env));
+    go_code = cleanup_go_source(&go_code, true);
+        // go_code = remove_unused_imports(&go_code)
+
 
     let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.go").as_str(), &go_code);
+    if compile_args.optimize_go {
+        let _ = go_cli::format(go_output_file.as_path());
+    }
 
     let compile_output_target = {
         let mut target_file = DARGO_DOT_DIR.clone();
