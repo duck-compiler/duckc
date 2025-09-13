@@ -276,7 +276,9 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
             "selector_expression" => {
                 if let Some(package_node) = node.child(0) {
                     if let Some(package_name) = extract_package_name_from_node(&package_node, go_source) {
-                        used_imports.insert(package_name);
+                        if !local_variables.contains(&package_name) {
+                            used_imports.insert(package_name);
+                        }
                     }
                 }
             }
@@ -285,7 +287,9 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
                     && function_node.kind() == "selector_expression"
                     && let Some(package_node) = function_node.child(0) {
                         if let Some(package_name) = extract_package_name_from_node(&package_node, go_source) {
-                            used_imports.insert(package_name);
+                            if !local_variables.contains(&package_name) {
+                                used_imports.insert(package_name);
+                            }
                         }
                     }
             }
@@ -294,7 +298,9 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
                     && parent.kind() == "selector_expression"
                     && let Some(package_node) = parent.child(0) {
                         if let Some(package_name) = extract_package_name_from_node(&package_node, go_source) {
-                            used_imports.insert(package_name);
+                            if !local_variables.contains(&package_name) {
+                                used_imports.insert(package_name);
+                            }
                         }
                     }
             }
@@ -2919,6 +2925,60 @@ mod tests {
         assert_cleanup_result(input, expected, true);
     }
 
+    #[test]
+    fn test_method_call_shadows_package_name() {
+        let input = r#"
+            package main
+
+            import (
+                "fmt"
+                "strings"
+                "os"
+            )
+
+            type X struct {
+                Lol string
+            }
+
+            func (self X) Method() {
+                self.Lol
+            }
+
+            func main() {
+                var strings = X { Lol: "Name" };
+                fmt.Println(strings.Method())
+
+                var os = "test"
+                fmt.Println(os)
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "fmt"
+            )
+
+            type X struct {
+                Lol string
+            }
+
+            func (self X) Method() {
+                self.Lol
+            }
+
+            func main() {
+                var strings = X { Lol: "Name" };
+                fmt.Println(strings.Method())
+
+                var os = "test"
+                fmt.Println(os)
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
 
     #[test]
     fn test_local_variable_shadows_package_name() {
@@ -3106,8 +3166,6 @@ mod tests {
 
             import (
                 "fmt"
-                "strings"
-                "os"
             )
 
             func main() {
