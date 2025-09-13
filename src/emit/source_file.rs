@@ -18,24 +18,10 @@ impl SourceFile {
         let mut instructions = Vec::new();
         instructions.push(IrInstruction::GoPackage(pkg_name));
 
-        let mut go_imports = vec![
-            (None, "html".to_string()),
-            (None, "fmt".to_string()),
-            (None, "reflect".to_string()),
-            (None, "unsafe".to_string()),
-            (None, "slices".to_string()),
-        ];
+        let mut go_imports = vec![];
 
-        for u in self.use_statements {
-            if let UseStatement::Go(name, alias) = u {
-                if name == "html"
-                    || name == "fmt"
-                    || name == "reflect"
-                    || name == "unsafe"
-                    || name == "slices"
-                {
-                    continue;
-                }
+        for use_statement in self.use_statements {
+            if let UseStatement::Go(name, alias) = use_statement {
                 go_imports.push((alias, name));
             }
         }
@@ -44,32 +30,19 @@ impl SourceFile {
 
         let mut emitted = HashSet::new();
 
-        for f in self.function_definitions {
+        for function_definition in self.function_definitions {
             // generic functions shouldn't be emitted, as they have incomplete type information
-            if f.generics.is_some() {
+            if function_definition.generics.is_some() {
                 continue;
             }
 
-            if emitted.insert(f.name.clone()) {
-                let mut fn_instr = f.emit(None, type_env, &mut to_ir);
+            if emitted.insert(function_definition.name.clone()) {
+                let mut fn_instr = function_definition.emit(None, type_env, &mut to_ir);
 
-                if f.name.as_str() == "main" {
-                    let IrInstruction::FunDef(_, _, _, _, body) = &mut fn_instr else {
+                if function_definition.name.as_str() == "main" {
+                    let IrInstruction::FunDef(_, _, _, _, _body) = &mut fn_instr else {
                         panic!("how")
                     };
-                    body.insert(
-                        0,
-                        IrInstruction::InlineGo("_ = html.EscapeString(\"\")".to_string()),
-                    );
-                    body.insert(
-                        0,
-                        IrInstruction::InlineGo("_ = fmt.Sprintf(\"%d\", 1)".to_string()),
-                    );
-                    body.insert(0, IrInstruction::InlineGo("_ = reflect.Append".to_string()));
-                    body.insert(
-                        0,
-                        IrInstruction::InlineGo("_ = unsafe.Pointer(nil)".to_string()),
-                    );
                 }
                 instructions.push(fn_instr);
             }
@@ -99,9 +72,9 @@ impl SourceFile {
             vec![IrInstruction::InlineGo(
                 r#"
                     if !slices.Contains(self.ClientComponents, comp) {
-		self.ClientComponents = append(self.ClientComponents, comp)
-	}
-                    "#
+                        self.ClientComponents = append(self.ClientComponents, comp)
+                    }
+                "#
                 .to_string(),
             )],
         ));

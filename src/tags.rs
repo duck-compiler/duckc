@@ -16,6 +16,7 @@ pub enum Tag {
     Compiler,
     Git,
     Build,
+    Run,
     Dependency,
     Setup,
     IO,
@@ -53,6 +54,17 @@ impl Display for Tag {
                     .on_color(Color::TrueColor {
                         r: 43,
                         g: 20,
+                        b: 20
+                    })
+                    .bright_white()
+            ),
+            Self::Run => write!(
+                f,
+                "{}",
+                " run "
+                    .on_color(Color::TrueColor {
+                        r: 43,
+                        g: 80,
                         b: 20
                     })
                     .bright_white()

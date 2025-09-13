@@ -534,7 +534,7 @@ impl TypeExpr {
             }
             // TODO: Match Expressions need to be type resolved just as the function defs
             ValueExpr::Match {
-                value_expr: _,
+                value_expr,
                 arms,
                 else_arm,
             } => {
@@ -544,12 +544,42 @@ impl TypeExpr {
                 }
 
                 let mut arm_types = Vec::new();
-                for arm in arms {
+                for arm in &arms {
                     let arm_type = TypeExpr::from_value_expr(&arm.value_expr.0, type_env);
                     if !arm_types.iter().any(|(x, _)| x == &arm_type) {
                         arm_types.push((arm_type, arm.value_expr.1));
                     }
                 }
+
+                if else_arm.is_none() {
+                    let possible_types: Vec<Spanned<TypeExpr>> =
+                        match &TypeExpr::from_value_expr(&value_expr.0, type_env) {
+                            TypeExpr::Or(types) => types.clone(),
+                            other => vec![(other.clone(), value_expr.1)],
+                        };
+
+                    let mut covered_types = Vec::new();
+                    for arm in &arms {
+                        let case_type = &arm.type_case.0;
+                        // if it has a condition it not fully covers the case
+                        if arm.condition.is_some() {
+                            continue;
+                        }
+
+                        if !covered_types.iter().any(|(x, _)| x == case_type) {
+                            covered_types.push((case_type.clone(), arm.type_case.1));
+                        }
+                    }
+
+                    possible_types.iter().for_each(|possible_type| {
+                        let is_covered = covered_types.iter().any(|(x, _)| *x == possible_type.0);
+                        if !is_covered {
+                            panic!("missing {possible_type:?} match arm");
+                        }
+                    });
+                }
+
+                
 
                 if arm_types.is_empty() {
                     TypeExpr::Tuple(vec![])
@@ -1258,7 +1288,7 @@ fn check_type_compatability(
                     format!(
                         "this is not an int. it's a {}",
                         given_type.0.as_clean_go_type_name(type_env).bright_yellow()
-                    )
+                    ),
                 )
             }
         }

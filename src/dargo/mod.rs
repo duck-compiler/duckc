@@ -4,3 +4,4 @@ pub mod cli;
 pub mod compile;
 pub mod init;
 pub mod loader;
+pub mod run;

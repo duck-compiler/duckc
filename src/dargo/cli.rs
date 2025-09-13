@@ -2,7 +2,7 @@ use clap::{Parser as CliParser, Subcommand};
 use std::path::PathBuf;
 
 use crate::{
-    dargo::{self, compile::CompileErrKind, init::InitErrKind},
+    dargo::{self, compile::CompileErrKind, init::InitErrKind, run::RunErrKind},
     tags::Tag,
 };
 
@@ -26,20 +26,33 @@ pub enum Commands {
     Compile(CompileArgs),
     Init(InitArgs),
     Clean,
+    Run(RunArgs),
 }
 
 #[derive(clap::Args, Debug)]
 pub struct BuildArgs {
-    // Examples:
-    // #[arg(long, short = 'o')]
-    // optimize: bool,
     // #[arg(long, value_parser = ["x86", "arm"])]
     // arch: Option<String>
+    #[arg(long, short = 'o')]
+    pub output_name: Option<String>,
+    #[arg(long, short = 'G')]
+    pub optimize_go: bool,
 }
 
 #[derive(clap::Args, Debug)]
 pub struct CompileArgs {
     pub file: PathBuf,
+    #[arg(long, short = 'o')]
+    pub output_name: Option<String>,
+    #[arg(long, short = 'G')]
+    pub optimize_go: bool,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct RunArgs {
+    pub file: Option<PathBuf>,
+    #[arg(long, short = 'G')]
+    pub optimize_go: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -57,6 +70,7 @@ pub enum CliErrKind {
     Compile(CompileErrKind),
     Build(BuildErrKind),
     Clean(CleanErrKind),
+    Run(RunErrKind),
 }
 
 pub fn run_cli() -> Result<(), (String, CliErrKind)> {
@@ -70,13 +84,14 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
                 )
             })?;
         }
-        Commands::Compile(compile_args) => dargo::compile::compile(compile_args.file, None)
-            .map_err(|err| {
+        Commands::Compile(compile_args) => {
+            dargo::compile::compile(compile_args).map_err(|err| {
                 (
                     format!("{}{}", Tag::Dargo, err.0),
                     CliErrKind::Compile(err.1),
                 )
-            })?,
+            })?;
+        }
         Commands::Init(_init_args) => {
             dargo::init::init_project(None)
                 .map_err(|err| (format!("{}{}", Tag::Dargo, err.0), CliErrKind::Init(err.1)))?;
@@ -86,6 +101,14 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
                 (
                     format!("{}{} {}", Tag::Dargo, Tag::Clean, err.0,),
                     CliErrKind::Clean(err.1),
+                )
+            })?;
+        }
+        Commands::Run(run_args) => {
+            dargo::run::run(&run_args).map_err(|err| {
+                (
+                    format!("{}{}{}", Tag::Dargo, Tag::Run, err.0,),
+                    CliErrKind::Run(err.1),
                 )
             })?;
         }

@@ -15,6 +15,7 @@ pub type TypeParam = TypeExpr;
 pub struct MatchArm {
     pub type_case: Spanned<TypeExpr>,
     pub identifier_binding: Option<String>,
+    pub condition: Option<Spanned<ValueExpr>>,
     pub value_expr: Spanned<ValueExpr>,
 }
 
@@ -132,9 +133,11 @@ impl ValueExpr {
     pub fn into_empty_span(self) -> Spanned<ValueExpr> {
         (self, empty_range())
     }
+
     pub fn into_empty_span_and_block(self) -> Spanned<ValueExpr> {
         self.into_empty_span().into_block()
     }
+
     pub fn needs_semicolon(&self) -> bool {
         match self {
             ValueExpr::HtmlString(..) => true,
@@ -265,29 +268,36 @@ where
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                 .boxed();
 
+            let match_arm_condition = just(Token::If)
+                .ignore_then(value_expr_parser.clone())
+                .or_not();
+
             let match_arm_identifier_binding = just(Token::ControlChar('@'))
                 .ignore_then(select_ref! { Token::Ident(ident) => ident.to_string() })
+                .then(match_arm_condition)
                 .or_not();
 
             let match_arm = type_expression_parser()
                 .then(match_arm_identifier_binding.clone())
-                .then_ignore(just(Token::ThinArrow))
+                .then_ignore(just(Token::ThickArrow))
                 .then(value_expr_parser.clone())
                 .map(|((type_expr, identifier), value_expr)| MatchArm {
                     type_case: type_expr,
-                    identifier_binding: identifier,
+                    identifier_binding: identifier.clone().map(|x| x.0),
+                    condition: identifier.map(|x| x.1).unwrap_or_else(|| None),
                     value_expr,
                 });
 
             let else_arm = just(Token::Else)
                 .then(match_arm_identifier_binding)
-                .then_ignore(just(Token::ThinArrow))
+                .then_ignore(just(Token::ThickArrow))
                 .then(value_expr_parser.clone())
                 // todo: add span of else
                 .map(|((_, identifier), value_expr)| MatchArm {
                     // todo: check if typeexpr::any is correct for the else arm in pattern matching
                     type_case: (TypeExpr::Any, value_expr.1),
-                    identifier_binding: identifier,
+                    identifier_binding: identifier.clone().map(|x| x.0),
+                    condition: identifier.map(|x| x.1).unwrap_or_else(|| None),
                     value_expr,
                 });
 
@@ -350,7 +360,7 @@ where
                                 initializer: initializer.clone(),
                             },
                             initializer.1,
-                            )
+                        )
                             .into(),
                     )
                 })
@@ -580,7 +590,6 @@ where
                     // x.push((Token::ControlChar('}'), empty_range()));
 
                     let cl = x.clone();
-                    
 
                     value_expr_parser
                         .parse(make_input(empty_range(), x.leak()))
@@ -796,7 +805,7 @@ where
                                 value_expr: value_expr.clone(),
                             },
                             e.span(),
-                            )
+                        )
                             .into(),
                     )
                 })
@@ -834,13 +843,10 @@ where
             let add = prod
                 .clone()
                 .then(
-                    choice((
-                        just(Token::ControlChar('+')),
-                        just(Token::ControlChar('-')),
-                    ))
-                    .then(prod.clone())
-                    .repeated()
-                    .collect::<Vec<_>>(),
+                    choice((just(Token::ControlChar('+')), just(Token::ControlChar('-'))))
+                        .then(prod.clone())
+                        .repeated()
+                        .collect::<Vec<_>>(),
                 )
                 .map(|(init, additional)| {
                     additional.into_iter().fold(init, |acc, (op, x)| {
@@ -872,10 +878,18 @@ where
                     additional.into_iter().fold(init, |acc, (op, x)| {
                         let span = acc.1.union(x.1);
                         let new_expr = match op {
-                            Token::ControlChar('<') => ValueExpr::LessThan(Box::new(acc), Box::new(x)),
-                            Token::LessThanOrEquals => ValueExpr::LessThanOrEquals(Box::new(acc), Box::new(x)),
-                            Token::ControlChar('>') => ValueExpr::GreaterThan(Box::new(acc), Box::new(x)),
-                            Token::GreaterThanOrEquals => ValueExpr::GreaterThanOrEquals(Box::new(acc), Box::new(x)),
+                            Token::ControlChar('<') => {
+                                ValueExpr::LessThan(Box::new(acc), Box::new(x))
+                            }
+                            Token::LessThanOrEquals => {
+                                ValueExpr::LessThanOrEquals(Box::new(acc), Box::new(x))
+                            }
+                            Token::ControlChar('>') => {
+                                ValueExpr::GreaterThan(Box::new(acc), Box::new(x))
+                            }
+                            Token::GreaterThanOrEquals => {
+                                ValueExpr::GreaterThanOrEquals(Box::new(acc), Box::new(x))
+                            }
                             _ => unreachable!(),
                         };
                         (new_expr, span)
@@ -941,16 +955,9 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            choice((
-                inline_go,
-                assignment,
-                or,
-                declaration,
-                pen,
-                atom,
-            ))
-            .labelled("expression")
-            .boxed()
+            choice((inline_go, assignment, or, declaration, pen, atom))
+                .labelled("expression")
+                .boxed()
         },
     )
 }
@@ -1168,6 +1175,9 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
             arms.iter_mut().for_each(|arm| {
                 type_expr_into_empty_range(&mut arm.type_case);
                 value_expr_into_empty_range(&mut arm.value_expr);
+                if let Some(condition) = &mut arm.condition {
+                    value_expr_into_empty_range(condition);
+                }
             });
 
             if let Some(arm) = else_arm {
@@ -2584,19 +2594,20 @@ mod tests {
                 },
             ),
             (
-                "match (5) { Int @i -> i }",
+                "match (5) { Int @i => i }",
                 ValueExpr::Match {
                     value_expr: Box::new(ValueExpr::Int(5).into_empty_span()),
                     arms: vec![MatchArm {
                         type_case: TypeExpr::Int.into_empty_span(),
                         identifier_binding: Some("i".to_string()),
                         value_expr: *var("i"),
+                        condition: None,
                     }],
                     else_arm: None,
                 },
             ),
             (
-                "match (\"Hallo\") { String @s -> s, Int @i -> i }",
+                "match (\"Hallo\") { String @s => s, Int @i => i }",
                 ValueExpr::Match {
                     value_expr: Box::new(
                         ValueExpr::String("Hallo".to_string(), true).into_empty_span(),
@@ -2606,18 +2617,43 @@ mod tests {
                             type_case: TypeExpr::String.into_empty_span(),
                             identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
+                            condition: None,
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
                             identifier_binding: Some("i".to_string()),
                             value_expr: *var("i"),
+                            condition: None,
                         },
                     ],
                     else_arm: None,
                 },
             ),
             (
-                "match (\"Hallo\") { String @s -> s, Int @i -> i, Other @o -> {
+                "match (\"Hallo\") { String @s if s => s, Int @i => i }",
+                ValueExpr::Match {
+                    value_expr: Box::new(
+                        ValueExpr::String("Hallo".to_string(), true).into_empty_span(),
+                    ),
+                    arms: vec![
+                        MatchArm {
+                            type_case: TypeExpr::String.into_empty_span(),
+                            identifier_binding: Some("s".to_string()),
+                            value_expr: *var("s"),
+                            condition: Some(*var("s")),
+                        },
+                        MatchArm {
+                            type_case: TypeExpr::Int.into_empty_span(),
+                            identifier_binding: Some("i".to_string()),
+                            value_expr: *var("i"),
+                            condition: None,
+                        },
+                    ],
+                    else_arm: None,
+                },
+            ),
+            (
+                "match (\"Hallo\") { String @s => s, Int @i => i, Other @o => {
                 return o
                 } }",
                 ValueExpr::Match {
@@ -2629,11 +2665,13 @@ mod tests {
                             type_case: TypeExpr::String.into_empty_span(),
                             identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
+                            condition: None,
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
                             identifier_binding: Some("i".to_string()),
                             value_expr: *var("i"),
+                            condition: None,
                         },
                         MatchArm {
                             type_case: TypeExpr::RawTypeName(false, vec!["Other".into()], None)
@@ -2643,6 +2681,7 @@ mod tests {
                                 ValueExpr::Return(Some(var("o"))).into_empty_span(),
                             ])
                             .into_empty_span(),
+                            condition: None,
                         },
                     ],
                     else_arm: None,
@@ -2650,14 +2689,14 @@ mod tests {
             ),
             (
                 "match (\"Hallo\") {
-                String @s -> s,
-                Int @i -> i,
-                Other @o -> {
+                String @s => s,
+                Int @i => i,
+                Other @o => {
                 return o
                 },
-                Other @o -> {
+                Other @o => {
                 match (o) {
-                String @s -> s
+                String @s => s
                 }
                 },
                 }",
@@ -2670,11 +2709,13 @@ mod tests {
                             type_case: TypeExpr::String.into_empty_span(),
                             identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
+                            condition: None,
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
                             identifier_binding: Some("i".to_string()),
                             value_expr: *var("i"),
+                            condition: None,
                         },
                         MatchArm {
                             type_case: TypeExpr::RawTypeName(false, vec!["Other".into()], None)
@@ -2684,6 +2725,7 @@ mod tests {
                                 ValueExpr::Return(Some(var("o"))).into_empty_span(),
                             ])
                             .into_empty_span(),
+                            condition: None,
                         },
                         MatchArm {
                             type_case: TypeExpr::RawTypeName(false, vec!["Other".into()], None)
@@ -2696,12 +2738,14 @@ mod tests {
                                         type_case: TypeExpr::String.into_empty_span(),
                                         identifier_binding: Some("s".to_string()),
                                         value_expr: *var("s"),
+                                        condition: None,
                                     }],
                                     else_arm: None,
                                 }
                                 .into_empty_span(),
                             ])
                             .into_empty_span(),
+                            condition: None,
                         },
                     ],
                     else_arm: None,
@@ -2926,9 +2970,18 @@ mod tests {
             ("4 * 5", mul(int(4), int(5))),
             ("20 / 4", div(int(20), int(4))),
             ("21 % 5", r#mod(int(21), int(5))),
-            ("2 + 3 * 4", add(int(2), mul(int(3), int(4)).into_empty_span().into())),
-            ("10 - 8 / 2", sub(int(10), div(int(8), int(2)).into_empty_span().into())),
-            ("1 + 10 % 3", add(int(1), r#mod(int(10), int(3)).into_empty_span().into())),
+            (
+                "2 + 3 * 4",
+                add(int(2), mul(int(3), int(4)).into_empty_span().into()),
+            ),
+            (
+                "10 - 8 / 2",
+                sub(int(10), div(int(8), int(2)).into_empty_span().into()),
+            ),
+            (
+                "1 + 10 % 3",
+                add(int(1), r#mod(int(10), int(3)).into_empty_span().into()),
+            ),
             (
                 "10 - 2 + 3",
                 add(sub(int(10), int(2)).into_empty_span().into(), int(3)),
@@ -2940,12 +2993,9 @@ mod tests {
             (
                 "10 * 2 / 5 * 3",
                 mul(
-                    div(
-                        mul(int(10), int(2)).into_empty_span().into(),
-                        int(5),
-                    )
-                    .into_empty_span()
-                    .into(),
+                    div(mul(int(10), int(2)).into_empty_span().into(), int(5))
+                        .into_empty_span()
+                        .into(),
                     int(3),
                 ),
             ),
@@ -2977,50 +3027,62 @@ mod tests {
                     ValueExpr::FunctionCall {
                         target: var("a"),
                         params: vec![],
-                        type_params: None
-                    }.into_empty_span().into(),
+                        type_params: None,
+                    }
+                    .into_empty_span()
+                    .into(),
                     mul(
                         ValueExpr::FunctionCall {
                             target: var("b"),
                             params: vec![],
-                            type_params: None
-                        }.into_empty_span().into(),
+                            type_params: None,
+                        }
+                        .into_empty_span()
+                        .into(),
                         ValueExpr::FunctionCall {
                             target: var("c"),
                             params: vec![],
-                            type_params: None
-                        }.into_empty_span().into(),
-                    ).into_empty_span().into()
-                )
+                            type_params: None,
+                        }
+                        .into_empty_span()
+                        .into(),
+                    )
+                    .into_empty_span()
+                    .into(),
+                ),
             ),
             (
                 "1 + (2 + (3 + 4))",
-                 add(
+                add(
                     int(1),
-                    add(
-                        int(2),
-                        add(int(3), int(4))
-                            .into_empty_span()
-                            .into()
-                    ).into_empty_span().into()
-                )
+                    add(int(2), add(int(3), int(4)).into_empty_span().into())
+                        .into_empty_span()
+                        .into(),
+                ),
             ),
             (
                 "1 * 2 + 3 * 4",
                 add(
                     mul(int(1), int(2)).into_empty_span().into(),
-                    mul(int(3), int(4)).into_empty_span().into()
-                )
-            )
+                    mul(int(3), int(4)).into_empty_span().into(),
+                ),
+            ),
         ];
 
         for (i, (src, expected_ast)) in test_cases.into_iter().enumerate() {
-            let lex_result = lex_parser("test", "").parse(src).into_result().unwrap_or_else(|_| panic!("Lexer failed on case {i}: '{src}'"));
+            let lex_result = lex_parser("test", "")
+                .parse(src)
+                .into_result()
+                .unwrap_or_else(|_| panic!("Lexer failed on case {i}: '{src}'"));
 
-            let parse_result = value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
+            let parse_result =
+                value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
 
             if parse_result.has_errors() {
-                panic!("parse failed for {i}: '{src}'. Errors: {:?}", parse_result.into_errors());
+                panic!(
+                    "parse failed for {i}: '{src}'. Errors: {:?}",
+                    parse_result.into_errors()
+                );
             }
 
             let mut output = parse_result.into_output().unwrap();
@@ -3039,25 +3101,42 @@ mod tests {
             ("5 >= 5", gte(int(5), int(5))),
             ("1 == 2", eq(int(1), int(2))),
             ("1 != 2", ne(int(1), int(2))),
-            ("true and false", and(ValueExpr::Bool(true).into_empty_span().into(), ValueExpr::Bool(false).into_empty_span().into())),
-            ("true or false", or(ValueExpr::Bool(true).into_empty_span().into(), ValueExpr::Bool(false).into_empty_span().into())),
-            ("1 + 2 < 4", lt(add(int(1), int(2)).into_empty_span().into(), int(4))),
+            (
+                "true and false",
+                and(
+                    ValueExpr::Bool(true).into_empty_span().into(),
+                    ValueExpr::Bool(false).into_empty_span().into(),
+                ),
+            ),
+            (
+                "true or false",
+                or(
+                    ValueExpr::Bool(true).into_empty_span().into(),
+                    ValueExpr::Bool(false).into_empty_span().into(),
+                ),
+            ),
+            (
+                "1 + 2 < 4",
+                lt(add(int(1), int(2)).into_empty_span().into(), int(4)),
+            ),
             (
                 "3 < 4 == true",
                 eq(
                     lt(int(3), int(4)).into_empty_span().into(),
-                    ValueExpr::Bool(true).into_empty_span().into()
-                )
+                    ValueExpr::Bool(true).into_empty_span().into(),
+                ),
             ),
             (
                 "true == true and false",
                 and(
                     eq(
                         ValueExpr::Bool(true).into_empty_span().into(),
-                        ValueExpr::Bool(true).into_empty_span().into()
-                    ).into_empty_span().into(),
-                    ValueExpr::Bool(false).into_empty_span().into()
-                )
+                        ValueExpr::Bool(true).into_empty_span().into(),
+                    )
+                    .into_empty_span()
+                    .into(),
+                    ValueExpr::Bool(false).into_empty_span().into(),
+                ),
             ),
             (
                 "false or true and true",
@@ -3065,25 +3144,34 @@ mod tests {
                     ValueExpr::Bool(false).into_empty_span().into(),
                     and(
                         ValueExpr::Bool(true).into_empty_span().into(),
-                        ValueExpr::Bool(true).into_empty_span().into()
-                    ).into_empty_span().into()
-                )
+                        ValueExpr::Bool(true).into_empty_span().into(),
+                    )
+                    .into_empty_span()
+                    .into(),
+                ),
             ),
             (
                 "1 < 2 and 3 > 1",
                 and(
                     lt(int(1), int(2)).into_empty_span().into(),
-                    gt(int(3), int(1)).into_empty_span().into()
-                )
+                    gt(int(3), int(1)).into_empty_span().into(),
+                ),
             ),
         ];
 
         for (i, (src, expected_ast)) in test_cases.into_iter().enumerate() {
-            let lex_result = lex_parser("test", "").parse(src).into_result().unwrap_or_else(|_| panic!("Lexer failed on case {i}: '{src}'"));
+            let lex_result = lex_parser("test", "")
+                .parse(src)
+                .into_result()
+                .unwrap_or_else(|_| panic!("Lexer failed on case {i}: '{src}'"));
 
-            let parse_result = value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
+            let parse_result =
+                value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
             if parse_result.has_errors() {
-                panic!("parse failed for {i}: '{src}'. Errors: {:?}", parse_result.into_errors());
+                panic!(
+                    "parse failed for {i}: '{src}'. Errors: {:?}",
+                    parse_result.into_errors()
+                );
             }
 
             let mut output = parse_result.into_output().unwrap();

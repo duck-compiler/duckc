@@ -6,7 +6,9 @@ use chumsky::prelude::*;
 
 use crate::{
     parse::{
-        generics_parser::{generics_parser, Generic}, value_parser::{empty_range, TypeParam}, Field, Spanned, SS
+        Field, SS, Spanned,
+        generics_parser::{Generic, generics_parser},
+        value_parser::{TypeParam, empty_range},
     },
     semantics::type_resolve::TypeEnv,
 };
@@ -230,7 +232,7 @@ where
                     .map(|str| str.join("."));
 
             let typeof_expr = just(Token::TypeOf)
-                .ignore_then(select_ref!{ Token::Ident(identifier) => identifier.clone() })
+                .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() })
                 .map(TypeExpr::TypeOf);
 
             let go_type = just(Token::Go)

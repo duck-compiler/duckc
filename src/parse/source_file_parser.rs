@@ -5,10 +5,20 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        duckx_component_parser::{duckx_component_parser, DuckxComponent}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, tsx_component_parser::{tsx_component_parser, TsxComponent}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, Spanned, SS
+        Context, SS, Spanned,
+        duckx_component_parser::{DuckxComponent, duckx_component_parser},
+        function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
+        lexer::{Token, lex_parser},
+        make_input, parse_failure,
+        struct_parser::{StructDefinition, struct_definition_parser},
+        tsx_component_parser::{TsxComponent, tsx_component_parser},
+        type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
+        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
+        value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr},
     },
     semantics::ident_mangler::{
-        mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
+        MangleEnv, mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression,
+        mangle_value_expr, unmangle,
     },
 };
 
