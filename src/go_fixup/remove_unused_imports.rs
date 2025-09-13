@@ -37,6 +37,20 @@ pub fn cleanup_go_source(go_source: &str, remove_exported: bool) -> String {
 
     for (name, decl) in &declarations {
         if !live_set.contains(name) && (!decl.is_exported || remove_exported) {
+            if matches!(decl.kind, DeclKind::Method) {
+                if let Some(dot_pos) = name.find('.') {
+                    let receiver_type = &name[..dot_pos];
+                    if live_set.contains(receiver_type) {
+                        continue;
+                    }
+                }
+
+                if live_set.contains(name) {
+                    continue;
+                }
+            }
+
+
             ranges_to_delete.push(decl.range);
         }
     }
@@ -850,6 +864,13 @@ fn find_dependencies(node: Node, source: &[u8], deps: &mut HashSet<String>) {
                 && type_node.kind() == "type_identifier" {
                     deps.insert(type_node.utf8_text(source).unwrap().to_string());
                 }
+        }
+        "field_declaration" => {
+            for child in node.children(&mut node.walk()) {
+                if child.kind() == "type_identifier" {
+                    deps.insert(child.utf8_text(source).unwrap().to_string());
+                }
+            }
         }
         _ => {}
     }
@@ -1858,7 +1879,6 @@ mod tests {
         let tree = parse_go_code(code);
         let used = find_used_imports(&tree, code);
         assert!(used.contains("fmt"));
-        // "main" is not an import, it's the package/function name, so it shouldn't be in used imports
     }
 
     #[test]
@@ -3186,5 +3206,1486 @@ mod tests {
         "#;
 
         assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_interface_method_implementations_preserved() {
+        let input = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type DuckBool interface {
+                as_dgo_bool() bool
+            }
+
+            type ConstString_Error struct {
+                value string
+            }
+
+            func (self ConstString_Error) as_dgo_string() string {
+                return "error: index out of bounds"
+            }
+
+            type ConcDuckBool struct {
+                value bool
+            }
+
+            func (self ConcDuckBool) as_dgo_bool() bool {
+                return self.value
+            }
+
+            func main() {
+                var index_out_of_bounds DuckString
+                index_out_of_bounds = ConstString_Error { "error: index out of bounds" }
+                fmt.Println(index_out_of_bounds.as_dgo_string())
+
+                var flag DuckBool
+                flag = ConcDuckBool { value: true }
+                fmt.Println(flag.as_dgo_bool())
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type DuckBool interface {
+                as_dgo_bool() bool
+            }
+
+            type ConstString_Error struct {
+                value string
+            }
+
+            func (self ConstString_Error) as_dgo_string() string {
+                return "error: index out of bounds"
+            }
+
+            type ConcDuckBool struct {
+                value bool
+            }
+
+            func (self ConcDuckBool) as_dgo_bool() bool {
+                return self.value
+            }
+
+            func main() {
+                var index_out_of_bounds DuckString
+                index_out_of_bounds = ConstString_Error { "error: index out of bounds" }
+                fmt.Println(index_out_of_bounds.as_dgo_string())
+
+                var flag DuckBool
+                flag = ConcDuckBool { value: true }
+                fmt.Println(flag.as_dgo_bool())
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_unused_interface_methods_removed() {
+        let input = r#"
+            package main
+
+            import "fmt"
+
+            type MyType struct {
+                value string
+            }
+
+            func (m MyType) as_dgo_string() string {
+                return m.value
+            }
+
+            func (m MyType) as_dgo_int() int {
+                return 42
+            }
+
+            func (m MyType) unusedMethod() bool {
+                return true
+            }
+
+            func main() {
+                m := MyType{value: "test"}
+                fmt.Println(m.as_dgo_string())
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import "fmt"
+
+            type MyType struct {
+                value string
+            }
+
+            func (m MyType) as_dgo_string() string {
+                return m.value
+            }
+
+            func main() {
+                m := MyType{value: "test"}
+                fmt.Println(m.as_dgo_string())
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_essential_types_preserved() {
+        let input = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type ConcDuckChar struct {
+                value rune
+            }
+
+            func (self ConcDuckChar) as_dgo_string() string {
+                return string(self.value)
+            }
+
+            type ConcDuckFloat struct {
+                value float64
+            }
+
+            func (self ConcDuckFloat) as_dgo_string() string {
+                return fmt.Sprintf("%f", self.value)
+            }
+
+            type ConstString_Test struct {
+                value string
+            }
+
+            func (self ConstString_Test) as_dgo_string() string {
+                return self.value
+            }
+
+            type Tag_SomeTag struct {
+                value string
+            }
+
+            func main() {
+                var c DuckString = ConcDuckChar{value: 'a'}
+                var f DuckString = ConcDuckFloat{value: 3.14}
+                var s DuckString = ConstString_Test{value: "test"}
+                var t Tag_SomeTag
+                fmt.Println(c.as_dgo_string())
+                fmt.Println(f.as_dgo_string())
+                fmt.Println(s.as_dgo_string())
+                _ = t
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type ConcDuckChar struct {
+                value rune
+            }
+
+            func (self ConcDuckChar) as_dgo_string() string {
+                return string(self.value)
+            }
+
+            type ConcDuckFloat struct {
+                value float64
+            }
+
+            func (self ConcDuckFloat) as_dgo_string() string {
+                return fmt.Sprintf("%f", self.value)
+            }
+
+            type ConstString_Test struct {
+                value string
+            }
+
+            func (self ConstString_Test) as_dgo_string() string {
+                return self.value
+            }
+
+            type Tag_SomeTag struct {
+                value string
+            }
+
+            func main() {
+                var c DuckString = ConcDuckChar{value: 'a'}
+                var f DuckString = ConcDuckFloat{value: 3.14}
+                var s DuckString = ConstString_Test{value: "test"}
+                var t Tag_SomeTag
+                fmt.Println(c.as_dgo_string())
+                fmt.Println(f.as_dgo_string())
+                fmt.Println(s.as_dgo_string())
+                _ = t
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_interface_methods_with_different_receivers() {
+        let input = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type TypeA struct {
+                value string
+            }
+
+            func (t TypeA) as_dgo_string() string {
+                return "TypeA: " + t.value
+            }
+
+            type TypeB struct {
+                value string
+            }
+
+            func (t TypeB) as_dgo_string() string {
+                return "TypeB: " + t.value
+            }
+
+            type TypeC struct {
+                value string
+            }
+
+            func (t TypeC) as_dgo_string() string {
+                return "TypeC: " + t.value
+            }
+
+            func main() {
+                var a DuckString = TypeA{value: "test"}
+                var b DuckString = TypeB{value: "test"}
+                // TypeC is not used
+                fmt.Println(a.as_dgo_string())
+                fmt.Println(b.as_dgo_string())
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type TypeA struct {
+                value string
+            }
+
+            func (t TypeA) as_dgo_string() string {
+                return "TypeA: " + t.value
+            }
+
+            type TypeB struct {
+                value string
+            }
+
+            func (t TypeB) as_dgo_string() string {
+                return "TypeB: " + t.value
+            }
+
+            type TypeC struct {
+                value string
+            }
+
+            func (t TypeC) as_dgo_string() string {
+                return "TypeC: " + t.value
+            }
+
+            func main() {
+                var a DuckString = TypeA{value: "test"}
+                var b DuckString = TypeB{value: "test"}
+                // TypeC is not used
+                fmt.Println(a.as_dgo_string())
+                fmt.Println(b.as_dgo_string())
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_nested_interface_implementations() {
+        let input = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type DuckInt interface {
+                as_dgo_int() int
+            }
+
+            type DuckBool interface {
+                as_dgo_bool() bool
+            }
+
+            type MultiDuck struct {
+                str string
+                num int
+                flag bool
+            }
+
+            func (m MultiDuck) as_dgo_string() string {
+                return m.str
+            }
+
+            func (m MultiDuck) as_dgo_int() int {
+                return m.num
+            }
+
+            func (m MultiDuck) as_dgo_bool() bool {
+                return m.flag
+            }
+
+            func (m MultiDuck) unusedMethod() string {
+                return "unused"
+            }
+
+            func main() {
+                m := MultiDuck{str: "hello", num: 42, flag: true}
+                fmt.Println(m.as_dgo_string())
+                fmt.Println(m.as_dgo_int())
+                fmt.Println(m.as_dgo_bool())
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import "fmt"
+
+            type MultiDuck struct {
+                str string
+                num int
+                flag bool
+            }
+
+            func (m MultiDuck) as_dgo_string() string {
+                return m.str
+            }
+
+            func (m MultiDuck) as_dgo_int() int {
+                return m.num
+            }
+
+            func (m MultiDuck) as_dgo_bool() bool {
+                return m.flag
+            }
+
+            func main() {
+                m := MultiDuck{str: "hello", num: 42, flag: true}
+                fmt.Println(m.as_dgo_string())
+                fmt.Println(m.as_dgo_int())
+                fmt.Println(m.as_dgo_bool())
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_const_string_implementations() {
+        let input = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type ConstString_Error_Index_Out_Of_Bounds struct {
+                value string
+            }
+
+            func (self ConstString_Error_Index_Out_Of_Bounds) as_dgo_string() string {
+                return "error: index out of bounds"
+            }
+
+            type ConstString_None struct {
+                value string
+            }
+
+            func (self ConstString_None) as_dgo_string() string {
+                return "none"
+            }
+
+            type ConstString_Const struct {
+                value string
+            }
+
+            func (self ConstString_Const) as_dgo_string() string {
+                return "const"
+            }
+
+            func main() {
+                var error_msg DuckString
+                var none_val DuckString
+                var const_val DuckString
+
+                error_msg = ConstString_Error_Index_Out_Of_Bounds { "error: index out of bounds" }
+                none_val = ConstString_None { "none" }
+                const_val = ConstString_Const { "const" }
+
+                fmt.Println(error_msg.as_dgo_string())
+                fmt.Println(none_val.as_dgo_string())
+                fmt.Println(const_val.as_dgo_string())
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type ConstString_Error_Index_Out_Of_Bounds struct {
+                value string
+            }
+
+            func (self ConstString_Error_Index_Out_Of_Bounds) as_dgo_string() string {
+                return "error: index out of bounds"
+            }
+
+            type ConstString_None struct {
+                value string
+            }
+
+            func (self ConstString_None) as_dgo_string() string {
+                return "none"
+            }
+
+            type ConstString_Const struct {
+                value string
+            }
+
+            func (self ConstString_Const) as_dgo_string() string {
+                return "const"
+            }
+
+            func main() {
+                var error_msg DuckString
+                var none_val DuckString
+                var const_val DuckString
+
+                error_msg = ConstString_Error_Index_Out_Of_Bounds { "error: index out of bounds" }
+                none_val = ConstString_None { "none" }
+                const_val = ConstString_Const { "const" }
+
+                fmt.Println(error_msg.as_dgo_string())
+                fmt.Println(none_val.as_dgo_string())
+                fmt.Println(const_val.as_dgo_string())
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_conc_duck_types_preserved() {
+        let input = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type DuckInt interface {
+                as_dgo_int() int
+            }
+
+            type DuckBool interface {
+                as_dgo_bool() bool
+            }
+
+            type DuckFloat interface {
+                as_dgo_float32() float32
+            }
+
+            type DuckRune interface {
+                as_dgo_rune() rune
+            }
+
+            type ConcDuckString struct {
+                value string
+            }
+
+            func (self ConcDuckString) as_dgo_string() string {
+                return self.value
+            }
+
+            type ConcDuckInt struct {
+                value int
+            }
+
+            func (self ConcDuckInt) as_dgo_int() int {
+                return self.value
+            }
+
+            type ConcDuckBool struct {
+                value bool
+            }
+
+            func (self ConcDuckBool) as_dgo_bool() bool {
+                return self.value
+            }
+
+            type ConcDuckFloat struct {
+                value float32
+            }
+
+            func (self ConcDuckFloat) as_dgo_float32() float32 {
+                return self.value
+            }
+
+            type ConcDuckRune struct {
+                value rune
+            }
+
+            func (self ConcDuckRune) as_dgo_rune() rune {
+                return self.value
+            }
+
+            func main() {
+                var s DuckString = ConcDuckString{value: "hello"}
+                var i DuckInt = ConcDuckInt{value: 42}
+                var b DuckBool = ConcDuckBool{value: true}
+                var f DuckFloat = ConcDuckFloat{value: 3.14}
+                var r DuckRune = ConcDuckRune{value: 'a'}
+                fmt.Println(s.as_dgo_string())
+                fmt.Println(i.as_dgo_int())
+                fmt.Println(b.as_dgo_bool())
+                fmt.Println(f.as_dgo_float32())
+                fmt.Println(r.as_dgo_rune())
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type DuckInt interface {
+                as_dgo_int() int
+            }
+
+            type DuckBool interface {
+                as_dgo_bool() bool
+            }
+
+            type DuckFloat interface {
+                as_dgo_float32() float32
+            }
+
+            type DuckRune interface {
+                as_dgo_rune() rune
+            }
+
+            type ConcDuckString struct {
+                value string
+            }
+
+            func (self ConcDuckString) as_dgo_string() string {
+                return self.value
+            }
+
+            type ConcDuckInt struct {
+                value int
+            }
+
+            func (self ConcDuckInt) as_dgo_int() int {
+                return self.value
+            }
+
+            type ConcDuckBool struct {
+                value bool
+            }
+
+            func (self ConcDuckBool) as_dgo_bool() bool {
+                return self.value
+            }
+
+            type ConcDuckFloat struct {
+                value float32
+            }
+
+            func (self ConcDuckFloat) as_dgo_float32() float32 {
+                return self.value
+            }
+
+            type ConcDuckRune struct {
+                value rune
+            }
+
+            func (self ConcDuckRune) as_dgo_rune() rune {
+                return self.value
+            }
+
+            func main() {
+                var s DuckString = ConcDuckString{value: "hello"}
+                var i DuckInt = ConcDuckInt{value: 42}
+                var b DuckBool = ConcDuckBool{value: true}
+                var f DuckFloat = ConcDuckFloat{value: 3.14}
+                var r DuckRune = ConcDuckRune{value: 'a'}
+                fmt.Println(s.as_dgo_string())
+                fmt.Println(i.as_dgo_int())
+                fmt.Println(b.as_dgo_bool())
+                fmt.Println(f.as_dgo_float32())
+                fmt.Println(r.as_dgo_rune())
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_tag_types_preserved() {
+        let input = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type Tag_None struct {
+                value string
+            }
+
+            func (self Tag_None) as_dgo_string() string {
+                return "none"
+            }
+
+            type Tag_Some struct {
+                value string
+            }
+
+            func (self Tag_Some) as_dgo_string() string {
+                return "some"
+            }
+
+            type Tag_Error struct {
+                value string
+            }
+
+            func (self Tag_Error) as_dgo_string() string {
+                return "error"
+            }
+
+            func main() {
+                var none DuckString = Tag_None{value: "none"}
+                var some DuckString = Tag_Some{value: "some"}
+                var err DuckString = Tag_Error{value: "error"}
+                fmt.Println(none.as_dgo_string())
+                fmt.Println(some.as_dgo_string())
+                fmt.Println(err.as_dgo_string())
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type Tag_None struct {
+                value string
+            }
+
+            func (self Tag_None) as_dgo_string() string {
+                return "none"
+            }
+
+            type Tag_Some struct {
+                value string
+            }
+
+            func (self Tag_Some) as_dgo_string() string {
+                return "some"
+            }
+
+            type Tag_Error struct {
+                value string
+            }
+
+            func (self Tag_Error) as_dgo_string() string {
+                return "error"
+            }
+
+            func main() {
+                var none DuckString = Tag_None{value: "none"}
+                var some DuckString = Tag_Some{value: "some"}
+                var err DuckString = Tag_Error{value: "error"}
+                fmt.Println(none.as_dgo_string())
+                fmt.Println(some.as_dgo_string())
+                fmt.Println(err.as_dgo_string())
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_mixed_interface_implementations() {
+        let input = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type DuckInt interface {
+                as_dgo_int() int
+            }
+
+            type DuckBool interface {
+                as_dgo_bool() bool
+            }
+
+            type UsedType struct {
+                value string
+            }
+
+            func (u UsedType) as_dgo_string() string {
+                return u.value
+            }
+
+            func (u UsedType) as_dgo_int() int {
+                return len(u.value)
+            }
+
+            func (u UsedType) as_dgo_bool() bool {
+                return len(u.value) > 0
+            }
+
+            type UnusedType struct {
+                value string
+            }
+
+            func (u UnusedType) as_dgo_string() string {
+                return u.value
+            }
+
+            func (u UnusedType) as_dgo_int() int {
+                return len(u.value)
+            }
+
+            func (u UnusedType) as_dgo_bool() bool {
+                return len(u.value) > 0
+            }
+
+            func main() {
+                var s DuckString = UsedType{value: "hello"}
+                var i DuckInt = UsedType{value: "hello"}
+                var b DuckBool = UsedType{value: "hello"}
+                fmt.Println(s.as_dgo_string())
+                fmt.Println(i.as_dgo_int())
+                fmt.Println(b.as_dgo_bool())
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type DuckInt interface {
+                as_dgo_int() int
+            }
+
+            type DuckBool interface {
+                as_dgo_bool() bool
+            }
+
+            type UsedType struct {
+                value string
+            }
+
+            func (u UsedType) as_dgo_string() string {
+                return u.value
+            }
+
+            func (u UsedType) as_dgo_int() int {
+                return len(u.value)
+            }
+
+            func (u UsedType) as_dgo_bool() bool {
+                return len(u.value) > 0
+            }
+
+            type UnusedType struct {
+                value string
+            }
+
+            func (u UnusedType) as_dgo_string() string {
+                return u.value
+            }
+
+            func (u UnusedType) as_dgo_int() int {
+                return len(u.value)
+            }
+
+            func (u UnusedType) as_dgo_bool() bool {
+                return len(u.value) > 0
+            }
+
+            func main() {
+                var s DuckString = UsedType{value: "hello"}
+                var i DuckInt = UsedType{value: "hello"}
+                var b DuckBool = UsedType{value: "hello"}
+                fmt.Println(s.as_dgo_string())
+                fmt.Println(i.as_dgo_int())
+                fmt.Println(b.as_dgo_bool())
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_interface_methods_with_pointers() {
+        let input = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type MyType struct {
+                value string
+            }
+
+            func (m *MyType) as_dgo_string() string {
+                return m.value
+            }
+
+            func (m MyType) unusedMethod() string {
+                return "unused"
+            }
+
+            func main() {
+                var s DuckString = &MyType{value: "test"}
+                fmt.Println(s.as_dgo_string())
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type MyType struct {
+                value string
+            }
+
+            func (m *MyType) as_dgo_string() string {
+                return m.value
+            }
+
+            func main() {
+                var s DuckString = &MyType{value: "test"}
+                fmt.Println(s.as_dgo_string())
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_interface_methods_with_generics() {
+        let input = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type GenericType[T any] struct {
+                value T
+            }
+
+            func (g GenericType[T]) as_dgo_string() string {
+                return fmt.Sprintf("%v", g.value)
+            }
+
+            func (g GenericType[T]) unusedMethod() string {
+                return "unused"
+            }
+
+            func main() {
+                var s DuckString = GenericType[string]{value: "hello"}
+                fmt.Println(s.as_dgo_string())
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import "fmt"
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type GenericType[T any] struct {
+                value T
+            }
+
+            func (g GenericType[T]) as_dgo_string() string {
+                return fmt.Sprintf("%v", g.value)
+            }
+
+            func main() {
+                var s DuckString = GenericType[string]{value: "hello"}
+                fmt.Println(s.as_dgo_string())
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_generic_with_external_package_types() {
+        let input = r#"
+            package main
+
+            import (
+                "fmt"
+                "time"
+                "strings"
+                "os"
+            )
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type GenericContainer[T any] struct {
+                value T
+            }
+
+            func (g GenericContainer[T]) as_dgo_string() string {
+                return fmt.Sprintf("%v", g.value)
+            }
+
+            func (g GenericContainer[T]) getValue() T {
+                return g.value
+            }
+
+            func main() {
+                // Using external package types as generic parameters
+                var timeContainer DuckString = GenericContainer[time.Time]{value: time.Now()}
+                var stringContainer DuckString = GenericContainer[string]{value: "hello"}
+                var osFileContainer DuckString = GenericContainer[*os.File]{value: os.Stdout}
+
+                fmt.Println(timeContainer.as_dgo_string())
+                fmt.Println(stringContainer.as_dgo_string())
+                fmt.Println(osFileContainer.as_dgo_string())
+
+                // Using strings package functions
+                result := strings.ToUpper("test")
+                fmt.Println(result)
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "fmt"
+                "time"
+                "strings"
+                "os"
+            )
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type GenericContainer[T any] struct {
+                value T
+            }
+
+            func (g GenericContainer[T]) as_dgo_string() string {
+                return fmt.Sprintf("%v", g.value)
+            }
+
+            func main() {
+                // Using external package types as generic parameters
+                var timeContainer DuckString = GenericContainer[time.Time]{value: time.Now()}
+                var stringContainer DuckString = GenericContainer[string]{value: "hello"}
+                var osFileContainer DuckString = GenericContainer[*os.File]{value: os.Stdout}
+
+                fmt.Println(timeContainer.as_dgo_string())
+                fmt.Println(stringContainer.as_dgo_string())
+                fmt.Println(osFileContainer.as_dgo_string())
+
+                // Using strings package functions
+                result := strings.ToUpper("test")
+                fmt.Println(result)
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_generic_with_unused_external_package_types() {
+        let input = r#"
+            package main
+
+            import (
+                "fmt"
+                "time"
+                "strings"
+                "os"
+                "net/http"
+            )
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type GenericContainer[T any] struct {
+                value T
+            }
+
+            func (g GenericContainer[T]) as_dgo_string() string {
+                return fmt.Sprintf("%v", g.value)
+            }
+
+            func main() {
+                // Only using some external package types
+                var timeContainer DuckString = GenericContainer[time.Time]{value: time.Now()}
+                var stringContainer DuckString = GenericContainer[string]{value: "hello"}
+
+                fmt.Println(timeContainer.as_dgo_string())
+                fmt.Println(stringContainer.as_dgo_string())
+
+                // Using strings package functions
+                result := strings.ToUpper("test")
+                fmt.Println(result)
+
+                // os and net/http are imported but not used
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "fmt"
+                "time"
+                "strings"
+            )
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type GenericContainer[T any] struct {
+                value T
+            }
+
+            func (g GenericContainer[T]) as_dgo_string() string {
+                return fmt.Sprintf("%v", g.value)
+            }
+
+            func main() {
+                // Only using some external package types
+                var timeContainer DuckString = GenericContainer[time.Time]{value: time.Now()}
+                var stringContainer DuckString = GenericContainer[string]{value: "hello"}
+
+                fmt.Println(timeContainer.as_dgo_string())
+                fmt.Println(stringContainer.as_dgo_string())
+
+                // Using strings package functions
+                result := strings.ToUpper("test")
+                fmt.Println(result)
+
+                // os and net/http are imported but not used
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_generic_with_interface_constraints() {
+        let input = r#"
+            package main
+
+            import (
+                "fmt"
+                "time"
+                "strings"
+            )
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type Stringer interface {
+                String() string
+            }
+
+            type GenericContainer[T Stringer] struct {
+                value T
+            }
+
+            func (g GenericContainer[T]) as_dgo_string() string {
+                return g.value.String()
+            }
+
+            func (g GenericContainer[T]) getValue() T {
+                return g.value
+            }
+
+            // Custom type implementing Stringer
+            type MyString struct {
+                value string
+            }
+
+            func (m MyString) String() string {
+                return m.value
+            }
+
+            func main() {
+                // Using external package types that implement Stringer
+                var timeContainer DuckString = GenericContainer[time.Time]{value: time.Now()}
+                var customContainer DuckString = GenericContainer[MyString]{value: MyString{value: "custom"}}
+
+                fmt.Println(timeContainer.as_dgo_string())
+                fmt.Println(customContainer.as_dgo_string())
+
+                // Using strings package functions
+                result := strings.ToUpper("test")
+                fmt.Println(result)
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "fmt"
+                "time"
+                "strings"
+            )
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type Stringer interface {
+                String() string
+            }
+
+            type GenericContainer[T Stringer] struct {
+                value T
+            }
+
+            func (g GenericContainer[T]) as_dgo_string() string {
+                return g.value.String()
+            }
+
+            // Custom type implementing Stringer
+            type MyString struct {
+                value string
+            }
+
+            func (m MyString) String() string {
+                return m.value
+            }
+
+            func main() {
+                // Using external package types that implement Stringer
+                var timeContainer DuckString = GenericContainer[time.Time]{value: time.Now()}
+                var customContainer DuckString = GenericContainer[MyString]{value: MyString{value: "custom"}}
+
+                fmt.Println(timeContainer.as_dgo_string())
+                fmt.Println(customContainer.as_dgo_string())
+
+                // Using strings package functions
+                result := strings.ToUpper("test")
+                fmt.Println(result)
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_generic_with_nested_external_types() {
+        let input = r#"
+            package main
+
+            import (
+                "fmt"
+                "time"
+                "strings"
+                "os"
+            )
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type GenericMap[K comparable, V any] struct {
+                data map[K]V
+            }
+
+            func (g GenericMap[K, V]) as_dgo_string() string {
+                return fmt.Sprintf("map with %d entries", len(g.data))
+            }
+
+            func (g GenericMap[K, V]) get(key K) (V, bool) {
+                val, ok := g.data[key]
+                return val, ok
+            }
+
+            func main() {
+                // Using external package types in nested generics
+                var timeMap DuckString = GenericMap[string, time.Time]{data: map[string]time.Time{"now": time.Now()}}
+                var fileMap DuckString = GenericMap[string, *os.File]{data: map[string]*os.File{"stdout": os.Stdout}}
+
+                fmt.Println(timeMap.as_dgo_string())
+                fmt.Println(fileMap.as_dgo_string())
+
+                // Using strings package functions
+                result := strings.ToUpper("test")
+                fmt.Println(result)
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "fmt"
+                "time"
+                "strings"
+                "os"
+            )
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type GenericMap[K comparable, V any] struct {
+                data map[K]V
+            }
+
+            func (g GenericMap[K, V]) as_dgo_string() string {
+                return fmt.Sprintf("map with %d entries", len(g.data))
+            }
+
+            func main() {
+                // Using external package types in nested generics
+                var timeMap DuckString = GenericMap[string, time.Time]{data: map[string]time.Time{"now": time.Now()}}
+                var fileMap DuckString = GenericMap[string, *os.File]{data: map[string]*os.File{"stdout": os.Stdout}}
+
+                fmt.Println(timeMap.as_dgo_string())
+                fmt.Println(fileMap.as_dgo_string())
+
+                // Using strings package functions
+                result := strings.ToUpper("test")
+                fmt.Println(result)
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_generic_with_external_package_methods() {
+        let input = r#"
+            package main
+
+            import (
+                "fmt"
+                "time"
+                "strings"
+                "os"
+            )
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type GenericWrapper[T any] struct {
+                value T
+            }
+
+            func (g GenericWrapper[T]) as_dgo_string() string {
+                return fmt.Sprintf("%v", g.value)
+            }
+
+            func (g GenericWrapper[T]) callMethod() string {
+                // This would call methods on the wrapped type
+                return fmt.Sprintf("wrapped: %v", g.value)
+            }
+
+            func main() {
+                // Using external package types and calling their methods
+                var timeWrapper DuckString = GenericWrapper[time.Time]{value: time.Now()}
+                var fileWrapper DuckString = GenericWrapper[*os.File]{value: os.Stdout}
+
+                fmt.Println(timeWrapper.as_dgo_string())
+                fmt.Println(fileWrapper.as_dgo_string())
+
+                // Using strings package functions
+                result := strings.ToUpper("test")
+                fmt.Println(result)
+
+                // Direct method calls on external types
+                now := time.Now()
+                fmt.Println(now.String())
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "fmt"
+                "time"
+                "strings"
+                "os"
+            )
+
+            type DuckString interface {
+                as_dgo_string() string
+            }
+
+            type GenericWrapper[T any] struct {
+                value T
+            }
+
+            func (g GenericWrapper[T]) as_dgo_string() string {
+                return fmt.Sprintf("%v", g.value)
+            }
+
+            func main() {
+                // Using external package types and calling their methods
+                var timeWrapper DuckString = GenericWrapper[time.Time]{value: time.Now()}
+                var fileWrapper DuckString = GenericWrapper[*os.File]{value: os.Stdout}
+
+                fmt.Println(timeWrapper.as_dgo_string())
+                fmt.Println(fileWrapper.as_dgo_string())
+
+                // Using strings package functions
+                result := strings.ToUpper("test")
+                fmt.Println(result)
+
+                // Direct method calls on external types
+                now := time.Now()
+                fmt.Println(now.String())
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_duckint_interface_preservation() {
+        let input = r#"
+package main
+
+import "fmt"
+
+type Duck_days_DuckInt struct {
+	days DuckInt
+}
+
+type DuckInt interface {
+	as_dgo_int() int
+}
+
+type ConcDuckInt struct {
+	value int
+}
+
+func (self ConcDuckInt) as_dgo_int() int {
+	return self.value
+}
+
+func main() {
+	var x Duck_days_DuckInt
+	_ = x
+}
+"#;
+
+        let result = cleanup_go_source(input, true);
+
+        // The DuckInt interface should be preserved because it's referenced in struct fields
+        assert!(result.contains("type DuckInt interface"), "DuckInt interface should be preserved");
+        assert!(result.contains("as_dgo_int() int"), "DuckInt interface method should be preserved");
+        assert!(result.contains("type ConcDuckInt struct"), "ConcDuckInt should be preserved");
+        assert!(result.contains("func (self ConcDuckInt) as_dgo_int()"), "ConcDuckInt method should be preserved");
+        assert!(result.contains("type Duck_days_DuckInt struct"), "Duck_days_DuckInt should be preserved");
     }
 }
