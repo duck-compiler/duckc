@@ -7,7 +7,7 @@ use crate::{
     cli::go_cli::{self, GoCliErrKind},
     dargo::cli::CompileArgs,
     emit::ir::join_ir,
-    go_fixup::remove_unused_imports::{cleanup_go_source, remove_unused_imports},
+    go_fixup::remove_unused_imports::cleanup_go_source,
     lex, parse_src_file,
     tags::Tag,
     typecheck, write_in_duck_dotdir,

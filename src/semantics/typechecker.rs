@@ -1,7 +1,6 @@
 use std::panic::Location;
 use std::process;
 
-use chumsky::combinator::Or;
 use chumsky::container::Seq;
 use colored::Colorize;
 
@@ -575,20 +574,20 @@ impl TypeExpr {
                     possible_types.iter().for_each(|possible_type| {
                         let is_covered = covered_types.iter().any(|(x, _)| *x == possible_type.0);
                         if !is_covered {
-                            panic!("missing {:?} match arm", possible_type);
+                            panic!("missing {possible_type:?} match arm");
                         }
                     });
                 }
 
-                let r#type = if arm_types.is_empty() {
+                
+
+                if arm_types.is_empty() {
                     TypeExpr::Tuple(vec![])
                 } else if arm_types.len() == 1 {
                     arm_types.first().cloned().unwrap().0
                 } else {
                     TypeExpr::Or(arm_types)
-                };
-
-                r#type
+                }
             }
         };
     }

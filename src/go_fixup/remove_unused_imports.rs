@@ -141,38 +141,30 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
             let text = &go_source[node.start_byte()..node.end_byte()];
             used_imports.insert(text.to_string());
         } else if node.kind() == "selector_expression" {
-            if let Some(package_node) = node.child(0) {
-                if package_node.kind() == "identifier" {
+            if let Some(package_node) = node.child(0)
+                && package_node.kind() == "identifier" {
                     let package_name =
                         &go_source[package_node.start_byte()..package_node.end_byte()];
                     used_imports.insert(package_name.to_string());
                 }
-            }
         } else if node.kind() == "call_expression" {
-            if let Some(function_node) = node.child(0) {
-                if function_node.kind() == "selector_expression" {
-                    if let Some(package_node) = function_node.child(0) {
-                        if package_node.kind() == "identifier" {
+            if let Some(function_node) = node.child(0)
+                && function_node.kind() == "selector_expression"
+                    && let Some(package_node) = function_node.child(0)
+                        && package_node.kind() == "identifier" {
                             let package_name =
                                 &go_source[package_node.start_byte()..package_node.end_byte()];
                             used_imports.insert(package_name.to_string());
                         }
-                    }
-                }
-            }
-        } else if node.kind() == "type_identifier" {
-            if let Some(parent) = node.parent() {
-                if parent.kind() == "selector_expression" {
-                    if let Some(package_node) = parent.child(0) {
-                        if package_node.kind() == "identifier" {
+        } else if node.kind() == "type_identifier"
+            && let Some(parent) = node.parent()
+                && parent.kind() == "selector_expression"
+                    && let Some(package_node) = parent.child(0)
+                        && package_node.kind() == "identifier" {
                             let package_name =
                                 &go_source[package_node.start_byte()..package_node.end_byte()];
                             used_imports.insert(package_name.to_string());
                         }
-                    }
-                }
-            }
-        }
 
         for i in 0..node.child_count() {
             if let Some(child) = node.child(i) {
@@ -190,8 +182,8 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
             {
                 if let Some(name_node) = spec.child(0) {
                     if name_node.kind() == "dot" {
-                        if let Some(path_node) = spec.child(spec.child_count() - 1) {
-                            if path_node.kind() == "interpreted_string_literal" {
+                        if let Some(path_node) = spec.child(spec.child_count() - 1)
+                            && path_node.kind() == "interpreted_string_literal" {
                                 let import_path = path_node
                                     .utf8_text(go_source.as_bytes())
                                     .unwrap()
@@ -199,7 +191,6 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
                                 let package_name = extract_package_name_from_path(import_path);
                                 used_imports.insert(package_name);
                             }
-                        }
                     } else if name_node.kind() == "identifier" {
                         let alias_name = name_node.utf8_text(go_source.as_bytes()).unwrap();
                         used_imports.insert(alias_name.to_string());
@@ -222,22 +213,20 @@ fn extract_package_name_from_import(import_text: &str) -> Option<String> {
     let trimmed = import_text.trim();
 
     if trimmed.starts_with('_') {
-        if let Some(start) = trimmed.find('"') {
-            if let Some(end) = trimmed[start + 1..].find('"') {
+        if let Some(start) = trimmed.find('"')
+            && let Some(end) = trimmed[start + 1..].find('"') {
                 let package_path = &trimmed[start + 1..start + 1 + end];
                 return Some(extract_package_name_from_path(package_path));
             }
-        }
         return None;
     }
 
     if trimmed.starts_with('.') {
-        if let Some(start) = trimmed.find('"') {
-            if let Some(end) = trimmed[start + 1..].find('"') {
+        if let Some(start) = trimmed.find('"')
+            && let Some(end) = trimmed[start + 1..].find('"') {
                 let package_path = &trimmed[start + 1..start + 1 + end];
                 return Some(extract_package_name_from_path(package_path));
             }
-        }
         return None;
     }
 
@@ -578,11 +567,11 @@ fn go_parse_declaration(
         find_dependencies(item_node, source, &mut dependencies);
         dependencies.remove(&name);
 
-        if item_node.kind() == "method_declaration" {
-            if let Some(receiver_type) = find_receiver_type_name(&item_node, source) {
+        if item_node.kind() == "method_declaration"
+            && let Some(receiver_type) = find_receiver_type_name(&item_node, source) {
                 dependencies.insert(receiver_type.clone());
 
-                let method_name_with_receiver = format!("{}.{}", receiver_type, name);
+                let method_name_with_receiver = format!("{receiver_type}.{name}");
                 declarations.insert(
                     method_name_with_receiver.clone(),
                     Declaration {
@@ -594,7 +583,6 @@ fn go_parse_declaration(
                     },
                 );
             }
-        }
 
         let is_exported = name.chars().next().unwrap_or('a').is_uppercase();
 
@@ -683,34 +671,28 @@ fn find_dependencies(node: Node, source: &[u8], deps: &mut HashSet<String>) {
             deps.insert(node.utf8_text(source).unwrap().to_string());
         }
         "selector_expression" => {
-            if let Some(operand) = node.child(0) {
-                if operand.kind() == "identifier" {
+            if let Some(operand) = node.child(0)
+                && operand.kind() == "identifier" {
                     deps.insert(operand.utf8_text(source).unwrap().to_string());
                 }
-            }
-            if let Some(field) = node.child(1) {
-                if field.kind() == "field_identifier" {
+            if let Some(field) = node.child(1)
+                && field.kind() == "field_identifier" {
                     deps.insert(field.utf8_text(source).unwrap().to_string());
                 }
-            }
         }
         "type_assertion" => {
-            if let Some(type_node) = node.child(1) {
-                if type_node.kind() == "type_identifier" {
+            if let Some(type_node) = node.child(1)
+                && type_node.kind() == "type_identifier" {
                     deps.insert(type_node.utf8_text(source).unwrap().to_string());
                 }
-            }
         }
         "type_switch_expression" => {
-            if let Some(expr) = node.child(0) {
-                if expr.kind() == "type_assertion" {
-                    if let Some(type_node) = expr.child(1) {
-                        if type_node.kind() == "type_identifier" {
+            if let Some(expr) = node.child(0)
+                && expr.kind() == "type_assertion"
+                    && let Some(type_node) = expr.child(1)
+                        && type_node.kind() == "type_identifier" {
                             deps.insert(type_node.utf8_text(source).unwrap().to_string());
                         }
-                    }
-                }
-            }
         }
         "type_case" => {
             for child in node.children(&mut node.walk()) {
@@ -727,11 +709,10 @@ fn find_dependencies(node: Node, source: &[u8], deps: &mut HashSet<String>) {
             }
         }
         "composite_literal" => {
-            if let Some(type_node) = node.child(0) {
-                if type_node.kind() == "type_identifier" {
+            if let Some(type_node) = node.child(0)
+                && type_node.kind() == "type_identifier" {
                     deps.insert(type_node.utf8_text(source).unwrap().to_string());
                 }
-            }
         }
         _ => {}
     }
@@ -742,13 +723,11 @@ fn find_dependencies(node: Node, source: &[u8], deps: &mut HashSet<String>) {
 }
 
 fn find_all_package_usages(node: Node, source: &[u8], usages: &mut HashSet<String>) {
-    if node.kind() == "selector_expression" {
-        if let Some(operand) = node.child(0) {
-            if operand.kind() == "identifier" {
+    if node.kind() == "selector_expression"
+        && let Some(operand) = node.child(0)
+            && operand.kind() == "identifier" {
                 usages.insert(operand.utf8_text(source).unwrap().to_string());
             }
-        }
-    }
 
     for child in node.children(&mut node.walk()) {
         find_all_package_usages(child, source, usages);
@@ -760,20 +739,19 @@ fn parse_imports(node: Node, source: &[u8], imports: &mut HashMap<String, Range>
         .children(&mut node.walk())
         .filter(|c| c.kind() == "import_spec")
     {
-        if let Some(path_node) = spec.child(spec.child_count() - 1) {
-            if path_node.kind() == "interpreted_string_literal" {
+        if let Some(path_node) = spec.child(spec.child_count() - 1)
+            && path_node.kind() == "interpreted_string_literal" {
                 let import_path = path_node.utf8_text(source).unwrap().trim_matches('"');
                 if let Some(name) = get_import_package_name(&spec, import_path, source) {
                     imports.insert(name, spec.range());
                 }
             }
-        }
     }
 }
 
 fn get_import_package_name(node: &Node, path: &str, source: &[u8]) -> Option<String> {
-    if let Some(name_node) = node.child(0) {
-        if name_node.kind() != "interpreted_string_literal" {
+    if let Some(name_node) = node.child(0)
+        && name_node.kind() != "interpreted_string_literal" {
             return match name_node.kind() {
                 "identifier" => Some(name_node.utf8_text(source).unwrap().to_string()),
                 "blank_identifier" => Some("_".to_string()), // handle blank imports
@@ -781,7 +759,6 @@ fn get_import_package_name(node: &Node, path: &str, source: &[u8]) -> Option<Str
                 _ => None,
             };
         }
-    }
     path.rsplit('/').next().map(|s| s.to_string())
 }
 
