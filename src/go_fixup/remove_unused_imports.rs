@@ -73,9 +73,8 @@ pub fn remove_unused_imports(go_source: &str) -> String {
         if import_text.contains(". \"") {
             let mut has_used_symbols = false;
 
-            for _used_symbol in &used_imports {
+            if !used_imports.is_empty() {
                 has_used_symbols = true;
-                break;
             }
 
             if !has_used_symbols {
@@ -239,12 +238,8 @@ fn extract_package_name_from_import(import_text: &str) -> Option<String> {
         return None;
     }
 
-    let Some(start) = trimmed.find('"') else {
-        return None;
-    };
-    let Some(end) = trimmed[start + 1..].find('"') else {
-        return None;
-    };
+    let start = trimmed.find('"')?;
+    let end = trimmed[start + 1..].find('"')?;
 
     let package_path = &trimmed[start + 1..start + 1 + end];
     Some(extract_package_name_from_path(package_path))
