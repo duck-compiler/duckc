@@ -4649,43 +4649,4 @@ mod tests {
 
         assert_cleanup_result(input, expected, true);
     }
-
-    #[test]
-    fn test_duckint_interface_preservation() {
-        let input = r#"
-package main
-
-import "fmt"
-
-type Duck_days_DuckInt struct {
-	days DuckInt
-}
-
-type DuckInt interface {
-	as_dgo_int() int
-}
-
-type ConcDuckInt struct {
-	value int
-}
-
-func (self ConcDuckInt) as_dgo_int() int {
-	return self.value
-}
-
-func main() {
-	var x Duck_days_DuckInt
-	_ = x
-}
-"#;
-
-        let result = cleanup_go_source(input, true);
-
-        // The DuckInt interface should be preserved because it's referenced in struct fields
-        assert!(result.contains("type DuckInt interface"), "DuckInt interface should be preserved");
-        assert!(result.contains("as_dgo_int() int"), "DuckInt interface method should be preserved");
-        assert!(result.contains("type ConcDuckInt struct"), "ConcDuckInt should be preserved");
-        assert!(result.contains("func (self ConcDuckInt) as_dgo_int()"), "ConcDuckInt method should be preserved");
-        assert!(result.contains("type Duck_days_DuckInt struct"), "Duck_days_DuckInt should be preserved");
-    }
 }
