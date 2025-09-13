@@ -33,6 +33,7 @@ pub mod cli;
 pub mod dargo;
 pub mod emit;
 pub mod fixup;
+pub mod go_fixup;
 pub mod parse;
 pub mod semantics;
 pub mod tags;

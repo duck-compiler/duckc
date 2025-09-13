@@ -3,12 +3,7 @@ use lazy_static::lazy_static;
 use std::{ffi::OsString, fs, path::PathBuf};
 
 use crate::{
-    DARGO_DOT_DIR,
-    cli::go_cli::{self, GoCliErrKind},
-    emit::ir::join_ir,
-    lex, parse_src_file,
-    tags::Tag,
-    typecheck, write_in_duck_dotdir,
+    cli::go_cli::{self, GoCliErrKind}, emit::ir::join_ir, go_fixup::remove_unused_imports::remove_unused_imports, lex, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
 };
 
 #[derive(Debug)]
@@ -108,6 +103,7 @@ pub fn compile(
     let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
     let mut type_env = typecheck(&mut src_file_ast);
     let go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env));
+    let go_code = remove_unused_imports(&go_code);
 
     let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.go").as_str(), &go_code);
 
