@@ -109,7 +109,9 @@ fn find_import_ranges(tree: &tree_sitter::Tree) -> Vec<Range> {
             continue;
         }
 
-        let has_import_spec_list = node.children(&mut node.walk()).any(|child| child.kind() == "import_spec_list");
+        let has_import_spec_list = node
+            .children(&mut node.walk())
+            .any(|child| child.kind() == "import_spec_list");
 
         if !has_import_spec_list {
             import_ranges.push(node.range());
@@ -146,7 +148,8 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
         } else if node.kind() == "selector_expression" {
             if let Some(package_node) = node.child(0) {
                 if package_node.kind() == "identifier" {
-                    let package_name = &go_source[package_node.start_byte()..package_node.end_byte()];
+                    let package_name =
+                        &go_source[package_node.start_byte()..package_node.end_byte()];
                     used_imports.insert(package_name.to_string());
                 }
             }
@@ -155,7 +158,8 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
                 if function_node.kind() == "selector_expression" {
                     if let Some(package_node) = function_node.child(0) {
                         if package_node.kind() == "identifier" {
-                            let package_name = &go_source[package_node.start_byte()..package_node.end_byte()];
+                            let package_name =
+                                &go_source[package_node.start_byte()..package_node.end_byte()];
                             used_imports.insert(package_name.to_string());
                         }
                     }
@@ -166,7 +170,8 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
                 if parent.kind() == "selector_expression" {
                     if let Some(package_node) = parent.child(0) {
                         if package_node.kind() == "identifier" {
-                            let package_name = &go_source[package_node.start_byte()..package_node.end_byte()];
+                            let package_name =
+                                &go_source[package_node.start_byte()..package_node.end_byte()];
                             used_imports.insert(package_name.to_string());
                         }
                     }
@@ -184,15 +189,20 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
     let mut import_stack = vec![tree.root_node()];
     while let Some(node) = import_stack.pop() {
         if node.kind() == "import_declaration" {
-            for spec in node.children(&mut node.walk()).filter(|c| c.kind() == "import_spec") {
+            for spec in node
+                .children(&mut node.walk())
+                .filter(|c| c.kind() == "import_spec")
+            {
                 if let Some(name_node) = spec.child(0) {
                     if name_node.kind() == "dot" {
                         if let Some(path_node) = spec.child(spec.child_count() - 1) {
                             if path_node.kind() == "interpreted_string_literal" {
-                                let import_path = path_node.utf8_text(go_source.as_bytes()).unwrap().trim_matches('"');
-                                if let Some(package_name) = extract_package_name_from_path(import_path) {
-                                    used_imports.insert(package_name);
-                                }
+                                let import_path = path_node
+                                    .utf8_text(go_source.as_bytes())
+                                    .unwrap()
+                                    .trim_matches('"');
+                                let package_name = extract_package_name_from_path(import_path);
+                                used_imports.insert(package_name);
                             }
                         }
                     } else if name_node.kind() == "identifier" {
@@ -218,9 +228,9 @@ fn extract_package_name_from_import(import_text: &str) -> Option<String> {
 
     if trimmed.starts_with('_') {
         if let Some(start) = trimmed.find('"') {
-            if let Some(end) = trimmed[start+1..].find('"') {
-                let package_path = &trimmed[start+1..start+1+end];
-                return extract_package_name_from_path(package_path);
+            if let Some(end) = trimmed[start + 1..].find('"') {
+                let package_path = &trimmed[start + 1..start + 1 + end];
+                return Some(extract_package_name_from_path(package_path));
             }
         }
         return None;
@@ -228,36 +238,46 @@ fn extract_package_name_from_import(import_text: &str) -> Option<String> {
 
     if trimmed.starts_with('.') {
         if let Some(start) = trimmed.find('"') {
-            if let Some(end) = trimmed[start+1..].find('"') {
-                let package_path = &trimmed[start+1..start+1+end];
-                return extract_package_name_from_path(package_path);
+            if let Some(end) = trimmed[start + 1..].find('"') {
+                let package_path = &trimmed[start + 1..start + 1 + end];
+                return Some(extract_package_name_from_path(package_path));
             }
         }
         return None;
     }
 
     if trimmed.starts_with('"') && trimmed.ends_with('"') {
-        let package_path = &trimmed[1..trimmed.len()-1];
-        return extract_package_name_from_path(package_path);
+        let package_path = &trimmed[1..trimmed.len() - 1];
+        return Some(extract_package_name_from_path(package_path));
     }
 
     if !trimmed.starts_with("import") {
         return None;
     }
 
-    let Some(start) = trimmed.find('"') else { return None; };
-    let Some(end) = trimmed[start+1..].find('"') else { return None; };
+    let Some(start) = trimmed.find('"') else {
+        return None;
+    };
+    let Some(end) = trimmed[start + 1..].find('"') else {
+        return None;
+    };
 
-    let package_path = &trimmed[start+1..start+1+end];
-    extract_package_name_from_path(package_path)
+    let package_path = &trimmed[start + 1..start + 1 + end];
+    Some(extract_package_name_from_path(package_path))
 }
 
-fn extract_package_name_from_path(package_path: &str) -> Option<String> {
-    if let Some(last_slash) = package_path.rfind('/') {
-        Some(package_path[last_slash+1..].to_string())
+fn extract_package_name_from_path(package_path: &str) -> String {
+    let package_path = if let Some(last_slash) = package_path.rfind('/') {
+        package_path[last_slash + 1..].to_string()
     } else {
-        Some(package_path.to_string())
-    }
+        package_path.to_string()
+    };
+
+    return if let Some(last_dash) = package_path.rfind('-') {
+        package_path[last_dash + 1..].to_string()
+    } else {
+        package_path.to_string()
+    };
 }
 
 fn analyze_source(
@@ -278,11 +298,7 @@ fn analyze_source(
     let mut package_usages = HashSet::new();
     find_all_package_usages(root_node, source, &mut package_usages);
 
-    (
-        declarations,
-        imports,
-        package_usages
-    )
+    (declarations, imports, package_usages)
 }
 
 fn parse_node(
@@ -293,7 +309,11 @@ fn parse_node(
 ) {
     match node.kind() {
         "import_declaration" => parse_imports(node, source, imports),
-        "function_declaration" | "method_declaration" | "type_declaration" | "var_declaration" | "const_declaration" => {
+        "function_declaration"
+        | "method_declaration"
+        | "type_declaration"
+        | "var_declaration"
+        | "const_declaration" => {
             go_parse_declaration(node, source, declarations);
         }
         _ => {
@@ -304,7 +324,10 @@ fn parse_node(
     }
 }
 
-fn calculate_live_set(declarations: &HashMap<String, Declaration>, _remove_exported: bool) -> HashSet<String> {
+fn calculate_live_set(
+    declarations: &HashMap<String, Declaration>,
+    _remove_exported: bool,
+) -> HashSet<String> {
     let mut live_set = HashSet::new();
     let mut worklist: VecDeque<String> = VecDeque::new();
 
@@ -318,7 +341,12 @@ fn calculate_live_set(declarations: &HashMap<String, Declaration>, _remove_expor
 
     let required_methods = collect_required_methods(&live_set, declarations);
     if !required_methods.is_empty() {
-        add_required_methods(&mut live_set, &mut worklist, declarations, &required_methods);
+        add_required_methods(
+            &mut live_set,
+            &mut worklist,
+            declarations,
+            &required_methods,
+        );
         perform_reachability_analysis(&mut live_set, &mut worklist, declarations);
     }
 
@@ -348,7 +376,10 @@ fn calculate_live_set(declarations: &HashMap<String, Declaration>, _remove_expor
     live_set
 }
 
-fn collect_required_methods(live_set: &HashSet<String>, declarations: &HashMap<String, Declaration>) -> HashSet<String> {
+fn collect_required_methods(
+    live_set: &HashSet<String>,
+    declarations: &HashMap<String, Declaration>,
+) -> HashSet<String> {
     live_set
         .iter()
         .filter_map(|name| declarations.get(name))
@@ -367,7 +398,9 @@ fn add_required_methods(
     required_methods: &HashSet<String>,
 ) {
     for (name, decl) in declarations {
-        let DeclKind::Method = &decl.kind else { continue; };
+        let DeclKind::Method = &decl.kind else {
+            continue;
+        };
 
         let (receiver_type, method_name) = if let Some(dot_pos) = name.find('.') {
             (&name[..dot_pos], &name[dot_pos + 1..])
@@ -375,13 +408,19 @@ fn add_required_methods(
             continue;
         };
 
-        if required_methods.contains(method_name) && live_set.contains(receiver_type) && live_set.insert(name.clone()) {
+        if required_methods.contains(method_name)
+            && live_set.contains(receiver_type)
+            && live_set.insert(name.clone())
+        {
             worklist.push_back(name.clone());
         }
     }
 }
 
-fn find_receiver_types(live_set: &HashSet<String>, declarations: &HashMap<String, Declaration>) -> HashSet<String> {
+fn find_receiver_types(
+    live_set: &HashSet<String>,
+    declarations: &HashMap<String, Declaration>,
+) -> HashSet<String> {
     let mut receiver_types = HashSet::new();
 
     for (name, decl) in declarations {
@@ -389,7 +428,9 @@ fn find_receiver_types(live_set: &HashSet<String>, declarations: &HashMap<String
             continue;
         }
 
-        let DeclKind::Method = &decl.kind else { continue; };
+        let DeclKind::Method = &decl.kind else {
+            continue;
+        };
 
         if let Some(dot_pos) = name.find('.') {
             let receiver_type = &name[..dot_pos];
@@ -400,7 +441,10 @@ fn find_receiver_types(live_set: &HashSet<String>, declarations: &HashMap<String
     receiver_types
 }
 
-fn find_type_methods(live_set: &HashSet<String>, declarations: &HashMap<String, Declaration>) -> Vec<String> {
+fn find_type_methods(
+    live_set: &HashSet<String>,
+    declarations: &HashMap<String, Declaration>,
+) -> Vec<String> {
     let mut type_methods = Vec::new();
 
     for (name, decl) in declarations {
@@ -414,7 +458,9 @@ fn find_type_methods(live_set: &HashSet<String>, declarations: &HashMap<String, 
         }
 
         for (method_name, method_decl) in declarations {
-            let DeclKind::Method = &method_decl.kind else { continue; };
+            let DeclKind::Method = &method_decl.kind else {
+                continue;
+            };
 
             if let Some(dot_pos) = method_name.find('.') {
                 let receiver_type = &method_name[..dot_pos];
@@ -432,11 +478,11 @@ fn find_special_method_names(live_set: &HashSet<String>) -> HashSet<String> {
     live_set
         .iter()
         .filter(|name| {
-            name.contains("as_dgo_string") ||
-            name.contains("as_dgo_int") ||
-            name.contains("as_dgo_float32") ||
-            name.contains("as_dgo_bool") ||
-            name.contains("as_dgo_rune")
+            name.contains("as_dgo_string")
+                || name.contains("as_dgo_int")
+                || name.contains("as_dgo_float32")
+                || name.contains("as_dgo_bool")
+                || name.contains("as_dgo_rune")
         })
         .cloned()
         .collect()
@@ -449,7 +495,9 @@ fn add_special_methods(
     method_names: &HashSet<String>,
 ) {
     for (name, decl) in declarations {
-        let DeclKind::Method = &decl.kind else { continue; };
+        let DeclKind::Method = &decl.kind else {
+            continue;
+        };
 
         if let Some(dot_pos) = name.find('.') {
             let method_name = &name[dot_pos + 1..];
@@ -469,7 +517,9 @@ fn perform_reachability_analysis(
     declarations: &HashMap<String, Declaration>,
 ) {
     while let Some(name) = worklist.pop_front() {
-        let Some(decl) = declarations.get(&name) else { continue; };
+        let Some(decl) = declarations.get(&name) else {
+            continue;
+        };
 
         for dep in &decl.dependencies {
             if live_set.insert(dep.clone()) {
@@ -500,7 +550,11 @@ fn drain_ranges(go_source: &str, mut ranges: Vec<Range>) -> String {
         .replace("\n\n\n", "\n\n")
 }
 
-fn go_parse_declaration(node: Node, source: &[u8], declarations: &mut HashMap<String, Declaration>) {
+fn go_parse_declaration(
+    node: Node,
+    source: &[u8],
+    declarations: &mut HashMap<String, Declaration>,
+) {
     let kind = match node.kind() {
         "function_declaration" => DeclKind::Function,
         "method_declaration" => DeclKind::Method,
@@ -510,14 +564,19 @@ fn go_parse_declaration(node: Node, source: &[u8], declarations: &mut HashMap<St
         _ => return,
     };
 
-    let nodes_to_process = if matches!(node.kind(), "var_declaration" | "const_declaration" | "type_declaration") {
+    let nodes_to_process = if matches!(
+        node.kind(),
+        "var_declaration" | "const_declaration" | "type_declaration"
+    ) {
         find_spec_nodes(node)
     } else {
         vec![node]
     };
 
     for item_node in nodes_to_process {
-        let Some(name_node) = item_node.child_by_field_name("name") else { continue };
+        let Some(name_node) = item_node.child_by_field_name("name") else {
+            continue;
+        };
         let name = name_node.utf8_text(source).unwrap().to_string();
 
         let mut dependencies = HashSet::new();
@@ -529,13 +588,16 @@ fn go_parse_declaration(node: Node, source: &[u8], declarations: &mut HashMap<St
                 dependencies.insert(receiver_type.clone());
 
                 let method_name_with_receiver = format!("{}.{}", receiver_type, name);
-                declarations.insert(method_name_with_receiver.clone(), Declaration {
-                    _name: method_name_with_receiver,
-                    kind: DeclKind::Method,
-                    range: item_node.range(),
-                    is_exported: name.chars().next().unwrap_or('a').is_uppercase(),
-                    dependencies: dependencies.clone(),
-                });
+                declarations.insert(
+                    method_name_with_receiver.clone(),
+                    Declaration {
+                        _name: method_name_with_receiver,
+                        kind: DeclKind::Method,
+                        range: item_node.range(),
+                        is_exported: name.chars().next().unwrap_or('a').is_uppercase(),
+                        dependencies: dependencies.clone(),
+                    },
+                );
             }
         }
 
@@ -552,26 +614,31 @@ fn go_parse_declaration(node: Node, source: &[u8], declarations: &mut HashMap<St
             kind.clone()
         };
 
-        let range = if matches!(node.kind(), "type_declaration" | "var_declaration" | "const_declaration") {
+        let range = if matches!(
+            node.kind(),
+            "type_declaration" | "var_declaration" | "const_declaration"
+        ) {
             node.range()
         } else {
             item_node.range()
         };
 
-        declarations.insert(name.clone(), Declaration {
-            _name: name,
-            kind: final_kind,
-            range,
-            is_exported,
-            dependencies
-        });
+        declarations.insert(
+            name.clone(),
+            Declaration {
+                _name: name,
+                kind: final_kind,
+                range,
+                is_exported,
+                dependencies,
+            },
+        );
     }
 }
 
 fn find_spec_nodes(node: Node) -> Vec<Node> {
     let mut nodes_to_process = Vec::new();
-    let target_kind = node.kind()
-        .replace("declaration", "spec");
+    let target_kind = node.kind().replace("declaration", "spec");
 
     let mut queue = VecDeque::from_iter(node.children(&mut node.walk()));
 
@@ -589,7 +656,9 @@ fn find_spec_nodes(node: Node) -> Vec<Node> {
 fn extract_interface_methods(type_body: Node, source: &[u8]) -> HashSet<String> {
     let mut methods = HashSet::new();
 
-    let Some(list) = type_body.child_by_field_name("methods") else { return methods; };
+    let Some(list) = type_body.child_by_field_name("methods") else {
+        return methods;
+    };
 
     for method_spec in list.children(&mut list.walk()) {
         if let Some(m_name) = method_spec.child_by_field_name("name") {
@@ -692,7 +761,10 @@ fn find_all_package_usages(node: Node, source: &[u8], usages: &mut HashSet<Strin
 }
 
 fn parse_imports(node: Node, source: &[u8], imports: &mut HashMap<String, Range>) {
-    for spec in node.children(&mut node.walk()).filter(|c| c.kind() == "import_spec") {
+    for spec in node
+        .children(&mut node.walk())
+        .filter(|c| c.kind() == "import_spec")
+    {
         if let Some(path_node) = spec.child(spec.child_count() - 1) {
             if path_node.kind() == "interpreted_string_literal" {
                 let import_path = path_node.utf8_text(source).unwrap().trim_matches('"');
