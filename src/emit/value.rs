@@ -1589,7 +1589,8 @@ impl ValueExpr {
                 ]);
 
                 let (mut rhs_instr, rhs_res) = rhs.0.direct_or_with_instr(type_env, env);
-                let rhs_val = rhs_res.expect("The right-hand side of an 'and' expression must produce a value");
+                let rhs_val = rhs_res
+                    .expect("The right-hand side of an 'and' expression must produce a value");
 
                 rhs_instr.push(IrInstruction::VarAssignment(result_var.clone(), rhs_val));
 
@@ -1618,7 +1619,8 @@ impl ValueExpr {
                 ]);
 
                 let (mut rhs_instr, rhs_res) = rhs.0.direct_or_with_instr(type_env, env);
-                let rhs_val = rhs_res.expect("The right-hand side of an 'or' expression must produce a value");
+                let rhs_val = rhs_res
+                    .expect("The right-hand side of an 'or' expression must produce a value");
 
                 rhs_instr.push(IrInstruction::VarAssignment(result_var.clone(), rhs_val));
 

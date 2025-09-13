@@ -553,10 +553,11 @@ impl TypeExpr {
                 }
 
                 if else_arm.is_none() {
-                    let possible_types: Vec<Spanned<TypeExpr>> = match &TypeExpr::from_value_expr(&value_expr.0, type_env) {
-                        TypeExpr::Or(types) => types.clone(),
-                        other => vec![(other.clone(), value_expr.1)],
-                    };
+                    let possible_types: Vec<Spanned<TypeExpr>> =
+                        match &TypeExpr::from_value_expr(&value_expr.0, type_env) {
+                            TypeExpr::Or(types) => types.clone(),
+                            other => vec![(other.clone(), value_expr.1)],
+                        };
 
                     let mut covered_types = Vec::new();
                     for arm in &arms {
@@ -1288,7 +1289,7 @@ fn check_type_compatability(
                     format!(
                         "this is not an int. it's a {}",
                         given_type.0.as_clean_go_type_name(type_env).bright_yellow()
-                    )
+                    ),
                 )
             }
         }

@@ -749,12 +749,9 @@ impl TypeExpr {
             TypeExpr::Tag(identifier) => format!("Tag__{identifier}"),
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
-            TypeExpr::TypeName(_, name, _type_params) => {
-                
-                type_env
-                    .resolve_type_alias(name)
-                    .as_clean_go_type_name(type_env)
-            }
+            TypeExpr::TypeName(_, name, _type_params) => type_env
+                .resolve_type_alias(name)
+                .as_clean_go_type_name(type_env),
             TypeExpr::TypeNameInternal(name) => name.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type) => format!(

@@ -1,5 +1,8 @@
 use crate::{
-    emit::{types::escape_string_for_go, value::IrInstruction}, parse::{tsx_component_parser::TsxComponent, type_parser::Duck}, semantics::type_resolve::TypeEnv, TypeExpr
+    TypeExpr,
+    emit::{types::escape_string_for_go, value::IrInstruction},
+    parse::{tsx_component_parser::TsxComponent, type_parser::Duck},
+    semantics::type_resolve::TypeEnv,
 };
 
 fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
@@ -147,9 +150,7 @@ impl TsxComponent {
 
         let emitted_props = emit_duck_to_js_obj(&self.props_type.0, vec!["props".to_string()]);
 
-        let props = format!(
-            "fmt.Sprintf(\"const props = {{...%s,...props2}}\", {emitted_props})"
-        );
+        let props = format!("fmt.Sprintf(\"const props = {{...%s,...props2}}\", {emitted_props})");
         let all = format!(
             "fmt.Sprintf(\"{}\\nfunction {}(props2){{\\n%s\\n%s}}\", {props}, \"{}\")",
             escape_string_for_go(
@@ -158,9 +159,7 @@ impl TsxComponent {
                     .client_components
                     .clone()
                     .into_iter()
-                    .map(|x| type_env
-                        .get_component(x.as_str())
-                        .unwrap().emit_js())
+                    .map(|x| type_env.get_component(x.as_str()).unwrap().emit_js())
                     .collect::<Vec<_>>()
                     .join("\n")
             ),
@@ -168,7 +167,6 @@ impl TsxComponent {
             escape_string_for_go(&self.typescript_source.0)
         );
 
-        
         IrInstruction::FunDef(
             self.name.clone(),
             None,

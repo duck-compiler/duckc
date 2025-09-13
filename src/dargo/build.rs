@@ -2,9 +2,9 @@ use std::io::ErrorKind as IOErrKind;
 use std::path::{Path, PathBuf};
 use std::{env, fs, os};
 
-use crate::dargo::cli::CompileArgs;
 use crate::DARGO_DOT_DIR;
 use crate::cli::git_cli::{self, GitCliErrKind};
+use crate::dargo::cli::CompileArgs;
 use crate::tags::Tag;
 
 use super::cli::BuildArgs;
@@ -125,18 +125,26 @@ pub fn build(build_args: &BuildArgs) -> Result<BuildOutput, (String, BuildErrKin
 
     let mut copy_target_clone = copy_target.to_path_buf();
     copy_target_clone.push("main.duck");
-    let compile_output = compile::compile(CompileArgs { file: copy_target_clone, output_name: build_args.output_name.clone(), optimize_go: build_args.optimize_go })
-        .map_err(|err| (
-                format!(
-                    "{}{} couldn't compile the code\n{}",
-                    Tag::Build,
-                    Tag::Err,
-                    err.0,
-                ),
-                BuildErrKind::Compile(err.1),
-        ))?;
+    let compile_output = compile::compile(CompileArgs {
+        file: copy_target_clone,
+        output_name: build_args.output_name.clone(),
+        optimize_go: build_args.optimize_go,
+    })
+    .map_err(|err| {
+        (
+            format!(
+                "{}{} couldn't compile the code\n{}",
+                Tag::Build,
+                Tag::Err,
+                err.0,
+            ),
+            BuildErrKind::Compile(err.1),
+        )
+    })?;
 
-    Ok(BuildOutput { binary_path: compile_output.binary_path })
+    Ok(BuildOutput {
+        binary_path: compile_output.binary_path,
+    })
 }
 
 fn copy_dir_all(

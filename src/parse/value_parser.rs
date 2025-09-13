@@ -360,7 +360,7 @@ where
                                 initializer: initializer.clone(),
                             },
                             initializer.1,
-                            )
+                        )
                             .into(),
                     )
                 })
@@ -591,7 +591,6 @@ where
 
                     let cl = x.clone();
 
-
                     value_expr_parser
                         .parse(make_input(empty_range(), x.leak()))
                         .into_result()
@@ -806,7 +805,7 @@ where
                                 value_expr: value_expr.clone(),
                             },
                             e.span(),
-                            )
+                        )
                             .into(),
                     )
                 })
@@ -844,13 +843,10 @@ where
             let add = prod
                 .clone()
                 .then(
-                    choice((
-                        just(Token::ControlChar('+')),
-                        just(Token::ControlChar('-')),
-                    ))
-                    .then(prod.clone())
-                    .repeated()
-                    .collect::<Vec<_>>(),
+                    choice((just(Token::ControlChar('+')), just(Token::ControlChar('-'))))
+                        .then(prod.clone())
+                        .repeated()
+                        .collect::<Vec<_>>(),
                 )
                 .map(|(init, additional)| {
                     additional.into_iter().fold(init, |acc, (op, x)| {
@@ -882,10 +878,18 @@ where
                     additional.into_iter().fold(init, |acc, (op, x)| {
                         let span = acc.1.union(x.1);
                         let new_expr = match op {
-                            Token::ControlChar('<') => ValueExpr::LessThan(Box::new(acc), Box::new(x)),
-                            Token::LessThanOrEquals => ValueExpr::LessThanOrEquals(Box::new(acc), Box::new(x)),
-                            Token::ControlChar('>') => ValueExpr::GreaterThan(Box::new(acc), Box::new(x)),
-                            Token::GreaterThanOrEquals => ValueExpr::GreaterThanOrEquals(Box::new(acc), Box::new(x)),
+                            Token::ControlChar('<') => {
+                                ValueExpr::LessThan(Box::new(acc), Box::new(x))
+                            }
+                            Token::LessThanOrEquals => {
+                                ValueExpr::LessThanOrEquals(Box::new(acc), Box::new(x))
+                            }
+                            Token::ControlChar('>') => {
+                                ValueExpr::GreaterThan(Box::new(acc), Box::new(x))
+                            }
+                            Token::GreaterThanOrEquals => {
+                                ValueExpr::GreaterThanOrEquals(Box::new(acc), Box::new(x))
+                            }
                             _ => unreachable!(),
                         };
                         (new_expr, span)
@@ -951,16 +955,9 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            choice((
-                inline_go,
-                assignment,
-                or,
-                declaration,
-                pen,
-                atom,
-            ))
-            .labelled("expression")
-            .boxed()
+            choice((inline_go, assignment, or, declaration, pen, atom))
+                .labelled("expression")
+                .boxed()
         },
     )
 }
@@ -2973,9 +2970,18 @@ mod tests {
             ("4 * 5", mul(int(4), int(5))),
             ("20 / 4", div(int(20), int(4))),
             ("21 % 5", r#mod(int(21), int(5))),
-            ("2 + 3 * 4", add(int(2), mul(int(3), int(4)).into_empty_span().into())),
-            ("10 - 8 / 2", sub(int(10), div(int(8), int(2)).into_empty_span().into())),
-            ("1 + 10 % 3", add(int(1), r#mod(int(10), int(3)).into_empty_span().into())),
+            (
+                "2 + 3 * 4",
+                add(int(2), mul(int(3), int(4)).into_empty_span().into()),
+            ),
+            (
+                "10 - 8 / 2",
+                sub(int(10), div(int(8), int(2)).into_empty_span().into()),
+            ),
+            (
+                "1 + 10 % 3",
+                add(int(1), r#mod(int(10), int(3)).into_empty_span().into()),
+            ),
             (
                 "10 - 2 + 3",
                 add(sub(int(10), int(2)).into_empty_span().into(), int(3)),
@@ -2987,12 +2993,9 @@ mod tests {
             (
                 "10 * 2 / 5 * 3",
                 mul(
-                    div(
-                        mul(int(10), int(2)).into_empty_span().into(),
-                        int(5),
-                    )
-                    .into_empty_span()
-                    .into(),
+                    div(mul(int(10), int(2)).into_empty_span().into(), int(5))
+                        .into_empty_span()
+                        .into(),
                     int(3),
                 ),
             ),
@@ -3024,50 +3027,62 @@ mod tests {
                     ValueExpr::FunctionCall {
                         target: var("a"),
                         params: vec![],
-                        type_params: None
-                    }.into_empty_span().into(),
+                        type_params: None,
+                    }
+                    .into_empty_span()
+                    .into(),
                     mul(
                         ValueExpr::FunctionCall {
                             target: var("b"),
                             params: vec![],
-                            type_params: None
-                        }.into_empty_span().into(),
+                            type_params: None,
+                        }
+                        .into_empty_span()
+                        .into(),
                         ValueExpr::FunctionCall {
                             target: var("c"),
                             params: vec![],
-                            type_params: None
-                        }.into_empty_span().into(),
-                    ).into_empty_span().into()
-                )
+                            type_params: None,
+                        }
+                        .into_empty_span()
+                        .into(),
+                    )
+                    .into_empty_span()
+                    .into(),
+                ),
             ),
             (
                 "1 + (2 + (3 + 4))",
-                 add(
+                add(
                     int(1),
-                    add(
-                        int(2),
-                        add(int(3), int(4))
-                            .into_empty_span()
-                            .into()
-                    ).into_empty_span().into()
-                )
+                    add(int(2), add(int(3), int(4)).into_empty_span().into())
+                        .into_empty_span()
+                        .into(),
+                ),
             ),
             (
                 "1 * 2 + 3 * 4",
                 add(
                     mul(int(1), int(2)).into_empty_span().into(),
-                    mul(int(3), int(4)).into_empty_span().into()
-                )
-            )
+                    mul(int(3), int(4)).into_empty_span().into(),
+                ),
+            ),
         ];
 
         for (i, (src, expected_ast)) in test_cases.into_iter().enumerate() {
-            let lex_result = lex_parser("test", "").parse(src).into_result().unwrap_or_else(|_| panic!("Lexer failed on case {i}: '{src}'"));
+            let lex_result = lex_parser("test", "")
+                .parse(src)
+                .into_result()
+                .unwrap_or_else(|_| panic!("Lexer failed on case {i}: '{src}'"));
 
-            let parse_result = value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
+            let parse_result =
+                value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
 
             if parse_result.has_errors() {
-                panic!("parse failed for {i}: '{src}'. Errors: {:?}", parse_result.into_errors());
+                panic!(
+                    "parse failed for {i}: '{src}'. Errors: {:?}",
+                    parse_result.into_errors()
+                );
             }
 
             let mut output = parse_result.into_output().unwrap();
@@ -3086,25 +3101,42 @@ mod tests {
             ("5 >= 5", gte(int(5), int(5))),
             ("1 == 2", eq(int(1), int(2))),
             ("1 != 2", ne(int(1), int(2))),
-            ("true and false", and(ValueExpr::Bool(true).into_empty_span().into(), ValueExpr::Bool(false).into_empty_span().into())),
-            ("true or false", or(ValueExpr::Bool(true).into_empty_span().into(), ValueExpr::Bool(false).into_empty_span().into())),
-            ("1 + 2 < 4", lt(add(int(1), int(2)).into_empty_span().into(), int(4))),
+            (
+                "true and false",
+                and(
+                    ValueExpr::Bool(true).into_empty_span().into(),
+                    ValueExpr::Bool(false).into_empty_span().into(),
+                ),
+            ),
+            (
+                "true or false",
+                or(
+                    ValueExpr::Bool(true).into_empty_span().into(),
+                    ValueExpr::Bool(false).into_empty_span().into(),
+                ),
+            ),
+            (
+                "1 + 2 < 4",
+                lt(add(int(1), int(2)).into_empty_span().into(), int(4)),
+            ),
             (
                 "3 < 4 == true",
                 eq(
                     lt(int(3), int(4)).into_empty_span().into(),
-                    ValueExpr::Bool(true).into_empty_span().into()
-                )
+                    ValueExpr::Bool(true).into_empty_span().into(),
+                ),
             ),
             (
                 "true == true and false",
                 and(
                     eq(
                         ValueExpr::Bool(true).into_empty_span().into(),
-                        ValueExpr::Bool(true).into_empty_span().into()
-                    ).into_empty_span().into(),
-                    ValueExpr::Bool(false).into_empty_span().into()
-                )
+                        ValueExpr::Bool(true).into_empty_span().into(),
+                    )
+                    .into_empty_span()
+                    .into(),
+                    ValueExpr::Bool(false).into_empty_span().into(),
+                ),
             ),
             (
                 "false or true and true",
@@ -3112,25 +3144,34 @@ mod tests {
                     ValueExpr::Bool(false).into_empty_span().into(),
                     and(
                         ValueExpr::Bool(true).into_empty_span().into(),
-                        ValueExpr::Bool(true).into_empty_span().into()
-                    ).into_empty_span().into()
-                )
+                        ValueExpr::Bool(true).into_empty_span().into(),
+                    )
+                    .into_empty_span()
+                    .into(),
+                ),
             ),
             (
                 "1 < 2 and 3 > 1",
                 and(
                     lt(int(1), int(2)).into_empty_span().into(),
-                    gt(int(3), int(1)).into_empty_span().into()
-                )
+                    gt(int(3), int(1)).into_empty_span().into(),
+                ),
             ),
         ];
 
         for (i, (src, expected_ast)) in test_cases.into_iter().enumerate() {
-            let lex_result = lex_parser("test", "").parse(src).into_result().unwrap_or_else(|_| panic!("Lexer failed on case {i}: '{src}'"));
+            let lex_result = lex_parser("test", "")
+                .parse(src)
+                .into_result()
+                .unwrap_or_else(|_| panic!("Lexer failed on case {i}: '{src}'"));
 
-            let parse_result = value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
+            let parse_result =
+                value_expr_parser(make_input).parse(make_input(empty_range(), &lex_result));
             if parse_result.has_errors() {
-                panic!("parse failed for {i}: '{src}'. Errors: {:?}", parse_result.into_errors());
+                panic!(
+                    "parse failed for {i}: '{src}'. Errors: {:?}",
+                    parse_result.into_errors()
+                );
             }
 
             let mut output = parse_result.into_output().unwrap();

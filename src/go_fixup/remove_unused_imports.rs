@@ -28,10 +28,8 @@ pub fn cleanup_go_source(go_source: &str, remove_exported: bool) -> String {
 
     let tree = parser.parse(go_source, None).unwrap();
 
-    let (declarations, _imports, _package_usages) = analyze_source(
-        tree.root_node(),
-        go_source.as_bytes()
-    );
+    let (declarations, _imports, _package_usages) =
+        analyze_source(tree.root_node(), go_source.as_bytes());
 
     let live_set = calculate_live_set(&declarations, remove_exported);
 
@@ -43,10 +41,7 @@ pub fn cleanup_go_source(go_source: &str, remove_exported: bool) -> String {
         }
     }
 
-    let cleaned_source = drain_ranges(
-        go_source,
-        ranges_to_delete
-    );
+    let cleaned_source = drain_ranges(go_source, ranges_to_delete);
 
     remove_unused_imports(&cleaned_source)
 }

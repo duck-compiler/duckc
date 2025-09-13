@@ -3,7 +3,14 @@ use lazy_static::lazy_static;
 use std::{ffi::OsString, fs, path::PathBuf};
 
 use crate::{
-    cli::go_cli::{self, GoCliErrKind}, dargo::cli::CompileArgs, emit::ir::join_ir, go_fixup::remove_unused_imports::{cleanup_go_source, remove_unused_imports}, lex, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
+    DARGO_DOT_DIR,
+    cli::go_cli::{self, GoCliErrKind},
+    dargo::cli::CompileArgs,
+    emit::ir::join_ir,
+    go_fixup::remove_unused_imports::{cleanup_go_source, remove_unused_imports},
+    lex, parse_src_file,
+    tags::Tag,
+    typecheck, write_in_duck_dotdir,
 };
 
 #[derive(Debug)]
@@ -23,9 +30,7 @@ pub struct CompileOutput {
     pub binary_path: PathBuf,
 }
 
-pub fn compile(
-    compile_args: CompileArgs,
-) -> Result<CompileOutput, (String, CompileErrKind)> {
+pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, CompileErrKind)> {
     let src_file: PathBuf = compile_args.file;
     let binary_output_name: Option<String> = compile_args.output_name;
 
@@ -106,8 +111,7 @@ pub fn compile(
     let mut type_env = typecheck(&mut src_file_ast);
     let mut go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env));
     go_code = cleanup_go_source(&go_code, true);
-        // go_code = remove_unused_imports(&go_code)
-
+    // go_code = remove_unused_imports(&go_code)
 
     let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.go").as_str(), &go_code);
     if compile_args.optimize_go {
@@ -125,11 +129,12 @@ pub fn compile(
         target_file
     };
 
-    go_cli::build(&compile_output_target, &go_output_file)
-        .map_err(|err| (
+    go_cli::build(&compile_output_target, &go_output_file).map_err(|err| {
+        (
             format!("{}{}", *COMPILE_TAG, err.0),
             CompileErrKind::GoCli(err.1),
-        ))?;
+        )
+    })?;
 
     println!(
         "{}{}{} Successfully compiled binary",
@@ -139,6 +144,6 @@ pub fn compile(
     );
 
     return Ok(CompileOutput {
-        binary_path: compile_output_target
+        binary_path: compile_output_target,
     });
 }
