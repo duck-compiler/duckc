@@ -1587,10 +1587,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     println!("{} insert type definitions", Tag::TypeResolve);
 
-    println!(
-        "source file struct defs: {}",
-        source_file.struct_definitions.len()
-    );
     // Step 2: Insert type definitions
     source_file
         .struct_definitions

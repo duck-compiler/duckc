@@ -571,7 +571,7 @@ impl TypeExpr {
                     }
 
                     possible_types.iter().for_each(|possible_type| {
-                        let is_covered = dbg!(&covered_types).iter().any(|(x, _)| *x == possible_type.0);
+                        let is_covered = &covered_types.iter().any(|(x, _)| *x == possible_type.0);
                         if !is_covered {
                             let missing_type = possible_type;
                             failure_with_occurence(

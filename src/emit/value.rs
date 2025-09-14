@@ -1007,7 +1007,7 @@ impl ValueExpr {
                         .collect::<Vec<_>>();
 
                     if !conditional_branches.is_empty() {
-                        the_one.conditional_branches = Some(dbg!(conditional_branches));
+                        the_one.conditional_branches = Some(conditional_branches);
                     }
 
                     merged_cases.push(the_one);
