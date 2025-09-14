@@ -7,18 +7,11 @@ use chumsky::container::Container;
 
 use crate::{
     parse::{
-        SS, Spanned,
-        duckx_component_parser::DuckxComponent,
-        function_parser::{FunctionDefintion, LambdaFunctionExpr},
-        source_file_parser::SourceFile,
-        struct_parser::StructDefinition,
-        tsx_component_parser::{
-            Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
-        },
-        type_parser::{Duck, TypeDefinition, TypeExpr},
-        value_parser::{
+        duckx_component_parser::DuckxComponent, function_parser::{FunctionDefintion, LambdaFunctionExpr}, source_file_parser::SourceFile, struct_parser::StructDefinition, tsx_component_parser::{
+            do_edits, Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit
+        }, type_parser::{Duck, TypeDefinition, TypeExpr}, value_parser::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
-        },
+        }, Spanned, SpannedMutRef, SS
     },
     semantics::ident_mangler::mangle,
     tags::Tag,
@@ -35,7 +28,7 @@ fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
     type_env.push_identifier_types();
     type_env.insert_identifier_type("props".to_string(), c.props_type.0.clone());
     type_env.all_types.push(c.props_type.0.clone());
-    typeresolve_value_expr(&mut c.value_expr.0, type_env);
+    typeresolve_value_expr((&mut c.value_expr.0, c.value_expr.1), type_env);
     type_env.pop_identifier_types();
 }
 
@@ -812,15 +805,22 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
             value_expr,
             arms,
             else_arm,
+            span: _
         } => {
             replace_generics_in_value_expr(&mut value_expr.0, set_params);
             for arm in arms {
                 replace_generics_in_type_expr(&mut arm.type_case.0, set_params);
+                if let Some(condition) = &mut arm.condition {
+                    replace_generics_in_value_expr(&mut condition.0, set_params);
+                }
                 replace_generics_in_value_expr(&mut arm.value_expr.0, set_params);
             }
 
             if let Some(arm) = else_arm {
                 replace_generics_in_type_expr(&mut arm.type_case.0, set_params);
+                if let Some(condition) = &mut arm.condition {
+                    replace_generics_in_value_expr(&mut condition.0, set_params);
+                }
                 replace_generics_in_value_expr(&mut arm.value_expr.0, set_params);
             }
         }
@@ -1248,6 +1248,7 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
             value_expr,
             arms,
             else_arm,
+            span: _
         } => {
             instantiate_generics_value_expr(&mut value_expr.0, type_env);
             for arm in arms {
@@ -1388,15 +1389,22 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
             value_expr,
             arms,
             else_arm,
+            span: _
         } => {
             sort_fields_value_expr(&mut value_expr.0);
             for arm in arms {
                 sort_fields_type_expr(&mut arm.type_case.0);
+                if let Some(condition) = &mut arm.condition {
+                    sort_fields_value_expr(&mut condition.0);
+                }
                 sort_fields_value_expr(&mut arm.value_expr.0);
             }
 
             if let Some(arm) = else_arm {
                 sort_fields_type_expr(&mut arm.type_case.0);
+                if let Some(condition) = &mut arm.condition {
+                    sort_fields_value_expr(&mut condition.0);
+                }
                 sort_fields_value_expr(&mut arm.value_expr.0);
             }
         }
@@ -1525,7 +1533,7 @@ pub fn typeresolve_struct_def(def: &mut StructDefinition, type_env: &mut TypeEnv
         }
 
         type_env.insert_identifier_type("self".to_string(), TypeExpr::Struct(def.name.clone()));
-        typeresolve_value_expr(&mut m.value_expr.0, type_env);
+        typeresolve_value_expr((&mut m.value_expr.0, m.value_expr.1), type_env);
         if m.name == "fisch" {
             println!(
                 "method resolve {} {} {:?}",
@@ -1825,16 +1833,18 @@ fn typeresolve_function_definition(
         }
     }
 
-    typeresolve_value_expr(&mut function_definition.value_expr.0, type_env);
+    typeresolve_value_expr((&mut function_definition.value_expr.0, function_definition.value_expr.1), type_env);
     type_env.pop_identifier_types();
 }
 
-fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
+fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+    let span = &value_expr.1;
+    let value_expr = value_expr.0;
     match value_expr {
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {
-                    typeresolve_value_expr(&mut e.0, type_env);
+                    typeresolve_value_expr((&mut e.0, e.1), type_env);
                 }
             }
         }
@@ -1854,17 +1864,17 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 resolve_all_aliases_type_expr(&mut type_expr.0, type_env);
                 type_env.insert_identifier_type(declaration.name.clone(), type_expr.0.clone());
             } else {
-                let type_expr = TypeExpr::from_value_expr(&declaration.initializer.0, type_env);
+                let type_expr = TypeExpr::from_value_expr(&declaration.initializer, type_env);
                 declaration.type_expr = Some((type_expr.clone(), declaration.initializer.1));
                 type_env.insert_identifier_type(declaration.name.clone(), type_expr);
             }
 
-            typeresolve_value_expr(&mut declaration.initializer.0, type_env);
+            typeresolve_value_expr((&mut declaration.initializer.0, declaration.initializer.1), type_env);
         }
         ValueExpr::FormattedString(contents) => {
             for c in contents {
                 match c {
-                    ValFmtStringContents::Expr(e) => typeresolve_value_expr(&mut e.0, type_env),
+                    ValFmtStringContents::Expr(e) => typeresolve_value_expr((&mut e.0, e.1), type_env),
                     ValFmtStringContents::String(s) => {
                         type_env.insert_type(TypeExpr::ConstString(s.clone()));
                     }
@@ -1872,8 +1882,10 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             }
         }
         ValueExpr::ArrayAccess(target, idx) => {
-            typeresolve_value_expr(&mut target.0, type_env);
-            typeresolve_value_expr(&mut idx.0, type_env);
+            let target = target.as_mut();
+            let idx = idx.as_mut();
+            typeresolve_value_expr((&mut target.0, target.1), type_env);
+            typeresolve_value_expr((&mut idx.0, target.1), type_env);
         }
         ValueExpr::Array(ty, exprs) => {
             if let Some(ty) = ty {
@@ -1884,9 +1896,9 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 if let Some(ty) = ty {
                     replace_if_const(&ty.0, &mut expr.0);
                 }
-                typeresolve_value_expr(&mut expr.0, type_env);
+                typeresolve_value_expr((&mut expr.0, expr.1), type_env);
             }
-            let ty = TypeExpr::from_value_expr(value_expr as &ValueExpr, type_env);
+            let ty = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
             type_env.insert_type(ty);
         }
         ValueExpr::InlineGo(..) => {}
@@ -1908,7 +1920,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 resolve_all_aliases_type_expr(&mut return_type.0, type_env);
             }
 
-            typeresolve_value_expr(&mut value_expr.0, type_env);
+            typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
             type_env.pop_identifier_types();
         }
         ValueExpr::FunctionCall {
@@ -1916,7 +1928,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             params,
             type_params,
         } => {
-            typeresolve_value_expr(&mut target.0, type_env);
+            typeresolve_value_expr((&mut target.0, target.1), type_env);
 
             let header: FunHeader;
 
@@ -1928,7 +1940,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 } = &mut target.0
             {
                 let target_ty =
-                    TypeExpr::from_value_expr_resolved_type_name(&target_obj.0, type_env);
+                    TypeExpr::from_value_expr_resolved_type_name(&target_obj, type_env);
 
                 let TypeExpr::Struct(struct_name) = target_ty else {
                     panic!()
@@ -2038,7 +2050,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                     *type_params = None;
                 }
             } else {
-                let TypeExpr::Fun(params, ret) = TypeExpr::from_value_expr(&target.0, type_env)
+                let TypeExpr::Fun(params, ret) = TypeExpr::from_value_expr(&target, type_env)
                 else {
                     panic!("not a func??")
                 };
@@ -2060,7 +2072,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
                 .zip(header.params.iter())
                 .for_each(|(param, param_def)| {
                     replace_if_const(&param_def.0, &mut param.0);
-                    typeresolve_value_expr(&mut param.0, type_env);
+                    typeresolve_value_expr((&mut param.0, param.1), type_env);
                 });
         }
         ValueExpr::Variable(_, identifier, type_expr_opt) => {
@@ -2079,41 +2091,41 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             then,
             r#else,
         } => {
-            typeresolve_value_expr(&mut condition.0, type_env);
+            typeresolve_value_expr((&mut condition.0, condition.1), type_env);
             type_env.push_identifier_types();
-            typeresolve_value_expr(&mut then.0, type_env);
+            typeresolve_value_expr((&mut then.0, then.1), type_env);
             type_env.pop_identifier_types();
             if let Some(r#else) = r#else {
                 type_env.push_identifier_types();
-                typeresolve_value_expr(&mut r#else.0, type_env);
+                typeresolve_value_expr((&mut r#else.0, r#else.1), type_env);
                 type_env.pop_identifier_types();
             }
         }
         ValueExpr::While { condition, body } => {
-            typeresolve_value_expr(&mut condition.0, type_env);
+            typeresolve_value_expr((&mut condition.0, condition.1), type_env);
             type_env.push_identifier_types();
-            typeresolve_value_expr(&mut body.0, type_env);
+            typeresolve_value_expr((&mut body.0, body.1), type_env);
             type_env.pop_identifier_types();
         }
         ValueExpr::Tuple(value_exprs) => {
             value_exprs
                 .iter_mut()
-                .for_each(|value_expr| typeresolve_value_expr(&mut value_expr.0, type_env));
-            let ty = TypeExpr::from_value_expr(value_expr as &ValueExpr, type_env);
+                .for_each(|value_expr| typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env));
+            let ty = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
             type_env.insert_type(ty);
         }
         ValueExpr::Block(value_exprs) => {
             type_env.push_identifier_types();
             value_exprs
                 .iter_mut()
-                .for_each(|value_expr| typeresolve_value_expr(&mut value_expr.0, type_env));
+                .for_each(|value_expr| typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env));
             type_env.pop_identifier_types();
         }
         ValueExpr::Duck(items) => {
             items
                 .iter_mut()
-                .for_each(|(_, value_expr)| typeresolve_value_expr(&mut value_expr.0, type_env));
-            let ty = TypeExpr::from_value_expr(value_expr as &ValueExpr, type_env);
+                .for_each(|(_, value_expr)| typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env));
+            let ty = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
             type_env.insert_type(ty);
         }
         ValueExpr::Struct {
@@ -2133,30 +2145,31 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
             fields.iter_mut().zip(def.fields.iter()).for_each(
                 |((_field_name, value_expr), field_def)| {
                     replace_if_const(&field_def.type_expr.0, &mut value_expr.0);
-                    typeresolve_value_expr(&mut value_expr.0, type_env);
+                    typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
                 },
             );
 
-            let ty = TypeExpr::from_value_expr(value_expr as &ValueExpr, type_env);
+            let ty = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
             type_env.insert_type(ty);
         }
         ValueExpr::FieldAccess { target_obj, .. } => {
-            typeresolve_value_expr(&mut target_obj.0, type_env);
+            let target_obj = target_obj.as_mut();
+            typeresolve_value_expr((&mut target_obj.0, target_obj.1), type_env);
         }
-        ValueExpr::Return(Some(value_expr)) => typeresolve_value_expr(&mut value_expr.0, type_env),
+        ValueExpr::Return(Some(value_expr)) => typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env),
         ValueExpr::VarAssign(assignment) => {
-            typeresolve_value_expr(&mut assignment.0.target.0, type_env);
-            let target_type = TypeExpr::from_value_expr(&assignment.0.target.0, type_env);
+            typeresolve_value_expr((&mut assignment.0.target.0, assignment.0.target.1), type_env);
+            let target_type = TypeExpr::from_value_expr(&assignment.0.target, type_env);
             replace_if_const(&target_type, &mut assignment.0.value_expr.0);
-            typeresolve_value_expr(&mut assignment.0.value_expr.0, type_env);
+            typeresolve_value_expr((&mut assignment.0.value_expr.0, assignment.0.value_expr.1), type_env);
         }
         ValueExpr::Add(lhs, rhs)
         | ValueExpr::Sub(lhs, rhs)
         | ValueExpr::Div(lhs, rhs)
         | ValueExpr::Mul(lhs, rhs)
         | ValueExpr::Mod(lhs, rhs) => {
-            typeresolve_value_expr(&mut lhs.0, type_env);
-            typeresolve_value_expr(&mut rhs.0, type_env);
+            typeresolve_value_expr((&mut lhs.0, lhs.1), type_env);
+            typeresolve_value_expr((&mut rhs.0, lhs.1), type_env);
         }
         ValueExpr::Equals(lhs, rhs)
         | ValueExpr::NotEquals(lhs, rhs)
@@ -2166,33 +2179,40 @@ fn typeresolve_value_expr(value_expr: &mut ValueExpr, type_env: &mut TypeEnv) {
         | ValueExpr::GreaterThanOrEquals(lhs, rhs)
         | ValueExpr::And(lhs, rhs)
         | ValueExpr::Or(lhs, rhs) => {
-            typeresolve_value_expr(&mut lhs.0, type_env);
-            typeresolve_value_expr(&mut rhs.0, type_env);
+            typeresolve_value_expr((&mut lhs.0, lhs.1), type_env);
+            typeresolve_value_expr((&mut rhs.0, lhs.1), type_env);
         }
         ValueExpr::BoolNegate(value_expr) => {
-            typeresolve_value_expr(&mut value_expr.0, type_env);
+            typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
         }
         ValueExpr::Match {
             value_expr,
             arms,
             else_arm,
+            span: _
         } => {
-            typeresolve_value_expr(&mut value_expr.0, type_env);
+            typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
             arms.iter_mut().for_each(|arm| {
                 type_env.push_identifier_types();
                 if let Some(identifier) = &arm.identifier_binding {
                     type_env.insert_identifier_type(identifier.clone(), arm.type_case.0.clone());
+                    if let Some(condition) = &mut arm.condition {
+                        typeresolve_value_expr((&mut condition.0, condition.1), type_env);
+                    }
                 }
-                typeresolve_value_expr(&mut arm.value_expr.0, type_env);
+                typeresolve_value_expr((&mut arm.value_expr.0, arm.value_expr.1), type_env);
                 type_env.pop_identifier_types();
             });
 
             if let Some(arm) = else_arm {
                 type_env.push_identifier_types();
                 if let Some(identifier) = &arm.identifier_binding {
+                    if let Some(condition) = &mut arm.condition {
+                        typeresolve_value_expr((&mut condition.0, condition.1), type_env);
+                    }
                     type_env.insert_identifier_type(identifier.clone(), arm.type_case.0.clone());
                 }
-                typeresolve_value_expr(&mut arm.value_expr.0, type_env);
+                typeresolve_value_expr((&mut arm.value_expr.0, arm.value_expr.1), type_env);
                 type_env.pop_identifier_types();
             }
         }
@@ -2264,7 +2284,7 @@ fn resolve_implicit_function_return_type(
                 .iter()
                 .for_each(|item| flatten_returns(&item.0, return_types_found, type_env)),
             ValueExpr::Return(Some(value_expr)) => {
-                return_types_found.push(TypeExpr::from_value_expr(&value_expr.0, type_env));
+                return_types_found.push(TypeExpr::from_value_expr(&value_expr, type_env));
             }
             ValueExpr::Return(None) => {
                 return_types_found.push(TypeExpr::Tuple(vec![]));

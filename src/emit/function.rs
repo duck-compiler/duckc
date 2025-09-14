@@ -1,6 +1,6 @@
 use crate::{
     emit::value::{IrInstruction, ToIr},
-    parse::function_parser::FunctionDefintion,
+    parse::{function_parser::FunctionDefintion},
     semantics::type_resolve::TypeEnv,
 };
 
@@ -13,7 +13,7 @@ impl FunctionDefintion {
     ) -> IrInstruction {
         // what's r?
         // println!("value_body {:?}", self.value_expr.0);
-        let (mut emitted_body, _r) = self.value_expr.0.emit(type_env, to_ir);
+        let (mut emitted_body, _r) = self.value_expr.0.emit(type_env, to_ir, self.span);
 
         if let Some(IrInstruction::Block(block_body)) = emitted_body.first() {
             emitted_body = block_body.clone();

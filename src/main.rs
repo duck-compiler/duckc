@@ -46,6 +46,7 @@ pub mod go_fixup;
 pub mod parse;
 pub mod semantics;
 pub mod tags;
+pub mod reports;
 
 lazy_static! {
     static ref DUCK_STD_PATH: PathBuf = {
@@ -258,6 +259,7 @@ fn parse_src_file(
                 value_expr,
                 arms,
                 else_arm,
+                span: _,
             } => {
                 typename_reset_global_value_expr(&mut value_expr.0);
                 for arm in arms {

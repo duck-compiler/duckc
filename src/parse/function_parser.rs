@@ -2,8 +2,7 @@ use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::{
     parse::{
-        SS, Spanned,
-        generics_parser::{Generic, generics_parser},
+        generics_parser::{generics_parser, Generic}, value_parser::empty_range, Spanned, SS
     },
     semantics::type_resolve::FunHeader,
 };
@@ -24,6 +23,7 @@ pub struct FunctionDefintion {
     pub params: Option<Vec<Param>>,
     pub value_expr: Spanned<ValueExpr>,
     pub generics: Option<Vec<Spanned<Generic>>>,
+    pub span: SS
 }
 
 impl FunctionDefintion {
@@ -66,6 +66,7 @@ impl Default for FunctionDefintion {
             params: Some(Default::default()),
             value_expr: ValueExpr::Block(vec![]).into_empty_span(),
             generics: None,
+            span: empty_range()
         }
     }
 }
@@ -107,8 +108,8 @@ where
         .then_ignore(just(Token::ControlChar(')')))
         .then(return_type_parser.or_not())
         .then(value_expr_parser(make_input))
-        .map(
-            |(((((has_sus, identifier), generics), params), return_type), mut value_expr)| {
+        .map_with(
+            |(((((has_sus, identifier), generics), params), return_type), mut value_expr), ctx| {
                 let is_sus = has_sus.is_some();
 
                 if is_sus && return_type.is_some() {
@@ -153,6 +154,7 @@ where
                     params,
                     value_expr,
                     generics,
+                    span: ctx.span()
                 }
             },
         )
@@ -232,6 +234,7 @@ pub mod tests {
                         empty_range(),
                     )]),
                     value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                    span: empty_range()
                 },
             ),
             (
@@ -255,6 +258,7 @@ pub mod tests {
                         ),
                     ]),
                     value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                    span: empty_range()
                 },
             ),
             (
@@ -284,6 +288,7 @@ pub mod tests {
                         ),
                     ]),
                     value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                    span: empty_range()
                 },
             ),
         ];
@@ -315,6 +320,7 @@ pub mod tests {
                     *generic = (generic.0.clone(), empty_range());
                 });
 
+            output.span = empty_range();
             output.value_expr = ValueExpr::Block(vec![]).into_empty_span();
 
             assert_eq!(output, expected_fns, "{i}: {}", src);

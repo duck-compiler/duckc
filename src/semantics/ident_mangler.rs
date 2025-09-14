@@ -378,6 +378,7 @@ pub fn mangle_value_expr(
             value_expr,
             arms,
             else_arm,
+            span: _
         } => {
             mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env);
             for arm in arms {

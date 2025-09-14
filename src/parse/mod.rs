@@ -28,6 +28,7 @@ pub struct Context {
 
 pub type SS = SimpleSpan<usize, Context>;
 pub type Spanned<T> = (T, SS);
+pub type SpannedMutRef<'a, T> = (&'a mut T, SS);
 
 #[derive(Debug, Clone)]
 pub struct Field {
