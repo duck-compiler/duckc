@@ -1,0 +1,7 @@
+fn main() {
+    let x: Int | String = "hello";
+    match x {
+        String @s => std::io::println(f"correct! - {s}"),
+        Int @i => std::io::println("wrong!"),
+    }
+}

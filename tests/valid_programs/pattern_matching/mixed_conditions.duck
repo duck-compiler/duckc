@@ -1,0 +1,10 @@
+fn main() {
+    let x: Int | String = 7;
+    match x {
+        String @s if s == "hello" => std::io::println("wrong!"),
+        String @s => std::io::println("wrong!"),
+        Int @i if i == 7 => std::io::println("correct!"),
+        Int @i if i > 5 => std::io::println("wrong!"),
+        Int @i => std::io::println("wrong!"),
+    }
+}

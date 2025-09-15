@@ -1,26 +1,26 @@
-use std::io::{debug};
+use std::io::{debug, println};
 
 struct Opt<T> = {
-    inner: T | "empty",
+    inner: T | .empty,
 } impl {
     fn filter(f: fn(x: T) -> Bool) -> Opt<T> {
         return match self.inner {
             T @ value => if (f(value)) { self } else { empty_opt<T>() },
-            "empty" => empty_opt<T>(),
+            .empty => empty_opt<T>(),
         };
     }
 
     fn map<U>(f: fn(x: T) -> U) -> Opt<U> {
         return match self.inner {
             T @ value => some<U>(f(value)),
-            "empty" => empty_opt<U>(),
+            .empty => empty_opt<U>(),
         };
     }
 
     fn is_empty() -> Bool {
         return match self.inner {
             T => false,
-            "empty" => true,
+            .empty => true,
         };
     }
 
@@ -32,29 +32,29 @@ struct Opt<T> = {
         return match self.inner {
             T @ first => match other.inner {
                 U @ second => some<(T, U)>((first, second)),
-                "empty" => empty_opt<(T, U)>(),
+                .empty => empty_opt<(T, U)>(),
             },
-            "empty" => empty_opt<(T, U)>(),
+            .empty => empty_opt<(T, U)>(),
         };
     }
 
     fn unwrap() -> T {
         match self.inner {
             T @ val => return val,
-            "empty" => std::error::panic("empty optional"),
+            .empty => std::error::panic("empty optional"),
         }
     }
 
     fn expect(s: String) -> T {
         match self.inner {
             T @ val => return val,
-            "empty" => std::error::panic(s),
+            .empty => std::error::panic(s),
         }
     }
 };
 
 fn empty_opt<T>() -> Opt<T> {
-    return Opt<T> { inner: "empty" };
+    return Opt<T> { inner: .empty };
 }
 
 fn some<T>(v: T) -> Opt<T> {
