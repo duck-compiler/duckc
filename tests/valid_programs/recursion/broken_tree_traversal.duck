@@ -1,0 +1,37 @@
+type TreeNode = {
+    value: Int,
+    left: TreeNode | .none,
+    right: TreeNode | .none,
+};
+
+fn sum_tree(node: TreeNode | .none) -> Int {
+    match node {
+        TreeNode @n => n.value + sum_tree(n.left) + sum_tree(n.right),
+        .none => 0,
+    }
+}
+
+fn main() {
+    std::io::println("Testing recursive tree traversal");
+    std::io::println("Tree structure: 1 -> (2, 3)");
+    std::io::println("Expected sum: 6 (1 + 2 + 3)");
+    
+    let tree: TreeNode = TreeNode {
+        value: 1,
+        left: TreeNode {
+            value: 2,
+            left: .none,
+            right: .none,
+        },
+        right: TreeNode {
+            value: 3,
+            left: .none,
+            right: .none,
+        },
+    };
+    
+    let sum: Int = sum_tree(tree);
+    
+    std::io::println("Actual sum:");
+    sum->std::string::from_int()->std::io::println();
+}

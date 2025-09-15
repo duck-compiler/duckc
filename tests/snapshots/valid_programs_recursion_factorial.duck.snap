@@ -1,0 +1,4 @@
+{
+    "stdout": "Testing factorial function\nComputing factorial(5)\nExpected result: 120 (5! = 5*4*3*2*1)\nActual result:\n120\n",
+    "stderr": ""
+}

@@ -1,0 +1,15 @@
+fn main() {
+    let counter: Int = 0;
+    let max: Int = 5;
+    
+    std::io::println("Testing while loop from 0 to 4");
+    std::io::println("Expected output: 0, 1, 2, 3, 4, then 'Loop finished'");
+    std::io::println("Actual output:");
+    
+    while (counter < max) {
+        counter->std::string::from_int()->std::io::println();
+        counter = counter + 1;
+    }
+    
+    std::io::println("Loop finished");
+}

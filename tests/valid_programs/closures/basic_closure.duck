@@ -1,0 +1,18 @@
+fn create_multiplier(factor: Int) -> fn(x: Int) -> Int {
+    return fn(x: Int) -> Int {
+        return x * factor;
+    };
+}
+
+fn main() {
+    std::io::println("Testing basic closure creation");
+    std::io::println("Creating multiplier with factor 3");
+    std::io::println("Calling multiply_by_3(5)");
+    std::io::println("Expected result: 15 (5 * 3)");
+    
+    let multiply_by_3: fn(x: Int) -> Int = create_multiplier(3);
+    let result: Int = multiply_by_3(5);
+    
+    std::io::println("Actual result:");
+    result->std::string::from_int()->std::io::println();
+}

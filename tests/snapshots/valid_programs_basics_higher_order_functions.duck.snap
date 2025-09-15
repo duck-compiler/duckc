@@ -1,0 +1,4 @@
+{
+    "stdout": "Testing higher-order functions (map and filter)\nInput array: [1, 2, 3, 4, 5]\nMap: multiply each by 2\nExpected: [2, 4, 6, 8, 10]\nActual result:\n2\n4\n6\n8\n10\nFilter: keep only even numbers\nExpected: [2, 4]\nActual result:\n2\n4\n",
+    "stderr": ""
+}

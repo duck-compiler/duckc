@@ -1,0 +1,4 @@
+{
+    "stdout": "Testing while loop with array [1, 2, 3, 4, 5]\nExpected sum: 15\nActual sum:\n15\n",
+    "stderr": ""
+}

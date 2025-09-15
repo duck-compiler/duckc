@@ -1,0 +1,4 @@
+{
+    "stdout": "Testing closure capture\nCreating counter with captured variable\nExpected sequence: 0, 1, 2\nInitial count:\n0\nAfter first increment:\n1\nAfter second increment:\n2\n",
+    "stderr": ""
+}

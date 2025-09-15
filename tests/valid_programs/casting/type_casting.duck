@@ -1,0 +1,24 @@
+fn main() {
+    std::io::println("Testing type casting");
+    
+    let int_val: Int = 42;
+    std::io::println("Original int value: 42");
+    
+    let string_val: String = int_val->std::string::from_int();
+    std::io::println("Int to string:");
+    string_val->std::io::println();
+    std::io::println("Expected: '42'");
+    
+    let back_to_int: Int = string_val->std::string::to_int();
+    std::io::println("String back to int:");
+    back_to_int->std::string::from_int()->std::io::println();
+    std::io::println("Expected: 42");
+    
+    let bool_val: Bool = true;
+    std::io::println("Original bool value: true");
+    
+    let bool_string: String = bool_val->std::string::from_bool();
+    std::io::println("Bool to string:");
+    bool_string->std::io::println();
+    std::io::println("Expected: 'true'");
+}
