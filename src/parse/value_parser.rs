@@ -295,6 +295,7 @@ where
                 .then(match_arm_identifier_binding)
                 .then_ignore(just(Token::ThickArrow))
                 .then(value_expr_parser.clone())
+                .then_ignore(just(Token::ControlChar(',')).or_not())
                 // todo: add span of else
                 .map_with(|((_, identifier), value_expr), ctx| MatchArm {
                     // todo: check if typeexpr::any is correct for the else arm in pattern matching
