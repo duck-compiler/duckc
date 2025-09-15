@@ -79,7 +79,7 @@ pub struct Case {
     pub instrs: Vec<IrInstruction>,
     pub identifier_binding: Option<String>,
     pub condition: Option<Spanned<ValueExpr>>,
-    pub conditional_branches: Option<Vec<(IrValue, Case)>>,
+    pub conditional_branches: Option<Vec<((Vec<IrInstruction>, Option<IrValue>), Case)>>,
     pub span: SS,
 }
 
@@ -923,7 +923,7 @@ impl ValueExpr {
 
                 let mut cases = Vec::new();
                 for arm in arms {
-                    let type_name = arm.type_case.0.as_go_concrete_annotation(type_env);
+                    let type_name = arm.type_case.0.as_go_type_annotation(type_env);
 
                     let (mut arm_instrs, arm_res) =
                         arm.value_expr.0.direct_or_with_instr(type_env, env, span.clone());
@@ -977,6 +977,7 @@ impl ValueExpr {
                         .collect::<Vec<_>>();
 
                     if case.condition.is_none() && matching_cases.is_empty() && else_arm.is_none() {
+                        merged_cases.push(case.clone());
                         continue;
                     }
 
@@ -999,10 +1000,10 @@ impl ValueExpr {
 
                     let mut the_one = the_one.unwrap_or_else(|| case).clone();
                     let conditional_branches = cases.iter()
-                        .filter(|case| case.condition.is_some())
+                        .filter(|case| case.condition.is_some() && case.type_name == the_one.type_name)
                         .map(|case| {
                             let cond = case.condition.as_ref().unwrap().clone();
-                            (cond.0.emit(type_env, env, cond.1).1.expect("compiler error: we expect that it is an ir value"), case.clone())
+                            (cond.0.emit(type_env, env, case.span), case.clone())
                         })
                         .collect::<Vec<_>>();
 
@@ -1013,6 +1014,7 @@ impl ValueExpr {
                     merged_cases.push(the_one);
                 }
 
+                dbg!(&merged_cases);
                 let cases = merged_cases;
 
                 instructions.push(IrInstruction::SwitchType(match_on_value, cases));
