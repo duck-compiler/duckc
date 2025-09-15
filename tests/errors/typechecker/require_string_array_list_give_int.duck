@@ -1,0 +1,3 @@
+fn main() {
+    let x: std::col::ArrayList<String> = 5;
+}

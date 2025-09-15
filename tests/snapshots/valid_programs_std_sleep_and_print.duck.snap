@@ -1,0 +1,4 @@
+{
+    "stdout": "before sleep\nafter sleep\n{20}\n{20}\nnot equal\n",
+    "stderr": ""
+}
