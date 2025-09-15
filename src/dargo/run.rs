@@ -1,7 +1,7 @@
 use colored::Colorize;
 use lazy_static::lazy_static;
-use std::io::ErrorKind as IOErrKind;
-use std::process::Command;
+use std::io::{self, ErrorKind as IOErrKind, Write};
+use std::process::{Command, Stdio};
 
 use crate::dargo::cli::{CompileArgs, RunArgs};
 use crate::dargo::compile::{CompileErrKind, compile};
@@ -54,10 +54,27 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
         })?;
 
         Command::new(full_path_name.clone())
-            .output()
+            .spawn()
             .map_err(|err| {
                 (
-                    format!("{}{} couldn't spawn duck process", Tag::IO, Tag::Err),
+                    format!(
+                        "{}{}{} couldn't spawn duck process",
+                        Tag::Run,
+                        Tag::IO,
+                        Tag::Err
+                    ),
+                    RunErrKind::IOErr(err.kind()),
+                )
+            })?
+            .wait()
+            .map_err(|err| {
+                (
+                    format!(
+                        "{}{}{} couldn't wait for process",
+                        Tag::Run,
+                        Tag::IO,
+                        Tag::Err
+                    ),
                     RunErrKind::IOErr(err.kind()),
                 )
             })?;
@@ -102,11 +119,23 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
     })?;
 
     Command::new(full_path_name.clone())
-        .output()
+        .spawn()
         .map_err(|err| {
             (
                 format!(
                     "{}{}{} couldn't spawn duck process",
+                    Tag::Run,
+                    Tag::IO,
+                    Tag::Err
+                ),
+                RunErrKind::IOErr(err.kind()),
+            )
+        })?
+        .wait()
+        .map_err(|err| {
+            (
+                format!(
+                    "{}{}{} couldn't wait for process",
                     Tag::Run,
                     Tag::IO,
                     Tag::Err
