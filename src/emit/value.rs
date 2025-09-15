@@ -2000,7 +2000,16 @@ mod tests {
                     decl("var_0", "DuckInt"),
                     IrInstruction::SwitchType(
                         IrValue::Int(1),
-                        vec![], // they're popped out
+                        vec![Case {
+                            type_name: "DuckInt".to_string(),
+                            instrs: vec![
+                                IrInstruction::VarAssignment("var_0".to_string(), IrValue::Int(2))
+                            ],
+                            identifier_binding: Some("x".to_string()),
+                            condition: None,
+                            conditional_branches: None,
+                            span: empty_range()
+                        }],
                     ),
                 ],
             ),
@@ -2017,7 +2026,14 @@ mod tests {
                     decl("var_1", "DuckInt"),
                     IrInstruction::SwitchType(
                         IrValue::Var("var_0".into()),
-                        vec![], // they're popped out
+                        vec![Case {
+                            type_name: "DuckInt".to_string(),
+                            instrs: vec![IrInstruction::VarAssignment("var_1".to_string(), IrValue::Int(100))],
+                            identifier_binding: Some("x".to_string()),
+                            condition: None,
+                            conditional_branches: None,
+                            span: empty_range()
+                        }],
                     ),
                 ],
             ),

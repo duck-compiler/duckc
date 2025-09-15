@@ -21,67 +21,88 @@ impl IrInstruction {
                 )
             }
             IrInstruction::SwitchType(against, type_cases) => {
-                // todo: should this be mangled???? LOLOLOLO I DON"T THINK SO
-                fn emit_case_go(case: &Case, actual: &str) -> String {
+                fn emit_case_go(case: &Case, actual: &str, else_case: Option<&Case>) -> String {
+                    fn format_case_output(case: &Case, instructions: &[IrInstruction]) -> String {
+                        format!(
+                            "case {}: {{\n{}\nbreak\n}}",
+                            case.type_name,
+                            instructions.iter()
+                                .map(|instr| instr.emit_as_go())
+                                .collect::<Vec<_>>()
+                                .join("\n")
+                        )
+                    }
                     if case.type_name == "__else" {
                         let ir_instructions = case.instrs
                             .iter()
                             .map(|ir| ir.emit_as_go())
                             .collect::<Vec<_>>()
                             .join("\n");
-
                         return format!("default: {{ {ir_instructions}\nbreak; }}")
                     }
 
-                    if let Some(branches) = &case.conditional_branches && branches.is_empty() {
-                        let branches = case.conditional_branches
-                            .clone()
-                            .expect("compiler error: wtf we've just checked that it some");
-
-                        let head = branches.first().expect("compiler error: this shouldn't be empty if not none");
-                        let mut main_if = IrInstruction::If(
-                            head.0.clone(),
-                            head.1.instrs.clone(),
-                            None,
-                        );
-
-                        let mut last_ref = &mut main_if;
-
-                        for branch in branches {
-                            let IrInstruction::If(_, _, r#else) = last_ref else { unreachable!("compiler error: this should never occur, if") };
-                            let next_if = IrInstruction::If(branch.0, branch.1.instrs, None);
-                            *r#else = Some(vec![next_if]);
-                            last_ref = r#else.as_mut().unwrap().first_mut().unwrap();
+                    let mut instructions = vec![];
+                    let type_name = case.type_name.clone();
+                    
+                    let Some(branches) = &case.conditional_branches else {
+                        if let Some(identifier) = &case.identifier_binding {
+                            instructions.push(IrInstruction::VarDecl(identifier.clone(), type_name.clone()));
+                            instructions.push(IrInstruction::VarAssignment(identifier.clone(), IrValue::Imm(format!("{actual}.({type_name})"))));
                         }
-
-                        let IrInstruction::If(_, _, r#else) = last_ref else { unreachable!("compiler error: this should never occur, last if") };
-                        *r#else = Some(case.instrs.clone());
-
-                        return format!(
-                            "case {}: {{\n{}\nbreak\n}}",
-                            case.type_name,
-                            main_if.emit_as_go()
-                        )
+                        instructions.extend(case.instrs.clone());
+                        return format_case_output(case, &instructions);
+                    };
+                    
+                    if branches.is_empty() {
+                        if let Some(identifier) = &case.identifier_binding {
+                            instructions.push(IrInstruction::VarDecl(identifier.clone(), type_name.clone()));
+                            instructions.push(IrInstruction::VarAssignment(identifier.clone(), IrValue::Imm(format!("{actual}.({type_name})"))));
+                        }
+                        instructions.extend(case.instrs.clone());
+                        return format_case_output(case, &instructions);
+                    }
+                    
+                    for branch in branches {
+                        let mut block_instructions = vec![];
+                        
+                        if let Some(identifier) = &branch.1.identifier_binding {
+                            block_instructions.push(IrInstruction::VarDecl(identifier.clone(), type_name.clone()));
+                            block_instructions.push(IrInstruction::VarAssignment(identifier.clone(), IrValue::Imm(format!("{actual}.({type_name})"))));
+                        }
+                        
+                        block_instructions.extend(branch.0.0.clone());
+                        
+                        let mut if_body = branch.1.instrs.clone();
+                        if_body.push(IrInstruction::Break);
+                        
+                        block_instructions.push(IrInstruction::If(branch.0.1.clone().expect("compiler error: we expect that there's an value"), if_body, None));
+                        
+                        instructions.push(IrInstruction::Block(block_instructions));
                     }
 
-                    return format!(
-                        "case {}: {{\n{}\nbreak\n}}",
-                        case.type_name,
-                        case.instrs.iter()
-                            .map(|ir| ir.emit_as_go())
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    )
+                    if let Some(else_case) = else_case {
+                        let Some(last_instruction) = instructions.last_mut() else { return format_case_output(case, &instructions); };
+                        let IrInstruction::Block(block_instrs) = last_instruction else { return format_case_output(case, &instructions); };
+                        let Some(last_block_instr) = block_instrs.last_mut() else { return format_case_output(case, &instructions); };
+                        let IrInstruction::If(_, _, else_branch) = last_block_instr else { return format_case_output(case, &instructions); };
+                        *else_branch = Some(else_case.instrs.clone());
+                    }
+                    
+                    format_case_output(case, &instructions)
                 }
+
+                let else_case = type_cases.iter().find(|case| case.type_name == "__else");
+                
+                let processed_cases: Vec<String> = type_cases
+                    .iter()
+                    .filter(|case| case.type_name != "__else")
+                    .map(|case| emit_case_go(case, &against.emit_as_go(), else_case))
+                    .collect();
 
                 format!(
                     "switch {}.(type) {{\n{}\n}}",
                     against.emit_as_go(),
-                    type_cases
-                        .iter()
-                        .map(|case| emit_case_go(case, &against.emit_as_go()))
-                        .collect::<Vec<_>>()
-                        .join("\n"),
+                    processed_cases.join("\n"),
                 )
             }
             IrInstruction::GoPackage(s) => format!("package {s}"),
