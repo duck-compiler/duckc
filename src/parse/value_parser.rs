@@ -17,7 +17,7 @@ pub struct MatchArm {
     pub identifier_binding: Option<String>,
     pub condition: Option<Spanned<ValueExpr>>,
     pub value_expr: Spanned<ValueExpr>,
-    pub span: SS
+    pub span: SS,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -115,7 +115,7 @@ pub enum ValueExpr {
         value_expr: Box<Spanned<ValueExpr>>,
         arms: Vec<MatchArm>,
         else_arm: Option<Box<MatchArm>>,
-        span: SS
+        span: SS,
     },
     FormattedString(Vec<ValFmtStringContents>),
 }
@@ -288,7 +288,7 @@ where
                     identifier_binding: identifier.clone().map(|x| x.0),
                     condition: identifier.map(|x| x.1).unwrap_or_else(|| None),
                     value_expr,
-                    span: ctx.span()
+                    span: ctx.span(),
                 });
 
             let else_arm = just(Token::Else)
@@ -303,7 +303,7 @@ where
                     identifier_binding: identifier.clone().map(|x| x.0),
                     condition: identifier.map(|x| x.1).unwrap_or_else(|| None),
                     value_expr,
-                    span: ctx.span()
+                    span: ctx.span(),
                 });
 
             let r#match = just(Token::Match)
@@ -320,7 +320,7 @@ where
                     value_expr: Box::new(value_expr),
                     arms,
                     else_arm,
-                    span: ctx.span()
+                    span: ctx.span(),
                 })
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
@@ -1177,7 +1177,7 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
             value_expr,
             arms,
             else_arm,
-            span
+            span,
         } => {
             *span = empty_range();
 
@@ -2617,7 +2617,7 @@ mod tests {
                         span: empty_range(),
                     }],
                     else_arm: None,
-                    span: empty_range()
+                    span: empty_range(),
                 },
             ),
             (
@@ -2643,7 +2643,7 @@ mod tests {
                         },
                     ],
                     else_arm: None,
-                    span: empty_range()
+                    span: empty_range(),
                 },
             ),
             (
@@ -2669,7 +2669,7 @@ mod tests {
                         },
                     ],
                     else_arm: None,
-                    span: empty_range()
+                    span: empty_range(),
                 },
             ),
             (
@@ -2708,7 +2708,7 @@ mod tests {
                         },
                     ],
                     else_arm: None,
-                    span: empty_range()
+                    span: empty_range(),
                 },
             ),
             (
@@ -2769,7 +2769,7 @@ mod tests {
                                         span: empty_range(),
                                     }],
                                     else_arm: None,
-                                    span: empty_range()
+                                    span: empty_range(),
                                 }
                                 .into_empty_span(),
                             ])
@@ -2779,7 +2779,7 @@ mod tests {
                         },
                     ],
                     else_arm: None,
-                    span: empty_range()
+                    span: empty_range(),
                 },
             ),
         ];

@@ -66,10 +66,9 @@ pub fn failure_with_occurence(
         .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
         .with_message(&msg)
         .with_labels(labels.into_iter().map(|label2| {
-            Label::new((
-                label2.1.context.file_name,
-                label2.1.into_range()
-            )).with_message(label2.0).with_color(Color::Yellow)
+            Label::new((label2.1.context.file_name, label2.1.into_range()))
+                .with_message(label2.0)
+                .with_color(Color::Yellow)
         }))
         .finish()
         .eprint(sources([(file_name, src)]))

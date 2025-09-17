@@ -3,7 +3,16 @@ use lazy_static::lazy_static;
 use std::{ffi::OsString, fs, path::PathBuf};
 
 use crate::{
-    cli::go_cli::{self, GoCliErrKind}, dargo::cli::CompileArgs, emit::ir::join_ir, go_fixup::remove_unused_imports::cleanup_go_source, lex, parse::value_parser::empty_range, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
+    DARGO_DOT_DIR,
+    cli::go_cli::{self, GoCliErrKind},
+    dargo::cli::CompileArgs,
+    emit::ir::join_ir,
+    go_fixup::remove_unused_imports::cleanup_go_source,
+    lex,
+    parse::value_parser::empty_range,
+    parse_src_file,
+    tags::Tag,
+    typecheck, write_in_duck_dotdir,
 };
 
 #[derive(Debug)]

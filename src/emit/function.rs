@@ -1,6 +1,6 @@
 use crate::{
     emit::value::{IrInstruction, ToIr},
-    parse::{function_parser::FunctionDefintion},
+    parse::function_parser::FunctionDefintion,
     semantics::type_resolve::TypeEnv,
 };
 

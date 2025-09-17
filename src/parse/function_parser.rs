@@ -2,7 +2,9 @@ use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::{
     parse::{
-        generics_parser::{generics_parser, Generic}, value_parser::empty_range, Spanned, SS
+        SS, Spanned,
+        generics_parser::{Generic, generics_parser},
+        value_parser::empty_range,
     },
     semantics::type_resolve::FunHeader,
 };
@@ -23,7 +25,7 @@ pub struct FunctionDefintion {
     pub params: Option<Vec<Param>>,
     pub value_expr: Spanned<ValueExpr>,
     pub generics: Option<Vec<Spanned<Generic>>>,
-    pub span: SS
+    pub span: SS,
 }
 
 impl FunctionDefintion {
@@ -66,7 +68,7 @@ impl Default for FunctionDefintion {
             params: Some(Default::default()),
             value_expr: ValueExpr::Block(vec![]).into_empty_span(),
             generics: None,
-            span: empty_range()
+            span: empty_range(),
         }
     }
 }
@@ -154,7 +156,7 @@ where
                     params,
                     value_expr,
                     generics,
-                    span: ctx.span()
+                    span: ctx.span(),
                 }
             },
         )
@@ -234,7 +236,7 @@ pub mod tests {
                         empty_range(),
                     )]),
                     value_expr: ValueExpr::Block(vec![]).into_empty_span(),
-                    span: empty_range()
+                    span: empty_range(),
                 },
             ),
             (
@@ -258,7 +260,7 @@ pub mod tests {
                         ),
                     ]),
                     value_expr: ValueExpr::Block(vec![]).into_empty_span(),
-                    span: empty_range()
+                    span: empty_range(),
                 },
             ),
             (
@@ -288,7 +290,7 @@ pub mod tests {
                         ),
                     ]),
                     value_expr: ValueExpr::Block(vec![]).into_empty_span(),
-                    span: empty_range()
+                    span: empty_range(),
                 },
             ),
         ];

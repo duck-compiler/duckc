@@ -390,7 +390,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             value_expr,
             arms,
             else_arm,
-            span: _
+            span: _,
         } => {
             append_global_prefix_value_expr(&mut value_expr.0, mangle_env);
             for arm in arms {

@@ -7,11 +7,18 @@ use chumsky::container::Container;
 
 use crate::{
     parse::{
-        duckx_component_parser::DuckxComponent, function_parser::{FunctionDefintion, LambdaFunctionExpr}, source_file_parser::SourceFile, struct_parser::StructDefinition, tsx_component_parser::{
-            do_edits, Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit
-        }, type_parser::{Duck, TypeDefinition, TypeExpr}, value_parser::{
+        SS, Spanned, SpannedMutRef,
+        duckx_component_parser::DuckxComponent,
+        function_parser::{FunctionDefintion, LambdaFunctionExpr},
+        source_file_parser::SourceFile,
+        struct_parser::StructDefinition,
+        tsx_component_parser::{
+            Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
+        },
+        type_parser::{Duck, TypeDefinition, TypeExpr},
+        value_parser::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
-        }, Spanned, SpannedMutRef, SS
+        },
     },
     semantics::ident_mangler::mangle,
     tags::Tag,
@@ -805,7 +812,7 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
             value_expr,
             arms,
             else_arm,
-            span: _
+            span: _,
         } => {
             replace_generics_in_value_expr(&mut value_expr.0, set_params);
             for arm in arms {
@@ -1248,7 +1255,7 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
             value_expr,
             arms,
             else_arm,
-            span: _
+            span: _,
         } => {
             instantiate_generics_value_expr(&mut value_expr.0, type_env);
             for arm in arms {
@@ -1389,7 +1396,7 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
             value_expr,
             arms,
             else_arm,
-            span: _
+            span: _,
         } => {
             sort_fields_value_expr(&mut value_expr.0);
             for arm in arms {
@@ -1829,7 +1836,13 @@ fn typeresolve_function_definition(
         }
     }
 
-    typeresolve_value_expr((&mut function_definition.value_expr.0, function_definition.value_expr.1), type_env);
+    typeresolve_value_expr(
+        (
+            &mut function_definition.value_expr.0,
+            function_definition.value_expr.1,
+        ),
+        type_env,
+    );
     type_env.pop_identifier_types();
 }
 
@@ -1865,12 +1878,17 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 type_env.insert_identifier_type(declaration.name.clone(), type_expr);
             }
 
-            typeresolve_value_expr((&mut declaration.initializer.0, declaration.initializer.1), type_env);
+            typeresolve_value_expr(
+                (&mut declaration.initializer.0, declaration.initializer.1),
+                type_env,
+            );
         }
         ValueExpr::FormattedString(contents) => {
             for c in contents {
                 match c {
-                    ValFmtStringContents::Expr(e) => typeresolve_value_expr((&mut e.0, e.1), type_env),
+                    ValFmtStringContents::Expr(e) => {
+                        typeresolve_value_expr((&mut e.0, e.1), type_env)
+                    }
                     ValFmtStringContents::String(s) => {
                         type_env.insert_type(TypeExpr::ConstString(s.clone()));
                     }
@@ -1935,8 +1953,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     field_name,
                 } = &mut target.0
             {
-                let target_ty =
-                    TypeExpr::from_value_expr_resolved_type_name(target_obj, type_env);
+                let target_ty = TypeExpr::from_value_expr_resolved_type_name(target_obj, type_env);
 
                 let TypeExpr::Struct(struct_name) = target_ty else {
                     panic!()
@@ -2046,8 +2063,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     *type_params = None;
                 }
             } else {
-                let TypeExpr::Fun(params, ret) = TypeExpr::from_value_expr(target, type_env)
-                else {
+                let TypeExpr::Fun(params, ret) = TypeExpr::from_value_expr(target, type_env) else {
                     panic!("not a func??")
                 };
                 header = FunHeader {
@@ -2104,23 +2120,23 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             type_env.pop_identifier_types();
         }
         ValueExpr::Tuple(value_exprs) => {
-            value_exprs
-                .iter_mut()
-                .for_each(|value_expr| typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env));
+            value_exprs.iter_mut().for_each(|value_expr| {
+                typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
+            });
             let ty = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
             type_env.insert_type(ty);
         }
         ValueExpr::Block(value_exprs) => {
             type_env.push_identifier_types();
-            value_exprs
-                .iter_mut()
-                .for_each(|value_expr| typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env));
+            value_exprs.iter_mut().for_each(|value_expr| {
+                typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
+            });
             type_env.pop_identifier_types();
         }
         ValueExpr::Duck(items) => {
-            items
-                .iter_mut()
-                .for_each(|(_, value_expr)| typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env));
+            items.iter_mut().for_each(|(_, value_expr)| {
+                typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
+            });
             let ty = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
             type_env.insert_type(ty);
         }
@@ -2152,12 +2168,20 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             let target_obj = target_obj.as_mut();
             typeresolve_value_expr((&mut target_obj.0, target_obj.1), type_env);
         }
-        ValueExpr::Return(Some(value_expr)) => typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env),
+        ValueExpr::Return(Some(value_expr)) => {
+            typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
+        }
         ValueExpr::VarAssign(assignment) => {
-            typeresolve_value_expr((&mut assignment.0.target.0, assignment.0.target.1), type_env);
+            typeresolve_value_expr(
+                (&mut assignment.0.target.0, assignment.0.target.1),
+                type_env,
+            );
             let target_type = TypeExpr::from_value_expr(&assignment.0.target, type_env);
             replace_if_const(&target_type, &mut assignment.0.value_expr.0);
-            typeresolve_value_expr((&mut assignment.0.value_expr.0, assignment.0.value_expr.1), type_env);
+            typeresolve_value_expr(
+                (&mut assignment.0.value_expr.0, assignment.0.value_expr.1),
+                type_env,
+            );
         }
         ValueExpr::Add(lhs, rhs)
         | ValueExpr::Sub(lhs, rhs)
@@ -2185,7 +2209,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             value_expr,
             arms,
             else_arm,
-            span: _
+            span: _,
         } => {
             typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
             arms.iter_mut().for_each(|arm| {

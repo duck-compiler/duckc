@@ -165,18 +165,14 @@ where
                 .ignore_then(just(Token::ControlChar('(')))
                 .ignore_then(function_fields)
                 .then_ignore(just(Token::ControlChar(')')))
-                .then(
-                    just(Token::ThinArrow)
-                        .ignore_then(p.clone())
-                        .or_not()
-                )
+                .then(just(Token::ThinArrow).ignore_then(p.clone()).or_not())
                 .map(|(fields, return_type)| {
                     TypeExpr::Fun(
                         fields
                             .iter()
                             .map(|field| (Some(field.0.clone()), field.1.clone()))
                             .collect::<Vec<_>>(),
-                        return_type.map(Box::new)
+                        return_type.map(Box::new),
                     )
                 });
 
@@ -331,18 +327,14 @@ where
                 .ignore_then(just(Token::ControlChar('(')))
                 .ignore_then(function_fields)
                 .then_ignore(just(Token::ControlChar(')')))
-                .then(
-                    just(Token::ThinArrow)
-                        .ignore_then(p.clone())
-                        .or_not()
-                )
+                .then(just(Token::ThinArrow).ignore_then(p.clone()).or_not())
                 .map(|(fields, return_type)| {
                     TypeExpr::Fun(
                         fields
                             .iter()
                             .map(|field| (Some(field.0.clone()), field.1.clone()))
                             .collect::<Vec<_>>(),
-                        return_type.map(Box::new)
+                        return_type.map(Box::new),
                     )
                 });
 
@@ -580,7 +572,6 @@ impl Display for Duck {
         write!(f, " }}")
     }
 }
-
 
 #[cfg(test)]
 pub mod tests {

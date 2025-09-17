@@ -1,9 +1,18 @@
-use std::{collections::{HashMap, HashSet, VecDeque}, panic};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    panic,
+};
 
 use crate::{
     emit::types::escape_string_for_go,
     parse::{
-        duckx_component_parser::find_client_components, failure_with_occurence, function_parser::LambdaFunctionExpr, struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}, value_parser::{Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Spanned, SS
+        SS, Spanned,
+        duckx_component_parser::find_client_components,
+        failure_with_occurence,
+        function_parser::LambdaFunctionExpr,
+        struct_parser::StructDefinition,
+        type_parser::{Duck, TypeExpr},
+        value_parser::{Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr},
     },
     semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
 };
@@ -46,9 +55,9 @@ pub enum IrInstruction {
     Return(Option<IrValue>),
     InlineGo(String),
     If(
-        IrValue, // bool_value
-        Vec<IrInstruction>, // body
-        Option<Vec<IrInstruction>> // else
+        IrValue,                    // bool_value
+        Vec<IrInstruction>,         // body
+        Option<Vec<IrInstruction>>, // else
     ),
     Loop(Vec<IrInstruction>),
     Block(Vec<IrInstruction>),
@@ -115,8 +124,11 @@ pub enum IrValue {
 impl IrValue {
     pub fn empty_tuple() -> Self {
         Self::Tuple(
-            TypeExpr::from_value_expr(&ValueExpr::Tuple(vec![]).into_empty_span(), &mut TypeEnv::default())
-                .as_go_type_annotation(&mut TypeEnv::default()),
+            TypeExpr::from_value_expr(
+                &ValueExpr::Tuple(vec![]).into_empty_span(),
+                &mut TypeEnv::default(),
+            )
+            .as_go_type_annotation(&mut TypeEnv::default()),
             vec![],
         )
     }
@@ -190,8 +202,7 @@ fn walk_access(
                 target_obj,
                 field_name,
             } => {
-                let type_expr =
-                    TypeExpr::from_value_expr_resolved_type_name(&target_obj, type_env);
+                let type_expr = TypeExpr::from_value_expr_resolved_type_name(&target_obj, type_env);
                 match type_expr {
                     TypeExpr::Tuple(..) => s.push_front(format!("field_{field_name}")),
                     TypeExpr::Duck(Duck { fields }) => {
@@ -460,7 +471,8 @@ impl ValueExpr {
                                                     html_str.push_str(&s)
                                                 }
                                                 ValHtmlStringContents::Expr(e) => {
-                                                    let (e_instr, e_res) = e.0.emit(type_env, env, e.1);
+                                                    let (e_instr, e_res) =
+                                                        e.0.emit(type_env, env, e.1);
                                                     instr.extend(e_instr);
                                                     if let Some(e_res) = e_res {
                                                         let IrValue::Var(e_res) = e_res else {
@@ -565,7 +577,8 @@ impl ValueExpr {
                                                     let current_param_name =
                                                         current_param.expect("no param provided");
                                                     current_param = None;
-                                                    let (e_instr, e_res) = e.0.emit(type_env, env, e.1);
+                                                    let (e_instr, e_res) =
+                                                        e.0.emit(type_env, env, e.1);
                                                     instr.extend(e_instr);
                                                     if let Some(e_res) = e_res {
                                                         let IrValue::Var(e_res) = e_res else {
@@ -903,7 +916,7 @@ impl ValueExpr {
                 value_expr,
                 arms,
                 else_arm,
-                span
+                span,
             } => {
                 let (mut instructions, match_on_res) =
                     value_expr.0.direct_or_with_instr(type_env, env, *span);
@@ -912,7 +925,8 @@ impl ValueExpr {
                     None => return (instructions, None),
                 };
 
-                let result_type = TypeExpr::from_value_expr(&(self.clone(), value_expr.1), type_env);
+                let result_type =
+                    TypeExpr::from_value_expr(&(self.clone(), value_expr.1), type_env);
                 let result_type_annotation = result_type.as_go_type_annotation(type_env);
 
                 let result_var_name = env.new_var();
@@ -941,10 +955,9 @@ impl ValueExpr {
                         identifier_binding: arm.identifier_binding.clone(),
                         condition: arm.condition.clone(),
                         conditional_branches: None,
-                        span: arm.span
+                        span: arm.span,
                     });
                 }
-
 
                 if let Some(arm) = else_arm {
                     let _type_name = arm.type_case.0.as_clean_go_type_name(type_env);
@@ -963,13 +976,16 @@ impl ValueExpr {
                         identifier_binding: arm.identifier_binding.clone(),
                         condition: arm.condition.clone(),
                         conditional_branches: None,
-                        span: arm.span
+                        span: arm.span,
                     });
                 }
 
                 let mut merged_cases = vec![];
                 for case in cases.clone().iter_mut() {
-                    if merged_cases.iter().any(|other_case: &Case| other_case.type_name == case.type_name) {
+                    if merged_cases
+                        .iter()
+                        .any(|other_case: &Case| other_case.type_name == case.type_name)
+                    {
                         continue;
                     }
 
@@ -983,9 +999,10 @@ impl ValueExpr {
                         continue;
                     }
 
-                    let the_one = cases
-                        .iter()
-                        .find(|hopefully_the_one| hopefully_the_one.type_name == case.type_name && hopefully_the_one.condition.is_none());
+                    let the_one = cases.iter().find(|hopefully_the_one| {
+                        hopefully_the_one.type_name == case.type_name
+                            && hopefully_the_one.condition.is_none()
+                    });
 
                     if the_one.is_none() && else_arm.is_none() {
                         failure_with_occurence(
@@ -993,16 +1010,28 @@ impl ValueExpr {
                             "Unexhaustive Match".to_string(),
                             *span,
                             vec![
-                                (format!("this only partially covers {} and you're not having an else branch", case.type_name), case.span),
-                                ("not all possibilites are covered by this match".to_string(), *span),
+                                (
+                                    format!(
+                                        "this only partially covers {} and you're not having an else branch",
+                                        case.type_name
+                                    ),
+                                    case.span,
+                                ),
+                                (
+                                    "not all possibilites are covered by this match".to_string(),
+                                    *span,
+                                ),
                             ],
-                            span.context.file_contents
+                            span.context.file_contents,
                         );
                     }
 
                     let mut the_one = the_one.unwrap_or(case).clone();
-                    let conditional_branches = cases.iter()
-                        .filter(|case| case.condition.is_some() && case.type_name == the_one.type_name)
+                    let conditional_branches = cases
+                        .iter()
+                        .filter(|case| {
+                            case.condition.is_some() && case.type_name == the_one.type_name
+                        })
                         .map(|case| {
                             let cond = case.condition.as_ref().unwrap().clone();
                             (cond.0.emit(type_env, env, case.span), case.clone())
@@ -1050,7 +1079,8 @@ impl ValueExpr {
                 res_instr.extend(idx_instr);
 
                 let res_type =
-                    TypeExpr::from_value_expr(&(self.clone(), target.as_ref().1), type_env).as_go_type_annotation(type_env);
+                    TypeExpr::from_value_expr(&(self.clone(), target.as_ref().1), type_env)
+                        .as_go_type_annotation(type_env);
                 let res_var_name = env.new_var();
 
                 res_instr.push(IrInstruction::VarDecl(res_var_name.clone(), res_type));
@@ -1115,7 +1145,8 @@ impl ValueExpr {
             }
             ValueExpr::InlineGo(s) => (vec![IrInstruction::InlineGo(s.clone())], None),
             ValueExpr::While { condition, body } => {
-                let (mut cond_instr, cond_res) = condition.0.direct_or_with_instr(type_env, env, span);
+                let (mut cond_instr, cond_res) =
+                    condition.0.direct_or_with_instr(type_env, env, span);
                 if cond_res.is_none() {
                     return (cond_instr, None);
                 }
@@ -1174,7 +1205,10 @@ impl ValueExpr {
             }
             ValueExpr::VarAssign(b) => {
                 let assign = &b.0;
-                let (i, res) = assign.value_expr.0.direct_or_with_instr(type_env, env, span);
+                let (i, res) = assign
+                    .value_expr
+                    .0
+                    .direct_or_with_instr(type_env, env, span);
                 if let Some(a_res) = res {
                     let target = &assign.target.0;
                     let mut res = Vec::new();
@@ -1219,14 +1253,16 @@ impl ValueExpr {
                         }
                     } else if let ValueExpr::ArrayAccess(target, idx) = target {
                         //todo(@Apfelfrosch) handle indices of type ! properly (do it in rest of emit too)
-                        let (idx_instr, Some(IrValue::Var(idx_res))) = idx.0.emit(type_env, env, idx.1)
+                        let (idx_instr, Some(IrValue::Var(idx_res))) =
+                            idx.0.emit(type_env, env, idx.1)
                         else {
                             panic!("no var: {idx:?}")
                         };
 
                         res.extend(idx_instr);
 
-                        let (walk_instr, walk_res) = walk_access(target.0.clone(), type_env, env, span);
+                        let (walk_instr, walk_res) =
+                            walk_access(target.0.clone(), type_env, env, span);
                         res.extend(walk_instr);
                         let target_res = match walk_res {
                             Some(s) => s,
@@ -1327,7 +1363,8 @@ impl ValueExpr {
                         res_var = None;
                         continue;
                     }
-                    let (block_instr, block_res) = block_expr.direct_or_with_instr(type_env, env, span);
+                    let (block_instr, block_res) =
+                        block_expr.direct_or_with_instr(type_env, env, span);
 
                     for current in block_instr.iter() {
                         res_instr.push(current.clone());
@@ -1346,7 +1383,8 @@ impl ValueExpr {
                 }
 
                 let mut final_instr = Vec::new();
-                let self_return_type = TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env);
+                let self_return_type =
+                    TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env);
                 if !self_return_type.is_unit() {
                     let fresvar = env.new_var();
 
@@ -1369,11 +1407,12 @@ impl ValueExpr {
             ValueExpr::Tuple(fields) => {
                 let mut res = Vec::new();
                 let mut res_vars = Vec::new();
-                let name =
-                    TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env).as_go_type_annotation(type_env);
+                let name = TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env)
+                    .as_go_type_annotation(type_env);
 
                 for (field_expr, _) in fields {
-                    let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, env, span);
+                    let (field_instr, field_res) =
+                        field_expr.direct_or_with_instr(type_env, env, span);
                     res.extend(field_instr);
                     if let Some(field_res) = field_res {
                         res_vars.push(field_res);
@@ -1428,7 +1467,8 @@ impl ValueExpr {
 
                 let mut instr = Vec::new();
                 if res.is_none() {
-                    let (walk_instr, walk_res) = walk_access(v_target.0.clone(), type_env, env, span);
+                    let (walk_instr, walk_res) =
+                        walk_access(v_target.0.clone(), type_env, env, span);
                     if walk_res.is_none() {
                         return (instr, None);
                     }
@@ -1448,8 +1488,7 @@ impl ValueExpr {
                     }
                 }
 
-                let TypeExpr::Fun(_, return_type) =
-                    TypeExpr::from_value_expr(v_target, type_env)
+                let TypeExpr::Fun(_, return_type) = TypeExpr::from_value_expr(v_target, type_env)
                 else {
                     panic!("can only call function")
                 };
@@ -1773,13 +1812,14 @@ impl ValueExpr {
                 }
             }
             ValueExpr::Duck(fields) => {
-                let name =
-                    TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env).as_clean_go_type_name(type_env);
+                let name = TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env)
+                    .as_clean_go_type_name(type_env);
 
                 let mut res = Vec::new();
                 let mut res_vars = Vec::new();
                 for (field_name, (field_expr, _)) in fields {
-                    let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, env, span);
+                    let (field_instr, field_res) =
+                        field_expr.direct_or_with_instr(type_env, env, span);
                     res.extend(field_instr);
                     if let Some(field_res) = field_res {
                         res_vars.push((field_name.clone(), field_res));
@@ -1792,7 +1832,8 @@ impl ValueExpr {
                 res.extend([
                     IrInstruction::VarDecl(
                         res_var.clone(),
-                        TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env).as_go_type_annotation(type_env),
+                        TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env)
+                            .as_go_type_annotation(type_env),
                     ),
                     IrInstruction::VarAssignment(res_var.clone(), IrValue::Duck(name, res_vars)),
                 ]);
@@ -1800,13 +1841,14 @@ impl ValueExpr {
                 (res, as_rvar(res_var))
             }
             ValueExpr::Struct { fields, .. } => {
-                let name =
-                    TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env).as_clean_go_type_name(type_env);
+                let name = TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env)
+                    .as_clean_go_type_name(type_env);
 
                 let mut res = Vec::new();
                 let mut res_vars = Vec::new();
                 for (field_name, (field_expr, _)) in fields {
-                    let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, env, span);
+                    let (field_instr, field_res) =
+                        field_expr.direct_or_with_instr(type_env, env, span);
                     res.extend(field_instr);
                     if let Some(field_res) = field_res {
                         res_vars.push((field_name.clone(), field_res));
@@ -1825,7 +1867,8 @@ impl ValueExpr {
             }
             ValueExpr::Tag(..) => {
                 let type_name =
-                    TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env).as_clean_go_type_name(type_env);
+                    TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env)
+                        .as_clean_go_type_name(type_env);
 
                 let mut res = Vec::new();
                 let res_var = env.new_var();
@@ -2004,13 +2047,14 @@ mod tests {
                         IrValue::Int(1),
                         vec![Case {
                             type_name: "DuckInt".to_string(),
-                            instrs: vec![
-                                IrInstruction::VarAssignment("var_0".to_string(), IrValue::Int(2))
-                            ],
+                            instrs: vec![IrInstruction::VarAssignment(
+                                "var_0".to_string(),
+                                IrValue::Int(2),
+                            )],
                             identifier_binding: Some("x".to_string()),
                             condition: None,
                             conditional_branches: None,
-                            span: empty_range()
+                            span: empty_range(),
                         }],
                     ),
                 ],
@@ -2030,11 +2074,14 @@ mod tests {
                         IrValue::Var("var_0".into()),
                         vec![Case {
                             type_name: "DuckInt".to_string(),
-                            instrs: vec![IrInstruction::VarAssignment("var_1".to_string(), IrValue::Int(100))],
+                            instrs: vec![IrInstruction::VarAssignment(
+                                "var_1".to_string(),
+                                IrValue::Int(100),
+                            )],
                             identifier_binding: Some("x".to_string()),
                             condition: None,
                             conditional_branches: None,
-                            span: empty_range()
+                            span: empty_range(),
                         }],
                     ),
                 ],
@@ -2046,12 +2093,13 @@ mod tests {
 
             let mut parsed = value_expr_parser(make_input)
                 .parse(make_input(empty_range(), &lexed))
-                .unwrap()
-                ;
+                .unwrap();
 
             value_expr_into_empty_range(&mut parsed);
 
-            let ir = parsed.0.emit(&mut TypeEnv::default(), &mut ToIr::default(), empty_range());
+            let ir = parsed
+                .0
+                .emit(&mut TypeEnv::default(), &mut ToIr::default(), empty_range());
             assert_eq!(exp, ir.0, "{src}");
         }
     }

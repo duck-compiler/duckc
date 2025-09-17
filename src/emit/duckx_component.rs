@@ -1,6 +1,6 @@
 use crate::{
     emit::value::{IrInstruction, ToIr},
-    parse::{duckx_component_parser::DuckxComponent, SS},
+    parse::{SS, duckx_component_parser::DuckxComponent},
     semantics::type_resolve::TypeEnv,
 };
 

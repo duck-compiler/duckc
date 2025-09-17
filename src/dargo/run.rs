@@ -1,6 +1,6 @@
 use colored::Colorize;
 use lazy_static::lazy_static;
-use std::io::{ErrorKind as IOErrKind};
+use std::io::ErrorKind as IOErrKind;
 use std::process::Command;
 
 use crate::dargo::cli::{CompileArgs, RunArgs};

@@ -150,9 +150,7 @@ impl TypeExpr {
             }
             ValueExpr::Break => TypeExpr::Tuple(vec![]),
             ValueExpr::Continue => TypeExpr::Tuple(vec![]),
-            ValueExpr::Return(Some(value_expr)) => {
-                TypeExpr::from_value_expr(value_expr, type_env)
-            }
+            ValueExpr::Return(Some(value_expr)) => TypeExpr::from_value_expr(value_expr, type_env),
             ValueExpr::Return(None) => TypeExpr::Any, // TODO return never !
             ValueExpr::VarAssign(_assignment) => TypeExpr::Tuple(vec![]),
             ValueExpr::VarDecl(decl) => {
@@ -193,7 +191,10 @@ impl TypeExpr {
                     .map(|(name, (value_expr, span))| {
                         Field::new(
                             name.to_string(),
-                            (TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env), *span),
+                            (
+                                TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env),
+                                *span,
+                            ),
                         )
                     })
                     .collect::<Vec<Field>>();
@@ -245,7 +246,10 @@ impl TypeExpr {
                     .map(|(name, (value_expr, span))| {
                         Field::new(
                             name.to_string(),
-                            (TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env), *span),
+                            (
+                                TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env),
+                                *span,
+                            ),
                         )
                     })
                     .collect::<Vec<Field>>();
@@ -464,10 +468,7 @@ impl TypeExpr {
             }
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(
-                    &(
-                        TypeExpr::from_value_expr(bool_expr, type_env),
-                        bool_expr.1,
-                    ),
+                    &(TypeExpr::from_value_expr(bool_expr, type_env), bool_expr.1),
                     &TypeExpr::Bool.into_empty_span(),
                     type_env,
                 );
@@ -539,7 +540,7 @@ impl TypeExpr {
                 value_expr,
                 arms,
                 else_arm,
-                span: _
+                span: _,
             } => {
                 let mut arms = arms.clone();
                 if let Some(arm) = else_arm {
@@ -578,16 +579,18 @@ impl TypeExpr {
                                 complete_span.context.file_name,
                                 "Unexhaustive Match".to_string(),
                                 *complete_span,
-                                vec![
-                                    (format!("possible type {} not covered", format!("{}", missing_type.0).bright_yellow()), *complete_span),
-                                ],
-                                complete_span.context.file_contents
+                                vec![(
+                                    format!(
+                                        "possible type {} not covered",
+                                        format!("{}", missing_type.0).bright_yellow()
+                                    ),
+                                    *complete_span,
+                                )],
+                                complete_span.context.file_contents,
                             );
                         }
                     });
                 }
-
-
 
                 if arm_types.is_empty() {
                     TypeExpr::Tuple(vec![])
@@ -1506,11 +1509,7 @@ mod test {
 
             let mut type_expr = (
                 TypeExpr::from_value_expr(
-                    &source_file
-                        .function_definitions
-                        .get(0)
-                        .unwrap()
-                        .value_expr,
+                    &source_file.function_definitions.get(0).unwrap().value_expr,
                     &mut type_env,
                 ),
                 empty_range(),
