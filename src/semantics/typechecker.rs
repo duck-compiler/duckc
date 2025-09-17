@@ -54,7 +54,7 @@ impl TypeExpr {
                         require(
                             // matches!(TypeExpr::from_value_expr(&e.0, type_env), TypeExpr::String) ||
                             // matches!(TypeExpr::from_value_expr(&e.0, type_env), TypeExpr::ConstString(..)),
-                            TypeExpr::from_value_expr(&e, type_env).is_string(),
+                            TypeExpr::from_value_expr(e, type_env).is_string(),
                             "Needs to be string".into(),
                         );
                     }
@@ -62,8 +62,8 @@ impl TypeExpr {
                 TypeExpr::String
             }
             ValueExpr::ArrayAccess(target, idx) => {
-                let target_type = TypeExpr::from_value_expr(&target, type_env);
-                let idx_type = TypeExpr::from_value_expr(&idx, type_env);
+                let target_type = TypeExpr::from_value_expr(target, type_env);
+                let idx_type = TypeExpr::from_value_expr(idx, type_env);
 
                 require(target_type.is_array(), "Needs to be array".into());
                 require(idx_type.is_int(), "Needs to be int".into());
@@ -78,10 +78,10 @@ impl TypeExpr {
                 if let Some(type_support) = optional_type_support {
                     for value_expr in value_exprs {
                         let type_expr = &(
-                            TypeExpr::from_value_expr(&value_expr, type_env),
+                            TypeExpr::from_value_expr(value_expr, type_env),
                             value_expr.1,
                         );
-                        check_type_compatability(&type_support, type_expr, type_env);
+                        check_type_compatability(type_support, type_expr, type_env);
                     }
 
                     return TypeExpr::Array(Box::new(type_support.clone()));
@@ -91,7 +91,7 @@ impl TypeExpr {
                     .iter()
                     .map(|value_expr| {
                         (
-                            TypeExpr::from_value_expr(&value_expr, type_env).unconst(),
+                            TypeExpr::from_value_expr(value_expr, type_env).unconst(),
                             value_expr.1,
                         )
                     })
@@ -151,7 +151,7 @@ impl TypeExpr {
             ValueExpr::Break => TypeExpr::Tuple(vec![]),
             ValueExpr::Continue => TypeExpr::Tuple(vec![]),
             ValueExpr::Return(Some(value_expr)) => {
-                TypeExpr::from_value_expr(&value_expr, type_env)
+                TypeExpr::from_value_expr(value_expr, type_env)
             }
             ValueExpr::Return(None) => TypeExpr::Any, // TODO return never !
             ValueExpr::VarAssign(_assignment) => TypeExpr::Tuple(vec![]),
@@ -181,7 +181,7 @@ impl TypeExpr {
                     )
                 }
 
-                let type_expr = type_env.try_resolve_type_expr(&type_env.resolve_type_alias(&name));
+                let type_expr = type_env.try_resolve_type_expr(&type_env.resolve_type_alias(name));
                 let TypeExpr::Struct(struct_def) = type_expr else {
                     panic!("is not a struct");
                 };
@@ -231,7 +231,7 @@ impl TypeExpr {
                         // maybe we need a way to tell that it should be consted here. e.g.
                         //  `(5,"hallo")`
                         (
-                            TypeExpr::from_value_expr(&value_expr, type_env).unconst(),
+                            TypeExpr::from_value_expr(value_expr, type_env).unconst(),
                             value_expr.1,
                         )
                     })
@@ -253,8 +253,8 @@ impl TypeExpr {
                 TypeExpr::Duck(Duck { fields: types })
             }
             ValueExpr::Add(left, right) => {
-                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&left, type_env);
-                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(&right, type_env);
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left, type_env);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right, type_env);
 
                 require(
                     left_type_expr.is_number(),
@@ -274,8 +274,8 @@ impl TypeExpr {
                 left_type_expr
             }
             ValueExpr::Sub(left, right) => {
-                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&left, type_env);
-                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(&right, type_env);
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left, type_env);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right, type_env);
 
                 require(
                     left_type_expr.is_number(),
@@ -295,8 +295,8 @@ impl TypeExpr {
                 left_type_expr
             }
             ValueExpr::Mod(left, right) => {
-                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&left, type_env);
-                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(&right, type_env);
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left, type_env);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right, type_env);
 
                 require(
                     left_type_expr.is_number(),
@@ -316,8 +316,8 @@ impl TypeExpr {
                 left_type_expr
             }
             ValueExpr::Div(left, right) => {
-                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&left, type_env);
-                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(&right, type_env);
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left, type_env);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right, type_env);
 
                 require(
                     left_type_expr.is_number(),
@@ -344,8 +344,8 @@ impl TypeExpr {
             | ValueExpr::GreaterThanOrEquals(lhs, rhs)
             | ValueExpr::And(lhs, rhs)
             | ValueExpr::Or(lhs, rhs) => {
-                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&lhs, type_env);
-                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(&rhs, type_env);
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(lhs, type_env);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(rhs, type_env);
 
                 check_type_compatability(
                     &(left_type_expr.clone(), lhs.1),
@@ -356,8 +356,8 @@ impl TypeExpr {
                 TypeExpr::Bool
             }
             ValueExpr::Mul(left, right) => {
-                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(&left, type_env);
-                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(&right, type_env);
+                let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left, type_env);
+                let right_type_expr: TypeExpr = TypeExpr::from_value_expr(right, type_env);
 
                 require(
                     left_type_expr.is_number(),
@@ -384,10 +384,10 @@ impl TypeExpr {
                 // todo: type_params
                 let in_param_types = params
                     .iter()
-                    .map(|param| (TypeExpr::from_value_expr(&param, type_env), param.1))
+                    .map(|param| (TypeExpr::from_value_expr(param, type_env), param.1))
                     .collect::<Vec<_>>();
 
-                let target_type = TypeExpr::from_value_expr(&target.as_ref(), type_env);
+                let target_type = TypeExpr::from_value_expr(target.as_ref(), type_env);
                 if let TypeExpr::Fun(param_types, return_type) = target_type {
                     param_types
                         .iter()
@@ -418,7 +418,7 @@ impl TypeExpr {
                         (
                             format!(
                                 "the thing you tried to invoke is of type {}",
-                                TypeExpr::from_value_expr(&target.as_ref(), type_env)
+                                TypeExpr::from_value_expr(target.as_ref(), type_env)
                                     .as_clean_go_type_name(type_env)
                             ),
                             target.as_ref().1,
@@ -426,7 +426,7 @@ impl TypeExpr {
                         (
                             format!(
                                 "{} cannot be called as it's not of type function!",
-                                TypeExpr::from_value_expr(&target.as_ref(), type_env)
+                                TypeExpr::from_value_expr(target.as_ref(), type_env)
                                     .as_clean_go_type_name(type_env)
                             ),
                             target.as_ref().1,
@@ -438,7 +438,7 @@ impl TypeExpr {
             ValueExpr::Block(value_exprs) => {
                 let mut ty = TypeExpr::Tuple(vec![]);
                 value_exprs.iter().for_each(|value_expr| {
-                    ty = TypeExpr::from_value_expr(&value_expr, type_env);
+                    ty = TypeExpr::from_value_expr(value_expr, type_env);
                 });
 
                 // TODO: add correct return type of block
@@ -465,7 +465,7 @@ impl TypeExpr {
             ValueExpr::BoolNegate(bool_expr) => {
                 check_type_compatability(
                     &(
-                        TypeExpr::from_value_expr(&bool_expr, type_env),
+                        TypeExpr::from_value_expr(bool_expr, type_env),
                         bool_expr.1,
                     ),
                     &TypeExpr::Bool.into_empty_span(),
@@ -478,16 +478,16 @@ impl TypeExpr {
                 then,
                 r#else,
             } => {
-                let condition_type_expr = TypeExpr::from_value_expr(&condition, type_env);
+                let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
                 check_type_compatability(
                     &(condition_type_expr, condition.1),
                     &TypeExpr::Bool.into_empty_span(),
                     type_env,
                 );
 
-                let _then_type_expr = TypeExpr::from_value_expr(&then, type_env);
+                let _then_type_expr = TypeExpr::from_value_expr(then, type_env);
                 if let Some(r#else) = r#else {
-                    let _else_type_expr = TypeExpr::from_value_expr(&r#else, type_env);
+                    let _else_type_expr = TypeExpr::from_value_expr(r#else, type_env);
                 }
 
                 // let x: TypeExpression = combine_types(vec![else_type_expr, then]);
@@ -501,7 +501,7 @@ impl TypeExpr {
                 field_name,
             } => {
                 let target_obj_type_expr =
-                    TypeExpr::from_value_expr_resolved_type_name(&target_obj, type_env);
+                    TypeExpr::from_value_expr_resolved_type_name(target_obj, type_env);
                 require(
                     target_obj_type_expr.is_object_like(),
                     format!(
@@ -523,14 +523,14 @@ impl TypeExpr {
                 target_obj_type_expr.typeof_field(field_name.to_string(), type_env)
             }
             ValueExpr::While { condition, body } => {
-                let condition_type_expr = TypeExpr::from_value_expr(&condition, type_env);
+                let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
                 check_type_compatability(
                     &(condition_type_expr, condition.1),
                     &TypeExpr::Bool.into_empty_span(),
                     type_env,
                 );
 
-                let _body_type_expr = TypeExpr::from_value_expr(&body, type_env);
+                let _body_type_expr = TypeExpr::from_value_expr(body, type_env);
 
                 return TypeExpr::Tuple(vec![]);
             }
@@ -556,7 +556,7 @@ impl TypeExpr {
 
                 if else_arm.is_none() {
                     let possible_types: Vec<Spanned<TypeExpr>> =
-                        match &TypeExpr::from_value_expr(&value_expr, type_env) {
+                        match &TypeExpr::from_value_expr(value_expr, type_env) {
                             TypeExpr::Or(types) => types.clone(),
                             other => vec![(other.clone(), value_expr.1)],
                         };

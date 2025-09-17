@@ -1936,7 +1936,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 } = &mut target.0
             {
                 let target_ty =
-                    TypeExpr::from_value_expr_resolved_type_name(&target_obj, type_env);
+                    TypeExpr::from_value_expr_resolved_type_name(target_obj, type_env);
 
                 let TypeExpr::Struct(struct_name) = target_ty else {
                     panic!()
@@ -2046,7 +2046,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     *type_params = None;
                 }
             } else {
-                let TypeExpr::Fun(params, ret) = TypeExpr::from_value_expr(&target, type_env)
+                let TypeExpr::Fun(params, ret) = TypeExpr::from_value_expr(target, type_env)
                 else {
                     panic!("not a func??")
                 };
@@ -2280,7 +2280,7 @@ fn resolve_implicit_function_return_type(
                 .iter()
                 .for_each(|item| flatten_returns(&item.0, return_types_found, type_env)),
             ValueExpr::Return(Some(value_expr)) => {
-                return_types_found.push(TypeExpr::from_value_expr(&value_expr, type_env));
+                return_types_found.push(TypeExpr::from_value_expr(value_expr, type_env));
             }
             ValueExpr::Return(None) => {
                 return_types_found.push(TypeExpr::Tuple(vec![]));

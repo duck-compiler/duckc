@@ -179,11 +179,10 @@ fn find_local_variables(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<St
         match node.kind() {
             "var_declaration" | "const_declaration" => {
                 for child in node.children(&mut node.walk()) {
-                    if matches!(child.kind(), "var_spec" | "const_spec") {
-                        if let Some(name_node) = child.child(0) {
+                    if matches!(child.kind(), "var_spec" | "const_spec")
+                        && let Some(name_node) = child.child(0) {
                             local_variables.extend(extract_identifiers_from_node(&name_node, go_source));
                         }
-                    }
                 }
             }
             "function_declaration" | "method_declaration" => {
@@ -274,7 +273,7 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
 
     fn extract_package_name_from_node(node: &Node, go_source: &str) -> Option<String> {
         return match node.kind() {
-            "identifier" => Some((&go_source[node.start_byte()..node.end_byte()]).to_string()),
+            "identifier" => Some(go_source[node.start_byte()..node.end_byte()].to_string()),
             _ => None
         }
     }
@@ -288,35 +287,29 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
                 }
             }
             "selector_expression" => {
-                if let Some(package_node) = node.child(0) {
-                    if let Some(package_name) = extract_package_name_from_node(&package_node, go_source) {
-                        if !local_variables.contains(&package_name) {
+                if let Some(package_node) = node.child(0)
+                    && let Some(package_name) = extract_package_name_from_node(&package_node, go_source)
+                        && !local_variables.contains(&package_name) {
                             used_imports.insert(package_name);
                         }
-                    }
-                }
             }
             "call_expression" => {
                 if let Some(function_node) = node.child(0)
                     && function_node.kind() == "selector_expression"
-                    && let Some(package_node) = function_node.child(0) {
-                        if let Some(package_name) = extract_package_name_from_node(&package_node, go_source) {
-                            if !local_variables.contains(&package_name) {
+                    && let Some(package_node) = function_node.child(0)
+                        && let Some(package_name) = extract_package_name_from_node(&package_node, go_source)
+                            && !local_variables.contains(&package_name) {
                                 used_imports.insert(package_name);
                             }
-                        }
-                    }
             }
             "type_identifier" => {
                 if let Some(parent) = node.parent()
                     && parent.kind() == "selector_expression"
-                    && let Some(package_node) = parent.child(0) {
-                        if let Some(package_name) = extract_package_name_from_node(&package_node, go_source) {
-                            if !local_variables.contains(&package_name) {
+                    && let Some(package_node) = parent.child(0)
+                        && let Some(package_name) = extract_package_name_from_node(&package_node, go_source)
+                            && !local_variables.contains(&package_name) {
                                 used_imports.insert(package_name);
                             }
-                        }
-                    }
             }
             _ => {}
         }
