@@ -1,7 +1,7 @@
 {
     "id": "d1adb05842916005a85d085735ffd01a",
     "file_path": "../../src/semantics/ident_mangler.rs",
-    "line_number": 473,
+    "line_number": 474,
     "title": "respect additional identifer scopes like blocks and lambdas",
     "tag": "todo",
     "module_tag": "semantics",

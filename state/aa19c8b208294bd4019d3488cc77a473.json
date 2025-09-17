@@ -13,7 +13,8 @@
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: maybe don't to this string __else",
-    "status": "open",
+    "status": "closed",
     "first_seen": "2025-09-05T03:39:39.968062",
-    "history": []
+    "history": [],
+    "closed_at": "2025-09-17T01:37:22.743785"
 }

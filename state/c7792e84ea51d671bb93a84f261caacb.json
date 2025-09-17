@@ -1,7 +1,7 @@
 {
     "id": "c7792e84ea51d671bb93a84f261caacb",
     "file_path": "../../src/semantics/ident_mangler.rs",
-    "line_number": 523,
+    "line_number": 524,
     "title": "type params",
     "tag": "todo",
     "module_tag": "semantics",

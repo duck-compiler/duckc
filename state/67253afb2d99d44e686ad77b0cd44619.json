@@ -1,7 +1,7 @@
 {
     "id": "67253afb2d99d44e686ad77b0cd44619",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 1557,
+    "line_number": 1572,
     "title": "check if we'd rather sort after generic generation",
     "tag": "todo",
     "module_tag": "semantics",

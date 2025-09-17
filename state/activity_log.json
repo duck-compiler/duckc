@@ -1,5 +1,25 @@
 [
     {
+        "type": "closed",
+        "timestamp": "2025-09-17T01:37:22.728242",
+        "issue_id": "da0532d17b7bc8b710213013d1b37916",
+        "issue_title": "should this be mangled???? LOLOLOLO I DON\"T THINK SO",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-09-17T01:37:22.728242",
+        "issue_id": "aa19c8b208294bd4019d3488cc77a473",
+        "issue_title": "maybe don't to this string __else",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
         "type": "created",
         "timestamp": "2025-09-10T23:16:09.456232",
         "issue_id": "e514f2aaa7e6dfc194295cef72572cdb",
