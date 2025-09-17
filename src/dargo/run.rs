@@ -1,7 +1,7 @@
 use colored::Colorize;
 use lazy_static::lazy_static;
-use std::io::{self, ErrorKind as IOErrKind, Write};
-use std::process::{Command, Stdio};
+use std::io::{ErrorKind as IOErrKind};
+use std::process::Command;
 
 use crate::dargo::cli::{CompileArgs, RunArgs};
 use crate::dargo::compile::{CompileErrKind, compile};
