@@ -1,4 +1,0 @@
-{
-    "stdout": "testing: `((true and (false or true)) and (true || (false and false)))`\nevaluation: `((true and true) and (true or false))` -> `(true and true)` -> `true`\nexpected value: true\nactual value: true\n",
-    "stderr": ""
-}

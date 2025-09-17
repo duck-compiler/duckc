@@ -1,4 +1,0 @@
-{
-    "stdout": "Testing safe error handling\nTesting safe_divide(10, 2) - should succeed\nExpected result: 5\nActual result:\n5\nTesting safe_divide(10, 0) - should fail\nExpected result: 'Cannot divide by zero'\nActual result:\nCannot divide by zero\n",
-    "stderr": ""
-}

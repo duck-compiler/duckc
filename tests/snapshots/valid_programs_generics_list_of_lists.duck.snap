@@ -1,4 +1,0 @@
-{
-    "stdout": "&{[]}\n&{[]}\n&{[]}\n&{[]}\n&{[{yooo} {yooo}]}\n&{[{100} {100}]}\n&{[{true} {true}]}\n&{[{} {}]}\n&{[{yo} {moin}]}\nlist at index 0 &{[{ich} {bin} {liste} {1}]}\nlist at index 1 &{[{yo} {moin}]}\n\nlist at index 0 &{[{yo} {servus}]}\nlist at index 1 &{[{yo} {servus}]}\n\nlist at index 0 0 &{[{a} {b} {c}]}\nlist at index 0 1 &{[{100}]}\nlist at index 1 0 &{[{a} {b} {c}]}\nlist at index 1 1 &{[{100}]}\n",
-    "stderr": ""
-}

@@ -1,4 +1,0 @@
-{
-    "stdout": "Testing custom operators for Vector struct\nVector 1: (1, 2)\nVector 2: (3, 4)\nSum of vectors:\nExpected: (4, 6)\nActual:\n4\n6\nScaled by 2:\nExpected: (8, 12)\nActual:\n8\n12\n",
-    "stderr": ""
-}
