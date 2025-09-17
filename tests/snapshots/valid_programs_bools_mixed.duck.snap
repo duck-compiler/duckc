@@ -1,0 +1,4 @@
+{
+    "stdout": "testing: `1 + 2 < 5 and 10 / 2 == 5 || 3 % 2 != 0`\nevaluation: `(3 < 5) and (5 == 5) or (1 != 0)` -> `true and true or true` -> `true or true`\nexpected value: true\nactual value: true\n",
+    "stderr": ""
+}

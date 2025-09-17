@@ -1,0 +1,4 @@
+{
+    "stdout": "Testing multiline string literals\nBasic multiline string:\n\n        This is a multiline string\n        that spans multiple lines\n        and preserves formatting.\n    \nExpected: Multiline text with preserved formatting\nInterpolated multiline string:\n\n        First line: 2\n        Second line: HELLO\n        Third line: true\n    \nExpected: Multiline text with interpolated values\n",
+    "stderr": ""
+}

@@ -1,0 +1,4 @@
+{
+    "stdout": "Testing error propagation\nTesting process_number('42') - should succeed\nExpected result: 84 (42 * 2)\nActual result:\n84\nTesting process_number('') - should fail\nExpected result: 'Parse error: Empty string'\nActual result:\nParse error: Empty string\n",
+    "stderr": ""
+}
