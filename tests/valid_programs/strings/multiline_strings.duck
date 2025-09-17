@@ -1,0 +1,23 @@
+fn main() {
+    std::io::println("Testing multiline string literals");
+    
+    let multiline: String = f"
+        This is a multiline string
+        that spans multiple lines
+        and preserves formatting.
+    ";
+
+    std::io::println("Basic multiline string:");
+    multiline->std::io::println();
+    std::io::println("Expected: Multiline text with preserved formatting");
+
+    let interpolated: String = f"
+        First line: {(1 + 1)->std::string::from_int()}
+        Second line: {"hello"->std::string::to_upper()}
+        Third line: {true->std::string::from_bool()}
+    ";
+
+    std::io::println("Interpolated multiline string:");
+    interpolated->std::io::println();
+    std::io::println("Expected: Multiline text with interpolated values");
+}

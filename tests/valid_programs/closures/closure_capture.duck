@@ -1,0 +1,34 @@
+fn create_counter() -> (fn() -> Int, fn()) {
+    let count: Int = 0;
+
+    let get_count: fn() -> Int = fn() -> Int {
+        return count;
+    };
+
+    let increment: fn() = fn() {
+        count = count + 1;
+    };
+
+    return (get_count, increment);
+}
+
+fn main() {
+    std::io::println("Testing closure capture");
+    std::io::println("Creating counter with captured variable");
+    std::io::println("Expected sequence: 0, 1, 2");
+
+    let x: (fn() -> Int, fn()) = create_counter();
+    let get_count = x.0;
+    let increment = x.1;
+
+    std::io::println("Initial count:");
+    get_count()->std::string::from_int()->std::io::println();
+
+    std::io::println("After first increment:");
+    increment();
+    get_count()->std::string::from_int()->std::io::println();
+
+    std::io::println("After second increment:");
+    increment();
+    get_count()->std::string::from_int()->std::io::println();
+}

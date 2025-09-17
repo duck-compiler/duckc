@@ -1,0 +1,10 @@
+type X = { days: Int };
+type Y = { lol: Int };
+
+fn main() {
+    let x: X | Y = { days: 5 };
+    match x {
+        X => std::io::println("X"),
+        Y => std::io::println("Y"),
+    }
+}

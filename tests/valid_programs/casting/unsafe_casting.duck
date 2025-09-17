@@ -1,0 +1,25 @@
+fn main() {
+    std::io::println("Testing unsafe casting with pattern matching");
+    
+    let x: Int | String = "hello";
+    std::io::println("Testing union type Int | String with value 'hello'");
+    std::io::println("Expected result: 'hello'");
+    
+    // Safe casting with pattern matching
+    std::io::println("Actual result:");
+    match x {
+        Int @i => i->std::string::from_int()->std::io::println(),
+        String @s => s->std::io::println(),
+    }
+    
+    // Type assertion (if supported)
+    let y: Int | String = 42;
+    std::io::println("Testing union type Int | String with value 42");
+    std::io::println("Expected result: 42");
+    
+    std::io::println("Actual result:");
+    match y {
+        Int @i => i->std::string::from_int()->std::io::println(),
+        String @s => s->std::io::println(),
+    }
+}

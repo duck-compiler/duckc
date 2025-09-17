@@ -1,0 +1,4 @@
+{
+    "stdout": "Testing fibonacci function\nComputing fibonacci(10)\nExpected result: 55 (fibonacci sequence: 0,1,1,2,3,5,8,13,21,34,55)\nActual result:\n55\n",
+    "stderr": ""
+}

@@ -1,0 +1,26 @@
+fn add_one(x: Int) -> Int {
+    return x + 1;
+}
+
+fn multiply_by_two(x: Int) -> Int {
+    return x * 2;
+}
+
+fn compose<A, B, C>(f: fn(x: B) -> C, g: fn(x: A) -> B) -> fn(x: A) -> C {
+    return fn(x: A) -> C {
+        return f(g(x));
+    };
+}
+
+fn main() {
+    std::io::println("Testing function composition");
+    std::io::println("Composing: multiply_by_two(add_one(x))");
+    std::io::println("Input: 5");
+    std::io::println("Expected: 12 ((5 + 1) * 2)");
+
+    let add_then_multiply: fn(x: Int) -> Int = compose<Int, Int, Int>(multiply_by_two, add_one);
+    let result: Int = add_then_multiply(5);
+
+    std::io::println("Actual result:");
+    result->std::string::from_int()->std::io::println();
+}

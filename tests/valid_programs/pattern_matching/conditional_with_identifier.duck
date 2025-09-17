@@ -1,0 +1,9 @@
+fn main() {
+    let x: Int | String = 42;
+    match x {
+        String @s => std::io::println("wrong!"),
+        Int @i if i > 40 => std::io::println("correct!"),
+        Int @i if i < 10 => std::io::println("wrong!"),
+        Int @i => std::io::println("wrong!"),
+    }
+}

@@ -1,0 +1,8 @@
+fn main() {
+    let x: Int | String | Bool = true;
+    match x {
+        String @s => std::io::println("wrong!"),
+        Int @i => std::io::println("wrong!"),
+        Bool @b => std::io::println("correct!"),
+    }
+}

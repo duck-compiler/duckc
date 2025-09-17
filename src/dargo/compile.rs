@@ -8,7 +8,9 @@ use crate::{
     dargo::cli::CompileArgs,
     emit::ir::join_ir,
     go_fixup::remove_unused_imports::cleanup_go_source,
-    lex, parse_src_file,
+    lex,
+    parse::value_parser::empty_range,
+    parse_src_file,
     tags::Tag,
     typecheck, write_in_duck_dotdir,
 };
@@ -109,7 +111,7 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
     let tokens = lex(src_file_name, src_file_file_contents);
     let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
     let mut type_env = typecheck(&mut src_file_ast);
-    let mut go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env));
+    let mut go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env, empty_range()));
     go_code = cleanup_go_source(&go_code, true);
     // go_code = remove_unused_imports(&go_code)
 

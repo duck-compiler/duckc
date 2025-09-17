@@ -390,6 +390,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             value_expr,
             arms,
             else_arm,
+            span: _,
         } => {
             append_global_prefix_value_expr(&mut value_expr.0, mangle_env);
             for arm in arms {
@@ -1699,6 +1700,7 @@ mod tests {
             sort_all(&mut original);
 
             for func in original.function_definitions.iter_mut() {
+                func.span = empty_range();
                 value_expr_into_empty_range(&mut func.value_expr);
             }
 

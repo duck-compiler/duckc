@@ -1,0 +1,12 @@
+fn main() {
+    let x: Int | String = 5;
+    match x {
+        String => std::io::println("wrong!"),
+        Int @v if v == 5 => std::io::println("correct!"),
+        Int @a if a == 7 => std::io::println("wrong!"),
+        Int @c if c == 8 => std::io::println("wrong!"),
+        Int @v if v == 10 => std::io::println("wrong!"),
+        Int => std::io::println("wrong!"),
+        else => std::io::println("wrong!")
+    };
+}

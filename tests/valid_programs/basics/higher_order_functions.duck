@@ -1,0 +1,35 @@
+fn my_map<T, U>(arr: std::col::ArrayList<T>, f: fn(x: T) -> U) -> std::col::ArrayList<U> {
+    return arr.map<U>(f);
+}
+
+fn my_filter<T>(arr: std::col::ArrayList<T>, predicate: fn(t: T) -> Bool) -> std::col::ArrayList<T> {
+    return arr.filter(predicate);
+}
+
+fn main() {
+    std::io::println("Testing higher-order functions (map and filter)");
+
+    let numbers: std::col::ArrayList<Int> = std::col::empty_array_list<Int>();
+    numbers.push(1);
+    numbers.push(2);
+    numbers.push(3);
+    numbers.push(4);
+    numbers.push(5);
+    std::io::println("Input array: [1, 2, 3, 4, 5]");
+
+    let doubled: std::col::ArrayList<Int> = my_map<Int, Int>(numbers, fn(x: Int) -> Int { return x * 2; });
+    std::io::println("Map: multiply each by 2");
+    std::io::println("Expected: [2, 4, 6, 8, 10]");
+    std::io::println("Actual result:");
+    doubled.for_each(fn(x: Int) -> () { 
+        x->std::string::from_int()->std::io::println();
+    });
+
+    let evens: std::col::ArrayList<Int> = my_filter<Int>(numbers, fn(x: Int) -> Bool { return x % 2 == 0; });
+    std::io::println("Filter: keep only even numbers");
+    std::io::println("Expected: [2, 4]");
+    std::io::println("Actual result:");
+    evens.for_each(fn(x: Int) -> () { 
+        x->std::string::from_int()->std::io::println();
+    });
+}

@@ -17,6 +17,7 @@ pub struct MatchArm {
     pub identifier_binding: Option<String>,
     pub condition: Option<Spanned<ValueExpr>>,
     pub value_expr: Spanned<ValueExpr>,
+    pub span: SS,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -114,6 +115,7 @@ pub enum ValueExpr {
         value_expr: Box<Spanned<ValueExpr>>,
         arms: Vec<MatchArm>,
         else_arm: Option<Box<MatchArm>>,
+        span: SS,
     },
     FormattedString(Vec<ValFmtStringContents>),
 }
@@ -281,24 +283,27 @@ where
                 .then(match_arm_identifier_binding.clone())
                 .then_ignore(just(Token::ThickArrow))
                 .then(value_expr_parser.clone())
-                .map(|((type_expr, identifier), value_expr)| MatchArm {
+                .map_with(|((type_expr, identifier), value_expr), ctx| MatchArm {
                     type_case: type_expr,
                     identifier_binding: identifier.clone().map(|x| x.0),
                     condition: identifier.map(|x| x.1).unwrap_or_else(|| None),
                     value_expr,
+                    span: ctx.span(),
                 });
 
             let else_arm = just(Token::Else)
                 .then(match_arm_identifier_binding)
                 .then_ignore(just(Token::ThickArrow))
                 .then(value_expr_parser.clone())
+                .then_ignore(just(Token::ControlChar(',')).or_not())
                 // todo: add span of else
-                .map(|((_, identifier), value_expr)| MatchArm {
+                .map_with(|((_, identifier), value_expr), ctx| MatchArm {
                     // todo: check if typeexpr::any is correct for the else arm in pattern matching
                     type_case: (TypeExpr::Any, value_expr.1),
                     identifier_binding: identifier.clone().map(|x| x.0),
                     condition: identifier.map(|x| x.1).unwrap_or_else(|| None),
                     value_expr,
+                    span: ctx.span(),
                 });
 
             let r#match = just(Token::Match)
@@ -311,10 +316,11 @@ where
                         .then(else_arm.map(Box::new).or_not())
                         .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}'))),
                 )
-                .map(|(value_expr, (arms, else_arm))| ValueExpr::Match {
+                .map_with(|(value_expr, (arms, else_arm)), ctx| ValueExpr::Match {
                     value_expr: Box::new(value_expr),
                     arms,
                     else_arm,
+                    span: ctx.span(),
                 })
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
@@ -987,6 +993,7 @@ pub fn empty_range() -> SS {
 
 pub fn source_file_into_empty_range(v: &mut SourceFile) {
     for x in &mut v.function_definitions {
+        x.span = empty_range();
         value_expr_into_empty_range(&mut x.value_expr);
         x.return_type.as_mut().map(type_expr_into_empty_range);
         if let Some(params) = &mut x.params {
@@ -1170,7 +1177,10 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
             value_expr,
             arms,
             else_arm,
+            span,
         } => {
+            *span = empty_range();
+
             value_expr_into_empty_range(value_expr);
             arms.iter_mut().for_each(|arm| {
                 type_expr_into_empty_range(&mut arm.type_case);
@@ -1178,9 +1188,11 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
                 if let Some(condition) = &mut arm.condition {
                     value_expr_into_empty_range(condition);
                 }
+                arm.span = empty_range();
             });
 
             if let Some(arm) = else_arm {
+                arm.span = empty_range();
                 type_expr_into_empty_range(&mut arm.type_case);
                 value_expr_into_empty_range(&mut arm.value_expr);
             }
@@ -2602,8 +2614,10 @@ mod tests {
                         identifier_binding: Some("i".to_string()),
                         value_expr: *var("i"),
                         condition: None,
+                        span: empty_range(),
                     }],
                     else_arm: None,
+                    span: empty_range(),
                 },
             ),
             (
@@ -2618,15 +2632,18 @@ mod tests {
                             identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                             condition: None,
+                            span: empty_range(),
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
                             identifier_binding: Some("i".to_string()),
                             value_expr: *var("i"),
                             condition: None,
+                            span: empty_range(),
                         },
                     ],
                     else_arm: None,
+                    span: empty_range(),
                 },
             ),
             (
@@ -2641,15 +2658,18 @@ mod tests {
                             identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                             condition: Some(*var("s")),
+                            span: empty_range(),
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
                             identifier_binding: Some("i".to_string()),
                             value_expr: *var("i"),
                             condition: None,
+                            span: empty_range(),
                         },
                     ],
                     else_arm: None,
+                    span: empty_range(),
                 },
             ),
             (
@@ -2666,12 +2686,14 @@ mod tests {
                             identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                             condition: None,
+                            span: empty_range(),
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
                             identifier_binding: Some("i".to_string()),
                             value_expr: *var("i"),
                             condition: None,
+                            span: empty_range(),
                         },
                         MatchArm {
                             type_case: TypeExpr::RawTypeName(false, vec!["Other".into()], None)
@@ -2682,9 +2704,11 @@ mod tests {
                             ])
                             .into_empty_span(),
                             condition: None,
+                            span: empty_range(),
                         },
                     ],
                     else_arm: None,
+                    span: empty_range(),
                 },
             ),
             (
@@ -2710,12 +2734,14 @@ mod tests {
                             identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                             condition: None,
+                            span: empty_range(),
                         },
                         MatchArm {
                             type_case: TypeExpr::Int.into_empty_span(),
                             identifier_binding: Some("i".to_string()),
                             value_expr: *var("i"),
                             condition: None,
+                            span: empty_range(),
                         },
                         MatchArm {
                             type_case: TypeExpr::RawTypeName(false, vec!["Other".into()], None)
@@ -2726,6 +2752,7 @@ mod tests {
                             ])
                             .into_empty_span(),
                             condition: None,
+                            span: empty_range(),
                         },
                         MatchArm {
                             type_case: TypeExpr::RawTypeName(false, vec!["Other".into()], None)
@@ -2739,16 +2766,20 @@ mod tests {
                                         identifier_binding: Some("s".to_string()),
                                         value_expr: *var("s"),
                                         condition: None,
+                                        span: empty_range(),
                                     }],
                                     else_arm: None,
+                                    span: empty_range(),
                                 }
                                 .into_empty_span(),
                             ])
                             .into_empty_span(),
                             condition: None,
+                            span: empty_range(),
                         },
                     ],
                     else_arm: None,
+                    span: empty_range(),
                 },
             ),
         ];

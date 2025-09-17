@@ -5,12 +5,12 @@ use crate::{
         types::emit_type_definitions,
         value::{IrInstruction, ToIr},
     },
-    parse::{source_file_parser::SourceFile, use_statement_parser::UseStatement},
+    parse::{SS, source_file_parser::SourceFile, use_statement_parser::UseStatement},
     semantics::type_resolve::TypeEnv,
 };
 
 impl SourceFile {
-    pub fn emit(self, pkg_name: String, type_env: &mut TypeEnv) -> Vec<IrInstruction> {
+    pub fn emit(self, pkg_name: String, type_env: &mut TypeEnv, span: SS) -> Vec<IrInstruction> {
         let mut to_ir = ToIr::default();
 
         let type_definitions = emit_type_definitions(type_env, &mut to_ir);
@@ -200,7 +200,7 @@ impl SourceFile {
         }
 
         for c in self.duckx_components {
-            instructions.push(c.emit(type_env, &mut to_ir));
+            instructions.push(c.emit(type_env, &mut to_ir, span));
         }
 
         instructions.extend(type_definitions);

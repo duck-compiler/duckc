@@ -28,6 +28,7 @@ pub struct Context {
 
 pub type SS = SimpleSpan<usize, Context>;
 pub type Spanned<T> = (T, SS);
+pub type SpannedMutRef<'a, T> = (&'a mut T, SS);
 
 #[derive(Debug, Clone)]
 pub struct Field {
@@ -65,7 +66,7 @@ pub fn failure_with_occurence(
         .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
         .with_message(&msg)
         .with_labels(labels.into_iter().map(|label2| {
-            Label::new((file_name, label2.1.into_range()))
+            Label::new((label2.1.context.file_name, label2.1.into_range()))
                 .with_message(label2.0)
                 .with_color(Color::Yellow)
         }))

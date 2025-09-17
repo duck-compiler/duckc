@@ -297,8 +297,8 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                     ));
                 }
 
-                for m in type_env.get_generic_methods(struct_name.clone()).clone() {
-                    instructions.push(m.emit(
+                for generic_method in type_env.get_generic_methods(struct_name.clone()).clone() {
+                    instructions.push(generic_method.emit(
                         Some(("self".to_string(), format!("*{struct_name}"))),
                         type_env,
                         to_ir,
