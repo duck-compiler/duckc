@@ -57,6 +57,7 @@ pub struct RunArgs {
 
 #[derive(clap::Args, Debug)]
 pub struct InitArgs {
+    pub project_name: Option<String>,
     // Examples:
     // #[arg(long, short = 'o')]
     // optimize: bool,
@@ -92,8 +93,8 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
                 )
             })?;
         }
-        Commands::Init(_init_args) => {
-            dargo::init::init_project(None)
+        Commands::Init(init_args) => {
+            dargo::init::init_project(None, init_args)
                 .map_err(|err| (format!("{}{}", Tag::Dargo, err.0), CliErrKind::Init(err.1)))?;
         }
         Commands::Clean => {

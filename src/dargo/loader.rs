@@ -7,12 +7,6 @@ use toml;
 
 use crate::tags::Tag;
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct BinaryConfig {
-    pub name: String,
-    pub version: String,
-    pub file: PathBuf,
-}
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(untagged)]
@@ -21,9 +15,23 @@ pub enum Dependency {
     // WithConfig(DependencyConfig)
 }
 
+// [[bin]]
+// name = "binary-name"
+// file = "src/main.duck"
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct BinaryConfig {
+    pub name: String,
+    pub file: PathBuf,
+}
+
+// this is place at the top-level
+// name = "project-name"
+// [[bin]]
+// [dependencies]
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ProjectConfig {
     pub name: String,
+    pub version: String,
     #[serde(rename = "bin", default)]
     pub binaries: Vec<BinaryConfig>,
     pub dependencies: Option<HashMap<String, Dependency>>,
@@ -102,15 +110,14 @@ mod tests {
     fn test_load_project_env_valid_config() {
         let toml_content = r#"
             name="My Project"
+            version="1.0.0"
 
             [[bin]]
             name = "example_binary"
-            version = "1.0.0"
             file = "./src/main.duck"
 
             [[bin]]
             name = "another_binary"
-            version = "0.9.0"
             file = "./src/another.duck"
 
             [dependencies]
@@ -119,17 +126,16 @@ mod tests {
         let file_path = create_temp_file("valid_dargo.toml", toml_content);
 
         let result = load_dargo_config(Some(file_path.clone()));
+        dbg!(&result);
         assert!(result.is_ok());
         let config = result.unwrap();
 
         assert_eq!(config.name, "My Project");
         assert_eq!(config.binaries.len(), 2);
         assert_eq!(config.binaries[0].name, "example_binary");
-        assert_eq!(config.binaries[0].version, "1.0.0");
         assert_eq!(config.binaries[0].file, PathBuf::from("./src/main.duck"));
 
         assert_eq!(config.binaries[1].name, "another_binary");
-        assert_eq!(config.binaries[1].version, "0.9.0");
         assert_eq!(config.binaries[1].file, PathBuf::from("./src/another.duck"));
 
         assert!(matches!(config.dependencies, Some(..)));
@@ -141,7 +147,51 @@ mod tests {
 
         assert_dependency_with_version(&dependencies, "some/fetch", "1.0.0");
 
-        fs::remove_file(file_path).unwrap();
+        let _ = fs::remove_file(file_path);
+    }
+
+    #[test]
+    fn test_load_project_env_valid_config_with_versions() {
+        let toml_content = r#"
+            name="My Project"
+            version="1.0.0"
+
+            [[bin]]
+            name = "example_binary"
+            file = "./src/main.duck"
+
+            [[bin]]
+            name = "another_binary"
+            file = "./src/another.duck"
+
+            [dependencies]
+            "some/fetch" = "1.0.0"
+            "#;
+        let file_path = create_temp_file("valid_dargo_versions.toml", toml_content);
+
+        let result = load_dargo_config(Some(file_path.clone()));
+        assert!(result.is_ok());
+        let config = result.unwrap();
+
+        assert_eq!(config.name, "My Project");
+        assert_eq!(config.version, "1.0.0");
+        assert_eq!(config.binaries.len(), 2);
+        assert_eq!(config.binaries[0].name, "example_binary");
+        assert_eq!(config.binaries[0].file, PathBuf::from("./src/main.duck"));
+
+        assert_eq!(config.binaries[1].name, "another_binary");
+        assert_eq!(config.binaries[1].file, PathBuf::from("./src/another.duck"));
+
+        assert!(matches!(config.dependencies, Some(..)));
+        let Some(dependencies) = config.dependencies else {
+            unreachable!()
+        };
+
+        assert_eq!(dependencies.len(), 1);
+
+        assert_dependency_with_version(&dependencies, "some/fetch", "1.0.0");
+
+        let _ = fs::remove_file(file_path);
     }
 
     #[test]
@@ -159,7 +209,6 @@ mod tests {
             name="My Project"
             [[bin]]
             name = "example_binary"
-            version = "1.0.0"
             file = "./src/main.duck"
             [dependencies]
             test
@@ -177,7 +226,7 @@ mod tests {
 
     #[test]
     fn test_load_project_env_missing_optional_sections() {
-        let toml_content = "name=\"My Project Only\"\n";
+        let toml_content = "name=\"My Project Only\"\nversion=\"1.0.0\"";
         let file_path = create_temp_file("optional_dargo.toml", toml_content);
 
         let result = load_dargo_config(Some(file_path.clone()));
@@ -209,6 +258,7 @@ mod tests {
     fn test_load_project_env_complex_dependency_urls() {
         let toml_content = r#"
             name="Project With Complex Dependencies"
+            version="1.0.0"
 
             [dependencies]
             "first/fetch" = "3.0.0"

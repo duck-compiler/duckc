@@ -1,11 +1,11 @@
 use colored::Colorize;
 use lazy_static::lazy_static;
 use std::{
-    fs,
-    path::{Path, PathBuf},
+    fs::{self, create_dir},
+    path::{Path, PathBuf}
 };
 
-use crate::tags::Tag;
+use crate::{dargo::cli::InitArgs, tags::Tag};
 
 #[derive(Debug)]
 pub enum InitErrKind {
@@ -14,22 +14,30 @@ pub enum InitErrKind {
 }
 
 lazy_static! {
-    static ref DEFAULT_DARGO_TOML_CONTENT: &'static str = r#"
-        name="My New Project"
-
-        [[bin]]
-        name = "my_app"
-        version = "0.1.0"
-        file = "./src/main.duck"
-
-        [dependencies]
-    "#
-    .trim();
     static ref INIT_TAG: String = " init ".on_purple().bright_white().to_string();
 }
 
-pub fn init_project(custom_toml_path: Option<PathBuf>) -> Result<(), (String, InitErrKind)> {
-    let dargo_toml_path = custom_toml_path.unwrap_or(Path::new("./dargo.toml").to_path_buf());
+pub fn generate_default_dargo_toml(
+    project_name: impl Into<String>,
+) -> String {
+    let dargo_toml = format!(r#"
+        name = "{}"
+        version = "0.0.1"
+
+        [dependencies]
+    "#, project_name.into());
+
+    return dargo_toml
+        .split("\n")
+        .map(|line| line.trim())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string()
+}
+
+pub fn init_project(custom_dargo_toml_path: Option<PathBuf>, init_args: InitArgs) -> Result<(), (String, InitErrKind)> {
+    let dargo_toml_path = custom_dargo_toml_path.unwrap_or_else(|| Path::new("./dargo.toml").to_path_buf());
     if dargo_toml_path.exists() {
         let message = format!(
             "{}{} dargo.toml already exists in working directory.",
@@ -39,7 +47,8 @@ pub fn init_project(custom_toml_path: Option<PathBuf>) -> Result<(), (String, In
         return Err((message, InitErrKind::DargoTomlAlreadyExists));
     }
 
-    fs::write(&dargo_toml_path, DEFAULT_DARGO_TOML_CONTENT.to_string()).map_err(|write_error| {
+    let dargo_toml_content = generate_default_dargo_toml(init_args.project_name.unwrap_or_else(|| "my project".to_string()));
+    fs::write(&dargo_toml_path, dargo_toml_content).map_err(|write_error| {
         let message = format!(
             "{}{} Failed to create default dargo.toml file '{}': {}",
             Tag::Err,
@@ -50,5 +59,29 @@ pub fn init_project(custom_toml_path: Option<PathBuf>) -> Result<(), (String, In
         (message, InitErrKind::DargoTomlAlreadyExists)
     })?;
 
+    let src_dir = Path::new("./src").to_path_buf();
+    if !src_dir.exists() {
+        let mkdir_result = create_dir(src_dir);
+        if mkdir_result.is_err() {
+            println!("todo: good error message when directoyr couldn't be created")
+        }
+    }
+
     Ok(())
+}
+
+#[cfg(test)]
+pub mod test {
+    use crate::dargo::init::generate_default_dargo_toml;
+
+
+    #[test]
+    pub fn test_dargo_toml_generation() {
+        let output = generate_default_dargo_toml("test");
+        assert!(output.contains("test"));
+        assert!(output.contains("0.0.1"));
+        assert!(output.contains("dependencies"));
+        assert_eq!(output.lines().count(), 4);
+    }
+
 }
