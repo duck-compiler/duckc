@@ -21,7 +21,7 @@ jobs:
 
   test-windows:
     name: cargo test on windows
-    runs-on: windows-2025
+    runs-on: windows-latest
 
     steps:
     - uses: ilammy/msvc-dev-cmd@v1
