@@ -27,4 +27,5 @@ jobs:
     - uses: ilammy/msvc-dev-cmd@v1
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - run: RUSTFLAGS="-C link-arg=/DEBUG:NONE" cargo test
+    - run: set RUSTFLAGS="-C link-arg=/DEBUG:NONE"
+    - run: cargo test
