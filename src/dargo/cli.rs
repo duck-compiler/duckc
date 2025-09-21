@@ -33,6 +33,8 @@ pub enum Commands {
 pub struct BuildArgs {
     // #[arg(long, value_parser = ["x86", "arm"])]
     // arch: Option<String>
+    #[arg(long, short = 'b')]
+    pub bin: Option<String>,
     #[arg(long, short = 'o')]
     pub output_name: Option<String>,
     #[arg(long, short = 'G')]
@@ -53,6 +55,8 @@ pub struct RunArgs {
     pub file: Option<PathBuf>,
     #[arg(long, short = 'G')]
     pub optimize_go: bool,
+    #[arg(long, short = 'b')]
+    pub bin: Option<String>,
 }
 
 #[derive(clap::Args, Debug)]
