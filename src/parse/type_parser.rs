@@ -106,17 +106,23 @@ where
 
             let function_fields = duck_fields.clone();
 
-            let go_type_identifier: impl Parser<'src, I, String, extra::Err<Rich<'src, Token, SS>>> =
-                select_ref! { Token::Ident(identifier) => identifier.to_string() }
-                    .separated_by(just(Token::ControlChar('.')))
-                    .at_least(1)
-                    .at_most(2)
-                    .collect::<Vec<String>>()
-                    .map(|str| str.join("."));
-
             let typeof_expr = just(Token::TypeOf)
                 .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() })
                 .map(TypeExpr::TypeOf);
+
+            let go_type_identifier = just(Token::ControlChar('`'))
+                .ignore_then(
+                    choice((
+                        select_ref! { Token::Ident(ident) => ident.to_string() },
+                        just(Token::ControlChar('[')).map(|c| c.to_string()),
+                        just(Token::ControlChar(']')).map(|c| c.to_string()),
+                        just(Token::ControlChar('.')).map(|c| c.to_string()),
+                    ))
+                    .repeated()
+                    .collect::<Vec<_>>()
+                )
+                .then_ignore(just(Token::ControlChar('`')))
+                .map(|strs| strs.join(""));
 
             let go_type = just(Token::Go)
                 .ignore_then(go_type_identifier)
@@ -270,13 +276,19 @@ where
 
             let function_fields = duck_fields.clone();
 
-            let go_type_identifier: impl Parser<'src, I, String, extra::Err<Rich<'src, Token, SS>>> =
-                select_ref! { Token::Ident(identifier) => identifier.to_string() }
-                    .separated_by(just(Token::ControlChar('.')))
-                    .at_least(1)
-                    .at_most(2)
-                    .collect::<Vec<String>>()
-                    .map(|str| str.join("."));
+            let go_type_identifier = just(Token::ControlChar('`'))
+                .ignore_then(
+                    choice((
+                        select_ref! { Token::Ident(ident) => ident.to_string() },
+                        just(Token::ControlChar('[')).map(|c| c.to_string()),
+                        just(Token::ControlChar(']')).map(|c| c.to_string()),
+                        just(Token::ControlChar('.')).map(|c| c.to_string()),
+                    ))
+                    .repeated()
+                    .collect::<Vec<_>>()
+                )
+                .then_ignore(just(Token::ControlChar('`')))
+                .map(|strs| strs.join(""));
 
             let go_type = just(Token::Go)
                 .ignore_then(go_type_identifier)
