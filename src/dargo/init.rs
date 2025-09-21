@@ -40,7 +40,6 @@ pub fn generate_default_main_duck() -> String {
     return "use std::io::{println};\n\nfn main() {\n    println(\"Hello, World!\");\n}".to_string()
 }
 
-
 pub fn init_project(custom_dargo_toml_path: Option<PathBuf>, init_args: InitArgs) -> Result<(), (String, InitErrKind)> {
     let dargo_toml_path = custom_dargo_toml_path.unwrap_or_else(|| Path::new("./dargo.toml").to_path_buf());
     if dargo_toml_path.exists() {
