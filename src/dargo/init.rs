@@ -36,6 +36,11 @@ pub fn generate_default_dargo_toml(
         .to_string()
 }
 
+pub fn generate_default_main_duck() -> String {
+    return "use std::io::{println};\n\nfn main() {\n    println(\"Hello, World!\");\n}".to_string()
+}
+
+
 pub fn init_project(custom_dargo_toml_path: Option<PathBuf>, init_args: InitArgs) -> Result<(), (String, InitErrKind)> {
     let dargo_toml_path = custom_dargo_toml_path.unwrap_or_else(|| Path::new("./dargo.toml").to_path_buf());
     if dargo_toml_path.exists() {
@@ -61,10 +66,21 @@ pub fn init_project(custom_dargo_toml_path: Option<PathBuf>, init_args: InitArgs
 
     let src_dir = Path::new("./src").to_path_buf();
     if !src_dir.exists() {
-        let mkdir_result = create_dir(src_dir);
-        if mkdir_result.is_err() {
-            println!("todo: good error message when directoyr couldn't be created")
+        let mkdir_result = create_dir(src_dir.clone());
+        if mkdir_result.is_ok() {
+            let main_src_file = {
+                let mut src_dir = src_dir.clone();
+                src_dir.push("main.duck");
+                src_dir
+            };
+
+            if !main_src_file.exists() {
+                // todo: this is currently a silent error - if there's one
+                let _ = fs::write(&main_src_file, generate_default_main_duck());
+            }
         }
+
+
     }
 
     Ok(())
