@@ -24,10 +24,16 @@ where
 {
     just(Token::Test)
         .ignore_then(select_ref! { Token::ConstString(str) => str.clone() })
-        .then_ignore(just(Token::ControlChar('{')))
         .then(value_expr_parser(make_input))
-        .then_ignore(just(Token::ControlChar('}')))
-        .map_with(|(name, body), ctx| (TestCase { name, body }, ctx.span()))
+        .map_with(|(name, mut body), ctx| {
+            body = match body {
+                (ValueExpr::Duck(x), loc) if x.is_empty() => (ValueExpr::Block(vec![]), loc),
+                x @ (ValueExpr::Block(_), _) => x,
+                _ => panic!("Function must be block"),
+            };
+
+            (TestCase { name, body }, ctx.span())
+        })
 }
 
 #[cfg(test)]
