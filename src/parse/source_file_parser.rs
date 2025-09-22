@@ -982,7 +982,7 @@ mod tests {
                 },
             ),
             (
-                "module abc {use test; module xyz { use lol; } fn abc() {} }",
+                "module abc {use test_mod; module xyz { use lol; } fn abc() {} }",
                 SourceFile {
                     sub_modules: vec![(
                         "abc".into(),
@@ -999,7 +999,7 @@ mod tests {
                             )],
                             use_statements: vec![UseStatement::Regular(
                                 false,
-                                vec![Indicator::Module("test".into())],
+                                vec![Indicator::Module("test_mod".into())],
                             )],
                             function_definitions: vec![FunctionDefintion {
                                 name: "abc".into(),

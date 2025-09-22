@@ -2884,7 +2884,7 @@ mod tests {
             "let x: { h: Int, x: { y: Int }} = { h: 4, x: { y: 8 } }",
             "let x: Int = false",
             "let x: String = \"Hallo, Welt!\"",
-            "let x: go sync.WaitGroup = {}",
+            "let x: go `sync.WaitGroup` = {}",
         ];
 
         for valid_declaration in valid_declarations {

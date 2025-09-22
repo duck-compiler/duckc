@@ -1263,7 +1263,7 @@ pub mod tests {
         );
 
         assert_type_expression(
-            "fn(x: Int) -> go fmt.Stringer",
+            "fn(x: Int) -> go `fmt.Stringer`",
             TypeExpr::Fun(
                 vec![("x".to_string().into(), TypeExpr::Int.into_empty_span())],
                 Some(Box::new(
@@ -1295,9 +1295,9 @@ pub mod tests {
         assert_type_expression("{}", TypeExpr::Any);
         assert_type_expression("duck {}", TypeExpr::Any);
 
-        assert_type_expression("go fmt", TypeExpr::Go("fmt".to_string()));
+        assert_type_expression("go `fmt`", TypeExpr::Go("fmt".to_string()));
         assert_type_expression(
-            "go sync.WaitGroup",
+            "go `sync.WaitGroup`",
             TypeExpr::Go("sync.WaitGroup".to_string()),
         );
 
@@ -1504,8 +1504,8 @@ pub mod tests {
             "type Tup = (Int, String, (Float, {x: String}));",
             "type Tup = (Int, String, (Float, {x: String}),);",
             "type Tup = (Int, String, (Float, {x: String}),);",
-            "type Tup = go fmt;",
-            "type Tup = go sync.WaitGroup;",
+            "type Tup = go `fmt`;",
+            "type Tup = go `sync.WaitGroup`;",
             "type X = ::String;",
             "type X = String::ABC::C;",
             "type X = ::String::ABC::C;",
@@ -1548,7 +1548,7 @@ pub mod tests {
             "{ x: {}, y: {}, z: {} }",
             "duck { x: duck {}, y: duck {}, z: duck {} }",
             "duck { x: String, y: duck {}, z: {}, w: { a: String, b: {}, c: duck { aa: String } } }",
-            "go sync.WaitGroup",
+            "go `sync.WaitGroup`",
             "::X",
             "::X::Y",
             "X::Y::Z",
