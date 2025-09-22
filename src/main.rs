@@ -459,6 +459,10 @@ fn parse_src_file(
         result.duckx_components.push(s.clone());
     }
 
+    for test_case in &std_src_file.test_cases {
+        result.test_cases.push(test_case.clone());
+    }
+
     result
 }
 

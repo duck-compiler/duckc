@@ -129,6 +129,10 @@ impl SourceFile {
                     result.duckx_components.push(duck_component);
                 }
 
+                for test_case in src.test_cases {
+                    result.test_cases.push(test_case);
+                }
+
                 for use_statement in &src.use_statements {
                     if matches!(use_statement, UseStatement::Go(..)) {
                         result.push_use(use_statement);
@@ -230,6 +234,12 @@ impl SourceFile {
                 result.duckx_components.push(c.clone());
             }
 
+            for test_case in &s.test_cases {
+                let mut test_case = test_case.clone();
+                mangle_value_expr(&mut test_case.body.0, global_prefix, prefix, &mut mangle_env);
+                result.test_cases.push(test_case)
+            }
+
             result
         }
 
@@ -312,6 +322,10 @@ impl SourceFile {
             let mut c = global_prefix.clone();
             c.extend(unmangle(&tsx_component.name));
             tsx_component.name = mangle(&c);
+        }
+
+        for test_case in &mut flattened_source_file.test_cases {
+            append_global_prefix_value_expr(&mut test_case.body.0, &mut mangle_env);
         }
 
         flattened_source_file

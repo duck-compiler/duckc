@@ -2,7 +2,7 @@ use clap::{Parser as CliParser, Subcommand};
 use std::path::PathBuf;
 
 use crate::{
-    dargo::{self, compile::CompileErrKind, init::InitErrKind, run::RunErrKind},
+    dargo::{self, compile::CompileErrKind, init::InitErrKind, run::RunErrKind, test::TestErrKind},
     tags::Tag,
 };
 
@@ -27,6 +27,7 @@ pub enum Commands {
     Init(InitArgs),
     Clean,
     Run(RunArgs),
+    Test(TestArgs),
 }
 
 #[derive(clap::Args, Debug)]
@@ -60,6 +61,15 @@ pub struct RunArgs {
 }
 
 #[derive(clap::Args, Debug)]
+pub struct TestArgs {
+    pub file: Option<PathBuf>,
+    #[arg(long, short = 'G')]
+    pub optimize_go: bool,
+    #[arg(long, short = 'b')]
+    pub bin: Option<String>,
+}
+
+#[derive(clap::Args, Debug)]
 pub struct InitArgs {
     pub project_name: Option<String>,
     // Examples:
@@ -76,6 +86,7 @@ pub enum CliErrKind {
     Build(BuildErrKind),
     Clean(CleanErrKind),
     Run(RunErrKind),
+    Test(TestErrKind),
 }
 
 pub fn run_cli() -> Result<(), (String, CliErrKind)> {
@@ -114,6 +125,14 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
                 (
                     format!("{}{}{}", Tag::Dargo, Tag::Run, err.0,),
                     CliErrKind::Run(err.1),
+                )
+            })?;
+        }
+        Commands::Test(test_args) => {
+            dargo::test::test(&test_args).map_err(|err| {
+                (
+                    format!("{}{}{}", Tag::Dargo, Tag::Run, err.0,),
+                    CliErrKind::Test(err.1),
                 )
             })?;
         }
