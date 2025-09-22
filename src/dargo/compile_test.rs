@@ -102,6 +102,10 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
 
     let tokens = lex(src_file_name, src_file_file_contents);
     let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
+    src_file_ast.use_statements.push(crate::parse::use_statement_parser::UseStatement::Go("io".to_string(), None));
+    src_file_ast.use_statements.push(crate::parse::use_statement_parser::UseStatement::Go("bufio".to_string(), None));
+    src_file_ast.use_statements.push(crate::parse::use_statement_parser::UseStatement::Go("bytes".to_string(), None));
+    src_file_ast.use_statements.push(crate::parse::use_statement_parser::UseStatement::Go("sync".to_string(), None));
     let mut type_env = typecheck(&mut src_file_ast);
     // the only change in this file is that the parameter is set to true
     let main_fun: &mut FunctionDefintion = src_file_ast.function_definitions.iter_mut()
@@ -119,6 +123,7 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
                     name: "{}",
                     test_case_fn: func() {{
                         fmt.Println("Running Test \"{}\"")
+                        time.Sleep(1000 * time.Millisecond)
                         {}
                     }},
                 }},
@@ -138,6 +143,26 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
             test_case_fn test_case_fn
         }}
 
+        func spinner(wg *sync.WaitGroup, writer *bufio.Writer, stop chan bool, testName string) {{
+            defer wg.Done()
+            animation := `|/-\`
+            i := 0
+            for {{
+                select {{
+		        case <-stop:
+					fmt.Fprintf(writer, "\r")
+					writer.Flush()
+					return
+			    default:
+			        fmt.Fprintf(writer, "\r[%c] Running test: %s", animation[i], testName)
+					writer.Flush()
+
+			        i = (i + 1) % len(animation)
+			        time.Sleep(100 * time.Millisecond)
+			    }}
+		    }}
+        }}
+
         func main() {{
             fmt.Println("tests")
 
@@ -145,15 +170,49 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
                 {test_source}
             }}
 
-            for _, test := range tests {{
-                defer func() {{
-                    if r := recover(); r != nil {{
-                        fmt.Println("test failed", test.name)
-                    }}
-                }}()
+            writer := bufio.NewWriter(os.Stdout)
 
-                test.test_case_fn()
-                fmt.Println("test successful", test.name)
+            for _, test := range tests {{
+                func (currentTest DuckTestCase) {{
+                    var wg sync.WaitGroup
+
+                    stop := make(chan bool)
+                    wg.Add(1)
+                    go spinner(&wg, writer, stop, currentTest.name)
+
+                    originalStdout := os.Stdout
+                    r, w, _ := os.Pipe()
+                    os.Stdout = w
+
+                    var testErr interface{{}}
+
+                    func() {{
+                        defer func() {{
+                            testErr = recover()
+                        }}()
+
+                        currentTest.test_case_fn()
+                    }}()
+
+                    var capturedOutput bytes.Buffer
+
+                    w.Close()
+                    io.Copy(&capturedOutput, r)
+
+                    os.Stdout = originalStdout
+
+                    stop <- true
+                    wg.Wait()
+
+                    if testErr != nil {{
+                        fmt.Fprintf(writer, "[\x1b[31m✘\x1b[0m] Test failed: %s\n", currentTest.name)
+				    }} else {{
+				        fmt.Fprintf(writer, "[\x1b[32m✔\x1b[0m] Test successful: %s\n", currentTest.name)
+				    }}
+
+                    fmt.Fprint(writer, capturedOutput.String())
+                    writer.Flush()
+                }}(test)
             }}
         }}"#,
     );
