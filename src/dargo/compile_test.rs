@@ -1,9 +1,10 @@
 use colored::Colorize;
+use duckwind::EmitEnv;
 use lazy_static::lazy_static;
-use std::{ffi::OsString, fs, path::PathBuf};
+use std::{ffi::OsString, fs, path::PathBuf, sync::mpsc, time::Duration};
 
 use crate::{
-    cli::go_cli::{self, GoCliErrKind}, dargo::cli::CompileArgs, emit::ir::join_ir, lex, parse::{function_parser::FunctionDefintion, value_parser::empty_range}, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
+    cli::go_cli::{self, GoCliErrKind}, dargo::cli::CompileArgs, emit::{ir::join_ir, types::escape_string_for_go}, lex, parse::{function_parser::FunctionDefintion, value_parser::empty_range}, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
 };
 
 #[derive(Debug)]
@@ -105,7 +106,28 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
     src_file_ast.use_statements.push(crate::parse::use_statement_parser::UseStatement::Go("bufio".to_string(), None));
     src_file_ast.use_statements.push(crate::parse::use_statement_parser::UseStatement::Go("bytes".to_string(), None));
     src_file_ast.use_statements.push(crate::parse::use_statement_parser::UseStatement::Go("sync".to_string(), None));
-    let mut type_env = typecheck(&mut src_file_ast);
+
+    let (tailwind_worker_send, tailwind_worker_receive) = mpsc::channel::<String>();
+    let (tailwind_result_send, tailwind_result_receive) = mpsc::channel::<String>();
+
+    let tailwind_prefix = None::<String>;
+
+    std::thread::spawn(move || {
+        let mut emit_env = EmitEnv::new_with_default_config();
+        // emit_env.parse_full_string(src_file_file_contents);
+        loop {
+            let s = tailwind_worker_receive.recv();
+            match s {
+                Ok(s) => emit_env.parse_full_string(tailwind_prefix.as_deref(), s.as_str()),
+                Err(_) => break,
+            }
+        }
+        tailwind_result_send
+            .send(emit_env.to_css_stylesheet(true))
+            .expect("could not send css result");
+    });
+    let mut type_env = typecheck(&mut src_file_ast, &tailwind_worker_send);
+
     // the only change in this file is that the parameter is set to true
     let main_fun: &mut FunctionDefintion = src_file_ast.function_definitions.iter_mut()
         .find(|fun_def| fun_def.name == "main")
@@ -216,10 +238,18 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         }}"#,
     );
 
-    let go_code = format!(
+    let mut go_code = format!(
         "{}\n\n{main_fn}",
         join_ir(&src_file_ast.emit("main".into(), &mut type_env, empty_range()))
     );
+
+    // drop the sender here so that the thread knows it should emit the final tailwind
+    drop(tailwind_worker_send);
+    let css = tailwind_result_receive
+        .recv_timeout(Duration::from_secs(30))
+        .expect("tailwind timed out");
+
+    go_code = format!("{go_code}\nconst TAILWIND_STR = \"{}\"", escape_string_for_go(css.as_str()));
 
     let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.test.go").as_str(), &go_code);
     if compile_args.optimize_go {

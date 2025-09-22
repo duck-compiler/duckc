@@ -401,7 +401,12 @@ impl ValueExpr {
                         ValHtmlStringContents::String(s) => {
                             *s = s.replace("<>", "").replace("</>", "");
                             let mut j = 0;
+
                             while !s.is_empty() && j < s.len() - 1 {
+                                while j < s.len() && !s.is_char_boundary(j) {
+                                    j += 1;
+                                }
+
                                 let slice = &s[j..];
                                 if slice.starts_with("<") && !slice.starts_with("</") {
                                     let mut end_of_tag = None;
@@ -729,7 +734,7 @@ impl ValueExpr {
 
                 for elem in &contents {
                     match elem {
-                        ValHtmlStringContents::String(s) => return_printf.push_str(s),
+                        ValHtmlStringContents::String(s) => return_printf.push_str(&s.replace("%", "%%")),
                         ValHtmlStringContents::Expr(e) => {
                             let ty = TypeExpr::from_value_expr(e, type_env);
                             match ty {

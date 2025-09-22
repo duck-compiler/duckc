@@ -1,18 +1,10 @@
 use colored::Colorize;
+use duckwind::EmitEnv;
 use lazy_static::lazy_static;
-use std::{ffi::OsString, fs, path::PathBuf};
+use std::{ffi::OsString, fs, path::PathBuf, sync::mpsc, time::Duration};
 
 use crate::{
-    DARGO_DOT_DIR,
-    cli::go_cli::{self, GoCliErrKind},
-    dargo::cli::CompileArgs,
-    emit::ir::join_ir,
-    go_fixup::remove_unused_imports::cleanup_go_source,
-    lex,
-    parse::value_parser::empty_range,
-    parse_src_file,
-    tags::Tag,
-    typecheck, write_in_duck_dotdir,
+    cli::go_cli::{self, GoCliErrKind}, dargo::cli::CompileArgs, emit::{ir::join_ir, types::escape_string_for_go}, go_fixup::remove_unused_imports::cleanup_go_source, lex, parse::value_parser::empty_range, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
 };
 
 #[derive(Debug)]
@@ -110,10 +102,38 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
 
     let tokens = lex(src_file_name, src_file_file_contents);
     let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
-    let mut type_env = typecheck(&mut src_file_ast);
+
+    let (tailwind_worker_send, tailwind_worker_receive) = mpsc::channel::<String>();
+    let (tailwind_result_send, tailwind_result_receive) = mpsc::channel::<String>();
+
+    let tailwind_prefix = None::<String>;
+
+    std::thread::spawn(move || {
+        let mut emit_env = EmitEnv::new_with_default_config();
+        // emit_env.parse_full_string(src_file_file_contents);
+        loop {
+            let s = tailwind_worker_receive.recv();
+            match s {
+                Ok(s) => emit_env.parse_full_string(tailwind_prefix.as_deref(), s.as_str()),
+                Err(_) => break,
+            }
+        }
+        tailwind_result_send
+            .send(emit_env.to_css_stylesheet(true))
+            .expect("could not send css result");
+    });
+    let mut type_env = typecheck(&mut src_file_ast, &tailwind_worker_send);
     let mut go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env, empty_range()));
+
+    // drop the sender here so that the thread knows it should emit the final tailwind
+    drop(tailwind_worker_send);
+
+    let css = tailwind_result_receive
+        .recv_timeout(Duration::from_secs(30))
+        .expect("tailwind timed out");
+
     go_code = cleanup_go_source(&go_code, true);
-    // go_code = remove_unused_imports(&go_code)
+    go_code = format!("{go_code}\nconst TAILWIND_STR = \"{}\"", escape_string_for_go(css.as_str()));
 
     let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.go").as_str(), &go_code);
     if compile_args.optimize_go {

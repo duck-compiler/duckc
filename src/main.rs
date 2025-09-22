@@ -12,7 +12,7 @@ use std::{
     fs::{self, File},
     io::Write,
     path::{Path, PathBuf},
-    process,
+    process, sync::mpsc::Sender,
 };
 
 use chumsky::{Parser, error::Rich};
@@ -466,8 +466,9 @@ fn parse_src_file(
     result
 }
 
-fn typecheck(src_file_ast: &mut SourceFile) -> TypeEnv {
+fn typecheck<'a>(src_file_ast: &mut SourceFile, tailwind_tx: &'a Sender<String>) -> TypeEnv<'a> {
     let mut type_env = TypeEnv::default();
+    type_env.tailwind_sender = Some(tailwind_tx);
     type_resolve::typeresolve_source_file(src_file_ast, &mut type_env);
 
     type_env
