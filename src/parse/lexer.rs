@@ -38,6 +38,7 @@ pub enum Token {
     Impl,
     Duck,
     Function,
+    Test,
     Return,
     Ident(String),
     ControlChar(char),
@@ -86,6 +87,7 @@ impl Display for Token {
             Token::ThickArrow => "=>",
             Token::Use => "use",
             Token::Type => "type",
+            Token::Test => "test",
             Token::Go => "go",
             Token::TypeOf => "typeof",
             Token::Struct => "struct",
@@ -443,6 +445,7 @@ pub fn lex_single<'a>(
             "use" => Token::Use,
             "typeof" => Token::TypeOf,
             "impl" => Token::Impl,
+            "test" => Token::Test,
             "type" => Token::Type,
             "duck" => Token::Duck,
             "go" => Token::Go,
@@ -1637,6 +1640,7 @@ mod tests {
             ),
             ("sus", vec![Token::Sus]),
             ("sus fn", vec![Token::Sus, Token::Function]),
+            ("test", vec![Token::Test]),
         ];
 
         for (src, expected_tokens) in test_cases {
