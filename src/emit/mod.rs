@@ -5,4 +5,3 @@ pub mod source_file;
 pub mod tsx_component;
 pub mod types;
 pub mod value;
-pub mod test_binary;

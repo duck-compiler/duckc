@@ -1,4 +1,3 @@
-use chumsky::input::Input;
 use colored::Colorize;
 use lazy_static::lazy_static;
 use std::{ffi::OsString, fs, path::PathBuf};
@@ -219,7 +218,7 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
 
     let go_code = format!(
         "{}\n\n{main_fn}",
-        join_ir(&src_file_ast.emit("main".into(), &mut type_env, empty_range(), true))
+        join_ir(&src_file_ast.emit("main".into(), &mut type_env, empty_range()))
     );
 
     let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.test.go").as_str(), &go_code);

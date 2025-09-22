@@ -1743,6 +1743,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         typeresolve_duckx_component(s, type_env);
     }
 
+    // TODO: typeresolve for tests can be disabled when not in test mode
     for test_case in &mut source_file.test_cases {
         typeresolve_test_case(test_case, type_env);
     }

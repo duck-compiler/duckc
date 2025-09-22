@@ -15,7 +15,6 @@ impl SourceFile {
         pkg_name: String,
         type_env: &mut TypeEnv,
         span: SS,
-        test_mode: bool,
     ) -> Vec<IrInstruction> {
         let mut to_ir = ToIr::default();
 
