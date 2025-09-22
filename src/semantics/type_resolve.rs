@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
+    sync::mpsc::Sender,
 };
 
 use chumsky::container::Container;
@@ -110,7 +111,7 @@ pub struct FunHeader {
 }
 
 #[derive(Debug, Clone)]
-pub struct TypeEnv {
+pub struct TypeEnv<'a> {
     pub identifier_types: Vec<HashMap<String, TypeExpr>>,
     pub type_aliases: Vec<HashMap<String, TypeExpr>>,
     pub all_types: Vec<TypeExpr>,
@@ -125,9 +126,10 @@ pub struct TypeEnv {
     pub generic_structs_generated: Vec<StructDefinition>,
     pub generic_methods_generated: HashMap<String, Vec<FunctionDefintion>>,
     pub prevent_struct_generation: HashSet<String>,
+    pub tailwind_sender: Option<&'a Sender<String>>,
 }
 
-impl Default for TypeEnv {
+impl Default for TypeEnv<'_> {
     fn default() -> Self {
         Self {
             identifier_types: vec![HashMap::new()],
@@ -143,6 +145,7 @@ impl Default for TypeEnv {
             generic_structs_generated: Vec::new(),
             generic_methods_generated: HashMap::new(),
             prevent_struct_generation: HashSet::new(),
+            tailwind_sender: None,
         }
     }
 }
@@ -153,7 +156,13 @@ pub struct TypesSummary {
     pub param_names_used: Vec<String>,
 }
 
-impl TypeEnv {
+impl TypeEnv<'_> {
+    pub fn check_for_tailwind(&self, s: &String) {
+        if let Some(sender) = self.tailwind_sender.as_ref() {
+            sender.send(s.to_owned()).expect("tailwind channel closed");
+        }
+    }
+
     pub fn has_component(&self, name: &str) -> bool {
         self.tsx_components.iter().any(|x| x.name.as_str() == name)
     }
@@ -1658,6 +1667,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     for comp in &source_file.tsx_components {
         type_env.tsx_components.push(comp.clone());
+        type_env.check_for_tailwind(&comp.typescript_source.0);
     }
 
     for comp in &source_file.duckx_components {
@@ -1865,6 +1875,10 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 if let ValHtmlStringContents::Expr(e) = c {
                     typeresolve_value_expr((&mut e.0, e.1), type_env);
                 }
+
+                if let ValHtmlStringContents::String(s) = c {
+                    type_env.check_for_tailwind(s);
+                }
             }
         }
         ValueExpr::RawVariable(_, path) => {
@@ -1901,6 +1915,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     }
                     ValFmtStringContents::String(s) => {
                         type_env.insert_type(TypeExpr::ConstString(s.clone()));
+                        type_env.check_for_tailwind(s);
                     }
                 }
             }
@@ -2247,6 +2262,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             }
         }
         ValueExpr::String(str, _) => {
+            type_env.check_for_tailwind(str);
             type_env.insert_type(TypeExpr::ConstString(str.clone()));
         }
         ValueExpr::Tag(tag) => {
