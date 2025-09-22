@@ -41,7 +41,7 @@ pub mod tests {
     use crate::parse::{
         lexer::lex_parser,
         make_input,
-        value_parser::{empty_range},
+        value_parser::{empty_range, value_expr_into_empty_range},
     };
     use chumsky::Parser;
 
@@ -50,6 +50,7 @@ pub mod tests {
     fn strip_spans(spanned_type_expr: Spanned<TestCase>) -> Spanned<TestCase> {
         let (mut expr, _) = spanned_type_expr;
         expr.body.1 = empty_range();
+        value_expr_into_empty_range(&mut expr.body);
         (expr, empty_range())
     }
 
@@ -114,7 +115,7 @@ pub mod tests {
             TestCase {
                 name: "lol".to_string(),
                 body: (
-                    ValueExpr::Return(None),
+                    ValueExpr::Block(vec![(ValueExpr::Return(None), empty_range())]),
                     empty_range()
                 )
             },
