@@ -115,9 +115,15 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         .iter()
         .map(|test_case| format!(
             r#"
-                fmt.Println("Running Test \"{}\"")
-                {}
+                DuckTestCase {{
+                    name: "{}",
+                    test_case_fn: func() {{
+                        fmt.Println("Running Test \"{}\"")
+                        {}
+                    }},
+                }},
             "#,
+            test_case.name,
             test_case.name,
             join_ir(&test_case.body.0.emit(&mut type_env, &mut crate::emit::value::ToIr { var_counter: 0 }, test_case.body.1).0)
         ))
@@ -125,10 +131,30 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         .join("\n");
 
     let main_fn = format!(
-        r#"func main() {{
+        r#"
+        type test_case_fn func()
+        type DuckTestCase struct {{
+            name string
+            test_case_fn test_case_fn
+        }}
+
+        func main() {{
             fmt.Println("tests")
 
-            {test_source}
+            tests := []DuckTestCase {{
+                {test_source}
+            }}
+
+            for _, test := range tests {{
+                defer func() {{
+                    if r := recover(); r != nil {{
+                        fmt.Println("test failed", test.name)
+                    }}
+                }}()
+
+                test.test_case_fn()
+                fmt.Println("test successful", test.name)
+            }}
         }}"#,
     );
 
