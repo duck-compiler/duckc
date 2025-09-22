@@ -28,7 +28,7 @@ where
         .map_with(|(name, mut body), ctx| {
             body = match body {
                 (ValueExpr::Duck(x), loc) if x.is_empty() => (ValueExpr::Block(vec![]), loc),
-                x @ (ValueExpr::Block(_), _) => x,
+                block @ (ValueExpr::Block(_), _) => block,
                 _ => panic!("Function must be block"),
             };
 
