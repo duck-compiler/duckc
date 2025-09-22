@@ -1,7 +1,7 @@
 {
     "id": "eaa4be15ded1bf103d5de778e31aa3cf",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 535,
+    "line_number": 544,
     "title": "support generics in typeof",
     "tag": "todo",
     "module_tag": "semantics",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Maurice Schmidt",
-        "email": "mvmogo@gmail.com"
+        "name": "Apfelfrosch",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "// todo: support generics in typeof",
     "status": "open",
