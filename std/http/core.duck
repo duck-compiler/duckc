@@ -1,4 +1,7 @@
 use go "net/http";
+use go "slices";
+use go "reflect";
+use go "unsafe";
 
 type RenderedTsx = (
     String,
@@ -60,5 +63,36 @@ fn serve_string(
 fn listen(port: Int) {
     go {
         http.ListenAndServe(fmt.Sprintf(":%d", port.as_dgo_int()), nil);
+    }
+}
+
+fn render(renderer: Html) -> String {
+    go {
+	    env := TemplEnv{[]string{}, []RenderCall{}}
+		res := renderer(&env)
+
+		prelude := `
+            <script type="module">
+            import { h, render } from "https://esm.sh/preact";
+            import { useState } from "https://esm.sh/preact/hooks";
+            import htm from "https://esm.sh/htm";
+
+            // Initialize htm with Preact
+            const html = htm.bind(h);
+        `
+
+        for _, e := range env.ClientComponents {
+            prelude += e
+            prelude += "\n"
+        }
+
+        for _, e := range env.RenderCalls {
+            prelude += fmt.Sprintf("document.querySelectorAll(\"[duckx-render=\\\"%s\\\"]\").forEach(e => render(html`%s`, e))", e.Id, e.Jsx)
+            prelude += "\n"
+        }
+
+        prelude += "\n</script>"
+
+		return ConcDuckString { res + prelude }
     }
 }
