@@ -197,7 +197,7 @@ dependencies = [
 [[package]]
 name = "duckwind"
 version = "0.1.0"
-source = "git+ssh://git@github.com/duck-compiler/duckwind#88efbeb9fb560410d092339c2486286d721147c7"
+source = "git+https://github.com/duck-compiler/duckwind.git#c8dc4917541195868d79f593f070055e6297ac71"
 dependencies = [
  "chumsky",
  "clap",
