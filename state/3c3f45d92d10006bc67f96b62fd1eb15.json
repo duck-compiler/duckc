@@ -1,0 +1,19 @@
+{
+    "id": "3c3f45d92d10006bc67f96b62fd1eb15",
+    "file_path": "../../src/dargo/init.rs",
+    "line_number": 77,
+    "title": "this is currently a silent error - if there's one",
+    "tag": "todo",
+    "module_tag": "dargo",
+    "user": null,
+    "issue_ref": null,
+    "description": "",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// todo: this is currently a silent error - if there's one",
+    "status": "open",
+    "first_seen": "2025-09-22T22:29:59.419951",
+    "history": []
+}

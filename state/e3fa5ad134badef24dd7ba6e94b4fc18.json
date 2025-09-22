@@ -1,8 +1,8 @@
 {
-    "id": "85e0c950789d9ad5d875a7db05b97130",
+    "id": "e3fa5ad134badef24dd7ba6e94b4fc18",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 2390,
-    "title": "add spans",
+    "line_number": 1746,
+    "title": "typeresolve for tests can be disabled when not in test mode",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
-    "source_line": "// TODO add spans",
+    "source_line": "// TODO: typeresolve for tests can be disabled when not in test mode",
     "status": "open",
-    "first_seen": "2025-07-09T23:15:12.305885",
+    "first_seen": "2025-09-22T22:29:59.416019",
     "history": []
 }

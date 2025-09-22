@@ -1,5 +1,35 @@
 [
     {
+        "type": "created",
+        "timestamp": "2025-09-22T22:29:59.411314",
+        "issue_id": "e3fa5ad134badef24dd7ba6e94b4fc18",
+        "issue_title": "typeresolve for tests can be disabled when not in test mode",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "modified",
+        "timestamp": "2025-09-22T22:29:59.411314",
+        "issue_id": "69b37346e3eac68781c08fc1a401d903",
+        "issue_title": "implement flatten for struct definitions",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-09-22T22:29:59.411314",
+        "issue_id": "3c3f45d92d10006bc67f96b62fd1eb15",
+        "issue_title": "this is currently a silent error - if there's one",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
         "type": "closed",
         "timestamp": "2025-09-17T01:37:22.728242",
         "issue_id": "da0532d17b7bc8b710213013d1b37916",
