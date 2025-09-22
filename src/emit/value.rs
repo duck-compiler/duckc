@@ -1045,7 +1045,6 @@ impl ValueExpr {
                     merged_cases.push(the_one);
                 }
 
-                dbg!(&merged_cases);
                 let cases = merged_cases;
 
                 instructions.push(IrInstruction::SwitchType(match_on_value, cases));

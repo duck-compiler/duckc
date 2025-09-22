@@ -2,7 +2,7 @@ use clap::{Parser as CliParser, Subcommand};
 use std::path::PathBuf;
 
 use crate::{
-    dargo::{self, compile::CompileErrKind, init::InitErrKind, run::RunErrKind},
+    dargo::{self, compile::CompileErrKind, init::InitErrKind, run::RunErrKind, test::TestErrKind},
     tags::Tag,
 };
 
@@ -27,12 +27,15 @@ pub enum Commands {
     Init(InitArgs),
     Clean,
     Run(RunArgs),
+    Test(TestArgs),
 }
 
 #[derive(clap::Args, Debug)]
 pub struct BuildArgs {
     // #[arg(long, value_parser = ["x86", "arm"])]
     // arch: Option<String>
+    #[arg(long, short = 'b')]
+    pub bin: Option<String>,
     #[arg(long, short = 'o')]
     pub output_name: Option<String>,
     #[arg(long, short = 'G')]
@@ -53,10 +56,22 @@ pub struct RunArgs {
     pub file: Option<PathBuf>,
     #[arg(long, short = 'G')]
     pub optimize_go: bool,
+    #[arg(long, short = 'b')]
+    pub bin: Option<String>,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct TestArgs {
+    pub file: Option<PathBuf>,
+    #[arg(long, short = 'G')]
+    pub optimize_go: bool,
+    #[arg(long, short = 'b')]
+    pub bin: Option<String>,
 }
 
 #[derive(clap::Args, Debug)]
 pub struct InitArgs {
+    pub project_name: Option<String>,
     // Examples:
     // #[arg(long, short = 'o')]
     // optimize: bool,
@@ -71,6 +86,7 @@ pub enum CliErrKind {
     Build(BuildErrKind),
     Clean(CleanErrKind),
     Run(RunErrKind),
+    Test(TestErrKind),
 }
 
 pub fn run_cli() -> Result<(), (String, CliErrKind)> {
@@ -92,8 +108,8 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
                 )
             })?;
         }
-        Commands::Init(_init_args) => {
-            dargo::init::init_project(None)
+        Commands::Init(init_args) => {
+            dargo::init::init_project(None, init_args)
                 .map_err(|err| (format!("{}{}", Tag::Dargo, err.0), CliErrKind::Init(err.1)))?;
         }
         Commands::Clean => {
@@ -109,6 +125,14 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
                 (
                     format!("{}{}{}", Tag::Dargo, Tag::Run, err.0,),
                     CliErrKind::Run(err.1),
+                )
+            })?;
+        }
+        Commands::Test(test_args) => {
+            dargo::test::test(&test_args).map_err(|err| {
+                (
+                    format!("{}{}{}", Tag::Dargo, Tag::Run, err.0,),
+                    CliErrKind::Test(err.1),
                 )
             })?;
         }

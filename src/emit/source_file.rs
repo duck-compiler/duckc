@@ -10,7 +10,12 @@ use crate::{
 };
 
 impl SourceFile {
-    pub fn emit(self, pkg_name: String, type_env: &mut TypeEnv, span: SS) -> Vec<IrInstruction> {
+    pub fn emit(
+        self,
+        pkg_name: String,
+        type_env: &mut TypeEnv,
+        span: SS,
+    ) -> Vec<IrInstruction> {
         let mut to_ir = ToIr::default();
 
         let type_definitions = emit_type_definitions(type_env, &mut to_ir);

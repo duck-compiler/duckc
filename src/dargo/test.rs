@@ -3,34 +3,34 @@ use lazy_static::lazy_static;
 use std::io::ErrorKind as IOErrKind;
 use std::process::Command;
 
-use crate::dargo::cli::{CompileArgs, RunArgs};
-use crate::dargo::compile::{CompileErrKind, compile};
+use crate::dargo::cli::{CompileArgs, TestArgs};
+use crate::dargo::compile_test::{self, CompileTestErrKind};
 use crate::{
     dargo::build::{BuildErrKind, build},
     tags::Tag,
 };
 
 #[derive(Debug)]
-pub enum RunErrKind {
+pub enum TestErrKind {
     BuildErr(BuildErrKind),
     MissingTargetBinary,
     NoBinaryFound,
-    CompileErr(CompileErrKind),
+    CompileTestErrKind(CompileTestErrKind),
     IOErr(IOErrKind),
     Unknown(),
 }
 
 lazy_static! {
-    static ref COMPILE_TAG: String = " compile ".on_bright_black().bright_white().to_string();
+    static ref COMPILE_TEST_TAG: String = " compile test ".on_bright_black().bright_white().to_string();
 }
 
-pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
-    if run_args.file.is_some() {
-        let run_args_file = run_args.file.clone().unwrap();
-        let compile_result = compile(CompileArgs {
+pub fn test(test_args: &TestArgs) -> Result<(), (String, TestErrKind)> {
+    if test_args.file.is_some() {
+        let run_args_file = test_args.file.clone().unwrap();
+        let compile_result = compile_test::compile(CompileArgs {
             file: run_args_file.clone(),
             output_name: None,
-            optimize_go: run_args.optimize_go,
+            optimize_go: test_args.optimize_go,
         })
         .map_err(|err| {
             (
@@ -40,7 +40,7 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
                     Tag::Err,
                     err.0
                 ),
-                RunErrKind::CompileErr(err.1),
+                TestErrKind::CompileTestErrKind(err.1),
             )
         })?;
 
@@ -51,7 +51,7 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
                     Tag::IO,
                     Tag::Err
                 ),
-                RunErrKind::IOErr(err.kind()),
+                TestErrKind::IOErr(err.kind()),
             )
         })?;
 
@@ -65,7 +65,7 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
                         Tag::IO,
                         Tag::Err
                     ),
-                    RunErrKind::IOErr(err.kind()),
+                    TestErrKind::IOErr(err.kind()),
                 )
             })?
             .wait()
@@ -77,7 +77,7 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
                         Tag::IO,
                         Tag::Err
                     ),
-                    RunErrKind::IOErr(err.kind()),
+                    TestErrKind::IOErr(err.kind()),
                 )
             })?;
 
@@ -94,9 +94,9 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
     }
 
     let build_result = build(&crate::dargo::cli::BuildArgs {
-        bin: run_args.bin.clone(),
+        bin: test_args.bin.clone(),
         output_name: None,
-        optimize_go: run_args.optimize_go,
+        optimize_go: test_args.optimize_go,
     })
     .map_err(|err| {
         (
@@ -106,19 +106,19 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
                 Tag::Err,
                 err.0
             ),
-            RunErrKind::BuildErr(err.1),
+            TestErrKind::BuildErr(err.1),
         )
     })?;
 
     let binary_path = if build_result.binaries.len() > 1 {
-        let Some(binary_name) = &run_args.bin else {
+        let Some(binary_name) = &test_args.bin else {
             return Err((
                 format!(
                     "{}{} missing target binary to run. mutliple binaries are available, specify using --bin <binary_name>\n",
                     Tag::Build,
                     Tag::Err,
                 ),
-                RunErrKind::MissingTargetBinary
+                TestErrKind::MissingTargetBinary
             ))
         };
 
@@ -131,7 +131,7 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
                     Tag::Err,
                     binary_name
                 ),
-                RunErrKind::NoBinaryFound
+                TestErrKind::NoBinaryFound
             ))
         }
 
@@ -146,7 +146,7 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
                     Tag::Build,
                     Tag::Err,
                 ),
-                RunErrKind::NoBinaryFound
+                TestErrKind::NoBinaryFound
             ))
         }
 
@@ -162,7 +162,7 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
                     Tag::IO,
                     Tag::Err
                 ),
-                RunErrKind::IOErr(err.kind()),
+                TestErrKind::IOErr(err.kind()),
             )
         })?;
 
@@ -176,7 +176,7 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
                     Tag::IO,
                     Tag::Err
                 ),
-                RunErrKind::IOErr(err.kind()),
+                TestErrKind::IOErr(err.kind()),
             )
         })?
         .wait()
@@ -188,7 +188,7 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
                     Tag::IO,
                     Tag::Err
                 ),
-                RunErrKind::IOErr(err.kind()),
+                TestErrKind::IOErr(err.kind()),
             )
         })?;
 

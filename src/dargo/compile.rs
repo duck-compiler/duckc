@@ -99,7 +99,7 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
                     "{}{} couldn't read file '{}'. msg='{}'",
                     *COMPILE_TAG,
                     Tag::Err,
-                    src_file_name.bright_blue(),
+                    src_file.to_string_lossy().bright_blue(),
                     err.to_string().bright_red()
                 ),
                 CompileErrKind::CannotReadFile,

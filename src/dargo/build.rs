@@ -21,7 +21,7 @@ pub enum BuildErrKind {
 }
 
 pub struct BuildOutput {
-    pub binary_path: PathBuf,
+    pub binaries: Vec<(String, PathBuf)>,
 }
 
 pub fn build(build_args: &BuildArgs) -> Result<BuildOutput, (String, BuildErrKind)> {
@@ -123,8 +123,40 @@ pub fn build(build_args: &BuildArgs) -> Result<BuildOutput, (String, BuildErrKin
 
     copy_dir_all(Path::new("./src"), copy_target)?;
 
+    if !dargo_config.binaries.is_empty() {
+        let mut binaries = vec![];
+        for target_binary in dargo_config.binaries {
+            let mut copy_target_clone = copy_target.to_path_buf();
+            copy_target_clone.push(target_binary.file);
+
+            let compile_output = compile::compile(CompileArgs {
+                file: copy_target_clone,
+                output_name: Some(target_binary.name.clone()),
+                optimize_go: build_args.optimize_go,
+            })
+            .map_err(|err| {
+                (
+                    format!(
+                        "{}{} couldn't compile the code\n{}",
+                        Tag::Build,
+                        Tag::Err,
+                        err.0,
+                    ),
+                    BuildErrKind::Compile(err.1),
+                )
+            })?;
+
+            binaries.push((target_binary.name, compile_output.binary_path))
+        }
+
+        return Ok(BuildOutput {
+            binaries
+        })
+    }
+
     let mut copy_target_clone = copy_target.to_path_buf();
     copy_target_clone.push("main.duck");
+
     let compile_output = compile::compile(CompileArgs {
         file: copy_target_clone,
         output_name: build_args.output_name.clone(),
@@ -142,8 +174,8 @@ pub fn build(build_args: &BuildArgs) -> Result<BuildOutput, (String, BuildErrKin
         )
     })?;
 
-    Ok(BuildOutput {
-        binary_path: compile_output.binary_path,
+    return Ok(BuildOutput {
+        binaries: vec![("default_target".to_string(), compile_output.binary_path)],
     })
 }
 

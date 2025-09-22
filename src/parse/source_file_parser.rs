@@ -5,20 +5,10 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        Context, SS, Spanned,
-        duckx_component_parser::{DuckxComponent, duckx_component_parser},
-        function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
-        lexer::{Token, lex_parser},
-        make_input, parse_failure,
-        struct_parser::{StructDefinition, struct_definition_parser},
-        tsx_component_parser::{TsxComponent, tsx_component_parser},
-        type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
-        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
-        value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr},
+        duckx_component_parser::{duckx_component_parser, DuckxComponent}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, test_parser::{test_parser, TestCase}, tsx_component_parser::{tsx_component_parser, TsxComponent}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, Spanned, SS
     },
     semantics::ident_mangler::{
-        MangleEnv, mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression,
-        mangle_value_expr, unmangle,
+        mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
     },
 };
 
@@ -31,6 +21,7 @@ pub struct SourceFile {
     pub sub_modules: Vec<(String, SourceFile)>,
     pub tsx_components: Vec<TsxComponent>,
     pub duckx_components: Vec<DuckxComponent>,
+    pub test_cases: Vec<TestCase>,
 }
 
 #[derive(Debug, Clone)]
@@ -42,6 +33,7 @@ pub enum SourceUnit {
     Struct(StructDefinition),
     Use(UseStatement),
     Module(String, SourceFile),
+    Test(Spanned<TestCase>)
 }
 
 impl SourceFile {
@@ -68,9 +60,9 @@ impl SourceFile {
                     if with_std {
                         imports.insert("std".into(), (true, vec![]));
                     }
-                    for u in &s.use_statements {
-                        if let UseStatement::Regular(glob, v) = u {
-                            let pre = v
+                    for use_statement in &s.use_statements {
+                        if let UseStatement::Regular(glob, segments) = use_statement {
+                            let pre = segments
                                 .iter()
                                 .take_while(|x| matches!(x, Indicator::Module(_)))
                                 .map(|x| {
@@ -78,10 +70,11 @@ impl SourceFile {
                                     x.to_string()
                                 })
                                 .collect::<Vec<_>>();
-                            let last = v.last();
-                            if let Some(Indicator::Symbols(sym)) = last {
-                                for s in sym {
-                                    imports.insert(s.clone(), (*glob, pre.clone()));
+
+                            let last = segments.last();
+                            if let Some(Indicator::Symbols(symbols)) = last {
+                                for symbol in symbols {
+                                    imports.insert(symbol.clone(), (*glob, pre.clone()));
                                 }
                             }
                         }
@@ -111,14 +104,14 @@ impl SourceFile {
                 p.push(name.to_owned());
                 let src = flatten0(sub_module, global_prefix, &p, with_std);
 
-                for f in src.function_definitions {
-                    mangle_env.insert_ident(f.name[prefix.len()..].to_string());
-                    result.function_definitions.push(f);
+                for function_definition in src.function_definitions {
+                    mangle_env.insert_ident(function_definition.name[prefix.len()..].to_string());
+                    result.function_definitions.push(function_definition);
                 }
 
-                for t in src.type_definitions {
-                    mangle_env.insert_type(t.name[prefix.len()..].to_string());
-                    result.type_definitions.push(t);
+                for type_definition in src.type_definitions {
+                    mangle_env.insert_type(type_definition.name[prefix.len()..].to_string());
+                    result.type_definitions.push(type_definition);
                 }
 
                 for struct_definition in src.struct_definitions {
@@ -136,54 +129,61 @@ impl SourceFile {
                     result.duckx_components.push(duck_component);
                 }
 
-                for u in &src.use_statements {
-                    if matches!(u, UseStatement::Go(..)) {
-                        result.push_use(u);
+                for test_case in src.test_cases {
+                    result.test_cases.push(test_case);
+                }
+
+                for use_statement in &src.use_statements {
+                    if matches!(use_statement, UseStatement::Go(..)) {
+                        result.push_use(use_statement);
                     }
                 }
             }
 
-            for u in &s.use_statements {
-                if matches!(u, UseStatement::Go(..)) {
-                    result.push_use(u);
+            for use_statement in &s.use_statements {
+                if matches!(use_statement, UseStatement::Go(..)) {
+                    result.push_use(use_statement);
                 }
             }
 
             for func in &s.function_definitions {
-                let mut f = func.clone();
+                let mut func = func.clone();
 
                 let mut p = Vec::new();
                 p.extend_from_slice(prefix);
-                p.push(f.name.clone());
-                f.name = mangle(&p);
+                p.push(func.name.clone());
+                func.name = mangle(&p);
 
-                if let Some(return_type) = &mut f.return_type {
+                if let Some(return_type) = &mut func.return_type {
                     mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
                 }
+
                 mangle_env.push_idents();
-                if let Some(params) = &mut f.params {
+                if let Some(params) = &mut func.params {
                     for (name, type_expr) in params {
                         mangle_type_expression(&mut type_expr.0, prefix, &mut mangle_env);
                         mangle_env.insert_ident(name.clone());
                     }
                 }
-                mangle_value_expr(&mut f.value_expr.0, global_prefix, prefix, &mut mangle_env);
+                mangle_value_expr(&mut func.value_expr.0, global_prefix, prefix, &mut mangle_env);
                 mangle_env.pop_idents();
-                result.function_definitions.push(f);
+                result.function_definitions.push(func);
             }
 
-            for t in &s.type_definitions {
-                let mut ty = t.clone();
+            for type_definition in &s.type_definitions {
+                let mut ty = type_definition.clone();
 
                 let mut p = Vec::new();
                 p.extend_from_slice(prefix);
                 p.push(ty.name.clone());
+
                 ty.name = mangle(&p);
                 mangle_type_expression(&mut ty.type_expression.0, prefix, &mut mangle_env);
                 result.type_definitions.push(ty);
             }
 
             // todo(@Apfelfrosch): implement flatten for struct definitions
+            // can this be deleted?
             for struct_def in &s.struct_definitions {
                 let mut struct_def = struct_def.clone();
 
@@ -220,11 +220,11 @@ impl SourceFile {
                 result.struct_definitions.push(struct_def);
             }
 
-            for c in &s.tsx_components {
+            for component in &s.tsx_components {
                 // todo: mangle components in tsx
-                let mut c = c.clone();
-                mangle_tsx_component(&mut c, global_prefix, prefix, &mut mangle_env);
-                result.tsx_components.push(c.clone());
+                let mut component = component.clone();
+                mangle_tsx_component(&mut component, global_prefix, prefix, &mut mangle_env);
+                result.tsx_components.push(component.clone());
             }
 
             for c in &s.duckx_components {
@@ -234,91 +234,101 @@ impl SourceFile {
                 result.duckx_components.push(c.clone());
             }
 
+            for test_case in &s.test_cases {
+                let mut test_case = test_case.clone();
+                mangle_value_expr(&mut test_case.body.0, global_prefix, prefix, &mut mangle_env);
+                result.test_cases.push(test_case)
+            }
+
             result
         }
 
-        let mut r = flatten0(self, global_prefix, &vec![], with_std);
+        let mut flattened_source_file = flatten0(self, global_prefix, &vec![], with_std);
 
         let mut mangle_env = MangleEnv {
             sub_mods: Vec::new(),
             global_prefix: global_prefix.clone(),
-            tsx_components: r.tsx_components.iter().map(|x| x.name.clone()).collect(),
-            duckx_components: r.duckx_components.iter().map(|x| x.name.clone()).collect(),
+            tsx_components: flattened_source_file.tsx_components.iter().map(|x| x.name.clone()).collect(),
+            duckx_components: flattened_source_file.duckx_components.iter().map(|x| x.name.clone()).collect(),
             imports: HashMap::new(),
             names: vec![
-                r.function_definitions
+                flattened_source_file.function_definitions
                     .iter()
                     .map(|x| x.name.clone())
                     .collect::<Vec<_>>(),
             ],
             types: vec![
-                r.type_definitions
+                flattened_source_file.type_definitions
                     .iter()
                     .map(|x| x.name.clone())
-                    .chain(r.struct_definitions.iter().map(|x| x.name.clone()))
+                    .chain(flattened_source_file.struct_definitions.iter().map(|x| x.name.clone()))
                     .collect::<Vec<_>>(),
             ],
         };
 
-        for f in &mut r.function_definitions {
+        for function_definition in &mut flattened_source_file.function_definitions {
             let mut c = global_prefix.clone();
-            c.extend(unmangle(&f.name));
-            f.name = mangle(&c);
+            c.extend(unmangle(&function_definition.name));
+            function_definition.name = mangle(&c);
 
-            for t in f.return_type.iter_mut().map(|x| &mut x.0).chain(
-                f.params
+            for type_expr in function_definition.return_type.iter_mut().map(|type_expr| &mut type_expr.0).chain(
+                function_definition.params
                     .iter_mut()
                     .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0)),
             ) {
-                append_global_prefix_type_expr(t, &mut mangle_env);
+                append_global_prefix_type_expr(type_expr, &mut mangle_env);
             }
 
-            append_global_prefix_value_expr(&mut f.value_expr.0, &mut mangle_env);
+            append_global_prefix_value_expr(&mut function_definition.value_expr.0, &mut mangle_env);
         }
 
-        for t in &mut r.type_definitions {
-            let mut c = global_prefix.clone();
-            c.extend(unmangle(&t.name));
-            t.name = mangle(&c);
+        for type_definition in &mut flattened_source_file.type_definitions {
+            let mut p = global_prefix.clone();
+            p.extend(unmangle(&type_definition.name));
+            type_definition.name = mangle(&p);
 
-            append_global_prefix_type_expr(&mut t.type_expression.0, &mut mangle_env);
+            append_global_prefix_type_expr(&mut type_definition.type_expression.0, &mut mangle_env);
         }
 
-        for s in &mut r.struct_definitions {
+        for struct_definition in &mut flattened_source_file.struct_definitions {
             let mut c = global_prefix.clone();
-            c.extend(unmangle(&s.name));
-            s.name = mangle(&c);
+            c.extend(unmangle(&struct_definition.name));
+            struct_definition.name = mangle(&c);
 
-            for m in &mut s.methods {
-                for t in m.return_type.iter_mut().map(|x| &mut x.0).chain(
-                    m.params
+            for method in &mut struct_definition.methods {
+                for type_expr in method.return_type.iter_mut().map(|type_expr| &mut type_expr.0).chain(
+                    method.params
                         .iter_mut()
                         .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0)),
                 ) {
-                    append_global_prefix_type_expr(t, &mut mangle_env);
+                    append_global_prefix_type_expr(type_expr, &mut mangle_env);
                 }
 
-                append_global_prefix_value_expr(&mut m.value_expr.0, &mut mangle_env);
+                append_global_prefix_value_expr(&mut method.value_expr.0, &mut mangle_env);
             }
         }
 
-        for s in &mut r.duckx_components {
-            let mut c = global_prefix.clone();
+        for component in &mut flattened_source_file.duckx_components {
+            let mut p = global_prefix.clone();
 
-            append_global_prefix_type_expr(&mut s.props_type.0, &mut mangle_env);
-            append_global_prefix_value_expr(&mut s.value_expr.0, &mut mangle_env);
+            append_global_prefix_type_expr(&mut component.props_type.0, &mut mangle_env);
+            append_global_prefix_value_expr(&mut component.value_expr.0, &mut mangle_env);
 
-            c.extend(unmangle(&s.name));
-            s.name = mangle(&c);
+            p.extend(unmangle(&component.name));
+            component.name = mangle(&p);
         }
 
-        for s in &mut r.tsx_components {
+        for tsx_component in &mut flattened_source_file.tsx_components {
             let mut c = global_prefix.clone();
-            c.extend(unmangle(&s.name));
-            s.name = mangle(&c);
+            c.extend(unmangle(&tsx_component.name));
+            tsx_component.name = mangle(&c);
         }
 
-        r
+        for test_case in &mut flattened_source_file.test_cases {
+            append_global_prefix_value_expr(&mut test_case.body.0, &mut mangle_env);
+        }
+
+        flattened_source_file
     }
 }
 
@@ -687,14 +697,15 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
                     ),
                 )
             })
-            .fold(SourceFile::default(), |mut acc, (internal, x)| {
+            .fold(SourceFile::default(), |mut acc, (internal, parsed_src)| {
                 if internal {
-                    acc.function_definitions.extend(x.function_definitions);
-                    acc.type_definitions.extend(x.type_definitions);
-                    acc.sub_modules.extend(x.sub_modules);
-                    acc.struct_definitions.extend(x.struct_definitions);
+                    acc.function_definitions.extend(parsed_src.function_definitions);
+                    acc.type_definitions.extend(parsed_src.type_definitions);
+                    acc.sub_modules.extend(parsed_src.sub_modules);
+                    acc.struct_definitions.extend(parsed_src.struct_definitions);
+                    acc.test_cases.extend(parsed_src.test_cases);
                 }
-                acc.use_statements.extend(x.use_statements);
+                acc.use_statements.extend(parsed_src.use_statements);
                 acc
             })
     } else {
@@ -764,7 +775,8 @@ where
             tsx_component_parser().map(SourceUnit::Component),
             duckx_component_parser(make_input.clone()).map(SourceUnit::Template),
             struct_definition_parser(make_input.clone()).map(SourceUnit::Struct),
-            function_definition_parser(make_input).map(SourceUnit::Func),
+            function_definition_parser(make_input.clone()).map(SourceUnit::Func),
+            test_parser(make_input).map(SourceUnit::Test),
             just(Token::Module)
                 .ignore_then(select_ref! { Token::Ident(i) => i.to_owned() })
                 .then(choice((
@@ -791,6 +803,7 @@ where
             let mut sub_modules = Vec::new();
             let mut tsx_components = Vec::new();
             let mut template_components = Vec::new();
+            let mut test_cases = Vec::new();
 
             for source_unit in source_units {
                 use SourceUnit::*;
@@ -802,6 +815,7 @@ where
                     Module(name, def) => sub_modules.push((name, def)),
                     Component(tsx_component) => tsx_components.push(tsx_component),
                     Template(duckx_component) => template_components.push(duckx_component),
+                    Test(test_case) => test_cases.push(test_case.0),
                 }
             }
 
@@ -813,6 +827,7 @@ where
                 sub_modules,
                 tsx_components,
                 duckx_components: template_components,
+                test_cases
             }
         })
     })
@@ -982,7 +997,7 @@ mod tests {
                 },
             ),
             (
-                "module abc {use test; module xyz { use lol; } fn abc() {} }",
+                "module abc {use test_mod; module xyz { use lol; } fn abc() {} }",
                 SourceFile {
                     sub_modules: vec![(
                         "abc".into(),
@@ -999,7 +1014,7 @@ mod tests {
                             )],
                             use_statements: vec![UseStatement::Regular(
                                 false,
-                                vec![Indicator::Module("test".into())],
+                                vec![Indicator::Module("test_mod".into())],
                             )],
                             function_definitions: vec![FunctionDefintion {
                                 name: "abc".into(),

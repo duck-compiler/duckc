@@ -7,18 +7,11 @@ use chumsky::container::Container;
 
 use crate::{
     parse::{
-        SS, Spanned, SpannedMutRef,
-        duckx_component_parser::DuckxComponent,
-        function_parser::{FunctionDefintion, LambdaFunctionExpr},
-        source_file_parser::SourceFile,
-        struct_parser::StructDefinition,
-        tsx_component_parser::{
-            Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
-        },
-        type_parser::{Duck, TypeDefinition, TypeExpr},
-        value_parser::{
+        duckx_component_parser::DuckxComponent, function_parser::{FunctionDefintion, LambdaFunctionExpr}, source_file_parser::SourceFile, struct_parser::StructDefinition, test_parser::TestCase, tsx_component_parser::{
+            do_edits, Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit
+        }, type_parser::{Duck, TypeDefinition, TypeExpr}, value_parser::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
-        },
+        }, Spanned, SpannedMutRef, SS
     },
     semantics::ident_mangler::mangle,
     tags::Tag,
@@ -36,6 +29,12 @@ fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
     type_env.insert_identifier_type("props".to_string(), c.props_type.0.clone());
     type_env.all_types.push(c.props_type.0.clone());
     typeresolve_value_expr((&mut c.value_expr.0, c.value_expr.1), type_env);
+    type_env.pop_identifier_types();
+}
+
+fn typeresolve_test_case(test_case: &mut TestCase, type_env: &mut TypeEnv) {
+    type_env.push_identifier_types();
+    typeresolve_value_expr((&mut test_case.body.0, test_case.body.1), type_env);
     type_env.pop_identifier_types();
 }
 
@@ -1592,6 +1591,11 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             sort_fields_value_expr(&mut function_definition.value_expr.0);
         });
 
+    source_file
+        .test_cases
+        .iter_mut()
+        .for_each(|test_case| sort_fields_value_expr(&mut test_case.body.0));
+
     println!("{} insert type definitions", Tag::TypeResolve);
 
     // Step 2: Insert type definitions
@@ -1738,6 +1742,12 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     for s in &mut source_file.duckx_components {
         typeresolve_duckx_component(s, type_env);
     }
+
+    // TODO: typeresolve for tests can be disabled when not in test mode
+    for test_case in &mut source_file.test_cases {
+        typeresolve_test_case(test_case, type_env);
+    }
+
     type_env.tsx_components = source_file.tsx_components.clone();
     type_env.duckx_components = source_file.duckx_components.clone();
 
