@@ -123,7 +123,7 @@ pub fn build(build_args: &BuildArgs) -> Result<BuildOutput, (String, BuildErrKin
 
     copy_dir_all(Path::new("./src"), copy_target)?;
 
-    if dargo_config.binaries.len() >= 1 {
+    if !dargo_config.binaries.is_empty() {
         let mut binaries = vec![];
         for target_binary in dargo_config.binaries {
             let mut copy_target_clone = copy_target.to_path_buf();

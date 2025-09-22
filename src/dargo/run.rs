@@ -138,7 +138,7 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
         let binary = binary.unwrap();
         binary.1.clone()
     } else {
-        let first_binary = build_result.binaries.get(0);
+        let first_binary = build_result.binaries.first();
         if first_binary.is_none() {
             return Err((
                 format!(
