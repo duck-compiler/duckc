@@ -126,7 +126,6 @@ mod tests {
         let file_path = create_temp_file("valid_dargo.toml", toml_content);
 
         let result = load_dargo_config(Some(file_path.clone()));
-        dbg!(&result);
         assert!(result.is_ok());
         let config = result.unwrap();
 
