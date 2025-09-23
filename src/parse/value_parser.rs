@@ -121,6 +121,7 @@ pub enum ValueExpr {
     FormattedString(Vec<ValFmtStringContents>),
     Ref(Box<Spanned<ValueExpr>>),
     RefMut(Box<Spanned<ValueExpr>>),
+    Deref(Box<Spanned<ValueExpr>>),
 }
 
 pub trait IntoBlock {
@@ -145,7 +146,7 @@ impl ValueExpr {
 
     pub fn needs_semicolon(&self) -> bool {
         match self {
-            ValueExpr::Ref(..) | ValueExpr::RefMut(..) => true,
+            ValueExpr::Deref(..) | ValueExpr::Ref(..) | ValueExpr::RefMut(..) => true,
             ValueExpr::HtmlString(..) => true,
             ValueExpr::If {
                 condition: _,
@@ -354,7 +355,8 @@ where
                 .or_not()
                 .boxed();
 
-            let declaration = just(Token::Let).or(just(Token::Const))
+            let declaration = just(Token::Let)
+                .or(just(Token::Const))
                 .then(
                     select_ref! { Token::Ident(identifier) => identifier.to_string() }
                         .map_with(|x, e| (x, e.span())),
@@ -520,8 +522,9 @@ where
 
             let tag_identifier = choice((
                 select_ref! { Token::Ident(ident) => ident.to_string() },
-                just(Token::ControlChar('.')).map(|_| "DOT".to_string())
-            )).boxed();
+                just(Token::ControlChar('.')).map(|_| "DOT".to_string()),
+            ))
+            .boxed();
 
             let tag_expr = just(Token::ControlChar('.'))
                 .ignore_then(tag_identifier)
@@ -673,6 +676,7 @@ where
             ))
             .or_not()
             .then(just(Token::ControlChar('!')).repeated().collect::<Vec<_>>())
+            .then(just(Token::ControlChar('*')).or_not())
             .then(
                 value_expr_parser
                     .clone()
@@ -750,8 +754,8 @@ where
                 .repeated()
                 .collect::<Vec<_>>(),
             )
-            .map(|(((is_ref, neg), target), params)| {
-                let target = params.into_iter().fold(target, |acc, x| match x {
+            .map(|((((is_ref, neg), is_deref), target), params)| {
+                let mut target = params.into_iter().fold(target, |acc, x| match x {
                     AtomPostParseUnit::ArrayAccess(idx_expr) => {
                         ValueExpr::ArrayAccess(acc.into(), idx_expr.into()).into_empty_span()
                     }
@@ -767,6 +771,10 @@ where
                     }
                     .into_empty_span(),
                 });
+
+                if is_deref.is_some() {
+                    target = ValueExpr::Deref(Box::new(target)).into_empty_span();
+                }
 
                 let res = neg.into_iter().fold(target, |acc, _| {
                     ValueExpr::BoolNegate(acc.into()).into_empty_span() // TODO(@Apfelfrosch) <-- fix this empty span
@@ -1086,7 +1094,9 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
 pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
     v.1 = empty_range();
     match &mut v.0 {
-        ValueExpr::Ref(v) | ValueExpr::RefMut(v) => value_expr_into_empty_range(&mut *v),
+        ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
+            value_expr_into_empty_range(&mut *v)
+        }
         ValueExpr::ArrayAccess(target, idx_expr) => {
             value_expr_into_empty_range(target);
             value_expr_into_empty_range(idx_expr);
@@ -1300,14 +1310,8 @@ mod tests {
                     .into_empty_span(),
                 ]),
             ),
-            (
-                ".tag",
-                ValueExpr::Tag("tag".to_string()),
-            ),
-            (
-                "..",
-                ValueExpr::Tag("DOT".to_string()),
-            ),
+            (".tag", ValueExpr::Tag("tag".to_string())),
+            ("..", ValueExpr::Tag("DOT".to_string())),
             (
                 "a<String>()",
                 ValueExpr::FunctionCall {
@@ -2856,6 +2860,25 @@ mod tests {
                 ),
             ),
             ("&a", ValueExpr::Ref(var("a"))),
+            ("*a", ValueExpr::Deref(var("a"))),
+            (
+                "*a.x",
+                ValueExpr::Deref(
+                    ValueExpr::FieldAccess {
+                        target_obj: var("a"),
+                        field_name: "x".to_string(),
+                    }
+                    .into_empty_span()
+                    .into(),
+                ),
+            ),
+            (
+                "*a * *b",
+                ValueExpr::Mul(
+                    ValueExpr::Deref(var("a")).into_empty_span().into(),
+                    ValueExpr::Deref(var("b")).into_empty_span().into(),
+                ),
+            ),
         ];
 
         for (i, (src, expected_tokens)) in test_cases.into_iter().enumerate() {

@@ -52,6 +52,12 @@ impl TypeExpr {
             ValueExpr::RefMut(v) => {
                 TypeExpr::RefMut((TypeExpr::from_value_expr(v, type_env), v.1.clone()).into())
             }
+            ValueExpr::Deref(v) => {
+                let ty_expr = TypeExpr::from_value_expr(&*v, type_env);
+                require(matches!(ty_expr, TypeExpr::Ref(..) | TypeExpr::RefMut(..)), "Needs to be ref".to_string());
+                let (TypeExpr::Ref(t) | TypeExpr::RefMut(t)) = ty_expr else {unreachable!()};
+                t.0
+            }
             ValueExpr::HtmlString(..) => TypeExpr::Html,
             ValueExpr::Tag(identifier) => TypeExpr::Tag(identifier.clone()),
             ValueExpr::RawVariable(_x, p) => panic!("{}", p.join(" ").leak()),

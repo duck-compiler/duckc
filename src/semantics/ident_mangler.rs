@@ -357,7 +357,7 @@ pub fn mangle_value_expr(
     mangle_env: &mut MangleEnv,
 ) {
     match value_expr {
-        ValueExpr::Ref(t) | ValueExpr::RefMut(t) => {
+        ValueExpr::Deref(t) | ValueExpr::Ref(t) | ValueExpr::RefMut(t) => {
             mangle_value_expr(&mut t.0, global_prefix, prefix, mangle_env)
         }
         ValueExpr::HtmlString(contents) => {

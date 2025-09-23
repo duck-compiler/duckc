@@ -118,6 +118,7 @@ pub enum IrValue {
     ArrayAccess(Box<IrValue>, Box<IrValue>),
     Imm(String),
     Pointer(Box<IrValue>),
+    Deref(Box<IrValue>),
     Nil,
 }
 
@@ -291,6 +292,32 @@ impl ValueExpr {
         span: SS,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
+            ValueExpr::Deref(v) => {
+                let target_type = TypeExpr::from_value_expr_resolved_type_name(
+                    &self.clone().into_empty_span(),
+                    type_env,
+                );
+                if matches!(target_type, TypeExpr::Struct(..)) {
+                    v.0.emit(type_env, env, span) // todo(@Apfelfrosch) insert clone
+                } else {
+                    let res_type = format!("{}", target_type.as_go_type_annotation(type_env));
+                    let (mut emit_instr, emit_res) = v.0.emit(type_env, env, span);
+                    if let Some(emit_res) = emit_res {
+                        let var_name = env.new_var();
+                        let ptr_var_decl = [
+                            IrInstruction::VarDecl(var_name.clone(), res_type),
+                            IrInstruction::VarAssignment(
+                                var_name.clone(),
+                                IrValue::Deref(Box::new(emit_res)),
+                            ),
+                        ];
+                        emit_instr.extend(ptr_var_decl);
+                        (emit_instr, Some(IrValue::Var(var_name)))
+                    } else {
+                        (emit_instr, None)
+                    }
+                }
+            }
             ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
                 let t = TypeExpr::from_value_expr_resolved_type_name(&*v, type_env);
                 if matches!(t, TypeExpr::Struct(..)) {

@@ -812,7 +812,7 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
 
 fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<String, TypeExpr>) {
     match expr {
-        ValueExpr::Ref(t) | ValueExpr::RefMut(t) => {
+        ValueExpr::Deref(t) | ValueExpr::Ref(t) | ValueExpr::RefMut(t) => {
             replace_generics_in_value_expr(&mut t.0, set_params)
         }
         ValueExpr::Add(lhs, rhs)
@@ -1141,7 +1141,7 @@ fn mangle_generics_name(
 
 fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv) {
     match expr {
-        ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
+        ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
             instantiate_generics_value_expr(&mut v.0, type_env)
         }
         ValueExpr::Add(lhs, rhs)
@@ -1457,7 +1457,7 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
 
 pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
     match expr {
-        ValueExpr::Ref(v) | ValueExpr::RefMut(v) => sort_fields_value_expr(&mut v.0),
+        ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => sort_fields_value_expr(&mut v.0),
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {
@@ -2113,7 +2113,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     let span = &value_expr.1;
     let value_expr = value_expr.0;
     match value_expr {
-        ValueExpr::Ref(v) | ValueExpr::RefMut(v) =>
+        ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) =>
             typeresolve_value_expr((&mut v.0, v.1.clone()), type_env),
 
         ValueExpr::HtmlString(contents) => {
@@ -2546,7 +2546,7 @@ fn resolve_implicit_function_return_type(
         type_env: &mut TypeEnv,
     ) {
         match value_expr {
-            ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
+            ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
                 flatten_returns(&v.0, return_types_found, type_env)
             }
             ValueExpr::HtmlString(contents) => {

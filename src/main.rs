@@ -248,7 +248,7 @@ fn parse_src_file(
 
     fn typename_reset_global_value_expr(type_expr: &mut ValueExpr) {
         match type_expr {
-            ValueExpr::Ref(v) | ValueExpr::RefMut(v) => typename_reset_global_value_expr(&mut v.0),
+            ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => typename_reset_global_value_expr(&mut v.0),
             ValueExpr::HtmlString(contents) => {
                 for c in contents {
                     if let ValHtmlStringContents::Expr(e) = c {
