@@ -497,6 +497,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replace by now"),
+            TypeExpr::KeyOf(..) => panic!("keyof should be replace by now"),
             TypeExpr::Alias(def) => def.type_expression.0.as_go_type_annotation(type_env),
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::Array(t) => format!("[]{}", t.0.as_go_type_annotation(type_env)),
@@ -568,6 +569,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
+            TypeExpr::KeyOf(..) => panic!("keyof should be replaced"),
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
             TypeExpr::RawTypeName(..) => panic!(),
@@ -652,6 +654,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
+            TypeExpr::KeyOf(..) => panic!("keyof should be replaced"),
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::RawTypeName(_, ident, _) => {
                 panic!("{ident:?}")
@@ -744,6 +747,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
+            TypeExpr::KeyOf(..) => panic!("keyof should be replaced"),
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::RawTypeName(_, ident, _) => {
                 panic!("{ident:?}")

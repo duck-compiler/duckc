@@ -1,12 +1,12 @@
 use std::panic::Location;
 use std::process;
 
-use ariadne::Label;
 use chumsky::container::Seq;
 use colored::Colorize;
 
 use crate::parse::struct_parser::StructDefinition;
 use crate::parse::type_parser::{Duck, TypeExpr};
+use crate::parse::value_parser::empty_range;
 use crate::parse::{Field, SS, failure_with_occurence};
 use crate::parse::{
     Spanned, failure,
@@ -392,10 +392,10 @@ impl TypeExpr {
                     .map(|param| (TypeExpr::from_value_expr(param, type_env), param.1))
                     .collect::<Vec<_>>();
 
-                let target_type = TypeExpr::from_value_expr(target.as_ref(), type_env);
-                if let TypeExpr::Fun(param_types, return_type) = target_type {
+                let mut target_type = TypeExpr::from_value_expr(target.as_ref(), type_env);
+                if let TypeExpr::Fun(param_types, return_type) = &mut target_type {
                     param_types
-                        .iter()
+                        .iter_mut()
                         .enumerate()
                         .for_each(|(index, param_type)| {
                             if matches!(param_type.1.0, TypeExpr::Any) {
@@ -406,10 +406,17 @@ impl TypeExpr {
                                 &param_type.1,
                                 in_param_types.get(index).unwrap(),
                                 type_env,
-                            )
+                            );
+
+                            // variant any replace
+                            if let TypeExpr::Array(boxed) = &in_param_types.get(index).unwrap().0 {
+                                if let TypeExpr::Or(_) = boxed.as_ref().0 {
+                                    param_type.1.0 = TypeExpr::Array(Box::new((TypeExpr::Any, empty_range())))
+                                }
+                            }
                         });
 
-                    return return_type.map_or(TypeExpr::Tuple(vec![]), |x| x.as_ref().0.clone());
+                    return return_type.clone().map_or(TypeExpr::Tuple(vec![]), |x| x.as_ref().0.clone());
                 }
 
                 failure(
@@ -1037,6 +1044,7 @@ pub fn check_type_compatability(
             )
         }
         TypeExpr::TypeOf(..) => panic!("typeof should have been replaced"),
+        TypeExpr::KeyOf(..) => panic!("keyof should have been replaced"),
         TypeExpr::Alias(..) => panic!("alias should have been replaced"),
         TypeExpr::Any => return,
         TypeExpr::InlineGo => todo!("should inline go be typechecked?"),

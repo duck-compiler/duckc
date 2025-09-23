@@ -62,6 +62,7 @@ pub enum TypeExpr {
     ),
     Array(Box<Spanned<TypeExpr>>),
     TypeOf(String),
+    KeyOf(Box<Spanned<TypeExpr>>),
 }
 
 impl TypeExpr {
@@ -106,6 +107,10 @@ where
                 .collect::<Vec<(String, Spanned<TypeExpr>)>>();
 
             let function_fields = duck_fields.clone();
+
+            let keyof_expr = just(Token::KeyOf)
+                .ignore_then(p.clone().map(Box::new))
+                .map(TypeExpr::KeyOf);
 
             let typeof_expr = just(Token::TypeOf)
                 .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() })
@@ -237,6 +242,7 @@ where
                     bool_literal,
                     tag,
                     typeof_expr,
+                    keyof_expr,
                     go_type,
                     type_name,
                     duck,
@@ -300,6 +306,10 @@ where
                 .ignore_then(go_type_identifier)
                 .map(TypeExpr::Go);
 
+            let keyof_expr = just(Token::KeyOf)
+                .ignore_then(p.clone().map(Box::new))
+                .map(TypeExpr::KeyOf);
+
             let typeof_expr = just(Token::TypeOf)
                 .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() })
                 .map(TypeExpr::TypeOf);
@@ -410,6 +420,7 @@ where
                     string_literal,
                     tag,
                     typeof_expr,
+                    keyof_expr,
                     go_type,
                     type_name,
                     duck,
@@ -509,6 +520,7 @@ impl Display for TypeExpr {
             TypeExpr::Html => write!(f, "html"),
             TypeExpr::Tag(identifier) => write!(f, ".{identifier}"),
             TypeExpr::TypeOf(identifier) => write!(f, "typeof {identifier}"),
+            TypeExpr::KeyOf(identifier) => write!(f, "keyof {}", identifier.as_ref().0.as_clean_user_faced_type_name()),
             TypeExpr::Alias(def) => write!(f, "{def:?}"),
             TypeExpr::Any => write!(f, "any"),
             TypeExpr::InlineGo => write!(f, "inline_go"),

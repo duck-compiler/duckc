@@ -504,7 +504,6 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
             *expr = env.resolve_type_alias(name);
         }
         TypeExpr::TypeOf(identifier) => {
-            // TODO:: HERE
             let type_expr = env
                 .identifier_types
                 .last()
@@ -513,6 +512,37 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
                 .expect("sorry bro didn't work :(");
 
             *expr = type_expr.clone()
+        }
+        TypeExpr::KeyOf(type_expr) => {
+            resolve_all_aliases_type_expr(&mut type_expr.0, env);
+            let span = type_expr.as_ref().1;
+            let type_expr: &mut TypeExpr = &mut type_expr.as_mut().0;
+
+            fn do_it(
+                type_expr: &TypeExpr,
+                span: &SS,
+            ) -> TypeExpr {
+                match &type_expr {
+                    TypeExpr::Duck(duck) => {
+                        let fields = duck.fields
+                            .iter()
+                            .map(|field| (TypeExpr::Tag(field.name.clone()), field.type_expr.1))
+                            .collect::<Vec<_>>();
+
+                        return TypeExpr::Or(fields);
+                    },
+                    TypeExpr::Alias(alias) => {
+                        return do_it(&alias.type_expression.0, span);
+                    },
+                    TypeExpr::Array(arr) => {
+                        return TypeExpr::Array(Box::new((do_it(&arr.as_ref().0, span), span.clone())));
+                    },
+                    e => { panic!("yoo {e:?}")}
+                };
+            }
+            let mut final_type = do_it(&type_expr, &span);
+            resolve_all_aliases_type_expr(&mut final_type, env);
+            *expr = final_type;
         }
         _ => {}
     }
@@ -543,6 +573,9 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
         TypeExpr::Html => {}
         // todo: support generics in typeof
         TypeExpr::TypeOf(..) => {}
+        TypeExpr::KeyOf(type_expr) => {
+            instantiate_generics_type_expr(&mut type_expr.as_mut().0, type_env);
+        }
         TypeExpr::Alias(alias) => {
             instantiate_generics_type_expr(&mut alias.type_expression.0, type_env);
         }
@@ -864,6 +897,9 @@ fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &HashMap<Strin
     match expr {
         TypeExpr::Html => {}
         TypeExpr::TypeOf(..) => {}
+        TypeExpr::KeyOf(type_expr) => {
+            replace_generics_in_type_expr(&mut type_expr.as_mut().0, set_params);
+        }
         TypeExpr::Alias(alias) => {
             replace_generics_in_type_expr(&mut alias.type_expression.0, set_params);
         }
@@ -1481,6 +1517,9 @@ pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
         TypeExpr::Html => {}
         TypeExpr::TypeOf(..) => {}
+        TypeExpr::KeyOf(type_expr) => {
+            sort_fields_type_expr(&mut type_expr.0);
+        }
         TypeExpr::Alias(t) => {
             sort_fields_type_expr(&mut t.type_expression.0);
         }
