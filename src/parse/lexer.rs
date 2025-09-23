@@ -57,6 +57,7 @@ pub enum Token {
     Match,
     If,
     TypeOf,
+    KeyOf,
     Else,
     Let,
     While,
@@ -90,6 +91,7 @@ impl Display for Token {
             Token::Test => "test",
             Token::Go => "go",
             Token::TypeOf => "typeof",
+            Token::KeyOf => "keyof",
             Token::Struct => "struct",
             Token::Duck => "duck",
             Token::Component => "component",
@@ -444,6 +446,7 @@ pub fn lex_single<'a>(
             "module" => Token::Module,
             "use" => Token::Use,
             "typeof" => Token::TypeOf,
+            "keyof" => Token::KeyOf,
             "impl" => Token::Impl,
             "test" => Token::Test,
             "type" => Token::Type,
@@ -1641,6 +1644,8 @@ mod tests {
             ("sus", vec![Token::Sus]),
             ("sus fn", vec![Token::Sus, Token::Function]),
             ("test", vec![Token::Test]),
+            ("keyof", vec![Token::KeyOf]),
+            ("typeof", vec![Token::TypeOf]),
         ];
 
         for (src, expected_tokens) in test_cases {
