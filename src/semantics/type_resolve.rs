@@ -513,14 +513,21 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
 
             *expr = type_expr.clone()
         }
+        TypeExpr::KeyOf(..)
+        | _ => {}
+    }
+}
+
+fn process_keyof_in_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
+    match expr {
         TypeExpr::KeyOf(type_expr) => {
-            resolve_all_aliases_type_expr(&mut type_expr.0, env);
             let span = type_expr.as_ref().1;
             let type_expr: &mut TypeExpr = &mut type_expr.as_mut().0;
 
             fn do_it(
                 type_expr: &TypeExpr,
                 span: &SS,
+                type_env: &mut TypeEnv,
             ) -> TypeExpr {
                 match &type_expr {
                     TypeExpr::Duck(duck) => {
@@ -531,18 +538,38 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
 
                         return TypeExpr::Or(fields);
                     },
+                    TypeExpr::Struct(struct_name) => {
+                        // Resolve the struct definition
+                        let struct_def = type_env.get_struct_def(struct_name);
+                        let fields = struct_def.fields
+                            .iter()
+                            .map(|field| (TypeExpr::Tag(field.name.clone()), field.type_expr.1))
+                            .collect::<Vec<_>>();
+
+                        return TypeExpr::Or(fields);
+                    },
                     TypeExpr::Alias(alias) => {
-                        return do_it(&alias.type_expression.0, span);
+                        return do_it(&alias.type_expression.0, span, type_env);
                     },
                     TypeExpr::Array(arr) => {
-                        return TypeExpr::Array(Box::new((do_it(&arr.as_ref().0, span), span.clone())));
+                        return TypeExpr::Array(Box::new((do_it(&arr.as_ref().0, span, type_env), span.clone())));
                     },
                     e => { panic!("yoo {e:?}")}
                 };
             }
-            let mut final_type = do_it(&type_expr, &span);
-            resolve_all_aliases_type_expr(&mut final_type, env);
+            let final_type = do_it(&type_expr, &span, type_env);
             *expr = final_type;
+        }
+        TypeExpr::Array(t) => {
+            process_keyof_in_type_expr(&mut t.0, type_env);
+        }
+        TypeExpr::Duck(d) => {
+            for f in &mut d.fields {
+                process_keyof_in_type_expr(&mut f.type_expr.0, type_env);
+            }
+        }
+        TypeExpr::Alias(alias) => {
+            process_keyof_in_type_expr(&mut alias.type_expression.0, type_env);
         }
         _ => {}
     }
@@ -947,13 +974,19 @@ fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &HashMap<Strin
         | TypeExpr::ConstString(..)
         | TypeExpr::Float
         | TypeExpr::Go(..)
-        | TypeExpr::RawTypeName(..)
         | TypeExpr::String
         | TypeExpr::Int
         | TypeExpr::Struct(..)
         | TypeExpr::TypeNameInternal(..)
         | TypeExpr::Tag(..)
         | TypeExpr::InlineGo => {}
+        TypeExpr::RawTypeName(_, typename, _) => {
+            if typename.len() == 1 {
+                if let Some(replacement) = set_params.get(&typename[0]) {
+                    *expr = replacement.clone();
+                }
+            }
+        }
         | TypeExpr::And(variants) => {
             for variant in variants.iter_mut() {
                 replace_generics_in_type_expr(&mut variant.0, set_params);
@@ -1148,6 +1181,7 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
                         {
                             replace_generics_in_type_expr(t, &generics_instance);
                             instantiate_generics_type_expr(t, type_env);
+                            process_keyof_in_type_expr(t, type_env);
                         }
 
                         replace_generics_in_value_expr(
