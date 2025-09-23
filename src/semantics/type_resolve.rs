@@ -521,6 +521,7 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
             fn do_it(
                 type_expr: &TypeExpr,
                 span: &SS,
+                env: &TypeEnv,
             ) -> TypeExpr {
                 match &type_expr {
                     TypeExpr::Duck(duck) => {
@@ -531,16 +532,36 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
 
                         return TypeExpr::Or(fields);
                     },
+                    TypeExpr::Struct(struct_name) => {
+                        let struct_def = env.get_struct_def(struct_name);
+                        let fields = struct_def.fields
+                            .iter()
+                            .map(|field| (TypeExpr::Tag(field.name.clone()), field.type_expr.1))
+                            .collect::<Vec<_>>();
+
+                        return TypeExpr::Or(fields);
+                    },
+                    TypeExpr::RawTypeName(_, typename, _) => {
+                        let resolved_type = env.resolve_type_alias(typename.first().unwrap());
+                        return do_it(&resolved_type, span, env);
+                    },
                     TypeExpr::Alias(alias) => {
-                        return do_it(&alias.type_expression.0, span);
+                        return do_it(&alias.type_expression.0, span, env);
                     },
                     TypeExpr::Array(arr) => {
-                        return TypeExpr::Array(Box::new((do_it(&arr.as_ref().0, span), span.clone())));
+                        return TypeExpr::Array(Box::new((do_it(&arr.as_ref().0, span, env), span.clone())));
                     },
-                    e => { panic!("yoo {e:?}")}
+                    TypeExpr::Or(variants) => {
+                        let keyof_variants = variants
+                            .iter()
+                            .map(|(variant, variant_span)| (do_it(&variant, span, env), variant_span.clone()))
+                            .collect::<Vec<_>>();
+                        return TypeExpr::Or(keyof_variants);
+                    },
+                    e => { panic!("compiler error: didn't match {e:?} in process_keyof_in_typ_expr")}
                 };
             }
-            let mut final_type = do_it(&type_expr, &span);
+            let mut final_type = do_it(&type_expr, &span, env);
             resolve_all_aliases_type_expr(&mut final_type, env);
             *expr = final_type;
         }
@@ -569,7 +590,6 @@ fn process_keyof_in_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                         return TypeExpr::Or(fields);
                     },
                     TypeExpr::Struct(struct_name) => {
-                        // Resolve the struct definition
                         let struct_def = type_env.get_struct_def(struct_name);
                         let fields = struct_def.fields
                             .iter()
@@ -578,13 +598,17 @@ fn process_keyof_in_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
 
                         return TypeExpr::Or(fields);
                     },
+                    TypeExpr::RawTypeName(_, typename, _) => {
+                        let resolved_type = type_env.resolve_type_alias(typename.first().unwrap());
+                        return do_it(&resolved_type, span, type_env);
+                    },
                     TypeExpr::Alias(alias) => {
                         return do_it(&alias.type_expression.0, span, type_env);
                     },
                     TypeExpr::Array(arr) => {
                         return TypeExpr::Array(Box::new((do_it(&arr.as_ref().0, span, type_env), span.clone())));
                     },
-                    e => { panic!("yoo {e:?}")}
+                    e => { panic!("compiler error: didn't match {e:?} in process_keyof_in_typ_expr")}
                 };
             }
             let final_type = do_it(&type_expr, &span, type_env);
@@ -1845,12 +1869,14 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 for (_, p) in params {
                     instantiate_generics_type_expr(&mut p.0, type_env);
                     resolve_all_aliases_type_expr(&mut p.0, type_env);
+                    process_keyof_in_type_expr(&mut p.0, type_env);
                 }
             }
 
             if let Some(r) = function_definition.return_type.as_mut() {
                 instantiate_generics_type_expr(&mut r.0, type_env);
                 resolve_all_aliases_type_expr(&mut r.0, type_env);
+                process_keyof_in_type_expr(&mut r.0, type_env);
             }
 
             let fn_type_expr = TypeExpr::Fun(
