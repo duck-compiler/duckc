@@ -513,8 +513,13 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
+            let tag_identifier = choice((
+                select_ref! { Token::Ident(ident) => ident.to_string() },
+                just(Token::ControlChar('.')).map(|_| "DOT".to_string())
+            )).boxed();
+
             let tag_expr = just(Token::ControlChar('.'))
-                .ignore_then(select_ref! { Token::Ident(ident) => ident.to_string() })
+                .ignore_then(tag_identifier)
                 .map(|identifier| ValueExpr::Tag(identifier.clone()))
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
@@ -1273,6 +1278,14 @@ mod tests {
                     ])
                     .into_empty_span(),
                 ]),
+            ),
+            (
+                ".tag",
+                ValueExpr::Tag("tag".to_string()),
+            ),
+            (
+                "..",
+                ValueExpr::Tag("DOT".to_string()),
             ),
             (
                 "a<String>()",
