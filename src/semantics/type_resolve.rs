@@ -1459,6 +1459,7 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
                 name: _,
                 type_expr,
                 initializer,
+                is_const: _,
             } = &mut d.0;
             if let Some(type_expr) = type_expr {
                 sort_fields_type_expr(&mut type_expr.0);

@@ -369,6 +369,7 @@ fn parse_src_file(
                     name: _,
                     type_expr,
                     initializer,
+                    is_const: _,
                 } = &mut b.0;
 
                 if let Some(type_expr) = type_expr.as_mut() {

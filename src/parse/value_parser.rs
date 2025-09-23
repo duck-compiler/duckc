@@ -43,6 +43,7 @@ pub struct Declaration {
     pub name: String,
     pub type_expr: Option<Spanned<TypeExpr>>,
     pub initializer: Spanned<ValueExpr>,
+    pub is_const: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -354,19 +355,20 @@ where
                 .boxed();
 
             let declaration = just(Token::Let).or(just(Token::Const))
-                .ignore_then(
+                .then(
                     select_ref! { Token::Ident(identifier) => identifier.to_string() }
                         .map_with(|x, e| (x, e.span())),
                 )
                 .then(declare_type)
                 .then(initializer)
-                .map(|(((ident, _), type_expr), initializer)| {
+                .map(|(((let_or_const, (ident, _)), type_expr), initializer)| {
                     ValueExpr::VarDecl(
                         (
                             Declaration {
                                 name: ident,
                                 type_expr,
                                 initializer: initializer.clone(),
+                                is_const: matches!(let_or_const, Token::Const),
                             },
                             initializer.1,
                         )
@@ -2340,6 +2342,22 @@ mod tests {
                             name: "x".into(),
                             initializer: ValueExpr::String("".to_string(), true).into_empty_span(),
                             type_expr: Some(TypeExpr::String.into_empty_span()),
+                            is_const: false,
+                        },
+                        empty_range(),
+                    )
+                        .into(),
+                ),
+            ),
+            (
+                "const x: String = \"\"",
+                ValueExpr::VarDecl(
+                    (
+                        Declaration {
+                            name: "x".into(),
+                            initializer: ValueExpr::String("".to_string(), true).into_empty_span(),
+                            type_expr: Some(TypeExpr::String.into_empty_span()),
+                            is_const: true,
                         },
                         empty_range(),
                     )
@@ -2872,6 +2890,7 @@ mod tests {
                     name: "x".to_string(),
                     type_expr: Some(TypeExpr::String.into_empty_span()),
                     initializer: ValueExpr::String("".to_string(), true).into_empty_span(),
+                    is_const: false,
                 },
             ),
             (
@@ -2888,6 +2907,7 @@ mod tests {
                         .into_empty_span(),
                     ),
                     initializer: ValueExpr::Duck(vec![]).into_empty_span(),
+                    is_const: false,
                 },
             ),
             (
@@ -2896,6 +2916,7 @@ mod tests {
                     name: "z".to_string(),
                     type_expr: Some(TypeExpr::Any.into_empty_span()),
                     initializer: empty_duck().into_empty_span(),
+                    is_const: false,
                 },
             ),
         ];

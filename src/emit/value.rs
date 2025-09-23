@@ -1131,6 +1131,7 @@ impl ValueExpr {
                     name,
                     type_expr,
                     initializer,
+                    is_const: _
                 } = &b.0;
 
                 let type_expression = type_expr
