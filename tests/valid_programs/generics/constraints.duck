@@ -7,9 +7,9 @@ type User<T: {
 
 type UserWithOther = User<{
     name: String,
-    age: Int,
-    other: String,
+    age: String
 }>;
+
 
 fn main() {
     println("correct")

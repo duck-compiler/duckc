@@ -1,0 +1,7 @@
+fn with_keyof_return<T>(val: keyof T) -> keyof T {
+    return t;
+}
+
+fn main() {
+    let x = with_keyof_return<{ username: String }>(.other);
+}

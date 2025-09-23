@@ -1,0 +1,4 @@
+{
+    "stdout": "=== Testing keyof operator ===\n\u2713 Simple inline type works\n\u2713 Type alias works\n\u2713 Complex type keyof works\nHandling user key\n\u2713 Function parameter with keyof works\n\u2713 Function return type with keyof works\n\u2713 Type instantiation without explicit type names works\n\u2713 Struct keyof works\n\u2713 Nested duck type keyof works\n\u2713 Array of keyof types works\n\u2713 Alternative user key works\nProcessing user keys\n\u2713 Keyof with function types works\n\u2713 Keyof with different types works\n\u2713 Nested keyof works\n\u2713 Complex nested keyof works\n\u2713 Mixed types keyof works\n\u2713 keyof in generic function call works\n\u2713 keyof in generic function with return\n\u2713 Direct keyof type annotation works\n\u2713 Generic function with matching type annotation works\n=== All keyof tests passed! ===\n",
+    "stderr": ""
+}
