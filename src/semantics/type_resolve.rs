@@ -513,8 +513,38 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
 
             *expr = type_expr.clone()
         }
-        TypeExpr::KeyOf(..)
-        | _ => {}
+        TypeExpr::KeyOf(type_expr) => {
+            resolve_all_aliases_type_expr(&mut type_expr.0, env);
+            let span = type_expr.as_ref().1;
+            let type_expr: &mut TypeExpr = &mut type_expr.as_mut().0;
+
+            fn do_it(
+                type_expr: &TypeExpr,
+                span: &SS,
+            ) -> TypeExpr {
+                match &type_expr {
+                    TypeExpr::Duck(duck) => {
+                        let fields = duck.fields
+                            .iter()
+                            .map(|field| (TypeExpr::Tag(field.name.clone()), field.type_expr.1))
+                            .collect::<Vec<_>>();
+
+                        return TypeExpr::Or(fields);
+                    },
+                    TypeExpr::Alias(alias) => {
+                        return do_it(&alias.type_expression.0, span);
+                    },
+                    TypeExpr::Array(arr) => {
+                        return TypeExpr::Array(Box::new((do_it(&arr.as_ref().0, span), span.clone())));
+                    },
+                    e => { panic!("yoo {e:?}")}
+                };
+            }
+            let mut final_type = do_it(&type_expr, &span);
+            resolve_all_aliases_type_expr(&mut final_type, env);
+            *expr = final_type;
+        }
+        _ => {}
     }
 }
 
