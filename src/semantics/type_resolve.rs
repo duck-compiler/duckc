@@ -673,6 +673,11 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
         | TypeExpr::TypeNameInternal(..)
         | TypeExpr::Struct(..)
         | TypeExpr::InlineGo => {}
+        | TypeExpr::And(variants) => {
+            for variant in variants.iter_mut() {
+                instantiate_generics_type_expr(&mut variant.0, type_env);
+            }
+        }
     }
 }
 
@@ -913,6 +918,11 @@ fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &HashMap<Strin
         | TypeExpr::TypeNameInternal(..)
         | TypeExpr::Tag(..)
         | TypeExpr::InlineGo => {}
+        | TypeExpr::And(variants) => {
+            for variant in variants.iter_mut() {
+                replace_generics_in_type_expr(&mut variant.0, set_params);
+            }
+        }
     }
 }
 
@@ -1515,6 +1525,11 @@ pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
         | TypeExpr::Struct(..)
         | TypeExpr::Tag(..)
         | TypeExpr::TypeNameInternal(..) => {}
+        | TypeExpr::And(variants) => {
+            for variant in variants.iter_mut() {
+                sort_fields_type_expr(&mut variant.0);
+            }
+        }
     }
 }
 
@@ -1623,6 +1638,14 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 struct_definition.name.clone(),
                 TypeExpr::Struct(struct_definition.name.clone()),
             );
+        });
+
+    source_file.type_definitions
+        .iter_mut()
+        .for_each(|type_def| {
+            if let TypeExpr::And(_) = &mut type_def.type_expression.0 {
+                type_def.type_expression.0 = dbg!(translate_interception_to_duck(&type_def.type_expression.0));
+            }
         });
 
     source_file
@@ -1872,6 +1895,42 @@ fn typeresolve_function_definition(
     type_env.pop_identifier_types();
 }
 
+fn translate_interception_to_duck(interception_type: &TypeExpr) -> TypeExpr {
+    match interception_type {
+        TypeExpr::And(variants) => {
+            let mut all_fields = Vec::new();
+
+            for variant in variants.iter() {
+                match &variant.0 {
+                    TypeExpr::Duck(duck) => {
+                        for field in &duck.fields {
+                            all_fields.push(field.clone());
+                        }
+                    }
+                    _ => {
+                        continue;
+                    }
+                }
+            }
+
+            let mut unique_fields = Vec::new();
+            let mut seen_names = HashSet::new();
+
+            for field in all_fields.into_iter().rev() {
+                if seen_names.insert(field.name.clone()) {
+                    unique_fields.push(field);
+                }
+            }
+
+            unique_fields.reverse();
+            TypeExpr::Duck(Duck { fields: unique_fields })
+        }
+        _ => {
+            interception_type.clone()
+        }
+    }
+}
+
 fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
     let span = &value_expr.1;
     let value_expr = value_expr.0;
@@ -1900,6 +1959,9 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
             // Resolve the type expression on the declaration
             if let Some(type_expr) = &mut declaration.type_expr {
+                if let TypeExpr::And(_) = &type_expr.0 {
+                    type_expr.0 = translate_interception_to_duck(&type_expr.0);
+                }
                 resolve_all_aliases_type_expr(&mut type_expr.0, type_env);
                 type_env.insert_identifier_type(declaration.name.clone(), type_expr.0.clone());
             } else {
@@ -2244,6 +2306,10 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         } => {
             typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
             arms.iter_mut().for_each(|arm| {
+                if let TypeExpr::And(_) = &arm.type_case.0 {
+                    arm.type_case.0 = translate_interception_to_duck(&arm.type_case.0);
+                }
+
                 type_env.push_identifier_types();
                 if let Some(identifier) = &arm.identifier_binding {
                     type_env.insert_identifier_type(identifier.clone(), arm.type_case.0.clone());

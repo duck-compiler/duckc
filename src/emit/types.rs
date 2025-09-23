@@ -560,6 +560,7 @@ impl TypeExpr {
             }
             TypeExpr::Tuple(_fields) => self.as_clean_go_type_name(type_env),
             TypeExpr::Or(_variants) => "any".to_string(),
+            TypeExpr::And(_variants) => "any".to_string(),
         };
     }
 
@@ -634,6 +635,7 @@ impl TypeExpr {
                 )
             }
             TypeExpr::Or(_) => "any".to_string(),
+            TypeExpr::And(_) => "any".to_string(),
         };
     }
 
@@ -723,6 +725,18 @@ impl TypeExpr {
 
                 return format!("Union_{}", variants.join("_or_"));
             }
+            TypeExpr::And(variants) => {
+                // mvmo 03.07.25: Check for double sort
+                let mut variants = variants
+                    .clone()
+                    .iter()
+                    .map(|variant| variant.0.type_id(type_env))
+                    .collect::<Vec<_>>();
+
+                variants.sort();
+
+                return format!("Intersection_{}", variants.join("_and_"));
+            }
         };
     }
 
@@ -808,6 +822,18 @@ impl TypeExpr {
                 variants.sort();
 
                 return format!("Union_{}", variants.join("_or_"));
+            }
+            TypeExpr::And(variants) => {
+                // mvmo 03.07.25: Check for double sort
+                let mut variants = variants
+                    .clone()
+                    .iter()
+                    .map(|variant| variant.0.as_clean_go_type_name(type_env))
+                    .collect::<Vec<_>>();
+
+                variants.sort();
+
+                return format!("Intersection_{}", variants.join("_and_"));
             }
         };
     }

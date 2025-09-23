@@ -1423,6 +1423,15 @@ pub fn check_type_compatability(
             check_type_compatability(content_type, &given_content_type, type_env);
         }
         TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) | TypeExpr::TypeNameInternal(..) => {}
+        TypeExpr::And(required_variants) => {
+            for required_variant in required_variants {
+                check_type_compatability(
+                    &required_variant,
+                    &given_type,
+                    type_env,
+                );
+            }
+        }
     }
 }
 
