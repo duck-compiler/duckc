@@ -291,7 +291,29 @@ impl ValueExpr {
         span: SS,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
-            ValueExpr::Ref(v) | ValueExpr::RefMut(v) => v.0.emit(type_env, env, span),
+            ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
+                let t = TypeExpr::from_value_expr_resolved_type_name(&*v, type_env);
+                if matches!(t, TypeExpr::Struct(..)) {
+                    v.0.emit(type_env, env, span)
+                } else {
+                    let ptr_type = format!("*{}", t.as_go_type_annotation(type_env));
+                    let (mut emit_instr, emit_res) = v.0.emit(type_env, env, span);
+                    if let Some(emit_res) = emit_res {
+                        let var_name = env.new_var();
+                        let ptr_var_decl = [
+                            IrInstruction::VarDecl(var_name.clone(), ptr_type),
+                            IrInstruction::VarAssignment(
+                                var_name.clone(),
+                                IrValue::Pointer(Box::new(emit_res)),
+                            ),
+                        ];
+                        emit_instr.extend(ptr_var_decl);
+                        (emit_instr, Some(IrValue::Var(var_name)))
+                    } else {
+                        (emit_instr, None)
+                    }
+                }
+            }
             ValueExpr::Sub(lhs, rhs) => {
                 let mut ir = Vec::new();
 
@@ -735,7 +757,9 @@ impl ValueExpr {
 
                 for elem in &contents {
                     match elem {
-                        ValHtmlStringContents::String(s) => return_printf.push_str(&s.replace("%", "%%")),
+                        ValHtmlStringContents::String(s) => {
+                            return_printf.push_str(&s.replace("%", "%%"))
+                        }
                         ValHtmlStringContents::Expr(e) => {
                             let ty = TypeExpr::from_value_expr(e, type_env);
                             match ty {
@@ -1131,7 +1155,7 @@ impl ValueExpr {
                     name,
                     type_expr,
                     initializer,
-                    is_const: _
+                    is_const: _,
                 } = &b.0;
 
                 let type_expression = type_expr

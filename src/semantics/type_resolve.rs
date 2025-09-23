@@ -8,11 +8,19 @@ use chumsky::container::Container;
 
 use crate::{
     parse::{
-        duckx_component_parser::DuckxComponent, function_parser::{FunctionDefintion, LambdaFunctionExpr}, source_file_parser::SourceFile, struct_parser::StructDefinition, test_parser::TestCase, tsx_component_parser::{
-            do_edits, Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit
-        }, type_parser::{Duck, TypeDefinition, TypeExpr}, value_parser::{
+        SS, Spanned, SpannedMutRef,
+        duckx_component_parser::DuckxComponent,
+        function_parser::{FunctionDefintion, LambdaFunctionExpr},
+        source_file_parser::SourceFile,
+        struct_parser::StructDefinition,
+        test_parser::TestCase,
+        tsx_component_parser::{
+            Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
+        },
+        type_parser::{Duck, TypeDefinition, TypeExpr},
+        value_parser::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
-        }, Spanned, SpannedMutRef, SS
+        },
     },
     semantics::{ident_mangler::mangle, typechecker::check_type_compatability},
     tags::Tag,
@@ -354,6 +362,9 @@ impl TypeEnv<'_> {
         let mut found = vec![];
 
         match type_expr {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
+                found.extend(self.flatten_types(&mut t.0, param_names_used));
+            }
             TypeExpr::Duck(duck) => duck.fields.iter_mut().for_each(|field| {
                 param_names_used.push(field.name.clone());
 
@@ -652,7 +663,9 @@ fn replace_generics_in_struct_definition(
 
 fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
     match expr {
-        TypeExpr::Ref(t) | TypeExpr::RefMut(t) => instantiate_generics_type_expr(&mut t.0, type_env),
+        TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
+            instantiate_generics_type_expr(&mut t.0, type_env)
+        }
         TypeExpr::Html => {}
         // todo: support generics in typeof
         TypeExpr::TypeOf(..) => {}
@@ -799,7 +812,9 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
 
 fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<String, TypeExpr>) {
     match expr {
-        ValueExpr::Ref(t) | ValueExpr::RefMut(t) => replace_generics_in_value_expr(&mut t.0, set_params),
+        ValueExpr::Ref(t) | ValueExpr::RefMut(t) => {
+            replace_generics_in_value_expr(&mut t.0, set_params)
+        }
         ValueExpr::Add(lhs, rhs)
         | ValueExpr::Mul(lhs, rhs)
         | ValueExpr::Div(lhs, rhs)
@@ -979,7 +994,9 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
 
 fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &HashMap<String, TypeExpr>) {
     match expr {
-        TypeExpr::Ref(t) | TypeExpr::RefMut(t) => replace_generics_in_type_expr(&mut t.0, set_params),
+        TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
+            replace_generics_in_type_expr(&mut t.0, set_params)
+        }
         TypeExpr::Html => {}
         TypeExpr::TypeOf(..) => {}
         TypeExpr::KeyOf(type_expr) => {
@@ -1124,7 +1141,9 @@ fn mangle_generics_name(
 
 fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv) {
     match expr {
-        ValueExpr::Ref(v) | ValueExpr::RefMut(v) => instantiate_generics_value_expr(&mut v.0, type_env),
+        ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
+            instantiate_generics_value_expr(&mut v.0, type_env)
+        }
         ValueExpr::Add(lhs, rhs)
         | ValueExpr::Mul(lhs, rhs)
         | ValueExpr::Mod(lhs, rhs)
@@ -2094,7 +2113,9 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     let span = &value_expr.1;
     let value_expr = value_expr.0;
     match value_expr {
-        ValueExpr::Ref(v) | ValueExpr::RefMut(v) => typeresolve_value_expr((&mut v.0, v.1.clone()), type_env),
+        ValueExpr::Ref(v) | ValueExpr::RefMut(v) =>
+            typeresolve_value_expr((&mut v.0, v.1.clone()), type_env),
+
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {
@@ -2525,7 +2546,9 @@ fn resolve_implicit_function_return_type(
         type_env: &mut TypeEnv,
     ) {
         match value_expr {
-            ValueExpr::Ref(v) | ValueExpr::RefMut(v) => flatten_returns(&v.0, return_types_found, type_env),
+            ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
+                flatten_returns(&v.0, return_types_found, type_env)
+            }
             ValueExpr::HtmlString(contents) => {
                 for c in contents {
                     if let ValHtmlStringContents::Expr(e) = c {
