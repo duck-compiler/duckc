@@ -1,6 +1,5 @@
 use std::io::{println};
 
-// Test functions with intersection return types
 fn create_basic_intersection() -> { x: Int } & { y: Int } {
     return { x: 5, y: 10 };
 }
@@ -14,7 +13,6 @@ fn create_complex_intersection() -> { username: String, age: Int } & { street: S
     };
 }
 
-// Functions with intersection parameters
 fn process_basic_intersection(point: { x: Int } & { y: Int }) {
     println("Processing basic intersection");
 }
