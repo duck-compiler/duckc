@@ -1036,11 +1036,21 @@ pub fn check_type_compatability(
         TypeExpr::Ref(req_t) => {
             if let TypeExpr::Ref(given_t) | TypeExpr::RefMut(given_t) = &given_type.0 {
                 check_type_compatability(req_t, given_t, type_env);
+            } else {
+                fail_requirement(
+                    "This is an immutable reference".to_string(),
+                    "So this needs to be an immutable reference or a mutable reference".to_string(),
+                );
             }
         }
         TypeExpr::RefMut(req_t) => {
             if let TypeExpr::RefMut(given_t) = &given_type.0 {
                 check_type_compatability(req_t, given_t, type_env);
+            } else {
+                fail_requirement(
+                    "This is an immutable reference".to_string(),
+                    "So this needs to be a mutable reference".to_string(),
+                );
             }
         }
         TypeExpr::Html => {
