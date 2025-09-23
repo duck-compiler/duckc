@@ -1291,7 +1291,7 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
     }
 }
 
-fn sort_fields_value_expr(expr: &mut ValueExpr) {
+pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
     match expr {
         ValueExpr::HtmlString(contents) => {
             for c in contents {
@@ -1461,7 +1461,7 @@ fn sort_fields_value_expr(expr: &mut ValueExpr) {
     }
 }
 
-fn sort_fields_type_expr(expr: &mut TypeExpr) {
+pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
         TypeExpr::Html => {}
         TypeExpr::TypeOf(..) => {}

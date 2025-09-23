@@ -261,6 +261,7 @@ pub mod tests {
                 generics: Some(vec![(
                     Generic {
                         name: "T".to_string(),
+                        constraint: None,
                     },
                     empty_range(),
                 )]),
@@ -293,12 +294,14 @@ pub mod tests {
                     (
                         Generic {
                             name: "K".to_string(),
+                            constraint: None,
                         },
                         empty_range(),
                     ),
                     (
                         Generic {
                             name: "V".to_string(),
+                            constraint: None,
                         },
                         empty_range(),
                     ),
