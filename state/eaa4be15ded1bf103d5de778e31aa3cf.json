@@ -1,7 +1,7 @@
 {
     "id": "eaa4be15ded1bf103d5de778e31aa3cf",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 544,
+    "line_number": 656,
     "title": "support generics in typeof",
     "tag": "todo",
     "module_tag": "semantics",
