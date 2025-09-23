@@ -1,4 +1,4 @@
 {
     "stdout": "",
-    "stderr": "\nthread 'main' panicked at src/parse/value_parser.rs:639:21:\nerror: empty array must provide type\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    "stderr": "\nthread 'main' panicked at src/parse/value_parser.rs:642:21:\nerror: empty array must provide type\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
 }

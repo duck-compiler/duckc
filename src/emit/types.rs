@@ -495,6 +495,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.as_go_type_annotation(type_env),
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replace by now"),
             TypeExpr::KeyOf(..) => panic!("keyof should be replace by now"),
@@ -567,6 +568,7 @@ impl TypeExpr {
 
     pub fn as_go_concrete_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.as_go_concrete_annotation(type_env),
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
             TypeExpr::KeyOf(..) => panic!("keyof should be replaced"),
@@ -652,6 +654,7 @@ impl TypeExpr {
 
     pub fn type_id(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.type_id(type_env),
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
             TypeExpr::KeyOf(..) => panic!("keyof should be replaced"),
@@ -745,6 +748,7 @@ impl TypeExpr {
 
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => todo!("ref as clean go type name"),
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
             TypeExpr::KeyOf(..) => panic!("keyof should be replaced"),

@@ -46,6 +46,8 @@ impl TypeExpr {
         let complete_span = &value_expr.1;
         let value_expr = &value_expr.0;
         return match value_expr {
+            ValueExpr::Ref(v) => TypeExpr::Ref((TypeExpr::from_value_expr(v, type_env), v.1.clone()).into()),
+            ValueExpr::RefMut(v) => TypeExpr::RefMut((TypeExpr::from_value_expr(v, type_env), v.1.clone()).into()),
             ValueExpr::HtmlString(..) => TypeExpr::Html,
             ValueExpr::Tag(identifier) => TypeExpr::Tag(identifier.clone()),
             ValueExpr::RawVariable(_x, p) => panic!("{}", p.join(" ").leak()),
@@ -1027,6 +1029,7 @@ pub fn check_type_compatability(
     };
 
     match &required_type.0 {
+        TypeExpr::Ref(t) | TypeExpr::RefMut(t) => todo!("ref and refmut"),
         TypeExpr::Html => {
             if let TypeExpr::Html = &given_type.0 {
                 return;

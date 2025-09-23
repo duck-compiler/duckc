@@ -118,6 +118,8 @@ pub enum ValueExpr {
         span: SS,
     },
     FormattedString(Vec<ValFmtStringContents>),
+    Ref(Box<Spanned<ValueExpr>>),
+    RefMut(Box<Spanned<ValueExpr>>),
 }
 
 pub trait IntoBlock {
@@ -142,6 +144,7 @@ impl ValueExpr {
 
     pub fn needs_semicolon(&self) -> bool {
         match self {
+            ValueExpr::Ref(..) | ValueExpr::RefMut(..) => true,
             ValueExpr::HtmlString(..) => true,
             ValueExpr::If {
                 condition: _,
@@ -656,115 +659,129 @@ where
             })
             .map_with(|x, e| (x, e.span()));
 
-            let atom = just(Token::ControlChar('!'))
-                .repeated()
-                .collect::<Vec<_>>()
-                .then(
+            #[derive(Debug, Clone)]
+            enum AtomPreParseUnit {
+                Ref,
+                RefMut,
+            }
+
+            let atom = choice((
+                just(Token::ControlChar('&')).map(|_| AtomPreParseUnit::Ref),
+                just(Token::RefMut).map(|_| AtomPreParseUnit::RefMut),
+            ))
+            .or_not()
+            .then(just(Token::ControlChar('!')).repeated().collect::<Vec<_>>())
+            .then(
+                value_expr_parser
+                    .clone()
+                    .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
+                    .or(choice((
+                        choice((array.clone(), array_with_type.clone())),
+                        float_expr,
+                        int,
+                        fmt_string,
+                        html_string,
+                        duckx,
+                        tag_expr,
+                        bool_val,
+                        string_val,
+                        struct_expression,
+                        scope_res_ident.clone(),
+                        r#match,
+                        if_expr,
+                        char_expr,
+                        tuple,
+                        duck_expression,
+                        block_expression,
+                        just(Token::Break)
+                            .to(ValueExpr::Break)
+                            .map_with(|x, e| (x, e.span())),
+                        just(Token::Continue)
+                            .to(ValueExpr::Continue)
+                            .map_with(|x, e| (x, e.span())),
+                        while_with_condition_and_body
+                            .clone()
+                            .map(|(cond, body)| ValueExpr::While {
+                                condition: Box::new(cond),
+                                body: Box::new(body),
+                            })
+                            .map_with(|x, e| (x, e.span())),
+                        just(Token::Return)
+                            .ignore_then(value_expr_parser.clone().or_not())
+                            .map_with(|x: Option<Spanned<ValueExpr>>, e| {
+                                (ValueExpr::Return(x.map(Box::new)), e.span())
+                            }),
+                    ))),
+            )
+            .then(
+                choice((
                     value_expr_parser
                         .clone()
-                        .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
-                        .or(choice((
-                            choice((array.clone(), array_with_type.clone())),
-                            float_expr,
-                            int,
-                            fmt_string,
-                            html_string,
-                            duckx,
-                            tag_expr,
-                            bool_val,
-                            string_val,
-                            struct_expression,
-                            scope_res_ident.clone(),
-                            r#match,
-                            if_expr,
-                            char_expr,
-                            tuple,
-                            duck_expression,
-                            block_expression,
-                            just(Token::Break)
-                                .to(ValueExpr::Break)
-                                .map_with(|x, e| (x, e.span())),
-                            just(Token::Continue)
-                                .to(ValueExpr::Continue)
-                                .map_with(|x, e| (x, e.span())),
-                            while_with_condition_and_body
+                        .repeated()
+                        .at_least(1)
+                        .at_most(1)
+                        .collect::<Vec<_>>()
+                        .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
+                        .map(|x| AtomPostParseUnit::ArrayAccess(x[0].clone())),
+                    just(Token::ControlChar('<'))
+                        .ignore_then(
+                            type_expression_parser()
                                 .clone()
-                                .map(|(cond, body)| ValueExpr::While {
-                                    condition: Box::new(cond),
-                                    body: Box::new(body),
-                                })
-                                .map_with(|x, e| (x, e.span())),
-                            just(Token::Return)
-                                .ignore_then(value_expr_parser.clone().or_not())
-                                .map_with(|x: Option<Spanned<ValueExpr>>, e| {
-                                    (ValueExpr::Return(x.map(Box::new)), e.span())
-                                }),
-                        ))),
-                )
-                .then(
-                    choice((
-                        value_expr_parser
-                            .clone()
-                            .repeated()
-                            .at_least(1)
-                            .at_most(1)
-                            .collect::<Vec<_>>()
-                            .delimited_by(
-                                just(Token::ControlChar('[')),
-                                just(Token::ControlChar(']')),
-                            )
-                            .map(|x| AtomPostParseUnit::ArrayAccess(x[0].clone())),
-                        just(Token::ControlChar('<'))
-                            .ignore_then(
-                                type_expression_parser()
-                                    .clone()
-                                    .separated_by(just(Token::ControlChar(',')))
-                                    .allow_trailing()
-                                    .at_least(1)
-                                    .collect::<Vec<Spanned<TypeExpr>>>(),
-                            )
-                            .then_ignore(just(Token::ControlChar('>')))
-                            .or_not()
-                            .then(params.clone())
-                            .map(|(type_params, params)| {
-                                AtomPostParseUnit::FuncCall(params, type_params)
-                            }),
-                        just(Token::ControlChar('.'))
-                            .ignore_then(
-                                select_ref! { Token::Ident(s) => s.to_string() }
-                                    .or(select_ref! { Token::ConstInt(i) => i.to_string() }),
-                            )
-                            .map(AtomPostParseUnit::FieldAccess),
-                    ))
-                    .repeated()
-                    .collect::<Vec<_>>(),
-                )
-                .map(|((neg, target), params)| {
-                    let target = params.into_iter().fold(target, |acc, x| match x {
-                        AtomPostParseUnit::ArrayAccess(idx_expr) => {
-                            ValueExpr::ArrayAccess(acc.into(), idx_expr.into()).into_empty_span()
-                        }
-                        AtomPostParseUnit::FuncCall(params, type_params) => {
-                            ValueExpr::FunctionCall {
-                                target: acc.into(),
-                                params,
-                                type_params,
-                            }
-                            .into_empty_span()
-                        }
-                        AtomPostParseUnit::FieldAccess(field_name) => ValueExpr::FieldAccess {
-                            target_obj: acc.into(),
-                            field_name,
-                        }
-                        .into_empty_span(),
-                    });
+                                .separated_by(just(Token::ControlChar(',')))
+                                .allow_trailing()
+                                .at_least(1)
+                                .collect::<Vec<Spanned<TypeExpr>>>(),
+                        )
+                        .then_ignore(just(Token::ControlChar('>')))
+                        .or_not()
+                        .then(params.clone())
+                        .map(|(type_params, params)| {
+                            AtomPostParseUnit::FuncCall(params, type_params)
+                        }),
+                    just(Token::ControlChar('.'))
+                        .ignore_then(
+                            select_ref! { Token::Ident(s) => s.to_string() }
+                                .or(select_ref! { Token::ConstInt(i) => i.to_string() }),
+                        )
+                        .map(AtomPostParseUnit::FieldAccess),
+                ))
+                .repeated()
+                .collect::<Vec<_>>(),
+            )
+            .map(|(((is_ref, neg), target), params)| {
+                let target = params.into_iter().fold(target, |acc, x| match x {
+                    AtomPostParseUnit::ArrayAccess(idx_expr) => {
+                        ValueExpr::ArrayAccess(acc.into(), idx_expr.into()).into_empty_span()
+                    }
+                    AtomPostParseUnit::FuncCall(params, type_params) => ValueExpr::FunctionCall {
+                        target: acc.into(),
+                        params,
+                        type_params,
+                    }
+                    .into_empty_span(),
+                    AtomPostParseUnit::FieldAccess(field_name) => ValueExpr::FieldAccess {
+                        target_obj: acc.into(),
+                        field_name,
+                    }
+                    .into_empty_span(),
+                });
 
-                    neg.into_iter().fold(target, |acc, _| {
-                        ValueExpr::BoolNegate(acc.into()).into_empty_span()
-                    })
-                })
-                .map_with(|x, e| (x.0, e.span()))
-                .boxed();
+                let res = neg.into_iter().fold(target, |acc, _| {
+                    ValueExpr::BoolNegate(acc.into()).into_empty_span() // TODO(@Apfelfrosch) <-- fix this empty span
+                });
+
+                if let Some(ref_type) = is_ref {
+                    match ref_type {
+                        AtomPreParseUnit::Ref => ValueExpr::Ref(res.into()),
+                        AtomPreParseUnit::RefMut => ValueExpr::RefMut(res.into()),
+                    }
+                    .into_empty_span()
+                } else {
+                    res
+                }
+            })
+            .map_with(|x, e| (x.0, e.span()))
+            .boxed();
 
             let pen = atom
                 .clone()
@@ -1022,6 +1039,7 @@ pub fn source_file_into_empty_range(v: &mut SourceFile) {
 pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
     t.1 = empty_range();
     match &mut t.0 {
+        TypeExpr::Ref(t) | TypeExpr::RefMut(t) => type_expr_into_empty_range(&mut *t),
         TypeExpr::Duck(d) => {
             for f in &mut d.fields {
                 type_expr_into_empty_range(&mut f.type_expr);
@@ -1066,6 +1084,7 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
 pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
     v.1 = empty_range();
     match &mut v.0 {
+        ValueExpr::Ref(v) | ValueExpr::RefMut(v) => value_expr_into_empty_range(&mut *v),
         ValueExpr::ArrayAccess(target, idx_expr) => {
             value_expr_into_empty_range(target);
             value_expr_into_empty_range(idx_expr);
@@ -2795,6 +2814,30 @@ mod tests {
                     span: empty_range(),
                 },
             ),
+            ("&mut a", ValueExpr::RefMut(var("a"))),
+            (
+                "&mut { x: 10 }",
+                ValueExpr::RefMut(
+                    ValueExpr::Duck(vec![(
+                        "x".to_string(),
+                        ValueExpr::Int(10).into_empty_span(),
+                    )])
+                    .into_empty_span()
+                    .into(),
+                ),
+            ),
+            (
+                "&{ x: 10 }",
+                ValueExpr::Ref(
+                    ValueExpr::Duck(vec![(
+                        "x".to_string(),
+                        ValueExpr::Int(10).into_empty_span(),
+                    )])
+                    .into_empty_span()
+                    .into(),
+                ),
+            ),
+            ("&a", ValueExpr::Ref(var("a"))),
         ];
 
         for (i, (src, expected_tokens)) in test_cases.into_iter().enumerate() {

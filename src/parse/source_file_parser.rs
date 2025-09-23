@@ -367,7 +367,7 @@ fn append_global_prefix_type_expr(type_expr: &mut TypeExpr, mangle_env: &mut Man
                 append_global_prefix_type_expr(&mut t.0, mangle_env);
             }
         }
-        TypeExpr::Array(t) => {
+        TypeExpr::Array(t) | TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
             append_global_prefix_type_expr(&mut t.0, mangle_env);
         }
         _ => {}
@@ -376,6 +376,7 @@ fn append_global_prefix_type_expr(type_expr: &mut TypeExpr, mangle_env: &mut Man
 
 fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut MangleEnv) {
     match value_expr {
+        ValueExpr::Ref(v) | ValueExpr::RefMut(v) => append_global_prefix_value_expr(&mut v.0, mangle_env),
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {

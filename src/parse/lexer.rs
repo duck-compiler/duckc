@@ -39,6 +39,7 @@ pub enum Token {
     Duck,
     Function,
     Test,
+    RefMut,
     Return,
     Ident(String),
     ControlChar(char),
@@ -81,6 +82,7 @@ pub enum Token {
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = match self {
+            Token::RefMut => "&mut",
             Token::FormatStringLiteral(s) => &format!("f-string {s:?}"),
             Token::Impl => "impl",
             Token::ScopeRes => "::",
@@ -572,6 +574,7 @@ pub fn lex_single<'a>(
                     lexer.clone(),
                 ))
                 .map(Token::InlineDuckx))
+            .or(just("&mut").map(|_| Token::RefMut))
             .or(doc_comment)
             .or(comment)
             .or(fmt_string)

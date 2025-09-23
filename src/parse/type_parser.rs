@@ -63,6 +63,8 @@ pub enum TypeExpr {
     Array(Box<Spanned<TypeExpr>>),
     TypeOf(String),
     KeyOf(Box<Spanned<TypeExpr>>),
+    Ref(Box<Spanned<TypeExpr>>),
+    RefMut(Box<Spanned<TypeExpr>>),
 }
 
 impl TypeExpr {
@@ -125,7 +127,7 @@ where
                         just(Token::ControlChar('.')).map(|c| c.to_string()),
                     ))
                     .repeated()
-                    .collect::<Vec<_>>()
+                    .collect::<Vec<_>>(),
                 )
                 .then_ignore(just(Token::ControlChar('`')))
                 .map(|strs| strs.join(""));
@@ -251,7 +253,30 @@ where
                 ))
                 .map_with(|x, e| (x, e.span())));
 
-            term_type_expr
+            let immutable_ref = just(Token::ControlChar('&'))
+                .or_not()
+                .then(term_type_expr.clone())
+                .map_with(|(is_ref, x), e| {
+                    if is_ref.is_some() {
+                        (TypeExpr::Ref(Box::new(x)), e.span())
+                    } else {
+                        x
+                    }
+                });
+
+            let mutable_ref =
+                just(Token::RefMut)
+                    .or_not()
+                    .then(term_type_expr)
+                    .map_with(|(is_ref, x), e| {
+                        if is_ref.is_some() {
+                            (TypeExpr::RefMut(Box::new(x)), e.span())
+                        } else {
+                            x
+                        }
+                    });
+
+            choice((immutable_ref, mutable_ref))
                 .separated_by(just(Token::ControlChar('|')))
                 .at_least(1)
                 .collect::<Vec<Spanned<TypeExpr>>>()
@@ -297,7 +322,7 @@ where
                         just(Token::ControlChar('.')).map(|c| c.to_string()),
                     ))
                     .repeated()
-                    .collect::<Vec<_>>()
+                    .collect::<Vec<_>>(),
                 )
                 .then_ignore(just(Token::ControlChar('`')))
                 .map(|strs| strs.join(""));
@@ -443,7 +468,30 @@ where
                 })
                 .map_with(|x, e| (x, e.span()));
 
-            let union_expr = array
+            let immutable_ref = just(Token::ControlChar('&'))
+                .or_not()
+                .then(array.clone())
+                .map_with(|(is_ref, x), e| {
+                    if is_ref.is_some() {
+                        (TypeExpr::Ref(Box::new(x)), e.span())
+                    } else {
+                        x
+                    }
+                });
+
+            let mutable_ref =
+                just(Token::RefMut)
+                    .or_not()
+                    .then(array)
+                    .map_with(|(is_ref, x), e| {
+                        if is_ref.is_some() {
+                            (TypeExpr::RefMut(Box::new(x)), e.span())
+                        } else {
+                            x
+                        }
+                    });
+
+            let union_expr = choice((immutable_ref, mutable_ref))
                 .separated_by(just(Token::ControlChar('|')))
                 .at_least(1)
                 .collect::<Vec<Spanned<TypeExpr>>>()
@@ -517,6 +565,7 @@ where
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => write!(f, "&{}", t.0),
             TypeExpr::Html => write!(f, "html"),
             TypeExpr::Tag(identifier) => write!(f, ".{identifier}"),
             TypeExpr::TypeOf(identifier) => write!(f, "typeof {identifier}"),
@@ -1538,6 +1587,74 @@ pub mod tests {
                     )],
                 })
                 .into_empty_span(),
+            ]),
+        );
+
+        assert_type_expression(
+            "&Int",
+            TypeExpr::Ref(TypeExpr::Int.into_empty_span().into()),
+        );
+
+        assert_type_expression(
+            "&String[]",
+            TypeExpr::Ref(
+                TypeExpr::Array(TypeExpr::String.into_empty_span().into())
+                    .into_empty_span()
+                    .into(),
+            ),
+        );
+
+        assert_type_expression(
+            "&(String | Int)",
+            TypeExpr::Ref(
+                TypeExpr::Or(vec![
+                    TypeExpr::String.into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
+                ])
+                .into_empty_span()
+                .into(),
+            ),
+        );
+
+        assert_type_expression(
+            "&String | Int",
+            TypeExpr::Or(vec![
+                TypeExpr::Ref(TypeExpr::String.into_empty_span().into()).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
+            ]),
+        );
+
+        assert_type_expression(
+            "&mut Int",
+            TypeExpr::RefMut(TypeExpr::Int.into_empty_span().into()),
+        );
+
+        assert_type_expression(
+            "&mut String[]",
+            TypeExpr::RefMut(
+                TypeExpr::Array(TypeExpr::String.into_empty_span().into())
+                    .into_empty_span()
+                    .into(),
+            ),
+        );
+
+        assert_type_expression(
+            "&mut (String | Int)",
+            TypeExpr::RefMut(
+                TypeExpr::Or(vec![
+                    TypeExpr::String.into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
+                ])
+                .into_empty_span()
+                .into(),
+            ),
+        );
+
+        assert_type_expression(
+            "&mut String | Int",
+            TypeExpr::Or(vec![
+                TypeExpr::RefMut(TypeExpr::String.into_empty_span().into()).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
             ]),
         );
     }
