@@ -353,7 +353,7 @@ where
                 .or_not()
                 .boxed();
 
-            let declaration = just(Token::Let)
+            let declaration = just(Token::Let).or(just(Token::Const))
                 .ignore_then(
                     select_ref! { Token::Ident(identifier) => identifier.to_string() }
                         .map_with(|x, e| (x, e.span())),

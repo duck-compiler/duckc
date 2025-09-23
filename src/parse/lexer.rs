@@ -61,6 +61,7 @@ pub enum Token {
     KeyOf,
     Else,
     Let,
+    Const,
     While,
     Break,
     Continue,
@@ -82,6 +83,7 @@ pub enum Token {
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = match self {
+            Token::Const => "const",
             Token::RefMut => "&mut",
             Token::FormatStringLiteral(s) => &format!("f-string {s:?}"),
             Token::Impl => "impl",
@@ -459,6 +461,7 @@ pub fn lex_single<'a>(
             "return" => Token::Return,
             "component" => Token::Component,
             "let" => Token::Let,
+            "const" => Token::Const,
             "if" => Token::If,
             "else" => Token::Else,
             "while" => Token::While,
