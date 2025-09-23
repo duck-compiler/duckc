@@ -1,0 +1,10 @@
+use std::io::{println};
+
+fn main() {
+    let x: .a | .b | .. = ..;
+    match x {
+        .a => println("wrong!"),
+        .b => println("wrong!"),
+        .. => println("correct!"),
+    };
+}
