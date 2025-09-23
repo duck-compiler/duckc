@@ -291,7 +291,7 @@ impl ValueExpr {
         span: SS,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
-            ValueExpr::Ref(..) | ValueExpr::RefMut(..) => todo!("ref emit"),
+            ValueExpr::Ref(v) | ValueExpr::RefMut(v) => v.0.emit(type_env, env, span),
             ValueExpr::Sub(lhs, rhs) => {
                 let mut ir = Vec::new();
 
