@@ -137,8 +137,13 @@ where
             let int_literal = select_ref! { Token::ConstInt(int) => *int }
                 .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
 
+            let tag_identifier = choice((
+                select_ref! { Token::Ident(ident) => ident.to_string() },
+                just(Token::ControlChar('.')).map(|_| "DOT".to_string())
+            )).boxed();
+
             let tag = just(Token::ControlChar('.'))
-                .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
+                .ignore_then(tag_identifier)
                 .map(TypeExpr::Tag);
 
             let duck = just(Token::Duck)
@@ -331,8 +336,13 @@ where
             let int_literal = select_ref! { Token::ConstInt(int) => *int }
                 .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
 
+            let tag_identifier = choice((
+                select_ref! { Token::Ident(ident) => ident.to_string() },
+                just(Token::ControlChar('.')).map(|_| "DOT".to_string())
+            )).boxed();
+
             let tag = just(Token::ControlChar('.'))
-                .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
+                .ignore_then(tag_identifier)
                 .map(TypeExpr::Tag);
 
             let function = just(Token::Function)

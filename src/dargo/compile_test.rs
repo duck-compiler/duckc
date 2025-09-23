@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use std::{ffi::OsString, fs, path::PathBuf, sync::mpsc, time::Duration};
 
 use crate::{
-    cli::go_cli::{self, GoCliErrKind}, dargo::cli::CompileArgs, emit::{ir::join_ir, types::escape_string_for_go}, lex, parse::{function_parser::FunctionDefintion, value_parser::empty_range}, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
+    cli::go_cli::{self, GoCliErrKind}, dargo::cli::CompileArgs, emit::{ir::join_ir, types::escape_string_for_go}, lex, parse::value_parser::empty_range, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
 };
 
 #[derive(Debug)]
@@ -128,12 +128,13 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
     });
     let mut type_env = typecheck(&mut src_file_ast, &tailwind_worker_send);
 
-    // the only change in this file is that the parameter is set to true
-    let main_fun: &mut FunctionDefintion = src_file_ast.function_definitions.iter_mut()
-        .find(|fun_def| fun_def.name == "main")
-        .expect("compiler error: expected main function");
+    let maybe_main_fn = src_file_ast.function_definitions
+        .iter_mut()
+        .find(|fun_def| fun_def.name == "main");
 
-    main_fun.name = "normally_main".to_string();
+    if let Some(main_fn) = maybe_main_fn {
+        main_fn.name = "____thrown_away_main_LOL".to_string();
+    }
 
     dbg!(&src_file_ast.test_cases);
     let test_source = src_file_ast.test_cases
