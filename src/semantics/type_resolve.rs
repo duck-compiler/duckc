@@ -445,6 +445,7 @@ impl TypeEnv<'_> {
             })
             .is_ok()
         });
+
         std::panic::set_hook(org);
 
         all_types.sort_by_key(|type_expr| type_expr.type_id(self));
@@ -1819,6 +1820,17 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     for fn_def in &source_file.function_definitions {
         type_env.function_definitions.push(fn_def.clone());
+        let mut function_type = fn_def.type_expr().0;
+
+        if let TypeExpr::Fun(_, return_type) = &mut function_type {
+            if let Some(return_type_box) = return_type {
+                if let TypeExpr::And(_) = &return_type_box.0 {
+                    return_type_box.0 = translate_interception_to_duck(&return_type_box.0);
+                }
+            }
+        }
+
+        type_env.insert_identifier_type(fn_def.name.clone(), function_type);
     }
 
     for comp in &source_file.tsx_components {
@@ -1879,7 +1891,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 process_keyof_in_type_expr(&mut r.0, type_env);
             }
 
-            let fn_type_expr = TypeExpr::Fun(
+            let mut fn_type_expr = TypeExpr::Fun(
                 function_definition
                     .params
                     .as_ref()
@@ -1897,6 +1909,14 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                         ))
                     }),
             );
+
+            if let TypeExpr::Fun(_, return_type) = &mut fn_type_expr {
+                if let Some(return_type_box) = return_type {
+                    if let TypeExpr::And(_) = &return_type_box.0 {
+                        return_type_box.0 = translate_interception_to_duck(&return_type_box.0);
+                    }
+                }
+            }
 
             type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr);
         });
@@ -2002,7 +2022,10 @@ fn typeresolve_function_definition(
         });
     }
 
-    if let Some((return_type, _)) = &mut function_definition.return_type {
+    if let Some((return_type, _span)) = &mut function_definition.return_type {
+        if let TypeExpr::And(_) = &return_type {
+            *return_type = translate_interception_to_duck(return_type);
+        }
         *return_type = type_env.insert_type(return_type.clone());
     }
 
@@ -2024,7 +2047,7 @@ fn typeresolve_function_definition(
     type_env.pop_identifier_types();
 }
 
-fn translate_interception_to_duck(interception_type: &TypeExpr) -> TypeExpr {
+pub fn translate_interception_to_duck(interception_type: &TypeExpr) -> TypeExpr {
     match interception_type {
         TypeExpr::And(variants) => {
             let mut all_fields = Vec::new();
@@ -2317,6 +2340,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             let type_expr = type_env
                 .get_identifier_type(identifier.clone())
                 .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));
+
             //resolve_all_aliases_type_expr(&mut type_expr, type_env, generics_to_ignore);
             *type_expr_opt = Some(type_expr)
         }
