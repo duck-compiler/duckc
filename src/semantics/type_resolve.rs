@@ -14,7 +14,7 @@ use crate::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
         }, Spanned, SpannedMutRef, SS
     },
-    semantics::ident_mangler::mangle,
+    semantics::{ident_mangler::mangle, typechecker::check_type_compatability},
     tags::Tag,
 };
 
@@ -575,6 +575,7 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
         TypeExpr::TypeName(_, name, type_params) => {
             let (mut new_type, mut new_type_params) =
                 resolve_by_string(name.as_str(), type_params.as_ref().cloned(), type_env);
+
             if let Some(e) = new_type.as_mut() {
                 if let TypeExpr::Struct(def) = e {
                     if let Some(new_type_params) = new_type_params.as_mut() {
@@ -926,12 +927,17 @@ fn resolve_by_string(
         if let Some(generics) = &def.generics
             && let Some(ref user_generics) = type_params
         {
-            for (generic_name, val_to_set) in generics
+            for (generic, val_to_set) in generics
                 .iter()
-                .map(|x| &x.0.name)
-                .zip(user_generics.iter().map(|x| &x.0))
+                .map(|x| &x.0)
+                .zip(user_generics.iter())
             {
-                gen_instance_map.insert(generic_name.to_owned(), val_to_set.clone());
+                let generic_name = generic.name.clone();
+                if let Some(constraint) = &generic.constraint {
+                    check_type_compatability(&constraint, val_to_set, type_env);
+                }
+
+                gen_instance_map.insert(generic_name, val_to_set.0.clone());
             }
         }
         let mut rhs = def.type_expression.0.clone();
