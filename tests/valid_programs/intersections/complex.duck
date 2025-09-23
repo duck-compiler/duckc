@@ -1,0 +1,146 @@
+use std::io::{println};
+
+// Test functions with intersection return types
+fn create_basic_intersection() -> { x: Int } & { y: Int } {
+    return { x: 5, y: 10 };
+}
+
+fn create_complex_intersection() -> { username: String, age: Int } & { street: String, city: String } {
+    return {
+        username: "john_doe",
+        age: 30,
+        street: "123 Main St",
+        city: "New York"
+    };
+}
+
+// Functions with intersection parameters
+fn process_basic_intersection(point: { x: Int } & { y: Int }) {
+    println("Processing basic intersection");
+}
+
+fn process_complex_intersection(user: { username: String, age: Int } & { street: String, city: String }) {
+    println("Processing complex intersection");
+}
+
+fn main() {
+    println("=== Testing Intersection Types (&) ===");
+
+    // Test 1: Basic intersection type assignment
+    let basic_intersection: { x: Int } & { y: Int } = { x: 5, y: 10 };
+    println("✓ Basic intersection type assignment works");
+
+    // Test 2: Function return type with intersection
+    let result = create_basic_intersection();
+    println("✓ Function with intersection return type works");
+
+    // Test 3: Function parameter with intersection
+    process_basic_intersection(result);
+    println("✓ Function parameter with intersection type works");
+
+    // Test 4: Complex intersection with multiple fields
+    let complex_result = create_complex_intersection();
+    println("✓ Complex intersection with multiple fields works");
+
+    // Test 5: Function parameter with complex intersection
+    process_complex_intersection(complex_result);
+    println("✓ Function parameter with complex intersection works");
+
+    // Test 6: Multiple intersection combinations
+    let multi_intersection: { a: Int } & { b: String } & { c: Bool } = {
+        a: 42,
+        b: "hello",
+        c: true
+    };
+    println("✓ Multiple intersection combinations work");
+
+    // Test 7: Intersection with different field types
+    let mixed_types: { str: String, num: Int, flag: Bool } & { arr: String[] } = {
+        str: "test",
+        num: 123,
+        flag: false,
+        arr: ["item1", "item2", "item3"]
+    };
+    println("✓ Intersection with different field types works");
+
+    // Test 8: Intersection in variable declarations
+    let inline_intersection: { id: Int } & { name: String } & { active: Bool } = {
+        id: 1,
+        name: "Test Item",
+        active: true
+    };
+    println("✓ Inline intersection in variable declarations works");
+
+    // Test 9: Deep nesting with intersections
+    let deep_nested: { level1: { level2: { level3: String } } } & { metadata: { version: Int } } = {
+        level1: {
+            level2: {
+                level3: "deep value"
+            }
+        },
+        metadata: {
+            version: 1
+        }
+    };
+    println("✓ Deep nesting with intersections works");
+
+    // Test 10: Intersection with overlapping field names (should merge)
+    let overlapping: { name: String, id: Int } & { name: String, category: String } = {
+        name: "Overlapping Item",
+        id: 42,
+        category: "Test Category"
+    };
+    println("✓ Intersection with overlapping field names works");
+
+    // Test 11: Intersection in array context
+    // TODO
+
+    // Test 12: Complex real-world scenario with inline types
+    let manager: { employeeId: Int, name: String, department: String } & { teamSize: Int, budget: Int } & { email: String, phone: String } = {
+        employeeId: 1001,
+        name: "Sarah Johnson",
+        department: "Engineering",
+        teamSize: 8,
+        budget: 500000,
+        email: "sarah@company.com",
+        phone: "+1-555-0199"
+    };
+    println("✓ Complex real-world intersection scenario works");
+
+    // Test 13: Edge case - intersection with empty objects
+    let empty_intersection: {} & { value: Int } = { value: 100 };
+    println("✓ Intersection with empty objects works");
+
+    // Test 14: Multiple levels of intersection
+    let triple_intersection: { a: Int } & { b: String } & { c: Bool } & { d: Float } = {
+        a: 1,
+        b: "test",
+        c: true,
+        d: 3.14
+    };
+    println("✓ Multiple levels of intersection work");
+
+    // Test 15: Intersection with different primitive types
+    let primitives: { str: String, int: Int, bool: Bool, float: Float } & { char: Char } = {
+        str: "hello",
+        int: 42,
+        bool: true,
+        float: 3.14159,
+        char: 'A'
+    };
+    println("✓ Intersection with different primitive types works");
+
+    // Test 16: Intersection with nested objects
+    let nested_intersection: { outer: { inner: String } } & { metadata: { count: Int } } = {
+        outer: {
+            inner: "nested value"
+        },
+        metadata: {
+            count: 42
+        }
+    };
+    println("✓ Intersection with nested objects works");
+
+
+    println("=== All intersection type tests passed! ===");
+}
