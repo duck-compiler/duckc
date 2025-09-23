@@ -1,0 +1,13 @@
+use std::io::{println};
+
+type And = { x: Int } & { y: Int };
+
+fn main() {
+    let b: { x: Int, y: Int } = { x: 5, y: 5 };
+    let a: And = b;
+
+    match a {
+        { x: Int } & { y: Int } => println("correct"),
+        else => println("wrong"),
+    };
+}

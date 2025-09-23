@@ -1,0 +1,19 @@
+use std::io::{println};
+
+type MyType = {
+    username: String,
+};
+
+fn keyof_check(key: keyof MyType) {
+}
+
+fn keyof_check_with_return() -> keyof MyType {
+    return .username;
+}
+
+fn main() {
+    keyof_check(.username);
+    let f = keyof_check_with_return();
+
+    println("success: let x: keyof { username: String } = .username;");
+}

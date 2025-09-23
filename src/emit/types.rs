@@ -497,6 +497,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replace by now"),
+            TypeExpr::KeyOf(..) => panic!("keyof should be replace by now"),
             TypeExpr::Alias(def) => def.type_expression.0.as_go_type_annotation(type_env),
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::Array(t) => format!("[]{}", t.0.as_go_type_annotation(type_env)),
@@ -560,6 +561,7 @@ impl TypeExpr {
             }
             TypeExpr::Tuple(_fields) => self.as_clean_go_type_name(type_env),
             TypeExpr::Or(_variants) => "any".to_string(),
+            TypeExpr::And(_variants) => "any".to_string(),
         };
     }
 
@@ -567,6 +569,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
+            TypeExpr::KeyOf(..) => panic!("keyof should be replaced"),
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
             TypeExpr::RawTypeName(..) => panic!(),
@@ -634,6 +637,7 @@ impl TypeExpr {
                 )
             }
             TypeExpr::Or(_) => "any".to_string(),
+            TypeExpr::And(_) => "any".to_string(),
         };
     }
 
@@ -650,6 +654,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
+            TypeExpr::KeyOf(..) => panic!("keyof should be replaced"),
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::RawTypeName(_, ident, _) => {
                 panic!("{ident:?}")
@@ -723,6 +728,18 @@ impl TypeExpr {
 
                 return format!("Union_{}", variants.join("_or_"));
             }
+            TypeExpr::And(variants) => {
+                // mvmo 03.07.25: Check for double sort
+                let mut variants = variants
+                    .clone()
+                    .iter()
+                    .map(|variant| variant.0.type_id(type_env))
+                    .collect::<Vec<_>>();
+
+                variants.sort();
+
+                return format!("Intersection_{}", variants.join("_and_"));
+            }
         };
     }
 
@@ -730,6 +747,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
+            TypeExpr::KeyOf(..) => panic!("keyof should be replaced"),
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::RawTypeName(_, ident, _) => {
                 panic!("{ident:?}")
@@ -808,6 +826,18 @@ impl TypeExpr {
                 variants.sort();
 
                 return format!("Union_{}", variants.join("_or_"));
+            }
+            TypeExpr::And(variants) => {
+                // mvmo 03.07.25: Check for double sort
+                let mut variants = variants
+                    .clone()
+                    .iter()
+                    .map(|variant| variant.0.as_clean_go_type_name(type_env))
+                    .collect::<Vec<_>>();
+
+                variants.sort();
+
+                return format!("Intersection_{}", variants.join("_and_"));
             }
         };
     }

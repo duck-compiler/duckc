@@ -221,7 +221,7 @@ fn walk_access(
                         }
                     }
                     TypeExpr::Struct(..) => s.push_front(field_name.to_string()),
-                    a => panic!("can only access object like {a:?} {:?}", target_obj.0),
+                    _ => {},
                 }
                 current_obj = target_obj.0;
             }

@@ -55,12 +55,14 @@ pub enum TypeExpr {
     Char,
     Float,
     Or(Vec<Spanned<TypeExpr>>),
+    And(Vec<Spanned<TypeExpr>>),
     Fun(
         Vec<(Option<String>, Spanned<TypeExpr>)>, // params
         Option<Box<Spanned<TypeExpr>>>,           // return type
     ),
     Array(Box<Spanned<TypeExpr>>),
     TypeOf(String),
+    KeyOf(Box<Spanned<TypeExpr>>),
 }
 
 impl TypeExpr {
@@ -105,6 +107,10 @@ where
                 .collect::<Vec<(String, Spanned<TypeExpr>)>>();
 
             let function_fields = duck_fields.clone();
+
+            let keyof_expr = just(Token::KeyOf)
+                .ignore_then(p.clone().map(Box::new))
+                .map(TypeExpr::KeyOf);
 
             let typeof_expr = just(Token::TypeOf)
                 .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() })
@@ -236,6 +242,7 @@ where
                     bool_literal,
                     tag,
                     typeof_expr,
+                    keyof_expr,
                     go_type,
                     type_name,
                     duck,
@@ -299,6 +306,10 @@ where
                 .ignore_then(go_type_identifier)
                 .map(TypeExpr::Go);
 
+            let keyof_expr = just(Token::KeyOf)
+                .ignore_then(p.clone().map(Box::new))
+                .map(TypeExpr::KeyOf);
+
             let typeof_expr = just(Token::TypeOf)
                 .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() })
                 .map(TypeExpr::TypeOf);
@@ -409,6 +420,7 @@ where
                     string_literal,
                     tag,
                     typeof_expr,
+                    keyof_expr,
                     go_type,
                     type_name,
                     duck,
@@ -431,7 +443,7 @@ where
                 })
                 .map_with(|x, e| (x, e.span()));
 
-            array
+            let union_expr = array
                 .separated_by(just(Token::ControlChar('|')))
                 .at_least(1)
                 .collect::<Vec<Spanned<TypeExpr>>>()
@@ -444,6 +456,21 @@ where
                         merge_or(&expr, &mut elems);
                         (TypeExpr::Or(elems), e.span())
                     }
+                });
+
+            union_expr
+                .separated_by(just(Token::ControlChar('&')))
+                .at_least(1)
+                .collect::<Vec<Spanned<TypeExpr>>>()
+                .map_with(|elements, e| {
+                    if elements.len() == 1 {
+                        elements.into_iter().next().unwrap()
+                    } else {
+                        let mut elems = Vec::new();
+                        let expr = (TypeExpr::And(elements), e.span());
+                        merge_and(&expr, &mut elems);
+                        (TypeExpr::And(elems), e.span())
+                    }
                 })
         },
     )
@@ -453,6 +480,16 @@ pub fn merge_or(t: &Spanned<TypeExpr>, o: &mut Vec<Spanned<TypeExpr>>) {
     if let TypeExpr::Or(elems) = &t.0 {
         for elem in elems {
             merge_or(elem, o);
+        }
+    } else {
+        o.push(t.clone());
+    }
+}
+
+pub fn merge_and(t: &Spanned<TypeExpr>, o: &mut Vec<Spanned<TypeExpr>>) {
+    if let TypeExpr::And(elems) = &t.0 {
+        for elem in elems {
+            merge_and(elem, o);
         }
     } else {
         o.push(t.clone());
@@ -483,6 +520,7 @@ impl Display for TypeExpr {
             TypeExpr::Html => write!(f, "html"),
             TypeExpr::Tag(identifier) => write!(f, ".{identifier}"),
             TypeExpr::TypeOf(identifier) => write!(f, "typeof {identifier}"),
+            TypeExpr::KeyOf(identifier) => write!(f, "keyof {}", identifier.as_ref().0.as_clean_user_faced_type_name()),
             TypeExpr::Alias(def) => write!(f, "{def:?}"),
             TypeExpr::Any => write!(f, "any"),
             TypeExpr::InlineGo => write!(f, "inline_go"),
@@ -554,6 +592,12 @@ impl Display for TypeExpr {
             TypeExpr::Or(variants) => variants.iter().enumerate().try_for_each(|(i, variant)| {
                 if i > 0 {
                     write!(f, " | ")?;
+                }
+                write!(f, "{}", variant.0)
+            }),
+            TypeExpr::And(variants) => variants.iter().enumerate().try_for_each(|(i, variant)| {
+                if i > 0 {
+                    write!(f, " & ")?;
                 }
                 write!(f, "{}", variant.0)
             }),
@@ -629,6 +673,7 @@ pub mod tests {
                 return_type.map(|rt_box| Box::new(strip_spans(*rt_box))),
             ),
             TypeExpr::Or(variants) => TypeExpr::Or(variants.into_iter().map(strip_spans).collect()),
+            TypeExpr::And(variants) => TypeExpr::And(variants.into_iter().map(strip_spans).collect()),
             TypeExpr::TypeName(is_global, type_name, Some(generics)) => TypeExpr::TypeName(
                 is_global,
                 type_name,

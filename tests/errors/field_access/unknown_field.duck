@@ -1,0 +1,4 @@
+fn main() {
+    let x = { username: "" };
+    let y = x.field;
+}

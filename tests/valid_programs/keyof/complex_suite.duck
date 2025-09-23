@@ -1,0 +1,138 @@
+use std::io::{println};
+
+type User = {
+    username: String,
+    age: Int,
+    email: String,
+};
+
+type Product = {
+    name: String,
+    price: Int,
+};
+
+fn get_user_key() -> keyof User {
+    return .username;
+}
+
+fn get_product_key() -> keyof Product {
+    return .name;
+}
+
+fn handle_key(key: keyof User) {
+    println("Handling user key");
+}
+
+fn process_user_keys(keys: keyof User) {
+    println("Processing user keys");
+}
+
+fn generics_test<T>(in: keyof T) {
+}
+
+fn generics_test_with_return<T>(t: keyof T) -> keyof T {
+    return t;
+}
+
+type ComplexType = {
+    id: Int,
+    name: String,
+    active: Bool,
+    tags: String[],
+};
+
+struct TestStruct = {
+    field1: String,
+    field2: Int,
+};
+
+type NestedType = {
+    outer: String,
+    inner: {
+        nested_field: Int,
+        another_field: Bool,
+    },
+};
+
+type DatabaseRecord = {
+    id: Int,
+    user: User,
+    metadata: {
+        created_at: String,
+        updated_at: String,
+    },
+};
+
+// Test different field types
+type MixedTypes = {
+    string_field: String,
+    int_field: Int,
+    bool_field: Bool,
+    array_field: String[],
+};
+
+fn main() {
+    println("=== Testing keyof operator ===");
+
+    let simple_key: keyof { username: String, age: Int } = .username;
+    println("✓ Simple inline type works");
+
+    let user_key: keyof User = .age;
+    println("✓ Type alias works");
+
+    let complex_key: keyof ComplexType = .name;
+    println("✓ Complex type keyof works");
+
+    handle_key(.username);
+    println("✓ Function parameter with keyof works");
+
+    let returned_key = get_user_key();
+    println("✓ Function return type with keyof works");
+
+    let user_instance = { username: "john", age: 25, email: "john@example.com" };
+    println("✓ Type instantiation without explicit type names works");
+
+    let struct_key: keyof TestStruct = .field1;
+    println("✓ Struct keyof works");
+
+    let nested_key1: keyof NestedType = .outer;
+    println("✓ Nested duck type keyof works");
+
+    let key_array: (keyof User)[] = [.username, .age, .email];
+    println("✓ Array of keyof types works");
+
+    let user_key_alt: keyof User = .email;
+    println("✓ Alternative user key works");
+
+    let result = process_user_keys(.username);
+    println("✓ Keyof with function types works");
+
+    let different_key: keyof Product = .price;
+    println("✓ Keyof with different types works");
+
+    let nested_key2: keyof NestedType = .outer;
+    println("✓ Nested keyof works");
+
+    let db_key: keyof DatabaseRecord = .id;
+    println("✓ Complex nested keyof works");
+
+    let mixed_key: keyof MixedTypes = .string_field;
+    println("✓ Mixed types keyof works");
+
+    generics_test<{ username: String }>(.username);
+    println("✓ keyof in generic function call works");
+
+    let x = generics_test_with_return<{ username: String }>(.username);
+    println("✓ keyof in generic function with return");
+
+    // Debug: Try with explicit type annotation using a different approach
+    let y: keyof { username: String } = .username;
+    println("✓ Direct keyof type annotation works");
+
+    // Try to match the exact same type as the generic function
+    let z: keyof { username: String } = generics_test_with_return<{ username: String }>(.username);
+    println("✓ Generic function with matching type annotation works");
+
+    println("=== All keyof tests passed! ===");
+
+}

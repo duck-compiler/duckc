@@ -1,0 +1,16 @@
+use std::io::{println};
+
+type User<T: {
+    name: String,
+    age: Int,
+}> = T;
+
+type UserWithOther = User<{
+    name: String,
+    age: String
+}>;
+
+
+fn main() {
+    println("correct")
+}

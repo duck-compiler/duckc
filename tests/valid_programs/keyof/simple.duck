@@ -1,0 +1,6 @@
+use std::io::{println};
+
+fn main() {
+    let x: keyof { username: String } = .username;
+    println("success: let x: keyof { username: String } = .username;");
+}

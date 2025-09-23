@@ -1,0 +1,10 @@
+use std::io::{println};
+
+type And = { x: Int } & { y: Int };
+
+fn main() {
+    let b: { x: Int, y: Int } = { x: 5, y: 5 };
+    let a: { x: Int } & { y: Int } = b;
+
+    println(f"correct: {a.x->std::string::from_int()}");
+}

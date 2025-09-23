@@ -6,6 +6,7 @@ use colored::Colorize;
 
 use crate::parse::struct_parser::StructDefinition;
 use crate::parse::type_parser::{Duck, TypeExpr};
+use crate::parse::value_parser::empty_range;
 use crate::parse::{Field, SS, failure_with_occurence};
 use crate::parse::{
     Spanned, failure,
@@ -391,10 +392,10 @@ impl TypeExpr {
                     .map(|param| (TypeExpr::from_value_expr(param, type_env), param.1))
                     .collect::<Vec<_>>();
 
-                let target_type = TypeExpr::from_value_expr(target.as_ref(), type_env);
-                if let TypeExpr::Fun(param_types, return_type) = target_type {
+                let mut target_type = TypeExpr::from_value_expr(target.as_ref(), type_env);
+                if let TypeExpr::Fun(param_types, return_type) = &mut target_type {
                     param_types
-                        .iter()
+                        .iter_mut()
                         .enumerate()
                         .for_each(|(index, param_type)| {
                             if matches!(param_type.1.0, TypeExpr::Any) {
@@ -405,10 +406,17 @@ impl TypeExpr {
                                 &param_type.1,
                                 in_param_types.get(index).unwrap(),
                                 type_env,
-                            )
+                            );
+
+                            // variant any replace
+                            if let TypeExpr::Array(boxed) = &in_param_types.get(index).unwrap().0 {
+                                if let TypeExpr::Or(_) = boxed.as_ref().0 {
+                                    param_type.1.0 = TypeExpr::Array(Box::new((TypeExpr::Any, empty_range())))
+                                }
+                            }
                         });
 
-                    return return_type.map_or(TypeExpr::Tuple(vec![]), |x| x.as_ref().0.clone());
+                    return return_type.clone().map_or(TypeExpr::Tuple(vec![]), |x| x.as_ref().0.clone());
                 }
 
                 failure(
@@ -501,25 +509,51 @@ impl TypeExpr {
                 target_obj,
                 field_name,
             } => {
+                let span = target_obj.as_ref().1;
                 let target_obj_type_expr =
                     TypeExpr::from_value_expr_resolved_type_name(target_obj, type_env);
-                require(
-                    target_obj_type_expr.is_object_like(),
-                    format!(
-                        "the target of a field access must be of type duck, struct or tuple. Got {target_obj_type_expr:?} {}",
-                        target_obj_type_expr.as_go_type_annotation(type_env)
-                    ),
-                );
-                require(
-                    target_obj_type_expr.has_field_by_name(field_name.clone(), type_env)
-                        || target_obj_type_expr.has_method_by_name(field_name.clone(), type_env),
-                    format!(
-                        "{:?} {} doesn't have a field with name {}",
-                        &target_obj_type_expr,
-                        target_obj_type_expr.as_go_type_annotation(type_env),
-                        field_name
-                    ),
-                );
+
+                if !target_obj_type_expr.is_object_like() {
+                    failure_with_occurence(
+                        span.context.file_name,
+                        "Invalid Field Access".to_string(),
+                        {
+                            let mut span = span.clone();
+                            span.end += 2;
+                            span
+                        },
+                        vec![
+                            (
+                                format!("this value is not object like and has no fields to access"),
+                                span.clone()
+                            )
+                        ],
+                        span.context.file_contents
+                    )
+                }
+
+                if !(target_obj_type_expr.has_field_by_name(field_name.clone(), type_env) || target_obj_type_expr.has_method_by_name(field_name.clone(), type_env)) {
+                    failure_with_occurence(
+                        span.context.file_name,
+                        "Invalid Field Access".to_string(),
+                        {
+                            let mut span = span.clone();
+                            span.end += 2;
+                            span
+                        },
+                        vec![
+                            (
+                                format!(
+                                    "this is of type {} and it has no field '{}'",
+                                    target_obj_type_expr.as_clean_user_faced_type_name().bright_yellow(),
+                                    field_name.bright_blue()
+                                ),
+                                span.clone()
+                            ),
+                        ],
+                        span.context.file_contents
+                    )
+                }
 
                 target_obj_type_expr.typeof_field(field_name.to_string(), type_env)
             }
@@ -660,10 +694,10 @@ impl TypeExpr {
                 } = type_env.get_struct_def(r#struct.as_str());
 
                 methods.iter().any(|f| f.name.as_str() == name.as_str())
-                    || type_env
-                        .get_generic_methods(struct_name.clone())
-                        .iter()
-                        .any(|x| x.name.as_str() == name.as_str())
+                || type_env
+                    .get_generic_methods(struct_name.clone())
+                    .iter()
+                    .any(|x| x.name.as_str() == name.as_str())
             }
             _ => false,
         }
@@ -758,8 +792,8 @@ impl TypeExpr {
 
     pub fn is_number(&self) -> bool {
         return *self == TypeExpr::Int
-            || *self == TypeExpr::Float
-            || matches!(*self, TypeExpr::ConstInt(..));
+        || *self == TypeExpr::Float
+        || matches!(*self, TypeExpr::ConstInt(..));
     }
 
     pub fn is_tuple(&self) -> bool {
@@ -803,8 +837,8 @@ impl TypeExpr {
         // todo(@Mvmo) Implement other literal types
         // floats, chars.... missing
         return matches!(*self, TypeExpr::ConstInt(..))
-            || matches!(*self, TypeExpr::ConstString(..))
-            || matches!(*self, TypeExpr::ConstBool(..));
+        || matches!(*self, TypeExpr::ConstString(..))
+        || matches!(*self, TypeExpr::ConstBool(..));
     }
 
     pub fn is_variant(&self) -> bool {
@@ -873,10 +907,10 @@ fn types_are_compatible(one: &TypeExpr, two: &TypeExpr, type_env: &mut TypeEnv) 
         };
 
         if types_one.len() == types_two.len()
-            && types_one
-                .iter()
-                .zip(types_two.iter())
-                .all(|(a, b)| types_are_compatible(&a.0, &b.0, type_env))
+        && types_one
+            .iter()
+            .zip(types_two.iter())
+            .all(|(a, b)| types_are_compatible(&a.0, &b.0, type_env))
         {
             return true;
         }
@@ -959,7 +993,7 @@ fn require_subset_of_variant_type(
     }
 }
 
-fn check_type_compatability(
+pub fn check_type_compatability(
     required_type: &Spanned<TypeExpr>,
     given_type: &Spanned<TypeExpr>,
     type_env: &mut TypeEnv,
@@ -1010,6 +1044,7 @@ fn check_type_compatability(
             )
         }
         TypeExpr::TypeOf(..) => panic!("typeof should have been replaced"),
+        TypeExpr::KeyOf(..) => panic!("keyof should have been replaced"),
         TypeExpr::Alias(..) => panic!("alias should have been replaced"),
         TypeExpr::Any => return,
         TypeExpr::InlineGo => todo!("should inline go be typechecked?"),
@@ -1396,6 +1431,15 @@ fn check_type_compatability(
             check_type_compatability(content_type, &given_content_type, type_env);
         }
         TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) | TypeExpr::TypeNameInternal(..) => {}
+        TypeExpr::And(required_variants) => {
+            for required_variant in required_variants {
+                check_type_compatability(
+                    &required_variant,
+                    &given_type,
+                    type_env,
+                );
+            }
+        }
     }
 }
 
