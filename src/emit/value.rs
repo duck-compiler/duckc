@@ -151,20 +151,29 @@ pub fn as_var(s: impl Into<String>) -> IrValue {
     IrValue::Var(s.into())
 }
 
-fn walk_access(
+fn walk_access_raw(
     obj: ValueExpr,
     type_env: &mut TypeEnv,
     env: &mut ToIr,
     span: SS,
-) -> (Vec<IrInstruction>, Option<String>) {
+    immutable: bool,
+) -> (Vec<IrInstruction>, Option<Vec<String>>) {
     let mut res_instr = VecDeque::new();
     let mut current_obj = obj;
     let mut s = VecDeque::new();
 
+    let mut derefs = Vec::new();
+    let mut stars = 0;
+
     loop {
         match current_obj {
-            ValueExpr::Variable(_, name, _) => {
-                s.push_front(name.clone());
+            ValueExpr::Variable(_, name, type_expr) => {
+                s.push_front(name);
+
+                if stars > 0 {
+                    derefs.push(stars);
+                    s[0].push(')');
+                }
                 break;
             }
             ValueExpr::ArrayAccess(next_obj, index) => {
@@ -203,7 +212,20 @@ fn walk_access(
                 target_obj,
                 field_name,
             } => {
-                let type_expr = TypeExpr::from_value_expr_resolved_type_name(&target_obj, type_env);
+                let mut type_expr =
+                    TypeExpr::from_value_expr_resolved_type_name(&target_obj, type_env);
+
+                let mut stars_to_set = 0;
+                while let TypeExpr::Ref(v) | TypeExpr::RefMut(v) = type_expr {
+                    type_expr = v.0;
+                    stars_to_set += 1;
+                }
+
+                let type_expr = TypeExpr::from_value_expr_resolved_type_name_dereferenced(
+                    &target_obj,
+                    type_env,
+                );
+
                 match type_expr {
                     TypeExpr::Tuple(..) => s.push_front(format!("field_{field_name}")),
                     TypeExpr::Duck(Duck { fields }) => {
@@ -215,6 +237,7 @@ fn walk_access(
                             || found_field.type_expr.0.is_duck()
                             || found_field.type_expr.0.is_struct()
                             || found_field.type_expr.0.is_fun()
+                            || immutable
                         {
                             s.push_front(format!("Get{field_name}()"));
                         } else {
@@ -224,15 +247,54 @@ fn walk_access(
                     TypeExpr::Struct(..) => s.push_front(field_name.to_string()),
                     _ => {},
                 }
+
+                if stars > 0 {
+                    derefs.push(stars);
+                    s[0].push(')');
+                }
+
+                stars = stars_to_set;
+
                 current_obj = target_obj.0;
             }
-            _ => panic!("need var, got {current_obj:?}"),
+            _ => {
+                if immutable {
+                    let (instr_emit, instr_res) = current_obj.emit(type_env, env, span);
+                    res_instr.extend(instr_emit);
+                    if let Some(instr_res) = instr_res {
+                        let IrValue::Var(n) = instr_res else {
+                            panic!("no var? {instr_res:?}")
+                        };
+                        s.push_front(n);
+                    } else {
+                        return (res_instr.into(), None);
+                    }
+                    break;
+                } else {
+                    panic!("need var, got {current_obj:?}")
+                }
+            }
         }
     }
-    (
-        res_instr.into(),
-        Some(Into::<Vec<String>>::into(s).join(".")),
-    )
+
+    for deref in derefs.iter().rev() {
+        for _ in 0..*deref {
+            s[0].insert(0, '*');
+        }
+        s[0].insert(0, '(');
+    }
+    (res_instr.into(), Some(Into::<Vec<String>>::into(s)))
+}
+
+fn walk_access(
+    obj: ValueExpr,
+    type_env: &mut TypeEnv,
+    env: &mut ToIr,
+    span: SS,
+    immutable: bool,
+) -> (Vec<IrInstruction>, Option<String>) {
+    let (i, r) = walk_access_raw(obj, type_env, env, span, immutable);
+    (i, r.map(|v| v.join(".")))
 }
 
 impl ValueExpr {
@@ -297,30 +359,26 @@ impl ValueExpr {
                     &self.clone().into_empty_span(),
                     type_env,
                 );
-                if matches!(target_type, TypeExpr::Struct(..)) {
-                    v.0.emit(type_env, env, span) // todo(@Apfelfrosch) insert clone
+                let res_type = format!("{}", target_type.as_go_type_annotation(type_env));
+                let (mut emit_instr, emit_res) = v.0.emit(type_env, env, span);
+                if let Some(emit_res) = emit_res {
+                    let var_name = env.new_var();
+                    let ptr_var_decl = [
+                        IrInstruction::VarDecl(var_name.clone(), res_type),
+                        IrInstruction::VarAssignment(
+                            var_name.clone(),
+                            IrValue::Deref(Box::new(emit_res)),
+                        ),
+                    ];
+                    emit_instr.extend(ptr_var_decl);
+                    (emit_instr, Some(IrValue::Var(var_name)))
                 } else {
-                    let res_type = format!("{}", target_type.as_go_type_annotation(type_env));
-                    let (mut emit_instr, emit_res) = v.0.emit(type_env, env, span);
-                    if let Some(emit_res) = emit_res {
-                        let var_name = env.new_var();
-                        let ptr_var_decl = [
-                            IrInstruction::VarDecl(var_name.clone(), res_type),
-                            IrInstruction::VarAssignment(
-                                var_name.clone(),
-                                IrValue::Deref(Box::new(emit_res)),
-                            ),
-                        ];
-                        emit_instr.extend(ptr_var_decl);
-                        (emit_instr, Some(IrValue::Var(var_name)))
-                    } else {
-                        (emit_instr, None)
-                    }
+                    (emit_instr, None)
                 }
             }
             ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
                 let t = TypeExpr::from_value_expr_resolved_type_name(&*v, type_env);
-                if matches!(t, TypeExpr::Struct(..)) {
+                if false && matches!(t, TypeExpr::Struct(..)) {
                     v.0.emit(type_env, env, span)
                 } else {
                     let ptr_type = format!("*{}", t.as_go_type_annotation(type_env));
@@ -1278,14 +1336,20 @@ impl ValueExpr {
                     } = target
                     {
                         let (walk_instr, walk_res) =
-                            walk_access(target_obj.0.clone(), type_env, env, span);
+                            walk_access_raw(target.clone(), type_env, env, span, false);
                         res.extend(walk_instr);
                         let target_res = match walk_res {
-                            Some(s) => s,
+                            Some(mut s) => {
+                                s.pop();
+                                s
+                            }
                             None => return (res, None),
-                        };
+                        }
+                        .join(".");
 
-                        let target_ty = TypeExpr::from_value_expr(target_obj, type_env);
+                        let target_ty = TypeExpr::from_value_expr_resolved_type_name_dereferenced(
+                            target_obj, type_env,
+                        );
                         match target_ty {
                             TypeExpr::Duck(_) => {
                                 res.push(IrInstruction::FunCall(
@@ -1319,7 +1383,7 @@ impl ValueExpr {
                         res.extend(idx_instr);
 
                         let (walk_instr, walk_res) =
-                            walk_access(target.0.clone(), type_env, env, span);
+                            walk_access(target.0.clone(), type_env, env, span, false);
                         res.extend(walk_instr);
                         let target_res = match walk_res {
                             Some(s) => s,
@@ -1328,6 +1392,50 @@ impl ValueExpr {
 
                         res.push(IrInstruction::VarAssignment(
                             format!("{target_res}[{idx_res}.as_dgo_int()]"),
+                            a_res,
+                        ));
+                    } else if let ValueExpr::Deref(target) = target {
+                        let target_type = TypeExpr::from_value_expr(target, type_env);
+
+                        if !matches!(target_type, TypeExpr::RefMut(..)) {
+                            if matches!(target_type, TypeExpr::Ref(..)) {
+                                failure_with_occurence(
+                                    span.context.file_name,
+                                    "Can only dereference a mutable reference".to_string(),
+                                    span,
+                                    vec![(
+                                        "This is not an mutable reference".to_string(),
+                                        target.1,
+                                    )],
+                                    span.context.file_contents,
+                                );
+                            }
+                            failure_with_occurence(
+                                span.context.file_name,
+                                "Can only dereference a reference".to_string(),
+                                span,
+                                vec![("This is not a reference".to_string(), target.1)],
+                                span.context.file_contents,
+                            );
+                        }
+
+                        let mut target_to_use = target.clone();
+                        let mut stars = String::from('*');
+
+                        while let ValueExpr::Deref(new_target) = &target_to_use.0 {
+                            stars.push('*');
+                            target_to_use = new_target.clone();
+                        }
+
+                        let (walk_instr, walk_res) =
+                            walk_access(target_to_use.0.clone(), type_env, env, span, false);
+                        res.extend(walk_instr);
+                        let target_res = match walk_res {
+                            Some(s) => s,
+                            None => return (res, None),
+                        };
+                        res.push(IrInstruction::VarAssignment(
+                            format!("{stars}{target_res}"),
                             a_res,
                         ));
                     } else {
@@ -1525,7 +1633,7 @@ impl ValueExpr {
                 let mut instr = Vec::new();
                 if res.is_none() {
                     let (walk_instr, walk_res) =
-                        walk_access(v_target.0.clone(), type_env, env, span);
+                        walk_access(v_target.0.clone(), type_env, env, span, false);
                     if walk_res.is_none() {
                         return (instr, None);
                     }
@@ -1797,73 +1905,12 @@ impl ValueExpr {
                 (ir, as_rvar(result_var))
             }
             ValueExpr::FieldAccess {
-                target_obj,
-                field_name,
+                target_obj: _,
+                field_name: _,
             } => {
-                let field_name = field_name.clone();
-                let (mut i, t_res) = target_obj.0.emit(type_env, env, target_obj.1);
-                if let Some(t_res) = t_res {
-                    let target_type =
-                        TypeExpr::from_value_expr_resolved_type_name(target_obj, type_env);
-                    match target_type {
-                        TypeExpr::Duck(Duck { fields }) => {
-                            let f = fields.iter().find(|f| f.name == field_name).unwrap();
-                            let res = env.new_var();
-                            i.push(IrInstruction::VarDecl(
-                                res.clone(),
-                                f.type_expr.0.as_go_type_annotation(type_env),
-                            ));
-                            i.push(IrInstruction::FunCall(
-                                Some(res.clone()),
-                                IrValue::FieldAccess(
-                                    Box::new(t_res),
-                                    format!("Get{}", field_name.clone()),
-                                ),
-                                vec![],
-                            ));
-                            return (i, Some(IrValue::Var(res)));
-                        }
-                        TypeExpr::Tuple(fields) => {
-                            let field_as_idx = field_name
-                                .parse::<usize>()
-                                .expect("non numeric tuple index");
-                            let field_name = format!("field_{field_name}");
-                            let res = env.new_var();
-                            i.push(IrInstruction::VarDecl(
-                                res.clone(),
-                                fields[field_as_idx].0.as_go_type_annotation(type_env),
-                            ));
-                            i.push(IrInstruction::VarAssignment(
-                                res.clone(),
-                                IrValue::FieldAccess(Box::new(t_res), field_name.clone()),
-                            ));
-                            return (i, Some(IrValue::Var(res)));
-                        }
-                        TypeExpr::Struct(struct_name) => {
-                            let StructDefinition {
-                                name,
-                                fields,
-                                methods: _,
-                                generics: _,
-                            } = type_env.get_struct_def(struct_name.as_str());
-                            let f = fields
-                                .iter()
-                                .find(|f| f.name == field_name)
-                                .cloned()
-                                .unwrap_or_else(|| panic!("{field_name} {name} {fields:?}"));
-                            let res = env.new_var();
-                            i.push(IrInstruction::VarDecl(
-                                res.clone(),
-                                f.type_expr.0.as_go_type_annotation(type_env),
-                            ));
-                            i.push(IrInstruction::VarAssignment(
-                                res.clone(),
-                                IrValue::FieldAccess(Box::new(t_res), field_name.clone()),
-                            ));
-                            return (i, Some(IrValue::Var(res)));
-                        }
-                        _ => panic!("can only access object like {self:?} {target_type:?}"),
-                    }
+                let (i, r) = walk_access(self.clone(), type_env, env, span, true);
+                if let Some(t_res) = r {
+                    return (i, Some(IrValue::Imm(t_res)));
                 } else {
                     return (i, None);
                 }

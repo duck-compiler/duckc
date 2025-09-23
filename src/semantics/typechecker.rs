@@ -35,8 +35,35 @@ impl TypeExpr {
         type_env: &mut TypeEnv,
     ) -> TypeExpr {
         let mut res = TypeExpr::from_value_expr(value_expr, type_env);
-        if let TypeExpr::TypeName(_, name, _) = &res {
-            res = type_env.resolve_type_alias(name);
+        loop {
+            if let TypeExpr::TypeName(_, name, _) = &res {
+                res = type_env.resolve_type_alias(name);
+            } else if let TypeExpr::Alias(def) = &res {
+                res = type_env.resolve_type_alias(&def.name);
+            } else {
+                break res;
+            }
+        }
+    }
+
+    pub fn from_value_expr_resolved_type_name_dereferenced(
+        value_expr: &Spanned<ValueExpr>,
+        type_env: &mut TypeEnv,
+    ) -> TypeExpr {
+        let mut res = TypeExpr::from_value_expr(value_expr, type_env);
+
+        while let TypeExpr::Ref(v) | TypeExpr::RefMut(v) = res {
+            res = v.0;
+        }
+
+        loop {
+            if let TypeExpr::TypeName(_, name, _) = &res {
+                res = type_env.resolve_type_alias(name);
+            } else if let TypeExpr::Alias(def) = &res {
+                res = type_env.resolve_type_alias(&def.name);
+            } else {
+                break;
+            }
         }
         res
     }
@@ -54,8 +81,18 @@ impl TypeExpr {
             }
             ValueExpr::Deref(v) => {
                 let ty_expr = TypeExpr::from_value_expr(&*v, type_env);
-                require(matches!(ty_expr, TypeExpr::Ref(..) | TypeExpr::RefMut(..)), "Needs to be ref".to_string());
-                let (TypeExpr::Ref(t) | TypeExpr::RefMut(t)) = ty_expr else {unreachable!()};
+                if !matches!(ty_expr, TypeExpr::Ref(..) | TypeExpr::RefMut(..)) {
+                    failure_with_occurence(
+                        complete_span.context.file_name,
+                        "Can only dereference a reference".to_string(),
+                        *complete_span,
+                        [("This is not a reference".to_string(), v.1)],
+                        complete_span.context.file_contents,
+                    );
+                }
+                let (TypeExpr::Ref(t) | TypeExpr::RefMut(t)) = ty_expr else {
+                    unreachable!()
+                };
                 t.0
             }
             ValueExpr::HtmlString(..) => TypeExpr::Html,
@@ -423,12 +460,15 @@ impl TypeExpr {
                             // variant any replace
                             if let TypeExpr::Array(boxed) = &in_param_types.get(index).unwrap().0 {
                                 if let TypeExpr::Or(_) = boxed.as_ref().0 {
-                                    param_type.1.0 = TypeExpr::Array(Box::new((TypeExpr::Any, empty_range())))
+                                    param_type.1.0 =
+                                        TypeExpr::Array(Box::new((TypeExpr::Any, empty_range())))
                                 }
                             }
                         });
 
-                    return return_type.clone().map_or(TypeExpr::Tuple(vec![]), |x| x.as_ref().0.clone());
+                    return return_type
+                        .clone()
+                        .map_or(TypeExpr::Tuple(vec![]), |x| x.as_ref().0.clone());
                 }
 
                 failure(
@@ -523,9 +563,11 @@ impl TypeExpr {
             } => {
                 let span = target_obj.as_ref().1;
                 let target_obj_type_expr =
-                    TypeExpr::from_value_expr_resolved_type_name(target_obj, type_env);
+                    TypeExpr::from_value_expr_resolved_type_name_dereferenced(target_obj, type_env);
 
-                if !target_obj_type_expr.is_object_like() {
+                if !target_obj_type_expr.is_object_like()
+                    && !target_obj_type_expr.ref_is_object_like()
+                {
                     failure_with_occurence(
                         span.context.file_name,
                         "Invalid Field Access".to_string(),
@@ -534,17 +576,19 @@ impl TypeExpr {
                             span.end += 2;
                             span
                         },
-                        vec![
-                            (
-                                format!("this value is not object like and has no fields to access"),
-                                span.clone()
-                            )
-                        ],
-                        span.context.file_contents
+                        vec![(
+                            format!("this value is not object like and has no fields to access"),
+                            span.clone(),
+                        )],
+                        span.context.file_contents,
                     )
                 }
 
-                if !(target_obj_type_expr.has_field_by_name(field_name.clone(), type_env) || target_obj_type_expr.has_method_by_name(field_name.clone(), type_env)) {
+                if target_obj_type_expr.has_field_by_name(field_name.clone(), type_env)
+                    || target_obj_type_expr.has_method_by_name(field_name.clone(), type_env)
+                    || target_obj_type_expr.ref_has_field_by_name(field_name.clone(), type_env)
+                    || target_obj_type_expr.ref_has_method_by_name(field_name.clone(), type_env)
+                {
                     failure_with_occurence(
                         span.context.file_name,
                         "Invalid Field Access".to_string(),
@@ -553,21 +597,26 @@ impl TypeExpr {
                             span.end += 2;
                             span
                         },
-                        vec![
-                            (
-                                format!(
-                                    "this is of type {} and it has no field '{}'",
-                                    target_obj_type_expr.as_clean_user_faced_type_name().bright_yellow(),
-                                    field_name.bright_blue()
-                                ),
-                                span.clone()
+                        vec![(
+                            format!(
+                                "this is of type {} and it has no field '{}'",
+                                target_obj_type_expr
+                                    .as_clean_user_faced_type_name()
+                                    .bright_yellow(),
+                                field_name.bright_blue()
                             ),
-                        ],
-                        span.context.file_contents
+                            span.clone(),
+                        )],
+                        span.context.file_contents,
                     )
                 }
 
-                target_obj_type_expr.typeof_field(field_name.to_string(), type_env)
+                target_obj_type_expr
+                    .typeof_field(field_name.to_string(), type_env)
+                    .or_else(|| {
+                        target_obj_type_expr.ref_typeof_field(field_name.to_string(), type_env)
+                    })
+                    .expect("Tried to access field on non object-like type.")
             }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
@@ -656,6 +705,13 @@ impl TypeExpr {
         }
     }
 
+    pub fn ref_is_object_like(&self) -> bool {
+        match self {
+            Self::Ref(t) | Self::RefMut(t) => t.0.is_object_like() || t.0.ref_is_object_like(),
+            _ => false,
+        }
+    }
+
     pub fn is_duck(&self) -> bool {
         match self {
             Self::Duck(..) => true,
@@ -706,10 +762,10 @@ impl TypeExpr {
                 } = type_env.get_struct_def(r#struct.as_str());
 
                 methods.iter().any(|f| f.name.as_str() == name.as_str())
-                || type_env
-                    .get_generic_methods(struct_name.clone())
-                    .iter()
-                    .any(|x| x.name.as_str() == name.as_str())
+                    || type_env
+                        .get_generic_methods(struct_name.clone())
+                        .iter()
+                        .any(|x| x.name.as_str() == name.as_str())
             }
             _ => false,
         }
@@ -736,8 +792,28 @@ impl TypeExpr {
         }
     }
 
-    fn typeof_field(&self, field_name: String, type_env: &TypeEnv) -> TypeExpr {
+    fn ref_has_field_by_name(&self, name: String, type_env: &TypeEnv) -> bool {
         match self {
+            Self::Ref(t) | Self::RefMut(t) => {
+                t.0.has_field_by_name(name.clone(), type_env)
+                    || t.0.ref_has_field_by_name(name.clone(), type_env)
+            }
+            _ => false,
+        }
+    }
+
+    fn ref_has_method_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
+        match self {
+            Self::Ref(t) | Self::RefMut(t) => {
+                t.0.has_method_by_name(name.clone(), type_env)
+                    || t.0.ref_has_method_by_name(name.clone(), type_env)
+            }
+            _ => false,
+        }
+    }
+
+    fn typeof_field(&self, field_name: String, type_env: &TypeEnv) -> Option<TypeExpr> {
+        Some(match self {
             Self::Tuple(fields) => fields[field_name.parse::<usize>().unwrap()].0.clone(),
             Self::Struct(r#struct) => {
                 let StructDefinition {
@@ -798,14 +874,24 @@ impl TypeExpr {
                 .type_expr
                 .0
                 .clone(),
-            _ => panic!("Tried to access field on non object-like type."),
+            _ => return None,
+        })
+    }
+
+    fn ref_typeof_field(&self, field_name: String, type_env: &TypeEnv) -> Option<TypeExpr> {
+        match self {
+            Self::Ref(t) | Self::RefMut(t) => {
+                t.0.typeof_field(field_name.clone(), type_env)
+                    .or_else(|| t.0.ref_typeof_field(field_name.clone(), type_env))
+            }
+            _ => None,
         }
     }
 
     pub fn is_number(&self) -> bool {
         return *self == TypeExpr::Int
-        || *self == TypeExpr::Float
-        || matches!(*self, TypeExpr::ConstInt(..));
+            || *self == TypeExpr::Float
+            || matches!(*self, TypeExpr::ConstInt(..));
     }
 
     pub fn is_tuple(&self) -> bool {
@@ -849,8 +935,8 @@ impl TypeExpr {
         // todo(@Mvmo) Implement other literal types
         // floats, chars.... missing
         return matches!(*self, TypeExpr::ConstInt(..))
-        || matches!(*self, TypeExpr::ConstString(..))
-        || matches!(*self, TypeExpr::ConstBool(..));
+            || matches!(*self, TypeExpr::ConstString(..))
+            || matches!(*self, TypeExpr::ConstBool(..));
     }
 
     pub fn is_variant(&self) -> bool {
@@ -919,10 +1005,10 @@ fn types_are_compatible(one: &TypeExpr, two: &TypeExpr, type_env: &mut TypeEnv) 
         };
 
         if types_one.len() == types_two.len()
-        && types_one
-            .iter()
-            .zip(types_two.iter())
-            .all(|(a, b)| types_are_compatible(&a.0, &b.0, type_env))
+            && types_one
+                .iter()
+                .zip(types_two.iter())
+                .all(|(a, b)| types_are_compatible(&a.0, &b.0, type_env))
         {
             return true;
         }
@@ -1054,8 +1140,8 @@ pub fn check_type_compatability(
                 check_type_compatability(req_t, given_t, type_env);
             } else {
                 fail_requirement(
-                    "This is an immutable reference".to_string(),
-                    "So this needs to be a mutable reference".to_string(),
+                    "This is a mutable reference".to_string(),
+                    "So this needs to be a mutable reference as well".to_string(),
                 );
             }
         }
@@ -1465,11 +1551,7 @@ pub fn check_type_compatability(
         TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) | TypeExpr::TypeNameInternal(..) => {}
         TypeExpr::And(required_variants) => {
             for required_variant in required_variants {
-                check_type_compatability(
-                    &required_variant,
-                    &given_type,
-                    type_env,
-                );
+                check_type_compatability(&required_variant, &given_type, type_env);
             }
         }
     }

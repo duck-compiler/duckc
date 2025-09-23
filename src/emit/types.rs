@@ -496,11 +496,7 @@ impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
-                if matches!(t.0, TypeExpr::Struct(..)) {
-                    t.0.as_go_type_annotation(type_env)
-                } else {
-                    format!("*{}", t.0.as_go_type_annotation(type_env))
-                }
+                format!("*{}", t.0.as_go_type_annotation(type_env))
             }
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replace by now"),

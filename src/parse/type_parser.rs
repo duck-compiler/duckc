@@ -147,8 +147,9 @@ where
 
             let tag_identifier = choice((
                 select_ref! { Token::Ident(ident) => ident.to_string() },
-                just(Token::ControlChar('.')).map(|_| "DOT".to_string())
-            )).boxed();
+                just(Token::ControlChar('.')).map(|_| "DOT".to_string()),
+            ))
+            .boxed();
 
             let tag = just(Token::ControlChar('.'))
                 .ignore_then(tag_identifier)
@@ -253,30 +254,36 @@ where
                 ))
                 .map_with(|x, e| (x, e.span())));
 
-            let immutable_ref = just(Token::ControlChar('&'))
-                .or_not()
-                .then(term_type_expr.clone())
-                .map_with(|(is_ref, x), e| {
-                    if is_ref.is_some() {
-                        (TypeExpr::Ref(Box::new(x)), e.span())
-                    } else {
-                        x
-                    }
-                });
+            #[derive(Debug, Clone)]
+            enum RefType {
+                Immutable,
+                Mutable,
+            }
 
-            let mutable_ref =
-                just(Token::RefMut)
-                    .or_not()
-                    .then(term_type_expr)
-                    .map_with(|(is_ref, x), e| {
-                        if is_ref.is_some() {
-                            (TypeExpr::RefMut(Box::new(x)), e.span())
-                        } else {
-                            x
+            let ref_parser = choice((
+                just(Token::ControlChar('&')).map(|_| RefType::Immutable),
+                just(Token::RefMut).map(|_| RefType::Mutable),
+            ))
+            .repeated()
+            .collect::<Vec<_>>()
+            .then(term_type_expr.clone())
+            .map_with(|(is_ref, x): (Vec<RefType>, Spanned<TypeExpr>), e| {
+                let res = is_ref
+                    .into_iter()
+                    .rev()
+                    .fold(x, |(acc_ty, acc_span), ref_type| match ref_type {
+                        RefType::Mutable => (
+                            TypeExpr::RefMut((acc_ty, acc_span).into()),
+                            acc_span.clone(),
+                        ),
+                        RefType::Immutable => {
+                            (TypeExpr::Ref((acc_ty, acc_span).into()), acc_span.clone())
                         }
                     });
+                (res.0, e.span())
+            });
 
-            choice((immutable_ref, mutable_ref))
+            ref_parser
                 .separated_by(just(Token::ControlChar('|')))
                 .at_least(1)
                 .collect::<Vec<Spanned<TypeExpr>>>()
@@ -374,8 +381,9 @@ where
 
             let tag_identifier = choice((
                 select_ref! { Token::Ident(ident) => ident.to_string() },
-                just(Token::ControlChar('.')).map(|_| "DOT".to_string())
-            )).boxed();
+                just(Token::ControlChar('.')).map(|_| "DOT".to_string()),
+            ))
+            .boxed();
 
             let tag = just(Token::ControlChar('.'))
                 .ignore_then(tag_identifier)
@@ -468,30 +476,36 @@ where
                 })
                 .map_with(|x, e| (x, e.span()));
 
-            let immutable_ref = just(Token::ControlChar('&'))
-                .or_not()
-                .then(array.clone())
-                .map_with(|(is_ref, x), e| {
-                    if is_ref.is_some() {
-                        (TypeExpr::Ref(Box::new(x)), e.span())
-                    } else {
-                        x
-                    }
-                });
+            #[derive(Debug, Clone)]
+            enum RefType {
+                Immutable,
+                Mutable,
+            }
 
-            let mutable_ref =
-                just(Token::RefMut)
-                    .or_not()
-                    .then(array)
-                    .map_with(|(is_ref, x), e| {
-                        if is_ref.is_some() {
-                            (TypeExpr::RefMut(Box::new(x)), e.span())
-                        } else {
-                            x
+            let ref_parser = choice((
+                just(Token::ControlChar('&')).map(|_| RefType::Immutable),
+                just(Token::RefMut).map(|_| RefType::Mutable),
+            ))
+            .repeated()
+            .collect::<Vec<_>>()
+            .then(array.clone())
+            .map_with(|(is_ref, x): (Vec<RefType>, Spanned<TypeExpr>), e| {
+                let res = is_ref
+                    .into_iter()
+                    .rev()
+                    .fold(x, |(acc_ty, acc_span), ref_type| match ref_type {
+                        RefType::Mutable => (
+                            TypeExpr::RefMut((acc_ty, acc_span).into()),
+                            acc_span.clone(),
+                        ),
+                        RefType::Immutable => {
+                            (TypeExpr::Ref((acc_ty, acc_span).into()), acc_span.clone())
                         }
                     });
+                (res.0, e.span())
+            });
 
-            let union_expr = choice((immutable_ref, mutable_ref))
+            let union_expr = ref_parser
                 .separated_by(just(Token::ControlChar('|')))
                 .at_least(1)
                 .collect::<Vec<Spanned<TypeExpr>>>()
@@ -1654,6 +1668,19 @@ pub mod tests {
             "&mut String | Int",
             TypeExpr::Or(vec![
                 TypeExpr::RefMut(TypeExpr::String.into_empty_span().into()).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
+            ]),
+        );
+
+        assert_type_expression(
+            "&&mut String | Int",
+            TypeExpr::Or(vec![
+                TypeExpr::Ref(
+                    TypeExpr::RefMut(TypeExpr::String.into_empty_span().into())
+                        .into_empty_span()
+                        .into(),
+                )
+                .into_empty_span(),
                 TypeExpr::Int.into_empty_span(),
             ]),
         );

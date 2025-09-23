@@ -668,15 +668,18 @@ where
             enum AtomPreParseUnit {
                 Ref,
                 RefMut,
+                BoolNegate,
+                Deref,
             }
 
             let atom = choice((
                 just(Token::ControlChar('&')).map(|_| AtomPreParseUnit::Ref),
                 just(Token::RefMut).map(|_| AtomPreParseUnit::RefMut),
+                just(Token::ControlChar('!')).map(|_| AtomPreParseUnit::BoolNegate),
+                just(Token::ControlChar('*')).map(|_| AtomPreParseUnit::Deref),
             ))
-            .or_not()
-            .then(just(Token::ControlChar('!')).repeated().collect::<Vec<_>>())
-            .then(just(Token::ControlChar('*')).or_not())
+            .repeated()
+            .collect::<Vec<_>>()
             .then(
                 value_expr_parser
                     .clone()
@@ -754,7 +757,7 @@ where
                 .repeated()
                 .collect::<Vec<_>>(),
             )
-            .map(|((((is_ref, neg), is_deref), target), params)| {
+            .map(|((pre, target), params)| {
                 let mut target = params.into_iter().fold(target, |acc, x| match x {
                     AtomPostParseUnit::ArrayAccess(idx_expr) => {
                         ValueExpr::ArrayAccess(acc.into(), idx_expr.into()).into_empty_span()
@@ -772,23 +775,30 @@ where
                     .into_empty_span(),
                 });
 
-                if is_deref.is_some() {
-                    target = ValueExpr::Deref(Box::new(target)).into_empty_span();
-                }
+                let res = pre
+                    .into_iter()
+                    .rev()
+                    .fold(target, |(acc_expr, acc_span), pre_unit| {
+                        (
+                            match pre_unit {
+                                AtomPreParseUnit::Ref => {
+                                    ValueExpr::Ref((acc_expr, acc_span).into())
+                                }
+                                AtomPreParseUnit::RefMut => {
+                                    ValueExpr::RefMut((acc_expr, acc_span).into())
+                                }
+                                AtomPreParseUnit::Deref => {
+                                    ValueExpr::Deref((acc_expr, acc_span).into())
+                                }
+                                AtomPreParseUnit::BoolNegate => {
+                                    ValueExpr::BoolNegate((acc_expr, acc_span).into())
+                                }
+                            },
+                            acc_span,
+                        )
+                    });
 
-                let res = neg.into_iter().fold(target, |acc, _| {
-                    ValueExpr::BoolNegate(acc.into()).into_empty_span() // TODO(@Apfelfrosch) <-- fix this empty span
-                });
-
-                if let Some(ref_type) = is_ref {
-                    match ref_type {
-                        AtomPreParseUnit::Ref => ValueExpr::Ref(res.into()),
-                        AtomPreParseUnit::RefMut => ValueExpr::RefMut(res.into()),
-                    }
-                    .into_empty_span()
-                } else {
-                    res
-                }
+                res
             })
             .map_with(|x, e| (x.0, e.span()))
             .boxed();
@@ -829,17 +839,27 @@ where
                 })
                 .map_with(|(x, _), e| (x, e.span()));
 
-            let assignment = scope_res_ident
-                .clone()
-                .rewind()
-                .ignore_then(pen.clone().or(atom.clone()))
+            let assignment = just(Token::ControlChar('*'))
+                .repeated()
+                .collect::<Vec<_>>()
+                .then(
+                    scope_res_ident
+                        .clone()
+                        .rewind()
+                        .ignore_then(pen.clone().or(atom.clone())),
+                )
                 .then_ignore(just(Token::ControlChar('=')))
                 .then(value_expr_parser.clone())
-                .map_with(|(target, value_expr), e| {
+                .map_with(|((deref, target), value_expr), e| {
                     ValueExpr::VarAssign(
                         (
                             Assignment {
-                                target,
+                                target: deref.into_iter().fold(
+                                    target,
+                                    |(acc_expr, acc_span), _| {
+                                        (ValueExpr::Deref((acc_expr, acc_span).into()), acc_span)
+                                    },
+                                ),
                                 value_expr: value_expr.clone(),
                             },
                             e.span(),
@@ -2862,6 +2882,46 @@ mod tests {
             ("&a", ValueExpr::Ref(var("a"))),
             ("*a", ValueExpr::Deref(var("a"))),
             (
+                "&*a",
+                ValueExpr::Ref(ValueExpr::Deref(var("a")).into_empty_span().into()),
+            ),
+            (
+                "&&*a",
+                ValueExpr::Ref(
+                    ValueExpr::Ref(ValueExpr::Deref(var("a")).into_empty_span().into())
+                        .into_empty_span()
+                        .into(),
+                ),
+            ),
+            (
+                "&mut &&*a",
+                ValueExpr::RefMut(
+                    ValueExpr::Ref(
+                        ValueExpr::Ref(ValueExpr::Deref(var("a")).into_empty_span().into())
+                            .into_empty_span()
+                            .into(),
+                    )
+                    .into_empty_span()
+                    .into(),
+                ),
+            ),
+            (
+                "*&mut &&*a",
+                ValueExpr::Deref(
+                    ValueExpr::RefMut(
+                        ValueExpr::Ref(
+                            ValueExpr::Ref(ValueExpr::Deref(var("a")).into_empty_span().into())
+                                .into_empty_span()
+                                .into(),
+                        )
+                        .into_empty_span()
+                        .into(),
+                    )
+                    .into_empty_span()
+                    .into(),
+                ),
+            ),
+            (
                 "*a.x",
                 ValueExpr::Deref(
                     ValueExpr::FieldAccess {
@@ -2877,6 +2937,40 @@ mod tests {
                 ValueExpr::Mul(
                     ValueExpr::Deref(var("a")).into_empty_span().into(),
                     ValueExpr::Deref(var("b")).into_empty_span().into(),
+                ),
+            ),
+            (
+                "*a = 10",
+                ValueExpr::VarAssign(
+                    (
+                        Assignment {
+                            target: ValueExpr::Deref(var("a")).into_empty_span(),
+                            value_expr: ValueExpr::Int(10).into_empty_span(),
+                        },
+                        empty_range(),
+                    )
+                        .into(),
+                ),
+            ),
+            (
+                "*a.x = 10",
+                ValueExpr::VarAssign(
+                    (
+                        Assignment {
+                            target: ValueExpr::Deref(
+                                ValueExpr::FieldAccess {
+                                    target_obj: var("a"),
+                                    field_name: "x".to_string(),
+                                }
+                                .into_empty_span()
+                                .into(),
+                            )
+                            .into_empty_span(),
+                            value_expr: ValueExpr::Int(10).into_empty_span(),
+                        },
+                        empty_range(),
+                    )
+                        .into(),
                 ),
             ),
         ];
