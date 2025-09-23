@@ -506,7 +506,6 @@ impl TypeExpr {
                 let target_obj_type_expr =
                     TypeExpr::from_value_expr_resolved_type_name(target_obj, type_env);
 
-                dbg!(&target_obj_type_expr);
                 if !target_obj_type_expr.is_object_like() {
                     failure_with_occurence(
                         span.context.file_name,

@@ -136,7 +136,6 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         main_fn.name = "____thrown_away_main_LOL".to_string();
     }
 
-    dbg!(&src_file_ast.test_cases);
     let test_source = src_file_ast.test_cases
         .iter()
         .map(|test_case| format!(
