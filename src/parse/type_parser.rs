@@ -1684,6 +1684,39 @@ pub mod tests {
                 TypeExpr::Int.into_empty_span(),
             ]),
         );
+
+        assert_type_expression(
+            "&String[]",
+            TypeExpr::Ref(
+                TypeExpr::Array(TypeExpr::String.into_empty_span().into())
+                    .into_empty_span()
+                    .into(),
+            ),
+        );
+        assert_type_expression(
+            "&mut String[]",
+            TypeExpr::RefMut(
+                TypeExpr::Array(TypeExpr::String.into_empty_span().into())
+                    .into_empty_span()
+                    .into(),
+            ),
+        );
+        assert_type_expression(
+            "(&String)[]",
+            TypeExpr::Array(
+                TypeExpr::Ref(TypeExpr::String.into_empty_span().into())
+                    .into_empty_span()
+                    .into(),
+            ),
+        );
+        assert_type_expression(
+            "(&mut String)[]",
+            TypeExpr::Array(
+                TypeExpr::RefMut(TypeExpr::String.into_empty_span().into())
+                    .into_empty_span()
+                    .into(),
+            ),
+        );
     }
 
     // TODO(@mvmo): type definition testing
