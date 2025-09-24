@@ -577,7 +577,9 @@ pub fn lex_single<'a>(
                     lexer.clone(),
                 ))
                 .map(Token::InlineDuckx))
-            .or(just("&mut").map(|_| Token::RefMut))
+            .or(just("&mut")
+                .then_ignore(whitespace().at_least(1))
+                .map(|_| Token::RefMut))
             .or(doc_comment)
             .or(comment)
             .or(fmt_string)

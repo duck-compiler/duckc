@@ -156,7 +156,8 @@ fn walk_access_raw(
     type_env: &mut TypeEnv,
     env: &mut ToIr,
     span: SS,
-    immutable: bool,
+    only_read: bool,
+    deref_needs_to_be_mut: bool,
 ) -> (Vec<IrInstruction>, Option<Vec<String>>) {
     let mut res_instr = VecDeque::new();
     let mut current_obj = obj;
@@ -216,9 +217,22 @@ fn walk_access_raw(
                     TypeExpr::from_value_expr_resolved_type_name(&target_obj, type_env);
 
                 let mut stars_to_set = 0;
-                while let TypeExpr::Ref(v) | TypeExpr::RefMut(v) = type_expr {
-                    type_expr = v.0;
-                    stars_to_set += 1;
+                if deref_needs_to_be_mut {
+                    while let TypeExpr::RefMut(v) = type_expr {
+                        type_expr = v.0;
+                        stars_to_set += 1;
+                    }
+                    if let TypeExpr::Ref(_) = type_expr {
+                        panic!(
+                            "need only mut refs for mut stuff {}..{}",
+                            span.start, span.end
+                        );
+                    }
+                } else {
+                    while let TypeExpr::Ref(v) | TypeExpr::RefMut(v) = type_expr {
+                        type_expr = v.0;
+                        stars_to_set += 1;
+                    }
                 }
 
                 let type_expr = TypeExpr::from_value_expr_resolved_type_name_dereferenced(
@@ -237,7 +251,7 @@ fn walk_access_raw(
                             || found_field.type_expr.0.is_duck()
                             || found_field.type_expr.0.is_struct()
                             || found_field.type_expr.0.is_fun()
-                            || immutable
+                            || only_read
                         {
                             s.push_front(format!("Get{field_name}()"));
                         } else {
@@ -258,7 +272,7 @@ fn walk_access_raw(
                 current_obj = target_obj.0;
             }
             _ => {
-                if immutable {
+                if only_read {
                     let (instr_emit, instr_res) = current_obj.emit(type_env, env, span);
                     res_instr.extend(instr_emit);
                     if let Some(instr_res) = instr_res {
@@ -291,9 +305,10 @@ fn walk_access(
     type_env: &mut TypeEnv,
     env: &mut ToIr,
     span: SS,
-    immutable: bool,
+    only_read: bool,
+    derefs_need_to_be_mut: bool,
 ) -> (Vec<IrInstruction>, Option<String>) {
-    let (i, r) = walk_access_raw(obj, type_env, env, span, immutable);
+    let (i, r) = walk_access_raw(obj, type_env, env, span, only_read, derefs_need_to_be_mut);
     (i, r.map(|v| v.join(".")))
 }
 
@@ -1332,7 +1347,7 @@ impl ValueExpr {
                     } = target
                     {
                         let (walk_instr, walk_res) =
-                            walk_access_raw(target.clone(), type_env, env, span, false);
+                            walk_access_raw(target.clone(), type_env, env, span, false, true);
                         res.extend(walk_instr);
                         let target_res = match walk_res {
                             Some(mut s) => {
@@ -1379,7 +1394,7 @@ impl ValueExpr {
                         res.extend(idx_instr);
 
                         let (walk_instr, walk_res) =
-                            walk_access(target.0.clone(), type_env, env, span, false);
+                            walk_access(target.0.clone(), type_env, env, span, false, true);
                         res.extend(walk_instr);
                         let target_res = match walk_res {
                             Some(s) => s,
@@ -1390,41 +1405,42 @@ impl ValueExpr {
                             format!("{target_res}[{idx_res}.as_dgo_int()]"),
                             a_res,
                         ));
-                    } else if let ValueExpr::Deref(target) = target {
-                        let target_type = TypeExpr::from_value_expr(target, type_env);
+                    } else if let ValueExpr::Deref(..) = target {
+                        let mut target_to_use = (target.clone(), span);
+                        let mut stars = String::new();
 
-                        if !matches!(target_type, TypeExpr::RefMut(..)) {
-                            if matches!(target_type, TypeExpr::Ref(..)) {
+                        while let (ValueExpr::Deref(new_target), span) = target_to_use {
+                            let target_type =
+                                TypeExpr::from_value_expr(&(new_target.0.clone(), new_target.1), type_env);
+
+                            if !matches!(target_type, TypeExpr::RefMut(..)) {
+                                if matches!(target_type, TypeExpr::Ref(..)) {
+                                    failure_with_occurence(
+                                        span.context.file_name,
+                                        "Can only dereference a mutable reference".to_string(),
+                                        span,
+                                        vec![(
+                                            "This is not a mutable reference".to_string(),
+                                            new_target.1,
+                                        )],
+                                        span.context.file_contents,
+                                    );
+                                }
                                 failure_with_occurence(
                                     span.context.file_name,
-                                    "Can only dereference a mutable reference".to_string(),
+                                    "Can only dereference a reference".to_string(),
                                     span,
-                                    vec![(
-                                        "This is not an mutable reference".to_string(),
-                                        target.1,
-                                    )],
+                                    vec![("This is not a reference".to_string(), new_target.1)],
                                     span.context.file_contents,
                                 );
                             }
-                            failure_with_occurence(
-                                span.context.file_name,
-                                "Can only dereference a reference".to_string(),
-                                span,
-                                vec![("This is not a reference".to_string(), target.1)],
-                                span.context.file_contents,
-                            );
-                        }
 
-                        let mut target_to_use = target.clone();
-                        let mut stars = String::from('*');
-
-                        while let ValueExpr::Deref(new_target) = &target_to_use.0 {
                             stars.push('*');
-                            target_to_use = new_target.clone();
+                            target_to_use = *new_target;
                         }
 
                         let (walk_instr, walk_res) =
-                            walk_access(target_to_use.0.clone(), type_env, env, span, false);
+                            walk_access(target_to_use.0.clone(), type_env, env, span, false, true);
                         res.extend(walk_instr);
                         let target_res = match walk_res {
                             Some(s) => s,
@@ -1629,7 +1645,7 @@ impl ValueExpr {
                 let mut instr = Vec::new();
                 if res.is_none() {
                     let (walk_instr, walk_res) =
-                        walk_access(v_target.0.clone(), type_env, env, span, false);
+                        walk_access(v_target.0.clone(), type_env, env, span, false, false);
                     if walk_res.is_none() {
                         return (instr, None);
                     }
@@ -1904,7 +1920,7 @@ impl ValueExpr {
                 target_obj: _,
                 field_name: _,
             } => {
-                let (i, r) = walk_access(self.clone(), type_env, env, span, true);
+                let (i, r) = walk_access(self.clone(), type_env, env, span, true, false);
                 if let Some(t_res) = r {
                     return (i, Some(IrValue::Imm(t_res)));
                 } else {
