@@ -112,14 +112,17 @@ impl TypeExpr {
                 TypeExpr::String
             }
             ValueExpr::ArrayAccess(target, idx) => {
-                let target_type = TypeExpr::from_value_expr(target, type_env);
+                let target_type = TypeExpr::from_value_expr_resolved_type_name_dereferenced(target, type_env);
                 let idx_type = TypeExpr::from_value_expr(idx, type_env);
 
-                require(target_type.is_array(), "Needs to be array".into());
+                require(
+                    target_type.is_array() || target_type.ref_is_array(),
+                    "Needs to be array".into(),
+                );
                 require(idx_type.is_int(), "Needs to be int".into());
 
                 let TypeExpr::Array(array_type) = target_type else {
-                    panic!()
+                    panic!("{target_type:?}")
                 };
 
                 array_type.0.clone()
@@ -925,6 +928,13 @@ impl TypeExpr {
 
     pub fn is_array(&self) -> bool {
         return matches!(*self, TypeExpr::Array(..));
+    }
+
+    pub fn ref_is_array(&self) -> bool {
+        match self {
+            TypeExpr::Ref(v) | TypeExpr::RefMut(v) => v.0.is_array() || v.0.ref_is_array(),
+            _ => false,
+        }
     }
 
     pub fn is_int(&self) -> bool {

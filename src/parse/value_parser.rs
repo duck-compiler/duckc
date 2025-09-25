@@ -758,7 +758,7 @@ where
                 .collect::<Vec<_>>(),
             )
             .map(|((pre, target), params)| {
-                let mut target = params.into_iter().fold(target, |acc, x| match x {
+                let target = params.into_iter().fold(target, |acc, x| match x {
                     AtomPostParseUnit::ArrayAccess(idx_expr) => {
                         ValueExpr::ArrayAccess(acc.into(), idx_expr.into()).into_empty_span()
                     }
@@ -839,27 +839,14 @@ where
                 })
                 .map_with(|(x, _), e| (x, e.span()));
 
-            let assignment = just(Token::ControlChar('*'))
-                .repeated()
-                .collect::<Vec<_>>()
-                .then(
-                    scope_res_ident
-                        .clone()
-                        .rewind()
-                        .ignore_then(pen.clone().or(atom.clone())),
-                )
+            let assignment = atom.clone()
                 .then_ignore(just(Token::ControlChar('=')))
                 .then(value_expr_parser.clone())
-                .map_with(|((deref, target), value_expr), e| {
+                .map_with(|(target, value_expr), e| {
                     ValueExpr::VarAssign(
                         (
                             Assignment {
-                                target: deref.into_iter().fold(
-                                    target,
-                                    |(acc_expr, acc_span), _| {
-                                        (ValueExpr::Deref((acc_expr, acc_span).into()), acc_span)
-                                    },
-                                ),
+                                target,
                                 value_expr: value_expr.clone(),
                             },
                             e.span(),
