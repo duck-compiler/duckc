@@ -629,7 +629,11 @@ where
                 .map_with(|x, e| (x, e.span()));
 
             let array_with_type = (just(Token::ControlChar('.'))
-                .ignore_then(type_expression_parser_without_array())
+                .ignore_then(
+                    choice((
+                        just(Token::ControlChar('(')).rewind().ignore_then(type_expression_parser()),
+                        type_expression_parser_without_array(),
+                    )))
                 .or_not())
             .then(
                 (value_expr_parser

@@ -1,0 +1,12 @@
+fn main() {
+    let arr = .String["first", "second"];
+    let ref_to_arr = &mut arr;
+
+    std::io::println("before:");
+    std::io::debug(arr);
+    std::io::debug(*ref_to_arr);
+    ref_to_arr[0] = "first modified";
+    std::io::println("after:");
+    std::io::debug(arr);
+    std::io::debug(*ref_to_arr);
+}

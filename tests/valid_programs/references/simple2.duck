@@ -1,0 +1,8 @@
+fn main() {
+    let s: String = "hi";
+    let ref_to_s = &mut s;
+    let ref_to_ref_s = &mut ref_to_s;
+    std::io::println(f"before: s = {s} and ref_to_s = {*ref_to_s} and ref_to_ref_s = {**ref_to_ref_s}");
+    **ref_to_ref_s = "hello";
+    std::io::println(f"after: s = {s} and ref_to_s = {*ref_to_s} and ref_to_ref_s = {**ref_to_ref_s}");
+}

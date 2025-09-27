@@ -1,0 +1,16 @@
+struct Person = {
+    name: String,
+};
+
+struct PersonBox = {
+    obj: &mut Person,
+};
+
+fn main() {
+    let person_1 = Person { name: "Bob" };
+    let ref_to_person_1 = &mut person_1;
+    let ref_to_boxed_person = &PersonBox { obj: ref_to_person_1 };
+    std::io::println(f"before: {person_1.name}, {ref_to_person_1.name}, {ref_to_boxed_person.obj.name}");
+    ref_to_person_1.name = "John";
+    std::io::println(f"after: {person_1.name}, {ref_to_person_1.name}, {ref_to_boxed_person.obj.name}");
+}
