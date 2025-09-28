@@ -137,12 +137,12 @@ where
                 .map(TypeExpr::Go);
 
             let string_literal =
-                select_ref! { Token::ConstString(str) => str.clone() }.map(TypeExpr::ConstString);
+                select_ref! { Token::StringLiteral(str) => str.clone() }.map(TypeExpr::ConstString);
 
             let bool_literal =
-                select_ref! { Token::ConstBool(bool) => *bool }.map(TypeExpr::ConstBool);
+                select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::ConstBool);
 
-            let int_literal = select_ref! { Token::ConstInt(int) => *int }
+            let int_literal = select_ref! { Token::IntLiteral(int) => *int }
                 .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
 
             let tag_identifier = choice((
@@ -373,10 +373,10 @@ where
                 });
 
             let string_literal =
-                select_ref! { Token::ConstString(str) => str.clone() }.map(TypeExpr::ConstString);
+                select_ref! { Token::StringLiteral(str) => str.clone() }.map(TypeExpr::ConstString);
             let bool_literal =
-                select_ref! { Token::ConstBool(bool) => *bool }.map(TypeExpr::ConstBool);
-            let int_literal = select_ref! { Token::ConstInt(int) => *int }
+                select_ref! { Token::BoolLiteral(bool) => *bool }.map(TypeExpr::ConstBool);
+            let int_literal = select_ref! { Token::IntLiteral(int) => *int }
                 .map(|int| TypeExpr::ConstInt(int.try_into().unwrap())); // TODO: unwrap!
 
             let tag_identifier = choice((

@@ -23,7 +23,7 @@ where
     M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
 {
     just(Token::Test)
-        .ignore_then(select_ref! { Token::ConstString(str) => str.clone() })
+        .ignore_then(select_ref! { Token::StringLiteral(str) => str.clone() })
         .then(value_expr_parser(make_input))
         .map_with(|(name, mut body), ctx| {
             body = match body {

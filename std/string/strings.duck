@@ -9,6 +9,15 @@ fn to_upper(s: String) -> String {
     return res;
 }
 
+test "strings: to_upper" {
+    let x: String = "Hallo, Welt"->to_upper();
+    if (x != "HALLO, WELT") {
+        go {
+            panic("expected x to be 'HALLO, WELT' but it wasn't")
+        }
+    }
+}
+
 fn to_lower(s: String) -> String {
     let res: String = "";
     go {
