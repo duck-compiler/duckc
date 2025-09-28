@@ -587,10 +587,10 @@ impl TypeExpr {
                     )
                 }
 
-                if target_obj_type_expr.has_field_by_name(field_name.clone(), type_env)
+                if !(target_obj_type_expr.has_field_by_name(field_name.clone(), type_env)
                     || target_obj_type_expr.has_method_by_name(field_name.clone(), type_env)
                     || target_obj_type_expr.ref_has_field_by_name(field_name.clone(), type_env)
-                    || target_obj_type_expr.ref_has_method_by_name(field_name.clone(), type_env)
+                    || target_obj_type_expr.ref_has_method_by_name(field_name.clone(), type_env))
                 {
                     failure_with_occurence(
                         span.context.file_name,
@@ -619,7 +619,7 @@ impl TypeExpr {
                     .or_else(|| {
                         target_obj_type_expr.ref_typeof_field(field_name.to_string(), type_env)
                     })
-                    .expect("Tried to access field on non object-like type.")
+                    .expect("Invalid Field Access")
             }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
