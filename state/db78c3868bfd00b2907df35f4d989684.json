@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Maurice Schmidt",
-        "email": "mvmogo@gmail.com"
+        "name": "Apfelfrosch",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "// TODO: resolve returns in main function to use the exit() fn of go, or wrap the code of the main function into a second function which then get's called inside a new main which just returns exit(other_main())",
     "status": "open",
