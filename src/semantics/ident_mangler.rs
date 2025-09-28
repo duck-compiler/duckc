@@ -262,6 +262,9 @@ pub fn mangle_type_expression(
 ) {
     match type_expr {
         TypeExpr::TypeName(..) => panic!("type name shouldn't be here"),
+        TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
+            mangle_type_expression(&mut t.0, prefix, mangle_env)
+        }
         TypeExpr::RawTypeName(is_global, path, type_params) => {
             // TODO: type params
 
@@ -354,6 +357,9 @@ pub fn mangle_value_expr(
     mangle_env: &mut MangleEnv,
 ) {
     match value_expr {
+        ValueExpr::Deref(t) | ValueExpr::Ref(t) | ValueExpr::RefMut(t) => {
+            mangle_value_expr(&mut t.0, global_prefix, prefix, mangle_env)
+        }
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {

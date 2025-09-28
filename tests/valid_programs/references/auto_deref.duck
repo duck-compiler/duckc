@@ -1,0 +1,11 @@
+struct Person = {
+    name: String,
+};
+
+fn main() {
+    let person_1 = Person { name: "Bob" };
+    let ref_to_person_1 = &mut person_1;
+    std::io::println(f"before: {person_1.name}, {ref_to_person_1.name}");
+    ref_to_person_1.name = "John";
+    std::io::println(f"after: {person_1.name}, {ref_to_person_1.name}");
+}

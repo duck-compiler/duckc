@@ -21,7 +21,7 @@ fn main() {
     std::io::println("Map: multiply each by 2");
     std::io::println("Expected: [2, 4, 6, 8, 10]");
     std::io::println("Actual result:");
-    doubled.for_each(fn(x: Int) -> () { 
+    doubled.for_each(fn(x: Int) -> () {
         x->std::string::from_int()->std::io::println();
     });
 
@@ -29,7 +29,7 @@ fn main() {
     std::io::println("Filter: keep only even numbers");
     std::io::println("Expected: [2, 4]");
     std::io::println("Actual result:");
-    evens.for_each(fn(x: Int) -> () { 
+    evens.for_each(fn(x: Int) -> () {
         x->std::string::from_int()->std::io::println();
     });
 }

@@ -104,7 +104,7 @@ fn main() {
     let user_key_alt: keyof User = .email;
     println("✓ Alternative user key works");
 
-    let result = process_user_keys(.username);
+    process_user_keys(.username);
     println("✓ Keyof with function types works");
 
     let different_key: keyof Product = .price;

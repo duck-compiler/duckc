@@ -31,6 +31,7 @@ pub enum RawHtmlStringContents {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
+    Mut,
     Use,
     Type,
     Go,
@@ -39,6 +40,7 @@ pub enum Token {
     Duck,
     Function,
     Test,
+    RefMut,
     Return,
     Ident(String),
     ControlChar(char),
@@ -60,6 +62,7 @@ pub enum Token {
     KeyOf,
     Else,
     Let,
+    Const,
     While,
     Break,
     Continue,
@@ -81,6 +84,9 @@ pub enum Token {
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = match self {
+            Token::Mut => "mut",
+            Token::Const => "const",
+            Token::RefMut => "&mut",
             Token::FormatStringLiteral(s) => &format!("f-string {s:?}"),
             Token::Impl => "impl",
             Token::ScopeRes => "::",
@@ -443,6 +449,7 @@ pub fn lex_single<'a>(
 ) -> impl Parser<'a, &'a str, Spanned<Token>, extra::Err<Rich<'a, char>>> + Clone {
     recursive(|lexer| {
         let keyword_or_ident = text::ident().map(|str| match str {
+            "mut" => Token::Mut,
             "module" => Token::Module,
             "use" => Token::Use,
             "typeof" => Token::TypeOf,
@@ -457,6 +464,7 @@ pub fn lex_single<'a>(
             "return" => Token::Return,
             "component" => Token::Component,
             "let" => Token::Let,
+            "const" => Token::Const,
             "if" => Token::If,
             "else" => Token::Else,
             "while" => Token::While,
@@ -572,6 +580,9 @@ pub fn lex_single<'a>(
                     lexer.clone(),
                 ))
                 .map(Token::InlineDuckx))
+            .or(just("&mut")
+                .then_ignore(whitespace().at_least(1))
+                .map(|_| Token::RefMut))
             .or(doc_comment)
             .or(comment)
             .or(fmt_string)

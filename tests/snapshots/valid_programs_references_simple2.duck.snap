@@ -1,0 +1,4 @@
+{
+    "stdout": "before: s = hi and ref_to_s = hi and ref_to_ref_s = hi\nafter: s = hello and ref_to_s = hello and ref_to_ref_s = hello\n",
+    "stderr": ""
+}

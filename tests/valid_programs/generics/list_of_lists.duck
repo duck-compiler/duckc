@@ -1,17 +1,17 @@
 struct List<T> = {
     elems: T[],
 } impl {
-    fn push(e: T) {
+    mut fn push(e: T) {
         go {
-            self.elems = append(self.elems, e)
+            (*self).elems = append((*self).elems, e)
         }
     }
 
     fn map<U>(f: fn(v: T) -> U) -> List<U> {
         let res: List<U> = List<U> { elems: .U[] };
         go {
-            for _, e := range self.elems {
-                res.elems = append(res.elems, f(e))
+            for _, e := range (*self).elems {
+                (*res).elems = append(res.elems, f(e))
             }
         }
         return res;
