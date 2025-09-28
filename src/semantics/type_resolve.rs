@@ -471,54 +471,6 @@ impl TypeEnv<'_> {
     }
 }
 
-fn resolve_all_aliases_value_expr(expr: &mut ValueExpr, env: &mut TypeEnv) {
-    match expr {
-        ValueExpr::Ref(t) | ValueExpr::RefMut(t) | ValueExpr::Deref(t) => {
-            resolve_all_aliases_value_expr(&mut t.0, env)
-        }
-        ValueExpr::Struct {
-            name,
-            fields,
-            type_params,
-        } => {
-            if let Some(ty) = type_params.as_mut() {
-                for ty in ty.iter_mut() {
-                    resolve_all_aliases_type_expr(&mut ty.0, env);
-                }
-            }
-
-            for field in fields.iter_mut() {
-                resolve_all_aliases_value_expr(&mut field.1.0, env);
-            }
-            *name = env
-                .try_resolve_type_alias(name)
-                .and_then(|x| match x {
-                    TypeExpr::Struct(name) => Some(name),
-                    _ => None,
-                })
-                .unwrap_or(name.clone());
-        }
-        ValueExpr::VarDecl(b) => {
-            let Declaration {
-                name,
-                type_expr,
-                initializer,
-                is_const,
-            } = &mut b.0;
-            if let Some(ty) = type_expr.as_mut() {
-                resolve_all_aliases_type_expr(&mut ty.0, env);
-            }
-            resolve_all_aliases_value_expr(&mut initializer.0, env);
-        }
-        ValueExpr::Block(b) => {
-            for e in b.iter_mut() {
-                resolve_all_aliases_value_expr(&mut e.0, env);
-            }
-        }
-        _ => {}
-    }
-}
-
 fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
     match expr {
         TypeExpr::RawTypeName(_, typename, generic_params) => {
@@ -1776,7 +1728,14 @@ pub fn typeresolve_struct_def(def: &mut StructDefinition, type_env: &mut TypeEnv
             }
         }
 
-        type_env.insert_identifier_type("self".to_string(), TypeExpr::Struct(def.name.clone()));
+        type_env.insert_identifier_type(
+            "self".to_string(),
+            if def.mut_methods.contains(&m.name) {
+                TypeExpr::RefMut(TypeExpr::Struct(def.name.clone()).into_empty_span().into())
+            } else {
+                TypeExpr::Ref(TypeExpr::Struct(def.name.clone()).into_empty_span().into())
+            },
+        );
         typeresolve_value_expr((&mut m.value_expr.0, m.value_expr.1), type_env);
         if m.name == "fisch" {
             println!(
@@ -2040,8 +1999,29 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     for (struct_name, methods) in cloned.iter_mut() {
         for m in methods.iter_mut() {
             type_env.push_identifier_types();
-            type_env
-                .insert_identifier_type("self".to_string(), TypeExpr::Struct(struct_name.clone()));
+            let StructDefinition {
+                name: _,
+                fields: _,
+                methods: _,
+                mut_methods,
+                generics: _,
+            } = type_env.get_struct_def(struct_name);
+            type_env.insert_identifier_type(
+                "self".to_string(),
+                if mut_methods.contains(&m.name) {
+                    TypeExpr::RefMut(
+                        TypeExpr::Struct(struct_name.clone())
+                            .into_empty_span()
+                            .into(),
+                    )
+                } else {
+                    TypeExpr::Ref(
+                        TypeExpr::Struct(struct_name.clone())
+                            .into_empty_span()
+                            .into(),
+                    )
+                },
+            );
             typeresolve_function_definition(m, type_env);
             type_env.pop_identifier_types();
         }
@@ -2284,7 +2264,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     field_name,
                 } = &mut target.0
             {
-                let target_ty = TypeExpr::from_value_expr_resolved_type_name(target_obj, type_env);
+                let target_ty = TypeExpr::from_value_expr_resolved_type_name_dereferenced(target_obj, type_env);
 
                 let TypeExpr::Struct(struct_name) = target_ty else {
                     panic!()
@@ -2294,6 +2274,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     name,
                     fields: _,
                     methods,
+                    mut_methods: _,
                     generics,
                 } = type_env.get_struct_def(struct_name.as_str()).clone();
 
@@ -2359,12 +2340,39 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     type_env.generic_fns_generated = cloned;
 
                     let mut cloned = type_env.generic_methods_generated.clone();
+                    let StructDefinition {
+                        name,
+                        fields: _,
+                        methods: _,
+                        mut_methods,
+                        generics: _,
+                    } = type_env.get_struct_def(struct_name.as_str()).clone();
                     for (s_name, values) in cloned.iter_mut() {
+                        let StructDefinition {
+                            name: _,
+                            fields: _,
+                            methods: _,
+                            mut_methods,
+                            generics: _,
+                        } = type_env.get_struct_def(s_name.as_str()).clone();
                         for v in values {
                             type_env.push_identifier_types();
+
                             type_env.insert_identifier_type(
                                 "self".to_string(),
-                                TypeExpr::Struct(s_name.clone()),
+                                if mut_methods.contains(&v.name) {
+                                    TypeExpr::RefMut(
+                                        TypeExpr::Struct(struct_name.clone())
+                                            .into_empty_span()
+                                            .into(),
+                                    )
+                                } else {
+                                    TypeExpr::Ref(
+                                        TypeExpr::Struct(struct_name.clone())
+                                            .into_empty_span()
+                                            .into(),
+                                    )
+                                },
                             );
                             typeresolve_function_definition(v, type_env);
                             type_env.pop_identifier_types();
@@ -2373,8 +2381,22 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     type_env.generic_methods_generated = cloned;
 
                     type_env.push_identifier_types();
-                    type_env
-                        .insert_identifier_type("self".to_string(), TypeExpr::Struct(struct_name));
+                    type_env.insert_identifier_type(
+                        "self".to_string(),
+                        if mut_methods.contains(&cloned_def.name) {
+                            TypeExpr::RefMut(
+                                TypeExpr::Struct(struct_name.clone())
+                                    .into_empty_span()
+                                    .into(),
+                            )
+                        } else {
+                            TypeExpr::Ref(
+                                TypeExpr::Struct(struct_name.clone())
+                                    .into_empty_span()
+                                    .into(),
+                            )
+                        },
+                    );
                     typeresolve_function_definition(&mut cloned_def, type_env);
                     type_env.pop_identifier_types();
 

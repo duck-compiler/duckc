@@ -5,7 +5,7 @@ struct Opt<T> = {
 } impl {
     fn filter(f: fn(x: T) -> Bool) -> Opt<T> {
         return match self.inner {
-            T @ value => if (f(value)) { self } else { empty_opt<T>() },
+            T @ value => if (f(value)) { *self } else { empty_opt<T>() },
             .empty => empty_opt<T>(),
         };
     }

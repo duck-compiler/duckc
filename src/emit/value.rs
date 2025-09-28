@@ -160,6 +160,7 @@ fn walk_access_raw(
 ) -> (Vec<IrInstruction>, Option<Vec<String>>) {
     let mut res_instr = VecDeque::new();
     let mut current_obj = obj.clone();
+    let mut is_calling_mut = false;
     let mut s = VecDeque::new();
 
     let mut derefs = Vec::new();
@@ -167,7 +168,7 @@ fn walk_access_raw(
 
     loop {
         match current_obj.0 {
-            ValueExpr::Variable(_, name, type_expr) => {
+            ValueExpr::Variable(_, name, _type_expr) => {
                 s.push_front(name);
 
                 if stars > 0 {
@@ -231,6 +232,38 @@ fn walk_access_raw(
             } => {
                 let mut param_res = Vec::new();
 
+                if let ValueExpr::FieldAccess {
+                    target_obj,
+                    field_name,
+                } = &target.0
+                {
+                    let ty = TypeExpr::from_value_expr_resolved_type_name_dereferenced(
+                        &target_obj.0.clone().into_empty_span(),
+                        type_env,
+                    );
+
+                    // let mut ty_or = TypeExpr::from_value_expr_resolved_type_name(
+                    //     &target_obj.0.clone().into_empty_span(),
+                    //     type_env,
+                    // );
+
+                    if let TypeExpr::Struct(struct_name) = ty {
+                        let struct_def = type_env.get_struct_def(struct_name.as_str());
+                        if struct_def.mut_methods.contains(field_name) {
+                            is_calling_mut = true;
+                            // while let TypeExpr::RefMut(v) = ty_or {
+                            //     ty_or = v.0;
+                            // }
+                            // if let TypeExpr::Ref(_) = ty_or {
+                            //     panic!(
+                            //         "need only mut refs for mut stuff {}..{}",
+                            //         span.start, span.end
+                            //     );
+                            // }
+                        }
+                    }
+                }
+
                 for param in params {
                     let (param_instr, var) = param.0.emit(type_env, env, span);
                     res_instr.extend(param_instr);
@@ -249,7 +282,7 @@ fn walk_access_raw(
                 let mut type_expr = TypeExpr::from_value_expr_resolved_type_name(&target, type_env);
 
                 let mut stars_to_set = 0;
-                if deref_needs_to_be_mut {
+                if deref_needs_to_be_mut || is_calling_mut {
                     while let TypeExpr::RefMut(v) = type_expr {
                         type_expr = v.0;
                         stars_to_set += 1;
@@ -285,7 +318,8 @@ fn walk_access_raw(
                     TypeExpr::from_value_expr_resolved_type_name(&target_obj, type_env);
 
                 let mut stars_to_set = 0;
-                if deref_needs_to_be_mut {
+                if deref_needs_to_be_mut || is_calling_mut {
+                    is_calling_mut = false;
                     while let TypeExpr::RefMut(v) = type_expr {
                         type_expr = v.0;
                         stars_to_set += 1;

@@ -761,6 +761,7 @@ impl TypeExpr {
                     name: struct_name,
                     fields: _,
                     methods,
+                    mut_methods: _,
                     generics: _,
                 } = type_env.get_struct_def(r#struct.as_str());
 
@@ -782,6 +783,7 @@ impl TypeExpr {
                     name: _,
                     fields,
                     methods: _,
+                    mut_methods: _,
                     generics: _,
                 } = type_env.get_struct_def(r#struct.as_str());
 
@@ -823,6 +825,7 @@ impl TypeExpr {
                     name,
                     fields,
                     methods,
+                    mut_methods: _,
                     generics: _,
                 } = type_env.get_struct_def(r#struct.as_str());
 

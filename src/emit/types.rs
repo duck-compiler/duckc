@@ -142,6 +142,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                     name: struct_name,
                     fields,
                     methods,
+                    mut_methods: _,
                     generics,
                 } = type_env.get_struct_def(s.as_str()).clone();
 
@@ -290,19 +291,48 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
 
                     instructions.extend(instructions_to_be_duck_conform);
 
-                    instructions.push(method.emit(
-                        Some(("self".to_string(), format!("*{struct_name}"))),
+                    let mut body = method.emit(
+                        Some(("duck_internal_self".to_string(), format!("*{struct_name}"))),
                         type_env,
                         to_ir,
-                    ));
+                    );
+                    if let IrInstruction::FunDef(_, _, _, _, body) = &mut body {
+                        body.insert(
+                            0,
+                            IrInstruction::VarDecl("self".to_string(), format!("**{struct_name}")),
+                        );
+                        body.insert(
+                            1,
+                            IrInstruction::VarAssignment(
+                                "self".to_string(),
+                                IrValue::Imm("&duck_internal_self".to_string()),
+                            ),
+                        );
+                    }
+
+                    instructions.push(body);
                 }
 
                 for generic_method in type_env.get_generic_methods(struct_name.clone()).clone() {
-                    instructions.push(generic_method.emit(
-                        Some(("self".to_string(), format!("*{struct_name}"))),
+                    let mut body = generic_method.emit(
+                        Some(("duck_internal_self".to_string(), format!("*{struct_name}"))),
                         type_env,
                         to_ir,
-                    ));
+                    );
+                    if let IrInstruction::FunDef(_, _, _, _, body) = &mut body {
+                        body.insert(
+                            0,
+                            IrInstruction::VarDecl("self".to_string(), format!("**{struct_name}")),
+                        );
+                        body.insert(
+                            1,
+                            IrInstruction::VarAssignment(
+                                "self".to_string(),
+                                IrValue::Imm("&duck_internal_self".to_string()),
+                            ),
+                        );
+                    }
+                    instructions.push(body);
                 }
 
                 instructions
@@ -445,6 +475,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                         name: _,
                         fields,
                         methods: _,
+                        mut_methods: _,
                         generics: _,
                     } = type_env.get_struct_def(struct_name.as_str()).clone();
 

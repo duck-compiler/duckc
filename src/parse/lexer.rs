@@ -31,6 +31,7 @@ pub enum RawHtmlStringContents {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
+    Mut,
     Use,
     Type,
     Go,
@@ -83,6 +84,7 @@ pub enum Token {
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = match self {
+            Token::Mut => "mut",
             Token::Const => "const",
             Token::RefMut => "&mut",
             Token::FormatStringLiteral(s) => &format!("f-string {s:?}"),
@@ -447,6 +449,7 @@ pub fn lex_single<'a>(
 ) -> impl Parser<'a, &'a str, Spanned<Token>, extra::Err<Rich<'a, char>>> + Clone {
     recursive(|lexer| {
         let keyword_or_ident = text::ident().map(|str| match str {
+            "mut" => Token::Mut,
             "module" => Token::Module,
             "use" => Token::Use,
             "typeof" => Token::TypeOf,

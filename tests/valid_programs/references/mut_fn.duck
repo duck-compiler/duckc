@@ -1,0 +1,21 @@
+struct Counter = {
+    count: Int,
+} impl {
+    mut fn increment() -> Int {
+        self.count = self.count + 1;
+        return self.count;
+    }
+};
+
+fn main() {
+    (&mut Counter { count: 100}).increment();
+    let counter = Counter { count: 0 };
+    counter.increment();
+    counter.increment();
+    counter.increment();
+    counter.increment();
+    let z = counter.increment();
+    std::io::debug(z);
+    std::io::debug(counter.increment());
+    std::io::debug(counter.count);
+}

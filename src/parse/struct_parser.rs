@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
@@ -16,6 +18,7 @@ pub struct StructDefinition {
     pub name: String,
     pub fields: Vec<Field>,
     pub methods: Vec<FunctionDefintion>,
+    pub mut_methods: HashSet<String>,
     pub generics: Option<Vec<Spanned<Generic>>>,
 }
 
@@ -34,10 +37,13 @@ where
     let impl_parser = just(Token::Impl)
         .ignore_then(just(Token::ControlChar('{')))
         .ignore_then(
-            function_definition_parser(make_input)
-                .repeated()
-                .at_least(0)
-                .collect::<Vec<_>>(),
+            (just(Token::Mut)
+                .or_not()
+                .map(|x| x.is_some())
+                .then(function_definition_parser(make_input)))
+            .repeated()
+            .at_least(0)
+            .collect::<Vec<_>>(),
         )
         .then_ignore(just(Token::ControlChar('}')))
         .or_not()
@@ -57,14 +63,25 @@ where
         .then_ignore(just(Token::ControlChar('}')))
         .then(impl_parser)
         .then_ignore(just(Token::ControlChar(';')))
-        .map(
-            |(((identifier, generics), fields), methods)| StructDefinition {
+        .map(|(((identifier, generics), fields), methods)| {
+            let (mut_methods_names, methods) = methods.into_iter().fold(
+                (HashSet::new(), Vec::new()),
+                |(mut mut_method_names, mut methods), (is_mut, elem)| {
+                    if is_mut {
+                        mut_method_names.insert(elem.name.clone());
+                    }
+                    methods.push(elem);
+                    (mut_method_names, methods)
+                },
+            );
+            StructDefinition {
                 name: identifier,
                 fields,
                 methods,
+                mut_methods: mut_methods_names,
                 generics,
-            },
-        )
+            }
+        })
 }
 
 #[cfg(test)]
@@ -222,6 +239,7 @@ pub mod tests {
                     Field::new("y".to_string(), TypeExpr::Int.into_empty_span()),
                 ],
                 methods: vec![],
+                mut_methods: HashSet::new(),
                 generics: None,
             },
         );
@@ -232,6 +250,7 @@ pub mod tests {
                 name: "Empty".to_string(),
                 fields: vec![],
                 methods: vec![],
+                mut_methods: HashSet::new(),
                 generics: None,
             },
         );
@@ -245,6 +264,7 @@ pub mod tests {
                     Field::new("name".to_string(), TypeExpr::String.into_empty_span()),
                 ],
                 methods: vec![],
+                mut_methods: HashSet::new(),
                 generics: None,
             },
         );
@@ -258,6 +278,7 @@ pub mod tests {
                     TypeExpr::RawTypeName(false, vec!["T".to_string()], None).into_empty_span(),
                 )],
                 methods: vec![],
+                mut_methods: HashSet::new(),
                 generics: Some(vec![(
                     Generic {
                         name: "T".to_string(),
@@ -290,6 +311,7 @@ pub mod tests {
                     .into_empty_span(),
                 )],
                 methods: vec![],
+                mut_methods: HashSet::new(),
                 generics: Some(vec![
                     (
                         Generic {

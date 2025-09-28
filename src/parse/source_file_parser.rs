@@ -836,7 +836,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{collections::HashSet, path::PathBuf};
 
     use chumsky::Parser;
 
@@ -962,6 +962,7 @@ mod tests {
                             TypeExpr::String.into_empty_span(),
                         )],
                         methods: vec![],
+                        mut_methods: HashSet::new(),
                         generics: None,
                     }],
                     ..Default::default()
