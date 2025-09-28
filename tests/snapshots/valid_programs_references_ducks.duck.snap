@@ -1,0 +1,4 @@
+{
+    "stdout": "before: d.y = String in y, *ref_to_y = String in y\nafter: d.y = y replaced, *ref_to_y = y replaced\n",
+    "stderr": ""
+}

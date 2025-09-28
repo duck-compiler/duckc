@@ -361,7 +361,7 @@ fn walk_access_raw(
                         }
                     }
                     TypeExpr::Struct(..) => s.push_front(field_name.to_string()),
-                    _ => {},
+                    _ => {}
                 }
 
                 s[0].insert(0, '.');
@@ -522,20 +522,68 @@ impl ValueExpr {
             ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
                 let t = TypeExpr::from_value_expr_resolved_type_name(&*v, type_env);
                 let ptr_type = format!("*{}", t.as_go_type_annotation(type_env));
-                let (mut emit_instr, emit_res) = v.0.emit(type_env, env, span);
-                if let Some(emit_res) = emit_res {
-                    let var_name = env.new_var();
-                    let ptr_var_decl = [
-                        IrInstruction::VarDecl(var_name.clone(), ptr_type),
-                        IrInstruction::VarAssignment(
-                            var_name.clone(),
-                            IrValue::Pointer(Box::new(emit_res)),
-                        ),
-                    ];
-                    emit_instr.extend(ptr_var_decl);
-                    (emit_instr, Some(IrValue::Var(var_name)))
-                } else {
-                    (emit_instr, None)
+
+                loop {
+                    if let ValueExpr::FieldAccess {
+                        target_obj,
+                        field_name: _,
+                    }
+                    | ValueExpr::ArrayAccess(target_obj, _) = &v.0
+                    {
+                        let t = TypeExpr::from_value_expr_resolved_type_name_dereferenced(
+                            &target_obj,
+                            type_env,
+                        );
+                        let need_mut = matches!(self, ValueExpr::RefMut(..));
+                        let is_accessing_duck = matches!(t, TypeExpr::Duck(..));
+                        let (mut walk_instr, walk_res) =
+                            walk_access_raw(&v, type_env, env, span, false, need_mut);
+                        if let Some(mut walk_res) = walk_res {
+                            let val_to_set: IrValue;
+                            if is_accessing_duck
+                                && let ValueExpr::FieldAccess {
+                                    target_obj: _,
+                                    field_name,
+                                } = &v.0
+                            {
+                                let r = walk_res.last_mut().expect("not last?");
+                                *r = r.replacen(
+                                    &format!("Get{field_name}()"),
+                                    &format!("GetPtr{field_name}()"),
+                                    1,
+                                );
+                                val_to_set = IrValue::Imm(walk_res.join(""));
+                            } else {
+                                val_to_set = IrValue::Pointer(Box::new(IrValue::Imm(walk_res.join(""))));
+                            }
+
+                            let var_name = env.new_var();
+                            let ptr_var_decl = [
+                                IrInstruction::VarDecl(var_name.clone(), ptr_type),
+                                IrInstruction::VarAssignment(var_name.clone(), val_to_set),
+                            ];
+                            walk_instr.extend(ptr_var_decl);
+                            break (walk_instr, Some(IrValue::Var(var_name)));
+                        } else {
+                            break (walk_instr, None);
+                        }
+                    }
+
+                    let (mut emit_instr, emit_res) = v.0.emit(type_env, env, span);
+                    if let Some(emit_res) = emit_res {
+                        let var_name = env.new_var();
+                        let ptr_var_decl = [
+                            IrInstruction::VarDecl(var_name.clone(), ptr_type),
+                            IrInstruction::VarAssignment(
+                                var_name.clone(),
+                                IrValue::Pointer(Box::new(emit_res)),
+                            ),
+                        ];
+                        emit_instr.extend(ptr_var_decl);
+                        break (emit_instr, Some(IrValue::Var(var_name)));
+                    } else {
+                        break (emit_instr, None);
+                    }
                 }
             }
             ValueExpr::Sub(lhs, rhs) => {
