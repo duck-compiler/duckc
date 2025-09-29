@@ -1000,7 +1000,7 @@ impl ValueExpr {
                                         return (instr, None);
                                     }
                                 }
-                                TypeExpr::String | TypeExpr::ConstString(..) => {
+                                TypeExpr::String(..) => {
                                     let (e_instr, e_res_var) = e.0.emit(type_env, env, e.1);
                                     instr.extend(e_instr);
                                     if let Some(e_res_var) = e_res_var {
@@ -1009,7 +1009,7 @@ impl ValueExpr {
                                         };
                                         return_printf.push_str("%s");
                                         return_printf_vars
-                                            .push(format!("{var_name}.as_dgo_string()"));
+                                            .push(format!("{var_name}"));
                                     } else {
                                         return (instr, None);
                                     }
@@ -1160,7 +1160,7 @@ impl ValueExpr {
 
                 instr.push(IrInstruction::VarDecl(
                     res_name.clone(),
-                    "DuckString".into(),
+                    "string".into(),
                 ));
                 instr.push(IrInstruction::StringConcat(res_name.clone(), concat_params));
 
@@ -2245,7 +2245,7 @@ mod tests {
             (
                 "let a: String = \"A\"",
                 vec![
-                    IrInstruction::VarDecl("a".into(), "DuckString".into()),
+                    IrInstruction::VarDecl("a".into(), "string".into()),
                     IrInstruction::VarAssignment("a".into(), IrValue::String("A".into(), true)),
                 ],
             ),

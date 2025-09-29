@@ -133,9 +133,9 @@ impl SourceFile {
 		} else {
 			return "false"
 		}
-	case ConcDuckString:
-		s := target.(ConcDuckString)
-		return fmt.Sprintf("\"%s\"", s.as_dgo_string())
+	case string:
+		s := target.(string)
+		return fmt.Sprintf("\"%s\"", s)
 	case ConcDuckInt:
 		s := target.(ConcDuckInt)
 		return fmt.Sprintf("%d", s.as_dgo_int())

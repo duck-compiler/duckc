@@ -892,7 +892,7 @@ mod tests {
                             fields: vec![
                                 Field {
                                     name: "x".to_string(),
-                                    type_expr: TypeExpr::String.into_empty_span(),
+                                    type_expr: TypeExpr::String(None).into_empty_span(),
                                 },
                                 Field {
                                     name: "y".to_string(),
@@ -943,7 +943,7 @@ mod tests {
                         type_expression: TypeExpr::Duck(Duck {
                             fields: vec![Field::new(
                                 "x".into(),
-                                TypeExpr::String.into_empty_span(),
+                                TypeExpr::String(None).into_empty_span(),
                             )],
                         })
                         .into_empty_span(),
@@ -959,7 +959,7 @@ mod tests {
                         name: "X".into(),
                         fields: vec![Field::new(
                             "x".to_string(),
-                            TypeExpr::String.into_empty_span(),
+                            TypeExpr::String(None).into_empty_span(),
                         )],
                         methods: vec![],
                         mut_methods: HashSet::new(),
@@ -1034,7 +1034,7 @@ mod tests {
                     function_definitions: vec![
                         FunctionDefintion {
                             name: "abc".into(),
-                            return_type: Some(TypeExpr::String.into_empty_span()),
+                            return_type: Some(TypeExpr::String(None).into_empty_span()),
                             ..Default::default()
                         },
                         FunctionDefintion {
@@ -1051,7 +1051,7 @@ mod tests {
                         type_expression: TypeExpr::Duck(Duck {
                             fields: vec![Field::new(
                                 "x".into(),
-                                TypeExpr::String.into_empty_span(),
+                                TypeExpr::String(None).into_empty_span(),
                             )],
                         })
                         .into_empty_span(),

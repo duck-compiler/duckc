@@ -9,12 +9,12 @@ impl IrInstruction {
         match self {
             IrInstruction::StringConcat(target, v) => {
                 format!(
-                    "{target} = ConcDuckString {{ value: {} }}",
+                    "{target} = {}",
                     if v.is_empty() {
                         String::from("\"\"")
                     } else {
                         v.iter()
-                            .map(|x| format!("{}.as_dgo_string()", x.emit_as_go()))
+                            .map(|x| format!("{}", x.emit_as_go()))
                             .collect::<Vec<_>>()
                             .join(" + ")
                     }
@@ -433,17 +433,7 @@ impl IrValue {
             IrValue::Int(i) => format!("ConcDuckInt {{ value: {i} }}"),
             IrValue::Float(f) => format!("ConcDuckFloat {{ value: {f} }}"),
             IrValue::Char(c) => format!("ConcDuckChar {{ value: '{c}' }}"),
-            IrValue::String(s, is_const) => {
-                if *is_const {
-                    format!(
-                        "ConstString_{} {{ \"{}\" }}",
-                        string_to_byte_string(s),
-                        s.replace("\n", "\\n")
-                    )
-                } else {
-                    format!("ConcDuckString {{ value: \"{}\" }}", s.replace("\n", "\\n"))
-                }
-            }
+            IrValue::String(s, _is_const) => format!("\"{}\"", s.replace("\n", "\\n")),
             IrValue::Var(v) => v.to_string(),
             IrValue::Struct(s, fields) => {
                 format!(

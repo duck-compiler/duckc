@@ -1328,7 +1328,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("a"),
                     params: vec![],
-                    type_params: Some(vec![TypeExpr::String.into_empty_span()]),
+                    type_params: Some(vec![TypeExpr::String(None).into_empty_span()]),
                 },
             ),
             (
@@ -1336,7 +1336,7 @@ mod tests {
                 ValueExpr::FunctionCall {
                     target: var("a"),
                     params: vec![*var("b")],
-                    type_params: Some(vec![TypeExpr::String.into_empty_span()]),
+                    type_params: Some(vec![TypeExpr::String(None).into_empty_span()]),
                 },
             ),
             (
@@ -2356,7 +2356,7 @@ mod tests {
                         Declaration {
                             name: "x".into(),
                             initializer: ValueExpr::String("".to_string(), true).into_empty_span(),
-                            type_expr: Some(TypeExpr::String.into_empty_span()),
+                            type_expr: Some(TypeExpr::String(None).into_empty_span()),
                             is_const: false,
                         },
                         empty_range(),
@@ -2371,7 +2371,7 @@ mod tests {
                         Declaration {
                             name: "x".into(),
                             initializer: ValueExpr::String("".to_string(), true).into_empty_span(),
-                            type_expr: Some(TypeExpr::String.into_empty_span()),
+                            type_expr: Some(TypeExpr::String(None).into_empty_span()),
                             is_const: true,
                         },
                         empty_range(),
@@ -2612,7 +2612,7 @@ mod tests {
                 "fn(x: String) -> Int 1",
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
-                        params: vec![("x".into(), TypeExpr::String.into_empty_span())],
+                        params: vec![("x".into(), TypeExpr::String(None).into_empty_span())],
                         return_type: Some(TypeExpr::Int.into_empty_span()),
                         value_expr: ValueExpr::Int(1).into_empty_span(),
                     }
@@ -2693,7 +2693,7 @@ mod tests {
                     ),
                     arms: vec![
                         MatchArm {
-                            type_case: TypeExpr::String.into_empty_span(),
+                            type_case: TypeExpr::String(None).into_empty_span(),
                             identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                             condition: None,
@@ -2719,7 +2719,7 @@ mod tests {
                     ),
                     arms: vec![
                         MatchArm {
-                            type_case: TypeExpr::String.into_empty_span(),
+                            type_case: TypeExpr::String(None).into_empty_span(),
                             identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                             condition: Some(*var("s")),
@@ -2747,7 +2747,7 @@ mod tests {
                     ),
                     arms: vec![
                         MatchArm {
-                            type_case: TypeExpr::String.into_empty_span(),
+                            type_case: TypeExpr::String(None).into_empty_span(),
                             identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                             condition: None,
@@ -2795,7 +2795,7 @@ mod tests {
                     ),
                     arms: vec![
                         MatchArm {
-                            type_case: TypeExpr::String.into_empty_span(),
+                            type_case: TypeExpr::String(None).into_empty_span(),
                             identifier_binding: Some("s".to_string()),
                             value_expr: *var("s"),
                             condition: None,
@@ -2827,7 +2827,7 @@ mod tests {
                                 ValueExpr::Match {
                                     value_expr: var("o"),
                                     arms: vec![MatchArm {
-                                        type_case: TypeExpr::String.into_empty_span(),
+                                        type_case: TypeExpr::String(None).into_empty_span(),
                                         identifier_binding: Some("s".to_string()),
                                         value_expr: *var("s"),
                                         condition: None,
@@ -2996,7 +2996,7 @@ mod tests {
                 "let x: String = \"\"",
                 Declaration {
                     name: "x".to_string(),
-                    type_expr: Some(TypeExpr::String.into_empty_span()),
+                    type_expr: Some(TypeExpr::String(None).into_empty_span()),
                     initializer: ValueExpr::String("".to_string(), true).into_empty_span(),
                     is_const: false,
                 },

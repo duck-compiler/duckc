@@ -261,7 +261,7 @@ pub mod tests {
                 name: "User".to_string(),
                 fields: vec![
                     Field::new("id".to_string(), TypeExpr::Int.into_empty_span()),
-                    Field::new("name".to_string(), TypeExpr::String.into_empty_span()),
+                    Field::new("name".to_string(), TypeExpr::String(None).into_empty_span()),
                 ],
                 methods: vec![],
                 mut_methods: HashSet::new(),
