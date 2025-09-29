@@ -2085,6 +2085,16 @@ fn typeresolve_function_definition(
         ),
         type_env,
     );
+
+    let return_type = resolve_implicit_function_return_type(function_definition, type_env);
+    if let Some(required_return_type) = &function_definition.return_type {
+        if let Some(given_return_type) = &return_type.ok() {
+            check_type_compatability(&required_return_type, &(given_return_type.clone(), function_definition.value_expr.1), type_env);
+        } else {
+            panic!("missing return in function")
+        }
+    }
+
     type_env.pop_identifier_types();
 }
 
@@ -2595,7 +2605,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
 // todo(@mvmo): typeinference
 // resolve implicit type and attach it to variables for type inference
-#[allow(dead_code)]
 fn resolve_implicit_function_return_type(
     fun_def: &FunctionDefintion,
     type_env: &mut TypeEnv,

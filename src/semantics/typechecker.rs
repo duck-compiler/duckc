@@ -72,6 +72,7 @@ impl TypeExpr {
     pub fn from_value_expr(value_expr: &Spanned<ValueExpr>, type_env: &mut TypeEnv) -> TypeExpr {
         let complete_span = &value_expr.1;
         let value_expr = &value_expr.0;
+
         return match value_expr {
             ValueExpr::Ref(v) => {
                 TypeExpr::Ref((TypeExpr::from_value_expr(v, type_env), v.1.clone()).into())
@@ -1466,7 +1467,7 @@ pub fn check_type_compatability(
                     "this expects an int.".to_string(),
                     format!(
                         "this is not an int. it's a {}",
-                        given_type.0.as_clean_go_type_name(type_env).bright_yellow()
+                        format!("{}", given_type.0).bright_yellow()
                     ),
                 )
             }
@@ -1475,7 +1476,10 @@ pub fn check_type_compatability(
             if !given_type.0.is_bool() {
                 fail_requirement(
                     format!("a {} value is required here", "Bool".bright_yellow(),),
-                    "this is not a bool".to_string(),
+                    format!(
+                        "this is not a bool. it's a {}",
+                        format!("{}", given_type.0).bright_yellow()
+                    ),
                 )
             }
         }
