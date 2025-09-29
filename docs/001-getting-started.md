@@ -4,11 +4,6 @@
 
 ---
 
-Table of contents
-    1.) Installation
-    2.) Project setup
-    3.) Hello, World!
-
 # 1. Installation
 In this step, you'll install [dargo](./dargo.md) to you computer. Dargo comes with everything needed to setup and build a project.
 Clone the master branch ouf our github repository.
