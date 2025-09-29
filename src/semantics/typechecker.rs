@@ -39,7 +39,7 @@ impl TypeExpr {
             if let TypeExpr::TypeName(_, name, _) = &res {
                 res = type_env.resolve_type_alias(name);
             } else if let TypeExpr::Alias(def) = &res {
-                res = type_env.resolve_type_alias(&def.name);
+                res = def.type_expression.0.clone();
             } else {
                 break res;
             }
@@ -60,12 +60,11 @@ impl TypeExpr {
             if let TypeExpr::TypeName(_, name, _) = &res {
                 res = type_env.resolve_type_alias(name);
             } else if let TypeExpr::Alias(def) = &res {
-                res = type_env.resolve_type_alias(&def.name);
+                res = def.type_expression.0.clone();
             } else {
-                break;
+                break res;
             }
         }
-        res
     }
 
     #[track_caller]
