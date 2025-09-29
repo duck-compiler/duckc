@@ -1,6 +1,6 @@
 fn main() {
     std::io::println("Testing multiline string literals");
-    
+
     let multiline: String = f"
         This is a multiline string
         that spans multiple lines

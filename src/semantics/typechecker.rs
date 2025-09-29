@@ -328,7 +328,7 @@ impl TypeExpr {
                     type_env,
                 );
 
-                left_type_expr
+                left_type_expr.unconst()
             }
             ValueExpr::Sub(left, right) => {
                 let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left, type_env);
@@ -349,7 +349,7 @@ impl TypeExpr {
                     type_env,
                 );
 
-                left_type_expr
+                left_type_expr.unconst()
             }
             ValueExpr::Mod(left, right) => {
                 let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left, type_env);
@@ -370,7 +370,7 @@ impl TypeExpr {
                     type_env,
                 );
 
-                left_type_expr
+                left_type_expr.unconst()
             }
             ValueExpr::Div(left, right) => {
                 let left_type_expr: TypeExpr = TypeExpr::from_value_expr(left, type_env);
@@ -391,7 +391,7 @@ impl TypeExpr {
                     type_env,
                 );
 
-                left_type_expr
+                left_type_expr.unconst()
             }
             ValueExpr::Equals(lhs, rhs)
             | ValueExpr::NotEquals(lhs, rhs)
@@ -431,7 +431,7 @@ impl TypeExpr {
                     type_env,
                 );
 
-                left_type_expr
+                left_type_expr.unconst()
             }
             ValueExpr::FunctionCall {
                 target,
@@ -648,8 +648,8 @@ impl TypeExpr {
                 let mut arm_types = Vec::new();
                 for arm in &arms {
                     let arm_type = TypeExpr::from_value_expr(&arm.value_expr, type_env);
-                    if !arm_types.iter().any(|(x, _)| x == &arm_type) {
-                        arm_types.push((arm_type, arm.value_expr.1));
+                    if !arm_types.iter().any(|(x, _)| x == &arm_type.unconst()) {
+                        arm_types.push((arm_type.unconst(), arm.value_expr.1));
                     }
                 }
 
@@ -670,7 +670,7 @@ impl TypeExpr {
                     }
 
                     possible_types.iter().for_each(|possible_type| {
-                        let is_covered = &covered_types.iter().any(|(x, _)| *x == possible_type.0);
+                        let is_covered = &covered_types.iter().any(|(x, _)| *x == possible_type.0.unconst());
                         if !is_covered {
                             let missing_type = possible_type;
                             failure_with_occurence(
@@ -734,6 +734,15 @@ impl TypeExpr {
         match self {
             Self::Struct(..) => true,
             _ => false,
+        }
+    }
+
+    pub fn unconst(&self) -> TypeExpr {
+        match self {
+            Self::String(..) => Self::String(None),
+            Self::Int(..) => Self::Int(None),
+            Self::Bool(..) => Self::Bool(None),
+            s => s.clone(),
         }
     }
 
@@ -1596,7 +1605,7 @@ mod test {
             ),
             ("0.5", TypeExpr::Float),
             ("0.1 + 0.4", TypeExpr::Float),
-            ("0 + 0.4", TypeExpr::Int(Some(0))),
+            ("0 + 0.4", TypeExpr::Int(None)),
             ("0.4 + 0", TypeExpr::Float),
             (
                 "(0, 2)",
@@ -1605,25 +1614,24 @@ mod test {
                     TypeExpr::Int(Some(2)).into_empty_span(),
                 ]),
             ),
-            // todo:
-            // (
-            //     "(0, 2 + 2)",
-            //     TypeExpr::Tuple(vec![
-            //         TypeExpr::Int(Some(0)).into_empty_span(),
-            //         // TypeExpr::Int(None).into_empty_span(),
-            //     ]),
-            // ),
-            // (
-            //     "(0, (2 + 2, 5))",
-            //     TypeExpr::Tuple(vec![
-            //         TypeExpr::Int(None).into_empty_span(),
-            //         TypeExpr::Tuple(vec![
-            //             TypeExpr::Int(None).into_empty_span(),
-            //             TypeExpr::Int(None).into_empty_span(),
-            //         ])
-            //         .into_empty_span(),
-            //     ]),
-            // ),
+            (
+                "(0, 2 + 2)",
+                TypeExpr::Tuple(vec![
+                    TypeExpr::Int(Some(0)).into_empty_span(),
+                    TypeExpr::Int(None).into_empty_span(),
+                ]),
+            ),
+            (
+                "(0, (2 + 2, 5))",
+                TypeExpr::Tuple(vec![
+                    TypeExpr::Int(Some(0)).into_empty_span(),
+                    TypeExpr::Tuple(vec![
+                        TypeExpr::Int(None).into_empty_span(),
+                        TypeExpr::Int(Some(5)).into_empty_span(),
+                    ])
+                    .into_empty_span(),
+                ]),
+            ),
             (
                 "(0, (\"Hallo, Welt\", 5))",
                 TypeExpr::Tuple(vec![

@@ -1,4 +1,4 @@
 {
-    "stdout": "before:\n[{first} {second}]\n[{first} {second}]\nafter:\n[{first modified} {second modified}]\n[{first modified} {second modified}]\n",
+    "stdout": "before:\n[first second]\n[first second]\nafter:\n[first modified second modified]\n[first modified second modified]\n",
     "stderr": ""
 }

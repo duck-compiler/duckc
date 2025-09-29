@@ -552,7 +552,8 @@ impl ValueExpr {
                     return (ir, None);
                 }
 
-                let type_expr = TypeExpr::from_value_expr(lhs, type_env);
+                let type_expr = TypeExpr::from_value_expr(lhs, type_env)
+                    .unconst();
 
                 let var = env.new_var();
                 ir.push(IrInstruction::VarDecl(
@@ -583,7 +584,8 @@ impl ValueExpr {
                     return (ir, None);
                 }
 
-                let type_expr = TypeExpr::from_value_expr(lhs, type_env);
+                let type_expr = TypeExpr::from_value_expr(lhs, type_env)
+                    .unconst();
 
                 let var = env.new_var();
                 ir.push(IrInstruction::VarDecl(
@@ -614,7 +616,8 @@ impl ValueExpr {
                     return (ir, None);
                 }
 
-                let type_expr = TypeExpr::from_value_expr(lhs, type_env);
+                let type_expr = TypeExpr::from_value_expr(lhs, type_env)
+                    .unconst();
 
                 let var = env.new_var();
                 ir.push(IrInstruction::VarDecl(
@@ -1634,7 +1637,8 @@ impl ValueExpr {
                     return (ir, None);
                 }
 
-                let type_expr = TypeExpr::from_value_expr(v1, type_env);
+                let type_expr = TypeExpr::from_value_expr(v1, type_env)
+                    .unconst();
 
                 let var = env.new_var();
                 ir.push(IrInstruction::VarDecl(
@@ -1665,7 +1669,8 @@ impl ValueExpr {
                     return (ir, None);
                 }
 
-                let type_expr = TypeExpr::from_value_expr(v1, type_env);
+                let type_expr = TypeExpr::from_value_expr(v1, type_env)
+                    .unconst();
 
                 let var = env.new_var();
                 ir.push(IrInstruction::VarDecl(
@@ -1878,7 +1883,7 @@ impl ValueExpr {
                         var.clone(),
                         v1_res.unwrap(),
                         v2_res.unwrap(),
-                        TypeExpr::from_value_expr(v1, type_env),
+                        TypeExpr::from_value_expr(v1, type_env).unconst(),
                     ),
                 ]);
 
@@ -1906,7 +1911,8 @@ impl ValueExpr {
                         var.clone(),
                         v1_res.unwrap(),
                         v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env),
+                        TypeExpr::from_value_expr(lhs, type_env)
+                            .unconst(),
                     ),
                 ]);
 
@@ -1934,7 +1940,8 @@ impl ValueExpr {
                         var.clone(),
                         v1_res.unwrap(),
                         v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env),
+                        TypeExpr::from_value_expr(lhs, type_env)
+                            .unconst(),
                     ),
                 ]);
 
@@ -1962,7 +1969,8 @@ impl ValueExpr {
                         var.clone(),
                         v1_res.unwrap(),
                         v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env),
+                        TypeExpr::from_value_expr(lhs, type_env)
+                            .unconst(),
                     ),
                 ]);
 
@@ -1990,7 +1998,8 @@ impl ValueExpr {
                         var.clone(),
                         v1_res.unwrap(),
                         v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env),
+                        TypeExpr::from_value_expr(lhs, type_env)
+                            .unconst(),
                     ),
                 ]);
 
@@ -2018,7 +2027,8 @@ impl ValueExpr {
                         var.clone(),
                         v1_res.unwrap(),
                         v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env),
+                        TypeExpr::from_value_expr(lhs, type_env)
+                            .unconst(),
                     ),
                 ]);
 
@@ -2226,7 +2236,7 @@ mod tests {
                         "var_0".into(),
                         IrValue::Int(1),
                         IrValue::Int(1),
-                        TypeExpr::Int(Some(1)),
+                        TypeExpr::Int(None),
                     ),
                 ],
             ),
@@ -2238,7 +2248,7 @@ mod tests {
                         "var_0".into(),
                         IrValue::Int(1),
                         IrValue::Int(1),
-                        TypeExpr::Int(Some(1)),
+                        TypeExpr::Int(None),
                     ),
                 ],
             ),
@@ -2271,7 +2281,7 @@ mod tests {
                         "var_0".into(),
                         IrValue::Int(1),
                         IrValue::Int(2),
-                        TypeExpr::Int(Some(1)),
+                        TypeExpr::Int(None),
                     ),
                 ],
             ),

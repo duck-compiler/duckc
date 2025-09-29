@@ -136,7 +136,7 @@ impl IrInstruction {
                     .collect();
 
                 format!(
-                    "switch {}.(type) {{\n{}\n}}",
+                    "switch ({}).(type) {{\n{}\n}}",
                     against.emit_as_go(),
                     processed_cases.join("\n"),
                 )

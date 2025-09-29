@@ -26,7 +26,7 @@ fn main() {
 
     println(f"{x.name}");
     go {
-        fmt.Println(x.Getage().as_dgo_int())
+        fmt.Println(x.Getage())
         fmt.Println(y);
     }
 }

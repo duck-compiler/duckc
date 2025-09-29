@@ -25,12 +25,12 @@ fn join(
         var final_str string
         for index, str := range strs {
             if index != 0 {
-                final_str += with.as_dgo_string()
+                final_str += with
             }
-            final_str += str.as_dgo_string()
+            final_str += str
         }
 
-        return ConcDuckString { value: final_str };
+        return final_str;
     }
 
     return ""

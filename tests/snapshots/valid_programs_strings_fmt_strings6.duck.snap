@@ -1,4 +1,4 @@
 {
-    "stdout": "{nested f string}\n",
+    "stdout": "nested f string\n",
     "stderr": ""
 }

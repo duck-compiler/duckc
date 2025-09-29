@@ -452,8 +452,8 @@ impl TypeExpr {
             TypeExpr::Bool(..) => "bool".to_string(),
             TypeExpr::InlineGo => "any".to_string(),
             TypeExpr::Int(..) => "int".to_string(),
-            TypeExpr::Float => "DuckFloat".to_string(),
-            TypeExpr::Char => "DuckChar".to_string(),
+            TypeExpr::Float => "float32".to_string(),
+            TypeExpr::Char => "rune".to_string(),
             TypeExpr::String(..) => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::TypeNameInternal(name) => type_env

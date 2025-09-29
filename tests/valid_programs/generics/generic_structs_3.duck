@@ -11,7 +11,7 @@ struct M<T> = {
 
 fn int_to_string(x: Int) -> String {
     go {
-        return ConcDuckString { strconv.Itoa(x.as_dgo_int()) }
+        return strconv.Itoa(x)
     }
     return "";
 }

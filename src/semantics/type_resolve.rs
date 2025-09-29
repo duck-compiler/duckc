@@ -1804,7 +1804,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .for_each(|type_def| {
             if let TypeExpr::And(_) = &mut type_def.type_expression.0 {
                 type_def.type_expression.0 =
-                    dbg!(translate_interception_to_duck(&type_def.type_expression.0));
+                    translate_interception_to_duck(&type_def.type_expression.0);
             }
         });
 
@@ -2710,6 +2710,7 @@ fn resolve_implicit_function_return_type(
     let mut return_types_found = Vec::new();
     flatten_returns(&fun_def.value_expr.0, &mut return_types_found, type_env);
 
+    let mut return_types_found = return_types_found.iter().map(|rt| rt.unconst()).collect::<Vec<_>>();
     return_types_found.sort_by_key(|type_expr| type_expr.as_clean_go_type_name(type_env));
     return_types_found.dedup();
 
