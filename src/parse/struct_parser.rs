@@ -235,8 +235,8 @@ pub mod tests {
             StructDefinition {
                 name: "Point".to_string(),
                 fields: vec![
-                    Field::new("x".to_string(), TypeExpr::Int.into_empty_span()),
-                    Field::new("y".to_string(), TypeExpr::Int.into_empty_span()),
+                    Field::new("x".to_string(), TypeExpr::Int(None).into_empty_span()),
+                    Field::new("y".to_string(), TypeExpr::Int(None).into_empty_span()),
                 ],
                 methods: vec![],
                 mut_methods: HashSet::new(),
@@ -260,7 +260,7 @@ pub mod tests {
             StructDefinition {
                 name: "User".to_string(),
                 fields: vec![
-                    Field::new("id".to_string(), TypeExpr::Int.into_empty_span()),
+                    Field::new("id".to_string(), TypeExpr::Int(None).into_empty_span()),
                     Field::new("name".to_string(), TypeExpr::String(None).into_empty_span()),
                 ],
                 methods: vec![],

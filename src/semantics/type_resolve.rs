@@ -796,16 +796,14 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
             }
         }
         TypeExpr::Any
-        | TypeExpr::Bool
         | TypeExpr::Char
-        | TypeExpr::ConstBool(..)
-        | TypeExpr::ConstInt(..)
+        | TypeExpr::Bool(..)
+        | TypeExpr::Int(..)
         | TypeExpr::String(..)
         | TypeExpr::Float
         | TypeExpr::Tag(..)
         | TypeExpr::Go(..)
         | TypeExpr::RawTypeName(..)
-        | TypeExpr::Int
         | TypeExpr::TypeNameInternal(..)
         | TypeExpr::Struct(..)
         | TypeExpr::InlineGo => {}
@@ -1049,14 +1047,12 @@ fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &HashMap<Strin
             }
         }
         TypeExpr::Any
-        | TypeExpr::Bool
         | TypeExpr::Char
-        | TypeExpr::ConstBool(..)
-        | TypeExpr::ConstInt(..)
+        | TypeExpr::Bool(..)
+        | TypeExpr::Int(..)
         | TypeExpr::Float
         | TypeExpr::Go(..)
         | TypeExpr::String(..)
-        | TypeExpr::Int
         | TypeExpr::Struct(..)
         | TypeExpr::TypeNameInternal(..)
         | TypeExpr::Tag(..)
@@ -1669,14 +1665,12 @@ pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
             }
         }
         TypeExpr::Any
-        | TypeExpr::Bool
-        | TypeExpr::ConstBool(_)
+        | TypeExpr::Bool(_)
         | TypeExpr::Char
         | TypeExpr::Float
         | TypeExpr::Go(_)
         | TypeExpr::InlineGo
-        | TypeExpr::Int
-        | TypeExpr::ConstInt(_)
+        | TypeExpr::Int(_)
         | TypeExpr::String(_)
         | TypeExpr::TypeName(..)
         | TypeExpr::Struct(..)

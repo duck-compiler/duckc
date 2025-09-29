@@ -211,7 +211,7 @@ fn walk_access_raw(
                         panic!("need var");
                     };
 
-                    s.push_front(format!("[{res}.as_dgo_int()]"));
+                    s.push_front(format!("[{res}]"));
                 } else {
                     return (res_instr.into(), None);
                 }
@@ -1014,7 +1014,7 @@ impl ValueExpr {
                                         return (instr, None);
                                     }
                                 }
-                                TypeExpr::Int | TypeExpr::ConstInt(..) => {
+                                TypeExpr::Int(..) => {
                                     let (e_instr, e_res_var) = e.0.emit(type_env, env, e.1);
                                     instr.extend(e_instr);
                                     if let Some(e_res_var) = e_res_var {
@@ -1022,12 +1022,12 @@ impl ValueExpr {
                                             panic!("not a var {e_res_var:?}")
                                         };
                                         return_printf.push_str("%v");
-                                        return_printf_vars.push(format!("{var_name}.as_dgo_int()"));
+                                        return_printf_vars.push(format!("{var_name}"));
                                     } else {
                                         return (instr, None);
                                     }
                                 }
-                                TypeExpr::Bool | TypeExpr::ConstBool(..) => {
+                                TypeExpr::Bool(..) => {
                                     let (e_instr, e_res_var) = e.0.emit(type_env, env, e.1);
                                     instr.extend(e_instr);
                                     if let Some(e_res_var) = e_res_var {
@@ -1036,7 +1036,7 @@ impl ValueExpr {
                                         };
                                         return_printf.push_str("%v");
                                         return_printf_vars
-                                            .push(format!("{var_name}.as_dgo_bool()"));
+                                            .push(format!("{var_name}"));
                                     } else {
                                         return (instr, None);
                                     }
@@ -1050,7 +1050,7 @@ impl ValueExpr {
                                         };
                                         return_printf.push_str("%v");
                                         return_printf_vars
-                                            .push(format!("{var_name}.as_dgo_float()"));
+                                            .push(format!("{var_name}"));
                                     } else {
                                         return (instr, None);
                                     }
@@ -1554,7 +1554,7 @@ impl ValueExpr {
                         .join("");
 
                         res.push(IrInstruction::VarAssignment(
-                            format!("{target_res}[{idx_res}.as_dgo_int()]"),
+                            format!("{target_res}[{idx_res}]"),
                             a_res,
                         ));
                     } else if let ValueExpr::Deref(..) = target.0 {
@@ -1765,7 +1765,7 @@ impl ValueExpr {
                 let (mut instr, e_res_var) = expr.0.direct_or_with_instr(type_env, env, span);
                 if let Some(e_res_var) = e_res_var {
                     let res = env.new_var();
-                    instr.push(IrInstruction::VarDecl(res.clone(), "DuckBool".into()));
+                    instr.push(IrInstruction::VarDecl(res.clone(), "bool".into()));
                     instr.push(IrInstruction::VarAssignment(
                         res.clone(),
                         IrValue::BoolNegate(e_res_var.into()),
@@ -1873,7 +1873,7 @@ impl ValueExpr {
 
                 let var = env.new_var();
                 ir.extend([
-                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
+                    IrInstruction::VarDecl(var.clone(), "bool".into()),
                     IrInstruction::Equals(
                         var.clone(),
                         v1_res.unwrap(),
@@ -1901,7 +1901,7 @@ impl ValueExpr {
 
                 let var = env.new_var();
                 ir.extend([
-                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
+                    IrInstruction::VarDecl(var.clone(), "bool".into()),
                     IrInstruction::NotEquals(
                         var.clone(),
                         v1_res.unwrap(),
@@ -1929,7 +1929,7 @@ impl ValueExpr {
 
                 let var = env.new_var();
                 ir.extend([
-                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
+                    IrInstruction::VarDecl(var.clone(), "bool".into()),
                     IrInstruction::LessThan(
                         var.clone(),
                         v1_res.unwrap(),
@@ -1957,7 +1957,7 @@ impl ValueExpr {
 
                 let var = env.new_var();
                 ir.extend([
-                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
+                    IrInstruction::VarDecl(var.clone(), "bool".into()),
                     IrInstruction::LessThanOrEquals(
                         var.clone(),
                         v1_res.unwrap(),
@@ -1985,7 +1985,7 @@ impl ValueExpr {
 
                 let var = env.new_var();
                 ir.extend([
-                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
+                    IrInstruction::VarDecl(var.clone(), "bool".into()),
                     IrInstruction::GreaterThan(
                         var.clone(),
                         v1_res.unwrap(),
@@ -2013,7 +2013,7 @@ impl ValueExpr {
 
                 let var = env.new_var();
                 ir.extend([
-                    IrInstruction::VarDecl(var.clone(), "DuckBool".into()),
+                    IrInstruction::VarDecl(var.clone(), "bool".into()),
                     IrInstruction::GreaterThanOrEquals(
                         var.clone(),
                         v1_res.unwrap(),
@@ -2036,7 +2036,7 @@ impl ValueExpr {
 
                 let result_var = env.new_var();
                 ir.extend([
-                    IrInstruction::VarDecl(result_var.clone(), "DuckBool".into()),
+                    IrInstruction::VarDecl(result_var.clone(), "bool".into()),
                     IrInstruction::VarAssignment(result_var.clone(), lhs_val),
                 ]);
 
@@ -2066,7 +2066,7 @@ impl ValueExpr {
 
                 let result_var = env.new_var();
                 ir.extend([
-                    IrInstruction::VarDecl(result_var.clone(), "DuckBool".into()),
+                    IrInstruction::VarDecl(result_var.clone(), "bool".into()),
                     IrInstruction::VarAssignment(result_var.clone(), lhs_val),
                 ]);
 
@@ -2221,24 +2221,24 @@ mod tests {
             (
                 "1 + 1",
                 vec![
-                    decl("var_0", "DuckInt"),
+                    decl("var_0", "int"),
                     IrInstruction::Add(
                         "var_0".into(),
                         IrValue::Int(1),
                         IrValue::Int(1),
-                        TypeExpr::Int,
+                        TypeExpr::Int(Some(1)),
                     ),
                 ],
             ),
             (
                 "1 * 1",
                 vec![
-                    decl("var_0", "DuckInt"),
+                    decl("var_0", "int"),
                     IrInstruction::Mul(
                         "var_0".into(),
                         IrValue::Int(1),
                         IrValue::Int(1),
-                        TypeExpr::Int,
+                        TypeExpr::Int(Some(1)),
                     ),
                 ],
             ),
@@ -2253,7 +2253,7 @@ mod tests {
             (
                 "!true",
                 vec![
-                    decl("var_0", "DuckBool"),
+                    decl("var_0", "bool"),
                     IrInstruction::VarAssignment(
                         "var_0".into(),
                         IrValue::BoolNegate(IrValue::Bool(true).into()),
@@ -2266,12 +2266,12 @@ mod tests {
             (
                 "1 == 2",
                 vec![
-                    decl("var_0", "DuckBool"),
+                    decl("var_0", "bool"),
                     IrInstruction::Equals(
                         "var_0".into(),
                         IrValue::Int(1),
                         IrValue::Int(2),
-                        TypeExpr::Int,
+                        TypeExpr::Int(Some(1)),
                     ),
                 ],
             ),
@@ -2288,49 +2288,49 @@ mod tests {
             (
                 ".Int[][.Int[]]",
                 vec![
-                    IrInstruction::VarDecl("var_0".into(), "[]DuckInt".into()),
+                    IrInstruction::VarDecl("var_0".into(), "[]int".into()),
                     IrInstruction::VarAssignment(
                         "var_0".into(),
-                        IrValue::Array("[]DuckInt".into(), vec![]),
+                        IrValue::Array("[]int".into(), vec![]),
                     ),
-                    IrInstruction::VarDecl("var_1".into(), "[][]DuckInt".into()),
+                    IrInstruction::VarDecl("var_1".into(), "[][]int".into()),
                     IrInstruction::VarAssignment(
                         "var_1".into(),
-                        IrValue::Array("[][]DuckInt".into(), vec![IrValue::Var("var_0".into())]),
+                        IrValue::Array("[][]int".into(), vec![IrValue::Var("var_0".into())]),
                     ),
                 ],
             ),
             (
                 "[1]",
                 vec![
-                    IrInstruction::VarDecl("var_0".into(), "[]DuckInt".into()),
+                    IrInstruction::VarDecl("var_0".into(), "[]int".into()),
                     IrInstruction::VarAssignment(
                         "var_0".into(),
-                        IrValue::Array("[]DuckInt".into(), vec![IrValue::Int(1)]),
+                        IrValue::Array("[]int".into(), vec![IrValue::Int(1)]),
                     ),
                 ],
             ),
             (
                 "{ x: 123 }",
                 vec![
-                    decl("var_0", "interface {\n   Hasx[DuckInt]\n}"),
+                    decl("var_0", "interface {\n   Hasx[int]\n}"),
                     IrInstruction::VarAssignment(
                         "var_0".into(),
                         IrValue::Duck(
-                            "Duck_x_DuckInt".into(),
+                            "Duck_x_int".into(),
                             vec![("x".into(), IrValue::Int(123))],
                         ),
                     ),
                 ],
             ),
             (
-                "match (1) { Int @x => 2 }",
+                "match 1 { Int @x => 2 }",
                 vec![
-                    decl("var_0", "DuckInt"),
+                    decl("var_0", "int"),
                     IrInstruction::SwitchType(
                         IrValue::Int(1),
                         vec![Case {
-                            type_name: "DuckInt".to_string(),
+                            type_name: "int".to_string(),
                             instrs: vec![IrInstruction::VarAssignment(
                                 "var_0".to_string(),
                                 IrValue::Int(2),
@@ -2344,20 +2344,20 @@ mod tests {
                 ],
             ),
             (
-                "match (1 + 1) { Int @x => 100 }",
+                "match 1 + 1 { Int @x => 100 }",
                 vec![
-                    decl("var_0", "DuckInt"),
+                    decl("var_0", "int"),
                     IrInstruction::Add(
                         "var_0".into(),
                         IrValue::Int(1),
                         IrValue::Int(1),
-                        TypeExpr::Int,
+                        TypeExpr::Int(None),
                     ),
-                    decl("var_1", "DuckInt"),
+                    decl("var_1", "int"),
                     IrInstruction::SwitchType(
                         IrValue::Var("var_0".into()),
                         vec![Case {
-                            type_name: "DuckInt".to_string(),
+                            type_name: "int".to_string(),
                             instrs: vec![IrInstruction::VarAssignment(
                                 "var_1".to_string(),
                                 IrValue::Int(100),

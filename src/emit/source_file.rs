@@ -136,15 +136,15 @@ impl SourceFile {
 	case string:
 		s := target.(string)
 		return fmt.Sprintf("\"%s\"", s)
-	case ConcDuckInt:
-		s := target.(ConcDuckInt)
-		return fmt.Sprintf("%d", s.as_dgo_int())
-	case ConcDuckFloat:
-		s := target.(ConcDuckFloat)
-		return fmt.Sprintf("%f", s.as_dgo_float32())
-	case ConcDuckBool:
-		s := target.(ConcDuckBool)
-		if s.as_dgo_bool() {
+	case int:
+		s := target.(int)
+		return fmt.Sprintf("%d", s)
+	case float32:
+		s := target.(float32)
+		return fmt.Sprintf("%f", s)
+	case bool:
+		s := target.(bool)
+		if s {
 			return "true"
 		} else {
 			return "false"

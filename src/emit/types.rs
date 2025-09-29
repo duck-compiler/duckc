@@ -10,12 +10,10 @@ use crate::{
 
 pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
     match primitive_type_expr {
-        TypeExpr::Int => "int",
         TypeExpr::Float => "float32",
-        TypeExpr::Bool => "bool",
         TypeExpr::Char => "rune",
-        TypeExpr::ConstInt(..) => "int",
-        TypeExpr::ConstBool(..) => "bool",
+        TypeExpr::Int(..) => "int",
+        TypeExpr::Bool(..) => "bool",
         TypeExpr::String(..) => "string",
         _ => panic!("That's not a primitive"),
     }
@@ -47,12 +45,10 @@ pub fn string_to_byte_string(input_str: &str) -> String {
 pub fn primitive_conc_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
     match primitive_type_expr {
         TypeExpr::String(..) => "string",
-        TypeExpr::Int => "ConcDuckInt",
-        TypeExpr::Float => "ConcDuckFloat",
-        TypeExpr::Bool => "ConcDuckBool",
-        TypeExpr::Char => "ConcDuckChar",
-        TypeExpr::ConstInt(int) => Box::leak(Box::new(format!("ConstInt_{int}"))),
-        TypeExpr::ConstBool(bool) => Box::leak(Box::new(format!("ConstBool_{bool}"))),
+        TypeExpr::Int(..) => "int",
+        TypeExpr::Float => "float32",
+        TypeExpr::Bool(..) => "bool",
+        TypeExpr::Char => "rune",
         _ => panic!("That's not a primitive"),
     }
 }
@@ -60,12 +56,10 @@ pub fn primitive_conc_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
 pub fn primitive_type_name(primitive_type_expr: &TypeExpr) -> &'static str {
     match primitive_type_expr {
         TypeExpr::String(..) => "string",
-        TypeExpr::Int => "DuckInt",
-        TypeExpr::Float => "DuckFloat",
-        TypeExpr::Bool => "DuckBool",
-        TypeExpr::Char => "DuckChar",
-        TypeExpr::ConstInt(int) => Box::leak(Box::new(format!("ConstInt_{int}"))),
-        TypeExpr::ConstBool(bool) => Box::leak(Box::new(format!("ConstBool_{bool}"))),
+        TypeExpr::Int(..) => "int",
+        TypeExpr::Float => "float32",
+        TypeExpr::Bool(..) => "bool",
+        TypeExpr::Char => "rune",
         _ => panic!("That's not a primitive"),
     }
 }
@@ -454,12 +448,10 @@ impl TypeExpr {
             TypeExpr::RawTypeName(..) => panic!(),
             TypeExpr::Array(t) => format!("[]{}", t.0.as_go_type_annotation(type_env)),
             TypeExpr::Any => "interface{}".to_string(),
-            TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
-            TypeExpr::ConstBool(b) => primitive_type_name(&TypeExpr::ConstBool(*b)).to_string(),
             TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
-            TypeExpr::Bool => "DuckBool".to_string(),
+            TypeExpr::Bool(..) => "bool".to_string(),
             TypeExpr::InlineGo => "any".to_string(),
-            TypeExpr::Int => "DuckInt".to_string(),
+            TypeExpr::Int(..) => "int".to_string(),
             TypeExpr::Float => "DuckFloat".to_string(),
             TypeExpr::Char => "DuckChar".to_string(),
             TypeExpr::String(..) => "string".to_string(),
@@ -522,14 +514,12 @@ impl TypeExpr {
             TypeExpr::Alias(..) => panic!("alias should be replaced"),
             TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
             TypeExpr::RawTypeName(..) => panic!(),
-            TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
-            TypeExpr::ConstBool(b) => primitive_type_name(&TypeExpr::ConstBool(*b)).to_string(),
             TypeExpr::Array(t) => format!("[]{}", t.0.as_go_concrete_annotation(type_env)),
             TypeExpr::Any => "interface{}".to_string(),
-            TypeExpr::Bool => "ConcDuckBool".to_string(),
-            TypeExpr::Int => "ConcDuckInt".to_string(),
-            TypeExpr::Float => "ConcDuckFloat".to_string(),
-            TypeExpr::Char => "ConcDuckChar".to_string(),
+            TypeExpr::Bool(..) => "bool".to_string(),
+            TypeExpr::Int(..) => "int".to_string(),
+            TypeExpr::Float => "float32".to_string(),
+            TypeExpr::Char => "rune".to_string(),
             TypeExpr::String(..) => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
@@ -597,15 +587,13 @@ impl TypeExpr {
             TypeExpr::RawTypeName(_, ident, _) => {
                 panic!("{ident:?}")
             }
-            TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
-            TypeExpr::ConstBool(b) => primitive_type_name(&TypeExpr::ConstBool(*b)).to_string(),
             TypeExpr::String(_) => "string".to_string(),
             TypeExpr::Array(t) => format!("Array_{}", t.0.as_clean_go_type_name(type_env)),
             TypeExpr::Any => "Any".to_string(),
-            TypeExpr::Bool => "DuckBool".to_string(),
-            TypeExpr::Int => "DuckInt".to_string(),
-            TypeExpr::Float => "DuckFloat".to_string(),
-            TypeExpr::Char => "DuckChar".to_string(),
+            TypeExpr::Bool(..) => "bool".to_string(),
+            TypeExpr::Int(..) => "int".to_string(),
+            TypeExpr::Float => "float32".to_string(),
+            TypeExpr::Char => "rune".to_string(),
             TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
@@ -689,14 +677,12 @@ impl TypeExpr {
             TypeExpr::RawTypeName(_, ident, _) => {
                 panic!("{ident:?}")
             }
-            TypeExpr::ConstInt(i) => primitive_type_name(&TypeExpr::ConstInt(*i)).to_string(),
-            TypeExpr::ConstBool(b) => primitive_type_name(&TypeExpr::ConstBool(*b)).to_string(),
             TypeExpr::Array(t) => format!("Array_{}", t.0.as_clean_go_type_name(type_env)),
             TypeExpr::Any => "Any".to_string(),
-            TypeExpr::Bool => "DuckBool".to_string(),
-            TypeExpr::Int => "DuckInt".to_string(),
-            TypeExpr::Float => "DuckFloat".to_string(),
-            TypeExpr::Char => "DuckChar".to_string(),
+            TypeExpr::Bool(..) => "bool".to_string(),
+            TypeExpr::Int(..) => "int".to_string(),
+            TypeExpr::Float => "float32".to_string(),
+            TypeExpr::Char => "rune".to_string(),
             TypeExpr::String(..) => "string".to_string(),
             TypeExpr::Tag(identifier) => format!("Tag__{identifier}"),
             TypeExpr::Go(identifier) => identifier.clone(),

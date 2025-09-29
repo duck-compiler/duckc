@@ -624,13 +624,6 @@ fn find_type_methods(
 fn find_special_method_names(live_set: &HashSet<String>) -> HashSet<String> {
     live_set
         .iter()
-        .filter(|name| {
-            name.contains("as_dgo_string")
-                || name.contains("as_dgo_int")
-                || name.contains("as_dgo_float32")
-                || name.contains("as_dgo_bool")
-                || name.contains("as_dgo_rune")
-        })
         .cloned()
         .collect()
 }

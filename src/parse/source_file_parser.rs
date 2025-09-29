@@ -896,7 +896,7 @@ mod tests {
                                 },
                                 Field {
                                     name: "y".to_string(),
-                                    type_expr: TypeExpr::Int.into_empty_span(),
+                                    type_expr: TypeExpr::Int(None).into_empty_span(),
                                 },
                             ],
                         })
