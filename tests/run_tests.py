@@ -336,6 +336,7 @@ def compile_and_run_with_error_assert(compiler_path, program_path, test_stats):
         if compile_result.returncode == 0:
             print(f"{SKIP} {COLOR_YELLOW}test {COLOR_RESET}{program_path} {COLOR_GRAY}-> {COLOR_RED}compilation successful. expected error{COLOR_RESET}")
             test_stats[STAT_SKIPPED] += 1
+            return
 
         if VERBOSE:
             print(f"  {COLOR_RED}STDERR:\n{indent_all_lines_with_tab(compile_result.stderr)}{COLOR_RESET}")
