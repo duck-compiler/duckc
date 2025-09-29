@@ -4,10 +4,10 @@ use ::time::{Duration, Millis, Seconds, Minutes, Hours, Days};
 
 fn sleep(d: Duration) {
     match (d) {
-        Millis @millis => go { time.Sleep(time.Duration(millis.Getmillis().as_dgo_int()) * time.Millisecond) },
-        Seconds @seconds => go { time.Sleep(time.Duration(seconds.Getseconds().as_dgo_int()) * time.Second) },
-        Minutes @minutes => go { time.Sleep(time.Duration(minutes.Getminutes().as_dgo_int()) * time.Minute) },
-        Hours @hours => go { time.Sleep(time.Duration(hours.Gethours().as_dgo_int()) * time.Hour) },
-        Days @days => go { time.Sleep(time.Duration(days.Getdays().as_dgo_int()) * 24 * time.Hour) },
+        Millis @millis => go { time.Sleep(time.Duration(millis.Getmillis()) * time.Millisecond) },
+        Seconds @seconds => go { time.Sleep(time.Duration(seconds.Getseconds()) * time.Second) },
+        Minutes @minutes => go { time.Sleep(time.Duration(minutes.Getminutes()) * time.Minute) },
+        Hours @hours => go { time.Sleep(time.Duration(hours.Gethours()) * time.Hour) },
+        Days @days => go { time.Sleep(time.Duration(days.Getdays()) * 24 * time.Hour) },
     }
 }

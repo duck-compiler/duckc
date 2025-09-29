@@ -4,7 +4,7 @@ use go "strconv";
 fn to_upper(s: String) -> String {
     let res: String = "";
     go {
-        res = ConcDuckString { value: strings.ToUpper(s.as_dgo_string()) }
+        res = strings.ToUpper(s)
     }
     return res;
 }
@@ -21,7 +21,7 @@ test "strings: to_upper" {
 fn to_lower(s: String) -> String {
     let res: String = "";
     go {
-        res = ConcDuckString { value: strings.ToLower(s.as_dgo_string()) }
+        res = strings.ToLower(s)
     }
     return res;
 }
@@ -29,8 +29,7 @@ fn to_lower(s: String) -> String {
 fn from_int(x: Int) -> String {
     let res: String = "";
     go {
-        tmp := strconv.Itoa(x.as_dgo_int())
-        res = ConcDuckString { value: tmp }
+        res = strconv.Itoa(x)
     }
     return res;
 }
@@ -38,8 +37,8 @@ fn from_int(x: Int) -> String {
 fn to_int(x: String) -> Int {
     let res: Int = 0;
     go {
-        tmp, _ := strconv.Atoi(x.as_dgo_string())
-        res = ConcDuckInt { value: tmp }
+        tmp, _ := strconv.Atoi(x)
+        res = tmp
     }
     return res;
 }
@@ -47,8 +46,7 @@ fn to_int(x: String) -> Int {
 fn from_bool(x: Bool) -> String {
     let res: String = "";
     go {
-        tmp := strconv.FormatBool(x.as_dgo_bool())
-        res = ConcDuckString { value: tmp }
+        res = strconv.FormatBool(x)
     }
     return res;
 }
