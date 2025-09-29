@@ -556,7 +556,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             }
         }
         ValueExpr::RawVariable(..) => panic!("raw variable shouldn't be here"),
-        ValueExpr::Variable(_, name, _) => {
+        ValueExpr::Variable(_, name, _, _) => {
             if mangle_env.is_top_level_ident(name) {
                 let mut v = Vec::new();
                 v.extend_from_slice(&mangle_env.global_prefix);

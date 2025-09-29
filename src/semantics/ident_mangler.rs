@@ -542,7 +542,7 @@ pub fn mangle_value_expr(
             if let Some(mangled) = mangle_env.mangle_ident(*is_global, prefix, path) {
                 *path = mangled;
             }
-            *value_expr = ValueExpr::Variable(true, mangle(path), None);
+            *value_expr = ValueExpr::Variable(true, mangle(path), None, None);
         }
         ValueExpr::Variable(..) => panic!("variable shouldn't be here. {value_expr:?}"),
         ValueExpr::If {

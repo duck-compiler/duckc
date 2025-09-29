@@ -24,6 +24,10 @@ type D struct {
 }
 
 func main() {
+	var aa any
+	aa = true
+	_ = aa
+
 	a := &A{0}
 	b := &B{&a}
 	x := D{

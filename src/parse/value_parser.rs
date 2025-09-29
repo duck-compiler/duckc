@@ -65,7 +65,7 @@ pub enum ValueExpr {
     Float(f64),
     Char(char),
     RawVariable(bool, Vec<String>),
-    Variable(bool, String, Option<TypeExpr>),
+    Variable(bool, String, Option<TypeExpr>, Option<bool>),
     If {
         condition: Box<Spanned<ValueExpr>>,
         then: Box<Spanned<ValueExpr>>,
