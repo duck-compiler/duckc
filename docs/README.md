@@ -19,12 +19,15 @@ Welcome to the offical book of the duck programming languge. The language for hy
   - [Modules](007-foundation-modules.md)
   - [Comments](008-foundation-comments.md)
   - [Control Flow](009-foundation-control-flow.md)
+  - [Structs - Structure your data](010-foundation-structs.md)
+  - [Ducks - Types types types](011-foundation-ducks.md)
 
 - **Advanced**
-  - [Introduction to the chapter Advanced](010-advanced-intro.md)
-  - [Typesystem](011-advanced-typesystem.md)
-  - [Function Penetration](012-advanced-function-penetration.md)
-  - [Go Interop](013-advanced-go-interop.md)
+  - [Introduction to the chapter Advanced](012-advanced-intro.md)
+  - [Typesystem](013-advanced-typesystem.md)
+  - [Function Penetration](014-advanced-function-penetration.md)
+  - [Go Interop](015-advanced-go-interop.md)
+  - [Sus Functions - How to suspend](016-advanced-sus-funs.md)
 
 ---
 

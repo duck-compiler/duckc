@@ -1,6 +1,6 @@
 # Control Flow
 
-[< Previous](008-foundation-comments.md) | [Home](README.md) | [Next >](010-advanced-intro.md)
+[< Previous](008-foundation-comments.md) | [Home](README.md) | [Next >](010-foundation-structs.md)
 
 ---
 
@@ -46,6 +46,6 @@ fn main() {
 
 ---
 
-[< Previous](008-foundation-comments.md) | [Home](README.md) | [Next >](010-advanced-intro.md)
+[< Previous](008-foundation-comments.md) | [Home](README.md) | [Next >](010-foundation-structs.md)
 
 <div align="center">🦆</div>
