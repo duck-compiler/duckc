@@ -1,5 +1,4 @@
 use crate::emit::{
-    types::{primitive_conc_type_name, primitive_native_type_name},
     value::{Case, IrInstruction, IrValue},
 };
 
