@@ -6,7 +6,7 @@
 
 # 1. Installation
 In this step, you'll install [dargo](./dargo.md) to you computer. Dargo comes with everything needed to setup and build a project.
-Clone the master branch ouf our github repository.
+Clone the master branch of our github repository.
 
 ```sh
 git clone git@github.com:duck-compiler/duckc.git
