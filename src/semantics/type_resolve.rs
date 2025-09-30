@@ -5,10 +5,11 @@ use std::{
 };
 
 use chumsky::container::Container;
+use colored::Colorize;
 
 use crate::{
     parse::{
-        SS, Spanned, SpannedMutRef,
+        SS, Spanned, SpannedMutRef, failure_with_occurence,
         duckx_component_parser::DuckxComponent,
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         source_file_parser::SourceFile,
@@ -2086,15 +2087,6 @@ fn typeresolve_function_definition(
         type_env,
     );
 
-    let return_type = resolve_implicit_function_return_type(function_definition, type_env);
-    if let Some(required_return_type) = &function_definition.return_type {
-        if let Some(given_return_type) = &return_type.ok() {
-            check_type_compatability(&required_return_type, &(given_return_type.clone(), function_definition.value_expr.1), type_env);
-        } else {
-            panic!("missing return in function")
-        }
-    }
-
     type_env.pop_identifier_types();
 }
 
@@ -2273,8 +2265,32 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
                 let method_def = methods
                     .iter()
-                    .find(|m| m.name.as_str() == field_name.as_str())
-                    .unwrap();
+                    .find(|m| m.name.as_str() == field_name.as_str());
+
+                let method_def = match method_def {
+                    Some(method) => method,
+                    None => {
+                        let span = target_obj.as_ref().1;
+                        failure_with_occurence(
+                            span.context.file_name,
+                            "Invalid Field Access".to_string(),
+                            {
+                                let mut span = span.clone();
+                                span.end += 2;
+                                span
+                            },
+                            vec![(
+                                format!(
+                                    "this is of type {} and it has no field '{}'",
+                                    struct_name.bright_yellow(),
+                                    field_name.bright_blue()
+                                ),
+                                span.clone(),
+                            )],
+                            span.context.file_contents,
+                        );
+                    }
+                };
 
                 if !type_env.has_method_header(mangled_name_to_check.as_str()) {
                     let generics_instance = method_def
@@ -2601,141 +2617,4 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         | ValueExpr::Return(None)
         | ValueExpr::Continue => {}
     }
-}
-
-// todo(@mvmo): typeinference
-// resolve implicit type and attach it to variables for type inference
-fn resolve_implicit_function_return_type(
-    fun_def: &FunctionDefintion,
-    type_env: &mut TypeEnv,
-) -> Result<TypeExpr, String> {
-    // check against annotated return type
-    fn flatten_returns(
-        value_expr: &ValueExpr,
-        return_types_found: &mut Vec<TypeExpr>,
-        type_env: &mut TypeEnv,
-    ) {
-        match value_expr {
-            ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
-                flatten_returns(&v.0, return_types_found, type_env)
-            }
-            ValueExpr::HtmlString(contents) => {
-                for c in contents {
-                    if let ValHtmlStringContents::Expr(e) = c {
-                        flatten_returns(&e.0, return_types_found, type_env);
-                    }
-                }
-            }
-            ValueExpr::FormattedString(contents) => {
-                for c in contents {
-                    if let ValFmtStringContents::Expr(e) = c {
-                        flatten_returns(&e.0, return_types_found, type_env);
-                    }
-                }
-            }
-            ValueExpr::Array(_, exprs) => {
-                for expr in exprs {
-                    flatten_returns(&expr.0, return_types_found, type_env);
-                }
-            }
-            ValueExpr::If {
-                condition,
-                then,
-                r#else,
-            } => {
-                flatten_returns(&condition.as_ref().0, return_types_found, type_env);
-                flatten_returns(&then.as_ref().0, return_types_found, type_env);
-                r#else.as_ref().inspect(|r#else| {
-                    flatten_returns(&r#else.as_ref().0, return_types_found, type_env);
-                });
-            }
-            ValueExpr::While { condition, body } => {
-                flatten_returns(&condition.as_ref().0, return_types_found, type_env);
-                flatten_returns(&body.as_ref().0, return_types_found, type_env)
-            }
-            ValueExpr::Block(items) => items
-                .iter()
-                .for_each(|item| flatten_returns(&item.0, return_types_found, type_env)),
-            ValueExpr::Return(Some(value_expr)) => {
-                return_types_found.push(TypeExpr::from_value_expr(value_expr, type_env));
-            }
-            ValueExpr::Return(None) => {
-                return_types_found.push(TypeExpr::Tuple(vec![]));
-            }
-            ValueExpr::VarAssign(assignment) => {
-                flatten_returns(
-                    &assignment.as_ref().0.value_expr.0,
-                    return_types_found,
-                    type_env,
-                );
-            }
-            ValueExpr::VarDecl(declaration) => {
-                flatten_returns(&declaration.0.initializer.0, return_types_found, type_env);
-            }
-            ValueExpr::Add(left, right)
-            | ValueExpr::Sub(left, right)
-            | ValueExpr::Mod(left, right)
-            | ValueExpr::Div(left, right)
-            | ValueExpr::Mul(left, right) => {
-                flatten_returns(&left.as_ref().0, return_types_found, type_env);
-                flatten_returns(&right.as_ref().0, return_types_found, type_env);
-            }
-            ValueExpr::BoolNegate(value_expr) => {
-                flatten_returns(&value_expr.as_ref().0, return_types_found, type_env);
-            }
-            ValueExpr::Equals(lhs, rhs)
-            | ValueExpr::NotEquals(lhs, rhs)
-            | ValueExpr::LessThan(lhs, rhs)
-            | ValueExpr::LessThanOrEquals(lhs, rhs)
-            | ValueExpr::GreaterThan(lhs, rhs)
-            | ValueExpr::GreaterThanOrEquals(lhs, rhs)
-            | ValueExpr::And(lhs, rhs)
-            | ValueExpr::Or(lhs, rhs) => {
-                flatten_returns(&lhs.as_ref().0, return_types_found, type_env);
-                flatten_returns(&rhs.as_ref().0, return_types_found, type_env);
-            }
-            ValueExpr::FunctionCall { .. }
-            | ValueExpr::Int(..)
-            | ValueExpr::InlineGo(..)
-            | ValueExpr::String(..)
-            | ValueExpr::Bool(..)
-            | ValueExpr::Float(..)
-            | ValueExpr::Char(..)
-            | ValueExpr::Tuple(..)
-            | ValueExpr::Break
-            | ValueExpr::Continue
-            | ValueExpr::Duck(..)
-            | ValueExpr::Struct { .. }
-            | ValueExpr::FieldAccess { .. }
-            | ValueExpr::Lambda(..)
-            | ValueExpr::Variable(..)
-            | ValueExpr::RawVariable(..)
-            | ValueExpr::Tag(..)
-            | ValueExpr::Match { .. }
-            | ValueExpr::ArrayAccess(..) => {}
-        }
-    }
-
-    let mut return_types_found = Vec::new();
-    flatten_returns(&fun_def.value_expr.0, &mut return_types_found, type_env);
-
-    let mut return_types_found = return_types_found.iter().map(|rt| rt.unconst()).collect::<Vec<_>>();
-    return_types_found.sort_by_key(|type_expr| type_expr.as_clean_go_type_name(type_env));
-    return_types_found.dedup();
-
-    if return_types_found.is_empty() {
-        return Ok(TypeExpr::Tuple(vec![]));
-    }
-
-    if return_types_found.len() == 1 {
-        return Ok(return_types_found.first().unwrap().clone());
-    }
-
-    // TODO add spans
-    return Ok(TypeExpr::Or(
-        return_types_found
-            .iter()
-            .map(|type_expr| type_expr.clone().into_empty_span())
-            .collect::<Vec<_>>(),
-    ));
 }

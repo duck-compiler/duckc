@@ -775,11 +775,18 @@ impl TypeExpr {
                     generics: _,
                 } = type_env.get_struct_def(r#struct.as_str());
 
-                methods.iter().any(|f| f.name.as_str() == name.as_str())
-                    || type_env
-                        .get_generic_methods(struct_name.clone())
-                        .iter()
-                        .any(|x| x.name.as_str() == name.as_str())
+                let has_method_with_name = methods
+                    .iter()
+                    .any(|f| f.name.as_str() == name.as_str());
+
+                let has_generic_method_with_name = type_env
+                    .get_generic_methods(struct_name.clone())
+                    .iter()
+                    .any(|x| {
+                        x.name.as_str() == name.as_str()
+                    });
+
+                return has_method_with_name || has_generic_method_with_name;
             }
             _ => false,
         }
