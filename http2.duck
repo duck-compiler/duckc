@@ -1,7 +1,7 @@
-type LolProps = { x: { x: String }, y: Bool, z: String[]};
+type LolProps = { x: { x: String }, y: Bool, z: String[] };
 
 component NoProps() tsx {
-return <p>no props 2</p>;
+    return <p>no props 2</p>;
 }
 
 component ABC() tsx {

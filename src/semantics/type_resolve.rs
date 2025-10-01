@@ -5,10 +5,11 @@ use std::{
 };
 
 use chumsky::container::Container;
+use colored::Colorize;
 
 use crate::{
     parse::{
-        SS, Spanned, SpannedMutRef,
+        SS, Spanned, SpannedMutRef, failure_with_occurence,
         duckx_component_parser::DuckxComponent,
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         source_file_parser::SourceFile,
@@ -796,17 +797,14 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
             }
         }
         TypeExpr::Any
-        | TypeExpr::Bool
         | TypeExpr::Char
-        | TypeExpr::ConstBool(..)
-        | TypeExpr::ConstInt(..)
-        | TypeExpr::ConstString(..)
+        | TypeExpr::Bool(..)
+        | TypeExpr::Int(..)
+        | TypeExpr::String(..)
         | TypeExpr::Float
         | TypeExpr::Tag(..)
         | TypeExpr::Go(..)
         | TypeExpr::RawTypeName(..)
-        | TypeExpr::String
-        | TypeExpr::Int
         | TypeExpr::TypeNameInternal(..)
         | TypeExpr::Struct(..)
         | TypeExpr::InlineGo => {}
@@ -1050,15 +1048,12 @@ fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &HashMap<Strin
             }
         }
         TypeExpr::Any
-        | TypeExpr::Bool
         | TypeExpr::Char
-        | TypeExpr::ConstBool(..)
-        | TypeExpr::ConstInt(..)
-        | TypeExpr::ConstString(..)
+        | TypeExpr::Bool(..)
+        | TypeExpr::Int(..)
         | TypeExpr::Float
         | TypeExpr::Go(..)
-        | TypeExpr::String
-        | TypeExpr::Int
+        | TypeExpr::String(..)
         | TypeExpr::Struct(..)
         | TypeExpr::TypeNameInternal(..)
         | TypeExpr::Tag(..)
@@ -1671,16 +1666,13 @@ pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
             }
         }
         TypeExpr::Any
-        | TypeExpr::Bool
-        | TypeExpr::ConstBool(_)
+        | TypeExpr::Bool(_)
         | TypeExpr::Char
         | TypeExpr::Float
         | TypeExpr::Go(_)
         | TypeExpr::InlineGo
-        | TypeExpr::Int
-        | TypeExpr::ConstInt(_)
-        | TypeExpr::String
-        | TypeExpr::ConstString(_)
+        | TypeExpr::Int(_)
+        | TypeExpr::String(_)
         | TypeExpr::TypeName(..)
         | TypeExpr::Struct(..)
         | TypeExpr::Tag(..)
@@ -1813,7 +1805,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .for_each(|type_def| {
             if let TypeExpr::And(_) = &mut type_def.type_expression.0 {
                 type_def.type_expression.0 =
-                    dbg!(translate_interception_to_duck(&type_def.type_expression.0));
+                    translate_interception_to_duck(&type_def.type_expression.0);
             }
         });
 
@@ -1834,8 +1826,8 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 vec![(Some("props".to_string()), tsx_component.props_type.clone())],
                 Some(Box::new((
                     TypeExpr::Tuple(vec![
-                        (TypeExpr::String, tsx_component.typescript_source.1),
-                        (TypeExpr::String, tsx_component.typescript_source.1),
+                        (TypeExpr::String(None), tsx_component.typescript_source.1),
+                        (TypeExpr::String(None), tsx_component.typescript_source.1),
                     ]),
                     tsx_component.typescript_source.1,
                 ))),
@@ -2062,18 +2054,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     type_env.function_definitions = source_file.function_definitions.clone();
 }
 
-pub fn replace_if_const(def_type: &TypeExpr, v: &mut ValueExpr) {
-    if let ValueExpr::String(_, is_const @ true) = v
-        && let TypeExpr::String = def_type
-    {
-        *is_const = false;
-    } else if let ValueExpr::Variable(_, _, Some(ty @ TypeExpr::ConstString(..))) = v
-        && let TypeExpr::String = def_type
-    {
-        *ty = TypeExpr::String;
-    }
-}
-
 fn typeresolve_function_definition(
     function_definition: &mut FunctionDefintion,
     type_env: &mut TypeEnv,
@@ -2106,6 +2086,7 @@ fn typeresolve_function_definition(
         ),
         type_env,
     );
+
     type_env.pop_identifier_types();
 }
 
@@ -2200,7 +2181,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                         typeresolve_value_expr((&mut e.0, e.1), type_env)
                     }
                     ValFmtStringContents::String(s) => {
-                        type_env.insert_type(TypeExpr::ConstString(s.clone()));
+                        type_env.insert_type(TypeExpr::String(Some(s.clone())));
                         type_env.check_for_tailwind(s);
                     }
                 }
@@ -2218,9 +2199,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             }
 
             for expr in exprs {
-                if let Some(ty) = ty {
-                    replace_if_const(&ty.0, &mut expr.0);
-                }
                 typeresolve_value_expr((&mut expr.0, expr.1), type_env);
             }
             let ty = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
@@ -2287,8 +2265,32 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
                 let method_def = methods
                     .iter()
-                    .find(|m| m.name.as_str() == field_name.as_str())
-                    .unwrap();
+                    .find(|m| m.name.as_str() == field_name.as_str());
+
+                let method_def = match method_def {
+                    Some(method) => method,
+                    None => {
+                        let span = target_obj.as_ref().1;
+                        failure_with_occurence(
+                            span.context.file_name,
+                            "Invalid Field Access".to_string(),
+                            {
+                                let mut span = span.clone();
+                                span.end += 2;
+                                span
+                            },
+                            vec![(
+                                format!(
+                                    "this is of type {} and it has no field '{}'",
+                                    struct_name.bright_yellow(),
+                                    field_name.bright_blue()
+                                ),
+                                span.clone(),
+                            )],
+                            span.context.file_contents,
+                        );
+                    }
+                };
 
                 if !type_env.has_method_header(mangled_name_to_check.as_str()) {
                     let generics_instance = method_def
@@ -2435,8 +2437,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             params
                 .iter_mut()
                 .zip(header.params.iter())
-                .for_each(|(param, param_def)| {
-                    replace_if_const(&param_def.0, &mut param.0);
+                .for_each(|(param, _)| {
                     typeresolve_value_expr((&mut param.0, param.1), type_env);
                 });
         }
@@ -2509,8 +2510,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             let def = type_env.get_struct_def(name.as_str()).clone();
 
             fields.iter_mut().zip(def.fields.iter()).for_each(
-                |((_field_name, value_expr), field_def)| {
-                    replace_if_const(&field_def.type_expr.0, &mut value_expr.0);
+                |((_field_name, value_expr), _)| {
                     typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
                 },
             );
@@ -2531,7 +2531,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 type_env,
             );
             let target_type = TypeExpr::from_value_expr(&assignment.0.target, type_env);
-            replace_if_const(&target_type, &mut assignment.0.value_expr.0);
             typeresolve_value_expr(
                 (&mut assignment.0.value_expr.0, assignment.0.value_expr.1),
                 type_env,
@@ -2605,7 +2604,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         }
         ValueExpr::String(str, _) => {
             type_env.check_for_tailwind(str);
-            type_env.insert_type(TypeExpr::ConstString(str.clone()));
+            type_env.insert_type(TypeExpr::String(Some(str.clone())));
         }
         ValueExpr::Tag(tag) => {
             type_env.insert_type(TypeExpr::Tag(tag.clone()));
@@ -2618,141 +2617,4 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         | ValueExpr::Return(None)
         | ValueExpr::Continue => {}
     }
-}
-
-// todo(@mvmo): typeinference
-// resolve implicit type and attach it to variables for type inference
-#[allow(dead_code)]
-fn resolve_implicit_function_return_type(
-    fun_def: &FunctionDefintion,
-    type_env: &mut TypeEnv,
-) -> Result<TypeExpr, String> {
-    // check against annotated return type
-    fn flatten_returns(
-        value_expr: &ValueExpr,
-        return_types_found: &mut Vec<TypeExpr>,
-        type_env: &mut TypeEnv,
-    ) {
-        match value_expr {
-            ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
-                flatten_returns(&v.0, return_types_found, type_env)
-            }
-            ValueExpr::HtmlString(contents) => {
-                for c in contents {
-                    if let ValHtmlStringContents::Expr(e) = c {
-                        flatten_returns(&e.0, return_types_found, type_env);
-                    }
-                }
-            }
-            ValueExpr::FormattedString(contents) => {
-                for c in contents {
-                    if let ValFmtStringContents::Expr(e) = c {
-                        flatten_returns(&e.0, return_types_found, type_env);
-                    }
-                }
-            }
-            ValueExpr::Array(_, exprs) => {
-                for expr in exprs {
-                    flatten_returns(&expr.0, return_types_found, type_env);
-                }
-            }
-            ValueExpr::If {
-                condition,
-                then,
-                r#else,
-            } => {
-                flatten_returns(&condition.as_ref().0, return_types_found, type_env);
-                flatten_returns(&then.as_ref().0, return_types_found, type_env);
-                r#else.as_ref().inspect(|r#else| {
-                    flatten_returns(&r#else.as_ref().0, return_types_found, type_env);
-                });
-            }
-            ValueExpr::While { condition, body } => {
-                flatten_returns(&condition.as_ref().0, return_types_found, type_env);
-                flatten_returns(&body.as_ref().0, return_types_found, type_env)
-            }
-            ValueExpr::Block(items) => items
-                .iter()
-                .for_each(|item| flatten_returns(&item.0, return_types_found, type_env)),
-            ValueExpr::Return(Some(value_expr)) => {
-                return_types_found.push(TypeExpr::from_value_expr(value_expr, type_env));
-            }
-            ValueExpr::Return(None) => {
-                return_types_found.push(TypeExpr::Tuple(vec![]));
-            }
-            ValueExpr::VarAssign(assignment) => {
-                flatten_returns(
-                    &assignment.as_ref().0.value_expr.0,
-                    return_types_found,
-                    type_env,
-                );
-            }
-            ValueExpr::VarDecl(declaration) => {
-                flatten_returns(&declaration.0.initializer.0, return_types_found, type_env);
-            }
-            ValueExpr::Add(left, right)
-            | ValueExpr::Sub(left, right)
-            | ValueExpr::Mod(left, right)
-            | ValueExpr::Div(left, right)
-            | ValueExpr::Mul(left, right) => {
-                flatten_returns(&left.as_ref().0, return_types_found, type_env);
-                flatten_returns(&right.as_ref().0, return_types_found, type_env);
-            }
-            ValueExpr::BoolNegate(value_expr) => {
-                flatten_returns(&value_expr.as_ref().0, return_types_found, type_env);
-            }
-            ValueExpr::Equals(lhs, rhs)
-            | ValueExpr::NotEquals(lhs, rhs)
-            | ValueExpr::LessThan(lhs, rhs)
-            | ValueExpr::LessThanOrEquals(lhs, rhs)
-            | ValueExpr::GreaterThan(lhs, rhs)
-            | ValueExpr::GreaterThanOrEquals(lhs, rhs)
-            | ValueExpr::And(lhs, rhs)
-            | ValueExpr::Or(lhs, rhs) => {
-                flatten_returns(&lhs.as_ref().0, return_types_found, type_env);
-                flatten_returns(&rhs.as_ref().0, return_types_found, type_env);
-            }
-            ValueExpr::FunctionCall { .. }
-            | ValueExpr::Int(..)
-            | ValueExpr::InlineGo(..)
-            | ValueExpr::String(..)
-            | ValueExpr::Bool(..)
-            | ValueExpr::Float(..)
-            | ValueExpr::Char(..)
-            | ValueExpr::Tuple(..)
-            | ValueExpr::Break
-            | ValueExpr::Continue
-            | ValueExpr::Duck(..)
-            | ValueExpr::Struct { .. }
-            | ValueExpr::FieldAccess { .. }
-            | ValueExpr::Lambda(..)
-            | ValueExpr::Variable(..)
-            | ValueExpr::RawVariable(..)
-            | ValueExpr::Tag(..)
-            | ValueExpr::Match { .. }
-            | ValueExpr::ArrayAccess(..) => {}
-        }
-    }
-
-    let mut return_types_found = Vec::new();
-    flatten_returns(&fun_def.value_expr.0, &mut return_types_found, type_env);
-
-    return_types_found.sort_by_key(|type_expr| type_expr.as_clean_go_type_name(type_env));
-    return_types_found.dedup();
-
-    if return_types_found.is_empty() {
-        return Ok(TypeExpr::Tuple(vec![]));
-    }
-
-    if return_types_found.len() == 1 {
-        return Ok(return_types_found.first().unwrap().clone());
-    }
-
-    // TODO add spans
-    return Ok(TypeExpr::Or(
-        return_types_found
-            .iter()
-            .map(|type_expr| type_expr.clone().into_empty_span())
-            .collect::<Vec<_>>(),
-    ));
 }

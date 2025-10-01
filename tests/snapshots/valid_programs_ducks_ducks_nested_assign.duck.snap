@@ -1,4 +1,4 @@
 {
-    "stdout": "{true}\n{10}\n{true}\n{100}\n{false}\n{100}\n",
+    "stdout": "true\n10\ntrue\n100\nfalse\n100\n",
     "stderr": ""
 }

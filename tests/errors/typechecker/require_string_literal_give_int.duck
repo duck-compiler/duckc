@@ -1,3 +1,0 @@
-fn main() {
-    let str: "const string" = 1;
-}

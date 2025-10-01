@@ -42,9 +42,9 @@ fn serve_component<P>(
     let x = with_react;
     go {
         var h = x;
-        http.HandleFunc(route.as_dgo_string(), func (w http.ResponseWriter, r *http.Request) {
+        http.HandleFunc(route, func (w http.ResponseWriter, r *http.Request) {
             var tsx = tsx_component(prop_supplier());
-            w.Write([]byte(h(tsx).as_dgo_string()))
+            w.Write([]byte(h(tsx)))
         })
     }
 }
@@ -54,15 +54,15 @@ fn serve_string(
     tsx_component: String,
 ) {
     go {
-        http.HandleFunc(route.as_dgo_string(), func (w http.ResponseWriter, r *http.Request) {
-            w.Write([]byte(tsx_component.as_dgo_string()))
+        http.HandleFunc(route, func (w http.ResponseWriter, r *http.Request) {
+            w.Write([]byte(tsx_component))
         })
     }
 }
 
 fn listen(port: Int) {
     go {
-        http.ListenAndServe(fmt.Sprintf(":%d", port.as_dgo_int()), nil);
+        http.ListenAndServe(fmt.Sprintf(":%d", port), nil);
     }
 }
 
@@ -93,6 +93,8 @@ fn render(renderer: Html) -> String {
 
         prelude += "\n</script>"
 
-		return ConcDuckString { res + prelude }
+		return res + prelude
     }
+
+    return ""
 }

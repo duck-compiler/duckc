@@ -13,24 +13,24 @@ fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
         current_path: Vec<String>,
     ) {
         match ty {
-            TypeExpr::String => {
+            TypeExpr::String(..) => {
                 out_string.push_str("\"%s\"");
                 out_params.push(format!(
-                    "html.EscapeString({}.as_dgo_string())",
+                    "html.EscapeString({})",
                     current_path.join(".")
                 ));
             }
-            TypeExpr::Int => {
+            TypeExpr::Int(..) => {
                 out_string.push_str("%v");
-                out_params.push(format!("{}.as_dgo_int()", current_path.join(".")));
+                out_params.push(format!("{}", current_path.join(".")));
             }
-            TypeExpr::Bool => {
+            TypeExpr::Bool(..) => {
                 out_string.push_str("%v");
-                out_params.push(format!("{}.as_dgo_bool()", current_path.join(".")));
+                out_params.push(format!("{}", current_path.join(".")));
             }
             TypeExpr::Float => {
                 out_string.push_str("%v");
-                out_params.push(format!("{}.as_dgo_float()", current_path.join(".")));
+                out_params.push(format!("{}", current_path.join(".")));
             }
             TypeExpr::Duck(Duck { fields }) => {
                 out_string.push('{');
@@ -50,12 +50,12 @@ fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
                 out_string.push('[');
 
                 out_params.push(match &t.0 {
-                    TypeExpr::String => {
+                    TypeExpr::String(..) => {
                         let go_code = format!(r#"
-                                strings.Join(func (s []DuckString) []string {{
+                                strings.Join(func (s []string) []string {{
                                     res := make([]string, len(s))
                                     for i := range s {{
-                                        res[i] = fmt.Sprintf("\"%s\"", html.EscapeString(s[i].as_dgo_string()))
+                                        res[i] = fmt.Sprintf("\"%s\"", html.EscapeString(s[i]))
                                     }}
                                     return res
                                 }}({}), ", "),
@@ -64,34 +64,34 @@ fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
                     }
                     TypeExpr::Float => {
                         let go_code = format!(r#"
-                            strings.Join(func (s []DuckFloat) []string {{
+                            strings.Join(func (s []float32) []string {{
                                 res := make([]int, len(s))
                                 for i := range s {{
-                                    res[i] = fmt.Sprintf("%v", s[i].as_dgo_float())
+                                    res[i] = fmt.Sprintf("%v", s[i])
                                 }}
                                 return res
                             }}({}), ", "),
                             "#, current_path.join("."));
                         go_code
                     }
-                    TypeExpr::Int => {
+                    TypeExpr::Int(..) => {
                         let go_code = format!(r#"
-                            strings.Join(func (s []DuckInt) []string {{
+                            strings.Join(func (s []int) []string {{
                                 res := make([]int, len(s))
                                 for i := range s {{
-                                    res[i] = fmt.Sprintf("%v", s[i].as_dgo_int())
+                                    res[i] = fmt.Sprintf("%v", s[i])
                                 }}
                                 return res
                             }}({}), ", "),
                             "#, current_path.join("."));
                         go_code
                     }
-                    TypeExpr::Bool => {
+                    TypeExpr::Bool(..) => {
                         let go_code = format!(r#"
-                            strings.Join(func (s []DuckBool) []string {{
+                            strings.Join(func (s []bool) []string {{
                                 res := make([]int, len(s))
                                 for i := range s {{
-                                    res[i] = fmt.Sprintf("%v", s[i].as_dgo_bool())
+                                    res[i] = fmt.Sprintf("%v", s[i])
                                 }}
                                 return res
                             }}({}), ", "),
@@ -174,9 +174,9 @@ impl TsxComponent {
                 "props".to_string(),
                 self.props_type.0.as_go_type_annotation(type_env),
             )],
-            Some("Tup_DuckString_DuckString".to_string()),
+            Some("Tup_string_string".to_string()),
             vec![IrInstruction::InlineGo(format!(
-                "return Tup_DuckString_DuckString {{ field_0: ConcDuckString {{ value: \"{}\" }}, field_1: ConcDuckString {{ value: {all} }} }}",
+                "return Tup_string_string {{ field_0: \"{}\", field_1: {all} }}",
                 self.name
             ))],
         )

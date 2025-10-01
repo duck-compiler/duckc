@@ -1,4 +1,4 @@
 {
-    "stdout": "{1}\n{1}\nGot from lambda {1} {1}\n",
+    "stdout": "1\n1\nGot from lambda 1 1\n",
     "stderr": ""
 }

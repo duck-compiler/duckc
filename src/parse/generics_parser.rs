@@ -310,7 +310,7 @@ pub mod tests {
                 "<TYPENAME: { username: String }>",
                 vec![Generic {
                     name: "TYPENAME".to_string(),
-                    constraint: Some((TypeExpr::Duck(Duck { fields: vec![Field { name: "username".to_string(), type_expr: (TypeExpr::String, empty_range())}] }), empty_range())),
+                    constraint: Some((TypeExpr::Duck(Duck { fields: vec![Field { name: "username".to_string(), type_expr: (TypeExpr::String(None), empty_range())}] }), empty_range())),
                 }],
             ),
             (
@@ -322,7 +322,7 @@ pub mod tests {
                     },
                     Generic {
                         name: "TYPENAMETWO".to_string(),
-                        constraint: Some((TypeExpr::Duck(Duck { fields: vec![Field { name: "username".to_string(), type_expr: (TypeExpr::String, empty_range())}, Field { name: "b".to_string(), type_expr: (TypeExpr::Int, empty_range())}] }), empty_range())),
+                        constraint: Some((TypeExpr::Duck(Duck { fields: vec![Field { name: "username".to_string(), type_expr: (TypeExpr::String(None), empty_range())}, Field { name: "b".to_string(), type_expr: (TypeExpr::Int(None), empty_range())}] }), empty_range())),
                     },
                 ],
             ),
@@ -341,7 +341,7 @@ pub mod tests {
                         name: "TYPENAMETHREE".to_string(),
                         constraint: Some((TypeExpr::Duck(Duck {
                             fields: vec![
-                                Field { name: "username".to_string(), type_expr: (TypeExpr::Duck(Duck { fields: vec![Field { name: "x".to_string(), type_expr: (TypeExpr::String, empty_range())}] }), empty_range())}
+                                Field { name: "username".to_string(), type_expr: (TypeExpr::Duck(Duck { fields: vec![Field { name: "x".to_string(), type_expr: (TypeExpr::String(None), empty_range())}] }), empty_range())}
                             ]
                         }), empty_range())),
                     },

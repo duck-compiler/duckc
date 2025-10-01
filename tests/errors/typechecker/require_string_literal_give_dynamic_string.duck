@@ -1,7 +1,0 @@
-fn main() {
-    let str: "const string" = m();
-}
-
-fn m() -> String {
-    return "dynamic string";
-}
