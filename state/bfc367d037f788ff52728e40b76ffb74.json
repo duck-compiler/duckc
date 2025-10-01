@@ -1,8 +1,8 @@
 {
-    "id": "514af71611f0eae8e0992677743467e6",
+    "id": "bfc367d037f788ff52728e40b76ffb74",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 1502,
-    "title": "discuss if we just allow passing ints as floats",
+    "line_number": 1606,
+    "title": "(\"4 + 4\", TypeExpr::Int(Some(\"4\"))),",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
-    "source_line": "// todo: discuss if we just allow passing ints as floats",
+    "source_line": "// todo: (\"4 + 4\", TypeExpr::Int(Some(\"4\"))),",
     "status": "open",
-    "first_seen": "2025-08-24T22:43:39.039693",
+    "first_seen": "2025-10-01T09:58:38.444299",
     "history": []
 }

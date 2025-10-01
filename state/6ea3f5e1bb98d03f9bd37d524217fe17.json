@@ -1,7 +1,7 @@
 {
     "id": "6ea3f5e1bb98d03f9bd37d524217fe17",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 277,
+    "line_number": 278,
     "title": "require name and implement typing for structs",
     "tag": "todo",
     "module_tag": "semantics",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Apfelfrosch",
-        "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// TODO: require name and implement typing for structs",
     "status": "open",

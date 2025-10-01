@@ -1,5 +1,35 @@
 [
     {
+        "type": "created",
+        "timestamp": "2025-10-01T09:58:38.437409",
+        "issue_id": "bfc367d037f788ff52728e40b76ffb74",
+        "issue_title": "(\"4 + 4\", TypeExpr::Int(Some(\"4\"))),",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-10-01T09:58:38.437409",
+        "issue_id": "eafb30b0c424a5220951f6aa028f8a3d",
+        "issue_title": "typeinference",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-10-01T09:58:38.437409",
+        "issue_id": "85e0c950789d9ad5d875a7db05b97130",
+        "issue_title": "add spans",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
         "type": "closed",
         "timestamp": "2025-09-23T23:30:53.679717",
         "issue_id": "b05a3be51e7023df2cd03e0cf204af27",
