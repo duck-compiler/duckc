@@ -5,10 +5,21 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        duckx_component_parser::{duckx_component_parser, DuckxComponent}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, test_parser::{test_parser, TestCase}, tsx_component_parser::{tsx_component_parser, TsxComponent}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, Spanned, SS
+        Context, SS, Spanned,
+        duckx_component_parser::{DuckxComponent, duckx_component_parser},
+        function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
+        lexer::{Token, lex_parser},
+        make_input, parse_failure,
+        struct_parser::{StructDefinition, struct_definition_parser},
+        test_parser::{TestCase, test_parser},
+        tsx_component_parser::{TsxComponent, tsx_component_parser},
+        type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
+        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
+        value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr},
     },
     semantics::ident_mangler::{
-        mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
+        MangleEnv, mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression,
+        mangle_value_expr, unmangle,
     },
 };
 
@@ -33,7 +44,7 @@ pub enum SourceUnit {
     Struct(StructDefinition),
     Use(UseStatement),
     Module(String, SourceFile),
-    Test(Spanned<TestCase>)
+    Test(Spanned<TestCase>),
 }
 
 impl SourceFile {
@@ -165,7 +176,12 @@ impl SourceFile {
                         mangle_env.insert_ident(name.clone());
                     }
                 }
-                mangle_value_expr(&mut func.value_expr.0, global_prefix, prefix, &mut mangle_env);
+                mangle_value_expr(
+                    &mut func.value_expr.0,
+                    global_prefix,
+                    prefix,
+                    &mut mangle_env,
+                );
                 mangle_env.pop_idents();
                 result.function_definitions.push(func);
             }
@@ -236,7 +252,12 @@ impl SourceFile {
 
             for test_case in &s.test_cases {
                 let mut test_case = test_case.clone();
-                mangle_value_expr(&mut test_case.body.0, global_prefix, prefix, &mut mangle_env);
+                mangle_value_expr(
+                    &mut test_case.body.0,
+                    global_prefix,
+                    prefix,
+                    &mut mangle_env,
+                );
                 result.test_cases.push(test_case)
             }
 
@@ -248,20 +269,35 @@ impl SourceFile {
         let mut mangle_env = MangleEnv {
             sub_mods: Vec::new(),
             global_prefix: global_prefix.clone(),
-            tsx_components: flattened_source_file.tsx_components.iter().map(|x| x.name.clone()).collect(),
-            duckx_components: flattened_source_file.duckx_components.iter().map(|x| x.name.clone()).collect(),
+            tsx_components: flattened_source_file
+                .tsx_components
+                .iter()
+                .map(|x| x.name.clone())
+                .collect(),
+            duckx_components: flattened_source_file
+                .duckx_components
+                .iter()
+                .map(|x| x.name.clone())
+                .collect(),
             imports: HashMap::new(),
             names: vec![
-                flattened_source_file.function_definitions
+                flattened_source_file
+                    .function_definitions
                     .iter()
                     .map(|x| x.name.clone())
                     .collect::<Vec<_>>(),
             ],
             types: vec![
-                flattened_source_file.type_definitions
+                flattened_source_file
+                    .type_definitions
                     .iter()
                     .map(|x| x.name.clone())
-                    .chain(flattened_source_file.struct_definitions.iter().map(|x| x.name.clone()))
+                    .chain(
+                        flattened_source_file
+                            .struct_definitions
+                            .iter()
+                            .map(|x| x.name.clone()),
+                    )
                     .collect::<Vec<_>>(),
             ],
         };
@@ -271,11 +307,17 @@ impl SourceFile {
             c.extend(unmangle(&function_definition.name));
             function_definition.name = mangle(&c);
 
-            for type_expr in function_definition.return_type.iter_mut().map(|type_expr| &mut type_expr.0).chain(
-                function_definition.params
-                    .iter_mut()
-                    .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0)),
-            ) {
+            for type_expr in function_definition
+                .return_type
+                .iter_mut()
+                .map(|type_expr| &mut type_expr.0)
+                .chain(
+                    function_definition
+                        .params
+                        .iter_mut()
+                        .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0)),
+                )
+            {
                 append_global_prefix_type_expr(type_expr, &mut mangle_env);
             }
 
@@ -296,11 +338,17 @@ impl SourceFile {
             struct_definition.name = mangle(&c);
 
             for method in &mut struct_definition.methods {
-                for type_expr in method.return_type.iter_mut().map(|type_expr| &mut type_expr.0).chain(
-                    method.params
-                        .iter_mut()
-                        .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0)),
-                ) {
+                for type_expr in method
+                    .return_type
+                    .iter_mut()
+                    .map(|type_expr| &mut type_expr.0)
+                    .chain(
+                        method
+                            .params
+                            .iter_mut()
+                            .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0)),
+                    )
+                {
                     append_global_prefix_type_expr(type_expr, &mut mangle_env);
                 }
 
@@ -376,7 +424,9 @@ fn append_global_prefix_type_expr(type_expr: &mut TypeExpr, mangle_env: &mut Man
 
 fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut MangleEnv) {
     match value_expr {
-        ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => append_global_prefix_value_expr(&mut v.0, mangle_env),
+        ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
+            append_global_prefix_value_expr(&mut v.0, mangle_env)
+        }
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {
@@ -700,7 +750,8 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
             })
             .fold(SourceFile::default(), |mut acc, (internal, parsed_src)| {
                 if internal {
-                    acc.function_definitions.extend(parsed_src.function_definitions);
+                    acc.function_definitions
+                        .extend(parsed_src.function_definitions);
                     acc.type_definitions.extend(parsed_src.type_definitions);
                     acc.sub_modules.extend(parsed_src.sub_modules);
                     acc.struct_definitions.extend(parsed_src.struct_definitions);
@@ -828,7 +879,7 @@ where
                 sub_modules,
                 tsx_components,
                 duckx_components: template_components,
-                test_cases
+                test_cases,
             }
         })
     })

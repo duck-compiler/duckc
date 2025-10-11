@@ -1135,7 +1135,10 @@ mod tests {
             ("fn", vec![Token::Function]),
             ("\"\"", vec![Token::StringLiteral(String::from(""))]),
             ("\"XX\"", vec![Token::StringLiteral(String::from("XX"))]),
-            ("\"X\\\"X\"", vec![Token::StringLiteral(String::from("X\"X"))]),
+            (
+                "\"X\\\"X\"",
+                vec![Token::StringLiteral(String::from("X\"X"))],
+            ),
             (
                 "\"Hallo ich bin ein String\\n\\n\\nNeue Zeile\"",
                 vec![Token::StringLiteral(String::from(
@@ -1545,7 +1548,10 @@ mod tests {
             ),
             ("-> // check", vec![Token::ThinArrow]),
             ("fn // check", vec![Token::Function]),
-            ("\"\" // check", vec![Token::StringLiteral(String::from(""))]),
+            (
+                "\"\" // check",
+                vec![Token::StringLiteral(String::from(""))],
+            ),
             (
                 "\"XX\" // check",
                 vec![Token::StringLiteral(String::from("XX"))],

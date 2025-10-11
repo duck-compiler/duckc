@@ -1,4 +1,4 @@
 {
-    "stdout": "before:\n[{yo} {moin}]\n[{yo} {moin}]\nafter:\n[{x replaced} {moin}]\n[{x replaced} {moin}]\n",
+    "stdout": "before:\n[yo moin]\n[yo moin]\nafter:\n[x replaced moin]\n[x replaced moin]\n",
     "stderr": ""
 }

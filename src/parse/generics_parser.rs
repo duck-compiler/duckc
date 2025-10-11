@@ -27,7 +27,6 @@ where
                                         TypeExpr::Duck(_) => type_expr,
                                         other => {
                                             failure_with_occurence(
-                                                span.context.file_name,
                                                 "Invalid Syntax".to_string(),
                                                 span,
                                                 vec![
@@ -39,7 +38,6 @@ where
                                                         span,
                                                     ),
                                                 ],
-                                                span.context.file_contents,
                                             );
                                         }
                                     }

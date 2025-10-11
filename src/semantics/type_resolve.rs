@@ -9,8 +9,9 @@ use colored::Colorize;
 
 use crate::{
     parse::{
-        SS, Spanned, SpannedMutRef, failure_with_occurence,
+        SS, Spanned, SpannedMutRef,
         duckx_component_parser::DuckxComponent,
+        failure_with_occurence,
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         source_file_parser::SourceFile,
         struct_parser::StructDefinition,
@@ -2302,7 +2303,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     None => {
                         let span = target_obj.as_ref().1;
                         failure_with_occurence(
-                            span.context.file_name,
                             "Invalid Field Access".to_string(),
                             {
                                 let mut span = span.clone();
@@ -2317,7 +2317,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                                 ),
                                 span.clone(),
                             )],
-                            span.context.file_contents,
                         );
                     }
                 };
@@ -2615,7 +2614,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
                 type_env.push_identifier_types();
                 if let Some(identifier) = &arm.identifier_binding {
-                    type_env.insert_identifier_type(identifier.clone(), arm.type_case.0.clone(), false);
+                    type_env.insert_identifier_type(
+                        identifier.clone(),
+                        arm.type_case.0.clone(),
+                        false,
+                    );
                     if let Some(condition) = &mut arm.condition {
                         typeresolve_value_expr((&mut condition.0, condition.1), type_env);
                     }
@@ -2630,7 +2633,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     if let Some(condition) = &mut arm.condition {
                         typeresolve_value_expr((&mut condition.0, condition.1), type_env);
                     }
-                    type_env.insert_identifier_type(identifier.clone(), arm.type_case.0.clone(), false);
+                    type_env.insert_identifier_type(
+                        identifier.clone(),
+                        arm.type_case.0.clone(),
+                        false,
+                    );
                 }
                 typeresolve_value_expr((&mut arm.value_expr.0, arm.value_expr.1), type_env);
                 type_env.pop_identifier_types();

@@ -1,5 +1,5 @@
 use crate::parse::{
-    Context, SS, Spanned,
+    Context, SS, Spanned, failure_with_occurence,
     function_parser::{LambdaFunctionExpr, Param},
     lexer::{FmtStringContents, HtmlStringContents},
     source_file_parser::SourceFile,
@@ -433,13 +433,20 @@ where
                     if exprs.len() >= 2 {
                         for (expr, has_semi) in &exprs[..exprs.len() - 1] {
                             if expr.0.needs_semicolon() && has_semi.is_none() {
-                                panic!("needs_semi")
+                                failure_with_occurence(
+                                    "This expression needs a semicolon".to_string(),
+                                    expr.1,
+                                    [(
+                                        "This expression needs a semicolon at the end".to_string(),
+                                        expr.1,
+                                    )],
+                                );
                             }
                         }
                     }
 
                     if !exprs.is_empty() && exprs.last().unwrap().1.is_some() {
-                        exprs.push((empty_tuple().into_empty_span(), None));
+                        exprs.push(((empty_tuple(), exprs.last().unwrap().0.1), None));
                     }
 
                     (
@@ -492,14 +499,15 @@ where
                     r#else: else_ifs.into_iter().rfold(
                         r#else.map(Box::new),
                         |acc, (cond, then)| {
-                            Some(Box::new(
+                            let span = then.1;
+                            Some(Box::new((
                                 ValueExpr::If {
                                     condition: Box::new(cond),
                                     then: Box::new(then),
                                     r#else: Some(acc.unwrap()),
-                                }
-                                .into_empty_span(),
-                            ))
+                                },
+                                span,
+                            )))
                         },
                     ),
                 })
@@ -629,11 +637,12 @@ where
                 .map_with(|x, e| (x, e.span()));
 
             let array_with_type = (just(Token::ControlChar('.'))
-                .ignore_then(
-                    choice((
-                        just(Token::ControlChar('(')).rewind().ignore_then(type_expression_parser()),
-                        type_expression_parser_without_array(),
-                    )))
+                .ignore_then(choice((
+                    just(Token::ControlChar('('))
+                        .rewind()
+                        .ignore_then(type_expression_parser()),
+                    type_expression_parser_without_array(),
+                )))
                 .or_not())
             .then(
                 (value_expr_parser
@@ -659,8 +668,10 @@ where
 
                 if declared_content_type.is_some() {
                     for _ in 0..exprs.len() - 1 {
+                        let content_type_unwrapped = content_type.unwrap();
+                        let span = content_type_unwrapped.1;
                         content_type =
-                            Some(TypeExpr::Array(Box::new(content_type.unwrap())).into_empty_span())
+                            Some((TypeExpr::Array(Box::new(content_type_unwrapped)), span));
                     }
                 }
 
@@ -758,25 +769,38 @@ where
                         )
                         .map(AtomPostParseUnit::FieldAccess),
                 ))
+                .map_with(|x, e| (x, e.span()))
                 .repeated()
                 .collect::<Vec<_>>(),
             )
             .map(|((pre, target), params)| {
-                let target = params.into_iter().fold(target, |acc, x| match x {
-                    AtomPostParseUnit::ArrayAccess(idx_expr) => {
-                        ValueExpr::ArrayAccess(acc.into(), idx_expr.into()).into_empty_span()
+                let target = params.into_iter().fold(target, |acc, (x, span)| {
+                    let span = SS {
+                        start: acc.1.start,
+                        end: span.end,
+                        context: span.context,
+                    };
+
+                    match x {
+                        AtomPostParseUnit::ArrayAccess(idx_expr) => {
+                            (ValueExpr::ArrayAccess(acc.into(), idx_expr.into()), span)
+                        }
+                        AtomPostParseUnit::FuncCall(params, type_params) => (
+                            ValueExpr::FunctionCall {
+                                target: acc.into(),
+                                params,
+                                type_params,
+                            },
+                            span,
+                        ),
+                        AtomPostParseUnit::FieldAccess(field_name) => (
+                            ValueExpr::FieldAccess {
+                                target_obj: acc.into(),
+                                field_name,
+                            },
+                            span,
+                        ),
                     }
-                    AtomPostParseUnit::FuncCall(params, type_params) => ValueExpr::FunctionCall {
-                        target: acc.into(),
-                        params,
-                        type_params,
-                    }
-                    .into_empty_span(),
-                    AtomPostParseUnit::FieldAccess(field_name) => ValueExpr::FieldAccess {
-                        target_obj: acc.into(),
-                        field_name,
-                    }
-                    .into_empty_span(),
                 });
 
                 let res = pre
@@ -843,7 +867,8 @@ where
                 })
                 .map_with(|(x, _), e| (x, e.span()));
 
-            let assignment = atom.clone()
+            let assignment = atom
+                .clone()
                 .then_ignore(just(Token::ControlChar('=')))
                 .then(value_expr_parser.clone())
                 .map_with(|(target, value_expr), e| {
@@ -2113,7 +2138,10 @@ mod tests {
             (
                 ".Int[][.Int[]]",
                 ValueExpr::Array(
-                    Some(TypeExpr::Array(TypeExpr::Int(None).into_empty_span().into()).into_empty_span()),
+                    Some(
+                        TypeExpr::Array(TypeExpr::Int(None).into_empty_span().into())
+                            .into_empty_span(),
+                    ),
                     vec![
                         ValueExpr::Array(Some(TypeExpr::Int(None).into_empty_span()), vec![])
                             .into_empty_span(),

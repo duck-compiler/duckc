@@ -133,8 +133,8 @@ where
                 .ignore_then(go_type_identifier)
                 .map(TypeExpr::Go);
 
-            let string_literal =
-                select_ref! { Token::StringLiteral(str) => str.clone() }.map(|str| TypeExpr::String(Some(str)));
+            let string_literal = select_ref! { Token::StringLiteral(str) => str.clone() }
+                .map(|str| TypeExpr::String(Some(str)));
 
             let bool_literal =
                 select_ref! { Token::BoolLiteral(b) => *b }.map(|b| TypeExpr::Bool(Some(b)));
@@ -373,7 +373,7 @@ where
                 .map(|str| TypeExpr::String(Some(str.clone())));
 
             let bool_literal =
-            select_ref! { Token::BoolLiteral(b) => *b }.map(|b| TypeExpr::Bool(Some(b)));
+                select_ref! { Token::BoolLiteral(b) => *b }.map(|b| TypeExpr::Bool(Some(b)));
 
             let int_literal = select_ref! { Token::IntLiteral(int) => *int }
                 .map(|int| TypeExpr::Int(int.try_into().unwrap())); // TODO: unwrap!
@@ -582,7 +582,11 @@ impl Display for TypeExpr {
             TypeExpr::Html => write!(f, "html"),
             TypeExpr::Tag(identifier) => write!(f, ".{identifier}"),
             TypeExpr::TypeOf(identifier) => write!(f, "typeof {identifier}"),
-            TypeExpr::KeyOf(identifier) => write!(f, "keyof {}", identifier.as_ref().0.as_clean_user_faced_type_name()),
+            TypeExpr::KeyOf(identifier) => write!(
+                f,
+                "keyof {}",
+                identifier.as_ref().0.as_clean_user_faced_type_name()
+            ),
             TypeExpr::Alias(def) => write!(f, "{def:?}"),
             TypeExpr::Any => write!(f, "any"),
             TypeExpr::InlineGo => write!(f, "inline_go"),
@@ -643,9 +647,33 @@ impl Display for TypeExpr {
                 Ok(())
             }
             TypeExpr::TypeNameInternal(s) => write!(f, "{s}"),
-            TypeExpr::String(s) => write!(f, "String{}", if let Some(str) = s { format!(" {str}") } else { String::from("") }),
-            TypeExpr::Int(i) => write!(f, "Int{}", if let Some(int) = i { format!(" {int}") } else { String::from("") }),
-            TypeExpr::Bool(b) => write!(f, "Bool{}", if let Some(boo) = b { format!(" {boo}") } else { String::from("") }),
+            TypeExpr::String(s) => write!(
+                f,
+                "String{}",
+                if let Some(str) = s {
+                    format!(" {str}")
+                } else {
+                    String::from("")
+                }
+            ),
+            TypeExpr::Int(i) => write!(
+                f,
+                "Int{}",
+                if let Some(int) = i {
+                    format!(" {int}")
+                } else {
+                    String::from("")
+                }
+            ),
+            TypeExpr::Bool(b) => write!(
+                f,
+                "Bool{}",
+                if let Some(boo) = b {
+                    format!(" {boo}")
+                } else {
+                    String::from("")
+                }
+            ),
             TypeExpr::Char => write!(f, "Char"),
             TypeExpr::Float => write!(f, "Float"),
             TypeExpr::Or(variants) => variants.iter().enumerate().try_for_each(|(i, variant)| {
@@ -732,7 +760,9 @@ pub mod tests {
                 return_type.map(|rt_box| Box::new(strip_spans(*rt_box))),
             ),
             TypeExpr::Or(variants) => TypeExpr::Or(variants.into_iter().map(strip_spans).collect()),
-            TypeExpr::And(variants) => TypeExpr::And(variants.into_iter().map(strip_spans).collect()),
+            TypeExpr::And(variants) => {
+                TypeExpr::And(variants.into_iter().map(strip_spans).collect())
+            }
             TypeExpr::TypeName(is_global, type_name, Some(generics)) => TypeExpr::TypeName(
                 is_global,
                 type_name,
@@ -808,7 +838,10 @@ pub mod tests {
     fn test_assert_type() {
         assert_type_expression(
             "fn() -> String",
-            TypeExpr::Fun(vec![], Some(Box::new(TypeExpr::String(None).into_empty_span()))),
+            TypeExpr::Fun(
+                vec![],
+                Some(Box::new(TypeExpr::String(None).into_empty_span())),
+            ),
         );
 
         assert_type_expression("true", TypeExpr::Bool(Some(true)));
@@ -853,7 +886,10 @@ pub mod tests {
         assert_type_expression(
             "fn(x: Int) -> Bool",
             TypeExpr::Fun(
-                vec![("x".to_string().into(), TypeExpr::Int(None).into_empty_span())],
+                vec![(
+                    "x".to_string().into(),
+                    TypeExpr::Int(None).into_empty_span(),
+                )],
                 Some(Box::new(TypeExpr::Bool(None).into_empty_span())),
             ),
         );
@@ -863,7 +899,10 @@ pub mod tests {
             TypeExpr::Fun(
                 vec![
                     ("a".to_string().into(), TypeExpr::Float.into_empty_span()),
-                    ("b".to_string().into(), TypeExpr::String(None).into_empty_span()),
+                    (
+                        "b".to_string().into(),
+                        TypeExpr::String(None).into_empty_span(),
+                    ),
                 ],
                 Some(Box::new(TypeExpr::Char.into_empty_span())),
             ),
@@ -1083,7 +1122,10 @@ pub mod tests {
                 Some(vec![
                     TypeExpr::Duck(Duck {
                         fields: vec![
-                            Field::new("data".to_string(), TypeExpr::String(None).into_empty_span()),
+                            Field::new(
+                                "data".to_string(),
+                                TypeExpr::String(None).into_empty_span(),
+                            ),
                             Field::new("id".to_string(), TypeExpr::Int(None).into_empty_span()),
                         ],
                     })
@@ -1114,7 +1156,10 @@ pub mod tests {
                 vec!["Executor".to_string()],
                 Some(vec![
                     TypeExpr::Fun(
-                        vec![("x".to_string().into(), TypeExpr::String(None).into_empty_span())],
+                        vec![(
+                            "x".to_string().into(),
+                            TypeExpr::String(None).into_empty_span(),
+                        )],
                         Some(Box::new(TypeExpr::Int(None).into_empty_span())),
                     )
                     .into_empty_span(),
@@ -1290,7 +1335,10 @@ pub mod tests {
                     TypeExpr::Duck(Duck {
                         fields: vec![
                             Field::new("age".to_string(), TypeExpr::Int(None).into_empty_span()),
-                            Field::new("name".to_string(), TypeExpr::String(None).into_empty_span()),
+                            Field::new(
+                                "name".to_string(),
+                                TypeExpr::String(None).into_empty_span(),
+                            ),
                         ],
                     })
                     .into_empty_span(),
@@ -1368,7 +1416,8 @@ pub mod tests {
             "(String[] | Int[])[]",
             TypeExpr::Array(
                 TypeExpr::Or(vec![
-                    TypeExpr::Array(TypeExpr::String(None).into_empty_span().into()).into_empty_span(),
+                    TypeExpr::Array(TypeExpr::String(None).into_empty_span().into())
+                        .into_empty_span(),
                     TypeExpr::Array(TypeExpr::Int(None).into_empty_span().into()).into_empty_span(),
                 ])
                 .into_empty_span()
@@ -1379,7 +1428,10 @@ pub mod tests {
         assert_type_expression(
             "fn(x: Int) -> go `fmt.Stringer`",
             TypeExpr::Fun(
-                vec![("x".to_string().into(), TypeExpr::Int(None).into_empty_span())],
+                vec![(
+                    "x".to_string().into(),
+                    TypeExpr::Int(None).into_empty_span(),
+                )],
                 Some(Box::new(
                     TypeExpr::Go("fmt.Stringer".to_string()).into_empty_span(),
                 )),
