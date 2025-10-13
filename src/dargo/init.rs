@@ -38,7 +38,8 @@ pub fn generate_default_dargo_toml(project_name: impl Into<String>) -> String {
 }
 
 pub fn generate_default_main_duck() -> String {
-    return "use std::io::{println};\n\nfn main() {\n    println(\"Hello, World!\");\n}".to_string();
+    return "use std::io::{println};\n\nfn main() {\n    println(\"Hello, World!\");\n}"
+        .to_string();
 }
 
 pub fn init_project(

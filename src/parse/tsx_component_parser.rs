@@ -158,7 +158,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::{lexer::lex_parser, make_input, value_parser::empty_range};
+    use crate::parse::{
+        lexer::lex_parser,
+        make_input,
+        value_parser::{empty_range, type_expr_into_empty_range},
+    };
 
     use super::*;
 
@@ -195,6 +199,7 @@ mod tests {
 
             let mut ast = ast;
             ast.typescript_source.1 = empty_range();
+            type_expr_into_empty_range(&mut ast.props_type);
 
             assert_eq!(ast, expected_ast);
         }

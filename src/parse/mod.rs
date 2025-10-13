@@ -78,7 +78,7 @@ pub fn failure_with_occurence(
         occured_at.context.file_contents,
     )]))
     .unwrap();
-    std::process::exit(1)
+    panic!("{msg}")
 }
 
 pub fn failure(
@@ -104,7 +104,7 @@ pub fn failure(
         .finish()
         .eprint(sources([(file_name, src)]))
         .unwrap();
-    panic!("{}", msg)
+    panic!("{msg}")
 }
 
 pub fn parse_failure(file_name: &str, err: &Rich<impl fmt::Display, SS>, src: &str) -> ! {

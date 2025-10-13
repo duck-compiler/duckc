@@ -146,7 +146,7 @@ mod tests {
     use crate::parse::{
         lexer::lex_parser,
         make_input,
-        value_parser::{empty_range, value_expr_into_empty_range},
+        value_parser::{empty_range, type_expr_into_empty_range, value_expr_into_empty_range},
     };
 
     use super::*;
@@ -182,6 +182,7 @@ mod tests {
                 unreachable!()
             };
             value_expr_into_empty_range(&mut ast.value_expr);
+            type_expr_into_empty_range(&mut ast.props_type);
             assert_eq!(ast, expected_ast);
         }
 
