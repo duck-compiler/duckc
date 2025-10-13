@@ -1,6 +1,10 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
-use crate::parse::{failure_with_occurence, lexer::Token, type_parser::{type_expression_parser, TypeExpr}, Spanned, SS};
+use crate::parse::{
+    SS, Spanned, failure_with_occurence,
+    lexer::Token,
+    type_parser::{TypeExpr, type_expression_parser},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Generic {
@@ -22,7 +26,7 @@ where
                         .ignore_then(
                             type_expression_parser()
                                 .map(|type_expr| {
-                                    let span = type_expr.1.clone();
+                                    let span = type_expr.1;
                                     match &type_expr.0 {
                                         TypeExpr::Duck(_) => type_expr,
                                         other => {
@@ -32,8 +36,7 @@ where
                                                 vec![
                                                     (
                                                         format!(
-                                                            "Type constraints are defined using ducks. You've passed a {}",
-                                                            other
+                                                            "Type constraints are defined using ducks. You've passed a {other}"
                                                         ),
                                                         span,
                                                     ),
@@ -47,7 +50,7 @@ where
                 )
                 .map(|(identifier, constraint)| Generic {
                     name: identifier.clone(),
-                    constraint: constraint
+                    constraint
                 })
                 .map_with(|generic, ctx| (generic, ctx.span()))
                 .separated_by(just(Token::ControlChar(',')))
@@ -61,9 +64,17 @@ where
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::{parse::{
-        generics_parser::generics_parser, lexer::lex_parser, make_input, type_parser::Duck, value_parser::{empty_range, type_expr_into_empty_range}, Field
-    }, semantics::type_resolve::sort_fields_type_expr};
+    use crate::{
+        parse::{
+            Field,
+            generics_parser::generics_parser,
+            lexer::lex_parser,
+            make_input,
+            type_parser::Duck,
+            value_parser::{empty_range, type_expr_into_empty_range},
+        },
+        semantics::type_resolve::sort_fields_type_expr,
+    };
 
     #[test]
     fn test_simple_generics_parser() {
@@ -308,7 +319,15 @@ pub mod tests {
                 "<TYPENAME: { username: String }>",
                 vec![Generic {
                     name: "TYPENAME".to_string(),
-                    constraint: Some((TypeExpr::Duck(Duck { fields: vec![Field { name: "username".to_string(), type_expr: (TypeExpr::String(None), empty_range())}] }), empty_range())),
+                    constraint: Some((
+                        TypeExpr::Duck(Duck {
+                            fields: vec![Field {
+                                name: "username".to_string(),
+                                type_expr: (TypeExpr::String(None), empty_range()),
+                            }],
+                        }),
+                        empty_range(),
+                    )),
                 }],
             ),
             (
@@ -320,7 +339,21 @@ pub mod tests {
                     },
                     Generic {
                         name: "TYPENAMETWO".to_string(),
-                        constraint: Some((TypeExpr::Duck(Duck { fields: vec![Field { name: "username".to_string(), type_expr: (TypeExpr::String(None), empty_range())}, Field { name: "b".to_string(), type_expr: (TypeExpr::Int(None), empty_range())}] }), empty_range())),
+                        constraint: Some((
+                            TypeExpr::Duck(Duck {
+                                fields: vec![
+                                    Field {
+                                        name: "username".to_string(),
+                                        type_expr: (TypeExpr::String(None), empty_range()),
+                                    },
+                                    Field {
+                                        name: "b".to_string(),
+                                        type_expr: (TypeExpr::Int(None), empty_range()),
+                                    },
+                                ],
+                            }),
+                            empty_range(),
+                        )),
                     },
                 ],
             ),
@@ -337,11 +370,23 @@ pub mod tests {
                     },
                     Generic {
                         name: "TYPENAMETHREE".to_string(),
-                        constraint: Some((TypeExpr::Duck(Duck {
-                            fields: vec![
-                                Field { name: "username".to_string(), type_expr: (TypeExpr::Duck(Duck { fields: vec![Field { name: "x".to_string(), type_expr: (TypeExpr::String(None), empty_range())}] }), empty_range())}
-                            ]
-                        }), empty_range())),
+                        constraint: Some((
+                            TypeExpr::Duck(Duck {
+                                fields: vec![Field {
+                                    name: "username".to_string(),
+                                    type_expr: (
+                                        TypeExpr::Duck(Duck {
+                                            fields: vec![Field {
+                                                name: "x".to_string(),
+                                                type_expr: (TypeExpr::String(None), empty_range()),
+                                            }],
+                                        }),
+                                        empty_range(),
+                                    ),
+                                }],
+                            }),
+                            empty_range(),
+                        )),
                     },
                 ],
             ),
@@ -371,16 +416,16 @@ pub mod tests {
                     if let Some((type_expr, span)) = generic.0.constraint.as_mut() {
                         *span = empty_range();
                         if let TypeExpr::Duck(duck) = type_expr {
-                            duck.fields.iter_mut()
-                                .for_each(|field| {
-                                    type_expr_into_empty_range(&mut field.type_expr);
-                                });
-                        } else { unreachable!("this should be anything else than a duck") }
+                            duck.fields.iter_mut().for_each(|field| {
+                                type_expr_into_empty_range(&mut field.type_expr);
+                            });
+                        } else {
+                            unreachable!("this should be anything else than a duck")
+                        }
                     }
                     generic.0
                 })
                 .collect::<Vec<Generic>>();
-
 
             expected_generics.iter_mut().for_each(|generic| {
                 if let Some((type_expr, _)) = &mut generic.constraint {

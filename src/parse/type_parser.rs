@@ -139,8 +139,8 @@ where
             let bool_literal =
                 select_ref! { Token::BoolLiteral(b) => *b }.map(|b| TypeExpr::Bool(Some(b)));
 
-            let int_literal = select_ref! { Token::IntLiteral(int) => *int }
-                .map(|int| TypeExpr::Int(int.try_into().ok()));
+            let int_literal =
+                select_ref! { Token::IntLiteral(int) => *int }.map(|int| TypeExpr::Int(Some(int)));
 
             let tag_identifier = choice((
                 select_ref! { Token::Ident(ident) => ident.to_string() },
@@ -269,13 +269,8 @@ where
                     .into_iter()
                     .rev()
                     .fold(x, |(acc_ty, acc_span), ref_type| match ref_type {
-                        RefType::Mutable => (
-                            TypeExpr::RefMut((acc_ty, acc_span).into()),
-                            acc_span.clone(),
-                        ),
-                        RefType::Immutable => {
-                            (TypeExpr::Ref((acc_ty, acc_span).into()), acc_span.clone())
-                        }
+                        RefType::Mutable => (TypeExpr::RefMut((acc_ty, acc_span).into()), acc_span),
+                        RefType::Immutable => (TypeExpr::Ref((acc_ty, acc_span).into()), acc_span),
                     });
                 (res.0, e.span())
             });
@@ -375,8 +370,8 @@ where
             let bool_literal =
                 select_ref! { Token::BoolLiteral(b) => *b }.map(|b| TypeExpr::Bool(Some(b)));
 
-            let int_literal = select_ref! { Token::IntLiteral(int) => *int }
-                .map(|int| TypeExpr::Int(int.try_into().unwrap())); // TODO: unwrap!
+            let int_literal =
+                select_ref! { Token::IntLiteral(int) => *int }.map(|int| TypeExpr::Int(int.into())); // TODO: unwrap!
 
             let tag_identifier = choice((
                 select_ref! { Token::Ident(ident) => ident.to_string() },
@@ -493,13 +488,8 @@ where
                     .into_iter()
                     .rev()
                     .fold(x, |(acc_ty, acc_span), ref_type| match ref_type {
-                        RefType::Mutable => (
-                            TypeExpr::RefMut((acc_ty, acc_span).into()),
-                            acc_span.clone(),
-                        ),
-                        RefType::Immutable => {
-                            (TypeExpr::Ref((acc_ty, acc_span).into()), acc_span.clone())
-                        }
+                        RefType::Mutable => (TypeExpr::RefMut((acc_ty, acc_span).into()), acc_span),
+                        RefType::Immutable => (TypeExpr::Ref((acc_ty, acc_span).into()), acc_span),
                     });
                 (res.0, e.span())
             });

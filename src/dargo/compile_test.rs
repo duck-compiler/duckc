@@ -4,7 +4,15 @@ use lazy_static::lazy_static;
 use std::{ffi::OsString, fs, path::PathBuf, sync::mpsc, time::Duration};
 
 use crate::{
-    cli::go_cli::{self, GoCliErrKind}, dargo::cli::CompileArgs, emit::{ir::join_ir, types::escape_string_for_go}, lex, parse::value_parser::empty_range, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
+    DARGO_DOT_DIR,
+    cli::go_cli::{self, GoCliErrKind},
+    dargo::cli::CompileArgs,
+    emit::{ir::join_ir, types::escape_string_for_go},
+    lex,
+    parse::value_parser::empty_range,
+    parse_src_file,
+    tags::Tag,
+    typecheck, write_in_duck_dotdir,
 };
 
 #[derive(Debug)]
@@ -17,7 +25,10 @@ pub enum CompileTestErrKind {
 }
 
 lazy_static! {
-    static ref COMPILE_TEST_TAG: String = " compile test ".on_bright_black().bright_white().to_string();
+    static ref COMPILE_TEST_TAG: String = " compile test "
+        .on_bright_black()
+        .bright_white()
+        .to_string();
 }
 
 pub struct CompileOutput {
@@ -102,10 +113,30 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
 
     let tokens = lex(src_file_name, src_file_file_contents);
     let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
-    src_file_ast.use_statements.push(crate::parse::use_statement_parser::UseStatement::Go("io".to_string(), None));
-    src_file_ast.use_statements.push(crate::parse::use_statement_parser::UseStatement::Go("bufio".to_string(), None));
-    src_file_ast.use_statements.push(crate::parse::use_statement_parser::UseStatement::Go("bytes".to_string(), None));
-    src_file_ast.use_statements.push(crate::parse::use_statement_parser::UseStatement::Go("sync".to_string(), None));
+    src_file_ast
+        .use_statements
+        .push(crate::parse::use_statement_parser::UseStatement::Go(
+            "io".to_string(),
+            None,
+        ));
+    src_file_ast
+        .use_statements
+        .push(crate::parse::use_statement_parser::UseStatement::Go(
+            "bufio".to_string(),
+            None,
+        ));
+    src_file_ast
+        .use_statements
+        .push(crate::parse::use_statement_parser::UseStatement::Go(
+            "bytes".to_string(),
+            None,
+        ));
+    src_file_ast
+        .use_statements
+        .push(crate::parse::use_statement_parser::UseStatement::Go(
+            "sync".to_string(),
+            None,
+        ));
 
     let (tailwind_worker_send, tailwind_worker_receive) = mpsc::channel::<String>();
     let (tailwind_result_send, tailwind_result_receive) = mpsc::channel::<String>();
@@ -128,7 +159,8 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
     });
     let mut type_env = typecheck(&mut src_file_ast, &tailwind_worker_send);
 
-    let maybe_main_fn = src_file_ast.function_definitions
+    let maybe_main_fn = src_file_ast
+        .function_definitions
         .iter_mut()
         .find(|fun_def| fun_def.name == "main");
 
@@ -136,10 +168,12 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         main_fn.name = "____thrown_away_main_LOL".to_string();
     }
 
-    let test_source = src_file_ast.test_cases
+    let test_source = src_file_ast
+        .test_cases
         .iter()
-        .map(|test_case| format!(
-            r#"
+        .map(|test_case| {
+            format!(
+                r#"
                 DuckTestCase {{
                     name: "{}",
                     test_case_fn: func() {{
@@ -149,10 +183,21 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
                     }},
                 }},
             "#,
-            test_case.name,
-            test_case.name,
-            join_ir(&test_case.body.0.emit(&mut type_env, &mut crate::emit::value::ToIr { var_counter: 0 }, test_case.body.1).0)
-        ))
+                test_case.name,
+                test_case.name,
+                join_ir(
+                    &test_case
+                        .body
+                        .0
+                        .emit(
+                            &mut type_env,
+                            &mut crate::emit::value::ToIr { var_counter: 0 },
+                            test_case.body.1
+                        )
+                        .0
+                )
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -249,9 +294,13 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         .recv_timeout(Duration::from_secs(30))
         .expect("tailwind timed out");
 
-    go_code = format!("{go_code}\nconst TAILWIND_STR = \"{}\"", escape_string_for_go(css.as_str()));
+    go_code = format!(
+        "{go_code}\nconst TAILWIND_STR = \"{}\"",
+        escape_string_for_go(css.as_str())
+    );
 
-    let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.test.go").as_str(), &go_code);
+    let go_output_file =
+        write_in_duck_dotdir(format!("{src_file_name}.gen.test.go").as_str(), &go_code);
     if compile_args.optimize_go {
         let _ = go_cli::format(go_output_file.as_path());
     }

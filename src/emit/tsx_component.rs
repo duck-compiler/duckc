@@ -15,22 +15,19 @@ fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
         match ty {
             TypeExpr::String(..) => {
                 out_string.push_str("\"%s\"");
-                out_params.push(format!(
-                    "html.EscapeString({})",
-                    current_path.join(".")
-                ));
+                out_params.push(format!("html.EscapeString({})", current_path.join(".")));
             }
             TypeExpr::Int(..) => {
                 out_string.push_str("%v");
-                out_params.push(format!("{}", current_path.join(".")));
+                out_params.push(current_path.join(".").to_string());
             }
             TypeExpr::Bool(..) => {
                 out_string.push_str("%v");
-                out_params.push(format!("{}", current_path.join(".")));
+                out_params.push(current_path.join(".").to_string());
             }
             TypeExpr::Float => {
                 out_string.push_str("%v");
-                out_params.push(format!("{}", current_path.join(".")));
+                out_params.push(current_path.join(".").to_string());
             }
             TypeExpr::Duck(Duck { fields }) => {
                 out_string.push('{');
@@ -51,7 +48,8 @@ fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
 
                 out_params.push(match &t.0 {
                     TypeExpr::String(..) => {
-                        let go_code = format!(r#"
+                        let go_code = format!(
+                            r#"
                                 strings.Join(func (s []string) []string {{
                                     res := make([]string, len(s))
                                     for i := range s {{
@@ -59,11 +57,14 @@ fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
                                     }}
                                     return res
                                 }}({}), ", "),
-                            "#, current_path.join("."));
+                            "#,
+                            current_path.join(".")
+                        );
                         go_code
                     }
                     TypeExpr::Float => {
-                        let go_code = format!(r#"
+                        let go_code = format!(
+                            r#"
                             strings.Join(func (s []float32) []string {{
                                 res := make([]int, len(s))
                                 for i := range s {{
@@ -71,11 +72,14 @@ fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
                                 }}
                                 return res
                             }}({}), ", "),
-                            "#, current_path.join("."));
+                            "#,
+                            current_path.join(".")
+                        );
                         go_code
                     }
                     TypeExpr::Int(..) => {
-                        let go_code = format!(r#"
+                        let go_code = format!(
+                            r#"
                             strings.Join(func (s []int) []string {{
                                 res := make([]int, len(s))
                                 for i := range s {{
@@ -83,11 +87,14 @@ fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
                                 }}
                                 return res
                             }}({}), ", "),
-                            "#, current_path.join("."));
+                            "#,
+                            current_path.join(".")
+                        );
                         go_code
                     }
                     TypeExpr::Bool(..) => {
-                        let go_code = format!(r#"
+                        let go_code = format!(
+                            r#"
                             strings.Join(func (s []bool) []string {{
                                 res := make([]int, len(s))
                                 for i := range s {{
@@ -95,7 +102,9 @@ fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
                                 }}
                                 return res
                             }}({}), ", "),
-                            "#, current_path.join("."));
+                            "#,
+                            current_path.join(".")
+                        );
                         go_code
                     }
                     _ => panic!("not compatible with js"),

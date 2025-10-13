@@ -149,9 +149,7 @@ pub fn build(build_args: &BuildArgs) -> Result<BuildOutput, (String, BuildErrKin
             binaries.push((target_binary.name, compile_output.binary_path))
         }
 
-        return Ok(BuildOutput {
-            binaries
-        })
+        return Ok(BuildOutput { binaries });
     }
 
     let mut copy_target_clone = copy_target.to_path_buf();
@@ -176,7 +174,7 @@ pub fn build(build_args: &BuildArgs) -> Result<BuildOutput, (String, BuildErrKin
 
     return Ok(BuildOutput {
         binaries: vec![("default_target".to_string(), compile_output.binary_path)],
-    })
+    });
 }
 
 fn copy_dir_all(

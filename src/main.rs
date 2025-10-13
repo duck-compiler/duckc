@@ -12,7 +12,8 @@ use std::{
     fs::{self, File},
     io::Write,
     path::{Path, PathBuf},
-    process, sync::mpsc::Sender,
+    process,
+    sync::mpsc::Sender,
 };
 
 use chumsky::{Parser, error::Rich};
@@ -44,9 +45,9 @@ pub mod emit;
 pub mod fixup;
 pub mod go_fixup;
 pub mod parse;
+pub mod reports;
 pub mod semantics;
 pub mod tags;
-pub mod reports;
 
 lazy_static! {
     static ref DUCK_STD_PATH: PathBuf = {
@@ -248,7 +249,9 @@ fn parse_src_file(
 
     fn typename_reset_global_value_expr(type_expr: &mut ValueExpr) {
         match type_expr {
-            ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => typename_reset_global_value_expr(&mut v.0),
+            ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
+                typename_reset_global_value_expr(&mut v.0)
+            }
             ValueExpr::HtmlString(contents) => {
                 for c in contents {
                     if let ValHtmlStringContents::Expr(e) = c {
@@ -469,8 +472,10 @@ fn parse_src_file(
 }
 
 fn typecheck<'a>(src_file_ast: &mut SourceFile, tailwind_tx: &'a Sender<String>) -> TypeEnv<'a> {
-    let mut type_env = TypeEnv::default();
-    type_env.tailwind_sender = Some(tailwind_tx);
+    let mut type_env = TypeEnv {
+        tailwind_sender: Some(tailwind_tx),
+        ..TypeEnv::default()
+    };
     type_resolve::typeresolve_source_file(src_file_ast, &mut type_env);
 
     type_env

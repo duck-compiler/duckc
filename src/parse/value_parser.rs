@@ -803,8 +803,7 @@ where
                     }
                 });
 
-                let res = pre
-                    .into_iter()
+                pre.into_iter()
                     .rev()
                     .fold(target, |(acc_expr, acc_span), pre_unit| {
                         (
@@ -824,9 +823,7 @@ where
                             },
                             acc_span,
                         )
-                    });
-
-                res
+                    })
             })
             .map_with(|x, e| (x.0, e.span()))
             .boxed();

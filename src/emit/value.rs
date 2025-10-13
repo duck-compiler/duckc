@@ -223,7 +223,7 @@ fn walk_access_raw(
                 if deref_needs_to_be_mut {
                     if !can_do_mut_stuff_through(&target_obj, type_env) {
                         failure_with_occurence(
-                            format!("This needs to allow mutable access"),
+                            "This needs to allow mutable access".to_string(),
                             target_obj.1,
                             [(
                                 "This needs to allow mutable access".to_string(),
@@ -286,8 +286,7 @@ fn walk_access_raw(
                 } = &target.0
                 {
                     let ty = TypeExpr::from_value_expr_resolved_type_name_dereferenced(
-                        &target_obj,
-                        type_env,
+                        target_obj, type_env,
                     );
 
                     if let TypeExpr::Struct(struct_name) = ty {
@@ -296,7 +295,7 @@ fn walk_access_raw(
                             && !can_do_mut_stuff_through(target_obj, type_env)
                         {
                             failure_with_occurence(
-                                format!("This needs to allow mutable access"),
+                                "This needs to allow mutable access".to_string(),
                                 target.1,
                                 [(
                                     "This needs to allow mutable access".to_string(),
@@ -364,7 +363,7 @@ fn walk_access_raw(
                 if deref_needs_to_be_mut {
                     if !can_do_mut_stuff_through(&target_obj, type_env) {
                         failure_with_occurence(
-                            format!("This needs to allow mutable access"),
+                            "This needs to allow mutable access".to_string(),
                             target_obj.1,
                             [(
                                 "This needs to allow mutable access".to_string(),
@@ -436,7 +435,7 @@ fn walk_access_raw(
                 if deref_needs_to_be_mut {
                     if !can_do_mut_stuff_through(&current_obj, type_env) {
                         failure_with_occurence(
-                            format!("This needs to allow mutable access"),
+                            "This needs to allow mutable access".to_string(),
                             current_obj.1,
                             [(
                                 "This needs to allow mutable access".to_string(),
@@ -574,7 +573,7 @@ impl ValueExpr {
             ValueExpr::Deref(v) => {
                 let target_type =
                     TypeExpr::from_value_expr_resolved_type_name(&(self.clone(), span), type_env);
-                let res_type = format!("{}", target_type.as_go_type_annotation(type_env));
+                let res_type = target_type.as_go_type_annotation(type_env).to_string();
                 let (mut emit_instr, emit_res) = v.0.emit(type_env, env, span);
                 if let Some(emit_res) = emit_res {
                     let var_name = env.new_var();
@@ -592,14 +591,15 @@ impl ValueExpr {
                 }
             }
             ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
-                let t = TypeExpr::from_value_expr_resolved_type_name(&*v, type_env);
+                let t = TypeExpr::from_value_expr_resolved_type_name(v, type_env);
                 let ptr_type = format!("*{}", t.as_go_type_annotation(type_env));
 
                 let need_mut = matches!(self, ValueExpr::RefMut(..));
 
+                #[allow(clippy::never_loop)]
                 loop {
                     let (mut walk_instr, walk_res) =
-                        walk_access_raw(&v, type_env, env, span, false, false, need_mut);
+                        walk_access_raw(v, type_env, env, span, false, false, need_mut);
 
                     if let ValueExpr::FieldAccess {
                         target_obj,
@@ -608,8 +608,7 @@ impl ValueExpr {
                     | ValueExpr::ArrayAccess(target_obj, _) = &v.0
                     {
                         let t = TypeExpr::from_value_expr_resolved_type_name_dereferenced(
-                            &target_obj,
-                            type_env,
+                            target_obj, type_env,
                         );
                         let is_accessing_duck = matches!(t, TypeExpr::Duck(..));
                         if let Some(mut walk_res) = walk_res {
@@ -1132,7 +1131,7 @@ impl ValueExpr {
                                             panic!("not a var {e_res_var:?}")
                                         };
                                         return_printf.push_str("%s");
-                                        return_printf_vars.push(format!("{var_name}"));
+                                        return_printf_vars.push(var_name.to_string());
                                     } else {
                                         return (instr, None);
                                     }
@@ -1145,7 +1144,7 @@ impl ValueExpr {
                                             panic!("not a var {e_res_var:?}")
                                         };
                                         return_printf.push_str("%v");
-                                        return_printf_vars.push(format!("{var_name}"));
+                                        return_printf_vars.push(var_name.to_string());
                                     } else {
                                         return (instr, None);
                                     }
@@ -1158,7 +1157,7 @@ impl ValueExpr {
                                             panic!("not a var {e_res_var:?}")
                                         };
                                         return_printf.push_str("%v");
-                                        return_printf_vars.push(format!("{var_name}"));
+                                        return_printf_vars.push(var_name.to_string());
                                     } else {
                                         return (instr, None);
                                     }
@@ -1171,7 +1170,7 @@ impl ValueExpr {
                                             panic!("not a var {e_res_var:?}")
                                         };
                                         return_printf.push_str("%v");
-                                        return_printf_vars.push(format!("{var_name}"));
+                                        return_printf_vars.push(var_name.to_string());
                                     } else {
                                         return (instr, None);
                                     }
@@ -1629,8 +1628,7 @@ impl ValueExpr {
                         .join("");
 
                         let target_ty = TypeExpr::from_value_expr_resolved_type_name_dereferenced(
-                            &target_obj,
-                            type_env,
+                            target_obj, type_env,
                         );
                         match target_ty {
                             TypeExpr::Duck(_) => {
@@ -1665,7 +1663,7 @@ impl ValueExpr {
                         res.extend(idx_instr);
 
                         let (walk_instr, walk_res) =
-                            walk_access_raw(&target, type_env, env, span, false, true, false);
+                            walk_access_raw(target, type_env, env, span, false, true, false);
                         res.extend(walk_instr);
                         let target_res = match walk_res {
                             Some(mut s) => {
@@ -1725,13 +1723,13 @@ impl ValueExpr {
                         ));
                     } else {
                         let (walk_instr, walk_res) =
-                            walk_access(&target, type_env, env, span, false, true, true);
+                            walk_access(target, type_env, env, span, false, true, true);
                         res.extend(walk_instr);
                         let target_res = match walk_res {
                             Some(s) => s,
                             None => return (res, None),
                         };
-                        res.push(IrInstruction::VarAssignment(format!("{target_res}"), a_res));
+                        res.push(IrInstruction::VarAssignment(target_res.to_string(), a_res));
                     }
 
                     (res, Some(IrValue::empty_tuple()))
@@ -1919,6 +1917,7 @@ impl ValueExpr {
 
                 let res = v_target.0.direct_emit(type_env, env, span);
                 let mut instr = Vec::new();
+                #[allow(clippy::unnecessary_unwrap)]
                 if res.is_none() {
                     let (walk_instr, walk_res) = walk_access(
                         &(self.clone(), span),

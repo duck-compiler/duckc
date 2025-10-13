@@ -131,7 +131,10 @@ where
     //   %javascript source
     // }
     just(Token::Component)
-        .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() }.map_with(|ident, e| (ident, e.span())))
+        .ignore_then(
+            select_ref! { Token::Ident(identifier) => identifier.clone() }
+                .map_with(|ident, e| (ident, e.span())),
+        )
         .then(
             just(Token::Ident("props".to_string()))
                 .ignore_then(just(Token::ControlChar(':')))
@@ -143,12 +146,14 @@ where
             select_ref! { Token::InlineTsx(tsx_source) => tsx_source.clone() }
                 .map_with(|x, e| (x, e.span())),
         )
-        .map(|(((ident, ident_span), props_type), tsx_source)| TsxComponent {
-            name: ident.clone(),
-            props_type: props_type
-                .unwrap_or((TypeExpr::Duck(Duck { fields: Vec::new() }), ident_span)),
-            typescript_source: tsx_source,
-        })
+        .map(
+            |(((ident, ident_span), props_type), tsx_source)| TsxComponent {
+                name: ident.clone(),
+                props_type: props_type
+                    .unwrap_or((TypeExpr::Duck(Duck { fields: Vec::new() }), ident_span)),
+                typescript_source: tsx_source,
+            },
+        )
 }
 
 #[cfg(test)]

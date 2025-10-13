@@ -74,13 +74,13 @@ impl TypeExpr {
 
         return match value_expr {
             ValueExpr::Ref(v) => {
-                TypeExpr::Ref((TypeExpr::from_value_expr(v, type_env), v.1.clone()).into())
+                TypeExpr::Ref((TypeExpr::from_value_expr(v, type_env), v.1).into())
             }
             ValueExpr::RefMut(v) => {
-                TypeExpr::RefMut((TypeExpr::from_value_expr(v, type_env), v.1.clone()).into())
+                TypeExpr::RefMut((TypeExpr::from_value_expr(v, type_env), v.1).into())
             }
             ValueExpr::Deref(v) => {
-                let ty_expr = TypeExpr::from_value_expr(&*v, type_env);
+                let ty_expr = TypeExpr::from_value_expr(v, type_env);
                 if !matches!(ty_expr, TypeExpr::Ref(..) | TypeExpr::RefMut(..)) {
                     failure_with_occurence(
                         "Can only dereference a reference".to_string(),
@@ -460,11 +460,11 @@ impl TypeExpr {
                             );
 
                             // variant any replace
-                            if let TypeExpr::Array(boxed) = &in_param_types.get(index).unwrap().0 {
-                                if let TypeExpr::Or(_) = boxed.as_ref().0 {
-                                    param_type.1.0 =
-                                        TypeExpr::Array(Box::new((TypeExpr::Any, empty_range())))
-                                }
+                            if let TypeExpr::Array(boxed) = &in_param_types.get(index).unwrap().0
+                                && let TypeExpr::Or(_) = boxed.as_ref().0
+                            {
+                                param_type.1.0 =
+                                    TypeExpr::Array(Box::new((TypeExpr::Any, empty_range())))
                             }
                         });
 
@@ -573,13 +573,13 @@ impl TypeExpr {
                     failure_with_occurence(
                         "Invalid Field Access".to_string(),
                         {
-                            let mut span = span.clone();
+                            let mut span = span;
                             span.end += 2;
                             span
                         },
                         vec![(
-                            format!("this value is not object like and has no fields to access"),
-                            span.clone(),
+                            "this value is not object like and has no fields to access".to_string(),
+                            span,
                         )],
                     )
                 }
@@ -592,7 +592,7 @@ impl TypeExpr {
                     failure_with_occurence(
                         "Invalid Field Access".to_string(),
                         {
-                            let mut span = span.clone();
+                            let mut span = span;
                             span.end += 2;
                             span
                         },
@@ -604,7 +604,7 @@ impl TypeExpr {
                                     .bright_yellow(),
                                 field_name.bright_blue()
                             ),
-                            span.clone(),
+                            span,
                         )],
                     )
                 }
@@ -1564,7 +1564,7 @@ pub fn check_type_compatability(
         TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) | TypeExpr::TypeNameInternal(..) => {}
         TypeExpr::And(required_variants) => {
             for required_variant in required_variants {
-                check_type_compatability(&required_variant, &given_type, type_env);
+                check_type_compatability(required_variant, &given_type, type_env);
             }
         }
     }

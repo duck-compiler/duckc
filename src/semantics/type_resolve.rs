@@ -577,14 +577,14 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
                     TypeExpr::Array(arr) => {
                         return TypeExpr::Array(Box::new((
                             do_it(&arr.as_ref().0, span, env),
-                            span.clone(),
+                            *span,
                         )));
                     }
                     TypeExpr::Or(variants) => {
                         let keyof_variants = variants
                             .iter()
                             .map(|(variant, variant_span)| {
-                                (do_it(&variant, span, env), variant_span.clone())
+                                (do_it(variant, span, env), *variant_span)
                             })
                             .collect::<Vec<_>>();
                         return TypeExpr::Or(keyof_variants);
@@ -594,7 +594,7 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
                     }
                 };
             }
-            let mut final_type = do_it(&type_expr, &span, env);
+            let mut final_type = do_it(type_expr, &span, env);
             resolve_all_aliases_type_expr(&mut final_type, env);
             *expr = final_type;
         }
@@ -639,7 +639,7 @@ fn process_keyof_in_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                     TypeExpr::Array(arr) => {
                         return TypeExpr::Array(Box::new((
                             do_it(&arr.as_ref().0, span, type_env),
-                            span.clone(),
+                            *span,
                         )));
                     }
                     e => {
@@ -647,7 +647,7 @@ fn process_keyof_in_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                     }
                 };
             }
-            let final_type = do_it(&type_expr, &span, type_env);
+            let final_type = do_it(type_expr, &span, type_env);
             *expr = final_type;
         }
         TypeExpr::Array(t) => {
@@ -1074,10 +1074,10 @@ fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &HashMap<Strin
         | TypeExpr::Tag(..)
         | TypeExpr::InlineGo => {}
         TypeExpr::RawTypeName(_, typename, _) => {
-            if typename.len() == 1 {
-                if let Some(replacement) = set_params.get(&typename[0]) {
-                    *expr = replacement.clone();
-                }
+            if typename.len() == 1
+                && let Some(replacement) = set_params.get(&typename[0])
+            {
+                *expr = replacement.clone();
             }
         }
         TypeExpr::And(variants) => {
@@ -1102,7 +1102,7 @@ fn resolve_by_string(
             for (generic, val_to_set) in generics.iter().map(|x| &x.0).zip(user_generics.iter()) {
                 let generic_name = generic.name.clone();
                 if let Some(constraint) = &generic.constraint {
-                    check_type_compatability(&constraint, val_to_set, type_env);
+                    check_type_compatability(constraint, val_to_set, type_env);
                 }
 
                 gen_instance_map.insert(generic_name, val_to_set.0.clone());
@@ -1876,12 +1876,11 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         type_env.function_definitions.push(fn_def.clone());
         let mut function_type = fn_def.type_expr().0;
 
-        if let TypeExpr::Fun(_, return_type) = &mut function_type {
-            if let Some(return_type_box) = return_type {
-                if let TypeExpr::And(_) = &return_type_box.0 {
-                    return_type_box.0 = translate_interception_to_duck(&return_type_box.0);
-                }
-            }
+        if let TypeExpr::Fun(_, return_type) = &mut function_type
+            && let Some(return_type_box) = return_type
+            && let TypeExpr::And(_) = &return_type_box.0
+        {
+            return_type_box.0 = translate_interception_to_duck(&return_type_box.0);
         }
 
         type_env.insert_identifier_type(fn_def.name.clone(), function_type, true);
@@ -1964,12 +1963,11 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     }),
             );
 
-            if let TypeExpr::Fun(_, return_type) = &mut fn_type_expr {
-                if let Some(return_type_box) = return_type {
-                    if let TypeExpr::And(_) = &return_type_box.0 {
-                        return_type_box.0 = translate_interception_to_duck(&return_type_box.0);
-                    }
-                }
+            if let TypeExpr::Fun(_, return_type) = &mut fn_type_expr
+                && let Some(return_type_box) = return_type
+                && let TypeExpr::And(_) = &return_type_box.0
+            {
+                return_type_box.0 = translate_interception_to_duck(&return_type_box.0);
             }
 
             type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr, true);
@@ -2153,7 +2151,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     let value_expr = value_expr.0;
     match value_expr {
         ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
-            typeresolve_value_expr((&mut v.0, v.1.clone()), type_env)
+            typeresolve_value_expr((&mut v.0, v.1), type_env)
         }
 
         ValueExpr::HtmlString(contents) => {
@@ -2305,7 +2303,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                         failure_with_occurence(
                             "Invalid Field Access".to_string(),
                             {
-                                let mut span = span.clone();
+                                let mut span = span;
                                 span.end += 2;
                                 span
                             },
@@ -2315,7 +2313,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                                     struct_name.bright_yellow(),
                                     field_name.bright_blue()
                                 ),
-                                span.clone(),
+                                span,
                             )],
                         );
                     }

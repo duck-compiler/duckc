@@ -3,11 +3,7 @@ use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
 use crate::parse::value_parser::value_expr_parser;
-use crate::{
-    parse::{
-        value_parser::ValueExpr, Spanned, SS
-    },
-};
+use crate::parse::{SS, Spanned, value_parser::ValueExpr};
 
 use super::lexer::Token;
 
@@ -17,7 +13,9 @@ pub struct TestCase {
     pub body: Spanned<ValueExpr>,
 }
 
-pub fn test_parser<'src, I, M>(make_input: M) -> impl Parser<'src, I, Spanned<TestCase>, extra::Err<Rich<'src, Token, SS>>> + Clone
+pub fn test_parser<'src, I, M>(
+    make_input: M,
+) -> impl Parser<'src, I, Spanned<TestCase>, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
     M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
@@ -77,8 +75,7 @@ pub mod tests {
             unreachable!();
         };
 
-        let parse_result = test_parser(make_input)
-            .parse(make_input(empty_range(), &tokens));
+        let parse_result = test_parser(make_input).parse(make_input(empty_range(), &tokens));
 
         assert!(
             !parse_result.has_errors(),
@@ -116,8 +113,8 @@ pub mod tests {
                 name: "lol".to_string(),
                 body: (
                     ValueExpr::Block(vec![(ValueExpr::Return(None), empty_range())]),
-                    empty_range()
-                )
+                    empty_range(),
+                ),
             },
         );
     }

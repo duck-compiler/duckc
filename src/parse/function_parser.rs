@@ -32,11 +32,11 @@ impl FunctionDefintion {
     pub fn to_header(&self) -> FunHeader {
         let mut return_type = self.return_type.clone();
 
-        if let Some((return_type_expr, _span)) = &mut return_type {
-            if let TypeExpr::And(_) = &return_type_expr {
-                use crate::semantics::type_resolve::translate_interception_to_duck;
-                *return_type_expr = translate_interception_to_duck(return_type_expr);
-            }
+        if let Some((return_type_expr, _span)) = &mut return_type
+            && let TypeExpr::And(_) = &return_type_expr
+        {
+            use crate::semantics::type_resolve::translate_interception_to_duck;
+            *return_type_expr = translate_interception_to_duck(return_type_expr);
         }
 
         FunHeader {
@@ -54,11 +54,11 @@ impl FunctionDefintion {
         // todo: retrieve correct span for function defintions typeexpr
         let mut return_type = self.return_type.clone();
 
-        if let Some((return_type_expr, _span)) = &mut return_type {
-            if let TypeExpr::And(_) = &return_type_expr {
-                use crate::semantics::type_resolve::translate_interception_to_duck;
-                *return_type_expr = translate_interception_to_duck(return_type_expr);
-            }
+        if let Some((return_type_expr, _span)) = &mut return_type
+            && let TypeExpr::And(_) = &return_type_expr
+        {
+            use crate::semantics::type_resolve::translate_interception_to_duck;
+            *return_type_expr = translate_interception_to_duck(return_type_expr);
         }
 
         return (

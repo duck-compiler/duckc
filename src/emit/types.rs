@@ -563,10 +563,7 @@ impl TypeExpr {
                     "Tup_{}",
                     fields
                         .iter()
-                        .map(|type_expr| type_expr
-                            .0
-                            .as_clean_go_type_name(type_env)
-                            .to_string())
+                        .map(|type_expr| type_expr.0.as_clean_go_type_name(type_env).to_string())
                         .collect::<Vec<_>>()
                         .join("_")
                 )
@@ -621,11 +618,7 @@ impl TypeExpr {
                 "Duck_{}",
                 duck.fields
                     .iter()
-                    .map(|field| format!(
-                        "{}_{}",
-                        field.name,
-                        field.type_expr.0.type_id(type_env)
-                    ))
+                    .map(|field| format!("{}_{}", field.name, field.type_expr.0.type_id(type_env)))
                     .collect::<Vec<_>>()
                     .join("_")
             ),
@@ -726,10 +719,7 @@ impl TypeExpr {
                     "Tup_{}",
                     fields
                         .iter()
-                        .map(|type_expr| type_expr
-                            .0
-                            .as_clean_go_type_name(type_env)
-                            .to_string())
+                        .map(|type_expr| type_expr.0.as_clean_go_type_name(type_env).to_string())
                         .collect::<Vec<_>>()
                         .join("_")
                 )

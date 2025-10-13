@@ -118,11 +118,14 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
                     Tag::Build,
                     Tag::Err,
                 ),
-                RunErrKind::MissingTargetBinary
-            ))
+                RunErrKind::MissingTargetBinary,
+            ));
         };
 
-        let binary = build_result.binaries.iter().find(|binary| *binary.0 == *binary_name);
+        let binary = build_result
+            .binaries
+            .iter()
+            .find(|binary| *binary.0 == *binary_name);
         if binary.is_none() {
             return Err((
                 format!(
@@ -131,8 +134,8 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
                     Tag::Err,
                     binary_name
                 ),
-                RunErrKind::NoBinaryFound
-            ))
+                RunErrKind::NoBinaryFound,
+            ));
         }
 
         let binary = binary.unwrap();
@@ -141,30 +144,25 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
         let first_binary = build_result.binaries.first();
         if first_binary.is_none() {
             return Err((
-                format!(
-                    "{}{} missing target binary to run.",
-                    Tag::Build,
-                    Tag::Err,
-                ),
-                RunErrKind::NoBinaryFound
-            ))
+                format!("{}{} missing target binary to run.", Tag::Build, Tag::Err,),
+                RunErrKind::NoBinaryFound,
+            ));
         }
 
         let first_binary = first_binary.unwrap();
         first_binary.1.clone()
     };
 
-    let full_path_name = binary_path.canonicalize()
-        .map_err(|err| {
-            (
-                format!(
-                    "{}{} couldn't canonicalize path name of just compiled duck binary",
-                    Tag::IO,
-                    Tag::Err
-                ),
-                RunErrKind::IOErr(err.kind()),
-            )
-        })?;
+    let full_path_name = binary_path.canonicalize().map_err(|err| {
+        (
+            format!(
+                "{}{} couldn't canonicalize path name of just compiled duck binary",
+                Tag::IO,
+                Tag::Err
+            ),
+            RunErrKind::IOErr(err.kind()),
+        )
+    })?;
 
     Command::new(full_path_name.clone())
         .spawn()

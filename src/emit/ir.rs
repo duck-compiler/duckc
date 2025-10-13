@@ -1,6 +1,4 @@
-use crate::emit::{
-    value::{Case, IrInstruction, IrValue},
-};
+use crate::emit::value::{Case, IrInstruction, IrValue};
 
 impl IrInstruction {
     fn emit_as_go(&self) -> String {
@@ -13,7 +11,7 @@ impl IrInstruction {
                         String::from("\"\"")
                     } else {
                         v.iter()
-                            .map(|x| format!("{}", x.emit_as_go()))
+                            .map(|x| x.emit_as_go().to_string())
                             .collect::<Vec<_>>()
                             .join(" + ")
                     }
@@ -143,40 +141,20 @@ impl IrInstruction {
             IrInstruction::GoPackage(s) => format!("package {s}"),
             IrInstruction::Add(r, left, right, _type_expr) => {
                 // TODO: check if this is correct
-                format!(
-                    "{r} = {} + {}",
-                    left.emit_as_go(),
-                    right.emit_as_go(),
-                )
+                format!("{r} = {} + {}", left.emit_as_go(), right.emit_as_go(),)
             }
             IrInstruction::Mul(r, v1, v2, _type_expr) => {
                 // TODO: check if this is correct
-                format!(
-                    "{r} = {} * {}",
-                    v1.emit_as_go(),
-                    v2.emit_as_go(),
-                )
+                format!("{r} = {} * {}", v1.emit_as_go(), v2.emit_as_go(),)
             }
             IrInstruction::Sub(r, v1, v2, _type_expr) => {
-                format!(
-                    "{r} = {} - {}",
-                    v1.emit_as_go(),
-                    v2.emit_as_go(),
-                )
+                format!("{r} = {} - {}", v1.emit_as_go(), v2.emit_as_go(),)
             }
             IrInstruction::Div(r, v1, v2, _type_expr) => {
-                format!(
-                    "{r} = {} / {}",
-                    v1.emit_as_go(),
-                    v2.emit_as_go(),
-                )
+                format!("{r} = {} / {}", v1.emit_as_go(), v2.emit_as_go(),)
             }
             IrInstruction::Mod(r, v1, v2, _type_expr) => {
-                format!(
-                    "{r} = {} % {}",
-                    v1.emit_as_go(),
-                    v2.emit_as_go(),
-                )
+                format!("{r} = {} % {}", v1.emit_as_go(), v2.emit_as_go(),)
             }
             IrInstruction::Continue => "continue".to_string(),
             IrInstruction::Break => "break".to_string(),
@@ -187,60 +165,28 @@ impl IrInstruction {
                     .unwrap_or("".to_string())
             ),
             IrInstruction::Equals(r, v1, v2, _type_expr) => {
-                format!(
-                    "{r} = {} == {}",
-                    v1.emit_as_go(),
-                    v2.emit_as_go(),
-                )
+                format!("{r} = {} == {}", v1.emit_as_go(), v2.emit_as_go(),)
             }
             IrInstruction::NotEquals(r, v1, v2, _type_expr) => {
-                format!(
-                    "{r} = {} != {}",
-                    v1.emit_as_go(),
-                    v2.emit_as_go(),
-                )
+                format!("{r} = {} != {}", v1.emit_as_go(), v2.emit_as_go(),)
             }
             IrInstruction::LessThan(r, v1, v2, _type_expr) => {
-                format!(
-                    "{r} = {} < {}",
-                    v1.emit_as_go(),
-                    v2.emit_as_go(),
-                )
+                format!("{r} = {} < {}", v1.emit_as_go(), v2.emit_as_go(),)
             }
             IrInstruction::LessThanOrEquals(r, v1, v2, _type_expr) => {
-                format!(
-                    "{r} = {} <= {}",
-                    v1.emit_as_go(),
-                    v2.emit_as_go(),
-                )
+                format!("{r} = {} <= {}", v1.emit_as_go(), v2.emit_as_go(),)
             }
             IrInstruction::GreaterThan(r, v1, v2, _type_expr) => {
-                format!(
-                    "{r} = {} > {}",
-                    v1.emit_as_go(),
-                    v2.emit_as_go(),
-                )
+                format!("{r} = {} > {}", v1.emit_as_go(), v2.emit_as_go(),)
             }
             IrInstruction::GreaterThanOrEquals(r, v1, v2, _type_expr) => {
-                format!(
-                    "{r} = {} >= {}",
-                    v1.emit_as_go(),
-                    v2.emit_as_go(),
-                )
+                format!("{r} = {} >= {}", v1.emit_as_go(), v2.emit_as_go(),)
             }
             IrInstruction::And(r, v1, v2, _type_expr) => {
-                format!(
-                    "{r} = {} && {}",
-                    v1.emit_as_go(),
-                    v2.emit_as_go(),
-                )
+                format!("{r} = {} && {}", v1.emit_as_go(), v2.emit_as_go(),)
             }
             IrInstruction::Or(r, v1, v2, _type_expr) => {
-                format!(
-                    "{r} = {} || {}",
-                    v1.emit_as_go(),
-                    v2.emit_as_go(),
-                )
+                format!("{r} = {} || {}", v1.emit_as_go(), v2.emit_as_go(),)
             }
             IrInstruction::Block(block_instr) => {
                 format!("{{\n{}\n}}", join_ir(block_instr))
@@ -456,10 +402,7 @@ impl IrValue {
                 )
             }
             IrValue::Nil => "nil".to_string(),
-            IrValue::BoolNegate(o) => format!(
-                "!{}",
-                o.emit_as_go()
-            ),
+            IrValue::BoolNegate(o) => format!("!{}", o.emit_as_go()),
             IrValue::Lambda(params, return_type, body) => format!(
                 "func({}) {} {{\n{}\n}} ",
                 params

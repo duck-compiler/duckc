@@ -21,7 +21,10 @@ pub enum TestErrKind {
 }
 
 lazy_static! {
-    static ref COMPILE_TEST_TAG: String = " compile test ".on_bright_black().bright_white().to_string();
+    static ref COMPILE_TEST_TAG: String = " compile test "
+        .on_bright_black()
+        .bright_white()
+        .to_string();
 }
 
 pub fn test(test_args: &TestArgs) -> Result<(), (String, TestErrKind)> {
@@ -118,11 +121,14 @@ pub fn test(test_args: &TestArgs) -> Result<(), (String, TestErrKind)> {
                     Tag::Build,
                     Tag::Err,
                 ),
-                TestErrKind::MissingTargetBinary
-            ))
+                TestErrKind::MissingTargetBinary,
+            ));
         };
 
-        let binary = build_result.binaries.iter().find(|binary| *binary.0 == *binary_name);
+        let binary = build_result
+            .binaries
+            .iter()
+            .find(|binary| *binary.0 == *binary_name);
         if binary.is_none() {
             return Err((
                 format!(
@@ -131,8 +137,8 @@ pub fn test(test_args: &TestArgs) -> Result<(), (String, TestErrKind)> {
                     Tag::Err,
                     binary_name
                 ),
-                TestErrKind::NoBinaryFound
-            ))
+                TestErrKind::NoBinaryFound,
+            ));
         }
 
         let binary = binary.unwrap();
@@ -141,30 +147,25 @@ pub fn test(test_args: &TestArgs) -> Result<(), (String, TestErrKind)> {
         let first_binary = build_result.binaries.first();
         if first_binary.is_none() {
             return Err((
-                format!(
-                    "{}{} missing target binary to run.",
-                    Tag::Build,
-                    Tag::Err,
-                ),
-                TestErrKind::NoBinaryFound
-            ))
+                format!("{}{} missing target binary to run.", Tag::Build, Tag::Err,),
+                TestErrKind::NoBinaryFound,
+            ));
         }
 
         let first_binary = first_binary.unwrap();
         first_binary.1.clone()
     };
 
-    let full_path_name = binary_path.canonicalize()
-        .map_err(|err| {
-            (
-                format!(
-                    "{}{} couldn't canonicalize path name of just compiled duck binary",
-                    Tag::IO,
-                    Tag::Err
-                ),
-                TestErrKind::IOErr(err.kind()),
-            )
-        })?;
+    let full_path_name = binary_path.canonicalize().map_err(|err| {
+        (
+            format!(
+                "{}{} couldn't canonicalize path name of just compiled duck binary",
+                Tag::IO,
+                Tag::Err
+            ),
+            TestErrKind::IOErr(err.kind()),
+        )
+    })?;
 
     Command::new(full_path_name.clone())
         .spawn()
