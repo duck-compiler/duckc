@@ -192,12 +192,16 @@ fn walk_access_raw(
     let mut derefs = Vec::new();
     let mut stars = 0;
 
+    let mut is_calling_fun = false;
+
     loop {
+        let cloned = is_calling_fun;
+        is_calling_fun = false;
         match current_obj.0 {
             ValueExpr::Variable(_, name, _type_expr, is_const) => {
                 s.push_front(name.clone());
 
-                if is_const.is_some_and(|v| v) && last_needs_mut && stars == 0 {
+                if is_const.is_some_and(|v| v) && last_needs_mut && stars == 0 && !cloned {
                     failure(
                         current_obj.1.context.file_name,
                         format!("NEED LET VAR {stars} {name}"),
@@ -278,6 +282,7 @@ fn walk_access_raw(
                 params,
                 type_params: _,
             } => {
+                is_calling_fun = true;
                 let mut param_res = Vec::new();
 
                 if let ValueExpr::FieldAccess {

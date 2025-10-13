@@ -53,7 +53,7 @@ fn main() {
 
     s_arr[0][0].s_mut_fn();
 
-    const test_var = &S {x: 100};
+    let test_var = &mut S {x: 100};
     test_var.x = 99;
 
     const const_arr = &mut ["a", "b", "c"];
@@ -89,7 +89,6 @@ fn main() {
 
     let part_ref = &mut &mut &mut p.name;
     ***part_ref = "abc";
-    std::io::debug(p);
 
     let r1: &mut Person = &mut p;
     r1.other.x = 100;
@@ -127,6 +126,4 @@ fn main() {
     let yyyyyyyy = ***************************************yyyyyyy;
     let yyyyyyyyy = &&&mut &&&&&&&mut &&&&mut &&&mut &&&mut &&&&&&&&mut &&&&&&mut &&&&&(&10, "hallo", &(1, 2, 3));
     let yyyyyyyyyy = ***************************************yyyyyyy;
-    std::io::debug(yyyyyyyy);
-    std::io::debug(yyyyyyyyyy);
 }

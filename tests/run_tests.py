@@ -9,6 +9,7 @@ import re
 
 VERBOSE = False
 CICD = False
+BUILD_DUCKC_IN_RELEASE = False
 UPDATE_SNAPSHOTS = False
 ONLY_ERRORS = False
 
@@ -434,7 +435,7 @@ def perform_tests():
         "skipped": 0
     }
 
-    compiler_path = build_and_move_cargo_binary("dargo");
+    compiler_path = build_and_move_cargo_binary("dargo", "release" if BUILD_DUCKC_IN_RELEASE else "debug");
 
     print(f"{COLOR_YELLOW}Duck Compiler is located at {COLOR_RESET}{compiler_path}{COLOR_RESET}")
 
@@ -481,6 +482,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        '--release',
+        action='store_true',
+        help='Build the duck compiler with optimizations'
+    )
+
+    parser.add_argument(
         '-u', '--update',
         action='store_true',
         dest='update_snapshots',
@@ -511,5 +518,9 @@ if __name__ == "__main__":
     ONLY_ERRORS = args.errors_only
     if ONLY_ERRORS:
         print(f"{COLOR_YELLOW}Running in Errors only mode. {COLOR_RESET}")
+
+    BUILD_DUCKC_IN_RELEASE = args.release
+    if BUILD_DUCKC_IN_RELEASE:
+        print(f"{COLOR_YELLOW}Building duckc in release mode.{COLOR_RESET}")
 
     perform_tests()
