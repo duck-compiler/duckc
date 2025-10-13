@@ -6,7 +6,12 @@ use std::{
 use crate::{
     emit::types::escape_string_for_go,
     parse::{
-        duckx_component_parser::find_client_components, failure, failure_with_occurence, function_parser::LambdaFunctionExpr, type_parser::{Duck, TypeExpr}, value_parser::{Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Spanned, SS
+        SS, Spanned,
+        duckx_component_parser::find_client_components,
+        failure, failure_with_occurence,
+        function_parser::LambdaFunctionExpr,
+        type_parser::{Duck, TypeExpr},
+        value_parser::{Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr},
     },
     semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
 };
@@ -145,6 +150,32 @@ pub fn as_var(s: impl Into<String>) -> IrValue {
     IrValue::Var(s.into())
 }
 
+fn can_do_mut_stuff_through(v: &Spanned<ValueExpr>, type_env: &mut TypeEnv) -> bool {
+    let mut ty = TypeExpr::from_value_expr_resolved_type_name(v, type_env);
+
+    if matches!(ty, TypeExpr::RefMut(..)) {
+        while let TypeExpr::RefMut(to) = ty {
+            if matches!(&to.0, TypeExpr::Ref(..)) {
+                return false;
+            }
+            ty = to.0;
+        }
+        true
+    } else if matches!(ty, TypeExpr::Ref(..)) {
+        false
+    } else if let ValueExpr::ArrayAccess(target_obj, _) = &v.0 {
+        can_do_mut_stuff_through(target_obj, type_env)
+    } else if let ValueExpr::FieldAccess {
+        target_obj,
+        field_name: _,
+    } = &v.0
+    {
+        can_do_mut_stuff_through(target_obj, type_env)
+    } else {
+        !matches!(&v.0, ValueExpr::Variable(_, _, _, Some(true)))
+    }
+}
+
 fn walk_access_raw(
     obj: &Spanned<ValueExpr>,
     type_env: &mut TypeEnv,
@@ -156,7 +187,6 @@ fn walk_access_raw(
 ) -> (Vec<IrInstruction>, Option<Vec<String>>) {
     let mut res_instr = VecDeque::new();
     let mut current_obj = obj.clone();
-    let mut is_calling_mut = false;
     let mut s = VecDeque::new();
 
     let mut derefs = Vec::new();
@@ -173,7 +203,7 @@ fn walk_access_raw(
                         format!("NEED LET VAR {stars} {name}"),
                         ("need let var".to_string(), current_obj.1),
                         [],
-                        current_obj.1.context.file_contents
+                        current_obj.1.context.file_contents,
                     );
                 }
 
@@ -190,21 +220,23 @@ fn walk_access_raw(
                     TypeExpr::from_value_expr_resolved_type_name(&target_obj, type_env);
 
                 let mut stars_to_set = 0;
-                if (deref_needs_to_be_mut && stars > 0) || is_calling_mut {
-                    if let ValueExpr::Variable(_, _, t, Some(true)) = &target_obj.0
-                        && !matches!(
-                            t.as_ref().unwrap(),
-                            TypeExpr::RefMut(..) | TypeExpr::Ref(..)
-                        )
-                    {
-                        panic!("ONLY MUT VARS",);
+                if deref_needs_to_be_mut {
+                    if !can_do_mut_stuff_through(&target_obj, type_env) {
+                        failure_with_occurence(
+                            format!("This needs to allow mutable access"),
+                            target_obj.1,
+                            [(
+                                "This needs to allow mutable access".to_string(),
+                                target_obj.1,
+                            )],
+                        );
                     }
 
-                    is_calling_mut = false;
                     while let TypeExpr::RefMut(v) = type_expr {
                         type_expr = v.0;
                         stars_to_set += 1;
                     }
+
                     if let TypeExpr::Ref(_) = type_expr {
                         panic!(
                             "need only mut refs for mut stuff {}..{}",
@@ -260,9 +292,17 @@ fn walk_access_raw(
 
                     if let TypeExpr::Struct(struct_name) = ty {
                         let struct_def = type_env.get_struct_def(struct_name.as_str());
-                        if struct_def.mut_methods.contains(field_name) {
-                            is_calling_mut = true;
-                            dbg!(&field_name, &target_obj);
+                        if struct_def.mut_methods.contains(field_name)
+                            && !can_do_mut_stuff_through(target_obj, type_env)
+                        {
+                            failure_with_occurence(
+                                format!("This needs to allow mutable access"),
+                                target.1,
+                                [(
+                                    "This needs to allow mutable access".to_string(),
+                                    target_obj.1,
+                                )],
+                            );
                         }
                     }
                 }
@@ -285,7 +325,7 @@ fn walk_access_raw(
                 let mut type_expr = TypeExpr::from_value_expr_resolved_type_name(&target, type_env);
 
                 let mut stars_to_set = 0;
-                if deref_needs_to_be_mut || is_calling_mut {
+                if deref_needs_to_be_mut {
                     while let TypeExpr::RefMut(v) = type_expr {
                         type_expr = v.0;
                         stars_to_set += 1;
@@ -321,17 +361,18 @@ fn walk_access_raw(
                     TypeExpr::from_value_expr_resolved_type_name(&target_obj, type_env);
 
                 let mut stars_to_set = 0;
-                if (deref_needs_to_be_mut && stars > 0) || is_calling_mut {
-                    if let ValueExpr::Variable(_, _, t, Some(true)) = &target_obj.0
-                        && !matches!(
-                            t.as_ref().unwrap(),
-                            TypeExpr::RefMut(..) | TypeExpr::Ref(..)
-                        )
-                    {
-                        panic!("ONLY MUT VARS",);
+                if deref_needs_to_be_mut {
+                    if !can_do_mut_stuff_through(&target_obj, type_env) {
+                        failure_with_occurence(
+                            format!("This needs to allow mutable access"),
+                            target_obj.1,
+                            [(
+                                "This needs to allow mutable access".to_string(),
+                                target_obj.1,
+                            )],
+                        );
                     }
 
-                    is_calling_mut = false;
                     while let TypeExpr::RefMut(v) = type_expr {
                         type_expr = v.0;
                         stars_to_set += 1;
@@ -393,13 +434,15 @@ fn walk_access_raw(
                     TypeExpr::from_value_expr_resolved_type_name(&current_obj, type_env);
 
                 if deref_needs_to_be_mut {
-                    if let ValueExpr::Variable(_, _, t, Some(true)) = &current_obj.0
-                        && !matches!(
-                            t.as_ref().unwrap(),
-                            TypeExpr::RefMut(..) | TypeExpr::Ref(..)
-                        )
-                    {
-                        panic!("ONLY MUT VARS",);
+                    if !can_do_mut_stuff_through(&current_obj, type_env) {
+                        failure_with_occurence(
+                            format!("This needs to allow mutable access"),
+                            current_obj.1,
+                            [(
+                                "This needs to allow mutable access".to_string(),
+                                current_obj.1,
+                            )],
+                        );
                     }
                     while let TypeExpr::RefMut(v) = type_expr {
                         type_expr = v.0;
@@ -407,7 +450,9 @@ fn walk_access_raw(
                     if let TypeExpr::Ref(_) = type_expr {
                         panic!(
                             "need only mut refs for mut stuff {}..{} {}",
-                            span.start, span.end, &span.context.file_contents[span.end - 20..],
+                            span.start,
+                            span.end,
+                            &span.context.file_contents[span.end - 20..],
                         );
                     }
                 } else {

@@ -31,11 +31,12 @@ struct S = {
     fn twice() -> &S {
         return &S {x: self.x * 2};
     }
+
     fn thrice() -> &&&&&S {
         return &&&&&S {x: self.x * 3};
     }
 
-    mut fn s_mut_fn() {}
+    mut fn s_mut_fn() -> &mut S { return self; }
 };
 
 fn get_s() -> &&S { return &&S{x: 10000}; }
@@ -44,8 +45,16 @@ fn takes_ref(r: &Person) {}
 fn takes_mut_ref(r: &mut Person) {}
 
 fn main() {
-    const s_arr = [S {x: 2110}];
-    s_arr[0].s_mut_fn();
+    //(&&mut S { x: 21100 }).s_mut_fn().s_mut_fn();
+    let s_arr = [[S {x: 2110}]];
+
+    const my_number = &mut &mut 10;
+    **my_number = **my_number + 1;
+
+    s_arr[0][0].s_mut_fn();
+
+    const test_var = &S {x: 100};
+    test_var.x = 99;
 
     const const_arr = &mut ["a", "b", "c"];
     const_arr[1] = "aaa";
