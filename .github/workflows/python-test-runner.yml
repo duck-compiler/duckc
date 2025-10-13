@@ -31,4 +31,4 @@ jobs:
         ./install_std.sh
         cd ./tests
         export RUST_BACKTRACE=0
-        python run_tests.py --cicd
+        python run_tests.py --cicd --release
