@@ -622,10 +622,7 @@ fn find_type_methods(
 }
 
 fn find_special_method_names(live_set: &HashSet<String>) -> HashSet<String> {
-    live_set
-        .iter()
-        .cloned()
-        .collect()
+    live_set.iter().cloned().collect()
 }
 
 fn add_special_methods(

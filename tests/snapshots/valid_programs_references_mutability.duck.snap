@@ -1,0 +1,4 @@
+{
+    "stdout": "say_hello from hallo\nS(x = 600) abc!\nS(x = -99) abc!\nS(x = -198) abc!\nS(x = -594) abc!\nS(x = -1188) abc!\n[replaced]\n[replaced]\n20\n100\n100\n300\n10\n",
+    "stderr": ""
+}

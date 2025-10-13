@@ -3,7 +3,7 @@ pub mod clean;
 pub mod cli;
 pub mod compile;
 pub mod compile_test;
-pub mod test;
 pub mod init;
 pub mod loader;
 pub mod run;
+pub mod test;

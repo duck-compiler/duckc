@@ -1,0 +1,129 @@
+struct Person = {
+    name: String,
+    r: &mut Int,
+    r2: &Int,
+    age: Int,
+    other: &mut &mut &mut S,
+} impl {
+    fn say_hello() {
+        std::io::println(f"say_hello from {self.name}");
+    }
+
+    fn clone() -> Person {
+    }
+
+    fn a() -> S {
+        return S { x: -99 };
+    }
+    fn b() -> &&S {
+        return &&S { x: -99 };
+    }
+};
+
+struct S = {
+    x: Int,
+} impl {
+    fn abc() -> S {
+        std::io::println(f"S(x = {std::string::from_int(self.x)}) abc!");
+        return *self;
+    }
+
+    fn twice() -> &S {
+        return &S {x: self.x * 2};
+    }
+
+    fn thrice() -> &&&&&S {
+        return &&&&&S {x: self.x * 3};
+    }
+
+    mut fn s_mut_fn() -> &mut S { return self; }
+};
+
+fn get_s() -> &&S { return &&S{x: 10000}; }
+
+fn takes_ref(r: &Person) {}
+fn takes_mut_ref(r: &mut Person) {}
+
+fn main() {
+    //(&&mut S { x: 21100 }).s_mut_fn().s_mut_fn();
+    let s_arr = [[S {x: 2110}]];
+
+    const my_number = &mut &mut 10;
+    **my_number = **my_number + 1;
+
+    s_arr[0][0].s_mut_fn();
+
+    let test_var = &mut S {x: 100};
+    test_var.x = 99;
+
+    const const_arr = &mut ["a", "b", "c"];
+    const_arr[1] = "aaa";
+
+    let xxx = 10;
+    const xxx_ref = &mut xxx;
+    *xxx_ref = 100;
+
+    let p: Person = Person { name: "hallo", age: 20, r: &mut 100, r2: &200, other: &mut &mut &mut S{x: 10},};
+    p.say_hello();
+
+    let s = &mut &mut .&mut &mut S[&mut &mut S {x: 100}, &mut &mut S{x: 102}];
+    s[1].x = 300;
+    s[1].twice().abc();
+
+    let ss = s[0].x;
+
+//    get_s().abc().twice().abc().thrice().abc().twice().abc();
+//    p.b().abc().twice().abc().thrice().abc().twice().abc();
+    (&&&p).b().abc().twice().abc().thrice().abc().twice().abc();
+
+    let arr = .String["hallo"];
+    arr[0] = "replaced";
+
+    let arr_ref = &mut .String["hallo"];
+    arr_ref[0] = "replaced";
+    std::io::debug(*arr_ref);
+
+    let arr_ref_2 = &mut arr;
+    arr_ref[0] = "replaced";
+    std::io::debug(arr);
+
+    let part_ref = &mut &mut &mut p.name;
+    ***part_ref = "abc";
+
+    let r1: &mut Person = &mut p;
+    r1.other.x = 100;
+    std::io::debug(r1.age);
+    let trippleR1: &&&Person = &&&p;
+    *r1.r = 300;
+    std::io::debug(r1.other.x);
+    std::io::debug(trippleR1.other.x);
+    std::io::debug(*trippleR1.r);
+    let r2: &Person = &mut p;
+    let r3: &mut Person = &mut p;
+    takes_ref(r2);
+    takes_ref(r3);
+    takes_ref(&p);
+    takes_ref(&mut p);
+    takes_mut_ref(r3);
+    takes_mut_ref(&mut p);
+
+    let d = { x: 10 };
+    let d2: &{x: Int } = &d;
+    let d3 = &d;
+
+    let i = 10;
+    let z = &mut &mut i;
+    let zz2 = &mut &z;
+    *z = &mut 30;
+    std::io::debug(i);
+    let zref = &mut z;
+
+    let yy = &(10, "hallo");
+    let yyy = &(&10, "hallo");
+    let yyyy = &(&10, "hallo", &(1, 2, 3));
+
+    let yyyyyyy = &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&(&10, "hallo", &(1, 2, 3));
+    let yyyyyyyy = ***************************************yyyyyyy;
+    let yyyyyyyyy = &&&mut &&&&&&&mut &&&&mut &&&mut &&&mut &&&&&&&&mut &&&&&&mut &&&&&(&10, "hallo", &(1, 2, 3));
+    let yyyyyyyyyy = ***************************************yyyyyyy;
+}

@@ -7,7 +7,6 @@ use toml;
 
 use crate::tags::Tag;
 
-
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(untagged)]
 pub enum Dependency {

@@ -113,7 +113,10 @@ where
     //   %javascript source
     // }
     just(Token::Template)
-        .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() })
+        .ignore_then(
+            select_ref! { Token::Ident(identifier) => identifier.clone() }
+                .map_with(|ident, e| (ident, e.span())),
+        )
         .then(
             just(Token::Ident("props".to_string()))
                 .ignore_then(just(Token::ControlChar(':')))
@@ -122,18 +125,20 @@ where
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
         )
         .then(value_expr_parser(make_input))
-        .map(|((ident, props_type), src_tokens)| DuckxComponent {
-            name: ident.clone(),
-            props_type: props_type
-                .unwrap_or(TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span()),
-            value_expr: if let ValueExpr::Duck(fields) = &src_tokens.0
-                && fields.is_empty()
-            {
-                (ValueExpr::Block(vec![]), src_tokens.1)
-            } else {
-                src_tokens
+        .map(
+            |(((ident, ident_span), props_type), src_tokens)| DuckxComponent {
+                name: ident.clone(),
+                props_type: props_type
+                    .unwrap_or((TypeExpr::Duck(Duck { fields: Vec::new() }), ident_span)),
+                value_expr: if let ValueExpr::Duck(fields) = &src_tokens.0
+                    && fields.is_empty()
+                {
+                    (ValueExpr::Block(vec![]), src_tokens.1)
+                } else {
+                    src_tokens
+                },
             },
-        })
+        )
 }
 
 #[cfg(test)]
@@ -141,7 +146,7 @@ mod tests {
     use crate::parse::{
         lexer::lex_parser,
         make_input,
-        value_parser::{empty_range, value_expr_into_empty_range},
+        value_parser::{empty_range, type_expr_into_empty_range, value_expr_into_empty_range},
     };
 
     use super::*;
@@ -177,6 +182,7 @@ mod tests {
                 unreachable!()
             };
             value_expr_into_empty_range(&mut ast.value_expr);
+            type_expr_into_empty_range(&mut ast.props_type);
             assert_eq!(ast, expected_ast);
         }
 

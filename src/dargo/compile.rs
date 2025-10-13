@@ -4,7 +4,16 @@ use lazy_static::lazy_static;
 use std::{ffi::OsString, fs, path::PathBuf, sync::mpsc, time::Duration};
 
 use crate::{
-    cli::go_cli::{self, GoCliErrKind}, dargo::cli::CompileArgs, emit::{ir::join_ir, types::escape_string_for_go}, go_fixup::remove_unused_imports::cleanup_go_source, lex, parse::value_parser::empty_range, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
+    DARGO_DOT_DIR,
+    cli::go_cli::{self, GoCliErrKind},
+    dargo::cli::CompileArgs,
+    emit::{ir::join_ir, types::escape_string_for_go},
+    go_fixup::remove_unused_imports::cleanup_go_source,
+    lex,
+    parse::value_parser::empty_range,
+    parse_src_file,
+    tags::Tag,
+    typecheck, write_in_duck_dotdir,
 };
 
 #[derive(Debug)]
@@ -133,7 +142,10 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         .expect("tailwind timed out");
 
     go_code = cleanup_go_source(&go_code, true);
-    go_code = format!("{go_code}\nconst TAILWIND_STR = \"{}\"", escape_string_for_go(css.as_str()));
+    go_code = format!(
+        "{go_code}\nconst TAILWIND_STR = \"{}\"",
+        escape_string_for_go(css.as_str())
+    );
 
     let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.go").as_str(), &go_code);
     if compile_args.optimize_go {

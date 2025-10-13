@@ -15,11 +15,11 @@ pub mod generics_parser;
 pub mod lexer;
 pub mod source_file_parser;
 pub mod struct_parser;
+pub mod test_parser;
 pub mod tsx_component_parser;
 pub mod type_parser;
 pub mod use_statement_parser;
 pub mod value_parser;
-pub mod test_parser;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Context {
@@ -57,24 +57,28 @@ pub fn make_input<'src>(
 }
 
 pub fn failure_with_occurence(
-    file_name: &'static str,
     msg: String,
     occured_at: SS,
     labels: impl IntoIterator<Item = (String, SS)>,
-    src: &str,
 ) -> ! {
-    Report::build(ReportKind::Error, (file_name, occured_at.into_range()))
-        .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
-        .with_message(&msg)
-        .with_labels(labels.into_iter().map(|label2| {
-            Label::new((label2.1.context.file_name, label2.1.into_range()))
-                .with_message(label2.0)
-                .with_color(Color::Yellow)
-        }))
-        .finish()
-        .eprint(sources([(file_name, src)]))
-        .unwrap();
-    panic!("{}", msg)
+    Report::build(
+        ReportKind::Error,
+        (occured_at.context.file_name, occured_at.into_range()),
+    )
+    .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
+    .with_message(&msg)
+    .with_labels(labels.into_iter().map(|label2| {
+        Label::new((label2.1.context.file_name, label2.1.into_range()))
+            .with_message(label2.0)
+            .with_color(Color::Yellow)
+    }))
+    .finish()
+    .eprint(sources([(
+        occured_at.context.file_name,
+        occured_at.context.file_contents,
+    )]))
+    .unwrap();
+    panic!("{msg}")
 }
 
 pub fn failure(
@@ -100,7 +104,7 @@ pub fn failure(
         .finish()
         .eprint(sources([(file_name, src)]))
         .unwrap();
-    panic!("{}", msg)
+    panic!("{msg}")
 }
 
 pub fn parse_failure(file_name: &str, err: &Rich<impl fmt::Display, SS>, src: &str) -> ! {

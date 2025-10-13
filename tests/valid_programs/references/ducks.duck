@@ -1,0 +1,7 @@
+fn main() {
+    let d: { x: Int, y: String } = { x: 10, y: "String in y" };
+    let ref_to_y = &mut d.y;
+    std::io::println(f"before: d.y = {d.y}, *ref_to_y = {*ref_to_y}");
+    *ref_to_y = "y replaced";
+    std::io::println(f"after: d.y = {d.y}, *ref_to_y = {*ref_to_y}");
+}

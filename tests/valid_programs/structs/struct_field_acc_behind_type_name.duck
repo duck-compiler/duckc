@@ -1,0 +1,21 @@
+struct B = {
+    f: String,
+} impl {
+    fn get_a() -> InterfaceC {
+        return { b: *self };
+    }
+};
+
+type InterfaceA = {
+    b: B
+};
+
+type InterfaceB = InterfaceA;
+type InterfaceC = InterfaceB;
+
+fn main() {
+    let x = B { f: "Hal" };
+    let y = x.get_a();
+    y.b.f->std::io::println();
+    (B { f: "Hal" }).get_a().b.f->std::io::println();
+}
