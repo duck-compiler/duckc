@@ -5,21 +5,10 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        Context, SS, Spanned,
-        duckx_component_parser::{DuckxComponent, duckx_component_parser},
-        function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
-        lexer::{Token, lex_parser},
-        make_input, parse_failure,
-        struct_parser::{StructDefinition, struct_definition_parser},
-        test_parser::{TestCase, test_parser},
-        tsx_component_parser::{TsxComponent, tsx_component_parser},
-        type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
-        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
-        value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr},
+        duckx_component_parser::{duckx_component_parser, DuckxComponent}, extensions_def_parser::{extensions_def_parser, ExtensionsDef}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, test_parser::{test_parser, TestCase}, tsx_component_parser::{tsx_component_parser, TsxComponent}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, Spanned, SS
     },
     semantics::ident_mangler::{
-        MangleEnv, mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression,
-        mangle_value_expr, unmangle,
+        mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
     },
 };
 
@@ -29,6 +18,7 @@ pub struct SourceFile {
     pub type_definitions: Vec<TypeDefinition>,
     pub struct_definitions: Vec<StructDefinition>,
     pub use_statements: Vec<UseStatement>,
+    pub extensions_defs: Vec<ExtensionsDef>,
     pub sub_modules: Vec<(String, SourceFile)>,
     pub tsx_components: Vec<TsxComponent>,
     pub duckx_components: Vec<DuckxComponent>,
@@ -39,6 +29,7 @@ pub struct SourceFile {
 pub enum SourceUnit {
     Func(FunctionDefintion),
     Type(TypeDefinition),
+    Extensions(ExtensionsDef),
     Component(TsxComponent),
     Template(DuckxComponent),
     Struct(StructDefinition),
@@ -107,6 +98,7 @@ impl SourceFile {
                         .collect::<Vec<_>>(),
                 ],
             };
+
             let mut result = SourceFile::default();
 
             for (name, sub_module) in &s.sub_modules {
@@ -142,6 +134,10 @@ impl SourceFile {
 
                 for test_case in src.test_cases {
                     result.test_cases.push(test_case);
+                }
+
+                for extensions_def in src.extensions_defs {
+                    result.extensions_defs.push(extensions_def)
                 }
 
                 for use_statement in &src.use_statements {
@@ -184,6 +180,41 @@ impl SourceFile {
                 );
                 mangle_env.pop_idents();
                 result.function_definitions.push(func);
+            }
+
+            for extensions_def in &s.extensions_defs {
+                let mut extensions_result = extensions_def.clone();
+                extensions_result.function_definitions = vec![];
+                for func in &extensions_def.function_definitions {
+                    let mut func = func.clone();
+
+                    let mut p = Vec::new();
+                    p.extend_from_slice(prefix);
+                    p.push(func.0.name.clone());
+                    func.0.name = mangle(&p);
+
+                    if let Some(return_type) = &mut func.0.return_type {
+                        mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
+                    }
+
+                    mangle_env.push_idents();
+                    if let Some(params) = &mut func.0.params {
+                        for (name, type_expr) in params {
+                            mangle_type_expression(&mut type_expr.0, prefix, &mut mangle_env);
+                            mangle_env.insert_ident(name.clone());
+                        }
+                    }
+                    mangle_value_expr(
+                        &mut func.0.value_expr.0,
+                        global_prefix,
+                        prefix,
+                        &mut mangle_env,
+                    );
+                    mangle_env.pop_idents();
+                    extensions_result.function_definitions.push(func)
+                }
+
+                result.extensions_defs.push(extensions_result)
             }
 
             for type_definition in &s.type_definitions {
@@ -234,6 +265,35 @@ impl SourceFile {
                 }
 
                 result.struct_definitions.push(struct_def);
+            }
+
+            for extensions_def in &s.extensions_defs {
+                let mut extensions_def = extensions_def.clone();
+                for func in &mut extensions_def.function_definitions {
+                    if let Some(return_type) = &mut func.0.return_type {
+                        mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
+                    }
+
+                    mangle_env.push_idents();
+
+                    if let Some(params) = &mut func.0.params {
+                        for (name, type_expr) in params {
+                            mangle_type_expression(&mut type_expr.0, prefix, &mut mangle_env);
+                            mangle_env.insert_ident(name.clone());
+                        }
+                    }
+
+                    mangle_value_expr(
+                        &mut func.0.value_expr.0,
+                        global_prefix,
+                        prefix,
+                        &mut mangle_env,
+                    );
+
+                    mangle_env.pop_idents();
+                }
+
+                result.extensions_defs.push(extensions_def);
             }
 
             for component in &s.tsx_components {
@@ -674,6 +734,9 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
         ValueExpr::FieldAccess { target_obj, .. } => {
             append_global_prefix_value_expr(&mut target_obj.0, mangle_env);
         }
+        ValueExpr::ExtensionAccess { target_obj, .. } => {
+            append_global_prefix_value_expr(&mut target_obj.0, mangle_env);
+        }
         ValueExpr::Return(Some(value_expr)) => {
             append_global_prefix_value_expr(&mut value_expr.0, mangle_env)
         }
@@ -824,6 +887,7 @@ where
         choice((
             use_statement_parser().map(SourceUnit::Use),
             type_definition_parser().map(SourceUnit::Type),
+            extensions_def_parser(make_input.clone()).map(SourceUnit::Extensions),
             tsx_component_parser().map(SourceUnit::Component),
             duckx_component_parser(make_input.clone()).map(SourceUnit::Template),
             struct_definition_parser(make_input.clone()).map(SourceUnit::Struct),
@@ -850,6 +914,7 @@ where
         .map(|source_units| {
             let mut function_definitions = Vec::new();
             let mut type_definitions = Vec::new();
+            let mut extensions_defs = Vec::new();
             let mut struct_definitions = Vec::new();
             let mut use_statements = Vec::new();
             let mut sub_modules = Vec::new();
@@ -862,6 +927,7 @@ where
                 match source_unit {
                     Func(def) => function_definitions.push(def),
                     Type(def) => type_definitions.push(def),
+                    Extensions(def) => extensions_defs.push(def),
                     Struct(def) => struct_definitions.push(def),
                     Use(def) => use_statements.push(def),
                     Module(name, def) => sub_modules.push((name, def)),
@@ -874,6 +940,7 @@ where
             SourceFile {
                 function_definitions,
                 type_definitions,
+                extensions_defs,
                 struct_definitions,
                 use_statements,
                 sub_modules,

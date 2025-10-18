@@ -4,6 +4,7 @@ use std::process;
 use chumsky::container::Seq;
 use colored::Colorize;
 
+use crate::parse::function_parser::FunctionDefintion;
 use crate::parse::struct_parser::StructDefinition;
 use crate::parse::type_parser::{Duck, TypeExpr};
 use crate::parse::value_parser::empty_range;
@@ -616,6 +617,44 @@ impl TypeExpr {
                     })
                     .expect("Invalid Field Access")
             }
+            ValueExpr::ExtensionAccess {
+                target_obj,
+                extension_name,
+            } => {
+                let span = target_obj.as_ref().1;
+                let target_obj_type_expr = TypeExpr::from_value_expr_resolved_type_name_dereferenced(
+                    target_obj,
+                    type_env
+                );
+
+                let extension_function = target_obj_type_expr
+                    .find_extension_function_by_name(
+                        extension_name,
+                        type_env
+                    )
+                    .unwrap_or_else(|| {
+                        failure_with_occurence(
+                            "Invalid Extension Access".to_string(),
+                            {
+                                let mut span = span;
+                                span.end += 2;
+                                span
+                            },
+                            vec![(
+                                format!(
+                                    "this is of type {} and it has no extension '{}'",
+                                    target_obj_type_expr
+                                        .as_clean_user_faced_type_name()
+                                        .bright_yellow(),
+                                    extension_name.bright_blue()
+                                ),
+                                span,
+                            )],
+                        )
+                });
+
+                return extension_function.type_expr().0;
+            }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
                 check_type_compatability(
@@ -780,6 +819,21 @@ impl TypeExpr {
             }
             _ => false,
         }
+    }
+
+    fn find_extension_function_by_name(&self, name: impl Into<String>, type_env: &mut TypeEnv) -> Option<FunctionDefintion> {
+        let target_type = self.as_clean_go_type_name(type_env);
+        if !type_env.extension_functions.contains_key(&target_type) {
+            return None
+        }
+
+        let extension_fns = type_env.extension_functions.get(&target_type)
+            .expect("we've just checked that the key exists");
+
+        return extension_fns
+            .iter()
+            .find(|ext_fn| ext_fn.name == name)
+            .cloned();
     }
 
     fn has_field_by_name(&self, name: String, type_env: &TypeEnv) -> bool {

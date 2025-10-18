@@ -13,7 +13,7 @@ pub type Param = (String, Spanned<TypeExpr>);
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-pub struct TypeExtensionDef {
+pub struct ExtensionsDef {
     pub target_type_expr: Spanned<TypeExpr>,
     pub function_definitions: Vec<Spanned<FunctionDefintion>>,
     pub span: SS,
@@ -21,7 +21,7 @@ pub struct TypeExtensionDef {
 
 pub fn extensions_def_parser<'src, I, M>(
     make_input: M,
-) -> impl Parser<'src, I, TypeExtensionDef, extra::Err<Rich<'src, Token, SS>>> + Clone
+) -> impl Parser<'src, I, ExtensionsDef, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
     M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
@@ -37,7 +37,7 @@ where
                 .collect::<Vec<_>>()
                 .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
         )
-        .map_with(|(target_type_expr, function_definitions), ctx| TypeExtensionDef {
+        .map_with(|(target_type_expr, function_definitions), ctx| ExtensionsDef {
             target_type_expr,
             function_definitions,
             span: ctx.span()

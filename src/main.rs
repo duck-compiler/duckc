@@ -327,10 +327,10 @@ fn parse_src_file(
                 }
                 typename_reset_global_value_expr(&mut target.0);
             }
-            ValueExpr::FieldAccess {
-                target_obj,
-                field_name: _,
-            } => {
+            ValueExpr::FieldAccess { target_obj, .. } => {
+                typename_reset_global_value_expr(&mut target_obj.0);
+            }
+            ValueExpr::ExtensionAccess { target_obj, .. } => {
                 typename_reset_global_value_expr(&mut target_obj.0);
             }
             ValueExpr::Array(ty, exprs) => {

@@ -91,6 +91,10 @@ pub enum ValueExpr {
         target_obj: Box<Spanned<ValueExpr>>,
         field_name: String,
     },
+    ExtensionAccess {
+        target_obj: Box<Spanned<ValueExpr>>,
+        extension_name: String,
+    },
     Array(Option<Spanned<TypeExpr>>, Vec<Spanned<ValueExpr>>),
     Return(Option<Box<Spanned<ValueExpr>>>),
     VarAssign(Box<Spanned<Assignment>>),
@@ -170,6 +174,7 @@ impl ValueExpr {
             | ValueExpr::Bool(..)
             | ValueExpr::Char(..)
             | ValueExpr::FieldAccess { .. }
+            | ValueExpr::ExtensionAccess { .. }
             | ValueExpr::Array(..)
             | ValueExpr::ArrayAccess(..)
             | ValueExpr::Variable(..)
@@ -545,6 +550,7 @@ where
                 FuncCall(Vec<Spanned<ValueExpr>>, Option<Vec<Spanned<TypeParam>>>),
                 ArrayAccess(Spanned<ValueExpr>),
                 FieldAccess(String),
+                ExtensionsAccess(String),
             }
 
             let fmt_string =
@@ -768,6 +774,11 @@ where
                                 .or(select_ref! { Token::IntLiteral(i) => i.to_string() }),
                         )
                         .map(AtomPostParseUnit::FieldAccess),
+                    just(Token::ControlChar(':')).ignore_then(just(Token::ControlChar(':')))
+                        .ignore_then(
+                            select_ref! { Token::Ident(s) => s.to_string() }
+                        )
+                        .map(AtomPostParseUnit::ExtensionsAccess)
                 ))
                 .map_with(|x, e| (x, e.span()))
                 .repeated()
@@ -800,6 +811,13 @@ where
                             },
                             span,
                         ),
+                        AtomPostParseUnit::ExtensionsAccess(extension_name) => (
+                            ValueExpr::ExtensionAccess {
+                                target_obj: acc.into(),
+                                extension_name
+                            },
+                            span
+                        )
                     }
                 });
 
@@ -2989,6 +3007,24 @@ mod tests {
                         .into(),
                 ),
             ),
+            (
+                "1::b",
+                ValueExpr::ExtensionAccess {
+                    target_obj: ValueExpr::Int(10).into_empty_span().into(),
+                    extension_name: "b".to_string()
+                }
+            ),
+            (
+                "1::b()",
+                ValueExpr::FunctionCall {
+                    target: ValueExpr::ExtensionAccess {
+                        target_obj: ValueExpr::Int(10).into_empty_span().into(),
+                        extension_name: "b".to_string()
+                    }.into_empty_span().into(),
+                    params: vec![],
+                    type_params: None,
+                }
+            )
         ];
 
         for (i, (src, expected_tokens)) in test_cases.into_iter().enumerate() {

@@ -203,6 +203,12 @@ impl SourceFile {
             instructions.push(c.emit(type_env, &mut to_ir, span));
         }
 
+        for extensions_def in self.extensions_defs {
+            for fn_def in extensions_def.function_definitions {
+                instructions.push(fn_def.0.emit(None, type_env, &mut to_ir))
+            }
+        }
+
         instructions.extend(type_definitions);
 
         instructions
