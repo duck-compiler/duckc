@@ -108,12 +108,13 @@ pub mod tests {
                     .collect(),
             }),
             TypeExpr::Tuple(t) => TypeExpr::Tuple(t.into_iter().map(strip_spans).collect()),
-            TypeExpr::Fun(params, return_type) => TypeExpr::Fun(
+            TypeExpr::Fun(params, return_type, is_mut) => TypeExpr::Fun(
                 params
                     .into_iter()
                     .map(|(name, param_type_expr)| (name, strip_spans(param_type_expr)))
                     .collect(),
                 return_type.map(|rt_box| Box::new(strip_spans(*rt_box))),
+                is_mut,
             ),
             TypeExpr::Or(variants) => TypeExpr::Or(variants.into_iter().map(strip_spans).collect()),
             TypeExpr::TypeName(is_global, type_name, Some(generics)) => TypeExpr::TypeName(

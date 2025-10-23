@@ -528,6 +528,7 @@ impl ValueExpr {
             ValueExpr::String(s, is_const) => Some(IrValue::String(s.clone(), *is_const)),
             ValueExpr::Lambda(b) => {
                 let LambdaFunctionExpr {
+                    is_mut: _,
                     params,
                     return_type,
                     value_expr,
@@ -1052,6 +1053,7 @@ impl ValueExpr {
                                                                     .into_empty_span()
                                                                     .into(),
                                                             ),
+                                                            false,
                                                         )),
                                                         Some(false),
                                                     )
@@ -1915,7 +1917,7 @@ impl ValueExpr {
             } => {
                 // todo: type_params
 
-                let TypeExpr::Fun(_, return_type) = TypeExpr::from_value_expr(v_target, type_env)
+                let TypeExpr::Fun(_, return_type, _) = TypeExpr::from_value_expr(v_target, type_env)
                 else {
                     panic!("can only call function")
                 };

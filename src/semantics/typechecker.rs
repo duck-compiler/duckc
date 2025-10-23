@@ -187,6 +187,7 @@ impl TypeExpr {
                     .map(|(name, type_expr)| (Some(name.clone()), type_expr.clone()))
                     .collect(),
                 lambda_expr.return_type.clone().map(Box::new),
+                lambda_expr.is_mut,
             ),
             ValueExpr::InlineGo(..) => TypeExpr::InlineGo,
             ValueExpr::Int(value) => TypeExpr::Int(Some(*value)),
@@ -444,7 +445,7 @@ impl TypeExpr {
                     .collect::<Vec<_>>();
 
                 let mut target_type = TypeExpr::from_value_expr(target.as_ref(), type_env);
-                if let TypeExpr::Fun(param_types, return_type) = &mut target_type {
+                if let TypeExpr::Fun(param_types, return_type, _) = &mut target_type {
                     param_types
                         .iter_mut()
                         .enumerate()
@@ -850,6 +851,7 @@ impl TypeExpr {
                                     .map(|x| (Some(x.0.clone()), x.1.clone()))
                                     .collect(),
                                 x.return_type.clone().map(Box::new),
+                                true,
                             ),
                         )
                     }))
@@ -870,6 +872,7 @@ impl TypeExpr {
                                             .map(|x| (Some(x.0.clone()), x.1.clone()))
                                             .collect(),
                                         x.return_type.clone().map(Box::new),
+                                        true,
                                     ),
                                 )
                             }),
@@ -1497,7 +1500,7 @@ pub fn check_type_compatability(
         TypeExpr::Or(..) => {
             require_subset_of_variant_type(required_type, &given_type, type_env);
         }
-        TypeExpr::Fun(required_params, required_return_type) => {
+        TypeExpr::Fun(required_params, required_return_type, is_mut_required) => {
             if !given_type.0.is_fun() {
                 fail_requirement(
                     "this requires a function".to_string(),
@@ -1505,9 +1508,17 @@ pub fn check_type_compatability(
                 )
             }
 
-            let TypeExpr::Fun(given_params, given_return_type) = &given_type.0 else {
+            let TypeExpr::Fun(given_params, given_return_type, is_mut_given) = &given_type.0 else {
                 unreachable!("we've already checked that it's a function")
             };
+
+            if *is_mut_required && !*is_mut_given {
+                fail_requirement(
+                    "this requires a mut fn".to_string(),
+                    "this is not a mut fn".to_string()
+                );
+            }
+
             if given_params.len() != required_params.len() {
                 fail_requirement(
                     format!(
