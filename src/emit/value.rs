@@ -150,7 +150,27 @@ pub fn as_var(s: impl Into<String>) -> IrValue {
     IrValue::Var(s.into())
 }
 
-fn can_do_mut_stuff_through(v: &Spanned<ValueExpr>, type_env: &mut TypeEnv) -> bool {
+pub fn needs_mut(v: &ValueExpr, type_env: &mut TypeEnv) -> bool {
+    match v {
+        ValueExpr::VarAssign(_) => true,
+        ValueExpr::FunctionCall { target, params: _, type_params: _ } => {
+            if let ValueExpr::FieldAccess { target_obj, field_name } = &target.0 {
+                let ty = TypeExpr::from_value_expr_resolved_type_name_dereferenced(&target_obj, type_env);
+                if let TypeExpr::TypeName(_, type_name, _) = ty {
+                    if let Some(struct_def) = type_env.get_struct_def_opt(&type_name) {
+                        if struct_def.mut_methods.contains(&field_name.to_string()) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+pub fn can_do_mut_stuff_through(v: &Spanned<ValueExpr>, type_env: &mut TypeEnv) -> bool {
     let mut ty = TypeExpr::from_value_expr_resolved_type_name(v, type_env);
 
     if matches!(ty, TypeExpr::RefMut(..)) {

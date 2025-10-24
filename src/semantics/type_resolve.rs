@@ -232,11 +232,15 @@ impl TypeEnv<'_> {
             .unwrap()
     }
 
-    pub fn get_struct_def<'a>(&'a self, name: &str) -> &'a StructDefinition {
+    pub fn get_struct_def_opt<'a>(&'a self, name: &str) -> Option<&'a StructDefinition> {
         self.struct_definitions
             .iter()
             .chain(self.generic_structs_generated.iter())
             .find(|x| x.name.as_str() == name)
+    }
+
+    pub fn get_struct_def<'a>(&'a self, name: &str) -> &'a StructDefinition {
+        self.get_struct_def_opt(name)
             .unwrap_or_else(|| panic!("Could not find struct {name}"))
     }
 
@@ -2246,7 +2250,34 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 value_expr,
             } = &mut **b;
 
+            let captured = type_env.identifier_types[1..]
+                .iter()
+                .flat_map(|v| v.iter())
+                .fold(HashMap::new(), |mut acc, (name, (ty, is_const))| {
+                    if !type_env.identifier_types[0].contains_key(name)  // don't capture top level identifiers like functions
+                    && !params.iter().any(|(param_name, _)| param_name == name) // don't capture shadowed variables
+                    {
+                        acc.insert(name.clone(), (ty.clone(), *is_mut && !*is_const));
+                    }
+                    acc
+                });
+
             type_env.push_identifier_types();
+
+            let mut go_shadowed_vars = String::new();
+
+            for (name, (ty, capture_as_mut)) in captured {
+                go_shadowed_vars.push_str(&format!("{name} := &{name}\n_ = {name}\n"));
+                type_env.insert_identifier_type(
+                    name,
+                    if capture_as_mut {
+                        TypeExpr::RefMut(Box::new(ty.into_empty_span()))
+                    } else {
+                        TypeExpr::Ref(Box::new(ty.into_empty_span()))
+                    },
+                    true,
+                );
+            }
 
             for (name, ty) in params {
                 type_env.insert_identifier_type(name.to_owned(), ty.0.clone(), false);
@@ -2258,6 +2289,10 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             }
 
             typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
+
+            let inline_go_expr = ValueExpr::InlineGo(go_shadowed_vars).into_empty_span();
+            value_expr.0 = ValueExpr::Block(vec![inline_go_expr, ValueExpr::Block(vec![value_expr.clone()]).into_empty_span()]);
+
             type_env.pop_identifier_types();
         }
         ValueExpr::FunctionCall {
@@ -2453,8 +2488,9 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     *type_params = None;
                 }
             } else {
-                let TypeExpr::Fun(params, ret, _) = TypeExpr::from_value_expr(target, type_env) else {
-                    panic!("not a func??")
+                let TypeExpr::Fun(params, ret, _) = TypeExpr::from_value_expr(target, type_env)
+                else {
+                    panic!("not a func?? {target:?}")
                 };
                 header = FunHeader {
                     params: params.iter().map(|x| x.1.clone()).collect(),

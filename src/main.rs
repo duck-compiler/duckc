@@ -508,6 +508,11 @@ fn duck_with_message(msg: &str) {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let mut a = 450;
+    Box::new(|| {
+        a = 300;
+    }) as Box<dyn FnMut()>;
+
     let cli_result = dargo::cli::run_cli();
     if let Err(err) = cli_result {
         duck_with_message("Ooops... something went wrong!!");

@@ -1,0 +1,23 @@
+struct S = {
+} impl {
+    fn imm_fun() {}
+    mut fn needs_mut() {}
+};
+
+fn main() {
+    let a = 5;
+    a = 10;
+
+    let s = S{};
+
+    (mut fn () {
+        //const a = &mut 200;
+        //*a = 300;
+
+        (mut fn() { **a = 500; })();
+
+        s.imm_fun();
+        s.needs_mut();
+    })();
+    std::io::println(std::string::from_int(a));
+}
