@@ -2,12 +2,12 @@ struct S = {
 } impl {
     fn imm_fun() {}
 
-    mut fn needs_mut() {
+    fn needs_mut() {
         std::io::println("HELLO I AM MUT FN");
     }
 };
 
-fn inter(d: &{ needs_mut: mut fn() }) {
+fn inter(d: &{ needs_mut: fn() }) {
     d.needs_mut();
 }
 
@@ -16,7 +16,7 @@ fn main() {
     a = 10;
 
     let s = S {};
-    inter(&{needs_mut: mut fn() {
+    inter(&{needs_mut: fn() {
         s.needs_mut();
     }});
 

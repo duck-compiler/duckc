@@ -153,9 +153,20 @@ pub fn as_var(s: impl Into<String>) -> IrValue {
 pub fn needs_mut(v: &ValueExpr, type_env: &mut TypeEnv) -> bool {
     match v {
         ValueExpr::VarAssign(_) => true,
-        ValueExpr::FunctionCall { target, params: _, type_params: _ } => {
-            if let ValueExpr::FieldAccess { target_obj, field_name } = &target.0 {
-                let ty = TypeExpr::from_value_expr_resolved_type_name_dereferenced(&target_obj, type_env);
+        ValueExpr::FunctionCall {
+            target,
+            params: _,
+            type_params: _,
+        } => {
+            if let ValueExpr::FieldAccess {
+                target_obj,
+                field_name,
+            } = &target.0
+            {
+                let ty = TypeExpr::from_value_expr_resolved_type_name_dereferenced(
+                    &target_obj,
+                    type_env,
+                );
                 if let TypeExpr::TypeName(_, type_name, _) = ty {
                     if let Some(struct_def) = type_env.get_struct_def_opt(&type_name) {
                         if struct_def.mut_methods.contains(&field_name.to_string()) {
@@ -327,6 +338,25 @@ fn walk_access_raw(
                                     target_obj.1,
                                 )],
                             );
+                        }
+                    } else if let TypeExpr::Duck(duck) = ty {
+                        if let Some(duck_field) = duck
+                            .fields
+                            .iter()
+                            .find(|field| field.name.as_str() == field_name.as_str())
+                        {
+                            if let TypeExpr::Fun(_, _, true) = duck_field.type_expr.0
+                                && !can_do_mut_stuff_through(target_obj, type_env)
+                            {
+                                failure_with_occurence(
+                                    "This needs to allow mutable access".to_string(),
+                                    target.1,
+                                    [(
+                                        "This needs to allow mutable access".to_string(),
+                                        target_obj.1,
+                                    )],
+                                );
+                            }
                         }
                     }
                 }
@@ -1937,7 +1967,8 @@ impl ValueExpr {
             } => {
                 // todo: type_params
 
-                let TypeExpr::Fun(_, return_type, _) = TypeExpr::from_value_expr(v_target, type_env)
+                let TypeExpr::Fun(_, return_type, _) =
+                    TypeExpr::from_value_expr(v_target, type_env)
                 else {
                     panic!("can only call function")
                 };
