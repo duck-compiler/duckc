@@ -2264,18 +2264,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
             type_env.push_identifier_types();
 
-            let mut go_shadowed_vars = String::new();
-
             for (name, (ty, capture_as_mut)) in captured {
-                go_shadowed_vars.push_str(&format!("{name} := &{name}\n_ = {name}\n"));
                 type_env.insert_identifier_type(
                     name,
-                    if capture_as_mut {
-                        TypeExpr::RefMut(Box::new(ty.into_empty_span()))
-                    } else {
-                        TypeExpr::Ref(Box::new(ty.into_empty_span()))
-                    },
-                    true,
+                    ty,
+                    !capture_as_mut,
                 );
             }
 
@@ -2289,10 +2282,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             }
 
             typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
-
-            let inline_go_expr = ValueExpr::InlineGo(go_shadowed_vars).into_empty_span();
-            value_expr.0 = ValueExpr::Block(vec![inline_go_expr, ValueExpr::Block(vec![value_expr.clone()]).into_empty_span()]);
-
             type_env.pop_identifier_types();
         }
         ValueExpr::FunctionCall {

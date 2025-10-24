@@ -8,14 +8,10 @@ fn main() {
     let a = 5;
     a = 10;
 
-    let s = S{};
+    let s = S {};
 
     (mut fn () {
-        //const a = &mut 200;
-        //*a = 300;
-
-        (mut fn() { **a = 500; })();
-
+        (mut fn() { a = 20; (mut fn() { a = 123; })();})();
         s.imm_fun();
         s.needs_mut();
     })();
