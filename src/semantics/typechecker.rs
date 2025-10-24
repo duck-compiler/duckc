@@ -1261,7 +1261,7 @@ pub fn check_type_compatability(
                 let struct_def = type_env.get_struct_def(struct_name).clone();
 
                 for required_field in duck.fields.iter() {
-                    if required_field.type_expr.0.is_fun() {
+                    if let TypeExpr::Fun(_, _, is_mut) = required_field.type_expr.0 {
                         let companion_method = struct_def
                             .methods
                             .iter()
@@ -1278,7 +1278,20 @@ pub fn check_type_compatability(
                                     "the given type doesn't have a field or method with name {}",
                                     required_field.name.bright_purple(),
                                 ),
-                            )
+                            );
+                        }
+
+                        if is_mut && !struct_def.mut_methods.contains(&required_field.name) {
+                            fail_requirement(
+                                format!(
+                                    "this type states that it requires a mutable method named {}",
+                                    required_field.name.bright_purple(),
+                                ),
+                                format!(
+                                    "the given type doesn't have a mutable method named {}",
+                                    required_field.name.bright_purple(),
+                                ),
+                            );
                         }
 
                         let companion_method = companion_method.unwrap();
