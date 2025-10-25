@@ -10,8 +10,8 @@ struct Y = {
 
 type Cloneable<T> = { clone: fn() -> T };
 
-fn cloneable<T>(with: Cloneable<T>) -> T {
-    return with.clone();
+fn cloneable<T>(_with: Cloneable<T>) -> T {
+    return _with.clone();
 }
 
 fn main() {

@@ -37,6 +37,8 @@ pub enum Token {
     Go,
     Struct,
     Impl,
+    With,
+    Extend,
     Duck,
     Function,
     Test,
@@ -89,6 +91,8 @@ impl Display for Token {
             Token::RefMut => "&mut",
             Token::FormatStringLiteral(s) => &format!("f-string {s:?}"),
             Token::Impl => "impl",
+            Token::With => "with",
+            Token::Extend => "extend",
             Token::ScopeRes => "::",
             Token::ThinArrow => "->",
             Token::ThickArrow => "=>",
@@ -455,6 +459,8 @@ pub fn lex_single<'a>(
             "typeof" => Token::TypeOf,
             "keyof" => Token::KeyOf,
             "impl" => Token::Impl,
+            "extend" => Token::Extend,
+            "with" => Token::With,
             "test" => Token::Test,
             "type" => Token::Type,
             "duck" => Token::Duck,
@@ -1663,6 +1669,8 @@ mod tests {
             ("test", vec![Token::Test]),
             ("keyof", vec![Token::KeyOf]),
             ("typeof", vec![Token::TypeOf]),
+            ("extend", vec![Token::Extend]),
+            ("with", vec![Token::With]),
         ];
 
         for (src, expected_tokens) in test_cases {

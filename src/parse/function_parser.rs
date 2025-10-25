@@ -166,6 +166,7 @@ where
                                 .into_empty_span(),
                             ],
                             type_params: None,
+                            is_extension_call: false,
                         },
                         value_expr.1,
                     );

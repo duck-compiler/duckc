@@ -42,7 +42,6 @@ use lazy_static::lazy_static;
 pub mod cli;
 pub mod dargo;
 pub mod emit;
-pub mod fixup;
 pub mod go_fixup;
 pub mod parse;
 pub mod reports;
@@ -321,6 +320,7 @@ fn parse_src_file(
                 target,
                 params,
                 type_params: _,
+                ..
             } => {
                 // todo: type_params
                 for p in params {
@@ -328,10 +328,10 @@ fn parse_src_file(
                 }
                 typename_reset_global_value_expr(&mut target.0);
             }
-            ValueExpr::FieldAccess {
-                target_obj,
-                field_name: _,
-            } => {
+            ValueExpr::FieldAccess { target_obj, .. } => {
+                typename_reset_global_value_expr(&mut target_obj.0);
+            }
+            ValueExpr::ExtensionAccess { target_obj, .. } => {
                 typename_reset_global_value_expr(&mut target_obj.0);
             }
             ValueExpr::Array(ty, exprs) => {

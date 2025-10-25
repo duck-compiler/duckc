@@ -18,14 +18,14 @@ fn insert<ElementType>(list: ArrayList<ElementType>, element: ElementType) {
 
 fn join(
     str_list: ArrayList<String>,
-    with: String,
+    seperator: String,
 ) -> String {
     go {
         strs := str_list.Getelements()
         var final_str string
         for index, str := range strs {
             if index != 0 {
-                final_str += with
+                final_str += seperator
             }
             final_str += str
         }
