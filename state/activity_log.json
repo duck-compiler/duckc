@@ -1,6 +1,26 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-10-25T04:01:43.750945",
+        "issue_id": "d143368bcfbf509206f9ba783934e568",
+        "issue_title": "mutable extension fns?",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-10-25T04:01:43.750945",
+        "issue_id": "db78c3868bfd00b2907df35f4d989684",
+        "issue_title": "resolve returns in main function to use the exit() fn of go, or wrap the code of the main function into a second function which then get's called inside a new main which just returns exit(other_main())",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-10-01T09:58:38.437409",
         "issue_id": "bfc367d037f788ff52728e40b76ffb74",
         "issue_title": "(\"4 + 4\", TypeExpr::Int(Some(\"4\"))),",

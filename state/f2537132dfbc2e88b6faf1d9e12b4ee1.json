@@ -1,7 +1,7 @@
 {
     "id": "f2537132dfbc2e88b6faf1d9e12b4ee1",
     "file_path": "../../src/parse/source_file_parser.rs",
-    "line_number": 247,
+    "line_number": 273,
     "title": "mangle components in tsx",
     "tag": "todo",
     "module_tag": "parse",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Apfelfrosch",
-        "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: mangle components in tsx",
     "status": "open",

@@ -13,7 +13,8 @@
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "// TODO: resolve returns in main function to use the exit() fn of go, or wrap the code of the main function into a second function which then get's called inside a new main which just returns exit(other_main())",
-    "status": "open",
+    "status": "closed",
     "first_seen": "2025-07-09T23:15:12.304461",
-    "history": []
+    "history": [],
+    "closed_at": "2025-10-25T04:01:43.758155"
 }

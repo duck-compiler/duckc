@@ -1,7 +1,7 @@
 {
     "id": "7fe1ded730721d8e4c33c68e53350800",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 1234,
+    "line_number": 1286,
     "title": "check against identity of struct in typechecking",
     "tag": "todo",
     "module_tag": "semantics",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Apfelfrosch",
-        "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: check against identity of struct in typechecking",
     "status": "open",

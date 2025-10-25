@@ -1,7 +1,7 @@
 {
     "id": "69b37346e3eac68781c08fc1a401d903",
     "file_path": "../../src/parse/source_file_parser.rs",
-    "line_number": 201,
+    "line_number": 227,
     "title": "implement flatten for struct definitions",
     "tag": "todo",
     "module_tag": "parse",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "can this be deleted?",
     "blame": {
-        "name": "Apfelfrosch",
-        "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo(@Apfelfrosch): implement flatten for struct definitions",
     "status": "open",
