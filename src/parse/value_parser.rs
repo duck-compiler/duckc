@@ -248,13 +248,17 @@ where
                     .ignore_then(type_expression_parser())
                     .boxed();
 
-                just(Token::Function)
-                    .ignore_then(just(Token::ControlChar('(')))
-                    .ignore_then(params_parser)
-                    .then_ignore(just(Token::ControlChar(')')))
-                    .then(return_type_parser.or_not())
-                    .then(value_expr_parser.clone())
-                    .map(|((params, return_type), mut value_expr)| {
+                just(Token::Mut)
+                    .or_not()
+                    .then(
+                        just(Token::Function)
+                            .ignore_then(just(Token::ControlChar('(')))
+                            .ignore_then(params_parser)
+                            .then_ignore(just(Token::ControlChar(')')))
+                            .then(return_type_parser.or_not())
+                            .then(value_expr_parser.clone()),
+                    )
+                    .map(|(is_mut, ((params, return_type), mut value_expr))| {
                         value_expr = match value_expr {
                             (ValueExpr::Duck(x), loc) if x.is_empty() => {
                                 (ValueExpr::Block(vec![]), loc)
@@ -263,6 +267,7 @@ where
                         };
                         ValueExpr::Lambda(
                             LambdaFunctionExpr {
+                                is_mut: is_mut.is_some(),
                                 params: params.unwrap_or_default(),
                                 return_type,
                                 value_expr,
@@ -1124,7 +1129,7 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
                 type_expr_into_empty_range(t);
             }
         }
-        TypeExpr::Fun(params, return_type) => {
+        TypeExpr::Fun(params, return_type, _) => {
             if let Some(x) = return_type.as_mut() {
                 type_expr_into_empty_range(&mut *x)
             }
@@ -1532,6 +1537,15 @@ mod tests {
                     type_params: None,
                     is_extension_call: false,
                 },
+            ),
+            (
+                "mut fn() {}",
+                ValueExpr::Lambda(Box::new(LambdaFunctionExpr {
+                    is_mut: true,
+                    params: vec![],
+                    return_type: None,
+                    value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                })),
             ),
             (
                 "a.y[0] = 5",
@@ -2111,10 +2125,12 @@ mod tests {
                     target: ValueExpr::FunctionCall {
                         target: ValueExpr::Lambda(
                             LambdaFunctionExpr {
+                                is_mut: false,
                                 params: vec![],
                                 return_type: None,
                                 value_expr: ValueExpr::Lambda(
                                     LambdaFunctionExpr {
+                                        is_mut: false,
                                         params: vec![],
                                         return_type: None,
                                         value_expr: ValueExpr::Block(vec![
@@ -2692,6 +2708,7 @@ mod tests {
                 "fn() {}",
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
+                        is_mut: false,
                         params: vec![],
                         return_type: None,
                         value_expr: ValueExpr::Block(vec![]).into_empty_span(),
@@ -2703,6 +2720,7 @@ mod tests {
                 "fn() 1",
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
+                        is_mut: false,
                         params: vec![],
                         return_type: None,
                         value_expr: ValueExpr::Int(1).into_empty_span(),
@@ -2714,6 +2732,7 @@ mod tests {
                 "fn() -> Int 1",
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
+                        is_mut: false,
                         params: vec![],
                         return_type: Some(TypeExpr::Int(None).into_empty_span()),
                         value_expr: ValueExpr::Int(1).into_empty_span(),
@@ -2725,6 +2744,7 @@ mod tests {
                 "fn(x: String) -> Int 1",
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
+                        is_mut: false,
                         params: vec![("x".into(), TypeExpr::String(None).into_empty_span())],
                         return_type: Some(TypeExpr::Int(None).into_empty_span()),
                         value_expr: ValueExpr::Int(1).into_empty_span(),

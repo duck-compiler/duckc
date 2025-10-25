@@ -233,7 +233,7 @@ fn parse_src_file(
                     typename_reset_global(&mut field.0);
                 }
             }
-            TypeExpr::Fun(params, ret) => {
+            TypeExpr::Fun(params, ret, _) => {
                 for (_, p) in params {
                     typename_reset_global(&mut p.0);
                 }
@@ -297,6 +297,7 @@ fn parse_src_file(
             }
             ValueExpr::Lambda(l) => {
                 let LambdaFunctionExpr {
+                    is_mut: _,
                     params,
                     return_type,
                     value_expr,

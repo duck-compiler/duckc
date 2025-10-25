@@ -72,6 +72,7 @@ impl FunctionDefintion {
                     .map(|(name, type_expr)| (Some(name.to_owned()), type_expr.to_owned()))
                     .collect::<Vec<_>>(),
                 return_type.map(Box::new),
+                true,
             ),
             self.value_expr.1,
         );
@@ -93,6 +94,7 @@ impl Default for FunctionDefintion {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LambdaFunctionExpr {
+    pub is_mut: bool,
     pub params: Vec<Param>,
     pub return_type: Option<Spanned<TypeExpr>>,
     pub value_expr: Spanned<ValueExpr>,
@@ -154,6 +156,7 @@ where
                             params: vec![
                                 ValueExpr::Lambda(
                                     LambdaFunctionExpr {
+                                        is_mut: false,
                                         params: vec![],
                                         return_type: None,
                                         value_expr: value_expr.clone(),

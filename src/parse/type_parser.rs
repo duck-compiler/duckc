@@ -56,6 +56,7 @@ pub enum TypeExpr {
     Fun(
         Vec<(Option<String>, Spanned<TypeExpr>)>, // params
         Option<Box<Spanned<TypeExpr>>>,           // return type
+        bool,                                     // is mut
     ),
     Array(Box<Spanned<TypeExpr>>),
     TypeOf(String),
@@ -105,7 +106,15 @@ where
                 .allow_trailing()
                 .collect::<Vec<(String, Spanned<TypeExpr>)>>();
 
-            let function_fields = duck_fields.clone();
+            let function_param = (select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                .then_ignore(just(Token::ControlChar(':')))).or_not()
+                .then(p.clone());
+
+            let function_params = function_param
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<(Option<String>, Spanned<TypeExpr>)>>();
 
             let keyof_expr = just(Token::KeyOf)
                 .ignore_then(p.clone().map(Box::new))
@@ -178,18 +187,16 @@ where
                     _ => TypeExpr::Any,
                 });
 
-            let function = just(Token::Function)
+            let function = just(Token::Mut).or_not().then(just(Token::Function)
                 .ignore_then(just(Token::ControlChar('(')))
-                .ignore_then(function_fields)
+                .ignore_then(function_params)
                 .then_ignore(just(Token::ControlChar(')')))
-                .then(just(Token::ThinArrow).ignore_then(p.clone()).or_not())
-                .map(|(fields, return_type)| {
+                .then(just(Token::ThinArrow).ignore_then(p.clone()).or_not()))
+                .map(|(is_mut, (params, return_type))| {
                     TypeExpr::Fun(
-                        fields
-                            .iter()
-                            .map(|field| (Some(field.0.clone()), field.1.clone()))
-                            .collect::<Vec<_>>(),
+                        params,
                         return_type.map(Box::new),
+                        is_mut.is_some(),
                     )
                 });
 
@@ -310,7 +317,15 @@ where
                 .allow_trailing()
                 .collect::<Vec<(String, Spanned<TypeExpr>)>>();
 
-            let function_fields = duck_fields.clone();
+            let function_param = (select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                .then_ignore(just(Token::ControlChar(':')))).or_not()
+                .then(p.clone());
+
+            let function_params = function_param
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<(Option<String>, Spanned<TypeExpr>)>>();
 
             let go_type_identifier = just(Token::ControlChar('`'))
                 .ignore_then(
@@ -383,18 +398,16 @@ where
                 .ignore_then(tag_identifier)
                 .map(TypeExpr::Tag);
 
-            let function = just(Token::Function)
+            let function = just(Token::Mut).or_not().then(just(Token::Function)
                 .ignore_then(just(Token::ControlChar('(')))
-                .ignore_then(function_fields)
+                .ignore_then(function_params)
                 .then_ignore(just(Token::ControlChar(')')))
-                .then(just(Token::ThinArrow).ignore_then(p.clone()).or_not())
-                .map(|(fields, return_type)| {
+                .then(just(Token::ThinArrow).ignore_then(p.clone()).or_not()))
+                .map(|(is_mut, (params, return_type))| {
                     TypeExpr::Fun(
-                        fields
-                            .iter()
-                            .map(|field| (Some(field.0.clone()), field.1.clone()))
-                            .collect::<Vec<_>>(),
+                        params,
                         return_type.map(Box::new),
+                        is_mut.is_some(),
                     )
                 });
 
@@ -678,7 +691,7 @@ impl Display for TypeExpr {
                 }
                 write!(f, "{}", variant.0)
             }),
-            TypeExpr::Fun(params, return_type) => {
+            TypeExpr::Fun(params, return_type, _) => {
                 write!(f, "fn(")?;
                 params
                     .iter()
@@ -742,12 +755,13 @@ pub mod tests {
                     .collect(),
             }),
             TypeExpr::Tuple(t) => TypeExpr::Tuple(t.into_iter().map(strip_spans).collect()),
-            TypeExpr::Fun(params, return_type) => TypeExpr::Fun(
+            TypeExpr::Fun(params, return_type, is_mut) => TypeExpr::Fun(
                 params
                     .into_iter()
                     .map(|(name, param_type_expr)| (name, strip_spans(param_type_expr)))
                     .collect(),
                 return_type.map(|rt_box| Box::new(strip_spans(*rt_box))),
+                is_mut,
             ),
             TypeExpr::Or(variants) => TypeExpr::Or(variants.into_iter().map(strip_spans).collect()),
             TypeExpr::And(variants) => {
@@ -831,6 +845,7 @@ pub mod tests {
             TypeExpr::Fun(
                 vec![],
                 Some(Box::new(TypeExpr::String(None).into_empty_span())),
+                false,
             ),
         );
 
@@ -881,6 +896,7 @@ pub mod tests {
                     TypeExpr::Int(None).into_empty_span(),
                 )],
                 Some(Box::new(TypeExpr::Bool(None).into_empty_span())),
+                false,
             ),
         );
 
@@ -895,6 +911,7 @@ pub mod tests {
                     ),
                 ],
                 Some(Box::new(TypeExpr::Char.into_empty_span())),
+                false,
             ),
         );
 
@@ -1086,6 +1103,7 @@ pub mod tests {
                     )
                     .into_empty_span(),
                 )),
+                false,
             ),
         );
 
@@ -1151,6 +1169,7 @@ pub mod tests {
                             TypeExpr::String(None).into_empty_span(),
                         )],
                         Some(Box::new(TypeExpr::Int(None).into_empty_span())),
+                        false,
                     )
                     .into_empty_span(),
                 ]),
@@ -1219,6 +1238,7 @@ pub mod tests {
                             .into_empty_span(),
                         )],
                         Some(Box::new(TypeExpr::Tuple(vec![]).into_empty_span())),
+                        false,
                     )
                     .into_empty_span(),
                 )],
@@ -1233,6 +1253,7 @@ pub mod tests {
                     )
                     .into_empty_span(),
                 )),
+                false,
             ),
         );
 
@@ -1313,6 +1334,7 @@ pub mod tests {
                         .into_empty_span(),
                 )],
                 Some(Box::new(TypeExpr::Tuple(Vec::new()).into_empty_span())),
+                false,
             ),
         );
 
@@ -1337,6 +1359,7 @@ pub mod tests {
                     TypeExpr::RawTypeName(true, vec!["MyResult".to_string()], None)
                         .into_empty_span(),
                 )),
+                false,
             ),
         );
 
@@ -1351,6 +1374,7 @@ pub mod tests {
                     ])
                     .into_empty_span(),
                 )),
+                false,
             ),
         );
 
@@ -1425,6 +1449,7 @@ pub mod tests {
                 Some(Box::new(
                     TypeExpr::Go("fmt.Stringer".to_string()).into_empty_span(),
                 )),
+                false,
             ),
         );
 
@@ -1445,6 +1470,7 @@ pub mod tests {
                     ])
                     .into_empty_span(),
                 )),
+                false,
             ),
         );
 

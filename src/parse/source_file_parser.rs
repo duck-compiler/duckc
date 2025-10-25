@@ -427,7 +427,7 @@ fn append_global_prefix_type_expr(type_expr: &mut TypeExpr, mangle_env: &mut Man
                 append_global_prefix_type_expr(&mut f.0, mangle_env);
             }
         }
-        TypeExpr::Fun(params, return_type) => {
+        TypeExpr::Fun(params, return_type, _) => {
             for (_, param_type) in params {
                 append_global_prefix_type_expr(&mut param_type.0, mangle_env);
             }
@@ -601,6 +601,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
         }
         ValueExpr::Lambda(lambda_expr) => {
             let LambdaFunctionExpr {
+                is_mut: _,
                 params,
                 return_type,
                 value_expr,

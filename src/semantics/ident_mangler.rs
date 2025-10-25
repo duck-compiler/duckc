@@ -291,7 +291,7 @@ pub fn mangle_type_expression(
                 mangle_type_expression(&mut f.0, prefix, mangle_env);
             }
         }
-        TypeExpr::Fun(params, return_type) => {
+        TypeExpr::Fun(params, return_type, _) => {
             for (_, param_type) in params {
                 mangle_type_expression(&mut param_type.0, prefix, mangle_env);
             }
@@ -508,6 +508,7 @@ pub fn mangle_value_expr(
         }
         ValueExpr::Lambda(lambda_expr) => {
             let LambdaFunctionExpr {
+                is_mut: _,
                 params,
                 return_type,
                 value_expr,
