@@ -24,7 +24,10 @@ use crate::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
         },
     },
-    semantics::{ident_mangler::mangle, typechecker::check_type_compatability},
+    semantics::{
+        ident_mangler::mangle,
+        typechecker::{check_type_compatability, check_type_compatability_full},
+    },
     tags::Tag,
 };
 
@@ -232,11 +235,15 @@ impl TypeEnv<'_> {
             .unwrap()
     }
 
-    pub fn get_struct_def<'a>(&'a self, name: &str) -> &'a StructDefinition {
+    pub fn get_struct_def_opt<'a>(&'a self, name: &str) -> Option<&'a StructDefinition> {
         self.struct_definitions
             .iter()
             .chain(self.generic_structs_generated.iter())
             .find(|x| x.name.as_str() == name)
+    }
+
+    pub fn get_struct_def<'a>(&'a self, name: &str) -> &'a StructDefinition {
+        self.get_struct_def_opt(name)
             .unwrap_or_else(|| panic!("Could not find struct {name}"))
     }
 
@@ -412,7 +419,7 @@ impl TypeEnv<'_> {
             TypeExpr::Tuple(types) => types.iter_mut().for_each(|type_expr| {
                 found.extend(self.flatten_types(&mut type_expr.0, param_names_used));
             }),
-            TypeExpr::Fun(params, return_type) => {
+            TypeExpr::Fun(params, return_type, _) => {
                 params.iter_mut().for_each(|param| {
                     found.extend(self.flatten_types(&mut param.1.0, param_names_used))
                 });
@@ -509,7 +516,7 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
             }
         }
         TypeExpr::Array(d) => resolve_all_aliases_type_expr(&mut d.0, env),
-        TypeExpr::Fun(params, return_type) => {
+        TypeExpr::Fun(params, return_type, _) => {
             if let Some(r) = return_type {
                 resolve_all_aliases_type_expr(&mut r.0, env);
             }
@@ -707,7 +714,7 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                 instantiate_generics_type_expr(&mut f.type_expr.0, type_env);
             }
         }
-        TypeExpr::Fun(params, ret) => {
+        TypeExpr::Fun(params, ret, _) => {
             for p in params {
                 instantiate_generics_type_expr(&mut p.1.0, type_env);
             }
@@ -1034,7 +1041,7 @@ fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &HashMap<Strin
                 replace_generics_in_type_expr(&mut f.type_expr.0, set_params);
             }
         }
-        TypeExpr::Fun(params, ret) => {
+        TypeExpr::Fun(params, ret, _) => {
             for p in params {
                 replace_generics_in_type_expr(&mut p.1.0, set_params);
             }
@@ -1297,6 +1304,7 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
                                             })
                                             .unwrap_or_default(),
                                         cloned_def.return_type.clone().map(Box::new),
+                                        true,
                                     ),
                                     true,
                                 ),
@@ -1507,6 +1515,7 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
         }
         ValueExpr::Lambda(l) => {
             let LambdaFunctionExpr {
+                is_mut: _,
                 params,
                 return_type,
                 value_expr,
@@ -1646,6 +1655,10 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
     }
 }
 
+pub fn is_const_var(v: &ValueExpr) -> bool {
+    matches!(v, ValueExpr::Variable(_, _, _, Some(true)))
+}
+
 pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
         TypeExpr::Ref(t) | TypeExpr::RefMut(t) => sort_fields_type_expr(&mut t.0),
@@ -1665,7 +1678,7 @@ pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
             }
         }
         TypeExpr::Array(d) => sort_fields_type_expr(&mut d.0),
-        TypeExpr::Fun(params, r) => {
+        TypeExpr::Fun(params, r, _) => {
             if let Some(r) = r {
                 sort_fields_type_expr(&mut r.0);
             }
@@ -1850,6 +1863,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     ]),
                     tsx_component.typescript_source.1,
                 ))),
+                true,
             ),
             true,
         );
@@ -1867,6 +1881,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                         duckx_component.props_type.clone(),
                     )],
                     Some(Box::new((TypeExpr::Html, duckx_component.value_expr.1))),
+                    true,
                 ),
                 true,
             );
@@ -1876,7 +1891,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         type_env.function_definitions.push(fn_def.clone());
         let mut function_type = fn_def.type_expr().0;
 
-        if let TypeExpr::Fun(_, return_type) = &mut function_type
+        if let TypeExpr::Fun(_, return_type, _) = &mut function_type
             && let Some(return_type_box) = return_type
             && let TypeExpr::And(_) = &return_type_box.0
         {
@@ -1961,9 +1976,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                             spanned_type_expr.1,
                         ))
                     }),
+                true,
             );
 
-            if let TypeExpr::Fun(_, return_type) = &mut fn_type_expr
+            if let TypeExpr::Fun(_, return_type, _) = &mut fn_type_expr
                 && let Some(return_type_box) = return_type
                 && let TypeExpr::And(_) = &return_type_box.0
             {
@@ -2235,12 +2251,30 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         ValueExpr::InlineGo(..) => {}
         ValueExpr::Lambda(b) => {
             let LambdaFunctionExpr {
+                is_mut,
                 params,
                 return_type,
                 value_expr,
             } = &mut **b;
 
+            let captured = type_env.identifier_types[1..]
+                .iter()
+                .flat_map(|v| v.iter())
+                .fold(HashMap::new(), |mut acc, (name, (ty, is_const))| {
+                    if !type_env.identifier_types[0].contains_key(name)  // don't capture top level identifiers like functions
+                    && !params.iter().any(|(param_name, _)| param_name == name)
+                    // don't capture shadowed variables
+                    {
+                        acc.insert(name.clone(), (ty.clone(), *is_mut && !*is_const));
+                    }
+                    acc
+                });
+
             type_env.push_identifier_types();
+
+            for (name, (ty, capture_as_mut)) in captured {
+                type_env.insert_identifier_type(name, ty, !capture_as_mut);
+            }
 
             for (name, ty) in params {
                 type_env.insert_identifier_type(name.to_owned(), ty.0.clone(), false);
@@ -2258,9 +2292,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             target,
             params,
             type_params,
-        } => {
+        } =>
+        {
             typeresolve_value_expr((&mut target.0, target.1), type_env);
 
+            #[allow(unused_variables)]
             let header: FunHeader;
 
             // generic method call
@@ -2447,8 +2483,9 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     *type_params = None;
                 }
             } else {
-                let TypeExpr::Fun(params, ret) = TypeExpr::from_value_expr(target, type_env) else {
-                    panic!("not a func??")
+                let TypeExpr::Fun(params, ret, _) = TypeExpr::from_value_expr(target, type_env)
+                else {
+                    panic!("not a func?? {target:?}")
                 };
                 header = FunHeader {
                     params: params.iter().map(|x| x.1.clone()).collect(),
@@ -2456,19 +2493,16 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 };
             }
 
+            let _header = header;
+
             assert!(
                 type_params.is_none(),
                 "type_params should be omitted by now"
             );
 
-            // println!("{:?}", header);
-
             params
                 .iter_mut()
-                .zip(header.params.iter())
-                .for_each(|(param, _)| {
-                    typeresolve_value_expr((&mut param.0, param.1), type_env);
-                });
+                .for_each(|param| typeresolve_value_expr((&mut param.0, param.1), type_env));
         }
         ValueExpr::Variable(_, identifier, type_expr_opt, const_opt) => {
             // if let Some(type_expr) = type_expr_opt {
@@ -2567,13 +2601,14 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 type_env,
             );
 
-            check_type_compatability(
+            check_type_compatability_full(
                 &(target_type, assignment.0.target.1),
                 &(
                     TypeExpr::from_value_expr(&assignment.0.value_expr, type_env),
                     assignment.0.value_expr.1,
                 ),
                 type_env,
+                is_const_var(&assignment.0.target.0),
             );
         }
         ValueExpr::Add(lhs, rhs)

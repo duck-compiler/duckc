@@ -5,7 +5,7 @@ fn create_counter() -> (fn() -> Int, fn()) {
         return count;
     };
 
-    let increment: fn() = fn() {
+    let increment: fn() = mut fn() {
         count = count + 1;
     };
 

@@ -465,7 +465,7 @@ impl TypeExpr {
                 .try_resolve_type_alias(name)
                 .map(|x| x.as_go_type_annotation(type_env))
                 .unwrap_or(name.clone()),
-            TypeExpr::Fun(params, return_type) => format!(
+            TypeExpr::Fun(params, return_type, _) => format!(
                 "func({}) {}",
                 params
                     .iter()
@@ -528,7 +528,7 @@ impl TypeExpr {
             TypeExpr::TypeName(_, name, _type_params) => type_env
                 .resolve_type_alias(name)
                 .as_go_concrete_annotation(type_env),
-            TypeExpr::Fun(params, return_type) => format!(
+            TypeExpr::Fun(params, return_type, _) => format!(
                 "func({}) {}",
                 params
                     .iter()
@@ -597,7 +597,7 @@ impl TypeExpr {
             TypeExpr::TypeName(_, name, _type_params) => name.clone(),
             TypeExpr::TypeNameInternal(name) => name.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
-            TypeExpr::Fun(params, return_type) => format!(
+            TypeExpr::Fun(params, return_type, _) => format!(
                 "Fun_From_{}{}",
                 params
                     .iter()
@@ -685,8 +685,9 @@ impl TypeExpr {
                 .as_clean_go_type_name(type_env),
             TypeExpr::TypeNameInternal(name) => name.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
-            TypeExpr::Fun(params, return_type) => format!(
-                "Fun_From_{}{}",
+            TypeExpr::Fun(params, return_type, is_mut) => format!(
+                "Fun_{}_From_{}{}",
+                if *is_mut { "Mut" } else { "NotMut" },
                 params
                     .iter()
                     .map(|(name, type_expr)| format!(

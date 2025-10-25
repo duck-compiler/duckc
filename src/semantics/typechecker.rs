@@ -12,7 +12,7 @@ use crate::parse::{
     Spanned, failure,
     value_parser::{ValFmtStringContents, ValueExpr},
 };
-use crate::semantics::type_resolve::TypeEnv;
+use crate::semantics::type_resolve::{TypeEnv, is_const_var};
 
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
@@ -187,6 +187,7 @@ impl TypeExpr {
                     .map(|(name, type_expr)| (Some(name.clone()), type_expr.clone()))
                     .collect(),
                 lambda_expr.return_type.clone().map(Box::new),
+                lambda_expr.is_mut,
             ),
             ValueExpr::InlineGo(..) => TypeExpr::InlineGo,
             ValueExpr::Int(value) => TypeExpr::Int(Some(*value)),
@@ -444,7 +445,7 @@ impl TypeExpr {
                     .collect::<Vec<_>>();
 
                 let mut target_type = TypeExpr::from_value_expr(target.as_ref(), type_env);
-                if let TypeExpr::Fun(param_types, return_type) = &mut target_type {
+                if let TypeExpr::Fun(param_types, return_type, _) = &mut target_type {
                     param_types
                         .iter_mut()
                         .enumerate()
@@ -453,10 +454,11 @@ impl TypeExpr {
                                 return;
                             }
 
-                            check_type_compatability(
+                            check_type_compatability_full(
                                 &param_type.1,
                                 in_param_types.get(index).unwrap(),
                                 type_env,
+                                is_const_var(&params[index].0),
                             );
 
                             // variant any replace
@@ -850,6 +852,7 @@ impl TypeExpr {
                                     .map(|x| (Some(x.0.clone()), x.1.clone()))
                                     .collect(),
                                 x.return_type.clone().map(Box::new),
+                                true,
                             ),
                         )
                     }))
@@ -870,6 +873,7 @@ impl TypeExpr {
                                             .map(|x| (Some(x.0.clone()), x.1.clone()))
                                             .collect(),
                                         x.return_type.clone().map(Box::new),
+                                        true,
                                     ),
                                 )
                             }),
@@ -1098,11 +1102,19 @@ fn require_subset_of_variant_type(
         }
     }
 }
-
 pub fn check_type_compatability(
     required_type: &Spanned<TypeExpr>,
     given_type: &Spanned<TypeExpr>,
     type_env: &mut TypeEnv,
+) {
+    check_type_compatability_full(required_type, given_type, type_env, false);
+}
+
+pub fn check_type_compatability_full(
+    required_type: &Spanned<TypeExpr>,
+    given_type: &Spanned<TypeExpr>,
+    type_env: &mut TypeEnv,
+    given_const_var: bool,
 ) {
     let mut given_type = given_type.clone();
     given_type.0 = type_env.try_resolve_type_expr(&given_type.0);
@@ -1258,7 +1270,7 @@ pub fn check_type_compatability(
                 let struct_def = type_env.get_struct_def(struct_name).clone();
 
                 for required_field in duck.fields.iter() {
-                    if required_field.type_expr.0.is_fun() {
+                    if let TypeExpr::Fun(_, _, is_mut) = required_field.type_expr.0 {
                         let companion_method = struct_def
                             .methods
                             .iter()
@@ -1275,7 +1287,44 @@ pub fn check_type_compatability(
                                     "the given type doesn't have a field or method with name {}",
                                     required_field.name.bright_purple(),
                                 ),
-                            )
+                            );
+                        }
+
+                        if is_mut {
+                            if !struct_def.mut_methods.contains(&required_field.name) {
+                                fail_requirement(
+                                    format!(
+                                        "this type states that it requires a mutable method named {}",
+                                        required_field.name.bright_purple(),
+                                    ),
+                                    format!(
+                                        "the given type doesn't have a mutable method named {}",
+                                        required_field.name.bright_purple(),
+                                    ),
+                                );
+                            }
+                            if given_const_var && !{
+                                let mut is_mut_ref = false;
+
+                                let mut current = given_type.0.clone();
+                                while let TypeExpr::RefMut(next) = current {
+                                    is_mut_ref = true;
+
+                                    if let TypeExpr::Ref(..) = next.0 {
+                                        is_mut_ref = false;
+                                        break;
+                                    }
+
+                                    current = next.0;
+                                }
+
+                               is_mut_ref
+                            } {
+                                fail_requirement(
+                                    format!("this needs mutable access",),
+                                    format!("this is a const var",),
+                                );
+                            }
                         }
 
                         let companion_method = companion_method.unwrap();
@@ -1497,7 +1546,7 @@ pub fn check_type_compatability(
         TypeExpr::Or(..) => {
             require_subset_of_variant_type(required_type, &given_type, type_env);
         }
-        TypeExpr::Fun(required_params, required_return_type) => {
+        TypeExpr::Fun(required_params, required_return_type, is_mut_required) => {
             if !given_type.0.is_fun() {
                 fail_requirement(
                     "this requires a function".to_string(),
@@ -1505,9 +1554,17 @@ pub fn check_type_compatability(
                 )
             }
 
-            let TypeExpr::Fun(given_params, given_return_type) = &given_type.0 else {
+            let TypeExpr::Fun(given_params, given_return_type, is_mut_given) = &given_type.0 else {
                 unreachable!("we've already checked that it's a function")
             };
+
+            if *is_mut_required && !*is_mut_given {
+                fail_requirement(
+                    "this requires a mut fn".to_string(),
+                    "this is not a mut fn".to_string(),
+                );
+            }
+
             if given_params.len() != required_params.len() {
                 fail_requirement(
                     format!(

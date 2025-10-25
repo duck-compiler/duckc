@@ -1,0 +1,13 @@
+fn take_fn(f: mut fn(String, Int)){f("a", 100)}
+fn take_imm_fn(f: fn(String, Int)){f("a", 100)}
+
+fn abc(x: String, y: Int) {}
+
+fn main() {
+    take_fn(abc);
+    take_fn(mut fn(x: String, y: Int){std::io::println(f"{x}{std::string::from_int(y)}")});
+
+    take_imm_fn(abc);
+    take_imm_fn(mut fn(x: String, y: Int){std::io::println(f"{x}{std::string::from_int(y)}")});
+    take_imm_fn(fn(x: String, y: Int){std::io::println(f"{x}{std::string::from_int(y)}")});
+}
