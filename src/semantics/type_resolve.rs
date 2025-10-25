@@ -53,8 +53,11 @@ fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, type_env: &mut
 
         let access_fn_type = TypeExpr::Fun(
             vec![(Some("self".to_string()), type_expr.clone())],
-            Some(Box::new(extension_method.0.type_expr()))
+            Some(Box::new(extension_method.0.type_expr())),
+            // todo: mutable extension fns?
+            false
         );
+
         type_env.extension_functions.insert(
             extension_function_name,
             (underlying_fn_type.clone(), access_fn_type.clone())

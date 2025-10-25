@@ -157,6 +157,7 @@ pub fn needs_mut(v: &ValueExpr, type_env: &mut TypeEnv) -> bool {
             target,
             params: _,
             type_params: _,
+            ..
         } => {
             if let ValueExpr::FieldAccess {
                 target_obj,
