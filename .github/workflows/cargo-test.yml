@@ -10,11 +10,22 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: cargo test
+  test-ubuntu:
+    name: cargo test on ubuntu
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - run: cargo test
+
+  test-windows:
+    name: cargo test on windows
+    runs-on: windows-latest
+
+    steps:
+    - uses: ilammy/msvc-dev-cmd@v1
+    - uses: actions/checkout@v4
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - run: set RUSTFLAGS="-C link-arg=/DEBUG:NONE"
     - run: cargo test
