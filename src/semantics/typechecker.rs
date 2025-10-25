@@ -12,7 +12,7 @@ use crate::parse::{
     Spanned, failure,
     value_parser::{ValFmtStringContents, ValueExpr},
 };
-use crate::semantics::type_resolve::TypeEnv;
+use crate::semantics::type_resolve::{TypeEnv, is_const_var};
 
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
@@ -454,10 +454,11 @@ impl TypeExpr {
                                 return;
                             }
 
-                            check_type_compatability(
+                            check_type_compatability_full(
                                 &param_type.1,
                                 in_param_types.get(index).unwrap(),
                                 type_env,
+                                is_const_var(&params[index].0),
                             );
 
                             // variant any replace
@@ -1101,11 +1102,19 @@ fn require_subset_of_variant_type(
         }
     }
 }
-
 pub fn check_type_compatability(
     required_type: &Spanned<TypeExpr>,
     given_type: &Spanned<TypeExpr>,
     type_env: &mut TypeEnv,
+) {
+    check_type_compatability_full(required_type, given_type, type_env, false);
+}
+
+pub fn check_type_compatability_full(
+    required_type: &Spanned<TypeExpr>,
+    given_type: &Spanned<TypeExpr>,
+    type_env: &mut TypeEnv,
+    given_const_var: bool,
 ) {
     let mut given_type = given_type.clone();
     given_type.0 = type_env.try_resolve_type_expr(&given_type.0);
@@ -1281,17 +1290,25 @@ pub fn check_type_compatability(
                             );
                         }
 
-                        if is_mut && !struct_def.mut_methods.contains(&required_field.name) {
-                            fail_requirement(
-                                format!(
-                                    "this type states that it requires a mutable method named {}",
-                                    required_field.name.bright_purple(),
-                                ),
-                                format!(
-                                    "the given type doesn't have a mutable method named {}",
-                                    required_field.name.bright_purple(),
-                                ),
-                            );
+                        if is_mut {
+                            if !struct_def.mut_methods.contains(&required_field.name) {
+                                fail_requirement(
+                                    format!(
+                                        "this type states that it requires a mutable method named {}",
+                                        required_field.name.bright_purple(),
+                                    ),
+                                    format!(
+                                        "the given type doesn't have a mutable method named {}",
+                                        required_field.name.bright_purple(),
+                                    ),
+                                );
+                            }
+                            if given_const_var {
+                                fail_requirement(
+                                    format!("needs a let var",),
+                                    format!("needs a let var",),
+                                );
+                            }
                         }
 
                         let companion_method = companion_method.unwrap();
@@ -1528,7 +1545,7 @@ pub fn check_type_compatability(
             if *is_mut_required && !*is_mut_given {
                 fail_requirement(
                     "this requires a mut fn".to_string(),
-                    "this is not a mut fn".to_string()
+                    "this is not a mut fn".to_string(),
                 );
             }
 

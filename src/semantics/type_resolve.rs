@@ -24,7 +24,10 @@ use crate::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
         },
     },
-    semantics::{ident_mangler::mangle, typechecker::check_type_compatability},
+    semantics::{
+        ident_mangler::mangle,
+        typechecker::{check_type_compatability, check_type_compatability_full},
+    },
     tags::Tag,
 };
 
@@ -1652,6 +1655,10 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
     }
 }
 
+pub fn is_const_var(v: &ValueExpr) -> bool {
+    matches!(v, ValueExpr::Variable(_, _, _, Some(true)))
+}
+
 pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
         TypeExpr::Ref(t) | TypeExpr::RefMut(t) => sort_fields_type_expr(&mut t.0),
@@ -2255,7 +2262,8 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 .flat_map(|v| v.iter())
                 .fold(HashMap::new(), |mut acc, (name, (ty, is_const))| {
                     if !type_env.identifier_types[0].contains_key(name)  // don't capture top level identifiers like functions
-                    && !params.iter().any(|(param_name, _)| param_name == name) // don't capture shadowed variables
+                    && !params.iter().any(|(param_name, _)| param_name == name)
+                    // don't capture shadowed variables
                     {
                         acc.insert(name.clone(), (ty.clone(), *is_mut && !*is_const));
                     }
@@ -2265,11 +2273,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             type_env.push_identifier_types();
 
             for (name, (ty, capture_as_mut)) in captured {
-                type_env.insert_identifier_type(
-                    name,
-                    ty,
-                    !capture_as_mut,
-                );
+                type_env.insert_identifier_type(name, ty, !capture_as_mut);
             }
 
             for (name, ty) in params {
@@ -2492,14 +2496,9 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 "type_params should be omitted by now"
             );
 
-            // println!("{:?}", header);
-
             params
                 .iter_mut()
-                .zip(header.params.iter())
-                .for_each(|(param, _)| {
-                    typeresolve_value_expr((&mut param.0, param.1), type_env);
-                });
+                .for_each(|param| typeresolve_value_expr((&mut param.0, param.1), type_env));
         }
         ValueExpr::Variable(_, identifier, type_expr_opt, const_opt) => {
             // if let Some(type_expr) = type_expr_opt {
@@ -2598,13 +2597,14 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 type_env,
             );
 
-            check_type_compatability(
+            check_type_compatability_full(
                 &(target_type, assignment.0.target.1),
                 &(
                     TypeExpr::from_value_expr(&assignment.0.value_expr, type_env),
                     assignment.0.value_expr.1,
                 ),
                 type_env,
+                is_const_var(&assignment.0.target.0),
             );
         }
         ValueExpr::Add(lhs, rhs)
