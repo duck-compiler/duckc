@@ -4,7 +4,7 @@ use std::{
     sync::mpsc::Sender,
 };
 
-use chumsky::container::{Container, Seq};
+use chumsky::container::Container;
 use colored::Colorize;
 
 use crate::{

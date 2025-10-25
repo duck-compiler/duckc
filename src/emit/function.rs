@@ -64,7 +64,6 @@ impl FunctionDefintion {
 
     pub fn emit_as_extension_fun(
         &self,
-        receiver: Option<(String, String)>,
         type_env: &mut TypeEnv,
         to_ir: &mut ToIr,
         target_type: &TypeExpr
