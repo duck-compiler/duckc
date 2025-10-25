@@ -6,8 +6,8 @@ struct MyStruct = {
     }
 };
 
-fn just_do_it(with: { do_something: fn (param_one: String) -> Int }) -> Int {
-    return with.do_something("hallo");
+fn just_do_it(_with: { do_something: fn (param_one: String) -> Int }) -> Int {
+    return _with.do_something("hallo");
 }
 
 fn main() {
