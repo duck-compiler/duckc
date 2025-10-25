@@ -1269,6 +1269,12 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
             field_name: _,
         } => {
             value_expr_into_empty_range(target_obj);
+        },
+        ValueExpr::ExtensionAccess {
+            target_obj,
+            extension_name: _,
+        } => {
+            value_expr_into_empty_range(target_obj);
         }
         ValueExpr::Match {
             value_expr,
@@ -3098,14 +3104,14 @@ mod tests {
                 ),
             ),
             (
-                "1::b",
+                "10@b",
                 ValueExpr::ExtensionAccess {
                     target_obj: ValueExpr::Int(10).into_empty_span().into(),
                     extension_name: "b".to_string()
                 }
             ),
             (
-                "1::b()",
+                "10@b()",
                 ValueExpr::FunctionCall {
                     target: ValueExpr::ExtensionAccess {
                         target_obj: ValueExpr::Int(10).into_empty_span().into(),
@@ -3113,7 +3119,7 @@ mod tests {
                     }.into_empty_span().into(),
                     params: vec![],
                     type_params: None,
-                    is_extension_call: false,
+                    is_extension_call: true,
                 }
             )
         ];
