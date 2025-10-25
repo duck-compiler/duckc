@@ -1373,8 +1373,8 @@ pub fn check_type_compatability_full(
                                is_mut_ref
                             } {
                                 fail_requirement(
-                                    format!("this needs mutable access",),
-                                    format!("this is a const var",),
+                                    "this needs mutable access".to_string(),
+                                    "this is a const var".to_string(),
                                 );
                             }
                         }

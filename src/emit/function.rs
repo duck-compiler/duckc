@@ -89,11 +89,11 @@ impl FunctionDefintion {
             vec![IrInstruction::Return(Some(IrValue::Lambda(
                 self.params
                     .clone()
-                    .unwrap_or_else(|| Vec::new())
+                    .unwrap_or_default()
                     .iter()
                     .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
                     .collect::<Vec<_>>(),
-                Some(format!("{}", self.return_type.clone().expect("compiler error: expect").0.as_go_return_type(type_env))),
+                Some(self.return_type.clone().expect("compiler error: expect").0.as_go_return_type(type_env)),
                 emitted_body
             )))],
         )

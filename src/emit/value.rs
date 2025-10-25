@@ -165,16 +165,14 @@ pub fn needs_mut(v: &ValueExpr, type_env: &mut TypeEnv) -> bool {
             } = &target.0
             {
                 let ty = TypeExpr::from_value_expr_resolved_type_name_dereferenced(
-                    &target_obj,
+                    target_obj,
                     type_env,
                 );
-                if let TypeExpr::TypeName(_, type_name, _) = ty {
-                    if let Some(struct_def) = type_env.get_struct_def_opt(&type_name) {
-                        if struct_def.mut_methods.contains(&field_name.to_string()) {
-                            return true;
-                        }
+                if let TypeExpr::TypeName(_, type_name, _) = ty
+                    && let Some(struct_def) = type_env.get_struct_def_opt(&type_name)
+                    && struct_def.mut_methods.contains(&field_name.to_string()) {
+                        return true;
                     }
-                }
             }
             false
         }
@@ -330,7 +328,7 @@ fn walk_access_raw(
                     if let TypeExpr::Struct(struct_name) = ty {
                         let struct_def = type_env.get_struct_def(struct_name.as_str());
                         if struct_def.mut_methods.contains(field_name)
-                            && !can_do_mut_stuff_through(target_obj, type_env)
+                        && !can_do_mut_stuff_through(target_obj, type_env)
                         {
                             failure_with_occurence(
                                 "This needs to allow mutable access".to_string(),
@@ -341,26 +339,24 @@ fn walk_access_raw(
                                 )],
                             );
                         }
-                    } else if let TypeExpr::Duck(duck) = ty {
-                        if let Some(duck_field) = duck
+                    } else if let TypeExpr::Duck(duck) = ty
+                        && let Some(duck_field) = duck
                             .fields
                             .iter()
                             .find(|field| field.name.as_str() == field_name.as_str())
-                        {
-                            if let TypeExpr::Fun(_, _, true) = duck_field.type_expr.0
-                                && !can_do_mut_stuff_through(target_obj, type_env)
-                            {
-                                failure_with_occurence(
-                                    "This needs to allow mutable access".to_string(),
-                                    target.1,
-                                    [(
-                                        "This needs to allow mutable access".to_string(),
-                                        target_obj.1,
-                                    )],
-                                );
-                            }
-                        }
+                        && let TypeExpr::Fun(_, _, true) = duck_field.type_expr.0
+                        && !can_do_mut_stuff_through(target_obj, type_env)
+                    {
+                        failure_with_occurence(
+                            "This needs to allow mutable access".to_string(),
+                            target.1,
+                            [(
+                                "This needs to allow mutable access".to_string(),
+                                target_obj.1,
+                            )],
+                        );
                     }
+
                 }
 
                 for param in params {
@@ -459,10 +455,10 @@ fn walk_access_raw(
                             .find(|x| x.name == field_name)
                             .expect("Field doesn't exist");
                         if found_field.type_expr.0.is_array()
-                            || found_field.type_expr.0.is_duck()
-                            || found_field.type_expr.0.is_struct()
-                            || found_field.type_expr.0.is_fun()
-                            || only_read
+                        || found_field.type_expr.0.is_duck()
+                        || found_field.type_expr.0.is_struct()
+                        || found_field.type_expr.0.is_fun()
+                        || only_read
                         {
                             s.push_front(format!("Get{field_name}()"));
                         } else {
@@ -654,7 +650,7 @@ impl ValueExpr {
                                     vec![emit_res]
                                 )
                             ].iter())
-                            .map(|i| i.clone())
+                            .cloned()
                             .collect::<Vec<_>>(),
                         as_rvar(var_name)
                     )
@@ -979,9 +975,9 @@ impl ValueExpr {
                                         ));
 
                                         let ValHtmlStringContents::String(s) = &mut contents[i]
-                                        else {
-                                            panic!()
-                                        };
+                                            else {
+                                                panic!()
+                                            };
 
                                         s.insert_str(j, &html_to_return);
 
@@ -993,7 +989,7 @@ impl ValueExpr {
                                         continue 'outer;
                                     } else if true
                                         && let Some(duckx_component) =
-                                            type_env.get_duckx_component(found).cloned()
+                                        type_env.get_duckx_component(found).cloned()
                                     {
                                         let mut o = Vec::new();
                                         let full_str = slice[..end_index].to_string();
@@ -1105,9 +1101,9 @@ impl ValueExpr {
 
                                         let TypeExpr::Duck(Duck { fields }) =
                                             duckx_component.props_type.0.clone()
-                                        else {
-                                            panic!("not taking a duck??")
-                                        };
+                                            else {
+                                                panic!("not taking a duck??")
+                                            };
 
                                         if fields.iter().any(|f| !props_init.contains_key(&f.name))
                                         {
@@ -1283,11 +1279,11 @@ impl ValueExpr {
                                         return_printf_vars.push(format!(
                                             r#"
                                             func() string {{
-                                                res := ""
-                                                for _, e := range {var_name} {{
-                                                    res += e(env)
-                                                }}
-                                                return res
+                                            res := ""
+                                            for _, e := range {var_name} {{
+                                            res += e(env)
+                                            }}
+                                            return res
                                             }}()"#
                                         ));
                                     } else {
@@ -1342,8 +1338,8 @@ impl ValueExpr {
                             )
                         },
                         "}".to_string(),
-                    ]
-                    .join("\n"),
+                        ]
+                        .join("\n"),
                 ));
 
                 (instr, Some(IrValue::Var(var_name)))
@@ -1469,7 +1465,7 @@ impl ValueExpr {
 
                     let the_one = cases.iter().find(|hopefully_the_one| {
                         hopefully_the_one.type_name == case.type_name
-                            && hopefully_the_one.condition.is_none()
+                        && hopefully_the_one.condition.is_none()
                     });
 
                     if the_one.is_none() && else_arm.is_none() {
@@ -1753,9 +1749,9 @@ impl ValueExpr {
                         //todo(@Apfelfrosch) handle indices of type ! properly (do it in rest of emit too)
                         let (idx_instr, Some(IrValue::Var(idx_res))) =
                             idx.0.emit(type_env, env, idx.1)
-                        else {
-                            panic!("no var: {idx:?}")
-                        };
+                            else {
+                                panic!("no var: {idx:?}")
+                            };
 
                         res.extend(idx_instr);
 
@@ -1916,8 +1912,8 @@ impl ValueExpr {
                         if matches!(
                             current,
                             IrInstruction::Return(..)
-                                | IrInstruction::Break
-                                | IrInstruction::Continue
+                            | IrInstruction::Break
+                            | IrInstruction::Continue
                         ) {
                             res_var = None;
                             return (res_instr, res_var);
@@ -2010,9 +2006,9 @@ impl ValueExpr {
 
                 let TypeExpr::Fun(_, return_type, _) =
                     TypeExpr::from_value_expr(v_target, type_env)
-                else {
-                    panic!("can only call function")
-                };
+                    else {
+                        panic!("can only call function")
+                    };
 
                 let res = v_target.0.direct_emit(type_env, env, span);
                 let mut instr = Vec::new();
