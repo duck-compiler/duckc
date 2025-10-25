@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet};
 
 use crate::{
     emit::{
@@ -205,7 +205,7 @@ impl SourceFile {
 
         for extensions_def in self.extensions_defs {
             for fn_def in extensions_def.function_definitions {
-                instructions.push(fn_def.0.emit(None, type_env, &mut to_ir))
+                instructions.push(fn_def.0.emit_as_extension_fun(None, type_env, &mut to_ir, &extensions_def.target_type_expr.0))
             }
         }
 
