@@ -1303,10 +1303,26 @@ pub fn check_type_compatability_full(
                                     ),
                                 );
                             }
-                            if given_const_var {
+                            if given_const_var && !{
+                                let mut is_mut_ref = false;
+
+                                let mut current = given_type.0.clone();
+                                while let TypeExpr::RefMut(next) = current {
+                                    is_mut_ref = true;
+
+                                    if let TypeExpr::Ref(..) = next.0 {
+                                        is_mut_ref = false;
+                                        break;
+                                    }
+
+                                    current = next.0;
+                                }
+
+                               is_mut_ref
+                            } {
                                 fail_requirement(
-                                    format!("needs a let var",),
-                                    format!("needs a let var",),
+                                    format!("this needs mutable access",),
+                                    format!("this is a const var",),
                                 );
                             }
                         }

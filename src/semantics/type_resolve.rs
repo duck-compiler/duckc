@@ -2292,9 +2292,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             target,
             params,
             type_params,
-        } => {
+        } =>
+        {
             typeresolve_value_expr((&mut target.0, target.1), type_env);
 
+            #[allow(unused_variables)]
             let header: FunHeader;
 
             // generic method call
@@ -2490,6 +2492,8 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     return_type: ret.as_ref().map(|x| x.deref().clone()),
                 };
             }
+
+            let _header = header;
 
             assert!(
                 type_params.is_none(),
