@@ -4,7 +4,6 @@ use std::process;
 use chumsky::container::Seq;
 use colored::Colorize;
 
-use crate::parse::function_parser::FunctionDefintion;
 use crate::parse::struct_parser::StructDefinition;
 use crate::parse::type_parser::{Duck, TypeExpr};
 use crate::parse::value_parser::empty_range;
@@ -437,6 +436,7 @@ impl TypeExpr {
                 target,
                 params,
                 type_params: _,
+                is_extension_call,
             } => {
                 // todo: type_params
                 let in_param_types = params
@@ -454,11 +454,26 @@ impl TypeExpr {
                                 return;
                             }
 
-                            check_type_compatability(
-                                &param_type.1,
-                                in_param_types.get(index).unwrap(),
-                                type_env,
-                            );
+                            if let Some(param_name) = &param_type.0
+                                && param_name == "self"
+                                {
+                                    if !is_extension_call {
+                                        check_type_compatability(
+                                            &param_type.1,
+                                            in_param_types.get(index).unwrap(),
+                                            type_env,
+                                        );
+                                    } else {
+                                        return
+                                    }
+                                } else {
+                                    check_type_compatability(
+                                        &param_type.1,
+                                        in_param_types.get(index).unwrap(),
+                                        type_env,
+                                    );
+                                }
+
 
                             // variant any replace
                             if let TypeExpr::Array(boxed) = &in_param_types.get(index).unwrap().0
@@ -627,11 +642,8 @@ impl TypeExpr {
                     type_env
                 );
 
-                let extension_function = target_obj_type_expr
-                    .find_extension_function_by_name(
-                        extension_name,
-                        type_env
-                    )
+                let extension_function_name = target_obj_type_expr.build_extension_access_function_name(extension_name, type_env);
+                let extension_function = type_env.extension_functions.get(&extension_function_name)
                     .unwrap_or_else(|| {
                         failure_with_occurence(
                             "Invalid Extension Access".to_string(),
@@ -652,8 +664,7 @@ impl TypeExpr {
                             )],
                         )
                 });
-
-                return extension_function.type_expr().0;
+                return extension_function.0.clone()
             }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
@@ -819,21 +830,6 @@ impl TypeExpr {
             }
             _ => false,
         }
-    }
-
-    fn find_extension_function_by_name(&self, name: impl Into<String>, type_env: &mut TypeEnv) -> Option<FunctionDefintion> {
-        let target_type = self.as_clean_go_type_name(type_env);
-        if !type_env.extension_functions.contains_key(&target_type) {
-            return None
-        }
-
-        let extension_fns = type_env.extension_functions.get(&target_type)
-            .expect("we've just checked that the key exists");
-
-        return extension_fns
-            .iter()
-            .find(|ext_fn| ext_fn.name == name)
-            .cloned();
     }
 
     fn has_field_by_name(&self, name: String, type_env: &TypeEnv) -> bool {

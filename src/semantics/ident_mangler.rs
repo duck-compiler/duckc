@@ -526,6 +526,7 @@ pub fn mangle_value_expr(
             target,
             params,
             type_params,
+            ..
         } => {
             // TODO: type params
             mangle_value_expr(&mut target.0, global_prefix, prefix, mangle_env);
@@ -601,6 +602,9 @@ pub fn mangle_value_expr(
                     mangle_type_expression(g, prefix, mangle_env);
                 }
             }
+        }
+        ValueExpr::ExtensionAccess { target_obj, .. } => {
+            mangle_value_expr(&mut target_obj.0, global_prefix, prefix, mangle_env);
         }
         ValueExpr::FieldAccess { target_obj, .. } => {
             mangle_value_expr(&mut target_obj.0, global_prefix, prefix, mangle_env);

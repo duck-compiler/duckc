@@ -4,7 +4,7 @@ use std::{
     sync::mpsc::Sender,
 };
 
-use chumsky::container::Container;
+use chumsky::container::{Container, Seq};
 use colored::Colorize;
 
 use crate::{
@@ -39,7 +39,27 @@ fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, type_env: &mut
     type_env.insert_identifier_type("self".to_string(), extensions_def.target_type_expr.0.clone(), false);
 
     type_env.all_types.push(extensions_def.target_type_expr.0.clone());
+    let type_expr = extensions_def.target_type_expr.clone();
     for extension_method in &mut extensions_def.function_definitions {
+        let extension_function_name = type_expr.0.build_extension_access_function_name(&extension_method.0.name.clone(), type_env);
+        if type_env.extension_functions.iter().any(|(existing, _)| *existing == extension_function_name) {
+            continue;
+        }
+
+        let underlying_fn_type = extension_method.0.type_expr().0;
+
+        let access_fn_type = TypeExpr::Fun(
+            vec![(Some("self".to_string()), type_expr.clone())],
+            Some(Box::new(extension_method.0.type_expr()))
+        );
+        type_env.extension_functions.insert(
+            extension_function_name,
+            (underlying_fn_type.clone(), access_fn_type.clone())
+        );
+
+        type_env.insert_type(access_fn_type);
+        type_env.insert_type(underlying_fn_type);
+
         typeresolve_function_definition(&mut extension_method.0, type_env);
     }
 }
@@ -126,7 +146,7 @@ pub struct TypeEnv<'a> {
     pub identifier_types: Vec<HashMap<String, (TypeExpr, bool)>>,
     pub type_aliases: Vec<HashMap<String, TypeExpr>>,
     pub all_types: Vec<TypeExpr>,
-    pub extension_functions: HashMap<String, Vec<FunctionDefintion>>, // key = clean go type name of target type
+    pub extension_functions: HashMap<String, (TypeExpr, TypeExpr)>, // key = extension function name, (actual_fn_type, access_fn_type)
 
     pub function_headers: HashMap<String, FunHeader>,
     pub function_definitions: Vec<FunctionDefintion>,
@@ -905,6 +925,7 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
             target,
             params,
             type_params,
+            ..
         } => {
             for v in [&mut target.0]
                 .into_iter()
@@ -915,6 +936,9 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
             for t in type_params.iter_mut().flat_map(|x| x.iter_mut()) {
                 replace_generics_in_type_expr(&mut t.0, set_params);
             }
+        }
+        ValueExpr::ExtensionAccess { target_obj, .. } => {
+            replace_generics_in_value_expr(&mut target_obj.as_mut().0, set_params);
         }
         ValueExpr::If {
             condition,
@@ -1223,10 +1247,14 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
                 }
             }
         }
+        ValueExpr::ExtensionAccess { target_obj, .. } => {
+            instantiate_generics_value_expr(&mut target_obj.as_mut().0, type_env);
+        }
         ValueExpr::FunctionCall {
             target,
             params,
             type_params,
+            ..
         } => {
             instantiate_generics_value_expr(&mut target.0, type_env);
             for t in type_params.iter_mut().flat_map(|x| x.iter_mut()) {
@@ -1566,10 +1594,14 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
                 }
             }
         }
+        ValueExpr::ExtensionAccess { target_obj, .. } => {
+            sort_fields_value_expr(&mut target_obj.as_mut().0);
+        }
         ValueExpr::FunctionCall {
             target,
             params,
             type_params: _,
+            ..
         } => {
             // todo: type_params
             sort_fields_value_expr(&mut target.0);
@@ -2261,10 +2293,15 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
             type_env.pop_identifier_types();
         }
+        ValueExpr::ExtensionAccess { target_obj, .. } => {
+            let target = target_obj.as_mut();
+            typeresolve_value_expr((&mut target.0, target.1), type_env);
+        }
         ValueExpr::FunctionCall {
             target,
             params,
             type_params,
+            ..
         } => {
             typeresolve_value_expr((&mut target.0, target.1), type_env);
 
@@ -2454,8 +2491,9 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     *type_params = None;
                 }
             } else {
-                let TypeExpr::Fun(params, ret) = TypeExpr::from_value_expr(target, type_env) else {
-                    panic!("not a func??")
+                let type_expr = TypeExpr::from_value_expr(target, type_env);
+                let TypeExpr::Fun(params, ret) = type_expr else {
+                    panic!("not a func?? {type_expr:?}")
                 };
                 header = FunHeader {
                     params: params.iter().map(|x| x.1.clone()).collect(),
