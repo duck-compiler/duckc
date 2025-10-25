@@ -72,8 +72,6 @@ pub mod tests {
             let extensions_def_parse_result = extensions_def_parser(make_input)
                 .parse(make_input(empty_range(), &tokens));
 
-            dbg!(&extensions_def_parse_result);
-
             assert_eq!(extensions_def_parse_result.has_errors(), false);
             assert_eq!(extensions_def_parse_result.has_output(), true);
         }

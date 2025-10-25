@@ -137,7 +137,7 @@ impl SourceFile {
                 }
 
                 for extensions_def in src.extensions_defs {
-                    result.extensions_defs.push(extensions_def)
+                    result.extensions_defs.push(extensions_def.clone())
                 }
 
                 for use_statement in &src.use_statements {
@@ -187,11 +187,6 @@ impl SourceFile {
                 extensions_result.function_definitions = vec![];
                 for func in &extensions_def.function_definitions {
                     let mut func = func.clone();
-
-                    let mut p = Vec::new();
-                    p.extend_from_slice(prefix);
-                    p.push(func.0.name.clone());
-                    func.0.name = mangle(&p);
 
                     if let Some(return_type) = &mut func.0.return_type {
                         mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
@@ -265,35 +260,6 @@ impl SourceFile {
                 }
 
                 result.struct_definitions.push(struct_def);
-            }
-
-            for extensions_def in &s.extensions_defs {
-                let mut extensions_def = extensions_def.clone();
-                for func in &mut extensions_def.function_definitions {
-                    if let Some(return_type) = &mut func.0.return_type {
-                        mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
-                    }
-
-                    mangle_env.push_idents();
-
-                    if let Some(params) = &mut func.0.params {
-                        for (name, type_expr) in params {
-                            mangle_type_expression(&mut type_expr.0, prefix, &mut mangle_env);
-                            mangle_env.insert_ident(name.clone());
-                        }
-                    }
-
-                    mangle_value_expr(
-                        &mut func.0.value_expr.0,
-                        global_prefix,
-                        prefix,
-                        &mut mangle_env,
-                    );
-
-                    mangle_env.pop_idents();
-                }
-
-                result.extensions_defs.push(extensions_def);
             }
 
             for component in &s.tsx_components {
@@ -653,6 +619,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             target,
             params,
             type_params,
+            ..
         } => {
             // TODO: type params
             append_global_prefix_value_expr(&mut target.0, mangle_env);
