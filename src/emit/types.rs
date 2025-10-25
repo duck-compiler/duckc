@@ -659,6 +659,18 @@ impl TypeExpr {
         };
     }
 
+    pub fn build_extension_access_function_name(
+        &self,
+        extension_name: &str,
+        type_env: &mut TypeEnv,
+    ) -> String {
+        return format!(
+            "Extend_{}_with_{}",
+            self.as_clean_go_type_name(type_env),
+            extension_name,
+        );
+    }
+
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::Ref(t) => format!("Ref___{}", t.0.as_clean_go_type_name(type_env)),

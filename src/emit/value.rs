@@ -34,7 +34,7 @@ pub enum IrInstruction {
     // Code Statements
     VarDecl(String, String),
     VarAssignment(IrRes, IrValue),
-    FunCall(Option<IrRes>, IrValue, Vec<IrValue>),
+    FunCall(Option<IrRes>, IrValue, Vec<IrValue>), //
     StringConcat(IrRes, Vec<IrValue>),
     Add(IrRes, IrValue, IrValue, TypeExpr),
     Mul(IrRes, IrValue, IrValue, TypeExpr),
@@ -281,6 +281,7 @@ fn walk_access_raw(
                 target,
                 params,
                 type_params: _,
+                ..
             } => {
                 is_calling_fun = true;
                 let mut param_res = Vec::new();
@@ -575,6 +576,43 @@ impl ValueExpr {
         span: SS,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
+            ValueExpr::ExtensionAccess { target_obj, extension_name } => {
+                let target_type = TypeExpr::from_value_expr(target_obj, type_env);
+
+                let extension_fn_name = target_type.build_extension_access_function_name(extension_name, type_env);
+                if !type_env.extension_functions.contains_key(&extension_fn_name) {
+                    panic!("doesn't have extension fuuun")
+                }
+
+                let extension_fn_type = type_env.extension_functions.get(&extension_fn_name)
+                    .expect("we've just checked that it exists")
+                    .clone();
+
+                let (mut emit_instr, emit_res) = target_obj.as_ref().0.emit(type_env, env, span);
+                if let Some(emit_res) = emit_res {
+                    let var_name = env.new_var();
+                    emit_instr.push(IrInstruction::VarDecl(var_name.clone(), extension_fn_type.0.as_go_type_annotation(type_env)));
+                    return (
+                        emit_instr
+                            .iter()
+                            .chain(vec![
+                                IrInstruction::FunCall(
+                                    Some(var_name.clone()),
+                                    IrValue::Imm(extension_fn_name.to_string()),
+                                    vec![emit_res]
+                                )
+                            ].iter())
+                            .map(|i| i.clone())
+                            .collect::<Vec<_>>(),
+                        as_rvar(var_name)
+                    )
+                } else {
+                    return (
+                        vec![],
+                        None
+                    )
+                }
+            }
             ValueExpr::Deref(v) => {
                 let target_type =
                     TypeExpr::from_value_expr_resolved_type_name(&(self.clone(), span), type_env);
@@ -1078,6 +1116,7 @@ impl ValueExpr {
                                                         .into_empty_span(),
                                                     ],
                                                     type_params: None,
+                                                    is_extension_call: false,
                                                 }
                                                 .into_empty_span(),
                                             ),
@@ -1912,6 +1951,7 @@ impl ValueExpr {
                 target: v_target,
                 params,
                 type_params: _,
+                ..
             } => {
                 // todo: type_params
 
