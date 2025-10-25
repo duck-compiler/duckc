@@ -1,7 +1,7 @@
 {
     "id": "61a150d8a9fd7d63506c740228dd8469",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 440,
+    "line_number": 441,
     "title": "type_params",
     "tag": "todo",
     "module_tag": "semantics",

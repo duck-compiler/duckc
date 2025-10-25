@@ -1,7 +1,7 @@
 {
     "id": "4dc6129b55b30463cb0f36dde3ca7e72",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 462,
+    "line_number": 469,
     "title": "fix this panic workaround",
     "tag": "todo",
     "module_tag": "semantics",
