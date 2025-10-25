@@ -1,6 +1,6 @@
 use crate::{
-    emit::value::{IrInstruction, ToIr},
-    parse::function_parser::FunctionDefintion,
+    emit::value::{IrInstruction, IrValue, ToIr},
+    parse::{function_parser::FunctionDefintion, type_parser::TypeExpr, value_parser::empty_range},
     semantics::type_resolve::TypeEnv,
 };
 
@@ -59,6 +59,44 @@ impl FunctionDefintion {
                     .map(|x| x.0.as_go_return_type(type_env))
             },
             emitted_body,
+        )
+    }
+
+    pub fn emit_as_extension_fun(
+        &self,
+        receiver: Option<(String, String)>,
+        type_env: &mut TypeEnv,
+        to_ir: &mut ToIr,
+        target_type: &TypeExpr
+    ) -> IrInstruction {
+        let (mut emitted_body, _result_var) = self.value_expr.0.emit(type_env, to_ir, self.span);
+        if let Some(IrInstruction::Block(block_body)) = emitted_body.first() {
+            emitted_body = block_body.clone();
+        }
+
+        let mut final_params = vec![("self".to_string(), (target_type.clone(), empty_range()))];
+        if let Some(existing_params) = &self.params {
+            final_params.extend(existing_params.clone());
+        }
+
+        IrInstruction::FunDef(
+            target_type.build_extension_access_function_name(&self.name, type_env),
+            None,
+            final_params
+                .iter()
+                .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
+                .collect::<Vec<_>>(),
+            Some(format!("func () {}", self.return_type.clone().expect("compiler error: expect").0.as_go_return_type(type_env))),
+            vec![IrInstruction::Return(Some(IrValue::Lambda(
+                self.params
+                    .clone()
+                    .unwrap_or_else(|| Vec::new())
+                    .iter()
+                    .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
+                    .collect::<Vec<_>>(),
+                Some(format!("{}", self.return_type.clone().expect("compiler error: expect").0.as_go_return_type(type_env))),
+                emitted_body
+            )))],
         )
     }
 }
