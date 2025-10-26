@@ -1,0 +1,6 @@
+fn main() {
+    const a = 100;
+    const f = mut fn () {
+        a = 200;
+    };
+}

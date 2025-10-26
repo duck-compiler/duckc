@@ -1,0 +1,8 @@
+fn main() {
+    let a = 100;
+    const f = fn () {
+        const inner_f = fn() {
+            a = 200;
+        };
+    };
+}
