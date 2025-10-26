@@ -1,0 +1,6 @@
+struct S = {} impl { mut fn m() {} };
+
+fn main() {
+    const arr = [&[&S {}]];
+    arr[0][0].m();
+}
