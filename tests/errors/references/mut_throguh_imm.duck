@@ -1,0 +1,4 @@
+fn main() {
+    const ref = &100;
+    *ref = 200;
+}

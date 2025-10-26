@@ -1,0 +1,14 @@
+struct A = {
+    s: String,
+} impl {
+};
+
+struct B = {
+    a: A,
+} impl {
+};
+
+fn main() {
+    const b = B { a: A { s: "text" } };
+    b.a.s = "replaced";
+}

@@ -1,0 +1,8 @@
+struct S = {
+    val: Int,
+} impl {};
+
+fn main() {
+    const s = S { val: 10 };
+    s.val = 100;
+}
