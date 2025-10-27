@@ -5,10 +5,22 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        duckx_component_parser::{duckx_component_parser, DuckxComponent}, extensions_def_parser::{extensions_def_parser, ExtensionsDef}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, struct_parser::{struct_definition_parser, StructDefinition}, test_parser::{test_parser, TestCase}, tsx_component_parser::{tsx_component_parser, TsxComponent}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, Spanned, SS
+        Context, SS, Spanned,
+        duckx_component_parser::{DuckxComponent, duckx_component_parser},
+        extensions_def_parser::{ExtensionsDef, extensions_def_parser},
+        function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
+        lexer::{Token, lex_parser},
+        make_input, parse_failure,
+        struct_parser::{StructDefinition, struct_definition_parser},
+        test_parser::{TestCase, test_parser},
+        tsx_component_parser::{TsxComponent, tsx_component_parser},
+        type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
+        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
+        value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr},
     },
     semantics::ident_mangler::{
-        mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
+        MangleEnv, mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression,
+        mangle_value_expr, unmangle,
     },
 };
 
@@ -402,6 +414,30 @@ impl SourceFile {
             append_global_prefix_value_expr(&mut test_case.body.0, &mut mangle_env);
         }
 
+        for ext_def in &mut flattened_source_file.extensions_defs {
+            for def in &mut ext_def.function_definitions {
+                for t in def
+                    .0
+                    .return_type
+                    .as_mut()
+                    .into_iter()
+                    .map(|(x, _)| x)
+                    .chain(
+                        def.0
+                            .params
+                            .as_mut()
+                            .into_iter()
+                            .flat_map(|v| v.iter_mut())
+                            .map(|(_, y)| &mut y.0),
+                    )
+                {
+                    append_global_prefix_type_expr(t, &mut mangle_env);
+                }
+
+                append_global_prefix_value_expr(&mut def.0.value_expr.0, &mut mangle_env);
+            }
+        }
+
         flattened_source_file
     }
 }
@@ -787,6 +823,7 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
                     acc.sub_modules.extend(parsed_src.sub_modules);
                     acc.struct_definitions.extend(parsed_src.struct_definitions);
                     acc.test_cases.extend(parsed_src.test_cases);
+                    acc.extensions_defs.extend(parsed_src.extensions_defs);
                 }
                 acc.use_statements.extend(parsed_src.use_statements);
                 acc

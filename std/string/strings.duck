@@ -50,3 +50,9 @@ fn from_bool(x: Bool) -> String {
     }
     return res;
 }
+
+extend String with impl {
+    fn to_int() -> Int {
+        return self->to_int();
+    }
+}

@@ -468,6 +468,9 @@ fn parse_src_file(
     for test_case in &std_src_file.test_cases {
         result.test_cases.push(test_case.clone());
     }
+    for extension_def in std_src_file.extensions_defs {
+        result.extensions_defs.push(extension_def.clone());
+    }
 
     result
 }
