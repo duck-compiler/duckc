@@ -1,0 +1,10 @@
+fn main() {
+    let a = "before";
+    const f = mut fn() {
+        a = "after lambda call";
+    };
+
+    std::io::println(a);
+    f();
+    std::io::println(a);
+}

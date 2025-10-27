@@ -1,0 +1,14 @@
+struct A = {
+} impl {
+    mut fn m() {}
+};
+
+struct B = {
+    a: &mut A,
+} impl {
+};
+
+fn main() {
+    const b = &B { a: &mut A {} };
+    b.a.m();
+}
