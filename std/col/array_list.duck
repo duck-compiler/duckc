@@ -13,7 +13,7 @@ struct ArrayList<T> = {
     mut fn pop() -> Opt<T> {
         let popped_val: Opt<T> = .none;
         go {
-            if (len((*self).elems) > 0) {
+            if len((*self).elems) > 0 {
                 var index = len((*self).elems) - 1;
                 popped_val = (*self).elems[index];
                 (*self).elems = (*self).elems[:index];

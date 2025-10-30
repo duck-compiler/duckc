@@ -1162,23 +1162,19 @@ mod tests {
             ("go {}", vec![Token::InlineGo(String::from(""))]),
             ("go {{}{}{}}", vec![Token::InlineGo(String::from("{}{}{}"))]),
             (
-                "if (true) {}",
+                "if true {}",
                 vec![
                     Token::If,
-                    Token::ControlChar('('),
                     Token::BoolLiteral(true),
-                    Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
                 ],
             ),
             (
-                "if (true) {} else {}",
+                "if true {} else {}",
                 vec![
                     Token::If,
-                    Token::ControlChar('('),
                     Token::BoolLiteral(true),
-                    Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
                     Token::Else,
@@ -1187,12 +1183,10 @@ mod tests {
                 ],
             ),
             (
-                "if (true) {} else if {} else if {} else {}",
+                "if true {} else if {} else if {} else {}",
                 vec![
                     Token::If,
-                    Token::ControlChar('('),
                     Token::BoolLiteral(true),
-                    Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
                     Token::Else,
@@ -1590,23 +1584,19 @@ mod tests {
                 vec![Token::InlineGo(String::from("{}{}{}"))],
             ),
             (
-                "if (true) {} // check",
+                "if true {} // check",
                 vec![
                     Token::If,
-                    Token::ControlChar('('),
                     Token::BoolLiteral(true),
-                    Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
                 ],
             ),
             (
-                "if (true) {} else {} // check",
+                "if true {} else {} // check",
                 vec![
                     Token::If,
-                    Token::ControlChar('('),
                     Token::BoolLiteral(true),
-                    Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
                     Token::Else,
@@ -1615,12 +1605,10 @@ mod tests {
                 ],
             ),
             (
-                "if (true) {} else if {} else if {} else {} // check",
+                "if true {} else if {} else if {} else {} // check",
                 vec![
                     Token::If,
-                    Token::ControlChar('('),
                     Token::BoolLiteral(true),
-                    Token::ControlChar(')'),
                     Token::ControlChar('{'),
                     Token::ControlChar('}'),
                     Token::Else,

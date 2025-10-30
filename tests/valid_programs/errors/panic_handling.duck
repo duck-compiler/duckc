@@ -1,5 +1,5 @@
 fn safe_divide(a: Int, b: Int) -> Int | String {
-    if (b == 0) {
+    if b == 0 {
         return "Cannot divide by zero";
     } else {
         return a / b;
@@ -10,20 +10,20 @@ fn main() {
     std::io::println("Testing safe error handling");
     std::io::println("Testing safe_divide(10, 2) - should succeed");
     std::io::println("Expected result: 5");
-    
+
     let result1: Int | String = safe_divide(10, 2);
-    
+
     std::io::println("Actual result:");
     match result1 {
         Int @value => value->std::string::from_int()->std::io::println(),
         String @error => error->std::io::println(),
     }
-    
+
     std::io::println("Testing safe_divide(10, 0) - should fail");
     std::io::println("Expected result: 'Cannot divide by zero'");
-    
+
     let result2: Int | String = safe_divide(10, 0);
-    
+
     std::io::println("Actual result:");
     match result2 {
         Int @value => value->std::string::from_int()->std::io::println(),
