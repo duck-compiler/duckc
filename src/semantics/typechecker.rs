@@ -736,7 +736,7 @@ impl TypeExpr {
                                 *complete_span,
                                 vec![(
                                     format!(
-                                        "possible type {} not covered {covered_types:?}",
+                                        "possible type {} not covered",
                                         format!("{}", missing_type.0).bright_yellow()
                                     ),
                                     *complete_span,

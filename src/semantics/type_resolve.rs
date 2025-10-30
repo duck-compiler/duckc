@@ -2255,7 +2255,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     let value_expr = value_expr.0;
     match value_expr {
         ValueExpr::For {
-            ident: (ident, is_const),
+            ident: (ident, is_const, ty),
             target,
             block,
         } => {
@@ -2279,6 +2279,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             }
 
             type_env.push_identifier_types();
+            *ty = Some(target_type.clone());
             type_env.insert_identifier_type(ident.clone(), target_type, *is_const);
             typeresolve_value_expr((&mut block.0, block.1), type_env);
             type_env.pop_identifier_types();

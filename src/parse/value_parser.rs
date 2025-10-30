@@ -55,7 +55,7 @@ pub struct Assignment {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueExpr {
     For {
-        ident: (String, bool),
+        ident: (String, bool, Option<TypeExpr>),
         target: Box<Spanned<ValueExpr>>,
         block: Box<Spanned<ValueExpr>>,
     },
@@ -293,7 +293,7 @@ where
                 .then_ignore(just(Token::ControlChar('{')).rewind())
                 .then(value_expr_parser.clone())
                 .map(|(((is_const, ident), expr), block)| ValueExpr::For {
-                    ident: (ident, is_const.is_some()),
+                    ident: (ident, is_const.is_some(), None),
                     target: Box::new(expr),
                     block: Box::new(block),
                 })

@@ -646,21 +646,57 @@ impl ValueExpr {
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
             ValueExpr::For {
-                ident: (ident, _),
+                ident: (ident, _, ident_type),
                 target,
                 block,
             } => {
-                let (mut target_instr, target_res) = target.0.emit(type_env, env, span);
-                if let Some(res) = target_res {
-                    let IrValue::Var(target_res_var_name) = res else {
-                        panic!("expected var {self:?}")
-                    };
+                let ident_type = ident_type.as_ref().expect("needs type");
+                let (mut target_instr, target_res) =
+                    walk_access(target, type_env, env, span, true, false, false);
 
+                let mut target_type =
+                    TypeExpr::from_value_expr_resolved_type_name(target, type_env);
+
+                let mut star_count: u32 = 0;
+
+                while let TypeExpr::Ref(t) | TypeExpr::RefMut(t) = target_type {
+                    star_count += 1;
+                    target_type = t.0;
+                }
+
+                if let Some(target_res_var_name) = target_res {
                     let (body_res_instr, _) = block.0.emit(type_env, env, span);
                     target_instr.push(IrInstruction::ForRangeElem {
                         ident: ident.to_owned(),
-                        range_target: IrValue::Var(target_res_var_name),
-                        body: body_res_instr,
+                        range_target: if star_count == 0 {
+                            IrValue::Var(target_res_var_name.clone())
+                        } else {
+                            let mut s = String::new();
+                            for _ in 0..star_count {
+                                s.push('*');
+                            }
+                            IrValue::Imm(format!("{s}{target_res_var_name}"))
+                        },
+                        body: {
+                            let mut body_instr = vec![
+                                IrInstruction::VarDecl(ident.to_owned(), ident_type.as_go_type_annotation(type_env)),
+                                IrInstruction::VarAssignment(ident.to_owned(), IrValue::Imm({
+                                    let mut s = target_res_var_name.clone();
+                                    for _ in 0..star_count {
+                                        s.insert(0, '*');
+                                    }
+                                    s.insert(0, '(');
+                                    s.push(')');
+                                    s.push_str(&format!("[DUCK_FOR_IDX]"));
+                                    for _ in 0..star_count {
+                                        s.insert(0, '&');
+                                    }
+                                    s
+                                }))
+                            ];
+                            body_instr.extend(body_res_instr);
+                            body_instr
+                        },
                     });
                     (target_instr, None)
                 } else {

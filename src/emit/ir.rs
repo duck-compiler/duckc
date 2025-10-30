@@ -5,12 +5,12 @@ impl IrInstruction {
         #![allow(clippy::format_in_format_args)]
         match self {
             IrInstruction::ForRangeElem {
-                ident,
+                ident: _,
                 range_target,
                 body,
             } => {
                 format!(
-                    "{{\nfor _, {ident} := range {} {{\n_ = {ident}\n{}\n}}\n}}",
+                    "{{\nfor DUCK_FOR_IDX := range {} {{\n_ = DUCK_FOR_IDX\n{}\n}}\n}}",
                     range_target.emit_as_go(),
                     body.iter()
                         .map(|i| i.emit_as_go())
