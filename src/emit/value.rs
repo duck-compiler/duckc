@@ -31,6 +31,12 @@ type ReturnType = Option<String>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrInstruction {
+    ForRangeElem {
+        ident: String,
+        range_target: IrValue,
+        body: Vec<IrInstruction>,
+    },
+
     // Code Statements
     VarDecl(String, String),
     VarAssignment(IrRes, IrValue),
@@ -212,7 +218,7 @@ pub fn can_do_mut_stuff_through2(
         field_name: _,
     } = &v.0
     {
-        can_do_mut_stuff_through2(&target_obj, type_env, var_needs_const)
+        can_do_mut_stuff_through2(target_obj, type_env, var_needs_const)
     } else {
         !var_needs_const || !matches!(&v.0, ValueExpr::Variable(_, _, _, Some(true)))
     }
@@ -344,7 +350,7 @@ fn walk_access_raw(
                     if let TypeExpr::Struct(struct_name) = ty {
                         let struct_def = type_env.get_struct_def(struct_name.as_str());
                         if struct_def.mut_methods.contains(field_name)
-                        && !can_do_mut_stuff_through(target_obj, type_env)
+                            && !can_do_mut_stuff_through(target_obj, type_env)
                         {
                             failure_with_occurence(
                                 "This needs to allow mutable access".to_string(),
@@ -639,6 +645,70 @@ impl ValueExpr {
         span: SS,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
+            ValueExpr::For {
+                ident: (ident, _, ident_type),
+                target,
+                block,
+            } => {
+                let ident_type = ident_type.as_ref().expect("needs type");
+                let (mut target_instr, target_res) =
+                    walk_access(target, type_env, env, span, true, false, false);
+
+                let mut target_type =
+                    TypeExpr::from_value_expr_resolved_type_name(target, type_env);
+
+                let mut star_count: u32 = 0;
+
+                while let TypeExpr::Ref(t) | TypeExpr::RefMut(t) = target_type {
+                    star_count += 1;
+                    target_type = t.0;
+                }
+
+                if let Some(target_res_var_name) = target_res {
+                    let (body_res_instr, _) = block.0.emit(type_env, env, span);
+                    target_instr.push(IrInstruction::ForRangeElem {
+                        ident: ident.to_owned(),
+                        range_target: if star_count == 0 {
+                            IrValue::Var(target_res_var_name.clone())
+                        } else {
+                            let mut s = String::new();
+                            for _ in 0..star_count {
+                                s.push('*');
+                            }
+                            IrValue::Imm(format!("{s}{target_res_var_name}"))
+                        },
+                        body: {
+                            let mut body_instr = vec![
+                                IrInstruction::VarDecl(
+                                    ident.to_owned(),
+                                    ident_type.as_go_type_annotation(type_env),
+                                ),
+                                IrInstruction::VarAssignment(
+                                    ident.to_owned(),
+                                    IrValue::Imm({
+                                        let mut s = target_res_var_name.clone();
+                                        for _ in 0..star_count {
+                                            s.insert(0, '*');
+                                        }
+                                        s.insert(0, '(');
+                                        s.push(')');
+                                        s.push_str("[DUCK_FOR_IDX]");
+                                        for _ in 0..star_count {
+                                            s.insert(0, '&');
+                                        }
+                                        s
+                                    }),
+                                ),
+                            ];
+                            body_instr.extend(body_res_instr);
+                            body_instr
+                        },
+                    });
+                    (target_instr, None)
+                } else {
+                    (target_instr, None)
+                }
+            }
             ValueExpr::ExtensionAccess {
                 target_obj,
                 extension_name,

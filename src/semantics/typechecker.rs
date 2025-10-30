@@ -6,7 +6,7 @@ use colored::Colorize;
 
 use crate::parse::struct_parser::StructDefinition;
 use crate::parse::type_parser::{Duck, TypeExpr};
-use crate::parse::value_parser::empty_range;
+use crate::parse::value_parser::{empty_range, type_expr_into_empty_range};
 use crate::parse::{Field, SS, failure_with_occurence};
 use crate::parse::{
     Spanned, failure,
@@ -73,6 +73,7 @@ impl TypeExpr {
         let value_expr = &value_expr.0;
 
         return match value_expr {
+            ValueExpr::For { .. } => TypeExpr::Tuple(vec![]),
             ValueExpr::Ref(v) => {
                 TypeExpr::Ref((TypeExpr::from_value_expr(v, type_env), v.1).into())
             }
@@ -457,27 +458,25 @@ impl TypeExpr {
 
                             if let Some(param_name) = &param_type.0
                                 && param_name == "self"
-                                {
-                                    if !is_extension_call {
-                                        check_type_compatability_full(
-                                            &param_type.1,
-                                            in_param_types.get(index).unwrap(),
-                                            type_env,
-                                            is_const_var(&params[index].0),
-                                        );
-                                    } else {
-                                        return
-                                    }
-                                } else {
+                            {
+                                if !is_extension_call {
                                     check_type_compatability_full(
                                         &param_type.1,
                                         in_param_types.get(index).unwrap(),
                                         type_env,
                                         is_const_var(&params[index].0),
                                     );
+                                } else {
+                                    return;
                                 }
-
-
+                            } else {
+                                check_type_compatability_full(
+                                    &param_type.1,
+                                    in_param_types.get(index).unwrap(),
+                                    type_env,
+                                    is_const_var(&params[index].0),
+                                );
+                            }
 
                             // variant any replace
                             if let TypeExpr::Array(boxed) = &in_param_types.get(index).unwrap().0
@@ -641,13 +640,14 @@ impl TypeExpr {
                 extension_name,
             } => {
                 let span = target_obj.as_ref().1;
-                let target_obj_type_expr = TypeExpr::from_value_expr_resolved_type_name_dereferenced(
-                    target_obj,
-                    type_env
-                );
+                let target_obj_type_expr =
+                    TypeExpr::from_value_expr_resolved_type_name_dereferenced(target_obj, type_env);
 
-                let extension_function_name = target_obj_type_expr.build_extension_access_function_name(extension_name, type_env);
-                let extension_function = type_env.extension_functions.get(&extension_function_name)
+                let extension_function_name = target_obj_type_expr
+                    .build_extension_access_function_name(extension_name, type_env);
+                let extension_function = type_env
+                    .extension_functions
+                    .get(&extension_function_name)
                     .unwrap_or_else(|| {
                         failure_with_occurence(
                             "Invalid Extension Access".to_string(),
@@ -667,8 +667,8 @@ impl TypeExpr {
                                 span,
                             )],
                         )
-                });
-                return extension_function.0.clone()
+                    });
+                return extension_function.0.clone();
             }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
@@ -719,9 +719,13 @@ impl TypeExpr {
                     }
 
                     possible_types.iter().for_each(|possible_type| {
-                        let is_covered = &covered_types
-                            .iter()
-                            .any(|(x, _)| *x == possible_type.0.unconst());
+                        let mut b = possible_type.clone();
+                        type_expr_into_empty_range(&mut b);
+                        let is_covered = &covered_types.iter().any(|x| {
+                            let mut a = x.clone();
+                            type_expr_into_empty_range(&mut a);
+                            a.0.unconst() == b.0.unconst()
+                        });
                         if !is_covered {
                             let missing_type = possible_type;
                             failure_with_occurence(
@@ -1355,23 +1359,25 @@ pub fn check_type_compatability_full(
                                     ),
                                 );
                             }
-                            if given_const_var && !{
-                                let mut is_mut_ref = false;
+                            if given_const_var
+                                && !{
+                                    let mut is_mut_ref = false;
 
-                                let mut current = given_type.0.clone();
-                                while let TypeExpr::RefMut(next) = current {
-                                    is_mut_ref = true;
+                                    let mut current = given_type.0.clone();
+                                    while let TypeExpr::RefMut(next) = current {
+                                        is_mut_ref = true;
 
-                                    if let TypeExpr::Ref(..) = next.0 {
-                                        is_mut_ref = false;
-                                        break;
+                                        if let TypeExpr::Ref(..) = next.0 {
+                                            is_mut_ref = false;
+                                            break;
+                                        }
+
+                                        current = next.0;
                                     }
 
-                                    current = next.0;
+                                    is_mut_ref
                                 }
-
-                               is_mut_ref
-                            } {
+                            {
                                 fail_requirement(
                                     "this needs mutable access".to_string(),
                                     "this is a const var".to_string(),

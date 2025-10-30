@@ -106,8 +106,10 @@ where
                 .allow_trailing()
                 .collect::<Vec<(String, Spanned<TypeExpr>)>>();
 
-            let function_param = (select_ref! { Token::Ident(identifier) => identifier.to_string() }
-                .then_ignore(just(Token::ControlChar(':')))).or_not()
+            let function_param =
+                (select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                    .then_ignore(just(Token::ControlChar(':'))))
+                .or_not()
                 .then(p.clone());
 
             let function_params = function_param
@@ -187,17 +189,17 @@ where
                     _ => TypeExpr::Any,
                 });
 
-            let function = just(Token::Mut).or_not().then(just(Token::Function)
-                .ignore_then(just(Token::ControlChar('(')))
-                .ignore_then(function_params)
-                .then_ignore(just(Token::ControlChar(')')))
-                .then(just(Token::ThinArrow).ignore_then(p.clone()).or_not()))
+            let function = just(Token::Mut)
+                .or_not()
+                .then(
+                    just(Token::Function)
+                        .ignore_then(just(Token::ControlChar('(')))
+                        .ignore_then(function_params)
+                        .then_ignore(just(Token::ControlChar(')')))
+                        .then(just(Token::ThinArrow).ignore_then(p.clone()).or_not()),
+                )
                 .map(|(is_mut, (params, return_type))| {
-                    TypeExpr::Fun(
-                        params,
-                        return_type.map(Box::new),
-                        is_mut.is_some(),
-                    )
+                    TypeExpr::Fun(params, return_type.map(Box::new), is_mut.is_some())
                 });
 
             let tuple = p
@@ -317,8 +319,10 @@ where
                 .allow_trailing()
                 .collect::<Vec<(String, Spanned<TypeExpr>)>>();
 
-            let function_param = (select_ref! { Token::Ident(identifier) => identifier.to_string() }
-                .then_ignore(just(Token::ControlChar(':')))).or_not()
+            let function_param =
+                (select_ref! { Token::Ident(identifier) => identifier.to_string() }
+                    .then_ignore(just(Token::ControlChar(':'))))
+                .or_not()
                 .then(p.clone());
 
             let function_params = function_param
@@ -398,17 +402,17 @@ where
                 .ignore_then(tag_identifier)
                 .map(TypeExpr::Tag);
 
-            let function = just(Token::Mut).or_not().then(just(Token::Function)
-                .ignore_then(just(Token::ControlChar('(')))
-                .ignore_then(function_params)
-                .then_ignore(just(Token::ControlChar(')')))
-                .then(just(Token::ThinArrow).ignore_then(p.clone()).or_not()))
+            let function = just(Token::Mut)
+                .or_not()
+                .then(
+                    just(Token::Function)
+                        .ignore_then(just(Token::ControlChar('(')))
+                        .ignore_then(function_params)
+                        .then_ignore(just(Token::ControlChar(')')))
+                        .then(just(Token::ThinArrow).ignore_then(p.clone()).or_not()),
+                )
                 .map(|(is_mut, (params, return_type))| {
-                    TypeExpr::Fun(
-                        params,
-                        return_type.map(Box::new),
-                        is_mut.is_some(),
-                    )
+                    TypeExpr::Fun(params, return_type.map(Box::new), is_mut.is_some())
                 });
 
             let tuple = p

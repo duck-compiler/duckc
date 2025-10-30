@@ -81,11 +81,15 @@ pub enum Token {
     Sus,
     Component,
     Template,
+    For,
+    In,
 }
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = match self {
+            Token::For => "for",
+            Token::In => "in",
             Token::Mut => "mut",
             Token::Const => "const",
             Token::RefMut => "&mut",
@@ -453,6 +457,8 @@ pub fn lex_single<'a>(
 ) -> impl Parser<'a, &'a str, Spanned<Token>, extra::Err<Rich<'a, char>>> + Clone {
     recursive(|lexer| {
         let keyword_or_ident = text::ident().map(|str| match str {
+            "for" => Token::For,
+            "in" => Token::In,
             "mut" => Token::Mut,
             "module" => Token::Module,
             "use" => Token::Use,

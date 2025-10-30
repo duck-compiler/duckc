@@ -27,7 +27,7 @@ fn process_user_keys(keys: keyof User) {
     println("Processing user keys");
 }
 
-fn generics_test<T>(in: keyof T) {
+fn generics_test<T>(i: keyof T) {
 }
 
 fn generics_test_with_return<T>(t: keyof T) -> keyof T {

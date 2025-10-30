@@ -1,0 +1,16 @@
+struct S = {
+    f: Int[],
+};
+
+fn main() {
+    const s = &mut S { f: .Int[2, 3], };
+
+    for i in &mut s.f {
+        std::io::println(std::string::from_int(*i));
+        *i = *i * 10;
+    }
+
+    for i in &s.f {
+        std::io::println(std::string::from_int(*i));
+    }
+}

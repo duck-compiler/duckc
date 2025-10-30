@@ -486,6 +486,14 @@ fn append_global_prefix_type_expr(type_expr: &mut TypeExpr, mangle_env: &mut Man
 
 fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut MangleEnv) {
     match value_expr {
+        ValueExpr::For {
+            ident: _,
+            target,
+            block,
+        } => {
+            append_global_prefix_value_expr(&mut target.0, mangle_env);
+            append_global_prefix_value_expr(&mut block.0, mangle_env);
+        }
         ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
             append_global_prefix_value_expr(&mut v.0, mangle_env)
         }

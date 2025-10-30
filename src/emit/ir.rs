@@ -4,6 +4,23 @@ impl IrInstruction {
     fn emit_as_go(&self) -> String {
         #![allow(clippy::format_in_format_args)]
         match self {
+            IrInstruction::ForRangeElem {
+                ident: _,
+                range_target,
+                body,
+            } => {
+                format!(
+                    "{{\nfor DUCK_FOR_IDX := range {} {{\n_ = DUCK_FOR_IDX\n{}\n}}\n}}",
+                    range_target.emit_as_go(),
+                    body.iter()
+                        .map(|i| i.emit_as_go())
+                        .fold(String::new(), |mut acc, x| {
+                            acc.push_str(&x);
+                            acc.push('\n');
+                            acc
+                        })
+                )
+            }
             IrInstruction::StringConcat(target, v) => {
                 format!(
                     "{target} = {}",

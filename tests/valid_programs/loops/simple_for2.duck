@@ -1,0 +1,5 @@
+fn main() {
+    for i in &.Int[2] {
+        std::io::println(std::string::from_int(*i));
+    }
+}
