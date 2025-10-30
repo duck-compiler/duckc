@@ -9,11 +9,21 @@ use colored::Colorize;
 
 use crate::{
     parse::{
-        duckx_component_parser::DuckxComponent, extensions_def_parser::ExtensionsDef, failure_with_occurence, function_parser::{FunctionDefintion, LambdaFunctionExpr}, source_file_parser::SourceFile, struct_parser::StructDefinition, test_parser::TestCase, tsx_component_parser::{
-            do_edits, Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit
-        }, type_parser::{Duck, TypeDefinition, TypeExpr}, value_parser::{
+        SS, Spanned, SpannedMutRef,
+        duckx_component_parser::DuckxComponent,
+        extensions_def_parser::ExtensionsDef,
+        failure_with_occurence,
+        function_parser::{FunctionDefintion, LambdaFunctionExpr},
+        source_file_parser::SourceFile,
+        struct_parser::StructDefinition,
+        test_parser::TestCase,
+        tsx_component_parser::{
+            Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
+        },
+        type_parser::{Duck, TypeDefinition, TypeExpr},
+        value_parser::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
-        }, Spanned, SpannedMutRef, SS
+        },
     },
     semantics::{
         ident_mangler::mangle,
@@ -39,13 +49,25 @@ fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
 
 fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, type_env: &mut TypeEnv) {
     type_env.push_identifier_types();
-    type_env.insert_identifier_type("self".to_string(), extensions_def.target_type_expr.0.clone(), false);
+    type_env.insert_identifier_type(
+        "self".to_string(),
+        extensions_def.target_type_expr.0.clone(),
+        false,
+    );
 
-    type_env.all_types.push(extensions_def.target_type_expr.0.clone());
+    type_env
+        .all_types
+        .push(extensions_def.target_type_expr.0.clone());
     let type_expr = extensions_def.target_type_expr.clone();
     for extension_method in &mut extensions_def.function_definitions {
-        let extension_function_name = type_expr.0.build_extension_access_function_name(&extension_method.0.name.clone(), type_env);
-        if type_env.extension_functions.iter().any(|(existing, _)| *existing == extension_function_name) {
+        let extension_function_name = type_expr
+            .0
+            .build_extension_access_function_name(&extension_method.0.name.clone(), type_env);
+        if type_env
+            .extension_functions
+            .iter()
+            .any(|(existing, _)| *existing == extension_function_name)
+        {
             continue;
         }
 
@@ -55,12 +77,12 @@ fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, type_env: &mut
             vec![(Some("self".to_string()), type_expr.clone())],
             Some(Box::new(extension_method.0.type_expr())),
             // todo: mutable extension fns?
-            false
+            false,
         );
 
         type_env.extension_functions.insert(
             extension_function_name,
-            (underlying_fn_type.clone(), access_fn_type.clone())
+            (underlying_fn_type.clone(), access_fn_type.clone()),
         );
 
         type_env.insert_type(access_fn_type);
@@ -866,6 +888,14 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
 
 fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<String, TypeExpr>) {
     match expr {
+        ValueExpr::For {
+            ident: _,
+            target,
+            block,
+        } => {
+            replace_generics_in_value_expr(&mut target.0, set_params);
+            replace_generics_in_value_expr(&mut block.0, set_params);
+        }
         ValueExpr::Deref(t) | ValueExpr::Ref(t) | ValueExpr::RefMut(t) => {
             replace_generics_in_value_expr(&mut t.0, set_params)
         }
@@ -1192,6 +1222,14 @@ fn mangle_generics_name(
 
 fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv) {
     match expr {
+        ValueExpr::For {
+            ident: _,
+            target,
+            block,
+        } => {
+            instantiate_generics_value_expr(&mut target.0, type_env);
+            instantiate_generics_value_expr(&mut block.0, type_env);
+        }
         ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
             instantiate_generics_value_expr(&mut v.0, type_env)
         }
@@ -1516,6 +1554,14 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
 
 pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
     match expr {
+        ValueExpr::For {
+            ident: _,
+            target,
+            block,
+        } => {
+            sort_fields_value_expr(&mut target.0);
+            sort_fields_value_expr(&mut block.0);
+        }
         ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
             sort_fields_value_expr(&mut v.0)
         }
@@ -2208,6 +2254,35 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     let span = &value_expr.1;
     let value_expr = value_expr.0;
     match value_expr {
+        ValueExpr::For {
+            ident: (ident, is_const),
+            target,
+            block,
+        } => {
+            typeresolve_value_expr((&mut target.0, target.1), type_env);
+            let mut target_type =
+                TypeExpr::from_value_expr_resolved_type_name(target, type_env);
+
+            let mut current = &mut target_type;
+            loop {
+                match current {
+                    TypeExpr::Ref(t) | TypeExpr::RefMut(t) => current = &mut t.0,
+                    other => {
+                        if let TypeExpr::Array(content_type) = other {
+                            *other = content_type.0.clone();
+                           break;
+                        } else {
+                            panic!("can only use range on array");
+                        }
+                    }
+                }
+            }
+
+            type_env.push_identifier_types();
+            type_env.insert_identifier_type(ident.clone(), target_type, *is_const);
+            typeresolve_value_expr((&mut block.0, block.1), type_env);
+            type_env.pop_identifier_types();
+        }
         ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
             typeresolve_value_expr((&mut v.0, v.1), type_env)
         }

@@ -54,6 +54,11 @@ pub struct Assignment {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueExpr {
+    For {
+        ident: (String, bool),
+        target: Box<Spanned<ValueExpr>>,
+        block: Box<Spanned<ValueExpr>>,
+    },
     FunctionCall {
         target: Box<Spanned<ValueExpr>>,
         params: Vec<Spanned<ValueExpr>>,
@@ -151,6 +156,7 @@ impl ValueExpr {
 
     pub fn needs_semicolon(&self) -> bool {
         match self {
+            ValueExpr::For { .. } => false,
             ValueExpr::Deref(..) | ValueExpr::Ref(..) | ValueExpr::RefMut(..) => true,
             ValueExpr::HtmlString(..) => true,
             ValueExpr::If {
@@ -277,6 +283,21 @@ where
                     })
                     .boxed()
             };
+
+            let for_parser = just(Token::Mut)
+                .or_not()
+                .then_ignore(just(Token::For))
+                .then(select_ref! { Token::Ident(ident) => ident.to_owned() })
+                .then_ignore(just(Token::In))
+                .then(value_expr_parser.clone())
+                .then_ignore(just(Token::ControlChar('{')).rewind())
+                .then(value_expr_parser.clone())
+                .map(|(((is_const, ident), expr), block)| ValueExpr::For {
+                    ident: (ident, is_const.is_some()),
+                    target: Box::new(expr),
+                    block: Box::new(block),
+                })
+                .map_with(|x, e| (x, e.span()));
 
             let params = value_expr_parser
                 .clone()
@@ -713,6 +734,7 @@ where
                     .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                     .or(choice((
                         choice((array.clone(), array_with_type.clone())),
+                        for_parser,
                         float_expr,
                         int,
                         fmt_string,
@@ -781,10 +803,8 @@ where
                         )
                         .map(AtomPostParseUnit::FieldAccess),
                     just(Token::ControlChar('@'))
-                        .ignore_then(
-                            select_ref! { Token::Ident(s) => s.to_string() }
-                        )
-                        .map(AtomPostParseUnit::ExtensionsAccess)
+                        .ignore_then(select_ref! { Token::Ident(s) => s.to_string() })
+                        .map(AtomPostParseUnit::ExtensionsAccess),
                 ))
                 .map_with(|x, e| (x, e.span()))
                 .repeated()
@@ -807,7 +827,10 @@ where
                                 target: acc.clone().into(),
                                 params,
                                 type_params,
-                                is_extension_call: matches!(acc.0, ValueExpr::ExtensionAccess {..}),
+                                is_extension_call: matches!(
+                                    acc.0,
+                                    ValueExpr::ExtensionAccess { .. }
+                                ),
                             },
                             span,
                         ),
@@ -821,10 +844,10 @@ where
                         AtomPostParseUnit::ExtensionsAccess(extension_name) => (
                             ValueExpr::ExtensionAccess {
                                 target_obj: acc.into(),
-                                extension_name
+                                extension_name,
                             },
-                            span
-                        )
+                            span,
+                        ),
                     }
                 });
 
@@ -883,7 +906,10 @@ where
                                     target,
                                     params,
                                     type_params,
-                                    is_extension_call: matches!(&acc.0, ValueExpr::ExtensionAccess { .. })
+                                    is_extension_call: matches!(
+                                        &acc.0,
+                                        ValueExpr::ExtensionAccess { .. }
+                                    ),
                                 },
                                 s,
                             )
@@ -1269,7 +1295,7 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
             field_name: _,
         } => {
             value_expr_into_empty_range(target_obj);
-        },
+        }
         ValueExpr::ExtensionAccess {
             target_obj,
             extension_name: _,
@@ -3107,21 +3133,23 @@ mod tests {
                 "10@b",
                 ValueExpr::ExtensionAccess {
                     target_obj: ValueExpr::Int(10).into_empty_span().into(),
-                    extension_name: "b".to_string()
-                }
+                    extension_name: "b".to_string(),
+                },
             ),
             (
                 "10@b()",
                 ValueExpr::FunctionCall {
                     target: ValueExpr::ExtensionAccess {
                         target_obj: ValueExpr::Int(10).into_empty_span().into(),
-                        extension_name: "b".to_string()
-                    }.into_empty_span().into(),
+                        extension_name: "b".to_string(),
+                    }
+                    .into_empty_span()
+                    .into(),
                     params: vec![],
                     type_params: None,
                     is_extension_call: true,
-                }
-            )
+                },
+            ),
         ];
 
         for (i, (src, expected_tokens)) in test_cases.into_iter().enumerate() {

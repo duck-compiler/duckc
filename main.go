@@ -6,6 +6,13 @@ type A struct {
 	x int
 }
 
+func abc() {
+	for _, e := range []string{}{
+		e = ""
+		_ = e
+	}
+}
+
 func (self *A) a() {
 	self.x = 100
 }

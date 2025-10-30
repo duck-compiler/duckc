@@ -6,7 +6,7 @@ use colored::Colorize;
 
 use crate::parse::struct_parser::StructDefinition;
 use crate::parse::type_parser::{Duck, TypeExpr};
-use crate::parse::value_parser::empty_range;
+use crate::parse::value_parser::{empty_range, type_expr_into_empty_range};
 use crate::parse::{Field, SS, failure_with_occurence};
 use crate::parse::{
     Spanned, failure,
@@ -73,6 +73,7 @@ impl TypeExpr {
         let value_expr = &value_expr.0;
 
         return match value_expr {
+            ValueExpr::For { .. } => TypeExpr::Tuple(vec![]),
             ValueExpr::Ref(v) => {
                 TypeExpr::Ref((TypeExpr::from_value_expr(v, type_env), v.1).into())
             }
@@ -719,9 +720,15 @@ impl TypeExpr {
                     }
 
                     possible_types.iter().for_each(|possible_type| {
+                        let mut b = possible_type.clone();
+                        type_expr_into_empty_range(&mut b);
                         let is_covered = &covered_types
                             .iter()
-                            .any(|(x, _)| *x == possible_type.0.unconst());
+                            .any(|x| {
+                                let mut a = x.clone();
+                                type_expr_into_empty_range(&mut a);
+                                a == b
+                            });
                         if !is_covered {
                             let missing_type = possible_type;
                             failure_with_occurence(
@@ -729,7 +736,7 @@ impl TypeExpr {
                                 *complete_span,
                                 vec![(
                                     format!(
-                                        "possible type {} not covered",
+                                        "possible type {} not covered {covered_types:?}",
                                         format!("{}", missing_type.0).bright_yellow()
                                     ),
                                     *complete_span,

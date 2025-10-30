@@ -1,0 +1,5 @@
+fn main() {
+    for i in &mut [1, 2, 3] {
+        std::io::println(std::string::from_int(*i));
+    }
+}

@@ -31,6 +31,12 @@ type ReturnType = Option<String>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrInstruction {
+    ForRangeElem {
+        ident: String,
+        range_target: IrValue,
+        body: Vec<IrInstruction>,
+    },
+
     // Code Statements
     VarDecl(String, String),
     VarAssignment(IrRes, IrValue),
@@ -344,7 +350,7 @@ fn walk_access_raw(
                     if let TypeExpr::Struct(struct_name) = ty {
                         let struct_def = type_env.get_struct_def(struct_name.as_str());
                         if struct_def.mut_methods.contains(field_name)
-                        && !can_do_mut_stuff_through(target_obj, type_env)
+                            && !can_do_mut_stuff_through(target_obj, type_env)
                         {
                             failure_with_occurence(
                                 "This needs to allow mutable access".to_string(),
@@ -639,6 +645,28 @@ impl ValueExpr {
         span: SS,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
+            ValueExpr::For {
+                ident: (ident, _),
+                target,
+                block,
+            } => {
+                let (mut target_instr, target_res) = target.0.emit(type_env, env, span);
+                if let Some(res) = target_res {
+                    let IrValue::Var(target_res_var_name) = res else {
+                        panic!("expected var {self:?}")
+                    };
+
+                    let (body_res_instr, _) = block.0.emit(type_env, env, span);
+                    target_instr.push(IrInstruction::ForRangeElem {
+                        ident: ident.to_owned(),
+                        range_target: IrValue::Var(target_res_var_name),
+                        body: body_res_instr,
+                    });
+                    (target_instr, None)
+                } else {
+                    (target_instr, None)
+                }
+            }
             ValueExpr::ExtensionAccess {
                 target_obj,
                 extension_name,
