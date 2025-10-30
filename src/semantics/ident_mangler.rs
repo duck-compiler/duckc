@@ -357,7 +357,11 @@ pub fn mangle_value_expr(
     mangle_env: &mut MangleEnv,
 ) {
     match value_expr {
-        ValueExpr::For { ident: _, target, block } => {
+        ValueExpr::For {
+            ident: _,
+            target,
+            block,
+        } => {
             mangle_value_expr(&mut target.0, global_prefix, prefix, mangle_env);
             mangle_value_expr(&mut block.0, global_prefix, prefix, mangle_env);
         }

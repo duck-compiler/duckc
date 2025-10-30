@@ -1,7 +1,8 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::parse::{
-    function_parser::{function_definition_parser, FunctionDefintion}, Spanned, SS
+    SS, Spanned,
+    function_parser::{FunctionDefintion, function_definition_parser},
 };
 
 use super::{
@@ -35,25 +36,26 @@ where
                 .map_with(|fn_def, ctx| (fn_def, ctx.span()))
                 .repeated()
                 .collect::<Vec<_>>()
-                .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
+                .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}'))),
         )
-        .map_with(|(target_type_expr, function_definitions), ctx| ExtensionsDef {
-            target_type_expr,
-            function_definitions,
-            span: ctx.span()
-        })
+        .map_with(
+            |(target_type_expr, function_definitions), ctx| ExtensionsDef {
+                target_type_expr,
+                function_definitions,
+                span: ctx.span(),
+            },
+        )
 }
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::{lexer::lex_parser, make_input, value_parser::empty_range};
     use super::*;
+    use crate::parse::{lexer::lex_parser, make_input, value_parser::empty_range};
 
     #[test]
     fn test_extensions_definition_parsing() {
-        let valid_extensions_definitions = vec![
-            "extend Int with impl { fn to_str() -> String { return \"h\" } }",
-        ];
+        let valid_extensions_definitions =
+            vec!["extend Int with impl { fn to_str() -> String { return \"h\" } }"];
 
         for valid_extensions_defintion in valid_extensions_definitions {
             println!("lexing {valid_extensions_defintion}");
@@ -69,8 +71,8 @@ pub mod tests {
 
             println!("extensions definition parsing {valid_extensions_defintion}");
 
-            let extensions_def_parse_result = extensions_def_parser(make_input)
-                .parse(make_input(empty_range(), &tokens));
+            let extensions_def_parse_result =
+                extensions_def_parser(make_input).parse(make_input(empty_range(), &tokens));
 
             assert_eq!(extensions_def_parse_result.has_errors(), false);
             assert_eq!(extensions_def_parse_result.has_output(), true);

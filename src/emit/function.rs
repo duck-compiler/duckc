@@ -66,7 +66,7 @@ impl FunctionDefintion {
         &self,
         type_env: &mut TypeEnv,
         to_ir: &mut ToIr,
-        target_type: &TypeExpr
+        target_type: &TypeExpr,
     ) -> IrInstruction {
         let (mut emitted_body, _result_var) = self.value_expr.0.emit(type_env, to_ir, self.span);
         if let Some(IrInstruction::Block(block_body)) = emitted_body.first() {
@@ -85,7 +85,14 @@ impl FunctionDefintion {
                 .iter()
                 .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
                 .collect::<Vec<_>>(),
-            Some(format!("func () {}", self.return_type.clone().expect("compiler error: expect").0.as_go_return_type(type_env))),
+            Some(format!(
+                "func () {}",
+                self.return_type
+                    .clone()
+                    .expect("compiler error: expect")
+                    .0
+                    .as_go_return_type(type_env)
+            )),
             vec![IrInstruction::Return(Some(IrValue::Lambda(
                 self.params
                     .clone()
@@ -93,8 +100,14 @@ impl FunctionDefintion {
                     .iter()
                     .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
                     .collect::<Vec<_>>(),
-                Some(self.return_type.clone().expect("compiler error: expect").0.as_go_return_type(type_env)),
-                emitted_body
+                Some(
+                    self.return_type
+                        .clone()
+                        .expect("compiler error: expect")
+                        .0
+                        .as_go_return_type(type_env),
+                ),
+                emitted_body,
             )))],
         )
     }

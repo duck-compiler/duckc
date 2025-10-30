@@ -2260,8 +2260,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             block,
         } => {
             typeresolve_value_expr((&mut target.0, target.1), type_env);
-            let mut target_type =
-                TypeExpr::from_value_expr_resolved_type_name(target, type_env);
+            let mut target_type = TypeExpr::from_value_expr_resolved_type_name(target, type_env);
 
             let mut current = &mut target_type;
             loop {
@@ -2270,7 +2269,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     other => {
                         if let TypeExpr::Array(content_type) = other {
                             *other = content_type.0.clone();
-                           break;
+                            break;
                         } else {
                             panic!("can only use range on array");
                         }

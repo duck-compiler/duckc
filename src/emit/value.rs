@@ -218,7 +218,7 @@ pub fn can_do_mut_stuff_through2(
         field_name: _,
     } = &v.0
     {
-        can_do_mut_stuff_through2(&target_obj, type_env, var_needs_const)
+        can_do_mut_stuff_through2(target_obj, type_env, var_needs_const)
     } else {
         !var_needs_const || !matches!(&v.0, ValueExpr::Variable(_, _, _, Some(true)))
     }
@@ -679,20 +679,26 @@ impl ValueExpr {
                         },
                         body: {
                             let mut body_instr = vec![
-                                IrInstruction::VarDecl(ident.to_owned(), ident_type.as_go_type_annotation(type_env)),
-                                IrInstruction::VarAssignment(ident.to_owned(), IrValue::Imm({
-                                    let mut s = target_res_var_name.clone();
-                                    for _ in 0..star_count {
-                                        s.insert(0, '*');
-                                    }
-                                    s.insert(0, '(');
-                                    s.push(')');
-                                    s.push_str(&format!("[DUCK_FOR_IDX]"));
-                                    for _ in 0..star_count {
-                                        s.insert(0, '&');
-                                    }
-                                    s
-                                }))
+                                IrInstruction::VarDecl(
+                                    ident.to_owned(),
+                                    ident_type.as_go_type_annotation(type_env),
+                                ),
+                                IrInstruction::VarAssignment(
+                                    ident.to_owned(),
+                                    IrValue::Imm({
+                                        let mut s = target_res_var_name.clone();
+                                        for _ in 0..star_count {
+                                            s.insert(0, '*');
+                                        }
+                                        s.insert(0, '(');
+                                        s.push(')');
+                                        s.push_str("[DUCK_FOR_IDX]");
+                                        for _ in 0..star_count {
+                                            s.insert(0, '&');
+                                        }
+                                        s
+                                    }),
+                                ),
                             ];
                             body_instr.extend(body_res_instr);
                             body_instr
