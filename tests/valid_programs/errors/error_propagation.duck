@@ -1,5 +1,5 @@
 fn parse_int(s: String) -> Int | String {
-    if (s == "") {
+    if s == "" {
         return "Empty string";
     } else {
         return std::string::to_int(s);
@@ -18,20 +18,20 @@ fn main() {
     std::io::println("Testing error propagation");
     std::io::println("Testing process_number('42') - should succeed");
     std::io::println("Expected result: 84 (42 * 2)");
-    
+
     let result1: Int | String = process_number("42");
-    
+
     std::io::println("Actual result:");
     match result1 {
         Int @value => value->std::string::from_int()->std::io::println(),
         String @error => error->std::io::println(),
     }
-    
+
     std::io::println("Testing process_number('') - should fail");
     std::io::println("Expected result: 'Parse error: Empty string'");
-    
+
     let result2: Int | String = process_number("");
-    
+
     std::io::println("Actual result:");
     match result2 {
         Int @value => value->std::string::from_int()->std::io::println(),

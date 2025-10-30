@@ -1,4 +1,4 @@
-extend Int with impl {
+extend Int {
     fn test_to_str() -> String {
         return std::string::from_int(self);
     }

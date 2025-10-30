@@ -11,7 +11,7 @@ fn to_upper(s: String) -> String {
 
 test "strings: to_upper" {
     let x: String = "Hallo, Welt"->to_upper();
-    if (x != "HALLO, WELT") {
+    if x != "HALLO, WELT" {
         go {
             panic("expected x to be 'HALLO, WELT' but it wasn't")
         }
@@ -34,6 +34,14 @@ fn from_int(x: Int) -> String {
     return res;
 }
 
+fn from_bool(x: Bool) -> String {
+    let res: String = "";
+    go {
+        res = strconv.FormatBool(x)
+    }
+    return res;
+}
+
 fn to_int(x: String) -> Int {
     let res: Int = 0;
     go {
@@ -43,16 +51,12 @@ fn to_int(x: String) -> Int {
     return res;
 }
 
-fn from_bool(x: Bool) -> String {
-    let res: String = "";
-    go {
-        res = strconv.FormatBool(x)
-    }
-    return res;
-}
-
-extend String with impl {
+extend String {
     fn to_int() -> Int {
         return self->to_int();
+    }
+
+    fn to_bool() -> Int {
+
     }
 }

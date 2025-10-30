@@ -28,8 +28,6 @@ where
 {
     just(Token::Extend)
         .ignore_then(type_expression_parser())
-        .then_ignore(just(Token::With))
-        .then_ignore(just(Token::Impl))
         .then(
             function_definition_parser(make_input)
                 .map_with(|fn_def, ctx| (fn_def, ctx.span()))
@@ -52,7 +50,7 @@ pub mod tests {
     #[test]
     fn test_extensions_definition_parsing() {
         let valid_extensions_definitions = vec![
-            "extend Int with impl { fn to_str() -> String { return \"h\" } }",
+            "extend Int { fn to_str() -> String { return \"h\" } }",
         ];
 
         for valid_extensions_defintion in valid_extensions_definitions {

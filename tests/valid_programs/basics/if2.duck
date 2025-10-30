@@ -1,7 +1,7 @@
 use std::io::{println};
 
 fn main() {
-    if (true) {
+    if true {
         println("is true");
     } else {
         println("is false");

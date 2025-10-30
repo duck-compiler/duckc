@@ -469,8 +469,8 @@ where
 
             let if_condition = value_expr_parser
                 .clone()
-                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                 .boxed();
+
             let if_body = block_expression.clone();
             let if_with_condition_and_body = just(Token::If)
                 .ignore_then(if_condition.clone())
@@ -1878,7 +1878,7 @@ mod tests {
                 },
             ),
             (
-                "if (true) { 1 } else { 2 }",
+                "if true { 1 } else { 2 }",
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into_empty_span().into(),
                     then: ValueExpr::Int(1).into_empty_span_and_block().into(),
@@ -1886,7 +1886,7 @@ mod tests {
                 },
             ),
             (
-                "if (true) { 1 } else if (false) { 3 } else if (200) { 4 } else { 2 }",
+                "if true { 1 } else if (false) { 3 } else if (200) { 4 } else { 2 }",
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into_empty_span().into(),
                     then: ValueExpr::Int(1).into_empty_span_and_block().into(),
@@ -2293,7 +2293,7 @@ mod tests {
                 ]),
             ),
             (
-                "if (true) {{}} else {{x: 1}}",
+                "if true {{}} else {{x: 1}}",
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into_empty_span().into(),
                     then: ValueExpr::Duck(vec![]).into_empty_span_and_block().into(),
@@ -2796,7 +2796,7 @@ mod tests {
                 ]),
             ),
             (
-                "if (true) {go {} 1;2}",
+                "if true {go {} 1;2}",
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into_empty_span().into(),
                     then: ValueExpr::Block(vec![

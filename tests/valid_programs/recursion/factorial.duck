@@ -1,5 +1,5 @@
 fn factorial(n: Int) -> Int {
-    if (n <= 1) {
+    if n <= 1 {
         return 1;
     } else {
         return n * factorial(n - 1);
@@ -10,9 +10,9 @@ fn main() {
     std::io::println("Testing factorial function");
     std::io::println("Computing factorial(5)");
     std::io::println("Expected result: 120 (5! = 5*4*3*2*1)");
-    
+
     let result: Int = factorial(5);
-    
+
     std::io::println("Actual result:");
     result->std::string::from_int()->std::io::println();
 }

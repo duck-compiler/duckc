@@ -41,7 +41,7 @@ fn main() {
     abc(y.x.x);
     xyz(y.x);
 
-    if (y.x.x == x.y) {
+    if y.x.x == x.y {
         go {
             fmt.Println("equal")
         }

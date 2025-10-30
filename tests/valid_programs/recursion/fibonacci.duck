@@ -1,5 +1,5 @@
 fn fibonacci(n: Int) -> Int {
-    if (n <= 1) {
+    if n <= 1 {
         return n;
     } else {
         return fibonacci(n - 1) + fibonacci(n - 2);
@@ -10,9 +10,9 @@ fn main() {
     std::io::println("Testing fibonacci function");
     std::io::println("Computing fibonacci(10)");
     std::io::println("Expected result: 55 (fibonacci sequence: 0,1,1,2,3,5,8,13,21,34,55)");
-    
+
     let result: Int = fibonacci(10);
-    
+
     std::io::println("Actual result:");
     result->std::string::from_int()->std::io::println();
 }

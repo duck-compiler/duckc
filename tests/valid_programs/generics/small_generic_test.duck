@@ -25,7 +25,7 @@ fn extract(s: Other<String>) -> String {
 }
 
 fn gen_method<EE>(s: Other<EE>, x: Bool) -> EE {
-    if (x) {
+    if x {
         return s.s;
     } else {
         return gen_method<EE>(s, true);
