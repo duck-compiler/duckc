@@ -1,7 +1,7 @@
 {
     "id": "f5901928e8ad348259b064be2aa120b4",
     "file_path": "../../src/parse/lexer.rs",
-    "line_number": 683,
+    "line_number": 689,
     "title": "[TSX] create tsx text parser",
     "tag": "todo",
     "module_tag": "parse",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Robin F\u00fcllgraf",
-        "email": "robin@fuellgraf.dev"
+        "name": "Apfelfrosch",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "// todo: [TSX] create tsx text parser",
     "status": "open",

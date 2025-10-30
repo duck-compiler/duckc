@@ -1,7 +1,7 @@
 {
     "id": "1a3c3687cab095dc5f1ae0f6e2b8db70",
     "file_path": "../../src/parse/type_parser.rs",
-    "line_number": 1154,
+    "line_number": 1158,
     "title": "discuss unnamed paramters in fn typeexpr",
     "tag": "todo",
     "module_tag": "parse",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "fn (String) -> Int\nwithout the x:\nThere's an example of this right below this issue.\nIt shows that you have to declare the parameter name",
     "blame": {
-        "name": "Robin F\u00fcllgraf",
-        "email": "robin@fuellgraf.dev"
+        "name": "Apfelfrosch",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "// TODO: discuss unnamed paramters in fn typeexpr",
     "status": "open",
