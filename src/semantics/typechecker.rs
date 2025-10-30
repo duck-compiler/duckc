@@ -724,7 +724,7 @@ impl TypeExpr {
                         let is_covered = &covered_types.iter().any(|x| {
                             let mut a = x.clone();
                             type_expr_into_empty_range(&mut a);
-                            a == b
+                            a.0.unconst() == b.0.unconst()
                         });
                         if !is_covered {
                             let missing_type = possible_type;
