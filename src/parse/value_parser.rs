@@ -659,58 +659,49 @@ where
             });
             // .map_with(|x, e| (x, e.span()));
 
-            let array = value_expr_parser
-                .clone()
-                .separated_by(just(Token::ControlChar(',')))
-                .at_least(1)
-                .allow_trailing()
-                .collect::<Vec<_>>()
-                .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
-                .map(|exprs| ValueExpr::Array(None, exprs))
-                .map_with(|x, e| (x, e.span()));
-
-            let array_with_type = (just(Token::ControlChar('.'))
-                .ignore_then(choice((
-                    just(Token::ControlChar('('))
-                        .rewind()
-                        .ignore_then(type_expression_parser()),
-                    type_expression_parser_without_array(),
-                )))
-                .or_not())
-            .then(
-                (value_expr_parser
-                    .clone()
-                    .separated_by(just(Token::ControlChar(',')))
-                    .allow_trailing()
-                    .collect::<Vec<_>>()
-                    .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']'))))
-                .repeated()
-                .at_least(1)
-                .collect::<Vec<_>>(),
-            )
-            .map(|(declared_content_type, exprs)| {
-                if declared_content_type.is_none() && exprs.last().unwrap().is_empty() {
-                    panic!("error: empty array must provide type");
-                }
-
-                if !exprs.is_empty() && exprs[..exprs.len() - 1].iter().any(|e| !e.is_empty()) {
-                    panic!("only last braces my include values");
-                }
-
-                let mut content_type = declared_content_type.clone();
-
-                if declared_content_type.is_some() {
-                    for _ in 0..exprs.len() - 1 {
-                        let content_type_unwrapped = content_type.unwrap();
-                        let span = content_type_unwrapped.1;
-                        content_type =
-                            Some((TypeExpr::Array(Box::new(content_type_unwrapped)), span));
+            let array = type_expression_parser_without_array()
+                .or_not()
+                .then(
+                    value_expr_parser
+                        .clone()
+                        .separated_by(just(Token::ControlChar(',')))
+                        .allow_trailing()
+                        .collect::<Vec<_>>()
+                        .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
+                        .repeated()
+                        .at_least(1)
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(mut ty, exprs)| {
+                    let mut first_non_empty = None;
+                    if let Some(ty) = ty.as_mut() {
+                        for i in 0..exprs.len() - 1 {
+                            if !exprs[i].is_empty() {
+                                first_non_empty = Some(i);
+                                break;
+                            }
+                            *ty = TypeExpr::Array(Box::new(ty.clone())).into_empty_span();
+                        }
+                    } else {
+                        for i in 0..exprs.len() - 1 {
+                            if !exprs[i].is_empty() {
+                                first_non_empty = Some(i);
+                                break;
+                            }
+                        }
                     }
-                }
 
-                ValueExpr::Array(content_type, exprs.last().unwrap().clone())
-            })
-            .map_with(|x, e| (x, e.span()));
+                    if let Some(first_non_empty) = first_non_empty {
+                        let mut v = ValueExpr::Array(ty, exprs[first_non_empty].clone());
+                        for i in first_non_empty + 1..exprs.len() {
+                            v = ValueExpr::ArrayAccess(Box::new(v.into_empty_span()), Box::new(exprs[i][0].clone()));
+                        }
+                        v
+                    } else {
+                        ValueExpr::Array(ty, exprs.last().unwrap().clone())
+                    }
+                })
+                .map_with(|x, e| (x, e.span()));
 
             #[derive(Debug, Clone)]
             enum AtomPreParseUnit {
@@ -733,7 +724,7 @@ where
                     .clone()
                     .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                     .or(choice((
-                        choice((array.clone(), array_with_type.clone())),
+                        array.clone(),
                         for_parser,
                         float_expr,
                         int,
@@ -1478,7 +1469,10 @@ mod tests {
             ),
             (
                 ".Int[]",
-                ValueExpr::Array(Some(TypeExpr::Int(None).into_empty_span()), vec![]),
+                ValueExpr::Array(
+                    Some(TypeExpr::Tag("Int".to_string()).into_empty_span()),
+                    vec![],
+                ),
             ),
             (
                 "[1]",
@@ -1530,8 +1524,11 @@ mod tests {
                             ],
                         )
                         .into_empty_span(),
-                        ValueExpr::Array(Some(TypeExpr::Int(None).into_empty_span()), vec![])
-                            .into_empty_span(),
+                        ValueExpr::Array(
+                            Some(TypeExpr::Tag("Int".to_string()).into_empty_span()),
+                            vec![],
+                        )
+                        .into_empty_span(),
                     ],
                 ),
             ),
