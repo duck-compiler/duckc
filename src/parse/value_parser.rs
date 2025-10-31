@@ -212,6 +212,90 @@ impl ValueExpr {
     }
 }
 
+pub fn array_parser<'src, I, M>(
+    _make_input: M,
+    value_expr_parser: impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>>
+    + Clone
+    + 'src,
+) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone + 'src
+where
+    I: BorrowInput<'src, Token = Token, Span = SS>,
+    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
+{
+    type_expression_parser_without_array()
+        .or_not()
+        .then(
+            value_expr_parser
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
+                .repeated()
+                .at_least(1)
+                .collect::<Vec<_>>(),
+        )
+        .map_with(|(mut ty, exprs), e| {
+            let mut first_non_empty = None;
+            if let Some(ty) = ty.as_mut() {
+                for i in 0..exprs.len() - 1 {
+                    if !exprs[i].is_empty() {
+                        first_non_empty = Some(i);
+                        break;
+                    }
+                    *ty = (TypeExpr::Array(Box::new(ty.clone())), ty.1);
+                }
+            } else {
+                for i in 0..exprs.len() - 1 {
+                    if !exprs[i].is_empty() {
+                        first_non_empty = Some(i);
+                        break;
+                    }
+                }
+            }
+
+            if let Some(first_non_empty) = first_non_empty {
+                let mut v = (
+                    ValueExpr::Array(ty, exprs[first_non_empty].clone()),
+                    SS {
+                        start: e.span().start,
+                        end: exprs[first_non_empty].last().unwrap().1.end + 1,
+                        context: e.span().context,
+                    },
+                );
+                for i in first_non_empty + 1..exprs.len() {
+                    let start = v.1.start;
+                    v = (
+                        ValueExpr::ArrayAccess(Box::new(v), Box::new(exprs[i][0].clone())),
+                        SS {
+                            start,
+                            end: exprs[i].last().unwrap().1.end + 1,
+                            context: e.span().context,
+                        },
+                    )
+                }
+                v.1.end = e.span().end;
+                v
+            } else {
+                if ty.is_none() && exprs.last().as_ref().is_none_or(|v| v.is_empty()) {
+                    failure_with_occurence(
+                        "Empty array must provide type".to_string(),
+                        e.span(),
+                        [(
+                            "This array is empty, therfore you need to specify a type e.g. Int[]"
+                                .to_string(),
+                            e.span(),
+                        )],
+                    );
+                }
+                (
+                    ValueExpr::Array(ty, exprs.last().unwrap().clone()),
+                    e.span(),
+                )
+            }
+        })
+}
+
 pub fn value_expr_parser<'src, I, M>(
     make_input: M,
 ) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone + 'src
@@ -659,49 +743,7 @@ where
             });
             // .map_with(|x, e| (x, e.span()));
 
-            let array = type_expression_parser_without_array()
-                .or_not()
-                .then(
-                    value_expr_parser
-                        .clone()
-                        .separated_by(just(Token::ControlChar(',')))
-                        .allow_trailing()
-                        .collect::<Vec<_>>()
-                        .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
-                        .repeated()
-                        .at_least(1)
-                        .collect::<Vec<_>>(),
-                )
-                .map(|(mut ty, exprs)| {
-                    let mut first_non_empty = None;
-                    if let Some(ty) = ty.as_mut() {
-                        for i in 0..exprs.len() - 1 {
-                            if !exprs[i].is_empty() {
-                                first_non_empty = Some(i);
-                                break;
-                            }
-                            *ty = TypeExpr::Array(Box::new(ty.clone())).into_empty_span();
-                        }
-                    } else {
-                        for i in 0..exprs.len() - 1 {
-                            if !exprs[i].is_empty() {
-                                first_non_empty = Some(i);
-                                break;
-                            }
-                        }
-                    }
-
-                    if let Some(first_non_empty) = first_non_empty {
-                        let mut v = ValueExpr::Array(ty, exprs[first_non_empty].clone());
-                        for i in first_non_empty + 1..exprs.len() {
-                            v = ValueExpr::ArrayAccess(Box::new(v.into_empty_span()), Box::new(exprs[i][0].clone()));
-                        }
-                        v
-                    } else {
-                        ValueExpr::Array(ty, exprs.last().unwrap().clone())
-                    }
-                })
-                .map_with(|x, e| (x, e.span()));
+            let array = array_parser(make_input.clone(), value_expr_parser.clone());
 
             #[derive(Debug, Clone)]
             enum AtomPreParseUnit {
@@ -1601,14 +1643,25 @@ mod tests {
             ),
             (
                 "a[0]",
-                ValueExpr::ArrayAccess(var("a"), ValueExpr::Int(0).into_empty_span().into()),
+                ValueExpr::Array(
+                    Some(
+                        TypeExpr::RawTypeName(false, vec!["a".to_string()], None).into_empty_span(),
+                    ),
+                    vec![ValueExpr::Int(0).into_empty_span()],
+                ),
             ),
             (
                 "a[0][0]",
                 ValueExpr::ArrayAccess(
-                    ValueExpr::ArrayAccess(var("a"), ValueExpr::Int(0).into_empty_span().into())
-                        .into_empty_span()
-                        .into(),
+                    ValueExpr::Array(
+                        Some(
+                            TypeExpr::RawTypeName(false, vec!["a".to_string()], None)
+                                .into_empty_span(),
+                        ),
+                        vec![ValueExpr::Int(0).into_empty_span()],
+                    )
+                    .into_empty_span()
+                    .into(),
                     ValueExpr::Int(0).into_empty_span().into(),
                 ),
             ),
@@ -2249,7 +2302,7 @@ mod tests {
                 },
             ),
             (
-                ".Int[][.Int[]]",
+                "Int[][Int[]]",
                 ValueExpr::Array(
                     Some(
                         TypeExpr::Array(TypeExpr::Int(None).into_empty_span().into())

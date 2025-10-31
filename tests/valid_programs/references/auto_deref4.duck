@@ -1,7 +1,7 @@
 fn main() {
-    let arr = .String["first", "second"];
+    let arr = ["first", "second"];
     let ref_to_arr = &mut arr;
-    let arr_of_res = .(&mut &mut String[])[&mut ref_to_arr];
+    let arr_of_res = [&mut ref_to_arr];
 
     std::io::println("before:");
     std::io::debug(arr);

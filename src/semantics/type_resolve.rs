@@ -2309,6 +2309,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         ValueExpr::VarDecl(declaration) => {
             let declaration = &mut declaration.0;
 
+            typeresolve_value_expr(
+                (&mut declaration.initializer.0, declaration.initializer.1),
+                type_env,
+            );
+
             // Resolve the type expression on the declaration
             if let Some(type_expr) = &mut declaration.type_expr {
                 if let TypeExpr::And(_) = &type_expr.0 {
@@ -2330,10 +2335,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 );
             }
 
-            typeresolve_value_expr(
-                (&mut declaration.initializer.0, declaration.initializer.1),
-                type_env,
-            );
         }
         ValueExpr::FormattedString(contents) => {
             for c in contents {
