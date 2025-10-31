@@ -238,16 +238,16 @@ where
         .map_with(|(mut ty, exprs), e| {
             let mut first_non_empty = None;
             if let Some(ty) = ty.as_mut() {
-                for i in 0..exprs.len() - 1 {
-                    if !exprs[i].is_empty() {
+                for (i, elem) in exprs.iter().enumerate().take(exprs.len() - 1) {
+                    if !elem.is_empty() {
                         first_non_empty = Some(i);
                         break;
                     }
                     *ty = (TypeExpr::Array(Box::new(ty.clone())), ty.1);
                 }
             } else {
-                for i in 0..exprs.len() - 1 {
-                    if !exprs[i].is_empty() {
+                for (i, elem) in exprs.iter().enumerate().take(exprs.len() - 1) {
+                    if !elem.is_empty() {
                         first_non_empty = Some(i);
                         break;
                     }
@@ -263,13 +263,13 @@ where
                         context: e.span().context,
                     },
                 );
-                for i in first_non_empty + 1..exprs.len() {
+                for elem in exprs.iter().skip(first_non_empty + 1) {
                     let start = v.1.start;
                     v = (
-                        ValueExpr::ArrayAccess(Box::new(v), Box::new(exprs[i][0].clone())),
+                        ValueExpr::ArrayAccess(Box::new(v), Box::new(elem[0].clone())),
                         SS {
                             start,
-                            end: exprs[i].last().unwrap().1.end + 1,
+                            end: elem.last().unwrap().1.end + 1,
                             context: e.span().context,
                         },
                     )

@@ -2334,7 +2334,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     declaration.is_const,
                 );
             }
-
         }
         ValueExpr::FormattedString(contents) => {
             for c in contents {
@@ -2358,12 +2357,21 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         ValueExpr::Array(ty, exprs) => {
             if let Some(ty) = ty {
                 if let TypeExpr::TypeName(is_glob, ty_name, _) = &ty.0
-                    && let Some((var_type, is_const)) = type_env.get_identifier_type_and_const(ty_name.clone())
+                    && let Some((var_type, is_const)) =
+                        type_env.get_identifier_type_and_const(ty_name.clone())
                     && exprs.len() == 1
-                    && let Some(expr) = exprs.get(0).cloned()
+                    && let Some(expr) = exprs.first().cloned()
                 {
                     *value_expr = ValueExpr::ArrayAccess(
-                        Box::new((ValueExpr::Variable(*is_glob, ty_name.clone(), Some(var_type), Some(is_const)), ty.1)),
+                        Box::new((
+                            ValueExpr::Variable(
+                                *is_glob,
+                                ty_name.clone(),
+                                Some(var_type),
+                                Some(is_const),
+                            ),
+                            ty.1,
+                        )),
                         Box::new(expr),
                     );
                     typeresolve_value_expr((value_expr, *span), type_env);
