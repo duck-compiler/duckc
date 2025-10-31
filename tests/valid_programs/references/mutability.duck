@@ -66,7 +66,7 @@ fn main() {
     let p: Person = Person { name: "hallo", age: 20, r: &mut 100, r2: &200, other: &mut &mut &mut S{x: 10},};
     p.say_hello();
 
-    let s = &mut &mut .&mut &mut S[&mut &mut S {x: 100}, &mut &mut S{x: 102}];
+    let s = &mut &mut [&mut &mut S {x: 100}, &mut &mut S{x: 102}];
     s[1].x = 300;
     s[1].twice().abc();
 
@@ -76,10 +76,10 @@ fn main() {
 //    p.b().abc().twice().abc().thrice().abc().twice().abc();
     (&&&p).b().abc().twice().abc().thrice().abc().twice().abc();
 
-    let arr = .String["hallo"];
+    let arr = ["hallo"];
     arr[0] = "replaced";
 
-    let arr_ref = &mut .String["hallo"];
+    let arr_ref = &mut ["hallo"];
     arr_ref[0] = "replaced";
     std::io::debug(*arr_ref);
 

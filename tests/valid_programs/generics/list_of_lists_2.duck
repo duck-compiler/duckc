@@ -5,6 +5,6 @@ struct List<T> = {
 };
 
 fn main() {
-    let list: List<String> = List<String> { elems: .String[] };
+    let list: List<String> = List<String> { elems: String[] };
     list.m<Int>(fn(v: String) -> Int { return 200; });
 }

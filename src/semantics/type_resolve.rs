@@ -2309,6 +2309,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         ValueExpr::VarDecl(declaration) => {
             let declaration = &mut declaration.0;
 
+            typeresolve_value_expr(
+                (&mut declaration.initializer.0, declaration.initializer.1),
+                type_env,
+            );
+
             // Resolve the type expression on the declaration
             if let Some(type_expr) = &mut declaration.type_expr {
                 if let TypeExpr::And(_) = &type_expr.0 {
@@ -2330,10 +2335,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 );
             }
 
-            typeresolve_value_expr(
-                (&mut declaration.initializer.0, declaration.initializer.1),
-                type_env,
-            );
         }
         ValueExpr::FormattedString(contents) => {
             for c in contents {
@@ -2356,7 +2357,20 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         }
         ValueExpr::Array(ty, exprs) => {
             if let Some(ty) = ty {
-                resolve_all_aliases_type_expr(&mut ty.0, type_env);
+                if let TypeExpr::TypeName(is_glob, ty_name, _) = &ty.0
+                    && let Some((var_type, is_const)) = type_env.get_identifier_type_and_const(ty_name.clone())
+                    && exprs.len() == 1
+                    && let Some(expr) = exprs.get(0).cloned()
+                {
+                    *value_expr = ValueExpr::ArrayAccess(
+                        Box::new((ValueExpr::Variable(*is_glob, ty_name.clone(), Some(var_type), Some(is_const)), ty.1)),
+                        Box::new(expr),
+                    );
+                    typeresolve_value_expr((value_expr, *span), type_env);
+                    return;
+                } else {
+                    resolve_all_aliases_type_expr(&mut ty.0, type_env);
+                }
             }
 
             for expr in exprs {

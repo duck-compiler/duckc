@@ -34,7 +34,7 @@ fn main() {
 
     z.x = [70];
 
-    let empty_arr: Int[] = .Int[];
+    let empty_arr: Int[] = Int[];
 
     go {
         fmt.Println(z)

@@ -2597,7 +2597,7 @@ mod tests {
                 ],
             ),
             (
-                ".{}[]",
+                "{}[]",
                 vec![
                     IrInstruction::VarDecl("var_0".into(), "[]interface{}".into()),
                     IrInstruction::VarAssignment(
@@ -2607,7 +2607,7 @@ mod tests {
                 ],
             ),
             (
-                ".Int[][.Int[]]",
+                "Int[][Int[]]",
                 vec![
                     IrInstruction::VarDecl("var_0".into(), "[]int".into()),
                     IrInstruction::VarAssignment(
@@ -2695,7 +2695,8 @@ mod tests {
 
             let mut parsed = value_expr_parser(make_input)
                 .parse(make_input(empty_range(), &lexed))
-                .unwrap();
+                .into_result()
+                .expect(&src);
 
             value_expr_into_empty_range(&mut parsed);
 

@@ -1,5 +1,5 @@
 fn main() {
-    let d: { x: String[], y: String } = { x: .String["yo", "moin"], y: "String in y" };
+    let d: { x: String[], y: String } = { x: ["yo", "moin"], y: "String in y" };
     let ref_to_x = &mut d.x;
     std::io::println("before:");
     std::io::debug(d.x);
