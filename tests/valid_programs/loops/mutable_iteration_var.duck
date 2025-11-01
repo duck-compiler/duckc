@@ -1,0 +1,12 @@
+fn main() {
+    const a = &[2];
+
+    for mut i in a {
+        i = &mut 30;
+        std::io::println(std::string::from_int(*i));
+    }
+
+    for i in a {
+        std::io::println(std::string::from_int(*i));
+    }
+}

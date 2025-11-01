@@ -368,16 +368,18 @@ where
                     .boxed()
             };
 
-            let for_parser = just(Token::Mut)
-                .or_not()
-                .then_ignore(just(Token::For))
-                .then(select_ref! { Token::Ident(ident) => ident.to_owned() })
+            let for_parser = just(Token::For)
+                .ignore_then(
+                    just(Token::Mut)
+                        .or_not()
+                        .then(select_ref! { Token::Ident(ident) => ident.to_owned() }),
+                )
                 .then_ignore(just(Token::In))
                 .then(value_expr_parser.clone())
                 .then_ignore(just(Token::ControlChar('{')).rewind())
                 .then(value_expr_parser.clone())
-                .map(|(((is_const, ident), expr), block)| ValueExpr::For {
-                    ident: (ident, is_const.is_some(), None),
+                .map(|(((is_mut, ident), expr), block)| ValueExpr::For {
+                    ident: (ident, is_mut.is_none(), None),
                     target: Box::new(expr),
                     block: Box::new(block),
                 })
