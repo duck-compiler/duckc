@@ -1620,7 +1620,7 @@ impl ValueExpr {
                 let cases = merged_cases;
 
                 let match_var = env.new_var();
-                let IrValue::Var(match_pre_var) = match_on_value else {
+                let (IrValue::Var(match_pre_var) | IrValue::Imm(match_pre_var)) = match_on_value else {
                     panic!("need var for match {match_on_value:?}")
                 };
 
