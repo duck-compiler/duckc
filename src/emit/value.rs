@@ -1620,7 +1620,8 @@ impl ValueExpr {
                 let cases = merged_cases;
 
                 let match_var = env.new_var();
-                let (IrValue::Var(match_pre_var) | IrValue::Imm(match_pre_var)) = match_on_value else {
+                let (IrValue::Var(match_pre_var) | IrValue::Imm(match_pre_var)) = match_on_value
+                else {
                     panic!("need var for match {match_on_value:?}")
                 };
 
@@ -2673,12 +2674,17 @@ mod tests {
                 "match 1 { Int @x => 2 }",
                 vec![
                     decl("var_0", "int"),
+                    IrInstruction::VarAssignment("var_0".to_string(), IrValue::Int(1)),
+                    decl("var_1", "int"),
+                    IrInstruction::InlineGo(
+                        "\nvar var_2 any\n_ = var_2\nvar_2 = var_0".to_string(),
+                    ),
                     IrInstruction::SwitchType(
-                        IrValue::Int(1),
+                        IrValue::Var("var_2".to_string()),
                         vec![Case {
                             type_name: "int".to_string(),
                             instrs: vec![IrInstruction::VarAssignment(
-                                "var_0".to_string(),
+                                "var_1".to_string(),
                                 IrValue::Int(2),
                             )],
                             identifier_binding: Some("x".to_string()),
@@ -2700,8 +2706,11 @@ mod tests {
                         TypeExpr::Int(None),
                     ),
                     decl("var_1", "int"),
+                    IrInstruction::InlineGo(
+                        "\nvar var_2 any\n_ = var_2\nvar_2 = var_0".to_string(),
+                    ),
                     IrInstruction::SwitchType(
-                        IrValue::Var("var_0".into()),
+                        IrValue::Var("var_2".into()),
                         vec![Case {
                             type_name: "int".to_string(),
                             instrs: vec![IrInstruction::VarAssignment(
