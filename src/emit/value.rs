@@ -19,6 +19,7 @@ use crate::{
 #[derive(Debug, Clone, Default)]
 pub struct ToIr {
     pub var_counter: usize,
+    pub labels: Vec<String>,
 }
 
 /// Expression further down should use this
@@ -35,6 +36,7 @@ pub enum IrInstruction {
         ident: String,
         range_target: IrValue,
         body: Vec<IrInstruction>,
+        label: String,
     },
 
     // Code Statements
@@ -55,8 +57,8 @@ pub enum IrInstruction {
     GreaterThanOrEquals(IrRes, IrValue, IrValue, TypeExpr),
     And(IrRes, IrValue, IrValue, TypeExpr),
     Or(IrRes, IrValue, IrValue, TypeExpr),
-    Break,
-    Continue,
+    Break(Option<String>),
+    Continue(Option<String>),
     Return(Option<IrValue>),
     InlineGo(String),
     If(
@@ -64,7 +66,7 @@ pub enum IrInstruction {
         Vec<IrInstruction>,         // body
         Option<Vec<IrInstruction>>, // else
     ),
-    Loop(Vec<IrInstruction>),
+    Loop(Vec<IrInstruction>, String),
     Block(Vec<IrInstruction>),
 
     // Top-Level Statements
@@ -141,6 +143,17 @@ impl IrValue {
 }
 
 impl ToIr {
+    pub fn top_label_cloned(&self) -> Option<String> {
+        self.labels.last().cloned()
+    }
+
+    pub fn new_label(&mut self) -> &String {
+        let label = format!("label_{}", self.var_counter);
+        self.var_counter += 1;
+        self.labels.push(label);
+        &self.labels[self.labels.len() - 1]
+    }
+
     pub fn new_var(&mut self) -> String {
         let var_name = format!("var_{}", self.var_counter);
         self.var_counter += 1;
@@ -665,7 +678,9 @@ impl ValueExpr {
                 }
 
                 if let Some(target_res_var_name) = target_res {
+                    let label = env.new_label().clone();
                     let (body_res_instr, _) = block.0.emit(type_env, env, span);
+                    env.labels.pop();
                     target_instr.push(IrInstruction::ForRangeElem {
                         ident: ident.to_owned(),
                         range_target: if star_count == 0 {
@@ -703,6 +718,7 @@ impl ValueExpr {
                             body_instr.extend(body_res_instr);
                             body_instr
                         },
+                        label: label.clone(),
                     });
                     (target_instr, None)
                 } else {
@@ -1477,8 +1493,7 @@ impl ValueExpr {
                 else_arm,
                 span,
             } => {
-                let (mut instructions, match_on_res) =
-                    value_expr.0.direct_or_with_instr(type_env, env, *span);
+                let (mut instructions, match_on_res) = value_expr.0.emit(type_env, env, *span);
                 let match_on_value = match match_on_res {
                     Some(v) => v,
                     None => return (instructions, None),
@@ -1604,7 +1619,16 @@ impl ValueExpr {
 
                 let cases = merged_cases;
 
-                instructions.push(IrInstruction::SwitchType(match_on_value, cases));
+                let match_var = env.new_var();
+                let IrValue::Var(match_pre_var) = match_on_value else {
+                    panic!("need var for match {match_on_value:?}")
+                };
+
+                instructions.push(IrInstruction::InlineGo(format!(
+                    "\nvar {match_var} any\n_ = {match_var}\n{match_var} = {match_pre_var}"
+                )));
+
+                instructions.push(IrInstruction::SwitchType(IrValue::Var(match_var), cases));
                 (
                     instructions,
                     if result_type.is_unit() {
@@ -1720,15 +1744,19 @@ impl ValueExpr {
                     return (cond_instr, None);
                 }
 
+                let label = env.new_label().clone();
+
                 let (body, _) = body.0.direct_or_with_instr(type_env, env, span);
+                env.labels.pop();
+
                 let cond_res = cond_res.unwrap();
                 cond_instr.push(IrInstruction::If(
                     cond_res,
                     body,
-                    Some(vec![IrInstruction::Break]),
+                    Some(vec![IrInstruction::Break(Some(label.clone()))]),
                 ));
 
-                (vec![IrInstruction::Loop(cond_instr)], None)
+                (vec![IrInstruction::Loop(cond_instr, label)], None)
             }
             ValueExpr::If {
                 condition,
@@ -2007,8 +2035,8 @@ impl ValueExpr {
                         if matches!(
                             current,
                             IrInstruction::Return(..)
-                                | IrInstruction::Break
-                                | IrInstruction::Continue
+                                | IrInstruction::Break(_)
+                                | IrInstruction::Continue(_)
                         ) {
                             res_var = None;
                             return (res_instr, res_var);
@@ -2079,8 +2107,8 @@ impl ValueExpr {
                     (instr, None)
                 }
             }
-            ValueExpr::Break => (vec![IrInstruction::Break], None),
-            ValueExpr::Continue => (vec![IrInstruction::Continue], None),
+            ValueExpr::Break => (vec![IrInstruction::Break(env.top_label_cloned())], None),
+            ValueExpr::Continue => (vec![IrInstruction::Continue(env.top_label_cloned())], None),
             ValueExpr::Return(expr) => {
                 if let Some(expr) = expr {
                     let (expr, _) = &**expr;
@@ -2581,9 +2609,9 @@ mod tests {
                     ),
                 ],
             ),
-            ("(true, break, 2)", vec![IrInstruction::Break]),
+            ("(true, break, 2)", vec![IrInstruction::Break(None)]),
             ("(true, return, 2)", vec![IrInstruction::Return(None)]),
-            ("(true, continue, 3)", vec![IrInstruction::Continue]),
+            ("(true, continue, 3)", vec![IrInstruction::Continue(None)]),
             (
                 "1 == 2",
                 vec![
