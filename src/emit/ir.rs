@@ -8,9 +8,10 @@ impl IrInstruction {
                 ident: _,
                 range_target,
                 body,
+                label,
             } => {
                 format!(
-                    "{{\nfor DUCK_FOR_IDX := range {} {{\n_ = DUCK_FOR_IDX\n{}\n}}\n}}",
+                    "{{\nif false {{goto {label}}}\n{label}:\nfor DUCK_FOR_IDX := range {} {{\n_ = DUCK_FOR_IDX\n{}\n}}\n}}",
                     range_target.emit_as_go(),
                     body.iter()
                         .map(|i| i.emit_as_go())
@@ -107,7 +108,7 @@ impl IrInstruction {
                         block_instructions.extend(branch.0.0.clone());
 
                         let mut if_body = branch.1.instrs.clone();
-                        if_body.push(IrInstruction::Break);
+                        if_body.push(IrInstruction::Break(None));
 
                         block_instructions.push(IrInstruction::If(
                             branch
@@ -173,8 +174,14 @@ impl IrInstruction {
             IrInstruction::Mod(r, v1, v2, _type_expr) => {
                 format!("{r} = {} % {}", v1.emit_as_go(), v2.emit_as_go(),)
             }
-            IrInstruction::Continue => "continue".to_string(),
-            IrInstruction::Break => "break".to_string(),
+            IrInstruction::Continue(label) => format!(
+                "continue{}",
+                label.as_ref().map(|l| format!(" {l}")).unwrap_or_default()
+            ),
+            IrInstruction::Break(label) => format!(
+                "break{}",
+                label.as_ref().map(|l| format!(" {l}")).unwrap_or_default()
+            ),
             IrInstruction::Return(o) => format!(
                 "return {}",
                 o.as_ref()
@@ -242,8 +249,8 @@ impl IrInstruction {
                         .unwrap_or("".to_string())
                 )
             }
-            IrInstruction::Loop(v) => {
-                format!("for {{\n{}\n}}", join_ir(v))
+            IrInstruction::Loop(v, label) => {
+                format!("if false {{goto {label}}}\n{label}:\nfor {{\n{}\n}}", join_ir(v))
             }
             IrInstruction::InlineGo(t) => t.to_string(),
             IrInstruction::GoImports(imports) => {
