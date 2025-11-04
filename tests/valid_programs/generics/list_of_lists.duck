@@ -8,7 +8,7 @@ struct List<T> = {
     }
 
     fn map<U>(f: fn(v: T) -> U) -> List<U> {
-        let res: List<U> = List<U> { elems: U[] };
+        let res: List<U> = List<U> { elems: [:U] };
         go {
             for _, e := range (*self).elems {
                 (*res).elems = append(res.elems, f(e))
@@ -19,7 +19,7 @@ struct List<T> = {
 
     fn empty_copy() -> List<T> {
         return List<T> {
-            elems: T[],
+            elems: [:T],
         };
     }
 
@@ -29,7 +29,7 @@ struct X<E> = {
     a: E,
 } impl {
     fn give_me_a_list() -> List<E> {
-        let res: List<E> = List<E> { elems: E[] };
+        let res: List<E> = List<E> { elems: [:E] };
         res.map<E>(fn(v: E) -> E { return v; });
         return res;
     }
@@ -49,7 +49,7 @@ fn main() {
     let inst: X<Float> = X<Float> {a: 1.0};
     print_with_go(inst.give_me_a_list());
 
-    let list: List<String> = List<String> { elems: String[] };
+    let list: List<String> = List<String> { elems: [:String] };
     let other: StringList = list;
     print_with_go(other.map<Int>(fn (v: String) -> Int { return 200 }));
 
@@ -69,12 +69,12 @@ fn main() {
     print_with_go(list.map<Float>(fn(v: String) -> Float { return 100.0 }));
     print_with_go(list.map<Bool>(fn(v: String) -> Bool { return true }));
     print_with_go(list.map<String>(fn(v: String) -> String { return "" }));
-    let list_of_lists_with_map: List<List<String>> = list.map<List<String>>(fn(v: String) -> List<String> { return List<String> { elems: String["yo", "servus"] } });
-    let list_of_list_of_lists_with_map: List<List<List<String>>> = list.map<List<List<String>>>(fn(v: String) -> List<List<String>> { return List<List<String>> { elems: List<String>[ List<String> { elems: String["a", "b", "c"] }, List<String> { elems: String["100"] } ] } });
+    let list_of_lists_with_map: List<List<String>> = list.map<List<String>>(fn(v: String) -> List<String> { return List<String> { elems: ["yo", "servus"] } });
+    let list_of_list_of_lists_with_map: List<List<List<String>>> = list.map<List<List<String>>>(fn(v: String) -> List<List<String>> { return List<List<String>> { elems: [ List<String> { elems: ["a", "b", "c"] }, List<String> { elems: ["100"] } ] } });
 
     print_with_go(list);
 
-    let list_of_list: List<List<String>> = List<List<String>> { elems: List<String>[] };
+    let list_of_list: List<List<String>> = List<List<String>> { elems: [:List<String>] };
     list_of_list.push(List<String> {
         elems: ["ich", "bin", "liste", "1"],
     });

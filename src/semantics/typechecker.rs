@@ -128,6 +128,14 @@ impl TypeExpr {
                 array_type.0.clone()
             }
             ValueExpr::Array(optional_type_support, value_exprs) => {
+                if optional_type_support.is_none() && value_exprs.is_empty() {
+                    failure_with_occurence(
+                        "Empty array must provide a type like so: [:Int]".to_string(),
+                        *complete_span,
+                        [("Provide a type for this array".to_string(), *complete_span)],
+                    );
+                }
+
                 if let Some(type_support) = optional_type_support {
                     for value_expr in value_exprs {
                         let type_expr = &(
@@ -172,7 +180,7 @@ impl TypeExpr {
 
                 if variants.is_empty() {
                     panic!(
-                        "Internal Compiler Error: variants shoulnd't ever be empty, as this is a syntax error."
+                        "Internal Compiler Error: variants shouldn't ever be empty, as this is a syntax error."
                     );
                 }
 
@@ -601,7 +609,7 @@ impl TypeExpr {
                             span
                         },
                         vec![(
-                            format!("this value is not object like and has no fields to access {target_obj_type_expr:?}"),
+                            format!("this value is not object like and has no fields to access"),
                             span,
                         )],
                     )

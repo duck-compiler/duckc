@@ -740,44 +740,44 @@ fn replace_generics_in_struct_definition(
     }
 }
 
-fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
-    match expr {
+fn instantiate_generics_type_expr(expr: &mut Spanned<TypeExpr>, type_env: &mut TypeEnv) {
+    match &mut expr.0 {
         TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
-            instantiate_generics_type_expr(&mut t.0, type_env)
+            instantiate_generics_type_expr(t.as_mut(), type_env)
         }
         TypeExpr::Html => {}
         // todo: support generics in typeof
         TypeExpr::TypeOf(..) => {}
         TypeExpr::KeyOf(type_expr) => {
-            instantiate_generics_type_expr(&mut type_expr.as_mut().0, type_env);
+            instantiate_generics_type_expr(type_expr.as_mut(), type_env);
         }
         TypeExpr::Alias(alias) => {
-            instantiate_generics_type_expr(&mut alias.type_expression.0, type_env);
+            instantiate_generics_type_expr(&mut alias.type_expression, type_env);
         }
         TypeExpr::Array(t) => {
-            instantiate_generics_type_expr(&mut t.0, type_env);
+            instantiate_generics_type_expr(t.as_mut(), type_env);
         }
         TypeExpr::Duck(d) => {
             for f in &mut d.fields {
-                instantiate_generics_type_expr(&mut f.type_expr.0, type_env);
+                instantiate_generics_type_expr(&mut f.type_expr, type_env);
             }
         }
         TypeExpr::Fun(params, ret, _) => {
             for p in params {
-                instantiate_generics_type_expr(&mut p.1.0, type_env);
+                instantiate_generics_type_expr(&mut p.1, type_env);
             }
             if let Some(ret) = ret {
-                instantiate_generics_type_expr(&mut ret.0, type_env);
+                instantiate_generics_type_expr(ret.as_mut(), type_env);
             }
         }
         TypeExpr::Or(contents) => {
             for c in contents {
-                instantiate_generics_type_expr(&mut c.0, type_env);
+                instantiate_generics_type_expr(c, type_env);
             }
         }
         TypeExpr::Tuple(fields) => {
             for f in fields {
-                instantiate_generics_type_expr(&mut f.0, type_env);
+                instantiate_generics_type_expr(f, type_env);
             }
         }
         TypeExpr::TypeName(_, name, type_params) => {
@@ -787,7 +787,7 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
             if let Some(e) = new_type.as_mut() {
                 if let TypeExpr::Struct(def) = e {
                     if let Some(new_type_params) = new_type_params.as_mut() {
-                        for (new_param, _) in new_type_params.iter_mut() {
+                        for new_param in new_type_params.iter_mut() {
                             instantiate_generics_type_expr(new_param, type_env);
                         }
                     } else {
@@ -795,6 +795,48 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                     }
 
                     let def = type_env.get_struct_def(def.as_str()).clone();
+
+                    let span = &expr.1;
+
+                    if let Some(type_params) = &type_params {
+                        if let Some(def_type_params) = def.generics.as_ref() {
+                            if type_params.len() != def_type_params.len() {
+                                failure_with_occurence(
+                                    format!(
+                                        "{name} takes {} type parameters. You provided {}",
+                                        def_type_params.len(),
+                                        type_params.len()
+                                    ),
+                                    *span,
+                                    [if type_params.len() < def_type_params.len() {
+                                        ("Add missing type parameters".to_string(), *span)
+                                    } else {
+                                        ("Remove extra type parameters".to_string(), *span)
+                                    }],
+                                );
+                            }
+
+                            for (provided_type, def_type) in
+                                type_params.iter().zip(def_type_params.iter())
+                            {
+                                if let Some(constraint) = def_type.0.constraint.as_ref() {
+                                    check_type_compatability(constraint, provided_type, type_env);
+                                }
+                            }
+                        } else {
+                            failure_with_occurence(
+                                format!("{name} does not take type parameters"),
+                                *span,
+                                [("Remove the type parameters".to_string(), *span)],
+                            );
+                        }
+                    } else if def.generics.is_some() {
+                        failure_with_occurence(
+                            format!("A {name} takes type parameters and you provided none"),
+                            *span,
+                            [("Provide type parameters".to_string(), *span)],
+                        );
+                    }
 
                     let mangled_name = mangle_generics_name(
                         def.name.as_str(),
@@ -833,7 +875,7 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                         type_env.generic_structs_generated.push(cloned_def.clone());
 
                         for f in &mut cloned_def.fields {
-                            instantiate_generics_type_expr(&mut f.type_expr.0, type_env);
+                            instantiate_generics_type_expr(&mut f.type_expr, type_env);
                         }
 
                         for m in &mut cloned_def.methods {
@@ -846,9 +888,9 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                                     .flat_map(|x| x.iter_mut())
                                     .map(|x| &mut x.1),
                             ) {
-                                instantiate_generics_type_expr(&mut ty.0, type_env);
+                                instantiate_generics_type_expr(ty, type_env);
                             }
-                            instantiate_generics_value_expr(&mut m.value_expr.0, type_env);
+                            instantiate_generics_value_expr(&mut m.value_expr, type_env);
                         }
 
                         // println!("AAAA  pushing {cloned_def:?}");
@@ -862,7 +904,7 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                         *e = TypeExpr::Struct(mangled_name);
                     }
                 }
-                *expr = e.clone();
+                expr.0 = e.clone();
                 instantiate_generics_type_expr(expr, type_env);
             }
         }
@@ -880,7 +922,7 @@ fn instantiate_generics_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
         | TypeExpr::InlineGo => {}
         TypeExpr::And(variants) => {
             for variant in variants.iter_mut() {
-                instantiate_generics_type_expr(&mut variant.0, type_env);
+                instantiate_generics_type_expr(variant, type_env);
             }
         }
     }
@@ -1220,18 +1262,18 @@ fn mangle_generics_name(
     })
 }
 
-fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv) {
-    match expr {
+fn instantiate_generics_value_expr(expr: &mut Spanned<ValueExpr>, type_env: &mut TypeEnv) {
+    match &mut expr.0 {
         ValueExpr::For {
             ident: _,
             target,
             block,
         } => {
-            instantiate_generics_value_expr(&mut target.0, type_env);
-            instantiate_generics_value_expr(&mut block.0, type_env);
+            instantiate_generics_value_expr(target.as_mut(), type_env);
+            instantiate_generics_value_expr(block.as_mut(), type_env);
         }
         ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
-            instantiate_generics_value_expr(&mut v.0, type_env)
+            instantiate_generics_value_expr(v.as_mut(), type_env)
         }
         ValueExpr::Add(lhs, rhs)
         | ValueExpr::Mul(lhs, rhs)
@@ -1246,57 +1288,57 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
         | ValueExpr::GreaterThanOrEquals(lhs, rhs)
         | ValueExpr::And(lhs, rhs)
         | ValueExpr::Or(lhs, rhs) => {
-            instantiate_generics_value_expr(&mut lhs.0, type_env);
-            instantiate_generics_value_expr(&mut rhs.0, type_env);
+            instantiate_generics_value_expr(lhs.as_mut(), type_env);
+            instantiate_generics_value_expr(rhs.as_mut(), type_env);
         }
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {
-                    instantiate_generics_value_expr(&mut e.0, type_env);
+                    instantiate_generics_value_expr(e, type_env);
                 }
             }
         }
         ValueExpr::BoolNegate(e) | ValueExpr::Return(Some(e)) => {
-            instantiate_generics_value_expr(&mut e.0, type_env)
+            instantiate_generics_value_expr(e.as_mut(), type_env)
         }
         ValueExpr::Array(t, exprs) => {
             if let Some(t) = t {
-                instantiate_generics_type_expr(&mut t.0, type_env);
+                instantiate_generics_type_expr(t, type_env);
             }
 
             for e in exprs {
-                instantiate_generics_value_expr(&mut e.0, type_env);
+                instantiate_generics_value_expr(e, type_env);
             }
         }
         ValueExpr::ArrayAccess(target, index) => {
-            instantiate_generics_value_expr(&mut target.0, type_env);
-            instantiate_generics_value_expr(&mut index.0, type_env);
+            instantiate_generics_value_expr(target.as_mut(), type_env);
+            instantiate_generics_value_expr(index.as_mut(), type_env);
         }
         ValueExpr::Block(exprs) => {
             for e in exprs {
-                instantiate_generics_value_expr(&mut e.0, type_env);
+                instantiate_generics_value_expr(e, type_env);
             }
         }
         ValueExpr::Duck(def) => {
             for (_, expr) in def {
-                instantiate_generics_value_expr(&mut expr.0, type_env);
+                instantiate_generics_value_expr(expr, type_env);
             }
         }
         ValueExpr::FieldAccess {
             target_obj,
             field_name: _,
         } => {
-            instantiate_generics_value_expr(&mut target_obj.0, type_env);
+            instantiate_generics_value_expr(target_obj.as_mut(), type_env);
         }
         ValueExpr::FormattedString(contents) => {
             for c in contents {
                 if let ValFmtStringContents::Expr(e) = c {
-                    instantiate_generics_value_expr(&mut e.0, type_env);
+                    instantiate_generics_value_expr(e, type_env);
                 }
             }
         }
         ValueExpr::ExtensionAccess { target_obj, .. } => {
-            instantiate_generics_value_expr(&mut target_obj.as_mut().0, type_env);
+            instantiate_generics_value_expr(target_obj.as_mut(), type_env);
         }
         ValueExpr::FunctionCall {
             target,
@@ -1304,12 +1346,12 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
             type_params,
             ..
         } => {
-            instantiate_generics_value_expr(&mut target.0, type_env);
+            instantiate_generics_value_expr(target.as_mut(), type_env);
             for t in type_params.iter_mut().flat_map(|x| x.iter_mut()) {
-                instantiate_generics_type_expr(&mut t.0, type_env);
+                instantiate_generics_type_expr(t, type_env);
             }
             for p in params {
-                instantiate_generics_value_expr(&mut p.0, type_env);
+                instantiate_generics_value_expr(p, type_env);
             }
 
             if let ValueExpr::Variable(_, var_name, _, _) = &mut target.0 {
@@ -1347,19 +1389,19 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
                         for t in cloned_def
                             .params
                             .iter_mut()
-                            .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0))
-                            .chain(cloned_def.return_type.iter_mut().map(|x| &mut x.0))
+                            .flat_map(|x| x.iter_mut().map(|x| &mut x.1))
+                            .chain(cloned_def.return_type.iter_mut())
                         {
-                            replace_generics_in_type_expr(t, &generics_instance);
+                            replace_generics_in_type_expr(&mut t.0, &generics_instance);
                             instantiate_generics_type_expr(t, type_env);
-                            process_keyof_in_type_expr(t, type_env);
+                            process_keyof_in_type_expr(&mut t.0, type_env);
                         }
 
                         replace_generics_in_value_expr(
                             &mut cloned_def.value_expr.0,
                             &generics_instance,
                         );
-                        instantiate_generics_value_expr(&mut cloned_def.value_expr.0, type_env);
+                        instantiate_generics_value_expr(&mut cloned_def.value_expr, type_env);
 
                         for m in type_env.identifier_types.iter_mut() {
                             m.insert(
@@ -1398,20 +1440,20 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
             then,
             r#else,
         } => {
-            instantiate_generics_value_expr(&mut condition.0, type_env);
-            instantiate_generics_value_expr(&mut then.0, type_env);
+            instantiate_generics_value_expr(condition.as_mut(), type_env);
+            instantiate_generics_value_expr(then.as_mut(), type_env);
             if let Some(r#else) = r#else {
-                instantiate_generics_value_expr(&mut r#else.0, type_env);
+                instantiate_generics_value_expr(r#else.as_mut(), type_env);
             }
         }
         ValueExpr::Lambda(def) => {
             for p in &mut def.params {
-                instantiate_generics_type_expr(&mut p.1.0, type_env);
+                instantiate_generics_type_expr(&mut p.1, type_env);
             }
             if let Some(return_type) = def.return_type.as_mut() {
-                instantiate_generics_type_expr(&mut return_type.0, type_env);
+                instantiate_generics_type_expr(return_type, type_env);
             }
-            instantiate_generics_value_expr(&mut def.value_expr.0, type_env);
+            instantiate_generics_value_expr(&mut def.value_expr, type_env);
         }
         ValueExpr::Struct {
             name,
@@ -1422,18 +1464,59 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
                 resolve_by_string(name.as_str(), type_params.clone(), type_env);
 
             if let Some(new_type_params) = new_type_params.as_mut() {
-                for (new_param, _) in new_type_params.iter_mut() {
+                for new_param in new_type_params.iter_mut() {
                     instantiate_generics_type_expr(new_param, type_env);
                 }
                 *type_params = Some(new_type_params.clone());
             }
 
             for field in fields {
-                instantiate_generics_value_expr(&mut field.1.0, type_env);
+                instantiate_generics_value_expr(&mut field.1, type_env);
             }
 
             if let Some(TypeExpr::Struct(ref def)) = new_type {
                 let def = type_env.get_struct_def(def.as_str()).clone();
+                let span = &expr.1;
+
+                if let Some(type_params) = &type_params {
+                    if let Some(def_type_params) = def.generics.as_ref() {
+                        if type_params.len() != def_type_params.len() {
+                            failure_with_occurence(
+                                format!(
+                                    "{name} takes {} type parameters. You provided {}",
+                                    def_type_params.len(),
+                                    type_params.len()
+                                ),
+                                *span,
+                                [if type_params.len() < def_type_params.len() {
+                                    ("Add missing type parameters".to_string(), *span)
+                                } else {
+                                    ("Remove extra type parameters".to_string(), *span)
+                                }],
+                            );
+                        }
+
+                        for (provided_type, def_type) in
+                            type_params.iter().zip(def_type_params.iter())
+                        {
+                            if let Some(constraint) = def_type.0.constraint.as_ref() {
+                                check_type_compatability(constraint, provided_type, type_env);
+                            }
+                        }
+                    } else {
+                        failure_with_occurence(
+                            format!("{name} does not take type parameters"),
+                            *span,
+                            [("Remove the type parameters".to_string(), *span)],
+                        );
+                    }
+                } else if def.generics.is_some() {
+                    failure_with_occurence(
+                        format!("B {name} takes type parameters and you provided none"),
+                        *span,
+                        [("Provide type parameters".to_string(), *span)],
+                    );
+                }
 
                 let mangled_name = mangle_generics_name(
                     def.name.as_str(),
@@ -1465,7 +1548,7 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
 
                     type_env.generic_structs_generated.push(cloned_def.clone());
                     for f in &mut cloned_def.fields {
-                        instantiate_generics_type_expr(&mut f.type_expr.0, type_env);
+                        instantiate_generics_type_expr(&mut f.type_expr, type_env);
                     }
 
                     for m in &mut cloned_def.methods {
@@ -1478,9 +1561,9 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
                                 .flat_map(|x| x.iter_mut())
                                 .map(|x| &mut x.1),
                         ) {
-                            instantiate_generics_type_expr(&mut ty.0, type_env);
+                            instantiate_generics_type_expr(ty, type_env);
                         }
-                        instantiate_generics_value_expr(&mut m.value_expr.0, type_env);
+                        instantiate_generics_value_expr(&mut m.value_expr, type_env);
                     }
 
                     // println!("pushing {cloned_def:?}");
@@ -1502,23 +1585,23 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
         }
         ValueExpr::Tuple(fields) => {
             for f in fields {
-                instantiate_generics_value_expr(&mut f.0, type_env);
+                instantiate_generics_value_expr(f, type_env);
             }
         }
         ValueExpr::While { condition, body } => {
-            instantiate_generics_value_expr(&mut condition.0, type_env);
-            instantiate_generics_value_expr(&mut body.0, type_env);
+            instantiate_generics_value_expr(condition.as_mut(), type_env);
+            instantiate_generics_value_expr(body.as_mut(), type_env);
         }
         ValueExpr::VarDecl(decl) => {
             if let Some(type_expr) = &mut decl.0.type_expr {
-                instantiate_generics_type_expr(&mut type_expr.0, type_env);
+                instantiate_generics_type_expr(type_expr, type_env);
             }
 
-            instantiate_generics_value_expr(&mut decl.0.initializer.0, type_env);
+            instantiate_generics_value_expr(&mut decl.0.initializer, type_env);
         }
         ValueExpr::VarAssign(a) => {
-            instantiate_generics_value_expr(&mut a.0.target.0, type_env);
-            instantiate_generics_value_expr(&mut a.0.value_expr.0, type_env);
+            instantiate_generics_value_expr(&mut a.0.target, type_env);
+            instantiate_generics_value_expr(&mut a.0.value_expr, type_env);
         }
         ValueExpr::Match {
             value_expr,
@@ -1526,15 +1609,15 @@ fn instantiate_generics_value_expr(expr: &mut ValueExpr, type_env: &mut TypeEnv)
             else_arm,
             span: _,
         } => {
-            instantiate_generics_value_expr(&mut value_expr.0, type_env);
+            instantiate_generics_value_expr(value_expr.as_mut(), type_env);
             for arm in arms {
-                instantiate_generics_type_expr(&mut arm.type_case.0, type_env);
-                instantiate_generics_value_expr(&mut arm.value_expr.0, type_env);
+                instantiate_generics_type_expr(&mut arm.type_case, type_env);
+                instantiate_generics_value_expr(&mut arm.value_expr, type_env);
             }
 
             if let Some(arm) = else_arm {
-                instantiate_generics_type_expr(&mut arm.type_case.0, type_env);
-                instantiate_generics_value_expr(&mut arm.value_expr.0, type_env);
+                instantiate_generics_type_expr(&mut arm.type_case, type_env);
+                instantiate_generics_value_expr(&mut arm.value_expr, type_env);
             }
         }
         ValueExpr::Bool(..)
@@ -2007,13 +2090,13 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         for t in x
             .params
             .iter_mut()
-            .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0))
-            .chain(x.return_type.iter_mut().map(|x| &mut x.0))
+            .flat_map(|x| x.iter_mut().map(|x| &mut x.1))
+            .chain(x.return_type.iter_mut())
         {
             instantiate_generics_type_expr(t, type_env);
         }
 
-        instantiate_generics_value_expr(&mut x.value_expr.0, type_env);
+        instantiate_generics_value_expr(&mut x.value_expr, type_env);
     });
 
     for func in &type_env.generic_fns_generated {
@@ -2031,14 +2114,14 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
             if let Some(params) = function_definition.params.as_mut() {
                 for (_, p) in params {
-                    instantiate_generics_type_expr(&mut p.0, type_env);
+                    instantiate_generics_type_expr(p, type_env);
                     resolve_all_aliases_type_expr(&mut p.0, type_env);
                     process_keyof_in_type_expr(&mut p.0, type_env);
                 }
             }
 
             if let Some(r) = function_definition.return_type.as_mut() {
-                instantiate_generics_type_expr(&mut r.0, type_env);
+                instantiate_generics_type_expr(r, type_env);
                 resolve_all_aliases_type_expr(&mut r.0, type_env);
                 process_keyof_in_type_expr(&mut r.0, type_env);
             }
@@ -2518,10 +2601,10 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     for t in cloned_def
                         .params
                         .iter_mut()
-                        .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0))
-                        .chain(cloned_def.return_type.iter_mut().map(|x| &mut x.0))
+                        .flat_map(|x| x.iter_mut().map(|x| &mut x.1))
+                        .chain(cloned_def.return_type.iter_mut())
                     {
-                        replace_generics_in_type_expr(t, &generics_instance);
+                        replace_generics_in_type_expr(&mut t.0, &generics_instance);
                         instantiate_generics_type_expr(t, type_env);
                     }
 
@@ -2529,7 +2612,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                         &mut cloned_def.value_expr.0,
                         &generics_instance,
                     );
-                    instantiate_generics_value_expr(&mut cloned_def.value_expr.0, type_env);
+                    instantiate_generics_value_expr(&mut cloned_def.value_expr, type_env);
 
                     type_env
                         .function_headers
@@ -2715,6 +2798,45 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             }
 
             let def = type_env.get_struct_def(name.as_str()).clone();
+
+            // if let Some(type_params) = &type_params {
+            //     if let Some(def_type_params) = def.generics.as_ref() {
+            //         if type_params.len() != def_type_params.len() {
+            //             failure_with_occurence(
+            //                 format!(
+            //                     "{name} takes {} type parameters. You provided {}",
+            //                     def_type_params.len(),
+            //                     type_params.len()
+            //                 ),
+            //                 *span,
+            //                 [if type_params.len() < def_type_params.len() {
+            //                     ("Add missing type parameters".to_string(), *span)
+            //                 } else {
+            //                     ("Remove extra type parameters".to_string(), *span)
+            //                 }],
+            //             );
+            //         }
+
+            //         for (provided_type, def_type) in type_params.iter().zip(def_type_params.iter())
+            //         {
+            //             if let Some(constraint) = def_type.0.constraint.as_ref() {
+            //                 check_type_compatability(constraint, provided_type, type_env);
+            //             }
+            //         }
+            //     } else {
+            //         failure_with_occurence(
+            //             format!("{name} does not take type parameters"),
+            //             *span,
+            //             [("Remove the type parameters".to_string(), *span)],
+            //         );
+            //     }
+            // } else if def.generics.is_some() {
+            //     failure_with_occurence(
+            //         format!("{name} takes type parameters and you provided none"),
+            //         *span,
+            //         [("Provide type parameters".to_string(), *span)],
+            //     );
+            // }
 
             fields
                 .iter_mut()
