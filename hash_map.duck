@@ -68,11 +68,6 @@ struct HashMap<K: { eq: fn(other: &K) -> Bool, hash: fn() -> Int }, V> = {
     mut fn remove(k: K) -> Bool {
         let result = false;
 
-        go {
-            var var_38 any
-            _ = var_38
-        }
-
         if (self.capacity() > 0) {
             const hash = k.hash();
             const pos = hash % self.capacity();

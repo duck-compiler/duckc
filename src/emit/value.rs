@@ -1799,7 +1799,14 @@ impl ValueExpr {
 
                 i.push(IrInstruction::If(cond_res.unwrap(), then_instr, r#else));
 
-                (i, Some(as_var(res_var_name)))
+                (
+                    i,
+                    if res_type.is_unit() {
+                        None
+                    } else {
+                        Some(as_var(res_var_name))
+                    },
+                )
             }
             ValueExpr::VarAssign(b) => {
                 let assign = &b.0;
