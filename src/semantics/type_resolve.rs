@@ -784,6 +784,8 @@ fn instantiate_generics_type_expr(expr: &mut Spanned<TypeExpr>, type_env: &mut T
             let (mut new_type, mut new_type_params) =
                 resolve_by_string(name.as_str(), type_params.as_ref().cloned(), type_env);
 
+            let type_params = new_type_params.clone();
+
             if let Some(e) = new_type.as_mut() {
                 if let TypeExpr::Struct(def) = e {
                     if let Some(new_type_params) = new_type_params.as_mut() {
