@@ -2626,7 +2626,7 @@ mod tests {
                 ],
             ),
             (
-                "{}[]",
+                "[:{}]",
                 vec![
                     IrInstruction::VarDecl("var_0".into(), "[]interface{}".into()),
                     IrInstruction::VarAssignment(
@@ -2636,7 +2636,7 @@ mod tests {
                 ],
             ),
             (
-                "Int[][Int[]]",
+                "[[:Int]]",
                 vec![
                     IrInstruction::VarDecl("var_0".into(), "[]int".into()),
                     IrInstruction::VarAssignment(

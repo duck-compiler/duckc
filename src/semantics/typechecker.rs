@@ -271,7 +271,11 @@ impl TypeExpr {
                 });
 
                 if is_missing_field || struct_def.fields.len() != value_expr_fields.len() {
-                    panic!("invalid type from value expr {is_missing_field}")
+                    failure_with_occurence(
+                        format!("invalid type from value expr {is_missing_field}"),
+                        *complete_span,
+                        [("x".to_string(), *complete_span)],
+                    );
                 }
 
                 // TypeExpr::Struct(Struct { fields: types })
@@ -597,7 +601,7 @@ impl TypeExpr {
                             span
                         },
                         vec![(
-                            "this value is not object like and has no fields to access".to_string(),
+                            format!("this value is not object like and has no fields to access {target_obj_type_expr:?}"),
                             span,
                         )],
                     )
