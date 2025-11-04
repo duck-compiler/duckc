@@ -932,6 +932,10 @@ fn instantiate_generics_type_expr(expr: &mut Spanned<TypeExpr>, type_env: &mut T
 
 fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<String, TypeExpr>) {
     match expr {
+        ValueExpr::As(v, t) => {
+            replace_generics_in_value_expr(&mut v.0, set_params);
+            replace_generics_in_type_expr(&mut t.0, set_params);
+        }
         ValueExpr::For {
             ident: _,
             target,
@@ -969,11 +973,7 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
         ValueExpr::BoolNegate(e) | ValueExpr::Return(Some(e)) => {
             replace_generics_in_value_expr(&mut e.0, set_params)
         }
-        ValueExpr::Array(t, exprs) => {
-            if let Some(t) = t {
-                replace_generics_in_type_expr(&mut t.0, set_params);
-            }
-
+        ValueExpr::Array(exprs) => {
             for e in exprs {
                 replace_generics_in_value_expr(&mut e.0, set_params);
             }
@@ -1266,6 +1266,10 @@ fn mangle_generics_name(
 
 fn instantiate_generics_value_expr(expr: &mut Spanned<ValueExpr>, type_env: &mut TypeEnv) {
     match &mut expr.0 {
+        ValueExpr::As(v, t) => {
+            instantiate_generics_value_expr(v.as_mut(), type_env);
+            instantiate_generics_type_expr(t, type_env);
+        }
         ValueExpr::For {
             ident: _,
             target,
@@ -1303,11 +1307,7 @@ fn instantiate_generics_value_expr(expr: &mut Spanned<ValueExpr>, type_env: &mut
         ValueExpr::BoolNegate(e) | ValueExpr::Return(Some(e)) => {
             instantiate_generics_value_expr(e.as_mut(), type_env)
         }
-        ValueExpr::Array(t, exprs) => {
-            if let Some(t) = t {
-                instantiate_generics_type_expr(t, type_env);
-            }
-
+        ValueExpr::Array(exprs) => {
             for e in exprs {
                 instantiate_generics_value_expr(e, type_env);
             }
@@ -1639,6 +1639,10 @@ fn instantiate_generics_value_expr(expr: &mut Spanned<ValueExpr>, type_env: &mut
 
 pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
     match expr {
+        ValueExpr::As(v, t) => {
+            sort_fields_value_expr(&mut v.0);
+            sort_fields_type_expr(&mut t.0);
+        }
         ValueExpr::For {
             ident: _,
             target,
@@ -1657,10 +1661,7 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
                 }
             }
         }
-        ValueExpr::Array(ty, exprs) => {
-            if let Some(ty) = ty {
-                sort_fields_type_expr(&mut ty.0);
-            }
+        ValueExpr::Array(exprs) => {
             for expr in exprs {
                 sort_fields_value_expr(&mut expr.0);
             }
@@ -2339,6 +2340,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     let span = &value_expr.1;
     let value_expr = value_expr.0;
     match value_expr {
+        ValueExpr::As(v, t) => {
+            type_env.insert_type(t.0.clone());
+            typeresolve_value_expr((&mut v.0, v.1), type_env);
+            let _ = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
+        }
         ValueExpr::For {
             ident: (ident, is_const, ty),
             target,
@@ -2439,33 +2445,10 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             typeresolve_value_expr((&mut target.0, target.1), type_env);
             typeresolve_value_expr((&mut idx.0, target.1), type_env);
         }
-        ValueExpr::Array(ty, exprs) => {
-            if let Some(ty) = ty {
-                if let TypeExpr::TypeName(is_glob, ty_name, _) = &ty.0
-                    && let Some((var_type, is_const)) =
-                        type_env.get_identifier_type_and_const(ty_name.clone())
-                    && exprs.len() == 1
-                    && let Some(expr) = exprs.first().cloned()
-                {
-                    *value_expr = ValueExpr::ArrayAccess(
-                        Box::new((
-                            ValueExpr::Variable(
-                                *is_glob,
-                                ty_name.clone(),
-                                Some(var_type),
-                                Some(is_const),
-                            ),
-                            ty.1,
-                        )),
-                        Box::new(expr),
-                    );
-                    typeresolve_value_expr((value_expr, *span), type_env);
-                    return;
-                } else {
-                    resolve_all_aliases_type_expr(&mut ty.0, type_env);
-                }
+        ValueExpr::Array(exprs) => {
+            if exprs.is_empty() {
+                return;
             }
-
             for expr in exprs {
                 typeresolve_value_expr((&mut expr.0, expr.1), type_env);
             }

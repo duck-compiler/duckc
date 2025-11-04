@@ -248,6 +248,10 @@ fn parse_src_file(
 
     fn typename_reset_global_value_expr(type_expr: &mut ValueExpr) {
         match type_expr {
+            ValueExpr::As(v, t) => {
+                typename_reset_global(&mut t.0);
+                typename_reset_global_value_expr(&mut v.0);
+            }
             ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
                 typename_reset_global_value_expr(&mut v.0)
             }
@@ -342,11 +346,7 @@ fn parse_src_file(
             ValueExpr::ExtensionAccess { target_obj, .. } => {
                 typename_reset_global_value_expr(&mut target_obj.0);
             }
-            ValueExpr::Array(ty, exprs) => {
-                if let Some(ty) = ty {
-                    typename_reset_global(&mut ty.0);
-                }
-
+            ValueExpr::Array(exprs) => {
                 for expr in exprs {
                     typename_reset_global_value_expr(&mut expr.0);
                 }

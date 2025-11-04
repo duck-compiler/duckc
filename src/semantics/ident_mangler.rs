@@ -357,6 +357,10 @@ pub fn mangle_value_expr(
     mangle_env: &mut MangleEnv,
 ) {
     match value_expr {
+        ValueExpr::As(v, t) => {
+            mangle_value_expr(&mut v.0, global_prefix, prefix, mangle_env);
+            mangle_type_expression(&mut t.0, prefix, mangle_env);
+        }
         ValueExpr::For {
             ident: _,
             target,
@@ -422,11 +426,7 @@ pub fn mangle_value_expr(
                 }
             }
         }
-        ValueExpr::Array(ty, exprs) => {
-            if let Some(ty) = ty {
-                mangle_type_expression(&mut ty.0, prefix, mangle_env);
-            }
-
+        ValueExpr::Array(exprs) => {
             for expr in exprs {
                 mangle_value_expr(&mut expr.0, global_prefix, prefix, mangle_env);
             }

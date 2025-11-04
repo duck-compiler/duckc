@@ -68,7 +68,7 @@ struct ArrayList<T> = {
     }
 
     mut fn clear() -> ArrayList<T> {
-        self.elems = [:T];
+        self.elems = [] as T[];
         return *self;
     }
 
@@ -144,7 +144,7 @@ struct ArrayList<T> = {
 
 fn empty_array_list<T>() -> ArrayList<T> {
     return ArrayList<T> {
-        elems: [:T],
+        elems: [] as T[],
     };
 }
 

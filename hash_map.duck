@@ -12,8 +12,8 @@ fn array_for<E>(arr: E[], f: fn(e: E, i: Int) -> Bool) {
 
  type KV<K, V> = (K, V);
 
- struct BigInt = {
-     v: Int,
+ struct BoxedInt = {
+     v: go int,
  } impl {
      fn eq(other: &BigInt) -> Bool {
          return self.v == other.v;

@@ -73,6 +73,17 @@ impl TypeExpr {
         let value_expr = &value_expr.0;
 
         return match value_expr {
+            ValueExpr::As(v, t) => {
+                if let ValueExpr::Array(exprs) = &v.0
+                    && exprs.is_empty()
+                {
+                    t.0.clone()
+                } else {
+                    let v_type = TypeExpr::from_value_expr(v.as_ref(), type_env);
+                    check_type_compatability(t, &(v_type, v.1), type_env);
+                    t.0.clone()
+                }
+            }
             ValueExpr::For { .. } => TypeExpr::Tuple(vec![]),
             ValueExpr::Ref(v) => {
                 TypeExpr::Ref((TypeExpr::from_value_expr(v, type_env), v.1).into())
@@ -127,25 +138,12 @@ impl TypeExpr {
 
                 array_type.0.clone()
             }
-            ValueExpr::Array(optional_type_support, value_exprs) => {
-                if optional_type_support.is_none() && value_exprs.is_empty() {
-                    failure_with_occurence(
-                        "Empty array must provide a type like so: [:Int]".to_string(),
-                        *complete_span,
-                        [("Provide a type for this array".to_string(), *complete_span)],
-                    );
-                }
-
-                if let Some(type_support) = optional_type_support {
-                    for value_expr in value_exprs {
-                        let type_expr = &(
-                            TypeExpr::from_value_expr(value_expr, type_env),
-                            value_expr.1,
-                        );
-                        check_type_compatability(type_support, type_expr, type_env);
-                    }
-
-                    return TypeExpr::Array(Box::new(type_support.clone()));
+            ValueExpr::Array(value_exprs) => {
+                if value_exprs.is_empty() {
+                    let t = String::from("empty array must be wrapped in as expression");
+                    failure_with_occurence(t.clone(), *complete_span, [
+                        (t.clone(), *complete_span)
+                    ]);
                 }
 
                 let mut variants = value_exprs

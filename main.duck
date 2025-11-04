@@ -3,6 +3,18 @@ struct S = {
 } impl {
 };
 
+struct User = {
+    id: String,
+    name: String,
+    amount_of_logins: Int,
+    session: {
+        jwt: String,
+        started: Int,
+    },
+};
+
+type Session = User.session;
+
 fn main() {
     while (true) {
         while (true) {

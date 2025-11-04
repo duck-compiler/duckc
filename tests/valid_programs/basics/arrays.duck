@@ -1,4 +1,4 @@
 fn main() {
     [[fn(){std::io::println("hallo");}]][0][0]();
-    [:{x: fn()}[], [{x: fn() { std::io::println("hallo from duck"); }}]][0][0].x();
+    ([[{x: fn() { std::io::println("hallo from duck"); }}]] as {x: fn()}[][])[0][0].x();
 }
