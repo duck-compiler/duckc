@@ -2704,8 +2704,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 };
             }
 
-            let _header = header;
-
             assert!(
                 type_params.is_none(),
                 "type_params should be omitted by now"
@@ -2713,7 +2711,51 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
             params
                 .iter_mut()
-                .for_each(|param| typeresolve_value_expr((&mut param.0, param.1), type_env));
+                .zip(header.params.iter())
+                .for_each(|(param_expr, param_def)| {
+                    let mut current = param_expr.clone();
+                    let mut current_ty = &param_def.0;
+                    loop {
+                        let cloned = current.clone();
+                        match current.0 {
+                            ValueExpr::Array(exprs) if exprs.is_empty() => {
+                                if let TypeExpr::Array(content_type) = current_ty {
+                                    let cloned_span = cloned.1;
+                                    let c = ValueExpr::As(
+                                        Box::new(cloned),
+                                        (
+                                            TypeExpr::Array(Box::new(
+                                                content_type.as_ref().clone(),
+                                            )),
+                                            cloned_span,
+                                        ),
+                                    );
+                                    let mut in_param_expr = &mut param_expr.0;
+                                    while let ValueExpr::Ref(next) | ValueExpr::RefMut(next) = in_param_expr {
+                                        in_param_expr = &mut next.0;
+                                    }
+                                    *in_param_expr = c;
+                                    break;
+                                } else {
+                                    break;
+                                }
+                            }
+                            ValueExpr::Ref(next) | ValueExpr::RefMut(next) => {
+                                if let TypeExpr::Ref(next_type) | TypeExpr::RefMut(next_type) =
+                                    current_ty
+                                {
+                                    current = *next;
+                                    current_ty = &next_type.0
+                                } else {
+                                    break;
+                                }
+                            }
+                            _ => break,
+                        }
+                    }
+
+                    typeresolve_value_expr((&mut param_expr.0, param_expr.1), type_env)
+                });
         }
         ValueExpr::Variable(_, identifier, type_expr_opt, const_opt) => {
             // if let Some(type_expr) = type_expr_opt {

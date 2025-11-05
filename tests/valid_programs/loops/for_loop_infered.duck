@@ -1,0 +1,14 @@
+fn take_array_ref(a: &Int[]) {
+}
+
+fn take_array_mut(a: &mut Int[]) {
+}
+
+fn take_array(a: Int[]) {
+}
+
+fn main() {
+    take_array_ref(&[]);
+    take_array_mut(&mut []);
+    take_array([]);
+}
