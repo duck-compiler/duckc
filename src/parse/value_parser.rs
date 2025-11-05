@@ -287,13 +287,38 @@ where
                         .then(select_ref! { Token::Ident(ident) => ident.to_owned() }),
                 )
                 .then_ignore(just(Token::In))
-                .then(value_expr_parser.clone())
-                .then_ignore(just(Token::ControlChar('{')).rewind())
-                .then(value_expr_parser.clone())
-                .map(|(((is_mut, ident), expr), block)| ValueExpr::For {
-                    ident: (ident, is_mut.is_none(), None),
-                    target: Box::new(expr),
-                    block: Box::new(block),
+                .then(choice((value_expr_parser.clone(),)))
+                // .then_ignore(just(Token::ControlChar('{')).rewind())
+                .then(value_expr_parser.clone().or_not())
+                .map(|(((is_mut, ident), expr), block)| {
+                    if let Some(block) = block {
+                        ValueExpr::For {
+                            ident: (ident, is_mut.is_none(), None),
+                            target: Box::new(expr),
+                            block: Box::new(block),
+                        }
+                    } else {
+                        if let ValueExpr::Struct {
+                            name,
+                            fields,
+                            type_params,
+                        } = &expr.0
+                            && fields.is_empty()
+                            && type_params.as_ref().is_none_or(|v| v.is_empty())
+                        {
+                            ValueExpr::For {
+                                ident: (ident, is_mut.is_none(), None),
+                                target: Box::new((
+                                    ValueExpr::RawVariable(false, vec![name.clone()]),
+                                    expr.1,
+                                )),
+                                block: Box::new((ValueExpr::Block(vec![]), expr.1)),
+                            }
+                        } else {
+                            let msg = "Invalid for target syntax".to_string();
+                            failure_with_occurence(msg.clone(), expr.1, [(msg.clone(), expr.1)]);
+                        }
+                    }
                 })
                 .map_with(|x, e| (x, e.span()));
 
