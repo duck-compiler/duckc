@@ -1,0 +1,14 @@
+fn take_array_ref(a: &&&&&Int[]) {
+    for i in a {
+    }
+}
+
+fn take_array_mut(a: &mut &&& &mut Int[]) {
+    for i in a {
+    }
+}
+
+fn main() {
+    take_array_ref(&&&&&[]);
+    take_array_ref(&mut &&& &mut []);
+}

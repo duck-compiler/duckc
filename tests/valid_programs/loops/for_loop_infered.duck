@@ -1,10 +1,19 @@
 fn take_array_ref(a: &Int[]) {
+    for i in a {
+
+    }
 }
 
 fn take_array_mut(a: &mut Int[]) {
+    for i in a {
+
+    }
 }
 
 fn take_array(a: Int[]) {
+    for i in a {
+
+    }
 }
 
 fn main() {

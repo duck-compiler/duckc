@@ -2354,15 +2354,32 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             let mut target_type = TypeExpr::from_value_expr_resolved_type_name(target, type_env);
 
             let mut current = &mut target_type;
+            let mut ref_type = 0;
             loop {
                 match current {
-                    TypeExpr::Ref(t) | TypeExpr::RefMut(t) => current = &mut t.0,
+                    TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
+                        ref_type = if matches!(t.0, TypeExpr::Ref(..)) {
+                            1
+                        } else {
+                            2
+                        };
+                        current = &mut t.0;
+                    }
                     other => {
                         if let TypeExpr::Array(content_type) = other {
-                            *other = content_type.0.clone();
+                            if ref_type > 0 {
+                                target_type = if ref_type == 1 {
+                                    TypeExpr::Ref(content_type.clone())
+                                } else {
+                                    TypeExpr::RefMut(content_type.clone())
+                                };
+                            } else {
+                                *other = content_type.0.clone();
+                            }
                             break;
                         } else {
-                            panic!("can only use range on array");
+                            let msg = "Can only use for on array".to_string();
+                            failure_with_occurence(msg.clone(), target.1, [(msg.clone(), target.1)])
                         }
                     }
                 }
@@ -2731,7 +2748,9 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                                         ),
                                     );
                                     let mut in_param_expr = &mut param_expr.0;
-                                    while let ValueExpr::Ref(next) | ValueExpr::RefMut(next) = in_param_expr {
+                                    while let ValueExpr::Ref(next) | ValueExpr::RefMut(next) =
+                                        in_param_expr
+                                    {
                                         in_param_expr = &mut next.0;
                                     }
                                     *in_param_expr = c;

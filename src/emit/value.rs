@@ -751,6 +751,7 @@ impl ValueExpr {
                                         s.insert(0, '(');
                                         s.push(')');
                                         s.push_str("[DUCK_FOR_IDX]");
+                                        let star_count = 1;
                                         for _ in 0..star_count {
                                             s.insert(0, '&');
                                         }

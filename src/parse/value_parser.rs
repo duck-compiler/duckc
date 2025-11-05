@@ -266,13 +266,7 @@ where
                             .then(return_type_parser.or_not())
                             .then(value_expr_parser.clone()),
                     )
-                    .map(|(is_mut, ((params, return_type), mut value_expr))| {
-                        value_expr = match value_expr {
-                            (ValueExpr::Duck(x), loc) if x.is_empty() => {
-                                (ValueExpr::Block(vec![]), loc)
-                            }
-                            _ => value_expr,
-                        };
+                    .map(|(is_mut, ((params, return_type), value_expr))| {
                         ValueExpr::Lambda(
                             LambdaFunctionExpr {
                                 is_mut: is_mut.is_some(),
@@ -452,6 +446,7 @@ where
                 .allow_trailing()
                 .collect::<Vec<_>>()
                 .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
+                .filter(|x| !x.is_empty())
                 .map(|mut x| {
                     x.sort_by_key(|(name, _)| name.clone());
                     ValueExpr::Duck(x)
@@ -1062,8 +1057,8 @@ fn empty_tuple() -> ValueExpr {
 }
 
 #[allow(dead_code)]
-fn empty_duck() -> ValueExpr {
-    ValueExpr::Duck(Vec::new())
+fn empty_block() -> ValueExpr {
+    ValueExpr::Block(Vec::new())
 }
 
 // track caller so that we find out where this method is called in case of error
@@ -1319,7 +1314,7 @@ mod tests {
         make_input,
         type_parser::{Duck, TypeExpr},
         value_parser::{
-            Assignment, Declaration, MatchArm, ValHtmlStringContents, empty_duck, empty_range,
+            Assignment, Declaration, MatchArm, ValHtmlStringContents, empty_block, empty_range,
             empty_tuple, type_expr_into_empty_range, value_expr_into_empty_range,
             value_expr_parser,
         },
@@ -1455,6 +1450,7 @@ mod tests {
                 "[1,]",
                 ValueExpr::Array(vec![ValueExpr::Int(1).into_empty_span()]),
             ),
+            ("{}", ValueExpr::Block(vec![])),
             (
                 "[1,]",
                 ValueExpr::Array(vec![ValueExpr::Int(1).into_empty_span()]),
@@ -1672,7 +1668,7 @@ mod tests {
                     type_params: None,
                 },
             ),
-            ("{}", empty_duck()),
+            ("{}", empty_block()),
             (
                 "to_upper()",
                 ValueExpr::FunctionCall {
@@ -1978,11 +1974,11 @@ mod tests {
                         .into(),
                 ),
             ),
-            ("{}", empty_duck()),
+            ("{}", empty_block()),
             (
                 "{}.x",
                 ValueExpr::FieldAccess {
-                    target_obj: empty_duck().into_empty_span().into(),
+                    target_obj: empty_block().into_empty_span().into(),
                     field_name: "x".into(),
                 },
             ),
@@ -1990,7 +1986,7 @@ mod tests {
                 "!{}.x",
                 ValueExpr::BoolNegate(
                     ValueExpr::FieldAccess {
-                        target_obj: empty_duck().into_empty_span().into(),
+                        target_obj: empty_block().into_empty_span().into(),
                         field_name: "x".into(),
                     }
                     .into_empty_span()
@@ -2024,7 +2020,7 @@ mod tests {
                     ValueExpr::Int(3).into_empty_span(),
                     ValueExpr::FunctionCall {
                         target: var("x"),
-                        params: vec![empty_duck().into_empty_span()],
+                        params: vec![empty_block().into_empty_span()],
                         type_params: None,
                         is_extension_call: false,
                     }
@@ -2267,7 +2263,7 @@ mod tests {
                 "if (true) {{}} else {{x: 1}}",
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into_empty_span().into(),
-                    then: ValueExpr::Duck(vec![]).into_empty_span_and_block().into(),
+                    then: ValueExpr::Block(vec![]).into_empty_span_and_block().into(),
                     r#else: Some(
                         ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(1).into_empty_span())])
                             .into_empty_span_and_block()
@@ -3145,7 +3141,7 @@ mod tests {
                         })
                         .into_empty_span(),
                     ),
-                    initializer: ValueExpr::Duck(vec![]).into_empty_span(),
+                    initializer: ValueExpr::Block(vec![]).into_empty_span(),
                     is_const: false,
                 },
             ),
@@ -3154,7 +3150,7 @@ mod tests {
                 Declaration {
                     name: "z".to_string(),
                     type_expr: Some(TypeExpr::Any.into_empty_span()),
-                    initializer: empty_duck().into_empty_span(),
+                    initializer: empty_block().into_empty_span(),
                     is_const: false,
                 },
             ),
