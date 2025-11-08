@@ -1,7 +1,7 @@
 {
     "id": "7fe1ded730721d8e4c33c68e53350800",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 1290,
+    "line_number": 1301,
     "title": "check against identity of struct in typechecking",
     "tag": "todo",
     "module_tag": "semantics",
