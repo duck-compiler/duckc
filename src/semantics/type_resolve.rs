@@ -9,7 +9,7 @@ use colored::Colorize;
 
 use crate::{
     parse::{
-        SS, Spanned, SpannedMutRef,
+        Field, SS, Spanned, SpannedMutRef,
         duckx_component_parser::DuckxComponent,
         extensions_def_parser::ExtensionsDef,
         failure_with_occurence,
@@ -2339,6 +2339,58 @@ pub fn translate_interception_to_duck(interception_type: &TypeExpr) -> TypeExpr 
     }
 }
 
+fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: &TypeEnv) {
+    match &mut v.0 {
+        ValueExpr::Ref(target) | ValueExpr::RefMut(target) => {
+            if let TypeExpr::Ref(next_ty) | TypeExpr::RefMut(next_ty) = &req.0 {
+                infer_against(target, next_ty, type_env);
+            }
+        }
+        ValueExpr::Array(..) => {
+            if let TypeExpr::Array(..) = &req.0 {
+                let cloned = v.clone();
+                v.0 = ValueExpr::As(Box::new(cloned), req.clone());
+            }
+        }
+        ValueExpr::Tuple(exprs) => {
+            if let TypeExpr::Tuple(fields) = &req.0 {
+                for (e, ty) in exprs.iter_mut().zip(fields.iter()) {
+                    infer_against(e, ty, type_env);
+                }
+            }
+        }
+        ValueExpr::Duck(exprs) => {
+            if let TypeExpr::Duck(def_fields) = &req.0 {
+                for (
+                    (_, e),
+                    Field {
+                        name: _,
+                        type_expr: ty,
+                    },
+                ) in exprs.iter_mut().zip(def_fields.fields.iter())
+                {
+                    infer_against(e, ty, type_env);
+                }
+            }
+        }
+        ValueExpr::Block(exprs) => exprs
+            .last_mut()
+            .iter_mut()
+            .for_each(|v| infer_against(v, req, type_env)),
+        ValueExpr::If {
+            condition: _,
+            then,
+            r#else,
+        } => {
+            infer_against(then, req, type_env);
+            if let Some(r#else) = r#else {
+                infer_against(r#else, req, type_env);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
     let span = &value_expr.1;
     let value_expr = value_expr.0;
@@ -2427,32 +2479,41 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         ValueExpr::VarDecl(declaration) => {
             let declaration = &mut declaration.0;
 
-            typeresolve_value_expr(
-                (&mut declaration.initializer.0, declaration.initializer.1),
-                type_env,
-            );
-
             // Resolve the type expression on the declaration
             if let Some(type_expr) = &mut declaration.type_expr {
                 if let TypeExpr::And(_) = &type_expr.0 {
                     type_expr.0 = translate_interception_to_duck(&type_expr.0);
                 }
+
                 resolve_all_aliases_type_expr(&mut type_expr.0, type_env);
-                type_env.insert_identifier_type(
-                    declaration.name.clone(),
-                    type_expr.0.clone(),
-                    declaration.is_const,
+                infer_against(&mut declaration.initializer, type_expr, type_env);
+
+                typeresolve_value_expr(
+                    (&mut declaration.initializer.0, declaration.initializer.1),
+                    type_env,
                 );
             } else {
+                typeresolve_value_expr(
+                    (&mut declaration.initializer.0, declaration.initializer.1),
+                    type_env,
+                );
+
                 let type_expr = TypeExpr::from_value_expr(&declaration.initializer, type_env);
                 declaration.type_expr = Some((type_expr.clone(), declaration.initializer.1));
-                type_env.insert_identifier_type(
-                    declaration.name.clone(),
-                    type_expr,
-                    declaration.is_const,
-                );
             }
+
+            type_env.insert_identifier_type(
+                declaration.name.clone(),
+                declaration
+                    .type_expr
+                    .as_ref()
+                    .cloned()
+                    .expect("should be unreachable")
+                    .0,
+                declaration.is_const,
+            );
         }
+
         ValueExpr::FormattedString(contents) => {
             for c in contents {
                 match c {
@@ -2740,49 +2801,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 .iter_mut()
                 .zip(header.params.iter())
                 .for_each(|(param_expr, param_def)| {
-                    let mut current = param_expr.clone();
-                    let mut current_ty = &param_def.0;
-                    loop {
-                        let cloned = current.clone();
-                        match current.0 {
-                            ValueExpr::Array(exprs) if exprs.is_empty() => {
-                                if let TypeExpr::Array(content_type) = current_ty {
-                                    let cloned_span = cloned.1;
-                                    let c = ValueExpr::As(
-                                        Box::new(cloned),
-                                        (
-                                            TypeExpr::Array(Box::new(
-                                                content_type.as_ref().clone(),
-                                            )),
-                                            cloned_span,
-                                        ),
-                                    );
-                                    let mut in_param_expr = &mut param_expr.0;
-                                    while let ValueExpr::Ref(next) | ValueExpr::RefMut(next) =
-                                        in_param_expr
-                                    {
-                                        in_param_expr = &mut next.0;
-                                    }
-                                    *in_param_expr = c;
-                                    break;
-                                } else {
-                                    break;
-                                }
-                            }
-                            ValueExpr::Ref(next) | ValueExpr::RefMut(next) => {
-                                if let TypeExpr::Ref(next_type) | TypeExpr::RefMut(next_type) =
-                                    current_ty
-                                {
-                                    current = *next;
-                                    current_ty = &next_type.0
-                                } else {
-                                    break;
-                                }
-                            }
-                            _ => break,
-                        }
-                    }
-
+                    infer_against(param_expr, param_def, type_env);
                     typeresolve_value_expr((&mut param_expr.0, param_expr.1), type_env)
                 });
         }
@@ -2894,12 +2913,12 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             //     );
             // }
 
-            fields
-                .iter_mut()
-                .zip(def.fields.iter())
-                .for_each(|((_field_name, value_expr), _)| {
+            fields.iter_mut().zip(def.fields.iter()).for_each(
+                |((_field_name, value_expr), def_field)| {
+                    infer_against(value_expr, &def_field.type_expr, type_env);
                     typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
-                });
+                },
+            );
 
             let ty = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
             type_env.insert_type(ty);

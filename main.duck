@@ -1,32 +1,5 @@
-struct S = {
-    f: Int[],
-} impl {
-};
-
-struct User = {
-    id: String,
-    name: String,
-    amount_of_logins: Int,
-    session: {
-        jwt: String,
-        started: Int,
-    },
-};
-
-type Session = User.session;
+fn take_s() {}
 
 fn main() {
-    while (true) {
-        while (true) {
-        std::io::println("loop");
-        const a = "a";
-        match a {
-            String => break,
-        }
-        }
-    }
-
-    for i in &Int[2] {
-        std::io::println(std::string::from_int(*i));
-    }
+    take_s("a");
 }

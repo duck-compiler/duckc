@@ -4,6 +4,10 @@ struct b = {} impl {
     }
 };
 
+struct ContainsArray = {
+    a: Int[],
+};
+
 fn take_array_ref(a: &Int[]) {
     for i in b {}.a() {
         std::io::println(std::string::from_int(i));
@@ -17,6 +21,18 @@ fn take_array_mut(a: &mut Int[]) {
     }
 }
 
+fn take_array_in_tuple(t: (&Int[],)) {
+    for i in t.0 {
+
+    }
+}
+
+fn take_array_in_duck(t: { x: &Int[] }) {
+    for i in t.x {
+
+    }
+}
+
 fn take_array(a: Int[]) {
     for i in a {
 
@@ -24,7 +40,12 @@ fn take_array(a: Int[]) {
 }
 
 fn main() {
+    const x: Int[] = [];
+    const x2 = ContainsArray { a: [] };
+
     take_array_ref(&[]);
     take_array_mut(&mut []);
     take_array([]);
+    take_array_in_tuple((&[],));
+    take_array_in_duck(if (true) { { x: &[], } } else { { x: &mut [], } });
 }
