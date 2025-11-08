@@ -1,0 +1,11 @@
+struct NeedsClose = {} impl { fn close() { std::io::println("i am being closed. (defer 0)"); } };
+
+fn main() {
+    const needs_close = NeedsClose {};
+
+    defer needs_close.close();
+    defer (fn() { std::io::println("defer 1"); })();
+    defer std::io::println("defer 2");
+
+    std::io::println("not defered");
+}

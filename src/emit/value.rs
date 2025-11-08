@@ -32,6 +32,7 @@ type ReturnType = Option<String>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrInstruction {
+    Defer(Box<IrInstruction>),
     ForRangeElem {
         ident: String,
         range_target: IrValue,
@@ -693,8 +694,21 @@ impl ValueExpr {
         span: SS,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
-            ValueExpr::As(v, t) =>
-            {
+            ValueExpr::Defer(e) => {
+                let (mut inner_emit, _) = e.0.emit(type_env, env, span);
+                let last = inner_emit.last_mut().expect("nothing emitted?");
+
+                match last {
+                    IrInstruction::FunCall(res, ..) => *res = None,
+                    IrInstruction::InlineGo(..) => {}
+                    _ => panic!("invalid for defer {last:?}"),
+                }
+
+                let popped = inner_emit.pop().unwrap();
+                inner_emit.push(IrInstruction::Defer(Box::new(popped)));
+                (inner_emit, None)
+            }
+            ValueExpr::As(v, t) => {
                 if let ValueExpr::Array(exprs) = &v.0 {
                     emit_array(&exprs, &t.0, type_env, env, span)
                 } else {

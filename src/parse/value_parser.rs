@@ -54,6 +54,7 @@ pub struct Assignment {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueExpr {
+    Defer(Box<Spanned<ValueExpr>>),
     For {
         ident: (String, bool, Option<TypeExpr>),
         target: Box<Spanned<ValueExpr>>,
@@ -157,6 +158,7 @@ impl ValueExpr {
 
     pub fn needs_semicolon(&self) -> bool {
         match self {
+            ValueExpr::Defer(..) => true,
             ValueExpr::As(..) => true,
             ValueExpr::For { .. } => false,
             ValueExpr::Deref(..) | ValueExpr::Ref(..) | ValueExpr::RefMut(..) => true,
@@ -287,9 +289,13 @@ where
                         .then(select_ref! { Token::Ident(ident) => ident.to_owned() }),
                 )
                 .then_ignore(just(Token::In))
-                .then(choice((value_expr_parser.clone(),)))
-                // .then_ignore(just(Token::ControlChar('{')).rewind())
-                .then(value_expr_parser.clone().or_not())
+                .then(value_expr_parser.clone())
+                .then(
+                    just(Token::ControlChar('{'))
+                        .rewind()
+                        .ignore_then(value_expr_parser.clone())
+                        .or_not(),
+                )
                 .map(|(((is_mut, ident), expr), block)| {
                     if let Some(block) = block {
                         ValueExpr::For {
@@ -1059,6 +1065,11 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
+            let defer = just(Token::Defer)
+                .ignore_then(value_expr_parser.clone())
+                .map(|b| ValueExpr::Defer(Box::new(b)))
+                .map_with(|x, e| (x, e.span()));
+
             let casted = choice((assignment, or, declaration, pen, atom))
                 .then(
                     just(Token::As)
@@ -1071,7 +1082,7 @@ where
                 })
                 .map_with(|x, e| (x, e.span()));
 
-            choice((inline_go, casted)).labelled("expression").boxed()
+            choice((inline_go, casted, defer)).labelled("expression").boxed()
         },
     )
 }

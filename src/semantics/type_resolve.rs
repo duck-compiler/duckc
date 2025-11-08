@@ -932,6 +932,7 @@ fn instantiate_generics_type_expr(expr: &mut Spanned<TypeExpr>, type_env: &mut T
 
 fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<String, TypeExpr>) {
     match expr {
+        ValueExpr::Defer(d) => replace_generics_in_value_expr(&mut d.0, set_params),
         ValueExpr::As(v, t) => {
             replace_generics_in_value_expr(&mut v.0, set_params);
             replace_generics_in_type_expr(&mut t.0, set_params);
@@ -1266,6 +1267,7 @@ fn mangle_generics_name(
 
 fn instantiate_generics_value_expr(expr: &mut Spanned<ValueExpr>, type_env: &mut TypeEnv) {
     match &mut expr.0 {
+        ValueExpr::Defer(d) => instantiate_generics_value_expr(d.as_mut(), type_env),
         ValueExpr::As(v, t) => {
             instantiate_generics_value_expr(v.as_mut(), type_env);
             instantiate_generics_type_expr(t, type_env);
@@ -1639,6 +1641,7 @@ fn instantiate_generics_value_expr(expr: &mut Spanned<ValueExpr>, type_env: &mut
 
 pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
     match expr {
+        ValueExpr::Defer(d) => sort_fields_value_expr(&mut d.0),
         ValueExpr::As(v, t) => {
             sort_fields_value_expr(&mut v.0);
             sort_fields_type_expr(&mut t.0);
@@ -2340,6 +2343,13 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     let span = &value_expr.1;
     let value_expr = value_expr.0;
     match value_expr {
+        ValueExpr::Defer(inner) => {
+            typeresolve_value_expr((&mut inner.0, inner.1), type_env);
+            if !matches!(inner.0, ValueExpr::FunctionCall { .. }) {
+                let msg = "Can only defer a function call".to_string();
+                failure_with_occurence(msg.clone(), *span, [(msg.clone(), inner.1)]);
+            }
+        }
         ValueExpr::As(v, t) => {
             type_env.insert_type(t.0.clone());
             typeresolve_value_expr((&mut v.0, v.1), type_env);

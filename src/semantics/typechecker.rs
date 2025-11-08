@@ -73,6 +73,7 @@ impl TypeExpr {
         let value_expr = &value_expr.0;
 
         return match value_expr {
+            ValueExpr::Defer(..) => TypeExpr::Tuple(vec![]),
             ValueExpr::As(v, t) => {
                 if let ValueExpr::Array(exprs) = &v.0
                     && exprs.is_empty()

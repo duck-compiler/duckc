@@ -1,7 +1,14 @@
-fn take_array_ref(a: &Int[]) {
-    for i in a {
-
+struct b = {} impl {
+    fn a() -> Int[] {
+       return [1, 2, 30];
     }
+};
+
+fn take_array_ref(a: &Int[]) {
+    for i in b {}.a() {
+        std::io::println(std::string::from_int(i));
+    }
+    std::io::println("fisch");
 }
 
 fn take_array_mut(a: &mut Int[]) {
