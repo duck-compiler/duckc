@@ -654,7 +654,10 @@ impl ValueExpr {
 
                 let mut rparams = Vec::new();
                 for p in params {
-                    rparams.push((p.0.clone(), p.1.0.as_go_type_annotation(type_env)));
+                    rparams.push((
+                        p.0.clone(),
+                        p.1.as_ref().unwrap().0.as_go_type_annotation(type_env),
+                    ));
                 }
 
                 let return_type = return_type

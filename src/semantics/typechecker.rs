@@ -142,9 +142,11 @@ impl TypeExpr {
             ValueExpr::Array(value_exprs) => {
                 if value_exprs.is_empty() {
                     let t = String::from("empty array must be wrapped in as expression");
-                    failure_with_occurence(t.clone(), *complete_span, [
-                        (t.clone(), *complete_span)
-                    ]);
+                    failure_with_occurence(
+                        t.clone(),
+                        *complete_span,
+                        [(t.clone(), *complete_span)],
+                    );
                 }
 
                 let mut variants = value_exprs
@@ -192,7 +194,9 @@ impl TypeExpr {
                 lambda_expr
                     .params
                     .iter()
-                    .map(|(name, type_expr)| (Some(name.clone()), type_expr.clone()))
+                    .map(|(name, type_expr)| {
+                        (Some(name.clone()), type_expr.as_ref().cloned().unwrap())
+                    })
                     .collect(),
                 lambda_expr.return_type.clone().map(Box::new),
                 lambda_expr.is_mut,

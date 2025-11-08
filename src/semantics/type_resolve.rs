@@ -1037,8 +1037,10 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &HashMap<Str
             }
         }
         ValueExpr::Lambda(def) => {
-            for p in &mut def.params {
-                replace_generics_in_type_expr(&mut p.1.0, set_params);
+            for (_, p) in &mut def.params {
+                if let Some(p) = p.as_mut() {
+                    replace_generics_in_type_expr(&mut p.0, set_params);
+                }
             }
             if let Some(return_type) = def.return_type.as_mut() {
                 replace_generics_in_type_expr(&mut return_type.0, set_params);
@@ -1451,8 +1453,10 @@ fn instantiate_generics_value_expr(expr: &mut Spanned<ValueExpr>, type_env: &mut
             }
         }
         ValueExpr::Lambda(def) => {
-            for p in &mut def.params {
-                instantiate_generics_type_expr(&mut p.1, type_env);
+            for (_, p) in &mut def.params {
+                if let Some(p) = p.as_mut() {
+                    instantiate_generics_type_expr(p, type_env);
+                }
             }
             if let Some(return_type) = def.return_type.as_mut() {
                 instantiate_generics_type_expr(return_type, type_env);
@@ -1693,7 +1697,9 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
                 sort_fields_type_expr(&mut return_type.0);
             }
             for (_, p) in params {
-                sort_fields_type_expr(&mut p.0);
+                if let Some(p) = p.as_mut() {
+                    sort_fields_type_expr(&mut p.0);
+                }
             }
             sort_fields_value_expr(&mut value_expr.0);
         }
@@ -2377,6 +2383,24 @@ fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: 
             .last_mut()
             .iter_mut()
             .for_each(|v| infer_against(v, req, type_env)),
+        ValueExpr::Lambda(expr) => {
+            if let TypeExpr::Fun(params, ret_type, _) = &req.0 {
+                for (expr_type, def_type) in expr
+                    .params
+                    .iter_mut()
+                    .map(|(_, ty)| ty)
+                    .zip(params.iter().map(|(_, x)| x))
+                {
+                    if expr_type.is_none() {
+                        *expr_type = Some(def_type.clone());
+                    }
+                }
+
+                if expr.return_type.is_none() {
+                    expr.return_type = ret_type.as_deref().cloned();
+                }
+            }
+        }
         ValueExpr::If {
             condition: _,
             then,
@@ -2572,6 +2596,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             }
 
             for (name, ty) in params {
+                let ty = ty.as_mut().unwrap();
                 type_env.insert_identifier_type(name.to_owned(), ty.0.clone(), false);
                 resolve_all_aliases_type_expr(&mut ty.0, type_env);
             }

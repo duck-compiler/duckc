@@ -95,7 +95,7 @@ impl Default for FunctionDefintion {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LambdaFunctionExpr {
     pub is_mut: bool,
-    pub params: Vec<Param>,
+    pub params: Vec<(String, Option<Spanned<TypeExpr>>)>,
     pub return_type: Option<Spanned<TypeExpr>>,
     pub value_expr: Spanned<ValueExpr>,
 }

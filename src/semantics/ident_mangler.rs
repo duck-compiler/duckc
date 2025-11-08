@@ -523,7 +523,9 @@ pub fn mangle_value_expr(
                 value_expr,
             } = &mut **lambda_expr;
             for (_, param_type) in params {
-                mangle_type_expression(&mut param_type.0, prefix, mangle_env);
+                if let Some(param_type) = param_type {
+                    mangle_type_expression(&mut param_type.0, prefix, mangle_env);
+                }
             }
             if let Some(return_type) = return_type {
                 mangle_type_expression(&mut return_type.0, prefix, mangle_env);

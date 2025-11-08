@@ -1,6 +1,6 @@
 use crate::parse::{
     Context, SS, Spanned, failure_with_occurence,
-    function_parser::{LambdaFunctionExpr, Param},
+    function_parser::LambdaFunctionExpr,
     lexer::{FmtStringContents, HtmlStringContents},
     source_file_parser::SourceFile,
     type_parser::type_expression_parser,
@@ -240,19 +240,17 @@ where
                 .map_with(|x, e| (x, e.span()));
 
             let lambda_parser = {
-                let param_parser =
+                let params_parser =
                     select_ref! { Token::Ident(identifier) => identifier.to_string() }
-                        .then_ignore(just(Token::ControlChar(':')))
-                        .then(type_expression_parser())
-                        .map(|(identifier, type_expr)| (identifier, type_expr) as Param)
+                        .then(
+                            (just(Token::ControlChar(':')))
+                                .ignore_then(type_expression_parser())
+                                .or_not(),
+                        )
+                        .separated_by(just(Token::ControlChar(',')))
+                        .allow_trailing()
+                        .collect::<Vec<_>>()
                         .boxed();
-
-                let params_parser = param_parser
-                    .separated_by(just(Token::ControlChar(',')))
-                    .allow_trailing()
-                    .collect::<Vec<Param>>()
-                    .or_not()
-                    .boxed();
 
                 let return_type_parser = just(Token::ThinArrow)
                     .ignore_then(type_expression_parser())
@@ -272,7 +270,7 @@ where
                         ValueExpr::Lambda(
                             LambdaFunctionExpr {
                                 is_mut: is_mut.is_some(),
-                                params: params.unwrap_or_default(),
+                                params,
                                 return_type,
                                 value_expr,
                             }
@@ -1082,7 +1080,9 @@ where
                 })
                 .map_with(|x, e| (x, e.span()));
 
-            choice((inline_go, casted, defer)).labelled("expression").boxed()
+            choice((inline_go, casted, defer))
+                .labelled("expression")
+                .boxed()
         },
     )
 }
@@ -1266,7 +1266,9 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
             value_expr_into_empty_range(&mut b.value_expr);
             b.return_type.as_mut().map(type_expr_into_empty_range);
             for (_, p) in &mut b.params {
-                type_expr_into_empty_range(p);
+                if let Some(p) = p.as_mut() {
+                    type_expr_into_empty_range(p);
+                }
             }
         }
         ValueExpr::Return(Some(v)) => value_expr_into_empty_range(v),
@@ -2754,7 +2756,7 @@ mod tests {
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
                         is_mut: false,
-                        params: vec![("x".into(), TypeExpr::String(None).into_empty_span())],
+                        params: vec![("x".into(), Some(TypeExpr::String(None).into_empty_span()))],
                         return_type: Some(TypeExpr::Int(None).into_empty_span()),
                         value_expr: ValueExpr::Int(1).into_empty_span(),
                     }

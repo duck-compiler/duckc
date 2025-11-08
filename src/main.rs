@@ -316,7 +316,9 @@ fn parse_src_file(
                     value_expr,
                 } = &mut **l;
                 for (_, p) in params {
-                    typename_reset_global(&mut p.0);
+                    if let Some(p) = p.as_mut() {
+                        typename_reset_global(&mut p.0);
+                    }
                 }
 
                 if let Some(return_type) = return_type {

@@ -39,10 +39,17 @@ fn take_array(a: Int[]) {
     }
 }
 
+fn takes_lambda(f: fn(x: Int, y: String) -> String) -> String {
+    std::io::println(f(10, "yooo"));
+}
+
 fn main() {
     const x: Int[] = [];
     const x2 = ContainsArray { a: [] };
 
+    takes_lambda(fn(x, y) {
+        f"y = {y}, x = {std::string::from_int(x)}"
+    });
     take_array_ref(&[]);
     take_array_mut(&mut []);
     take_array([]);

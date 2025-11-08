@@ -652,7 +652,9 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
                 value_expr,
             } = &mut **lambda_expr;
             for (_, param_type) in params {
-                append_global_prefix_type_expr(&mut param_type.0, mangle_env);
+                if let Some(param_type) = param_type.as_mut() {
+                    append_global_prefix_type_expr(&mut param_type.0, mangle_env);
+                }
             }
             if let Some(return_type) = return_type {
                 append_global_prefix_type_expr(&mut return_type.0, mangle_env);
