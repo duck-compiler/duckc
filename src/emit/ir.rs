@@ -4,6 +4,14 @@ impl IrInstruction {
     fn emit_as_go(&self) -> String {
         #![allow(clippy::format_in_format_args)]
         match self {
+            IrInstruction::Defer(d) => {
+                let fun_call @ (IrInstruction::FunCall(None, ..) | IrInstruction::InlineGo(..)) =
+                    d.as_ref()
+                else {
+                    panic!("can only defer a func call without result {d:?}")
+                };
+                format!("defer {}", fun_call.emit_as_go())
+            }
             IrInstruction::ForRangeElem {
                 ident: _,
                 range_target,
@@ -250,7 +258,10 @@ impl IrInstruction {
                 )
             }
             IrInstruction::Loop(v, label) => {
-                format!("if false {{goto {label}}}\n{label}:\nfor {{\n{}\n}}", join_ir(v))
+                format!(
+                    "if false {{goto {label}}}\n{label}:\nfor {{\n{}\n}}",
+                    join_ir(v)
+                )
             }
             IrInstruction::InlineGo(t) => t.to_string(),
             IrInstruction::GoImports(imports) => {

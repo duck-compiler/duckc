@@ -32,6 +32,7 @@ type ReturnType = Option<String>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrInstruction {
+    Defer(Box<IrInstruction>),
     ForRangeElem {
         ident: String,
         range_target: IrValue,
@@ -600,6 +601,41 @@ fn walk_access(
     (i, r.map(|v| v.join("")))
 }
 
+fn emit_array(
+    exprs: &Vec<Spanned<ValueExpr>>,
+    arr_type: &TypeExpr,
+    type_env: &mut TypeEnv,
+    env: &mut ToIr,
+    span: SS,
+) -> (Vec<IrInstruction>, Option<IrValue>) {
+    let mut total_instr = Vec::new();
+    let mut array_contents = Vec::new();
+
+    for expr in exprs {
+        let (expr_instr, expr_res) = expr.0.direct_or_with_instr(type_env, env, span);
+        total_instr.extend(expr_instr);
+        if let Some(expr_res) = expr_res {
+            array_contents.push(expr_res);
+        } else {
+            return (total_instr, None);
+        }
+    }
+
+    let res_var_name = env.new_var();
+    total_instr.extend([
+        IrInstruction::VarDecl(
+            res_var_name.clone(),
+            arr_type.as_go_type_annotation(type_env),
+        ),
+        IrInstruction::VarAssignment(
+            res_var_name.clone(),
+            IrValue::Array(arr_type.as_go_type_annotation(type_env), array_contents),
+        ),
+    ]);
+
+    (total_instr, Some(IrValue::Var(res_var_name)))
+}
+
 impl ValueExpr {
     pub fn direct_emit(&self, type_env: &mut TypeEnv, env: &mut ToIr, span: SS) -> Option<IrValue> {
         match self {
@@ -658,6 +694,27 @@ impl ValueExpr {
         span: SS,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
+            ValueExpr::Defer(e) => {
+                let (mut inner_emit, _) = e.0.emit(type_env, env, span);
+                let last = inner_emit.last_mut().expect("nothing emitted?");
+
+                match last {
+                    IrInstruction::FunCall(res, ..) => *res = None,
+                    IrInstruction::InlineGo(..) => {}
+                    _ => panic!("invalid for defer {last:?}"),
+                }
+
+                let popped = inner_emit.pop().unwrap();
+                inner_emit.push(IrInstruction::Defer(Box::new(popped)));
+                (inner_emit, None)
+            }
+            ValueExpr::As(v, t) => {
+                if let ValueExpr::Array(exprs) = &v.0 {
+                    emit_array(&exprs, &t.0, type_env, env, span)
+                } else {
+                    v.0.direct_or_with_instr(type_env, env, v.1)
+                }
+            }
             ValueExpr::For {
                 ident: (ident, _, ident_type),
                 target,
@@ -708,6 +765,7 @@ impl ValueExpr {
                                         s.insert(0, '(');
                                         s.push(')');
                                         s.push_str("[DUCK_FOR_IDX]");
+                                        let star_count = star_count.min(1);
                                         for _ in 0..star_count {
                                             s.insert(0, '&');
                                         }
@@ -1672,35 +1730,9 @@ impl ValueExpr {
 
                 (res_instr, Some(IrValue::Var(res_var_name)))
             }
-            ValueExpr::Array(_, exprs) => {
-                let mut total_instr = Vec::new();
-                let mut array_contents = Vec::new();
-
-                for expr in exprs {
-                    let (expr_instr, expr_res) = expr.0.direct_or_with_instr(type_env, env, span);
-                    total_instr.extend(expr_instr);
-                    if let Some(expr_res) = expr_res {
-                        array_contents.push(expr_res);
-                    } else {
-                        return (total_instr, None);
-                    }
-                }
-
+            ValueExpr::Array(exprs) => {
                 let arr_type = TypeExpr::from_value_expr(&(self.clone(), span), type_env);
-
-                let res_var_name = env.new_var();
-                total_instr.extend([
-                    IrInstruction::VarDecl(
-                        res_var_name.clone(),
-                        arr_type.as_go_type_annotation(type_env),
-                    ),
-                    IrInstruction::VarAssignment(
-                        res_var_name.clone(),
-                        IrValue::Array(arr_type.as_go_type_annotation(type_env), array_contents),
-                    ),
-                ]);
-
-                (total_instr, Some(IrValue::Var(res_var_name)))
+                emit_array(exprs, &arr_type, type_env, env, span)
             }
             ValueExpr::VarDecl(b) => {
                 let Declaration {
@@ -1799,7 +1831,14 @@ impl ValueExpr {
 
                 i.push(IrInstruction::If(cond_res.unwrap(), then_instr, r#else));
 
-                (i, Some(as_var(res_var_name)))
+                (
+                    i,
+                    if res_type.is_unit() {
+                        None
+                    } else {
+                        Some(as_var(res_var_name))
+                    },
+                )
             }
             ValueExpr::VarAssign(b) => {
                 let assign = &b.0;
@@ -2626,7 +2665,7 @@ mod tests {
                 ],
             ),
             (
-                "{}[]",
+                "[] as {}[]",
                 vec![
                     IrInstruction::VarDecl("var_0".into(), "[]interface{}".into()),
                     IrInstruction::VarAssignment(
@@ -2636,7 +2675,7 @@ mod tests {
                 ],
             ),
             (
-                "Int[][Int[]]",
+                "[[] as Int[]]",
                 vec![
                     IrInstruction::VarDecl("var_0".into(), "[]int".into()),
                     IrInstruction::VarAssignment(

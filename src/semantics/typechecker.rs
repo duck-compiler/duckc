@@ -73,6 +73,18 @@ impl TypeExpr {
         let value_expr = &value_expr.0;
 
         return match value_expr {
+            ValueExpr::Defer(..) => TypeExpr::Tuple(vec![]),
+            ValueExpr::As(v, t) => {
+                if let ValueExpr::Array(exprs) = &v.0
+                    && exprs.is_empty()
+                {
+                    t.0.clone()
+                } else {
+                    let v_type = TypeExpr::from_value_expr(v.as_ref(), type_env);
+                    check_type_compatability(t, &(v_type, v.1), type_env);
+                    t.0.clone()
+                }
+            }
             ValueExpr::For { .. } => TypeExpr::Tuple(vec![]),
             ValueExpr::Ref(v) => {
                 TypeExpr::Ref((TypeExpr::from_value_expr(v, type_env), v.1).into())
@@ -127,17 +139,12 @@ impl TypeExpr {
 
                 array_type.0.clone()
             }
-            ValueExpr::Array(optional_type_support, value_exprs) => {
-                if let Some(type_support) = optional_type_support {
-                    for value_expr in value_exprs {
-                        let type_expr = &(
-                            TypeExpr::from_value_expr(value_expr, type_env),
-                            value_expr.1,
-                        );
-                        check_type_compatability(type_support, type_expr, type_env);
-                    }
-
-                    return TypeExpr::Array(Box::new(type_support.clone()));
+            ValueExpr::Array(value_exprs) => {
+                if value_exprs.is_empty() {
+                    let t = String::from("empty array must be wrapped in as expression");
+                    failure_with_occurence(t.clone(), *complete_span, [
+                        (t.clone(), *complete_span)
+                    ]);
                 }
 
                 let mut variants = value_exprs
@@ -172,7 +179,7 @@ impl TypeExpr {
 
                 if variants.is_empty() {
                     panic!(
-                        "Internal Compiler Error: variants shoulnd't ever be empty, as this is a syntax error."
+                        "Internal Compiler Error: variants shouldn't ever be empty, as this is a syntax error."
                     );
                 }
 
@@ -271,7 +278,11 @@ impl TypeExpr {
                 });
 
                 if is_missing_field || struct_def.fields.len() != value_expr_fields.len() {
-                    panic!("invalid type from value expr {is_missing_field}")
+                    failure_with_occurence(
+                        format!("invalid type from value expr {is_missing_field}"),
+                        *complete_span,
+                        [("x".to_string(), *complete_span)],
+                    );
                 }
 
                 // TypeExpr::Struct(Struct { fields: types })
@@ -597,7 +608,7 @@ impl TypeExpr {
                             span
                         },
                         vec![(
-                            "this value is not object like and has no fields to access".to_string(),
+                            format!("this value is not object like and has no fields to access"),
                             span,
                         )],
                     )
@@ -1821,7 +1832,7 @@ mod test {
                 "{ let y: { x: String, y: Int, a: { b: { c: { d: { e: String }}}} } = {}; }",
                 Box::new(|summary: &TypesSummary| {
                     // +1 because of the empty duck
-                    assert_eq!(summary.types_used.len(), 5 + 1 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 5 + primitive_and_main_len);
                 }),
             ),
             (
@@ -1833,85 +1844,74 @@ mod test {
             (
                 "{ let x: { a: Char, b: Char } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    // +1 because of empty duck
-                    assert_eq!(summary.types_used.len(), 1 + 1 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: { y: Int } } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    // + 1 because of empty duck
-                    assert_eq!(summary.types_used.len(), 1 + 2 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
-                // + 1 because of empty duck
                 "{ let y: { x: Int } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 1 + 1 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: Int, y: String, z: { x: Int } } = { }; }",
                 Box::new(|summary: &TypesSummary| {
-                    // + 1 because of empty duck
-                    assert_eq!(summary.types_used.len(), 2 + 1 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
-                // + 1 because of empty duck
                 "{ let y: { x: Int, y: String, z: { x: Int }, w: () } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    assert_eq!(summary.types_used.len(), 2 + 1 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let a: { b: { c: { d: { e: { f: { a: Int }}}}}} = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    // + 1 because of empty duck
-                    assert_eq!(summary.types_used.len() - primitive_and_main_len, 7);
+                    assert_eq!(summary.types_used.len() - primitive_and_main_len, 6);
                 }),
             ),
             (
                 "{ let y: { x: String } | { y: String } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    // + 1 because of empty duck
-                    assert_eq!(summary.types_used.len(), 3 + 1 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 3 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: String } | { y: String } | { z: String } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    // +1 because of empty duck
-                    assert_eq!(summary.types_used.len(), 4 + 1 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 4 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: { x: String } | { y: String } | { z: String } }  = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    // +1 because of empty duck
-                    assert_eq!(summary.types_used.len() - primitive_and_main_len, 5 + 1);
+                    assert_eq!(summary.types_used.len() - primitive_and_main_len, 5);
                 }),
             ),
             (
                 "{ let y: { x: String } | { y: String } | { z: String } | { u: String } | { v: String } | { w: String } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    // +1 because of empty duck
-                    assert_eq!(summary.types_used.len(), 7 + 1 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 7 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { x: String } | { x: String } | { x: String } | { x: String } | { x: String } | { x: String } = {}; }",
                 Box::new(|summary: &TypesSummary| {
-                    // +1 because of empty duck
-                    assert_eq!(summary.types_used.len(), 2 + 1 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
             (
                 "{ let y: { abc: { x: String, y: String }, abc2: { x: String, y: String } } = {}; }",
                 Box::new(|summary: &TypesSummary| {
                     // +1 because of empty duck
-                    assert_eq!(summary.types_used.len(), 2 + 1 + primitive_and_main_len);
+                    assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
                 }),
             ),
         ];
@@ -1964,6 +1964,7 @@ mod test {
                 .map(|type_expr| type_expr.as_clean_go_type_name(&mut type_env))
                 .for_each(|type_name| println!("\t{type_name}"));
 
+            dbg!(src);
             summary_check_fun(&summary);
         }
     }

@@ -3,7 +3,7 @@ use crate::parse::{
     function_parser::{LambdaFunctionExpr, Param},
     lexer::{FmtStringContents, HtmlStringContents},
     source_file_parser::SourceFile,
-    type_parser::{type_expression_parser, type_expression_parser_without_array},
+    type_parser::type_expression_parser,
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
@@ -54,6 +54,7 @@ pub struct Assignment {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueExpr {
+    Defer(Box<Spanned<ValueExpr>>),
     For {
         ident: (String, bool, Option<TypeExpr>),
         target: Box<Spanned<ValueExpr>>,
@@ -88,6 +89,7 @@ pub enum ValueExpr {
     Duck(Vec<(String, Spanned<ValueExpr>)>),
     HtmlString(Vec<ValHtmlStringContents>),
     Tag(String),
+    As(Box<Spanned<ValueExpr>>, Spanned<TypeExpr>),
     Struct {
         name: String,
         fields: Vec<(String, Spanned<ValueExpr>)>,
@@ -101,7 +103,7 @@ pub enum ValueExpr {
         target_obj: Box<Spanned<ValueExpr>>,
         extension_name: String,
     },
-    Array(Option<Spanned<TypeExpr>>, Vec<Spanned<ValueExpr>>),
+    Array(Vec<Spanned<ValueExpr>>),
     Return(Option<Box<Spanned<ValueExpr>>>),
     VarAssign(Box<Spanned<Assignment>>),
     VarDecl(Box<Spanned<Declaration>>),
@@ -156,6 +158,8 @@ impl ValueExpr {
 
     pub fn needs_semicolon(&self) -> bool {
         match self {
+            ValueExpr::Defer(..) => true,
+            ValueExpr::As(..) => true,
             ValueExpr::For { .. } => false,
             ValueExpr::Deref(..) | ValueExpr::Ref(..) | ValueExpr::RefMut(..) => true,
             ValueExpr::HtmlString(..) => true,
@@ -212,90 +216,6 @@ impl ValueExpr {
     }
 }
 
-pub fn array_parser<'src, I, M>(
-    _make_input: M,
-    value_expr_parser: impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>>
-    + Clone
-    + 'src,
-) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone + 'src
-where
-    I: BorrowInput<'src, Token = Token, Span = SS>,
-    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
-{
-    type_expression_parser_without_array()
-        .or_not()
-        .then(
-            value_expr_parser
-                .clone()
-                .separated_by(just(Token::ControlChar(',')))
-                .allow_trailing()
-                .collect::<Vec<_>>()
-                .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
-                .repeated()
-                .at_least(1)
-                .collect::<Vec<_>>(),
-        )
-        .map_with(|(mut ty, exprs), e| {
-            let mut first_non_empty = None;
-            if let Some(ty) = ty.as_mut() {
-                for (i, elem) in exprs.iter().enumerate().take(exprs.len() - 1) {
-                    if !elem.is_empty() {
-                        first_non_empty = Some(i);
-                        break;
-                    }
-                    *ty = (TypeExpr::Array(Box::new(ty.clone())), ty.1);
-                }
-            } else {
-                for (i, elem) in exprs.iter().enumerate().take(exprs.len() - 1) {
-                    if !elem.is_empty() {
-                        first_non_empty = Some(i);
-                        break;
-                    }
-                }
-            }
-
-            if let Some(first_non_empty) = first_non_empty {
-                let mut v = (
-                    ValueExpr::Array(ty, exprs[first_non_empty].clone()),
-                    SS {
-                        start: e.span().start,
-                        end: exprs[first_non_empty].last().unwrap().1.end + 1,
-                        context: e.span().context,
-                    },
-                );
-                for elem in exprs.iter().skip(first_non_empty + 1) {
-                    let start = v.1.start;
-                    v = (
-                        ValueExpr::ArrayAccess(Box::new(v), Box::new(elem[0].clone())),
-                        SS {
-                            start,
-                            end: elem.last().unwrap().1.end + 1,
-                            context: e.span().context,
-                        },
-                    )
-                }
-                v.1.end = e.span().end;
-                v
-            } else {
-                if ty.is_none() && exprs.last().as_ref().is_none_or(|v| v.is_empty()) {
-                    failure_with_occurence(
-                        "Empty array must provide type".to_string(),
-                        e.span(),
-                        [(
-                            "This array is empty, therfore you need to specify a type e.g. Int[]"
-                                .to_string(),
-                            e.span(),
-                        )],
-                    );
-                }
-                (
-                    ValueExpr::Array(ty, exprs.last().unwrap().clone()),
-                    e.span(),
-                )
-            }
-        })
-}
-
 pub fn value_expr_parser<'src, I, M>(
     make_input: M,
 ) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone + 'src
@@ -348,13 +268,7 @@ where
                             .then(return_type_parser.or_not())
                             .then(value_expr_parser.clone()),
                     )
-                    .map(|(is_mut, ((params, return_type), mut value_expr))| {
-                        value_expr = match value_expr {
-                            (ValueExpr::Duck(x), loc) if x.is_empty() => {
-                                (ValueExpr::Block(vec![]), loc)
-                            }
-                            _ => value_expr,
-                        };
+                    .map(|(is_mut, ((params, return_type), value_expr))| {
                         ValueExpr::Lambda(
                             LambdaFunctionExpr {
                                 is_mut: is_mut.is_some(),
@@ -376,12 +290,41 @@ where
                 )
                 .then_ignore(just(Token::In))
                 .then(value_expr_parser.clone())
-                .then_ignore(just(Token::ControlChar('{')).rewind())
-                .then(value_expr_parser.clone())
-                .map(|(((is_mut, ident), expr), block)| ValueExpr::For {
-                    ident: (ident, is_mut.is_none(), None),
-                    target: Box::new(expr),
-                    block: Box::new(block),
+                .then(
+                    just(Token::ControlChar('{'))
+                        .rewind()
+                        .ignore_then(value_expr_parser.clone())
+                        .or_not(),
+                )
+                .map(|(((is_mut, ident), expr), block)| {
+                    if let Some(block) = block {
+                        ValueExpr::For {
+                            ident: (ident, is_mut.is_none(), None),
+                            target: Box::new(expr),
+                            block: Box::new(block),
+                        }
+                    } else {
+                        if let ValueExpr::Struct {
+                            name,
+                            fields,
+                            type_params,
+                        } = &expr.0
+                            && fields.is_empty()
+                            && type_params.as_ref().is_none_or(|v| v.is_empty())
+                        {
+                            ValueExpr::For {
+                                ident: (ident, is_mut.is_none(), None),
+                                target: Box::new((
+                                    ValueExpr::RawVariable(false, vec![name.clone()]),
+                                    expr.1,
+                                )),
+                                block: Box::new((ValueExpr::Block(vec![]), expr.1)),
+                            }
+                        } else {
+                            let msg = "Invalid for target syntax".to_string();
+                            failure_with_occurence(msg.clone(), expr.1, [(msg.clone(), expr.1)]);
+                        }
+                    }
                 })
                 .map_with(|x, e| (x, e.span()));
 
@@ -534,6 +477,7 @@ where
                 .allow_trailing()
                 .collect::<Vec<_>>()
                 .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
+                .filter(|x| !x.is_empty())
                 .map(|mut x| {
                     x.sort_by_key(|(name, _)| name.clone());
                     ValueExpr::Duck(x)
@@ -745,7 +689,14 @@ where
             });
             // .map_with(|x, e| (x, e.span()));
 
-            let array = array_parser(make_input.clone(), value_expr_parser.clone());
+            let array = value_expr_parser
+                .clone()
+                .separated_by(just(Token::ControlChar(',')))
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
+                .map(|exprs| ValueExpr::Array(exprs))
+                .map_with(|x, e| (x, e.span()));
 
             #[derive(Debug, Clone)]
             enum AtomPreParseUnit {
@@ -1114,9 +1065,24 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            choice((inline_go, assignment, or, declaration, pen, atom))
-                .labelled("expression")
-                .boxed()
+            let defer = just(Token::Defer)
+                .ignore_then(value_expr_parser.clone())
+                .map(|b| ValueExpr::Defer(Box::new(b)))
+                .map_with(|x, e| (x, e.span()));
+
+            let casted = choice((assignment, or, declaration, pen, atom))
+                .then(
+                    just(Token::As)
+                        .ignore_then(type_expression_parser())
+                        .or_not(),
+                )
+                .map(|(v, t)| {
+                    t.map(|t| ValueExpr::As(Box::new(v.clone()), t))
+                        .unwrap_or(v.0)
+                })
+                .map_with(|x, e| (x, e.span()));
+
+            choice((inline_go, casted, defer)).labelled("expression").boxed()
         },
     )
 }
@@ -1127,8 +1093,8 @@ fn empty_tuple() -> ValueExpr {
 }
 
 #[allow(dead_code)]
-fn empty_duck() -> ValueExpr {
-    ValueExpr::Duck(Vec::new())
+fn empty_block() -> ValueExpr {
+    ValueExpr::Block(Vec::new())
 }
 
 // track caller so that we find out where this method is called in case of error
@@ -1215,6 +1181,10 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
 pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
     v.1 = empty_range();
     match &mut v.0 {
+        ValueExpr::As(v, t) => {
+            value_expr_into_empty_range(v);
+            type_expr_into_empty_range(t);
+        }
         ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
             value_expr_into_empty_range(&mut *v)
         }
@@ -1222,10 +1192,7 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
             value_expr_into_empty_range(target);
             value_expr_into_empty_range(idx_expr);
         }
-        ValueExpr::Array(t, elems) => {
-            if let Some(t) = t {
-                type_expr_into_empty_range(t);
-            }
+        ValueExpr::Array(elems) => {
             for elem in elems {
                 value_expr_into_empty_range(elem);
             }
@@ -1383,7 +1350,7 @@ mod tests {
         make_input,
         type_parser::{Duck, TypeExpr},
         value_parser::{
-            Assignment, Declaration, MatchArm, ValHtmlStringContents, empty_duck, empty_range,
+            Assignment, Declaration, MatchArm, ValHtmlStringContents, empty_block, empty_range,
             empty_tuple, type_expr_into_empty_range, value_expr_into_empty_range,
             value_expr_parser,
         },
@@ -1512,69 +1479,47 @@ mod tests {
                 },
             ),
             (
-                ".Int[]",
-                ValueExpr::Array(
-                    Some(TypeExpr::Tag("Int".to_string()).into_empty_span()),
-                    vec![],
-                ),
-            ),
-            (
                 "[1]",
-                ValueExpr::Array(None, vec![ValueExpr::Int(1).into_empty_span()]),
+                ValueExpr::Array(vec![ValueExpr::Int(1).into_empty_span()]),
             ),
             (
                 "[1,]",
-                ValueExpr::Array(None, vec![ValueExpr::Int(1).into_empty_span()]),
+                ValueExpr::Array(vec![ValueExpr::Int(1).into_empty_span()]),
             ),
+            ("{}", ValueExpr::Block(vec![])),
             (
                 "[1,]",
-                ValueExpr::Array(None, vec![ValueExpr::Int(1).into_empty_span()]),
+                ValueExpr::Array(vec![ValueExpr::Int(1).into_empty_span()]),
             ),
             (
                 "[1,2]",
-                ValueExpr::Array(
-                    None,
-                    vec![
-                        ValueExpr::Int(1).into_empty_span(),
-                        ValueExpr::Int(2).into_empty_span(),
-                    ],
-                ),
+                ValueExpr::Array(vec![
+                    ValueExpr::Int(1).into_empty_span(),
+                    ValueExpr::Int(2).into_empty_span(),
+                ]),
             ),
             (
                 "[1 == 2, 2]",
-                ValueExpr::Array(
-                    None,
-                    vec![
-                        ValueExpr::Equals(
-                            Box::new(ValueExpr::Int(1).into_empty_span()),
-                            Box::new(ValueExpr::Int(2).into_empty_span()),
-                        )
-                        .into_empty_span(),
-                        ValueExpr::Int(2).into_empty_span(),
-                    ],
-                ),
+                ValueExpr::Array(vec![
+                    ValueExpr::Equals(
+                        Box::new(ValueExpr::Int(1).into_empty_span()),
+                        Box::new(ValueExpr::Int(2).into_empty_span()),
+                    )
+                    .into_empty_span(),
+                    ValueExpr::Int(2).into_empty_span(),
+                ]),
             ),
             (
-                "[[1,2,3], .Int[]]",
-                ValueExpr::Array(
-                    None,
-                    vec![
-                        ValueExpr::Array(
-                            None,
-                            vec![
-                                ValueExpr::Int(1).into_empty_span(),
-                                ValueExpr::Int(2).into_empty_span(),
-                                ValueExpr::Int(3).into_empty_span(),
-                            ],
-                        )
-                        .into_empty_span(),
-                        ValueExpr::Array(
-                            Some(TypeExpr::Tag("Int".to_string()).into_empty_span()),
-                            vec![],
-                        )
-                        .into_empty_span(),
-                    ],
-                ),
+                "[[1,2,3], []]",
+                ValueExpr::Array(vec![
+                    ValueExpr::Array(vec![
+                        ValueExpr::Int(1).into_empty_span(),
+                        ValueExpr::Int(2).into_empty_span(),
+                        ValueExpr::Int(3).into_empty_span(),
+                    ])
+                    .into_empty_span(),
+                    ValueExpr::Array(vec![]).into_empty_span(),
+                ]),
             ),
             (
                 "a.y[0]",
@@ -1591,7 +1536,7 @@ mod tests {
             (
                 "[1][0]",
                 ValueExpr::ArrayAccess(
-                    ValueExpr::Array(None, vec![ValueExpr::Int(1).into_empty_span()])
+                    ValueExpr::Array(vec![ValueExpr::Int(1).into_empty_span()])
                         .into_empty_span()
                         .into(),
                     ValueExpr::Int(0).into_empty_span().into(),
@@ -1645,25 +1590,14 @@ mod tests {
             ),
             (
                 "a[0]",
-                ValueExpr::Array(
-                    Some(
-                        TypeExpr::RawTypeName(false, vec!["a".to_string()], None).into_empty_span(),
-                    ),
-                    vec![ValueExpr::Int(0).into_empty_span()],
-                ),
+                ValueExpr::ArrayAccess(var("a"), ValueExpr::Int(0).into_empty_span().into()),
             ),
             (
                 "a[0][0]",
                 ValueExpr::ArrayAccess(
-                    ValueExpr::Array(
-                        Some(
-                            TypeExpr::RawTypeName(false, vec!["a".to_string()], None)
-                                .into_empty_span(),
-                        ),
-                        vec![ValueExpr::Int(0).into_empty_span()],
-                    )
-                    .into_empty_span()
-                    .into(),
+                    ValueExpr::ArrayAccess(var("a"), ValueExpr::Int(0).into_empty_span().into())
+                        .into_empty_span()
+                        .into(),
                     ValueExpr::Int(0).into_empty_span().into(),
                 ),
             ),
@@ -1716,30 +1650,27 @@ mod tests {
             ),
             (
                 "[a(), b(), (1,2)]",
-                ValueExpr::Array(
-                    None,
-                    vec![
-                        ValueExpr::FunctionCall {
-                            target: var("a"),
-                            params: vec![],
-                            type_params: None,
-                            is_extension_call: false,
-                        }
-                        .into_empty_span(),
-                        ValueExpr::FunctionCall {
-                            target: var("b"),
-                            params: vec![],
-                            type_params: None,
-                            is_extension_call: false,
-                        }
-                        .into_empty_span(),
-                        ValueExpr::Tuple(vec![
-                            ValueExpr::Int(1).into_empty_span(),
-                            ValueExpr::Int(2).into_empty_span(),
-                        ])
-                        .into_empty_span(),
-                    ],
-                ),
+                ValueExpr::Array(vec![
+                    ValueExpr::FunctionCall {
+                        target: var("a"),
+                        params: vec![],
+                        type_params: None,
+                        is_extension_call: false,
+                    }
+                    .into_empty_span(),
+                    ValueExpr::FunctionCall {
+                        target: var("b"),
+                        params: vec![],
+                        type_params: None,
+                        is_extension_call: false,
+                    }
+                    .into_empty_span(),
+                    ValueExpr::Tuple(vec![
+                        ValueExpr::Int(1).into_empty_span(),
+                        ValueExpr::Int(2).into_empty_span(),
+                    ])
+                    .into_empty_span(),
+                ]),
             ),
             ("true", ValueExpr::Bool(true)),
             ("false", ValueExpr::Bool(false)),
@@ -1773,7 +1704,7 @@ mod tests {
                     type_params: None,
                 },
             ),
-            ("{}", empty_duck()),
+            ("{}", empty_block()),
             (
                 "to_upper()",
                 ValueExpr::FunctionCall {
@@ -2079,11 +2010,11 @@ mod tests {
                         .into(),
                 ),
             ),
-            ("{}", empty_duck()),
+            ("{}", empty_block()),
             (
                 "{}.x",
                 ValueExpr::FieldAccess {
-                    target_obj: empty_duck().into_empty_span().into(),
+                    target_obj: empty_block().into_empty_span().into(),
                     field_name: "x".into(),
                 },
             ),
@@ -2091,7 +2022,7 @@ mod tests {
                 "!{}.x",
                 ValueExpr::BoolNegate(
                     ValueExpr::FieldAccess {
-                        target_obj: empty_duck().into_empty_span().into(),
+                        target_obj: empty_block().into_empty_span().into(),
                         field_name: "x".into(),
                     }
                     .into_empty_span()
@@ -2125,7 +2056,7 @@ mod tests {
                     ValueExpr::Int(3).into_empty_span(),
                     ValueExpr::FunctionCall {
                         target: var("x"),
-                        params: vec![empty_duck().into_empty_span()],
+                        params: vec![empty_block().into_empty_span()],
                         type_params: None,
                         is_extension_call: false,
                     }
@@ -2304,21 +2235,15 @@ mod tests {
                 },
             ),
             (
-                "Int[][Int[]]",
-                ValueExpr::Array(
-                    Some(
-                        TypeExpr::Array(TypeExpr::Int(None).into_empty_span().into())
-                            .into_empty_span(),
-                    ),
-                    vec![
-                        ValueExpr::Array(Some(TypeExpr::Int(None).into_empty_span()), vec![])
-                            .into_empty_span(),
-                    ],
-                ),
+                "[[], []]",
+                ValueExpr::Array(vec![
+                    ValueExpr::Array(vec![]).into_empty_span(),
+                    ValueExpr::Array(vec![]).into_empty_span(),
+                ]),
             ),
             (
                 "[1]",
-                ValueExpr::Array(None, vec![ValueExpr::Int(1).into_empty_span()]),
+                ValueExpr::Array(vec![ValueExpr::Int(1).into_empty_span()]),
             ),
             ("()", empty_tuple()),
             (
@@ -2374,7 +2299,7 @@ mod tests {
                 "if (true) {{}} else {{x: 1}}",
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into_empty_span().into(),
-                    then: ValueExpr::Duck(vec![]).into_empty_span_and_block().into(),
+                    then: ValueExpr::Block(vec![]).into_empty_span_and_block().into(),
                     r#else: Some(
                         ValueExpr::Duck(vec![("x".into(), ValueExpr::Int(1).into_empty_span())])
                             .into_empty_span_and_block()
@@ -3252,7 +3177,7 @@ mod tests {
                         })
                         .into_empty_span(),
                     ),
-                    initializer: ValueExpr::Duck(vec![]).into_empty_span(),
+                    initializer: ValueExpr::Block(vec![]).into_empty_span(),
                     is_const: false,
                 },
             ),
@@ -3261,7 +3186,7 @@ mod tests {
                 Declaration {
                     name: "z".to_string(),
                     type_expr: Some(TypeExpr::Any.into_empty_span()),
-                    initializer: empty_duck().into_empty_span(),
+                    initializer: empty_block().into_empty_span(),
                     is_const: false,
                 },
             ),
@@ -3522,6 +3447,13 @@ mod tests {
                 add(
                     mul(int(1), int(2)).into_empty_span().into(),
                     mul(int(3), int(4)).into_empty_span().into(),
+                ),
+            ),
+            (
+                "1 as String",
+                ValueExpr::As(
+                    ValueExpr::Int(1).into_empty_span().into(),
+                    TypeExpr::String(None).into_empty_span(),
                 ),
             ),
         ];
