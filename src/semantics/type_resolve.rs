@@ -544,6 +544,7 @@ impl TypeEnv<'_> {
 
 fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
     match expr {
+        TypeExpr::Ref(t) | TypeExpr::RefMut(t) => resolve_all_aliases_type_expr(&mut t.0, env),
         TypeExpr::RawTypeName(_, typename, generic_params) => {
             if typename.len() != 1 {
                 panic!()
