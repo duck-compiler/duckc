@@ -2605,6 +2605,10 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 resolve_all_aliases_type_expr(&mut return_type.0, type_env);
             }
 
+            if let Some(return_type) = return_type.as_ref() {
+                infer_against(value_expr, return_type, type_env);
+            }
+
             typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
             type_env.pop_identifier_types();
         }
