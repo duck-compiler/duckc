@@ -8,6 +8,10 @@ fn gen_fun<T>(x: C<T, T>) {
 
 struct GenS<T> = {
     x: T,
+} impl {
+    fn abc() -> Self {
+        return *self;
+    }
 };
 
 type C<B, Y> = Y;
@@ -19,4 +23,5 @@ fn main() {
     gen_fun<Int>(0);
     gen_fun<String>("yoo");
     const x = GenS<String> { x: "yo" };
+    const y = GenS<Int> { x: 10 };
 }

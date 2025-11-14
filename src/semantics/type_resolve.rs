@@ -250,7 +250,6 @@ impl TypeEnv<'_> {
                 .collect::<Vec<_>>()
                 .join(MANGLE_SEP);
 
-            cloned_def.name = new_struct_name.clone();
             cloned_def.generics = vec![];
 
             if self
@@ -258,10 +257,8 @@ impl TypeEnv<'_> {
                 .insert(new_struct_name.clone())
             {
                 replace_generics_in_struct_definition(&mut cloned_def, &generic_arguments);
-                self.generic_structs_generated.push(cloned_def.clone());
                 typeresolve_struct_def(&mut cloned_def, type_params.to_vec(), self);
-                self.generic_structs_generated
-                    .retain(|f| f.name.as_str() != new_struct_name.clone());
+                cloned_def.name = new_struct_name.clone();
                 self.generic_structs_generated.push(cloned_def);
             }
             self.generic_structs_generated
@@ -475,7 +472,7 @@ impl TypeEnv<'_> {
 
     pub fn summarize(&mut self) -> TypesSummary {
         let mut all_types = self.all_types.clone();
-        // dbg!(all_types.iter().filter(|x| x.is_struct() && x.type_id(self).contains("Xyz")).collect::<Vec<_>>());
+
         all_types.extend(TypeExpr::primitives());
         all_types.extend(
             self.tsx_components
@@ -498,22 +495,6 @@ impl TypeEnv<'_> {
         });
 
         all_types.append(&mut to_push);
-
-        // todo: fix this panic workaround
-        let org = std::panic::take_hook();
-        std::panic::set_hook(Box::new(|_| {}));
-        all_types.retain(|e| {
-            let mut cloned = self.clone();
-            std::panic::catch_unwind(move || {
-                e.type_id(&mut cloned);
-                e.as_clean_go_type_name(&mut cloned);
-                e.as_go_type_annotation(&mut cloned);
-                e.as_clean_user_faced_type_name();
-            })
-            .is_ok()
-        });
-
-        std::panic::set_hook(org);
 
         all_types.sort_by_key(|type_expr| type_expr.type_id(self));
         all_types.dedup_by_key(|type_expr| type_expr.type_id(self));
@@ -1366,10 +1347,6 @@ pub fn typeresolve_struct_def(
                 resolve_all_aliases_type_expr(&mut p.1.0, type_env);
             }
         }
-
-        if m.name.starts_with("replace_both2") {
-            dbg!(m);
-        }
     }
 
     for m in &mut def.methods {
@@ -1848,7 +1825,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
                 let type_expr = TypeExpr::from_value_expr(&declaration.initializer, type_env);
                 declaration.type_expr = Some((type_expr.clone(), declaration.initializer.1));
-                dbg!(&declaration.name, &type_expr);
             }
 
             type_env.insert_identifier_type(

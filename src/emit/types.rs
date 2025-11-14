@@ -616,7 +616,7 @@ impl TypeExpr {
                     .map(|type_expr| format!("_To_{}", type_expr.0.as_clean_go_type_name(type_env)))
                     .unwrap_or_else(|| "".to_string())
             ),
-            TypeExpr::Struct { name: s, .. } => s.clone(),
+            TypeExpr::Struct { .. } => self.as_clean_go_type_name(type_env),
             TypeExpr::Duck(duck) => format!(
                 "Duck_{}",
                 duck.fields
