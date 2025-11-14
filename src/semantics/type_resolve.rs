@@ -205,8 +205,8 @@ impl TypeEnv<'_> {
         type_params: &[Spanned<TypeExpr>],
         span: SS,
     ) -> &'a mut StructDefinition {
-        let mut name = name;
-        let mut type_params = type_params;
+        let name = name;
+        let type_params = type_params;
 
         let generic_id = build_struct_generic_id(name, type_params, self);
 
@@ -222,17 +222,55 @@ impl TypeEnv<'_> {
         let cloned_def = self
             .struct_definitions
             .iter()
+            .chain(self.generic_structs_generated.iter())
             .find(|user_struct_definition| user_struct_definition.name.as_str() == name)
             .cloned();
 
         if let Some(mut cloned_def) = cloned_def {
+            let generic_arguments = cloned_def
+                .generics
+                .iter()
+                .map(|(x, _)| x)
+                .zip(type_params.iter())
+                .fold(HashMap::new(), |mut acc, (def, arg)| {
+                    if let Some(c) = def.constraint.as_ref() {
+                        check_type_compatability(c, arg, self);
+                    }
+                    acc.insert(def.name.clone(), arg.0.clone());
+                    acc
+                });
+
+            let new_struct_name = [cloned_def.name.clone()]
+                .into_iter()
+                .chain(
+                    generic_arguments
+                        .iter()
+                        .map(|(_, x)| x.as_clean_go_type_name(self)),
+                )
+                .collect::<Vec<_>>()
+                .join(MANGLE_SEP);
+
+            cloned_def.name = new_struct_name.clone();
             cloned_def.generics = vec![];
-            let idx = self.generic_structs_generated.len();
-            self.generic_structs_generated.push(cloned_def);
-            &mut self.generic_structs_generated[idx]
+
+            if self
+                .prevent_generic_generation
+                .insert(new_struct_name.clone())
+            {
+                replace_generics_in_struct_definition(&mut cloned_def, &generic_arguments);
+                self.generic_structs_generated.push(cloned_def.clone());
+                typeresolve_struct_def(&mut cloned_def, type_params.to_vec(), self);
+                self.generic_structs_generated
+                    .retain(|f| f.name.as_str() != new_struct_name.clone());
+                self.generic_structs_generated.push(cloned_def);
+            }
+            self.generic_structs_generated
+                .iter_mut()
+                .find(|f| f.name.as_str() == new_struct_name.as_str())
+                .unwrap()
         } else {
             failure_with_occurence(
-                "This struct does not exist",
+                format!("This struct does not exist {name}"),
                 span,
                 [(format!("Struct {name} does not exist"), span)],
             );
@@ -375,6 +413,16 @@ impl TypeEnv<'_> {
             .insert(alias, type_expr);
     }
 
+    pub fn get_type_alias(&self, alias: &str) -> Option<TypeExpr> {
+        for i in self.type_aliases.iter().rev() {
+            let r = i.get(alias).cloned();
+            if r.is_some() {
+                return r;
+            }
+        }
+        None
+    }
+
     fn flatten_types(
         &mut self,
         type_expr: &mut TypeExpr,
@@ -400,19 +448,6 @@ impl TypeEnv<'_> {
 
                 found.push(type_expr.clone());
                 found.append(&mut flattened_types_from_type_expr);
-
-                if type_expr.is_object_like() {
-                    let _type_name = type_expr.as_clean_go_type_name(self);
-                    let is_duck = matches!(type_expr, TypeExpr::Duck(_));
-                    field.type_expr = (
-                        if is_duck {
-                            type_expr
-                        } else {
-                            panic!("yo {type_expr:?}")
-                        },
-                        field.type_expr.1,
-                    );
-                }
             }),
             TypeExpr::Tuple(types) => types.iter_mut().for_each(|type_expr| {
                 found.extend(self.flatten_types(&mut type_expr.0, param_names_used));
@@ -990,6 +1025,13 @@ pub fn resolve_type_expr(t: &Spanned<TypeExpr>, env: &mut TypeEnv) -> Spanned<Ty
             _ => break,
         };
 
+        if let Some(simple_resolved) = env.get_type_alias(name)
+            && generics.is_empty()
+        {
+            res = simple_resolved.into_empty_span();
+            continue;
+        }
+
         if let Some(def) = env
             .type_definitions
             .iter()
@@ -1293,15 +1335,19 @@ pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
     }
 }
 
-pub fn typeresolve_struct_def(def: &mut StructDefinition, type_env: &mut TypeEnv) {
+pub fn typeresolve_struct_def(
+    def: &mut StructDefinition,
+    type_params: Vec<Spanned<TypeExpr>>,
+    type_env: &mut TypeEnv,
+) {
     type_env.push_type_aliases();
-    type_env.insert_type_alias(
-        "Self".to_string(),
-        TypeExpr::Struct {
-            name: def.name.clone(),
-            type_params: todo!(),
-        },
-    );
+
+    let self_type = TypeExpr::Struct {
+        name: def.name.clone(),
+        type_params: type_params.clone(),
+    };
+
+    type_env.insert_type_alias("Self".to_string(), self_type.clone());
 
     for f in &mut def.fields {
         resolve_all_aliases_type_expr(&mut f.type_expr.0, type_env);
@@ -1338,9 +1384,9 @@ pub fn typeresolve_struct_def(def: &mut StructDefinition, type_env: &mut TypeEnv
         type_env.insert_identifier_type(
             "self".to_string(),
             if def.mut_methods.contains(&m.name) {
-                TypeExpr::RefMut(todo!())
+                TypeExpr::RefMut(self_type.clone().into_empty_span().into())
             } else {
-                TypeExpr::Ref(todo!())
+                TypeExpr::Ref(self_type.clone().into_empty_span().into())
             },
             true,
         );
@@ -1349,9 +1395,7 @@ pub fn typeresolve_struct_def(def: &mut StructDefinition, type_env: &mut TypeEnv
     }
 
     type_env.pop_type_aliases();
-    let ty_expr: TypeExpr = todo!();
-    type_env.insert_type_alias(def.name.clone(), ty_expr.clone());
-    type_env.all_types.insert(0, ty_expr);
+    type_env.all_types.insert(0, self_type.clone());
 }
 
 pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut TypeEnv) {
@@ -1547,7 +1591,9 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .struct_definitions
         .iter_mut()
         .for_each(|struct_definition| {
-            typeresolve_struct_def(struct_definition, type_env);
+            if struct_definition.generics.is_empty() {
+                typeresolve_struct_def(struct_definition, vec![], type_env);
+            }
         });
 }
 
@@ -2093,7 +2139,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                                     .insert(cloned_fn_def.name.clone());
                             }
                             let mut cloned = mut_struct_def.clone();
-                            typeresolve_struct_def(&mut cloned, type_env);
+                            typeresolve_struct_def(&mut cloned, type_params.clone(), type_env);
                             *type_env.get_struct_def_mut(&struct_name) = cloned;
                             type_env
                                 .get_generic_methods(struct_name.clone())
@@ -2176,60 +2222,16 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             fields,
             type_params,
         } => {
-            let mut def = type_env
-                .get_struct_def_with_type_params_mut(name.as_str(), type_params.as_slice(), *span)
-                .clone();
+            let og_def = type_env.get_struct_def(name);
 
-            if type_params.len() != def.generics.len() {
-                let msg = "Wrong number of type parameters";
+            if type_params.len() != og_def.generics.len() {
+                let msg = "Wrong number of type parameters A";
                 failure_with_occurence(msg, *span, [(msg, *span)])
             }
 
-            let generic_arguments = def
-                .generics
-                .iter()
-                .map(|(x, _)| x)
-                .zip(type_params.iter())
-                .fold(HashMap::new(), |mut acc, (def, arg)| {
-                    if let Some(c) = def.constraint.as_ref() {
-                        check_type_compatability(c, arg, type_env);
-                    }
-                    acc.insert(def.name.clone(), arg.0.clone());
-                    acc
-                });
-
-            let mut cloned_def = def.clone();
-
-            let new_struct_name = [cloned_def.name.clone()]
-                .into_iter()
-                .chain(
-                    generic_arguments
-                        .iter()
-                        .map(|(_, x)| x.as_clean_go_type_name(type_env)),
-                )
-                .collect::<Vec<_>>()
-                .join(MANGLE_SEP);
-
-            *name = new_struct_name.clone();
-            *type_params = vec![];
-
-            cloned_def.name = new_struct_name.clone();
-            cloned_def.generics = vec![];
-
-            if type_env
-                .prevent_generic_generation
-                .insert(new_struct_name.clone())
-            {
-                replace_generics_in_struct_definition(&mut cloned_def, &generic_arguments);
-                type_env.generic_structs_generated.push(cloned_def.clone());
-                typeresolve_struct_def(&mut cloned_def, type_env);
-                type_env
-                    .generic_structs_generated
-                    .retain(|f| f.name.as_str() != new_struct_name.clone());
-                type_env.generic_structs_generated.push(cloned_def.clone());
-            }
-
-            def = cloned_def;
+            let def = type_env
+                .get_struct_def_with_type_params_mut(name.as_str(), type_params.as_slice(), *span)
+                .clone();
 
             fields.iter_mut().zip(def.fields.iter()).for_each(
                 |((_field_name, value_expr), def_field)| {

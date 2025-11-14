@@ -6,7 +6,7 @@ use crate::{
         type_parser::{Duck, TypeExpr},
         value_parser::empty_range,
     },
-    semantics::type_resolve::TypeEnv,
+    semantics::{ident_mangler::MANGLE_SEP, type_resolve::TypeEnv},
 };
 
 pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
@@ -716,7 +716,18 @@ impl TypeExpr {
                     .map(|type_expr| format!("_To_{}", type_expr.0.as_clean_go_type_name(type_env)))
                     .unwrap_or_else(|| "".to_string())
             ),
-            TypeExpr::Struct { name: s, .. } => s.clone(),
+            TypeExpr::Struct {
+                name: s,
+                type_params,
+            } => vec![s.clone()]
+                .into_iter()
+                .chain(
+                    type_params
+                        .iter()
+                        .map(|(x, _)| x.as_clean_go_type_name(type_env)),
+                )
+                .collect::<Vec<_>>()
+                .join(MANGLE_SEP),
             TypeExpr::Duck(duck) => format!(
                 "Duck_{}",
                 duck.fields
