@@ -1077,7 +1077,7 @@ mod tests {
                             )],
                         })
                         .into_empty_span(),
-                        generics: None,
+                        generics: vec![],
                     }],
                     ..Default::default()
                 },
@@ -1185,7 +1185,7 @@ mod tests {
                             )],
                         })
                         .into_empty_span(),
-                        generics: None,
+                        generics: vec![],
                     }],
                     ..Default::default()
                 },

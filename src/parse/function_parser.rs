@@ -35,8 +35,8 @@ impl FunctionDefintion {
         if let Some((return_type_expr, _span)) = &mut return_type
             && let TypeExpr::And(_) = &return_type_expr
         {
-            use crate::semantics::type_resolve::translate_interception_to_duck;
-            *return_type_expr = translate_interception_to_duck(return_type_expr);
+            use crate::semantics::type_resolve::translate_intersection_to_duck;
+            *return_type_expr = translate_intersection_to_duck(return_type_expr);
         }
 
         FunHeader {
@@ -57,8 +57,8 @@ impl FunctionDefintion {
         if let Some((return_type_expr, _span)) = &mut return_type
             && let TypeExpr::And(_) = &return_type_expr
         {
-            use crate::semantics::type_resolve::translate_interception_to_duck;
-            *return_type_expr = translate_interception_to_duck(return_type_expr);
+            use crate::semantics::type_resolve::translate_intersection_to_duck;
+            *return_type_expr = translate_intersection_to_duck(return_type_expr);
         }
 
         return (

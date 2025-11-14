@@ -454,32 +454,34 @@ fn parse_src_file(
 
     // TODO: do this for all dependencies
     let mut result = src_file.unwrap().flatten(&vec![], true);
-    for s in &std_src_file.function_definitions {
-        result.function_definitions.push(s.clone());
-    }
-    for s in &std_src_file.type_definitions {
-        result.type_definitions.push(s.clone());
-    }
-    for s in &std_src_file.struct_definitions {
-        result.struct_definitions.push(s.clone());
-    }
-    for s in &std_src_file.use_statements {
-        if let UseStatement::Go(..) = s {
-            result.push_use(s);
+    if false {
+        for s in &std_src_file.function_definitions {
+            result.function_definitions.push(s.clone());
         }
-    }
-    for s in &std_src_file.tsx_components {
-        result.tsx_components.push(s.clone());
-    }
-    for s in &std_src_file.duckx_components {
-        result.duckx_components.push(s.clone());
-    }
+        for s in &std_src_file.type_definitions {
+            result.type_definitions.push(s.clone());
+        }
+        for s in &std_src_file.struct_definitions {
+            result.struct_definitions.push(s.clone());
+        }
+        for s in &std_src_file.use_statements {
+            if let UseStatement::Go(..) = s {
+                result.push_use(s);
+            }
+        }
+        for s in &std_src_file.tsx_components {
+            result.tsx_components.push(s.clone());
+        }
+        for s in &std_src_file.duckx_components {
+            result.duckx_components.push(s.clone());
+        }
 
-    for test_case in &std_src_file.test_cases {
-        result.test_cases.push(test_case.clone());
-    }
-    for extension_def in std_src_file.extensions_defs {
-        result.extensions_defs.push(extension_def.clone());
+        for test_case in &std_src_file.test_cases {
+            result.test_cases.push(test_case.clone());
+        }
+        for extension_def in std_src_file.extensions_defs {
+            result.extensions_defs.push(extension_def.clone());
+        }
     }
 
     result

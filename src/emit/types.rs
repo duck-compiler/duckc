@@ -134,7 +134,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                     mut_methods: _,
                     generics: _,
                 } = type_env
-                    .get_struct_def_with_type_params(s.as_str(), type_params, empty_range())
+                    .get_struct_def_with_type_params_mut(s.as_str(), type_params, empty_range())
                     .clone();
 
                 let mut instructions: Vec<IrInstruction> = fields
@@ -370,7 +370,6 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
         .iter()
         .filter(|type_expr| type_expr.is_object_like())
         .map(|type_expr| {
-            let type_expr = type_env.try_resolve_type_expr(type_expr);
             let type_name = type_expr.as_clean_go_type_name(type_env);
 
             let mut instructions =
@@ -395,7 +394,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                         mut_methods: _,
                         generics: _,
                     } = type_env
-                        .get_struct_def_with_type_params(
+                        .get_struct_def_with_type_params_mut(
                             struct_name.as_str(),
                             type_params.as_slice(),
                             empty_range(),
@@ -466,15 +465,9 @@ impl TypeExpr {
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String(..) => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::TypeNameInternal(name) => type_env
-                .try_resolve_type_alias(name)
-                .map(|x| x.as_go_type_annotation(type_env))
-                .unwrap_or(name.clone()),
+
             // todo: type params
-            TypeExpr::TypeName(_, name, _) => type_env
-                .try_resolve_type_alias(name)
-                .map(|x| x.as_go_type_annotation(type_env))
-                .unwrap_or(name.clone()),
+            TypeExpr::TypeName(_, name, _) => panic!("type name should be replaced {name}"),
             TypeExpr::Fun(params, return_type, _) => format!(
                 "func({}) {}",
                 params
@@ -535,11 +528,10 @@ impl TypeExpr {
             TypeExpr::String(..) => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
-            TypeExpr::TypeNameInternal(name) => name.clone(),
             // todo: type params
-            TypeExpr::TypeName(_, name, _type_params) => type_env
-                .resolve_type_alias(name)
-                .as_go_concrete_annotation(type_env),
+            TypeExpr::TypeName(_, name, _type_params) => {
+                panic!("type name should be replaced {name}")
+            }
             TypeExpr::Fun(params, return_type, _) => format!(
                 "func({}) {}",
                 params
@@ -607,7 +599,6 @@ impl TypeExpr {
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
             TypeExpr::TypeName(_, name, _type_params) => name.clone(),
-            TypeExpr::TypeNameInternal(name) => name.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type, _) => format!(
                 "Fun_From_{}{}",
@@ -704,10 +695,9 @@ impl TypeExpr {
             TypeExpr::Tag(identifier) => format!("Tag__{identifier}"),
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
-            TypeExpr::TypeName(_, name, _type_params) => type_env
-                .resolve_type_alias(name)
-                .as_clean_go_type_name(type_env),
-            TypeExpr::TypeNameInternal(name) => name.clone(),
+            TypeExpr::TypeName(_, name, _type_params) => {
+                panic!("typename should be replaced {name}")
+            }
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type, is_mut) => format!(
                 "Fun_{}_From_{}{}",

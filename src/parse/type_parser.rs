@@ -19,7 +19,7 @@ use super::lexer::Token;
 pub struct TypeDefinition {
     pub name: String,
     pub type_expression: Spanned<TypeExpr>,
-    pub generics: Option<Vec<Spanned<Generic>>>,
+    pub generics: Vec<Spanned<Generic>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,7 +46,6 @@ pub enum TypeExpr {
     Tuple(Vec<Spanned<TypeExpr>>),
     RawTypeName(bool, Vec<String>, Vec<Spanned<TypeParam>>),
     TypeName(bool, String, Vec<Spanned<TypeParam>>),
-    TypeNameInternal(String),
     Tag(String),
     String(Option<String>),
     Int(Option<i64>),
@@ -588,7 +587,7 @@ where
         .map(|((identifier, generics), type_expression)| TypeDefinition {
             name: identifier,
             type_expression,
-            generics,
+            generics: generics.unwrap_or_default(),
         })
 }
 
@@ -665,7 +664,6 @@ impl Display for TypeExpr {
                 }
                 Ok(())
             }
-            TypeExpr::TypeNameInternal(s) => write!(f, "{s}"),
             TypeExpr::String(s) => write!(
                 f,
                 "String{}",

@@ -1,4 +1,8 @@
-fn take_s() {}
+fn take_s(s: S) {}
+
+type C<B, Y> = Y;
+type SS = C<Int, String>;
+type S = SS;
 
 fn main() {
     take_s("a");

@@ -30,21 +30,7 @@ impl TypeExpr {
         }
     }
 
-    pub fn from_value_expr_resolved_type_name(
-        value_expr: &Spanned<ValueExpr>,
-        type_env: &mut TypeEnv,
-    ) -> TypeExpr {
-        let mut res = TypeExpr::from_value_expr(value_expr, type_env);
-        loop {
-            if let TypeExpr::TypeName(_, name, _) = &res {
-                res = type_env.resolve_type_alias(name);
-            } else {
-                break res;
-            }
-        }
-    }
-
-    pub fn from_value_expr_resolved_type_name_dereferenced(
+    pub fn from_value_expr_dereferenced(
         value_expr: &Spanned<ValueExpr>,
         type_env: &mut TypeEnv,
     ) -> TypeExpr {
@@ -54,13 +40,7 @@ impl TypeExpr {
             res = v.0;
         }
 
-        loop {
-            if let TypeExpr::TypeName(_, name, _) = &res {
-                res = type_env.resolve_type_alias(name);
-            } else {
-                break res;
-            }
-        }
+        res
     }
 
     #[track_caller]
@@ -119,8 +99,7 @@ impl TypeExpr {
                 TypeExpr::String(None)
             }
             ValueExpr::ArrayAccess(target, idx) => {
-                let target_type =
-                    TypeExpr::from_value_expr_resolved_type_name_dereferenced(target, type_env);
+                let target_type = TypeExpr::from_value_expr_dereferenced(target, type_env);
                 let idx_type = TypeExpr::from_value_expr(idx, type_env);
 
                 require(
@@ -234,7 +213,7 @@ impl TypeExpr {
                 fields: _,
                 type_params,
             } => {
-                let _struct_def = type_env.get_struct_def_with_type_params(
+                let _struct_def = type_env.get_struct_def_with_type_params_mut(
                     name.as_str(),
                     type_params,
                     *complete_span,
@@ -551,7 +530,7 @@ impl TypeExpr {
             } => {
                 let span = target_obj.as_ref().1;
                 let target_obj_type_expr =
-                    TypeExpr::from_value_expr_resolved_type_name_dereferenced(target_obj, type_env);
+                    TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
 
                 if !target_obj_type_expr.is_object_like()
                     && !target_obj_type_expr.ref_is_object_like()
@@ -610,7 +589,7 @@ impl TypeExpr {
             } => {
                 let span = target_obj.as_ref().1;
                 let target_obj_type_expr =
-                    TypeExpr::from_value_expr_resolved_type_name_dereferenced(target_obj, type_env);
+                    TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
 
                 let extension_function_name = target_obj_type_expr
                     .build_extension_access_function_name(extension_name, type_env);
@@ -798,7 +777,11 @@ impl TypeExpr {
                     mut_methods: _,
                     generics: _,
                 } = type_env
-                    .get_struct_def_with_type_params(r#struct.as_str(), type_params, empty_range())
+                    .get_struct_def_with_type_params_mut(
+                        r#struct.as_str(),
+                        type_params,
+                        empty_range(),
+                    )
                     .clone();
 
                 let has_method_with_name = methods.iter().any(|f| f.name.as_str() == name.as_str());
@@ -824,7 +807,7 @@ impl TypeExpr {
                     methods: _,
                     mut_methods: _,
                     generics: _,
-                } = type_env.get_struct_def_with_type_params(name, type_params, empty_range());
+                } = type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
 
                 fields.iter().any(|f| f.name.as_str() == name.as_str())
             }
@@ -870,7 +853,11 @@ impl TypeExpr {
                     mut_methods: _,
                     generics: _,
                 } = type_env
-                    .get_struct_def_with_type_params(r#struct.as_str(), type_params, empty_range())
+                    .get_struct_def_with_type_params_mut(
+                        r#struct.as_str(),
+                        type_params,
+                        empty_range(),
+                    )
                     .clone();
 
                 fields
@@ -1152,7 +1139,6 @@ pub fn check_type_compatability_full(
     given_const_var: bool,
 ) {
     let mut given_type = given_type.clone();
-    given_type.0 = type_env.try_resolve_type_expr(&given_type.0);
     let fail_requirement = |explain_required: String, explain_given: String| {
         let (smaller, larger) = if required_type.1.start <= given_type.1.start {
             (required_type.1, given_type.1)
@@ -1305,7 +1291,7 @@ pub fn check_type_compatability_full(
                 type_params,
             } => {
                 let struct_def = type_env
-                    .get_struct_def_with_type_params(struct_name, type_params, required_type.1)
+                    .get_struct_def_with_type_params_mut(struct_name, type_params, required_type.1)
                     .clone();
 
                 for required_field in duck.fields.iter() {
@@ -1659,7 +1645,9 @@ pub fn check_type_compatability_full(
 
             check_type_compatability(content_type, &given_content_type, type_env);
         }
-        TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) | TypeExpr::TypeNameInternal(..) => {}
+        TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) => {
+            panic!("shouldn't be here {given_type:?} {given_type:?}")
+        }
         TypeExpr::And(required_variants) => {
             for required_variant in required_variants {
                 check_type_compatability(required_variant, &given_type, type_env);
