@@ -11,7 +11,9 @@ use crate::{
         failure, failure_with_occurence,
         function_parser::LambdaFunctionExpr,
         type_parser::{Duck, TypeExpr},
-        value_parser::{Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr},
+        value_parser::{
+            Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr, empty_range,
+        },
     },
     semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
 };
@@ -361,8 +363,16 @@ fn walk_access_raw(
                         target_obj, type_env,
                     );
 
-                    if let TypeExpr::Struct(struct_name) = ty {
-                        let struct_def = type_env.get_struct_def(struct_name.as_str());
+                    if let TypeExpr::Struct {
+                        name: struct_name,
+                        type_params,
+                    } = ty
+                    {
+                        let struct_def = type_env.get_struct_def_with_type_params(
+                            struct_name.as_str(),
+                            &type_params,
+                            empty_range(),
+                        );
                         if struct_def.mut_methods.contains(field_name)
                             && !can_do_mut_stuff_through(target_obj, type_env)
                         {
@@ -500,7 +510,7 @@ fn walk_access_raw(
                             s.push_front(format!("GetPtr{field_name}()"));
                         }
                     }
-                    TypeExpr::Struct(..) => s.push_front(field_name.to_string()),
+                    TypeExpr::Struct { .. } => s.push_front(field_name.to_string()),
                     _ => {}
                 }
 
@@ -1336,7 +1346,7 @@ impl ValueExpr {
                                                         )
                                                         .into_empty_span(),
                                                     ],
-                                                    type_params: None,
+                                                    type_params: vec![],
                                                     is_extension_call: false,
                                                 }
                                                 .into_empty_span(),
@@ -1903,7 +1913,7 @@ impl ValueExpr {
                                     a_res,
                                 ));
                             }
-                            TypeExpr::Struct(_) => {
+                            TypeExpr::Struct { .. } => {
                                 res.push(IrInstruction::VarAssignment(
                                     format!("{target_res}.{field_name}"),
                                     a_res,

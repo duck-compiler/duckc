@@ -218,8 +218,7 @@ fn parse_src_file(
             TypeExpr::TypeName(global, _, type_params) => {
                 type_params
                     .iter_mut()
-                    .flat_map(|x| x.iter_mut().map(|x| &mut x.0))
-                    .for_each(typename_reset_global);
+                    .for_each(|(t, _)| typename_reset_global(t));
                 *global = false;
             }
             TypeExpr::Array(t) => typename_reset_global(&mut t.0),
