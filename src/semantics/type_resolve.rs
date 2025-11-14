@@ -1450,15 +1450,12 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 ),
                 true,
             );
+            type_env.duckx_components.push(duckx_component.clone());
         });
 
     for comp in &source_file.tsx_components {
         type_env.tsx_components.push(comp.clone());
         type_env.check_for_tailwind(&comp.typescript_source.0);
-    }
-
-    for comp in &source_file.duckx_components {
-        type_env.duckx_components.push(comp.clone());
     }
 
     println!(
@@ -1473,9 +1470,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .for_each(|function_definition| {
             if let Some(params) = function_definition.params.as_mut() {
                 for (_, p) in params {
-                    dbg!(1, &function_definition.name);
                     resolve_all_aliases_type_expr(&mut p.0, type_env);
-                    dbg!(2);
                     process_keyof_in_type_expr(&mut p.0, type_env);
                 }
             }
@@ -1512,7 +1507,9 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 return_type_box.0 = translate_intersection_to_duck(&return_type_box.0);
             }
             type_env.insert_identifier_type(function_definition.name.clone(), fn_type_expr, true);
-            type_env.function_definitions.push(function_definition.clone());
+            type_env
+                .function_definitions
+                .push(function_definition.clone());
         });
     println!("{} typeresolve functions", Tag::TypeResolve);
     println!("{} final resolve of all functions", Tag::TypeResolve);
@@ -1541,7 +1538,9 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .function_definitions
         .iter_mut()
         .for_each(|function_defintion| {
-            typeresolve_function_definition(function_defintion, type_env);
+            if !function_defintion.generics.is_some() {
+                typeresolve_function_definition(function_defintion, type_env);
+            }
         });
 
     source_file
@@ -1570,8 +1569,6 @@ fn typeresolve_function_definition(
     }
 
     type_env.push_identifier_types();
-
-    dbg!(&type_env.function_definitions);
 
     if let Some(params) = function_definition.params.clone().as_mut() {
         for p in params {
@@ -1904,47 +1901,39 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             type_params,
             ..
         } => {
-            typeresolve_value_expr((&mut target.0, target.1), type_env);
-
-            let target_type = TypeExpr::from_value_expr(target, type_env);
-
-            let TypeExpr::Fun(def_params, def_ret, _) = target_type else {
-                failure_with_occurence(
-                    "Can only call functions",
-                    *span,
-                    [("Can only call functions", *span)],
-                )
-            };
-
             let header: FunHeader;
 
-            match &mut target.0 {
-                ValueExpr::Variable(_, name, _, _) => {
-                    let fn_def = type_env
-                        .function_definitions
-                        .iter()
-                        .find(|x| name.as_str() == x.name.as_str())
-                        .cloned()
-                        .expect(&format!("could not find {name}"));
+            if type_params.is_empty() {
+                typeresolve_value_expr((&mut target.0, target.1), type_env);
 
-                    if type_params.len() != fn_def.generics.as_ref().map(|v| v.len()).unwrap_or(0) {
-                        let msg = "Wrong number of type parameters";
-                        failure_with_occurence(msg, *span, [(msg, *span)])
-                    }
+                let target_type = TypeExpr::from_value_expr(target, type_env);
 
-                    'a: {
-                        if fn_def.generics.is_none() {
-                            header = FunHeader {
-                                params: fn_def
-                                    .params
-                                    .clone()
-                                    .unwrap_or_default()
-                                    .into_iter()
-                                    .map(|(_, x)| x)
-                                    .collect(),
-                                return_type: fn_def.return_type.clone(),
-                            };
-                            break 'a;
+                let TypeExpr::Fun(def_params, def_ret, _) = target_type else {
+                    failure_with_occurence(
+                        "Can only call functions",
+                        *span,
+                        [("Can only call functions", *span)],
+                    )
+                };
+                header = FunHeader {
+                    params: def_params.into_iter().map(|(_, x)| x).collect(),
+                    return_type: def_ret.as_deref().cloned(),
+                };
+            } else {
+                match &mut target.0 {
+                    ValueExpr::Variable(_, name, _, _) => {
+                        let fn_def = type_env
+                            .function_definitions
+                            .iter()
+                            .find(|x| name.as_str() == x.name.as_str())
+                            .cloned()
+                            .expect(&format!("could not find {name}"));
+
+                        if type_params.len()
+                            != fn_def.generics.as_ref().map(|v| v.len()).unwrap_or(0)
+                        {
+                            let msg = "Wrong number of type parameters";
+                            failure_with_occurence(msg, *span, [(msg, *span)])
                         }
 
                         let generic_arguments = fn_def
@@ -1974,9 +1963,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                             .collect::<Vec<_>>()
                             .join(MANGLE_SEP);
 
-                        *name = new_fn_name.clone();
-                        *type_params = vec![];
-
                         cloned_fn_def.name = new_fn_name.clone();
                         cloned_fn_def.generics = None;
 
@@ -2005,120 +1991,120 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                             typeresolve_function_definition(&mut cloned_fn_def, type_env);
                             type_env.generic_fns_generated.push(cloned_fn_def.clone());
                         }
-                        header = type_env.get_method_header(&fn_def.name);
+                        header = type_env.get_method_header(&new_fn_name);
                     }
-                }
-                ValueExpr::FieldAccess {
-                    target_obj,
-                    field_name,
-                } => {
-                    let TypeExpr::Struct {
-                        name: struct_name,
-                        mut type_params,
-                    } = TypeExpr::from_value_expr_dereferenced(&target_obj, type_env)
-                    else {
-                        let msg = "Can only generic method call a struct";
-                        failure_with_occurence(msg, *span, [(msg, *span)]);
-                    };
+                    ValueExpr::FieldAccess {
+                        target_obj,
+                        field_name,
+                    } => {
+                        let TypeExpr::Struct {
+                            name: struct_name,
+                            mut type_params,
+                        } = TypeExpr::from_value_expr_dereferenced(&target_obj, type_env)
+                        else {
+                            let msg = "Can only generic method call a struct";
+                            failure_with_occurence(msg, *span, [(msg, *span)]);
+                        };
 
-                    let mut_struct_def = type_env.get_struct_def_mut(&struct_name);
-                    let method = mut_struct_def
-                        .methods
-                        .iter()
-                        .find(|m| m.name.as_str() == field_name.as_str())
-                        .cloned()
-                        .unwrap();
-
-                    let type_params_inner = type_params;
-
-                    if method
-                        .generics
-                        .as_ref()
-                        .is_none_or(|v2| type_params_inner.len() != v2.len())
-                    {
-                        let msg = "Wrong number of type parameters";
-                        failure_with_occurence(msg, *span, [(msg, *span)])
-                    }
-
-                    let generic_arguments = method
-                        .generics
-                        .as_ref()
-                        .unwrap()
-                        .iter()
-                        .map(|(x, _)| x)
-                        .zip(type_params_inner.iter())
-                        .fold(HashMap::new(), |mut acc, (def, arg)| {
-                            if let Some(c) = def.constraint.as_ref() {
-                                check_type_compatability(c, arg, type_env);
-                            }
-                            acc.insert(def.name.clone(), arg.0.clone());
-                            acc
-                        });
-
-                    let mut cloned_fn_def = method.clone();
-
-                    let (new_fn_name, global_generic_generation_id) = {
-                        let new_method_name = [cloned_fn_def.name.clone()]
-                            .into_iter()
-                            .chain(
-                                generic_arguments
-                                    .iter()
-                                    .map(|(_, t)| t.as_clean_user_faced_type_name()),
-                            )
-                            .collect::<Vec<_>>();
-
-                        let mut gen_id = new_method_name.clone();
-                        gen_id.insert(0, struct_name.clone());
-                        (new_method_name.join(MANGLE_SEP), gen_id.join(MANGLE_SEP))
-                    };
-
-                    *field_name = new_fn_name.clone();
-                    type_params = vec![];
-
-                    cloned_fn_def.name = new_fn_name.clone();
-                    cloned_fn_def.generics = None;
-
-                    if type_env
-                        .prevent_generic_generation
-                        .insert(global_generic_generation_id.clone())
-                    {
-                        replace_generics_in_function_definition(
-                            &mut cloned_fn_def,
-                            &generic_arguments,
-                        );
-                        type_env.function_headers.insert(
-                            global_generic_generation_id.clone(),
-                            FunHeader {
-                                params: cloned_fn_def
-                                    .params
-                                    .as_ref()
-                                    .cloned()
-                                    .unwrap()
-                                    .into_iter()
-                                    .map(|(_, x)| x)
-                                    .collect(),
-                                return_type: cloned_fn_def.return_type.as_ref().cloned(),
-                            },
-                        );
                         let mut_struct_def = type_env.get_struct_def_mut(&struct_name);
-                        mut_struct_def.methods.push(cloned_fn_def.clone());
-                        if mut_struct_def.mut_methods.contains(field_name) {
-                            mut_struct_def
-                                .mut_methods
-                                .insert(cloned_fn_def.name.clone());
+                        let method = mut_struct_def
+                            .methods
+                            .iter()
+                            .find(|m| m.name.as_str() == field_name.as_str())
+                            .cloned()
+                            .unwrap();
+
+                        let type_params_inner = type_params;
+
+                        if method
+                            .generics
+                            .as_ref()
+                            .is_none_or(|v2| type_params_inner.len() != v2.len())
+                        {
+                            let msg = "Wrong number of type parameters";
+                            failure_with_occurence(msg, *span, [(msg, *span)])
                         }
-                        let mut cloned = mut_struct_def.clone();
-                        typeresolve_struct_def(&mut cloned, type_env);
-                        *type_env.get_struct_def_mut(&struct_name) = cloned;
-                        type_env
-                            .get_generic_methods(struct_name.clone())
-                            .push(cloned_fn_def);
+
+                        let generic_arguments = method
+                            .generics
+                            .as_ref()
+                            .unwrap()
+                            .iter()
+                            .map(|(x, _)| x)
+                            .zip(type_params_inner.iter())
+                            .fold(HashMap::new(), |mut acc, (def, arg)| {
+                                if let Some(c) = def.constraint.as_ref() {
+                                    check_type_compatability(c, arg, type_env);
+                                }
+                                acc.insert(def.name.clone(), arg.0.clone());
+                                acc
+                            });
+
+                        let mut cloned_fn_def = method.clone();
+
+                        let (new_fn_name, global_generic_generation_id) = {
+                            let new_method_name = [cloned_fn_def.name.clone()]
+                                .into_iter()
+                                .chain(
+                                    generic_arguments
+                                        .iter()
+                                        .map(|(_, t)| t.as_clean_user_faced_type_name()),
+                                )
+                                .collect::<Vec<_>>();
+
+                            let mut gen_id = new_method_name.clone();
+                            gen_id.insert(0, struct_name.clone());
+                            (new_method_name.join(MANGLE_SEP), gen_id.join(MANGLE_SEP))
+                        };
+
+                        *field_name = new_fn_name.clone();
+                        type_params = vec![];
+
+                        cloned_fn_def.name = new_fn_name.clone();
+                        cloned_fn_def.generics = None;
+
+                        if type_env
+                            .prevent_generic_generation
+                            .insert(global_generic_generation_id.clone())
+                        {
+                            replace_generics_in_function_definition(
+                                &mut cloned_fn_def,
+                                &generic_arguments,
+                            );
+                            type_env.function_headers.insert(
+                                global_generic_generation_id.clone(),
+                                FunHeader {
+                                    params: cloned_fn_def
+                                        .params
+                                        .as_ref()
+                                        .cloned()
+                                        .unwrap()
+                                        .into_iter()
+                                        .map(|(_, x)| x)
+                                        .collect(),
+                                    return_type: cloned_fn_def.return_type.as_ref().cloned(),
+                                },
+                            );
+                            let mut_struct_def = type_env.get_struct_def_mut(&struct_name);
+                            mut_struct_def.methods.push(cloned_fn_def.clone());
+                            if mut_struct_def.mut_methods.contains(field_name) {
+                                mut_struct_def
+                                    .mut_methods
+                                    .insert(cloned_fn_def.name.clone());
+                            }
+                            let mut cloned = mut_struct_def.clone();
+                            typeresolve_struct_def(&mut cloned, type_env);
+                            *type_env.get_struct_def_mut(&struct_name) = cloned;
+                            type_env
+                                .get_generic_methods(struct_name.clone())
+                                .push(cloned_fn_def);
+                        }
+                        header = type_env.get_method_header(&global_generic_generation_id);
                     }
-                    header = type_env.get_method_header(&global_generic_generation_id);
-                }
-                _ => {
-                    let msg = "Can only use generics on methods or global functions";
-                    failure_with_occurence(msg, *span, [(msg, *span)]);
+                    _ => {
+                        let msg = "Can only use generics on methods or global functions";
+                        failure_with_occurence(msg, *span, [(msg, *span)]);
+                    }
                 }
             }
 
@@ -2235,10 +2221,8 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 .insert(new_struct_name.clone())
             {
                 replace_generics_in_struct_definition(&mut cloned_def, &generic_arguments);
-                dbg!(1);
                 type_env.generic_structs_generated.push(cloned_def.clone());
                 typeresolve_struct_def(&mut cloned_def, type_env);
-                dbg!(2);
                 type_env
                     .generic_structs_generated
                     .retain(|f| f.name.as_str() != new_struct_name.clone());

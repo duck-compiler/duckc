@@ -1,4 +1,10 @@
+use go "fmt";
+use go "strconv";
+
 fn take_s(s: S) {}
+
+fn gen_fun<T>(x: C<T, T>) {
+}
 
 type C<B, Y> = Y;
 type SS = C<Int, String>;
@@ -6,4 +12,6 @@ type S = SS;
 
 fn main() {
     take_s("a");
+    gen_fun<Int>(0);
+    gen_fun<String>("yoo");
 }

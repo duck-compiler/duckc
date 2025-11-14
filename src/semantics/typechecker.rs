@@ -1646,7 +1646,7 @@ pub fn check_type_compatability_full(
             check_type_compatability(content_type, &given_content_type, type_env);
         }
         TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) => {
-            panic!("shouldn't be here {given_type:?} {given_type:?}")
+
         }
         TypeExpr::And(required_variants) => {
             for required_variant in required_variants {

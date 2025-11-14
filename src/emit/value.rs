@@ -15,7 +15,10 @@ use crate::{
             Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr, empty_range,
         },
     },
-    semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
+    semantics::{
+        ident_mangler::{MANGLE_SEP, mangle},
+        type_resolve::TypeEnv,
+    },
 };
 
 #[derive(Debug, Clone, Default)]
@@ -186,8 +189,7 @@ pub fn needs_mut(v: &ValueExpr, type_env: &mut TypeEnv) -> bool {
                 field_name,
             } = &target.0
             {
-                let ty =
-                    TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
+                let ty = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
                 if let TypeExpr::TypeName(_, type_name, _) = ty
                     && let Some(struct_def) = type_env.get_struct_def_opt(&type_name)
                     && struct_def.mut_methods.contains(&field_name.to_string())
@@ -288,8 +290,7 @@ fn walk_access_raw(
             ValueExpr::ArrayAccess(target_obj, index) => {
                 let (instr, res) = index.0.emit(type_env, env, span);
 
-                let mut type_expr =
-                    TypeExpr::from_value_expr(&target_obj, type_env);
+                let mut type_expr = TypeExpr::from_value_expr(&target_obj, type_env);
 
                 let mut stars_to_set = 0;
                 if deref_needs_to_be_mut {
@@ -348,7 +349,7 @@ fn walk_access_raw(
             ValueExpr::FunctionCall {
                 target,
                 params,
-                type_params: _,
+                type_params,
                 ..
             } => {
                 is_calling_fun = true;
@@ -359,9 +360,7 @@ fn walk_access_raw(
                     field_name,
                 } = &target.0
                 {
-                    let ty = TypeExpr::from_value_expr_dereferenced(
-                        target_obj, type_env,
-                    );
+                    let ty = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
 
                     if let TypeExpr::Struct {
                         name: struct_name,
@@ -448,14 +447,31 @@ fn walk_access_raw(
                 }
 
                 stars = stars_to_set;
-                current_obj = *target;
+                current_obj = if let ValueExpr::Variable(a, var_name, b, c) = &target.0
+                    && !type_params.is_empty()
+                {
+                    let generic_name = [var_name.clone()]
+                        .into_iter()
+                        .chain(
+                            type_params
+                                .iter()
+                                .map(|(t, _)| t.as_clean_go_type_name(type_env)),
+                        )
+                        .collect::<Vec<_>>()
+                        .join(MANGLE_SEP);
+                    (
+                        ValueExpr::Variable(a.clone(), generic_name, b.clone(), c.clone()),
+                        target.1,
+                    )
+                } else {
+                    *target
+                };
             }
             ValueExpr::FieldAccess {
                 target_obj,
                 field_name,
             } => {
-                let mut type_expr =
-                    TypeExpr::from_value_expr(&target_obj, type_env);
+                let mut type_expr = TypeExpr::from_value_expr(&target_obj, type_env);
 
                 let mut stars_to_set = 0;
                 if deref_needs_to_be_mut {
@@ -487,10 +503,7 @@ fn walk_access_raw(
                     }
                 }
 
-                let type_expr = TypeExpr::from_value_expr_dereferenced(
-                    &target_obj,
-                    type_env,
-                );
+                let type_expr = TypeExpr::from_value_expr_dereferenced(&target_obj, type_env);
 
                 match type_expr {
                     TypeExpr::Tuple(..) => s.push_front(format!("field_{field_name}")),
@@ -527,8 +540,7 @@ fn walk_access_raw(
             }
             _ => {
                 // if only_read {
-                let mut type_expr =
-                    TypeExpr::from_value_expr(&current_obj, type_env);
+                let mut type_expr = TypeExpr::from_value_expr(&current_obj, type_env);
 
                 if deref_needs_to_be_mut {
                     if !can_do_mut_stuff_through(&current_obj, type_env) {
@@ -737,8 +749,7 @@ impl ValueExpr {
                 let (mut target_instr, target_res) =
                     walk_access(target, type_env, env, span, true, false, false);
 
-                let mut target_type =
-                    TypeExpr::from_value_expr(target, type_env);
+                let mut target_type = TypeExpr::from_value_expr(target, type_env);
 
                 let mut star_count: u32 = 0;
 
@@ -844,8 +855,7 @@ impl ValueExpr {
                 }
             }
             ValueExpr::Deref(v) => {
-                let target_type =
-                    TypeExpr::from_value_expr(&(self.clone(), span), type_env);
+                let target_type = TypeExpr::from_value_expr(&(self.clone(), span), type_env);
                 let res_type = target_type.as_go_type_annotation(type_env).to_string();
                 let (mut emit_instr, emit_res) = v.0.emit(type_env, env, span);
                 if let Some(emit_res) = emit_res {
@@ -880,9 +890,7 @@ impl ValueExpr {
                     }
                     | ValueExpr::ArrayAccess(target_obj, _) = &v.0
                     {
-                        let t = TypeExpr::from_value_expr_dereferenced(
-                            target_obj, type_env,
-                        );
+                        let t = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
                         let is_accessing_duck = matches!(t, TypeExpr::Duck(..));
                         if let Some(mut walk_res) = walk_res {
                             let val_to_set: IrValue;
@@ -1896,9 +1904,8 @@ impl ValueExpr {
                         }
                         .join("");
 
-                        let target_ty = TypeExpr::from_value_expr_dereferenced(
-                            target_obj, type_env,
-                        );
+                        let target_ty =
+                            TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
                         match target_ty {
                             TypeExpr::Duck(_) => {
                                 res.push(IrInstruction::FunCall(
@@ -2175,7 +2182,7 @@ impl ValueExpr {
             ValueExpr::FunctionCall {
                 target: v_target,
                 params,
-                type_params: _,
+                type_params,
                 ..
             } => {
                 // todo: type_params
