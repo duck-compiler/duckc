@@ -257,7 +257,12 @@ impl TypeEnv<'_> {
                 .insert(new_struct_name.clone())
             {
                 replace_generics_in_struct_definition(&mut cloned_def, &generic_arguments);
+                cloned_def.name = new_struct_name.clone();
+                self.generic_structs_generated.push(cloned_def.clone());
+                cloned_def.name = name.to_string();
                 typeresolve_struct_def(&mut cloned_def, type_params.to_vec(), self);
+                self.generic_structs_generated
+                    .retain(|f| f.name.as_str() != new_struct_name.as_str());
                 cloned_def.name = new_struct_name.clone();
                 self.generic_structs_generated.push(cloned_def);
             }
@@ -1006,6 +1011,16 @@ pub fn resolve_type_expr(t: &Spanned<TypeExpr>, env: &mut TypeEnv) -> Spanned<Ty
             _ => break,
         };
 
+        if let Some(s_def) = env.get_struct_def_opt(name)
+            && !matches!(res.0, TypeExpr::Struct { .. })
+        {
+            res.0 = TypeExpr::Struct {
+                name: s_def.name.clone(),
+                type_params: generics.to_vec(),
+            };
+            continue;
+        }
+
         if let Some(simple_resolved) = env.get_type_alias(name)
             && generics.is_empty()
         {
@@ -1348,6 +1363,23 @@ pub fn typeresolve_struct_def(
             }
         }
     }
+
+    let new_struct_name = [def.name.clone()]
+        .into_iter()
+        .chain(
+            type_params
+                .iter()
+                .map(|(x, _)| x.as_clean_go_type_name(type_env)),
+        )
+        .collect::<Vec<_>>()
+        .join(MANGLE_SEP);
+
+    let mut cloned = def.clone();
+    cloned.name = new_struct_name.clone();
+    type_env
+        .generic_structs_generated
+        .retain(|f| f.name.as_str() != new_struct_name.as_str());
+    type_env.generic_structs_generated.push(cloned);
 
     for m in &mut def.methods {
         type_env.push_identifier_types();
