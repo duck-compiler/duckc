@@ -1,32 +1,41 @@
-struct S = {
-    f: Int[],
+use go "fmt";
+use go "strconv";
+
+fn take_s(s: S) {}
+
+fn gen_fun<T>(x: C<T, T>) {
+}
+
+struct GenS<T> = {
+    x: T,
 } impl {
+    fn abc() -> GenS<Int> {
+        return GenS<Int> { x: 100 };
+    }
+    fn xyz() -> GenS<Bool> {
+        return self.xx().y();
+    }
+    fn xx() -> GenS<Float> {
+        return GenS<Float> { x: 10.0 };
+    }
+    fn y() -> GenS<Bool> {
+        return GenS<Bool> { x: true };
+    }
 };
 
-struct User = {
-    id: String,
-    name: String,
-    amount_of_logins: Int,
-    session: {
-        jwt: String,
-        started: Int,
-    },
-};
+fn gimme_s<E>(f: E) -> GenS<E> {
+    return GenS<E> { x: f };
+}
 
-type Session = User.session;
+type C<B, Y> = Y;
+type SS = C<Int, String>;
+type S = SS;
 
 fn main() {
-    while (true) {
-        while (true) {
-        std::io::println("loop");
-        const a = "a";
-        match a {
-            String => break,
-        }
-        }
-    }
-
-    for i in &Int[2] {
-        std::io::println(std::string::from_int(*i));
-    }
+    const a = gimme_s<GenS<Int>>(GenS<Int> {x: 1000 });
+    take_s("a");
+    gen_fun<Int>(0);
+    gen_fun<String>("yoo");
+    const x = GenS<String> { x: "yo" };
+    const y = x.abc();
 }

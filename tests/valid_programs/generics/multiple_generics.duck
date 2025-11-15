@@ -30,8 +30,8 @@ struct Pair<A, B> = {
     }
 
     fn replace_both2<NewA, NewB>(new_a: NewA, new_b: NewB) -> Pair<NewA, NewB> {
-        let first: Pair<NewA, B> = self.replace_a<NewA>(new_a);
-        let second: Pair<A, NewB> = self.replace_b<NewB>(new_b);
+        let first = self.replace_a<NewA>(new_a);
+        let second = self.replace_b<NewB>(new_b);
 
         return Pair<NewA, NewB> {
             a: first.a,
@@ -50,9 +50,9 @@ type PairWhereFirstIsInt<B> = Pair<Int, B>;
 type PairWhereFirstIsInt2<X> = Pair<Int, X>;
 
 fn main() {
-    let int_string_pair: Pair<Int, String> = Pair<Int, String> { a: 100, b: "a string" };
-    let int_string_pair2: PairWhereFirstIsInt<String> = PairWhereFirstIsInt<String> { a: 100, b: "a string" };
-    let int_string_pair3: PairWhereFirstIsInt2<String> = PairWhereFirstIsInt2<String> { a: 100, b: "a string" };
+    let int_string_pair = Pair<Int, String> { a: 100, b: "a string" };
+    let int_string_pair2 = PairWhereFirstIsInt<String> { a: 100, b: "a string" };
+    let int_string_pair3 = PairWhereFirstIsInt2<String> { a: 100, b: "a string" };
 
     print_with_go(int_string_pair);
     print_with_go(int_string_pair2);
