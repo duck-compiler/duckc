@@ -1,6 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
-    sync::mpsc::Sender,
+    clone, collections::{HashMap, HashSet}, sync::mpsc::Sender
 };
 
 use chumsky::container::Container;
@@ -513,8 +512,263 @@ impl TypeEnv<'_> {
     }
 }
 
+fn trav_type_expr<F1>(mut f_t: F1, v: &mut Spanned<TypeExpr>)
+where
+    F1: FnMut(&mut Spanned<TypeExpr>) + Clone,
+{
+    f_t(v);
+    match &mut v.0 {
+        TypeExpr::Duck(fields) => {
+            for f in &mut fields.fields {
+                trav_type_expr(f_t.clone(), &mut f.type_expr);
+            }
+        }
+        TypeExpr::Array(a) | TypeExpr::KeyOf(a) | TypeExpr::Ref(a) | TypeExpr::RefMut(a) => {
+            trav_type_expr(f_t, a)
+        }
+        TypeExpr::Bool(..)
+        | TypeExpr::Tag(..)
+        | TypeExpr::TypeOf(..)
+        | TypeExpr::Int(..)
+        | TypeExpr::String(..)
+        | TypeExpr::Float
+        | TypeExpr::Char
+        | TypeExpr::Html
+        | TypeExpr::Go(..)
+        | TypeExpr::Any
+        | TypeExpr::InlineGo => {}
+        TypeExpr::And(types) | TypeExpr::Or(types) | TypeExpr::Tuple(types) => {
+            for t in types {
+                trav_type_expr(f_t.clone(), t);
+            }
+        }
+        TypeExpr::Fun(params, ret, _) => {
+            for p in params {
+                trav_type_expr(f_t.clone(), &mut p.1);
+            }
+            if let Some(ret) = ret.as_mut() {
+                trav_type_expr(f_t.clone(), ret);
+            }
+        }
+        TypeExpr::RawTypeName(_, _, type_params)
+        | TypeExpr::TypeName(_, _, type_params)
+        | TypeExpr::Struct {
+            name: _,
+            type_params,
+        } => {
+            for t in type_params {
+                trav_type_expr(f_t.clone(), t);
+            }
+        }
+    }
+}
+
+pub fn trav_value_expr<F1, F2>(mut f_t: F1, mut f_vv: F2, v: &mut Spanned<ValueExpr>)
+where
+    F1: FnMut(&mut Spanned<TypeExpr>) + Clone,
+    F2: FnMut(&mut Spanned<ValueExpr>) + Clone,
+{
+    let cloned = f_t.clone();
+    let cloned_2 = f_vv.clone();
+    let mut f_v = |x: &mut Spanned<ValueExpr>| {
+        trav_value_expr(cloned.clone(), cloned_2.clone(), x);
+    };
+
+    f_vv(v);
+
+    match &mut v.0 {
+        ValueExpr::Lambda(l) => {
+            for v in &mut l.params {
+                if let Some(t) = v.1.as_mut() {
+                    f_t(t);
+                }
+            }
+            if let Some(ret) = l.return_type.as_mut() {
+                f_t(ret);
+            }
+            f_v(&mut l.value_expr);
+        }
+        ValueExpr::Return(e) => {
+            if let Some(e) = e {
+                f_v(e);
+            }
+        }
+        ValueExpr::FieldAccess {
+            target_obj,
+            field_name,
+        } => {
+            f_v(target_obj);
+        }
+        ValueExpr::ExtensionAccess {
+            target_obj,
+            extension_name,
+        } => {
+            f_v(target_obj);
+        }
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    f_v(e);
+                }
+            }
+        }
+        ValueExpr::FormattedString(contents) => {
+            for c in contents {
+                if let ValFmtStringContents::Expr(e) = c {
+                    f_v(e);
+                }
+            }
+        }
+        ValueExpr::Block(exprs) | ValueExpr::Tuple(exprs) => exprs.iter_mut().for_each(f_v),
+        ValueExpr::Duck(v) => {
+            for v in v {
+                f_v(&mut v.1);
+            }
+        }
+        ValueExpr::Struct {
+            name,
+            fields,
+            type_params,
+        } => {
+            for t in type_params {
+                f_t(t);
+            }
+            for v in fields {
+                f_v(&mut v.1);
+            }
+        }
+        ValueExpr::Add(lhs, rhs)
+        | ValueExpr::Sub(lhs, rhs)
+        | ValueExpr::Mul(lhs, rhs)
+        | ValueExpr::Div(lhs, rhs)
+        | ValueExpr::Mod(lhs, rhs)
+        | ValueExpr::Equals(lhs, rhs)
+        | ValueExpr::NotEquals(lhs, rhs)
+        | ValueExpr::GreaterThan(lhs, rhs)
+        | ValueExpr::GreaterThanOrEquals(lhs, rhs)
+        | ValueExpr::LessThan(lhs, rhs)
+        | ValueExpr::And(lhs, rhs)
+        | ValueExpr::Or(lhs, rhs)
+        | ValueExpr::LessThanOrEquals(lhs, rhs) => {
+            f_v(lhs);
+            f_v(rhs);
+        }
+        ValueExpr::FunctionCall {
+            target,
+            params,
+            type_params,
+            is_extension_call: _,
+        } => {
+            f_v(target);
+            for p in params {
+                f_v(p);
+            }
+            for t in type_params {
+                f_t(t);
+            }
+        }
+        ValueExpr::For {
+            ident: (_, _, _ident_type),
+            target,
+            block,
+        } => {
+            f_v(target);
+            f_v(block);
+        }
+        ValueExpr::ArrayAccess(target, idx) => {
+            f_v(target);
+            f_v(idx);
+        }
+        ValueExpr::As(target, t) => {
+            f_v(target);
+            f_t(t);
+        }
+        ValueExpr::Defer(v) => f_v(v),
+        ValueExpr::Array(exprs) => exprs.iter_mut().for_each(f_v),
+        ValueExpr::VarAssign(assign) => {
+            f_v(&mut assign.0.target);
+            f_v(&mut assign.0.value_expr);
+        }
+        ValueExpr::VarDecl(decl) => {
+            if let Some(t) = decl.0.type_expr.as_mut() {
+                f_t(t);
+            }
+            f_v(&mut decl.0.initializer);
+        }
+        ValueExpr::If {
+            condition,
+            then,
+            r#else,
+        } => {
+            f_v(condition);
+            f_v(then);
+            if let Some(e) = r#else {
+                f_v(e);
+            }
+        }
+        ValueExpr::While { condition, body } => {
+            f_v(condition);
+            f_v(body);
+        }
+        ValueExpr::Match {
+            value_expr,
+            arms,
+            else_arm,
+            span,
+        } => {
+            f_v(value_expr);
+            for arm in arms {
+                if let Some(c) = arm.condition.as_mut() {
+                    f_v(c);
+                }
+                f_t(&mut arm.type_case);
+                f_v(&mut arm.value_expr);
+            }
+            if let Some(e) = else_arm.as_mut() {
+                f_v(&mut e.value_expr);
+            }
+        }
+        ValueExpr::Int(..)
+        | ValueExpr::String(..)
+        | ValueExpr::Float(..)
+        | ValueExpr::Char(..)
+        | ValueExpr::Bool(..)
+        | ValueExpr::Tag(..)
+        | ValueExpr::Break
+        | ValueExpr::Continue
+        | ValueExpr::Variable(..)
+        | ValueExpr::RawVariable(..)
+        | ValueExpr::InlineGo(..) => {}
+
+        ValueExpr::BoolNegate(v)
+        | ValueExpr::Deref(v)
+        | ValueExpr::Ref(v)
+        | ValueExpr::RefMut(v) => {
+            f_v(v);
+        }
+    }
+}
+
 fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
     match expr {
+        TypeExpr::Html
+        | TypeExpr::Char
+        | TypeExpr::Any
+        | TypeExpr::InlineGo
+        | TypeExpr::Go(..)
+        | TypeExpr::Tag(..)
+        | TypeExpr::Int(..)
+        | TypeExpr::Bool(..)
+        | TypeExpr::Float
+        | TypeExpr::String(..) => {}
+        TypeExpr::And(v) => {
+            for v in v {
+                resolve_all_aliases_type_expr(&mut v.0, env);
+            }
+        }
+        TypeExpr::Struct { .. } => {
+            *expr = resolve_type_expr(&expr.clone().into_empty_span(), env).0;
+        }
         TypeExpr::Ref(t) | TypeExpr::RefMut(t) => resolve_all_aliases_type_expr(&mut t.0, env),
         TypeExpr::RawTypeName(_, typename, generic_params) => {
             if typename.len() != 1 {
@@ -627,7 +881,6 @@ fn resolve_all_aliases_type_expr(expr: &mut TypeExpr, env: &mut TypeEnv) {
             resolve_all_aliases_type_expr(&mut final_type, env);
             *expr = final_type;
         }
-        _ => {}
     }
 }
 
@@ -2030,7 +2283,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                             );
                             type_env.function_headers.insert(
                                 new_fn_name.clone(),
-                                FunHeader {
+                                dbg!(FunHeader {
                                     params: cloned_fn_def
                                         .params
                                         .as_ref()
@@ -2040,7 +2293,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                                         .map(|(_, x)| x)
                                         .collect(),
                                     return_type: cloned_fn_def.return_type.as_ref().cloned(),
-                                },
+                                }),
                             );
                             typeresolve_function_definition(&mut cloned_fn_def, type_env);
                             type_env.generic_fns_generated.push(cloned_fn_def.clone());

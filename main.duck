@@ -23,11 +23,16 @@ struct GenS<T> = {
     }
 };
 
+fn gimme_s<E>(f: E) -> GenS<E> {
+    return GenS<E> { x: f };
+}
+
 type C<B, Y> = Y;
 type SS = C<Int, String>;
 type S = SS;
 
 fn main() {
+    const a = gimme_s<GenS<Int>>(GenS<Int> {x: 1000 });
     take_s("a");
     gen_fun<Int>(0);
     gen_fun<String>("yoo");
