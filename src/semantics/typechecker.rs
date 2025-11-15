@@ -12,6 +12,7 @@ use crate::parse::{
     Spanned, failure,
     value_parser::{ValFmtStringContents, ValueExpr},
 };
+use crate::semantics::ident_mangler::MANGLE_SEP;
 use crate::semantics::type_resolve::{TypeEnv, is_const_var};
 
 impl TypeExpr {
@@ -383,7 +384,7 @@ impl TypeExpr {
             ValueExpr::FunctionCall {
                 target,
                 params,
-                type_params: _,
+                type_params,
                 is_extension_call,
             } => {
                 // todo: type_params
@@ -392,50 +393,124 @@ impl TypeExpr {
                     .map(|param| (TypeExpr::from_value_expr(param, type_env), param.1))
                     .collect::<Vec<_>>();
 
-                let mut target_type = TypeExpr::from_value_expr(target.as_ref(), type_env);
-                if let TypeExpr::Fun(param_types, return_type, _) = &mut target_type {
-                    param_types
-                        .iter_mut()
-                        .enumerate()
-                        .for_each(|(index, param_type)| {
-                            if matches!(param_type.1.0, TypeExpr::Any) {
-                                return;
-                            }
+                if !type_params.is_empty() {
+                    if let ValueExpr::Variable(_, var_name, ..) = &target.0 {
+                        let new_fn_name = [var_name.to_string()]
+                            .into_iter()
+                            .chain(
+                                type_params
+                                    .iter()
+                                    .map(|(t, _)| t.as_clean_go_type_name(type_env)),
+                            )
+                            .collect::<Vec<_>>()
+                            .join(MANGLE_SEP);
 
-                            if let Some(param_name) = &param_type.0
-                                && param_name == "self"
-                            {
-                                if !is_extension_call {
+                        let f = type_env
+                            .generic_fns_generated
+                            .iter()
+                            .find(|fn_def| fn_def.name.as_str() == new_fn_name.clone());
+
+                        if let Some(d) = f {
+                            return d
+                                .return_type
+                                .as_ref()
+                                .cloned()
+                                .map(|(x, _)| x)
+                                .unwrap_or(TypeExpr::Tuple(vec![]));
+                        } else {
+                            unreachable!("fn not found");
+                        }
+                    } else if let ValueExpr::FieldAccess {
+                        target_obj,
+                        field_name,
+                    } = &target.0
+                    {
+                        let TypeExpr::Struct {
+                            name: struct_name,
+                            type_params: struct_type_params,
+                        } = TypeExpr::from_value_expr(target_obj, type_env)
+                        else {
+                            panic!()
+                        };
+
+                        let replaced_generics = type_env
+                            .get_struct_def_with_type_params_mut(
+                                &struct_name,
+                                &struct_type_params,
+                                *complete_span,
+                            )
+                            .name
+                            .clone();
+
+                        let (_new_fn_name, global_generic_generation_id) = {
+                            let new_method_name = [field_name.clone()]
+                                .into_iter()
+                                .chain(
+                                    type_params
+                                        .iter()
+                                        .map(|(t, _)| t.as_clean_go_type_name(type_env)),
+                                )
+                                .collect::<Vec<_>>();
+
+                            let mut gen_id = new_method_name.clone();
+                            gen_id.insert(0, replaced_generics.clone());
+                            (new_method_name.join(MANGLE_SEP), gen_id.join(MANGLE_SEP))
+                        };
+
+                        let header = type_env.get_method_header(&global_generic_generation_id);
+                        return header
+                            .return_type
+                            .clone()
+                            .map(|(x, _)| x)
+                            .unwrap_or(TypeExpr::Tuple(vec![]));
+                    }
+                } else {
+                    let mut target_type = TypeExpr::from_value_expr(target.as_ref(), type_env);
+                    if let TypeExpr::Fun(param_types, return_type, _) = &mut target_type {
+                        param_types
+                            .iter_mut()
+                            .enumerate()
+                            .for_each(|(index, param_type)| {
+                                if matches!(param_type.1.0, TypeExpr::Any) {
+                                    return;
+                                }
+
+                                if let Some(param_name) = &param_type.0
+                                    && param_name == "self"
+                                {
+                                    if !is_extension_call {
+                                        check_type_compatability_full(
+                                            &param_type.1,
+                                            in_param_types.get(index).unwrap(),
+                                            type_env,
+                                            is_const_var(&params[index].0),
+                                        );
+                                    } else {
+                                        return;
+                                    }
+                                } else {
                                     check_type_compatability_full(
                                         &param_type.1,
                                         in_param_types.get(index).unwrap(),
                                         type_env,
                                         is_const_var(&params[index].0),
                                     );
-                                } else {
-                                    return;
                                 }
-                            } else {
-                                check_type_compatability_full(
-                                    &param_type.1,
-                                    in_param_types.get(index).unwrap(),
-                                    type_env,
-                                    is_const_var(&params[index].0),
-                                );
-                            }
 
-                            // variant any replace
-                            if let TypeExpr::Array(boxed) = &in_param_types.get(index).unwrap().0
-                                && let TypeExpr::Or(_) = boxed.as_ref().0
-                            {
-                                param_type.1.0 =
-                                    TypeExpr::Array(Box::new((TypeExpr::Any, empty_range())))
-                            }
-                        });
+                                // variant any replace
+                                if let TypeExpr::Array(boxed) =
+                                    &in_param_types.get(index).unwrap().0
+                                    && let TypeExpr::Or(_) = boxed.as_ref().0
+                                {
+                                    param_type.1.0 =
+                                        TypeExpr::Array(Box::new((TypeExpr::Any, empty_range())))
+                                }
+                            });
 
-                    return return_type
-                        .clone()
-                        .map_or(TypeExpr::Tuple(vec![]), |x| x.as_ref().0.clone());
+                        return return_type
+                            .clone()
+                            .map_or(TypeExpr::Tuple(vec![]), |x| x.as_ref().0.clone());
+                    }
                 }
 
                 failure(
@@ -800,14 +875,21 @@ impl TypeExpr {
     fn has_field_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
         match self {
             Self::Tuple(fields) => fields.len() > name.parse::<usize>().unwrap(),
-            Self::Struct { name, type_params } => {
+            Self::Struct {
+                name: struct_name,
+                type_params,
+            } => {
                 let StructDefinition {
                     name: _,
                     fields,
                     methods: _,
                     mut_methods: _,
                     generics: _,
-                } = type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
+                } = type_env.get_struct_def_with_type_params_mut(
+                    struct_name,
+                    type_params,
+                    empty_range(),
+                );
 
                 fields.iter().any(|f| f.name.as_str() == name.as_str())
             }
@@ -1645,9 +1727,7 @@ pub fn check_type_compatability_full(
 
             check_type_compatability(content_type, &given_content_type, type_env);
         }
-        TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) => {
-
-        }
+        TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) => {}
         TypeExpr::And(required_variants) => {
             for required_variant in required_variants {
                 check_type_compatability(required_variant, &given_type, type_env);

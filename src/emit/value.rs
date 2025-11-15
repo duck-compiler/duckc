@@ -3,6 +3,8 @@ use std::{
     panic,
 };
 
+use chumsky::container::Container;
+
 use crate::{
     emit::types::escape_string_for_go,
     parse::{
@@ -364,12 +366,12 @@ fn walk_access_raw(
 
                     if let TypeExpr::Struct {
                         name: struct_name,
-                        type_params,
+                        type_params: struct_type_params,
                     } = ty
                     {
                         let struct_def = type_env.get_struct_def_with_type_params_mut(
                             struct_name.as_str(),
-                            &type_params,
+                            &struct_type_params,
                             empty_range(),
                         );
                         if struct_def.mut_methods.contains(field_name)
@@ -463,6 +465,28 @@ fn walk_access_raw(
                         ValueExpr::Variable(a.clone(), generic_name, b.clone(), c.clone()),
                         target.1,
                     )
+                } else if let ValueExpr::FieldAccess {
+                    target_obj,
+                    field_name,
+                } = &target.0
+                    && !type_params.is_empty()
+                {
+                    let generic_name = [field_name.clone()]
+                        .into_iter()
+                        .chain(
+                            type_params
+                                .iter()
+                                .map(|(t, _)| t.as_clean_go_type_name(type_env)),
+                        )
+                        .collect::<Vec<_>>()
+                        .join(MANGLE_SEP);
+                    (
+                        ValueExpr::FieldAccess {
+                            target_obj: target_obj.clone(),
+                            field_name: generic_name.clone(),
+                        },
+                        target.1,
+                    )
                 } else {
                     *target
                 };
@@ -524,7 +548,9 @@ fn walk_access_raw(
                         }
                     }
                     TypeExpr::Struct { .. } => s.push_front(field_name.to_string()),
-                    _ => {}
+                    _ => {
+                        dbg!(&target_obj.0);
+                    }
                 }
 
                 s[0].insert(0, '.');
@@ -2187,11 +2213,30 @@ impl ValueExpr {
             } => {
                 // todo: type_params
 
-                let TypeExpr::Fun(_, return_type, _) =
-                    TypeExpr::from_value_expr(v_target, type_env)
-                else {
-                    panic!("can only call function")
-                };
+                let v_target = &mut v_target.clone();
+                let return_type = Some(
+                    TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env)
+                        .into_empty_span(),
+                )
+                .filter(|x| !x.0.is_unit());
+
+                if !type_params.is_empty() {
+                    if let ValueExpr::FieldAccess {
+                        target_obj: _,
+                        field_name,
+                    } = &mut v_target.0
+                    {
+                        *field_name = [field_name.clone()]
+                            .into_iter()
+                            .chain(
+                                type_params
+                                    .iter()
+                                    .map(|(t, _)| t.as_clean_go_type_name(type_env)),
+                            )
+                            .collect::<Vec<_>>()
+                            .join(MANGLE_SEP);
+                    }
+                }
 
                 let res = v_target.0.direct_emit(type_env, env, span);
                 let mut instr = Vec::new();

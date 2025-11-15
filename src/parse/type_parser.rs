@@ -610,7 +610,22 @@ impl Display for TypeExpr {
                 type_params,
             } => {
                 let s = s.replace("_____", "::");
-                write!(f, "{s}")
+                write!(
+                    f,
+                    "{s}{}",
+                    if type_params.is_empty() {
+                        ""
+                    } else {
+                        &format!(
+                            "<{}>",
+                            type_params
+                                .iter()
+                                .map(|x| x.0.as_clean_user_faced_type_name())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    }
+                )
             }
             TypeExpr::Go(s) => write!(f, "go {s}"),
             TypeExpr::Duck(d) => write!(f, "{d}"), // Delegates to Duck's Display impl

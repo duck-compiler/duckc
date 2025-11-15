@@ -454,7 +454,7 @@ fn parse_src_file(
 
     // TODO: do this for all dependencies
     let mut result = src_file.unwrap().flatten(&vec![], true);
-    if false {
+    if !false {
         for s in &std_src_file.function_definitions {
             result.function_definitions.push(s.clone());
         }
