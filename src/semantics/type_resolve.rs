@@ -212,11 +212,12 @@ impl TypeEnv<'_> {
 
         let generic_id = build_struct_generic_id(name, type_params, self);
 
-        if let Some((idx, _def)) = self
-            .generic_structs_generated
-            .iter()
-            .enumerate()
-            .find(|(_, stored_def)| stored_def.name.as_str() == generic_id.as_ref())
+        if !type_params.is_empty()
+            && let Some((idx, _def)) = self
+                .generic_structs_generated
+                .iter()
+                .enumerate()
+                .find(|(_, stored_def)| stored_def.name.as_str() == generic_id.as_ref())
         {
             return &mut self.generic_structs_generated[idx];
         }
