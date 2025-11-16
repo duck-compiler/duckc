@@ -831,7 +831,7 @@ fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeE
         |f, env| match &mut f.0 {
             ValueExpr::Struct {
                 name,
-                fields,
+                fields: _,
                 type_params,
             } => {
                 if let TypeExpr::Struct {
@@ -1894,21 +1894,21 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     }
 
     source_file
+        .struct_definitions
+        .iter_mut()
+        .for_each(|struct_definition| {
+            if struct_definition.generics.is_empty() {
+                typeresolve_struct_def(struct_definition, vec![], type_env);
+            }
+        });
+
+    source_file
         .function_definitions
         .iter_mut()
         .for_each(|function_defintion| {
             if function_defintion.generics.is_none() {
                 typeresolve_function_definition(function_defintion, type_env);
                 process_keyof_in_value_expr(&mut function_defintion.value_expr, type_env);
-            }
-        });
-
-    source_file
-        .struct_definitions
-        .iter_mut()
-        .for_each(|struct_definition| {
-            if struct_definition.generics.is_empty() {
-                typeresolve_struct_def(struct_definition, vec![], type_env);
             }
         });
 
