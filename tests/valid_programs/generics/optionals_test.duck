@@ -1,19 +1,19 @@
 use std::io::{debug, println};
 
-struct Opt<T> = {
+struct Option<T> = {
     inner: T | .empty,
 } impl {
-    fn filter(f: fn(x: T) -> Bool) -> Opt<T> {
+    fn filter(f: fn(x: T) -> Bool) -> Option<T> {
         return match self.inner {
-            T @ value => if (f(value)) { *self } else { empty_opt<T>() },
-            .empty => empty_opt<T>(),
+            T @ value => if (f(value)) { *self } else { empty_Option<T>() },
+            .empty => empty_Option<T>(),
         };
     }
 
-    fn map<U>(f: fn(x: T) -> U) -> Opt<U> {
+    fn map<U>(f: fn(x: T) -> U) -> Option<U> {
         return match self.inner {
             T @ value => some<U>(f(value)),
-            .empty => empty_opt<U>(),
+            .empty => empty_Option<U>(),
         };
     }
 
@@ -28,13 +28,13 @@ struct Opt<T> = {
         return !self.is_empty();
     }
 
-    fn zip<U>(other: Opt<U>) -> Opt<(T, U)> {
+    fn zip<U>(other: Option<U>) -> Option<(T, U)> {
         return match self.inner {
             T @ first => match other.inner {
                 U @ second => some<(T, U)>((first, second)),
-                .empty => empty_opt<(T, U)>(),
+                .empty => empty_Option<(T, U)>(),
             },
-            .empty => empty_opt<(T, U)>(),
+            .empty => empty_Option<(T, U)>(),
         };
     }
 
@@ -53,19 +53,19 @@ struct Opt<T> = {
     }
 };
 
-fn empty_opt<T>() -> Opt<T> {
-    return Opt<T> { inner: .empty };
+fn empty_Option<T>() -> Option<T> {
+    return Option<T> { inner: .empty };
 }
 
-fn some<T>(v: T) -> Opt<T> {
-    return Opt<T> { inner: v };
+fn some<T>(v: T) -> Option<T> {
+    return Option<T> { inner: v };
 }
 
 fn main() {
     let v: String = "abc";
 
-    let o: Opt<String> = some<String>("Yo");
-    let o2: Opt<Int> = some<Int>(200);
+    let o: Option<String> = some<String>("Yo");
+    let o2: Option<Int> = some<Int>(200);
 
     debug(o.filter(fn(x: String) -> Bool { return false; }).is_empty());
     debug(o.filter(fn(x: String) -> Bool { return true }));
@@ -75,6 +75,6 @@ fn main() {
     debug(o.map<Int>(fn(x: String) -> Int { return 100 }).is_some());
     debug(o.zip<Int>(o2));
     debug(o.zip<Int>(o2).is_some());
-    debug(o.zip<Int>(empty_opt<Int>()).is_empty());
-    debug(empty_opt<String>().unwrap());
+    debug(o.zip<Int>(empty_Option<Int>()).is_empty());
+    debug(empty_Option<String>().unwrap());
 }

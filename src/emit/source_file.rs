@@ -30,7 +30,11 @@ impl SourceFile {
 
         let mut emitted = HashSet::new();
 
-        for function_definition in self.function_definitions {
+        for function_definition in self
+            .function_definitions
+            .iter()
+            .chain(type_env.generic_fns_generated.clone().iter())
+        {
             // generic functions shouldn't be emitted, as they have incomplete type information
             if function_definition.generics.is_some() {
                 continue;

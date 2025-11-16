@@ -1,5 +1,5 @@
 fn with_keyof_return<T>(val: keyof T) -> keyof T {
-    return t;
+    return val;
 }
 
 fn main() {

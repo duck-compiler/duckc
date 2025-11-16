@@ -58,19 +58,19 @@ pub fn make_input<'src>(
 }
 
 pub fn failure_with_occurence(
-    msg: String,
+    msg: impl AsRef<str>,
     occured_at: SS,
-    labels: impl IntoIterator<Item = (String, SS)>,
+    labels: impl IntoIterator<Item = (impl AsRef<str>, SS)>,
 ) -> ! {
     Report::build(
         ReportKind::Error,
         (occured_at.context.file_name, occured_at.into_range()),
     )
     .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
-    .with_message(&msg)
+    .with_message(msg.as_ref())
     .with_labels(labels.into_iter().map(|label2| {
         Label::new((label2.1.context.file_name, label2.1.into_range()))
-            .with_message(label2.0)
+            .with_message(label2.0.as_ref())
             .with_color(Color::Yellow)
     }))
     .finish()
@@ -79,7 +79,7 @@ pub fn failure_with_occurence(
         occured_at.context.file_contents,
     )]))
     .unwrap();
-    panic!("{msg}")
+    panic!("{}", msg.as_ref())
 }
 
 pub fn failure(

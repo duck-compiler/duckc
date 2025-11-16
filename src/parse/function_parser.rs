@@ -35,8 +35,8 @@ impl FunctionDefintion {
         if let Some((return_type_expr, _span)) = &mut return_type
             && let TypeExpr::And(_) = &return_type_expr
         {
-            use crate::semantics::type_resolve::translate_interception_to_duck;
-            *return_type_expr = translate_interception_to_duck(return_type_expr);
+            use crate::semantics::type_resolve::translate_intersection_to_duck;
+            *return_type_expr = translate_intersection_to_duck(return_type_expr);
         }
 
         FunHeader {
@@ -57,8 +57,8 @@ impl FunctionDefintion {
         if let Some((return_type_expr, _span)) = &mut return_type
             && let TypeExpr::And(_) = &return_type_expr
         {
-            use crate::semantics::type_resolve::translate_interception_to_duck;
-            *return_type_expr = translate_interception_to_duck(return_type_expr);
+            use crate::semantics::type_resolve::translate_intersection_to_duck;
+            *return_type_expr = translate_intersection_to_duck(return_type_expr);
         }
 
         return (
@@ -95,7 +95,7 @@ impl Default for FunctionDefintion {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LambdaFunctionExpr {
     pub is_mut: bool,
-    pub params: Vec<Param>,
+    pub params: Vec<(String, Option<Spanned<TypeExpr>>)>,
     pub return_type: Option<Spanned<TypeExpr>>,
     pub value_expr: Spanned<ValueExpr>,
 }
@@ -165,7 +165,7 @@ where
                                 )
                                 .into_empty_span(),
                             ],
-                            type_params: None,
+                            type_params: vec![],
                             is_extension_call: false,
                         },
                         value_expr.1,

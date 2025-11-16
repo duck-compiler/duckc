@@ -49,7 +49,7 @@ pub fn find_client_components(
     fn trav(n: &Node, t: &[u8], out: &mut HashSet<String>, type_env: &mut TypeEnv) {
         if n.grammar_name() == "self_closing_tag" {
             for comp in type_env.get_full_component_dependencies(
-                n.child(1).unwrap().utf8_text(t).unwrap().to_string(),
+                &n.child(1).unwrap().utf8_text(t).unwrap().to_string(),
             ) {
                 out.insert(comp);
             }
@@ -79,7 +79,7 @@ pub fn find_client_components(
                     }
                     if type_env.get_component(between).is_some() {
                         type_env
-                            .get_full_component_dependencies(between.to_string())
+                            .get_full_component_dependencies(&between.to_string())
                             .into_iter()
                             .for_each(|s| {
                                 out.insert(s);

@@ -192,6 +192,7 @@ dependencies = [
  "clap",
  "colored",
  "duckwind",
+ "indexmap",
  "lazy_static",
  "serde",
  "tempfile",
