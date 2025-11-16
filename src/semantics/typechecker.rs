@@ -425,12 +425,13 @@ impl TypeExpr {
                         field_name,
                     } = &target.0
                     {
+                        let t = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
                         let TypeExpr::Struct {
                             name: struct_name,
                             type_params: struct_type_params,
-                        } = TypeExpr::from_value_expr(target_obj, type_env)
+                        } = t
                         else {
-                            panic!()
+                            panic!("{t:?}")
                         };
 
                         let replaced_generics = type_env
@@ -619,7 +620,7 @@ impl TypeExpr {
                         },
                         vec![(
                             format!(
-                                "this value is not object like and has no fields to access {target_obj_type_expr:?}"
+                                "this value is not object like and has no fields to access"
                             ),
                             span,
                         )],
@@ -720,10 +721,20 @@ impl TypeExpr {
                 let mut arm_types = Vec::new();
                 for arm in &arms {
                     let arm_type = TypeExpr::from_value_expr(&arm.value_expr, type_env);
-                    if !arm_types.iter().any(|(x, _)| x == &arm_type.unconst()) {
+
+                    let mut cloned_arm_type = arm_type.clone().into_empty_span();
+                    type_expr_into_empty_range(&mut cloned_arm_type);
+
+                    if !arm_types.iter().any(|t: &Spanned<TypeExpr>| {
+                        let mut cl1 = t.clone();
+                        type_expr_into_empty_range(&mut cl1);
+                        cl1.0.unconst() == cloned_arm_type.0.unconst()
+                    }) {
                         arm_types.push((arm_type.unconst(), arm.value_expr.1));
                     }
                 }
+
+                arm_types.retain(|f| !f.0.is_unit());
 
                 if else_arm.is_none() {
                     let possible_types: Vec<Spanned<TypeExpr>> =
@@ -736,7 +747,13 @@ impl TypeExpr {
                     for arm in &arms {
                         let case_type = &arm.type_case.0;
 
-                        if !covered_types.iter().any(|(x, _)| x == case_type) {
+                        let mut cloned_arm_type = case_type.clone().into_empty_span();
+                        type_expr_into_empty_range(&mut cloned_arm_type);
+                        if !covered_types.iter().any(|t: &Spanned<TypeExpr>| {
+                            let mut cl1 = t.clone();
+                            type_expr_into_empty_range(&mut cl1);
+                            cl1.0 == cloned_arm_type.0
+                        }) {
                             covered_types.push((case_type.clone(), arm.type_case.1));
                         }
                     }

@@ -549,7 +549,6 @@ fn walk_access_raw(
                     }
                     TypeExpr::Struct { .. } => s.push_front(field_name.to_string()),
                     _ => {
-                        dbg!(&target_obj.0);
                     }
                 }
 

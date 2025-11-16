@@ -1136,14 +1136,13 @@ pub fn source_file_into_empty_range(v: &mut SourceFile) {
 pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
     t.1 = empty_range();
     match &mut t.0 {
-        TypeExpr::Ref(t) | TypeExpr::RefMut(t) => type_expr_into_empty_range(&mut *t),
+        TypeExpr::Ref(t) | TypeExpr::RefMut(t) => type_expr_into_empty_range(t),
         TypeExpr::Duck(d) => {
             for f in &mut d.fields {
                 type_expr_into_empty_range(&mut f.type_expr);
             }
         }
         TypeExpr::Array(t) => {
-            t.1 = empty_range();
             type_expr_into_empty_range(t);
         }
         TypeExpr::Tuple(fields) => {
@@ -1158,7 +1157,7 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
         }
         TypeExpr::Fun(params, return_type, _) => {
             if let Some(x) = return_type.as_mut() {
-                type_expr_into_empty_range(&mut *x)
+                type_expr_into_empty_range(x)
             }
             for (_, p) in params {
                 type_expr_into_empty_range(p);
@@ -1171,6 +1170,14 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
         }
         TypeExpr::RawTypeName(_, _, params) => {
             for p in params {
+                type_expr_into_empty_range(p);
+            }
+        }
+        TypeExpr::Struct {
+            name: _,
+            type_params,
+        } => {
+            for p in type_params {
                 type_expr_into_empty_range(p);
             }
         }
