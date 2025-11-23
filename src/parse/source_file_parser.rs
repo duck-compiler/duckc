@@ -1462,7 +1462,7 @@ mod tests {
             ),
         ];
 
-        let dir = PathBuf::from("test_files").join("modules");
+        let dir = PathBuf::from("tests").join("modules");
 
         for (main_file, mut expected) in test_cases {
             let src = std::fs::read_to_string(dir.join(main_file)).unwrap();
