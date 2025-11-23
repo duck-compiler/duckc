@@ -18,11 +18,11 @@ type Session = User.session;
 fn main() {
     while (true) {
         while (true) {
-        std::io::println("loop");
-        const a = "a";
-        match a {
-            String => break,
-        }
+            std::io::println("loop");
+            const a = "a";
+            match a {
+                String => break,
+            }
         }
     }
 
