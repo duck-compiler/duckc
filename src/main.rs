@@ -44,7 +44,6 @@ pub mod dargo;
 pub mod emit;
 pub mod go_fixup;
 pub mod parse;
-pub mod reports;
 pub mod semantics;
 pub mod tags;
 
