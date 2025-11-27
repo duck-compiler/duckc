@@ -800,14 +800,23 @@ where
 }
 
 fn resolve_all_aliases_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv) {
+    let span = expr.1.clone();
     trav_type_expr(
-        |f, env| match &mut f.0 {
+        |node, env| match &mut node.0 {
+            TypeExpr::TypeOf(identifier) => {
+                let type_expr = env.get_identifier_type(identifier);
+                *node = resolve_type_expr(&(type_expr.expect("couldn't find identifier type"), span), env);
+            },
+            TypeExpr::KeyOf(type_expr) => {
+                let type_expr = type_expr.as_mut();
+                *type_expr = resolve_type_expr(type_expr, env);
+            },
             TypeExpr::TypeName(..) => {
-                *f = resolve_type_expr(f, env);
+                *node = resolve_type_expr(node, env);
             }
             TypeExpr::RawTypeName(_, v, _) => {
                 assert_eq!(1, v.len(), "should be mangled");
-                *f = resolve_type_expr(f, env);
+                *node = resolve_type_expr(node, env);
             }
             _ => {}
         },
@@ -818,13 +827,21 @@ fn resolve_all_aliases_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv
 
 fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeEnv) {
     trav_value_expr(
-        |f, env| match &mut f.0 {
+        |node, env| match &mut node.0 {
+            TypeExpr::TypeOf(identifier) => {
+                let type_expr = env.get_identifier_type(identifier);
+                *node = resolve_type_expr(&(type_expr.expect("couldn't find identifier type"), node.1), env);
+            },
+            TypeExpr::KeyOf(type_expr) => {
+                let type_expr = type_expr.as_mut();
+                *type_expr = resolve_type_expr(type_expr, env);
+            },
             TypeExpr::TypeName(..) => {
-                *f = resolve_type_expr(f, env);
+                *node = resolve_type_expr(node, env);
             }
             TypeExpr::RawTypeName(_, v, _) => {
                 assert_eq!(1, v.len(), "should be mangled");
-                *f = resolve_type_expr(f, env);
+                *node = resolve_type_expr(node, env);
             }
             _ => {}
         },
@@ -904,8 +921,9 @@ fn process_keyof_in_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                         return TypeExpr::Or(fields);
                     }
                     TypeExpr::RawTypeName(_, typename, _) => {
-                        let resolved_type = todo!("repalce type name");
-                        return do_it(&resolved_type, span, type_env);
+                        todo!();
+                        let resolved_type = resolve_type_expr(&(type_expr.clone(), *span), type_env);
+                        return do_it(&resolved_type.0, span, type_env);
                     }
                     TypeExpr::Array(arr) => {
                         return TypeExpr::Array(Box::new((
@@ -919,6 +937,8 @@ fn process_keyof_in_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                 };
             }
             let final_type = do_it(type_expr, &span, type_env);
+            println!("final type returned is {final_type:?}");
+
             *expr = final_type;
         }
         TypeExpr::Array(t) => {
@@ -1244,14 +1264,14 @@ fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &IndexMap<Stri
     }
 }
 
-pub fn resolve_type_expr(t: &Spanned<TypeExpr>, env: &mut TypeEnv) -> Spanned<TypeExpr> {
-    let mut res = t.clone();
+pub fn resolve_type_expr(type_expr: &Spanned<TypeExpr>, env: &mut TypeEnv) -> Spanned<TypeExpr> {
+    let mut res = type_expr.clone();
 
     loop {
         let (name, generics) = match &res.0 {
-            TypeExpr::RawTypeName(_, v, generics) => {
-                assert_eq!(v.len(), 1, "should be mangled");
-                let name = &v[0];
+            TypeExpr::RawTypeName(_, name_segments, generics) => {
+                assert_eq!(name_segments.len(), 1, "should be mangled");
+                let name = &name_segments[0];
                 (name, generics)
             }
             TypeExpr::TypeName(_, name, generics) => (name, generics),
@@ -1852,7 +1872,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             }
 
             if function_definition.name.starts_with("gimme") {
-                // dbg!(&function_definition.value_expr);
+                // dbg!(&function_definition);
             }
             resolve_all_aliases_value_expr(&mut function_definition.value_expr, type_env);
             if function_definition.name.starts_with("gimme") {
@@ -1909,6 +1929,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             if function_defintion.generics.is_none() {
                 typeresolve_function_definition(function_defintion, type_env);
                 process_keyof_in_value_expr(&mut function_defintion.value_expr, type_env);
+            }
+
+            if function_defintion.name.starts_with("gimme") {
+                // dbg!(&function_defintion);
             }
         });
 

@@ -1237,6 +1237,7 @@ pub fn check_type_compatability_full(
     type_env: &mut TypeEnv,
     given_const_var: bool,
 ) {
+    println!("comparing {required_type:?} with {given_type:?}");
     let mut given_type = given_type.clone();
     let fail_requirement = |explain_required: String, explain_given: String| {
         let (smaller, larger) = if required_type.1.start <= given_type.1.start {
