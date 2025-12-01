@@ -1,10 +1,9 @@
 use std::{
-    cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex, mpsc::Sender},
+    sync::mpsc::Sender,
 };
 
-use chumsky::{container::Container, span::Span};
+use chumsky::container::Container;
 use indexmap::IndexMap;
 
 use crate::{
@@ -829,8 +828,8 @@ fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeE
     trav_value_expr(
         |node, env| match &mut node.0 {
             TypeExpr::TypeOf(identifier) => {
-                let type_expr = env.get_identifier_type(identifier);
-                *node = resolve_type_expr(&(type_expr.expect("couldn't find identifier type"), node.1), env);
+                // let type_expr = env.get_identifier_type(identifier);
+                // *node = resolve_type_expr(&(type_expr.expect("couldn't find identifier type"), node.1), env);
             },
             TypeExpr::KeyOf(type_expr) => {
                 let type_expr = type_expr.as_mut();
@@ -937,8 +936,6 @@ fn process_keyof_in_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                 };
             }
             let final_type = do_it(type_expr, &span, type_env);
-            println!("final type returned is {final_type:?}");
-
             *expr = final_type;
         }
         TypeExpr::Array(t) => {
@@ -2215,44 +2212,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             resolve_all_aliases_type_expr(&mut type_expr.clone().into_empty_span(), type_env);
             *value_expr = ValueExpr::Variable(true, ident, Some(type_expr), Some(is_const));
         }
-        ValueExpr::VarDecl(declaration) => {
-            let declaration = &mut declaration.0;
-
-            // Resolve the type expression on the declaration
-            if let Some(type_expr) = &mut declaration.type_expr {
-                if let TypeExpr::And(_) = &type_expr.0 {
-                    type_expr.0 = translate_intersection_to_duck(&type_expr.0);
-                }
-
-                resolve_all_aliases_type_expr(type_expr, type_env);
-                infer_against(&mut declaration.initializer, type_expr, type_env);
-
-                typeresolve_value_expr(
-                    (&mut declaration.initializer.0, declaration.initializer.1),
-                    type_env,
-                );
-            } else {
-                typeresolve_value_expr(
-                    (&mut declaration.initializer.0, declaration.initializer.1),
-                    type_env,
-                );
-
-                let type_expr = TypeExpr::from_value_expr(&declaration.initializer, type_env);
-                declaration.type_expr = Some((type_expr.clone(), declaration.initializer.1));
-            }
-
-            type_env.insert_identifier_type(
-                declaration.name.clone(),
-                declaration
-                    .type_expr
-                    .as_ref()
-                    .cloned()
-                    .expect("should be unreachable")
-                    .0,
-                declaration.is_const,
-            );
-        }
-
+        ValueExpr::VarDecl(..) => typeresolve_var_decl((value_expr, *span), type_env),
         ValueExpr::FormattedString(contents) => {
             for c in contents {
                 match c {
@@ -2283,427 +2243,27 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             type_env.insert_type(ty);
         }
         ValueExpr::InlineGo(..) => {}
-        ValueExpr::Lambda(b) => {
-            let LambdaFunctionExpr {
-                is_mut,
-                params,
-                return_type,
-                value_expr,
-            } = &mut **b;
-
-            let captured = type_env.identifier_types[1..]
-                .iter()
-                .flat_map(|v| v.iter())
-                .fold(HashMap::new(), |mut acc, (name, (ty, is_const))| {
-                    if !type_env.identifier_types[0].contains_key(name)  // don't capture top level identifiers like functions
-                    && !params.iter().any(|(param_name, _)| param_name == name)
-                    // don't capture shadowed variables
-                    {
-                        acc.insert(name.clone(), (ty.clone(), *is_mut && !*is_const));
-                    }
-                    acc
-                });
-
-            type_env.push_identifier_types();
-
-            for (name, (ty, capture_as_mut)) in captured {
-                type_env.insert_identifier_type(name, ty, !capture_as_mut);
-            }
-
-            for (name, ty) in params {
-                let ty = ty.as_mut().unwrap();
-                type_env.insert_identifier_type(name.to_owned(), ty.0.clone(), false);
-                resolve_all_aliases_type_expr(ty, type_env);
-            }
-
-            if let Some(return_type) = return_type {
-                resolve_all_aliases_type_expr(return_type, type_env);
-            }
-
-            if let Some(return_type) = return_type.as_ref() {
-                infer_against(value_expr, return_type, type_env);
-            }
-
-            typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
-            type_env.pop_identifier_types();
-        }
         ValueExpr::ExtensionAccess { target_obj, .. } => {
             let target = target_obj.as_mut();
             typeresolve_value_expr((&mut target.0, target.1), type_env);
         }
-        ValueExpr::FunctionCall {
-            target,
-            params,
-            type_params,
-            ..
-        } => {
-            let header: FunHeader;
-
-            if type_params.is_empty() {
-                typeresolve_value_expr((&mut target.0, target.1), type_env);
-
-                let target_type = TypeExpr::from_value_expr(target, type_env);
-
-                let TypeExpr::Fun(def_params, def_ret, _) = target_type else {
-                    failure_with_occurence(
-                        "Can only call functions",
-                        *span,
-                        [("Can only call functions", *span)],
-                    )
-                };
-                header = FunHeader {
-                    params: def_params.into_iter().map(|(_, x)| x).collect(),
-                    return_type: def_ret.as_deref().cloned(),
-                };
-            } else {
-                match &mut target.0 {
-                    ValueExpr::Variable(_, name, ty, _) => {
-                        let fn_def = type_env
-                            .function_definitions
-                            .iter()
-                            .find(|x| name.as_str() == x.name.as_str())
-                            .cloned()
-                            .expect(&format!("could not find {name}"));
-
-                        if type_params.len()
-                            != fn_def.generics.as_ref().map(|v| v.len()).unwrap_or(0)
-                        {
-                            let msg = "Wrong number of type parameters";
-                            failure_with_occurence(msg, *span, [(msg, *span)])
-                        }
-
-                        let generic_arguments = fn_def
-                            .generics
-                            .as_ref()
-                            .unwrap()
-                            .iter()
-                            .map(|(x, _)| x)
-                            .zip(type_params.iter())
-                            .fold(IndexMap::new(), |mut acc, (def, arg)| {
-                                if let Some(c) = def.constraint.as_ref() {
-                                    check_type_compatability(c, arg, type_env);
-                                }
-                                acc.insert(def.name.clone(), arg.0.clone());
-                                acc
-                            });
-
-                        let mut cloned_fn_def = fn_def.clone();
-
-                        let new_fn_name = [cloned_fn_def.name.clone()]
-                            .into_iter()
-                            .chain(
-                                generic_arguments
-                                    .iter()
-                                    .map(|(_, t)| t.as_clean_go_type_name(type_env)),
-                            )
-                            .collect::<Vec<_>>()
-                            .join(MANGLE_SEP);
-
-                        cloned_fn_def.name = new_fn_name.clone();
-                        cloned_fn_def.generics = None;
-
-                        if type_env
-                            .prevent_generic_generation
-                            .insert(new_fn_name.clone())
-                        {
-                            replace_generics_in_function_definition(
-                                &mut cloned_fn_def,
-                                &generic_arguments,
-                            );
-                            for p in &mut cloned_fn_def.params.iter_mut().flat_map(|v| v.iter_mut())
-                            {
-                                process_keyof_in_type_expr(&mut p.1.0, type_env);
-                            }
-                            for p in &mut cloned_fn_def.return_type.iter_mut() {
-                                process_keyof_in_type_expr(&mut p.0, type_env);
-                            }
-                            process_keyof_in_value_expr(&mut cloned_fn_def.value_expr, type_env);
-                            type_env.function_headers.insert(
-                                new_fn_name.clone(),
-                                FunHeader {
-                                    params: cloned_fn_def
-                                        .params
-                                        .as_ref()
-                                        .cloned()
-                                        .unwrap()
-                                        .into_iter()
-                                        .map(|(_, x)| x)
-                                        .collect(),
-                                    return_type: cloned_fn_def.return_type.as_ref().cloned(),
-                                },
-                            );
-                            typeresolve_function_definition(&mut cloned_fn_def, type_env);
-                            type_env.generic_fns_generated.push(cloned_fn_def.clone());
-                        }
-                        header = type_env.get_method_header(&new_fn_name);
-                        *ty = Some(TypeExpr::Fun(
-                            cloned_fn_def
-                                .params
-                                .clone()
-                                .unwrap_or_default()
-                                .into_iter()
-                                .map(|x| (Some(x.0), x.1))
-                                .collect(),
-                            cloned_fn_def.return_type.clone().map(Box::new),
-                            true,
-                        ));
-                    }
-                    ValueExpr::FieldAccess {
-                        target_obj,
-                        field_name,
-                    } => {
-                        typeresolve_value_expr((&mut target_obj.0, target_obj.1), type_env);
-
-                        let self_type =
-                            TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
-
-                        let TypeExpr::Struct {
-                            name: struct_name,
-                            type_params: struct_type_params,
-                        } = TypeExpr::from_value_expr_dereferenced(&target_obj, type_env)
-                        else {
-                            let msg = "Can only generic method call a struct";
-                            failure_with_occurence(msg, *span, [(msg, *span)]);
-                        };
-
-                        let mut_struct_def = type_env.get_struct_def_with_type_params_mut(
-                            &struct_name,
-                            &struct_type_params,
-                            *span,
-                        );
-
-                        let replaced_struct_name = mut_struct_def.name.clone();
-
-                        let method = mut_struct_def
-                            .methods
-                            .iter()
-                            .find(|m| m.name.as_str() == field_name.as_str())
-                            .cloned()
-                            .unwrap();
-
-                        if method
-                            .generics
-                            .as_ref()
-                            .is_none_or(|v2| type_params.len() != v2.len())
-                        {
-                            let msg = "Wrong number of type parameters";
-                            failure_with_occurence(msg, *span, [(msg, *span)])
-                        }
-
-                        let is_mut = mut_struct_def.mut_methods.contains(&method.name);
-
-                        let generic_arguments = method
-                            .generics
-                            .as_ref()
-                            .unwrap()
-                            .iter()
-                            // .chain(mut_struct_def.generics.clone().iter())
-                            .map(|(x, _)| x)
-                            .zip(type_params.iter()) //.chain(struct_type_params.iter()))
-                            .fold(IndexMap::new(), |mut acc, (def, arg)| {
-                                if let Some(c) = def.constraint.as_ref() {
-                                    check_type_compatability(c, arg, type_env);
-                                }
-                                acc.insert(def.name.clone(), arg.0.clone());
-                                acc
-                            });
-
-                        let mut cloned_fn_def = method.clone();
-
-                        let (new_fn_name, global_generic_generation_id) = {
-                            let new_method_name = [cloned_fn_def.name.clone()]
-                                .into_iter()
-                                .chain(
-                                    generic_arguments
-                                        .iter()
-                                        .map(|(_, t)| t.as_clean_go_type_name(type_env)),
-                                )
-                                .collect::<Vec<_>>();
-
-                            let mut gen_id = new_method_name.clone();
-                            gen_id.insert(0, replaced_struct_name.clone());
-                            (new_method_name.join(MANGLE_SEP), gen_id.join(MANGLE_SEP))
-                        };
-
-                        cloned_fn_def.name = new_fn_name.clone();
-                        cloned_fn_def.generics = None;
-
-                        if type_env
-                            .prevent_generic_generation
-                            .insert(global_generic_generation_id.clone())
-                        {
-                            replace_generics_in_function_definition(
-                                &mut cloned_fn_def,
-                                &generic_arguments,
-                            );
-                            for p in &mut cloned_fn_def.params.iter_mut().flat_map(|v| v.iter_mut())
-                            {
-                                resolve_all_aliases_type_expr(&mut p.1, type_env);
-                                process_keyof_in_type_expr(&mut p.1.0, type_env);
-                            }
-                            for p in &mut cloned_fn_def.return_type.iter_mut() {
-                                resolve_all_aliases_type_expr(p, type_env);
-                                process_keyof_in_type_expr(&mut p.0, type_env);
-                            }
-                            process_keyof_in_value_expr(&mut cloned_fn_def.value_expr, type_env);
-                            type_env.function_headers.insert(
-                                global_generic_generation_id.clone(),
-                                FunHeader {
-                                    params: cloned_fn_def
-                                        .params
-                                        .as_ref()
-                                        .cloned()
-                                        .unwrap()
-                                        .into_iter()
-                                        .map(|(_, x)| x)
-                                        .collect(),
-                                    return_type: cloned_fn_def.return_type.as_ref().cloned(),
-                                },
-                            );
-                            typeresolve_method_definition(
-                                &mut cloned_fn_def,
-                                self_type.into_empty_span(),
-                                is_mut,
-                                type_env,
-                            );
-                            type_env
-                                .get_generic_methods(replaced_struct_name)
-                                .push(cloned_fn_def);
-                        }
-                        header = type_env.get_method_header(&global_generic_generation_id);
-                    }
-                    _ => {
-                        let msg = "Can only use generics on methods or global functions";
-                        failure_with_occurence(msg, *span, [(msg, *span)]);
-                    }
-                }
-            }
-
-            params
-                .iter_mut()
-                .zip(header.params.iter())
-                .for_each(|(param_expr, param_def)| {
-                    infer_against(param_expr, param_def, type_env);
-                    typeresolve_value_expr((&mut param_expr.0, param_expr.1), type_env)
-                });
-        }
-        ValueExpr::Variable(_, identifier, type_expr_opt, const_opt) => {
-            // if let Some(type_expr) = type_expr_opt {
-            //     resolve_all_aliases_type_expr(type_expr, type_env);
-            //     return;
-            // }
-            let (type_expr, is_const) = type_env
-                .get_identifier_type_and_const(&identifier)
-                .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));
-
-            //resolve_all_aliases_type_expr(&mut type_expr, type_env, generics_to_ignore);
-            *type_expr_opt = Some(type_expr);
-            *const_opt = Some(is_const);
-        }
-        ValueExpr::If {
-            condition,
-            then,
-            r#else,
-        } => {
-            typeresolve_value_expr((&mut condition.0, condition.1), type_env);
-            type_env.push_identifier_types();
-            typeresolve_value_expr((&mut then.0, then.1), type_env);
-            type_env.pop_identifier_types();
-            if let Some(r#else) = r#else {
-                type_env.push_identifier_types();
-                typeresolve_value_expr((&mut r#else.0, r#else.1), type_env);
-                type_env.pop_identifier_types();
-            }
-        }
-        ValueExpr::While { condition, body } => {
-            typeresolve_value_expr((&mut condition.0, condition.1), type_env);
-            type_env.push_identifier_types();
-            typeresolve_value_expr((&mut body.0, body.1), type_env);
-            type_env.pop_identifier_types();
-        }
-        ValueExpr::Tuple(value_exprs) => {
-            value_exprs.iter_mut().for_each(|value_expr| {
-                typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
-            });
-            let ty = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
-            type_env.insert_type(ty);
-        }
-        ValueExpr::Block(value_exprs) => {
-            type_env.push_identifier_types();
-            value_exprs.iter_mut().for_each(|value_expr| {
-                typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
-            });
-            type_env.pop_identifier_types();
-        }
-        ValueExpr::Duck(items) => {
-            items.iter_mut().for_each(|(_, value_expr)| {
-                typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
-            });
-            let ty = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
-            type_env.insert_type(ty);
-        }
-        ValueExpr::Struct {
-            name,
-            fields,
-            type_params,
-        } => {
-            let og_def = type_env.get_struct_def(name);
-
-            if type_params.len() != og_def.generics.len() {
-                let msg = "Wrong number of type parameters A";
-                failure_with_occurence(msg, *span, [(msg, *span)])
-            }
-
-            let def = type_env
-                .get_struct_def_with_type_params_mut(name.as_str(), type_params.as_slice(), *span)
-                .clone();
-
-            fields.iter_mut().zip(def.fields.iter()).for_each(
-                |((_field_name, value_expr), def_field)| {
-                    infer_against(value_expr, &def_field.type_expr, type_env);
-                    typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
-                },
-            );
-
-            let ty = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
-            type_env.insert_type(ty);
-        }
+        ValueExpr::Lambda(..) => typeresolve_lambda((value_expr, *span), type_env),
+        ValueExpr::FunctionCall { .. } => typeresolve_function_call((value_expr, *span), type_env),
+        ValueExpr::Variable(..) => typeresolve_variable((value_expr, *span), type_env),
+        ValueExpr::If { .. } => typeresolve_if_expr((value_expr, *span), type_env),
+        ValueExpr::While { .. } => typeresolve_while((value_expr, *span), type_env),
+        ValueExpr::Tuple(..) => typeresolve_tuple((value_expr, *span), type_env),
+        ValueExpr::Block(..) => typeresolve_block((value_expr, *span), type_env),
+        ValueExpr::Duck(..) => typeresolve_duck_value_expr((value_expr, *span), type_env),
         ValueExpr::FieldAccess { target_obj, .. } => {
             let target_obj = target_obj.as_mut();
             typeresolve_value_expr((&mut target_obj.0, target_obj.1), type_env);
         }
-        ValueExpr::Return(Some(value_expr)) => {
-            typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
-        }
-        ValueExpr::VarAssign(assignment) => {
-            typeresolve_value_expr(
-                (&mut assignment.0.target.0, assignment.0.target.1),
-                type_env,
-            );
-            let target_type = TypeExpr::from_value_expr(&assignment.0.target, type_env);
-            typeresolve_value_expr(
-                (&mut assignment.0.value_expr.0, assignment.0.value_expr.1),
-                type_env,
-            );
-
-            check_type_compatability_full(
-                &(target_type, assignment.0.target.1),
-                &(
-                    TypeExpr::from_value_expr(&assignment.0.value_expr, type_env),
-                    assignment.0.value_expr.1,
-                ),
-                type_env,
-                is_const_var(&assignment.0.target.0),
-            );
-        }
-        ValueExpr::Add(lhs, rhs)
-        | ValueExpr::Sub(lhs, rhs)
-        | ValueExpr::Div(lhs, rhs)
-        | ValueExpr::Mul(lhs, rhs)
-        | ValueExpr::Mod(lhs, rhs) => {
-            typeresolve_value_expr((&mut lhs.0, lhs.1), type_env);
-            typeresolve_value_expr((&mut rhs.0, lhs.1), type_env);
-        }
+        ValueExpr::Struct { .. } => typeresolve_struct((value_expr, *span), type_env),
+        ValueExpr::Return(Some(value_expr)) => typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env),
+        ValueExpr::VarAssign(..) => typeresolve_var_assign((value_expr, *span), type_env),
+        ValueExpr::Match { .. } => typeresolve_match((value_expr, *span), type_env),
+        ValueExpr::BoolNegate(value_expr) => typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env),
         ValueExpr::Equals(lhs, rhs)
         | ValueExpr::NotEquals(lhs, rhs)
         | ValueExpr::LessThan(lhs, rhs)
@@ -2711,55 +2271,14 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         | ValueExpr::GreaterThan(lhs, rhs)
         | ValueExpr::GreaterThanOrEquals(lhs, rhs)
         | ValueExpr::And(lhs, rhs)
+        | ValueExpr::Add(lhs, rhs)
+        | ValueExpr::Sub(lhs, rhs)
+        | ValueExpr::Div(lhs, rhs)
+        | ValueExpr::Mul(lhs, rhs)
+        | ValueExpr::Mod(lhs, rhs)
         | ValueExpr::Or(lhs, rhs) => {
             typeresolve_value_expr((&mut lhs.0, lhs.1), type_env);
             typeresolve_value_expr((&mut rhs.0, lhs.1), type_env);
-        }
-        ValueExpr::BoolNegate(value_expr) => {
-            typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
-        }
-        ValueExpr::Match {
-            value_expr,
-            arms,
-            else_arm,
-            span: _,
-        } => {
-            typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
-            arms.iter_mut().for_each(|arm| {
-                if let TypeExpr::And(_) = &arm.type_case.0 {
-                    arm.type_case.0 = translate_intersection_to_duck(&arm.type_case.0);
-                }
-
-                type_env.push_identifier_types();
-                if let Some(identifier) = &arm.identifier_binding {
-                    type_env.insert_identifier_type(
-                        identifier.clone(),
-                        arm.type_case.0.clone(),
-                        false,
-                    );
-                    if let Some(condition) = &mut arm.condition {
-                        typeresolve_value_expr((&mut condition.0, condition.1), type_env);
-                    }
-                }
-                typeresolve_value_expr((&mut arm.value_expr.0, arm.value_expr.1), type_env);
-                type_env.pop_identifier_types();
-            });
-
-            if let Some(arm) = else_arm {
-                type_env.push_identifier_types();
-                if let Some(identifier) = &arm.identifier_binding {
-                    if let Some(condition) = &mut arm.condition {
-                        typeresolve_value_expr((&mut condition.0, condition.1), type_env);
-                    }
-                    type_env.insert_identifier_type(
-                        identifier.clone(),
-                        arm.type_case.0.clone(),
-                        false,
-                    );
-                }
-                typeresolve_value_expr((&mut arm.value_expr.0, arm.value_expr.1), type_env);
-                type_env.pop_identifier_types();
-            }
         }
         ValueExpr::String(str, _) => {
             type_env.check_for_tailwind(str);
@@ -2776,4 +2295,536 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         | ValueExpr::Return(None)
         | ValueExpr::Continue => {}
     }
+}
+
+fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+    let span = value_expr.1;
+    let ValueExpr::Match { value_expr, arms, else_arm, span: _ } = value_expr.0 else {
+        unreachable!("only pass match exprs to this function")
+    };
+
+    typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
+    arms.iter_mut().for_each(|arm| {
+        if let TypeExpr::And(_) = &arm.type_case.0 {
+            arm.type_case.0 = translate_intersection_to_duck(&arm.type_case.0);
+        }
+
+        type_env.push_identifier_types();
+        if let Some(identifier) = &arm.identifier_binding {
+            type_env.insert_identifier_type(
+                identifier.clone(),
+                arm.type_case.0.clone(),
+                false,
+            );
+            if let Some(condition) = &mut arm.condition {
+                typeresolve_value_expr((&mut condition.0, condition.1), type_env);
+            }
+        }
+        typeresolve_value_expr((&mut arm.value_expr.0, arm.value_expr.1), type_env);
+        type_env.pop_identifier_types();
+    });
+
+    if let Some(arm) = else_arm {
+        type_env.push_identifier_types();
+        if let Some(identifier) = &arm.identifier_binding {
+            if let Some(condition) = &mut arm.condition {
+                typeresolve_value_expr((&mut condition.0, condition.1), type_env);
+            }
+            type_env.insert_identifier_type(
+                identifier.clone(),
+                arm.type_case.0.clone(),
+                false,
+            );
+        }
+        typeresolve_value_expr((&mut arm.value_expr.0, arm.value_expr.1), type_env);
+        type_env.pop_identifier_types();
+    }
+}
+
+fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+    let span = value_expr.1;
+    let ValueExpr::FunctionCall { target, params, type_params, is_extension_call: _ } = value_expr.0 else {
+        unreachable!("only pass functioncalls to this function")
+    };
+
+    let header: FunHeader;
+    if type_params.is_empty() {
+        typeresolve_value_expr((&mut target.0, target.1), type_env);
+
+        let target_type = TypeExpr::from_value_expr(target, type_env);
+
+        let TypeExpr::Fun(def_params, def_ret, _) = target_type else {
+            failure_with_occurence(
+                "Can only call functions",
+                span,
+                [("Can only call functions", span)],
+            )
+        };
+
+        header = FunHeader {
+            params: def_params.into_iter().map(|(_, x)| x).collect(),
+            return_type: def_ret.as_deref().cloned(),
+        };
+    } else {
+        match &mut target.0 {
+            ValueExpr::Variable(_, name, ty, _) => {
+                let fn_def = type_env
+                    .function_definitions
+                    .iter()
+                    .find(|x| name.as_str() == x.name.as_str())
+                    .cloned()
+                    .expect(&format!("could not find {name}"));
+
+                if type_params.len()
+                != fn_def.generics.as_ref().map(|v| v.len()).unwrap_or(0)
+                {
+                    let msg = "Wrong number of type parameters";
+                    failure_with_occurence(msg, span, [(msg, span)])
+                }
+
+                let generic_arguments = fn_def
+                    .generics
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|(x, _)| x)
+                    .zip(type_params.iter())
+                    .fold(IndexMap::new(), |mut acc, (def, arg)| {
+                        if let Some(c) = def.constraint.as_ref() {
+                            check_type_compatability(c, arg, type_env);
+                        }
+                        acc.insert(def.name.clone(), arg.0.clone());
+                        acc
+                    });
+
+                let mut cloned_fn_def = fn_def.clone();
+
+                let new_fn_name = [cloned_fn_def.name.clone()]
+                    .into_iter()
+                    .chain(
+                        generic_arguments
+                            .iter()
+                            .map(|(_, t)| t.as_clean_go_type_name(type_env)),
+                    )
+                    .collect::<Vec<_>>()
+                    .join(MANGLE_SEP);
+
+                cloned_fn_def.name = new_fn_name.clone();
+                cloned_fn_def.generics = None;
+
+                let prevent_generic_generation = type_env
+                    .prevent_generic_generation
+                    .insert(new_fn_name.clone());
+
+                if prevent_generic_generation {
+                    replace_generics_in_function_definition(
+                        &mut cloned_fn_def,
+                        &generic_arguments,
+                    );
+                    for p in &mut cloned_fn_def.params.iter_mut().flat_map(|v| v.iter_mut())
+                    {
+                        process_keyof_in_type_expr(&mut p.1.0, type_env);
+                    }
+                    for p in &mut cloned_fn_def.return_type.iter_mut() {
+                        process_keyof_in_type_expr(&mut p.0, type_env);
+                    }
+                    process_keyof_in_value_expr(&mut cloned_fn_def.value_expr, type_env);
+                    type_env.function_headers.insert(
+                        new_fn_name.clone(),
+                        FunHeader {
+                            params: cloned_fn_def
+                                .params
+                                .as_ref()
+                                .cloned()
+                                .unwrap()
+                                .into_iter()
+                                .map(|(_, x)| x)
+                                .collect(),
+                            return_type: cloned_fn_def.return_type.as_ref().cloned(),
+                        },
+                    );
+                    typeresolve_function_definition(&mut cloned_fn_def, type_env);
+                    type_env.generic_fns_generated.push(cloned_fn_def.clone());
+                }
+                header = type_env.get_method_header(&new_fn_name);
+                *ty = Some(TypeExpr::Fun(
+                    cloned_fn_def
+                        .params
+                        .clone()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|x| (Some(x.0), x.1))
+                        .collect(),
+                    cloned_fn_def.return_type.clone().map(Box::new),
+                    true,
+                ));
+            }
+            ValueExpr::FieldAccess {
+                target_obj,
+                field_name,
+            } => {
+                typeresolve_value_expr((&mut target_obj.0, target_obj.1), type_env);
+
+                let self_type =
+                    TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
+
+                let TypeExpr::Struct {
+                    name: struct_name,
+                    type_params: struct_type_params,
+                } = TypeExpr::from_value_expr_dereferenced(&target_obj, type_env)
+                else {
+                    let msg = "Can only generic method call a struct";
+                    failure_with_occurence(msg, span, [(msg, span)]);
+                };
+
+                let mut_struct_def = type_env.get_struct_def_with_type_params_mut(
+                    &struct_name,
+                    &struct_type_params,
+                    span,
+                );
+
+                let replaced_struct_name = mut_struct_def.name.clone();
+
+                let method = mut_struct_def
+                    .methods
+                    .iter()
+                    .find(|m| m.name.as_str() == field_name.as_str())
+                    .cloned()
+                    .unwrap();
+
+                if method
+                    .generics
+                    .as_ref()
+                    .is_none_or(|v2| type_params.len() != v2.len())
+                {
+                    let msg = "Wrong number of type parameters";
+                    failure_with_occurence(msg, span, [(msg, span)])
+                }
+
+                let is_mut = mut_struct_def.mut_methods.contains(&method.name);
+
+                let generic_arguments = method
+                    .generics
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    // .chain(mut_struct_def.generics.clone().iter())
+                    .map(|(x, _)| x)
+                    .zip(type_params.iter()) //.chain(struct_type_params.iter()))
+                    .fold(IndexMap::new(), |mut acc, (def, arg)| {
+                        if let Some(c) = def.constraint.as_ref() {
+                            check_type_compatability(c, arg, type_env);
+                        }
+                        acc.insert(def.name.clone(), arg.0.clone());
+                        acc
+                    });
+
+                let mut cloned_fn_def = method.clone();
+
+                let (new_fn_name, global_generic_generation_id) = {
+                    let new_method_name = [cloned_fn_def.name.clone()]
+                        .into_iter()
+                        .chain(
+                            generic_arguments
+                                .iter()
+                                .map(|(_, t)| t.as_clean_go_type_name(type_env)),
+                        )
+                        .collect::<Vec<_>>();
+
+                    let mut gen_id = new_method_name.clone();
+                    gen_id.insert(0, replaced_struct_name.clone());
+                    (new_method_name.join(MANGLE_SEP), gen_id.join(MANGLE_SEP))
+                };
+
+                cloned_fn_def.name = new_fn_name.clone();
+                cloned_fn_def.generics = None;
+
+                if type_env
+                    .prevent_generic_generation
+                    .insert(global_generic_generation_id.clone())
+                {
+                    replace_generics_in_function_definition(
+                        &mut cloned_fn_def,
+                        &generic_arguments,
+                    );
+                    for p in &mut cloned_fn_def.params.iter_mut().flat_map(|v| v.iter_mut())
+                    {
+                        resolve_all_aliases_type_expr(&mut p.1, type_env);
+                        process_keyof_in_type_expr(&mut p.1.0, type_env);
+                    }
+                    for p in &mut cloned_fn_def.return_type.iter_mut() {
+                        resolve_all_aliases_type_expr(p, type_env);
+                        process_keyof_in_type_expr(&mut p.0, type_env);
+                    }
+                    process_keyof_in_value_expr(&mut cloned_fn_def.value_expr, type_env);
+                    type_env.function_headers.insert(
+                        global_generic_generation_id.clone(),
+                        FunHeader {
+                            params: cloned_fn_def
+                                .params
+                                .as_ref()
+                                .cloned()
+                                .unwrap()
+                                .into_iter()
+                                .map(|(_, x)| x)
+                                .collect(),
+                            return_type: cloned_fn_def.return_type.as_ref().cloned(),
+                        },
+                    );
+                    typeresolve_method_definition(
+                        &mut cloned_fn_def,
+                        self_type.into_empty_span(),
+                        is_mut,
+                        type_env,
+                    );
+                    type_env
+                        .get_generic_methods(replaced_struct_name)
+                        .push(cloned_fn_def);
+                }
+                header = type_env.get_method_header(&global_generic_generation_id);
+            }
+            _ => {
+                let msg = "Can only use generics on methods or global functions";
+                failure_with_occurence(msg, span, [(msg, span)]);
+            }
+        }
+    }
+
+    params
+        .iter_mut()
+        .zip(header.params.iter())
+        .for_each(|(param_expr, param_def)| {
+            infer_against(param_expr, param_def, type_env);
+            typeresolve_value_expr((&mut param_expr.0, param_expr.1), type_env)
+        });
+}
+
+fn typeresolve_var_decl(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+    let _span = value_expr.1;
+    let ValueExpr::VarDecl(declaration) = value_expr.0 else {
+        unreachable!("only pass var declarations to this function")
+    };
+
+    let declaration = &mut declaration.0;
+
+    // Resolve the type expression on the declaration
+    if let Some(type_expr) = &mut declaration.type_expr {
+        if let TypeExpr::And(_) = &type_expr.0 {
+            type_expr.0 = translate_intersection_to_duck(&type_expr.0);
+        }
+
+        resolve_all_aliases_type_expr(type_expr, type_env);
+        infer_against(&mut declaration.initializer, type_expr, type_env);
+
+        typeresolve_value_expr(
+            (&mut declaration.initializer.0, declaration.initializer.1),
+            type_env,
+        );
+    } else {
+        typeresolve_value_expr(
+            (&mut declaration.initializer.0, declaration.initializer.1),
+            type_env,
+        );
+
+        let type_expr = TypeExpr::from_value_expr(&declaration.initializer, type_env);
+        declaration.type_expr = Some((type_expr.clone(), declaration.initializer.1));
+    }
+
+    type_env.insert_identifier_type(
+        declaration.name.clone(),
+        declaration
+            .type_expr
+            .as_ref()
+            .cloned()
+            .expect("should be unreachable")
+            .0,
+        declaration.is_const,
+    );
+}
+
+fn typeresolve_var_assign(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+    let _span = value_expr.1;
+    let ValueExpr::VarAssign(assignment) = value_expr.0 else {
+        unreachable!("only pass var assignments to this function")
+    };
+
+    typeresolve_value_expr(
+        (&mut assignment.0.target.0, assignment.0.target.1),
+        type_env,
+    );
+    let target_type = TypeExpr::from_value_expr(&assignment.0.target, type_env);
+    typeresolve_value_expr(
+        (&mut assignment.0.value_expr.0, assignment.0.value_expr.1),
+        type_env,
+    );
+
+    check_type_compatability_full(
+        &(target_type, assignment.0.target.1),
+        &(
+            TypeExpr::from_value_expr(&assignment.0.value_expr, type_env),
+            assignment.0.value_expr.1,
+        ),
+        type_env,
+        is_const_var(&assignment.0.target.0),
+    );
+}
+
+fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+    let span = value_expr.1;
+    let ValueExpr::Struct { name, fields, type_params } = value_expr.0 else {
+        unreachable!("only pass structs to this function")
+    };
+
+    let og_def = type_env.get_struct_def(name);
+
+    if type_params.len() != og_def.generics.len() {
+        let msg = "Wrong number of type parameters A";
+        failure_with_occurence(msg, span, [(msg, span)])
+    }
+
+    let def = type_env
+        .get_struct_def_with_type_params_mut(name.as_str(), type_params.as_slice(), span)
+        .clone();
+
+    fields.iter_mut().zip(def.fields.iter()).for_each(
+        |((_field_name, value_expr), def_field)| {
+            infer_against(value_expr, &def_field.type_expr, type_env);
+            typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
+        },
+    );
+
+    let ty = TypeExpr::from_value_expr(&(value_expr.0.clone(), span), type_env);
+    type_env.insert_type(ty);
+}
+
+fn typeresolve_block(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+    let ValueExpr::Block(value_exprs) = value_expr.0 else {
+        unreachable!("only pass structs to this function")
+    };
+
+    type_env.push_identifier_types();
+    value_exprs.iter_mut().for_each(|value_expr| {
+        typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
+    });
+    type_env.pop_identifier_types();
+}
+
+fn typeresolve_duck_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+    let span = value_expr.1;
+    let ValueExpr::Duck(items) = value_expr.0 else {
+        unreachable!("only pass structs to this function")
+    };
+
+    items.iter_mut().for_each(|(_, value_expr)| {
+        typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
+    });
+
+    let ty = TypeExpr::from_value_expr(&(value_expr.0.clone(), span), type_env);
+    type_env.insert_type(ty);
+}
+
+fn typeresolve_tuple(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+    let span = value_expr.1;
+    let ValueExpr::Tuple(value_exprs) = value_expr.0 else {
+        unreachable!("only pass structs to this function")
+    };
+
+    value_exprs.iter_mut().for_each(|value_expr| {
+        typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
+    });
+    let ty = TypeExpr::from_value_expr(&(value_expr.0.clone(), span), type_env);
+    type_env.insert_type(ty);
+}
+
+fn typeresolve_while(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+    let ValueExpr::While { condition, body } = value_expr.0 else {
+        unreachable!("only pass structs to this function")
+    };
+
+    typeresolve_value_expr((&mut condition.0, condition.1), type_env);
+    type_env.push_identifier_types();
+    typeresolve_value_expr((&mut body.0, body.1), type_env);
+    type_env.pop_identifier_types();
+}
+
+fn typeresolve_if_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+    let ValueExpr::If { condition, then, r#else } = value_expr.0 else {
+        unreachable!("only pass structs to this function")
+    };
+
+    typeresolve_value_expr((&mut condition.0, condition.1), type_env);
+    type_env.push_identifier_types();
+    typeresolve_value_expr((&mut then.0, then.1), type_env);
+    type_env.pop_identifier_types();
+    if let Some(r#else) = r#else {
+        type_env.push_identifier_types();
+        typeresolve_value_expr((&mut r#else.0, r#else.1), type_env);
+        type_env.pop_identifier_types();
+    }
+}
+
+fn typeresolve_variable(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+    let ValueExpr::Variable(_, identifier, type_expr_opt, const_opt) = value_expr.0 else {
+        unreachable!("only pass structs to this function")
+    };
+    // if let Some(type_expr) = type_expr_opt {
+    //     resolve_all_aliases_type_expr(type_expr, type_env);
+    //     return;
+    // }
+    let (type_expr, is_const) = type_env
+        .get_identifier_type_and_const(&identifier)
+        .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));
+
+    //resolve_all_aliases_type_expr(&mut type_expr, type_env, generics_to_ignore);
+    *type_expr_opt = Some(type_expr);
+    *const_opt = Some(is_const);
+}
+
+fn typeresolve_lambda(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+    let ValueExpr::Lambda(lambda_body) = value_expr.0 else {
+        unreachable!("only pass structs to this function")
+    };
+
+    let LambdaFunctionExpr {
+        is_mut,
+        params,
+        return_type,
+        value_expr,
+    } = &mut **lambda_body;
+
+    let captured = type_env.identifier_types[1..]
+        .iter()
+        .flat_map(|v| v.iter())
+        .fold(HashMap::new(), |mut acc, (name, (ty, is_const))| {
+            if !type_env.identifier_types[0].contains_key(name)  // don't capture top level identifiers like functions
+            && !params.iter().any(|(param_name, _)| param_name == name)
+            // don't capture shadowed variables
+            {
+                acc.insert(name.clone(), (ty.clone(), *is_mut && !*is_const));
+            }
+            acc
+        });
+
+    type_env.push_identifier_types();
+
+    for (name, (ty, capture_as_mut)) in captured {
+        type_env.insert_identifier_type(name, ty, !capture_as_mut);
+    }
+
+    for (name, ty) in params {
+        let ty = ty.as_mut().unwrap();
+        type_env.insert_identifier_type(name.to_owned(), ty.0.clone(), false);
+        resolve_all_aliases_type_expr(ty, type_env);
+    }
+
+    if let Some(return_type) = return_type {
+        resolve_all_aliases_type_expr(return_type, type_env);
+    }
+
+    if let Some(return_type) = return_type.as_ref() {
+        infer_against(value_expr, return_type, type_env);
+    }
+
+    typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
+    type_env.pop_identifier_types();
 }
