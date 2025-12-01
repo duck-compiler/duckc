@@ -921,8 +921,8 @@ fn process_keyof_in_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
                     }
                     TypeExpr::RawTypeName(_, typename, _) => {
                         todo!();
-                        let resolved_type = resolve_type_expr(&(type_expr.clone(), *span), type_env);
-                        return do_it(&resolved_type.0, span, type_env);
+                        // let resolved_type = resolve_type_expr(&(type_expr.clone(), *span), type_env);
+                        // return do_it(&resolved_type.0, span, type_env);
                     }
                     TypeExpr::Array(arr) => {
                         return TypeExpr::Array(Box::new((
