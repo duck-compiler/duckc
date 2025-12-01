@@ -1749,19 +1749,20 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     },
                 );
             }
-            for f in &mut struct_definition.fields {
-                resolve_all_aliases_type_expr(&mut f.type_expr, type_env);
+
+            for field in &mut struct_definition.fields {
+                resolve_all_aliases_type_expr(&mut field.type_expr, type_env);
             }
-            for f in &mut struct_definition.methods {
-                for t in f
+            for fun_def in &mut struct_definition.methods {
+                for type_expr in fun_def
                     .params
                     .iter_mut()
                     .flat_map(|v| v.iter_mut().map(|c| &mut c.1))
-                    .chain(f.return_type.iter_mut())
+                    .chain(fun_def.return_type.iter_mut())
                 {
-                    resolve_all_aliases_type_expr(t, type_env);
+                    resolve_all_aliases_type_expr(type_expr, type_env);
                 }
-                resolve_all_aliases_value_expr(&mut f.value_expr, type_env);
+                resolve_all_aliases_value_expr(&mut fun_def.value_expr, type_env);
             }
             type_env.struct_definitions.push(struct_definition.clone());
         });
