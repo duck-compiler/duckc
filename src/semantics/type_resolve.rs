@@ -2206,7 +2206,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         }
         ValueExpr::RawVariable(_, path) => {
             let ident = mangle(path);
-            let (mut type_expr, is_const) = type_env
+            let (type_expr, is_const) = type_env
                 .get_identifier_type_and_const(&ident)
                 .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {ident}"));
             resolve_all_aliases_type_expr(&mut type_expr.clone().into_empty_span(), type_env);
