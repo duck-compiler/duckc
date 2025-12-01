@@ -3,8 +3,6 @@ use std::{
     panic,
 };
 
-use chumsky::container::Container;
-
 use crate::{
     emit::types::escape_string_for_go,
     parse::{

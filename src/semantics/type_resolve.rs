@@ -634,13 +634,13 @@ where
         }
         ValueExpr::FieldAccess {
             target_obj,
-            field_name,
+            field_name: _,
         } => {
             trav_value_expr(f_t.clone(), f_vv.clone(), target_obj, env);
         }
         ValueExpr::ExtensionAccess {
             target_obj,
-            extension_name,
+            extension_name: _,
         } => {
             trav_value_expr(f_t.clone(), f_vv.clone(), target_obj, env);
         }
@@ -669,7 +669,7 @@ where
             }
         }
         ValueExpr::Struct {
-            name,
+            name: _,
             fields,
             type_params,
         } => {
@@ -763,7 +763,7 @@ where
             value_expr,
             arms,
             else_arm,
-            span,
+            span: _,
         } => {
             trav_value_expr(f_t.clone(), f_vv.clone(), value_expr, env);
             for arm in arms {
@@ -827,7 +827,7 @@ fn resolve_all_aliases_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv
 fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeEnv) {
     trav_value_expr(
         |node, env| match &mut node.0 {
-            TypeExpr::TypeOf(identifier) => {
+            TypeExpr::TypeOf(_identifier) => {
                 // let type_expr = env.get_identifier_type(identifier);
                 // *node = resolve_type_expr(&(type_expr.expect("couldn't find identifier type"), node.1), env);
             },
@@ -879,7 +879,7 @@ fn process_keyof_in_value_expr(expr: &mut Spanned<ValueExpr>, type_env: &mut Typ
         |f, env| {
             process_keyof_in_type_expr(&mut f.0, env);
         },
-        |v, env| {},
+        |_, _| {},
         expr,
         type_env,
     );
@@ -919,7 +919,7 @@ fn process_keyof_in_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
 
                         return TypeExpr::Or(fields);
                     }
-                    TypeExpr::RawTypeName(_, typename, _) => {
+                    TypeExpr::RawTypeName(_, _typename, _) => {
                         todo!();
                         // let resolved_type = resolve_type_expr(&(type_expr.clone(), *span), type_env);
                         // return do_it(&resolved_type.0, span, type_env);
@@ -1333,20 +1333,20 @@ pub fn resolve_type_expr(type_expr: &Spanned<TypeExpr>, env: &mut TypeEnv) -> Sp
     res
 }
 
-fn mangle_generics_name(
-    base: &str,
-    params: &[Spanned<TypeExpr>],
-    type_env: &mut TypeEnv,
-) -> String {
-    format!("{base}{}", {
-        let r = params
-            .iter()
-            .map(|x| x.0.as_clean_go_type_name(type_env))
-            .collect::<Vec<_>>()
-            .join("_");
-        if r.is_empty() { r } else { format!("_{r}") }
-    })
-}
+// fn mangle_generics_name(
+//     base: &str,
+//     params: &[Spanned<TypeExpr>],
+//     type_env: &mut TypeEnv,
+// ) -> String {
+//     format!("{base}{}", {
+//         let r = params
+//             .iter()
+//             .map(|x| x.0.as_clean_go_type_name(type_env))
+//             .collect::<Vec<_>>()
+//             .join("_");
+//         if r.is_empty() { r } else { format!("_{r}") }
+//     })
+// }
 
 pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
     match expr {
@@ -2298,7 +2298,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 }
 
 fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let span = value_expr.1;
     let ValueExpr::Match { value_expr, arms, else_arm, span: _ } = value_expr.0 else {
         unreachable!("only pass match exprs to this function")
     };
