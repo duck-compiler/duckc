@@ -394,124 +394,141 @@ impl TypeExpr {
                     .collect::<Vec<_>>();
 
                 if !type_params.is_empty() {
-                    if let ValueExpr::Variable(_, var_name, ..) = &target.0 {
-                        let new_fn_name = [var_name.to_string()]
-                            .into_iter()
-                            .chain(
-                                type_params
-                                    .iter()
-                                    .map(|(t, _)| t.as_clean_go_type_name(type_env)),
-                            )
-                            .collect::<Vec<_>>()
-                            .join(MANGLE_SEP);
-
-                        let f = type_env
-                            .generic_fns_generated
-                            .iter()
-                            .find(|fn_def| fn_def.name.as_str() == new_fn_name.clone());
-
-                        if let Some(d) = f {
-                            return d
-                                .return_type
-                                .as_ref()
-                                .cloned()
-                                .map(|(x, _)| x)
-                                .unwrap_or(TypeExpr::Tuple(vec![]));
-                        } else {
-                            unreachable!("fn not found");
-                        }
-                    } else if let ValueExpr::FieldAccess {
-                        target_obj,
-                        field_name,
-                    } = &target.0
-                    {
-                        let t = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
-                        let TypeExpr::Struct {
-                            name: struct_name,
-                            type_params: struct_type_params,
-                        } = t
-                        else {
-                            panic!("{t:?}")
-                        };
-
-                        let replaced_generics = type_env
-                            .get_struct_def_with_type_params_mut(
-                                &struct_name,
-                                &struct_type_params,
-                                *complete_span,
-                            )
-                            .name
-                            .clone();
-
-                        let (_new_fn_name, global_generic_generation_id) = {
-                            let new_method_name = [field_name.clone()]
+                    match &target.0 {
+                        ValueExpr::Variable(_, var_name, ..) => {
+                            let new_fn_name = [var_name.to_string()]
                                 .into_iter()
                                 .chain(
                                     type_params
                                         .iter()
                                         .map(|(t, _)| t.as_clean_go_type_name(type_env)),
                                 )
-                                .collect::<Vec<_>>();
+                                .collect::<Vec<_>>()
+                                .join(MANGLE_SEP);
 
-                            let mut gen_id = new_method_name.clone();
-                            gen_id.insert(0, replaced_generics.clone());
-                            (new_method_name.join(MANGLE_SEP), gen_id.join(MANGLE_SEP))
-                        };
+                            let fn_def = type_env
+                                .generic_fns_generated
+                                .iter()
+                                .find(|fn_def| fn_def.name.as_str() == new_fn_name.clone());
 
-                        let header = type_env.get_method_header(&global_generic_generation_id);
-                        return header
-                            .return_type
-                            .clone()
-                            .map(|(x, _)| x)
-                            .unwrap_or(TypeExpr::Tuple(vec![]));
-                    }
-                } else {
-                    let mut target_type = TypeExpr::from_value_expr(target.as_ref(), type_env);
-                    if let TypeExpr::Fun(param_types, return_type, _) = &mut target_type {
-                        param_types
-                            .iter_mut()
-                            .enumerate()
-                            .for_each(|(index, param_type)| {
-                                if matches!(param_type.1.0, TypeExpr::Any) {
-                                    return;
+                            let fn_def = fn_def.expect("this should exist");
+
+                            let params  = fn_def.params.clone();
+                            if params.is_some() {
+                                let params = params.unwrap();
+                                for (index, param) in params.iter().enumerate() {
+                                    let given_type = in_param_types.get(index).expect("todo: len doesnt match");
+                                    // TODO: check if we should clone the typeenv
+                                    check_type_compatability_full(&param.1.clone(), given_type, &mut type_env.clone(), false);
                                 }
+                            }
 
-                                if let Some(param_name) = &param_type.0
-                                    && param_name == "self"
-                                {
-                                    if !is_extension_call {
-                                        check_type_compatability_full(
-                                            &param_type.1,
-                                            in_param_types.get(index).unwrap(),
-                                            type_env,
-                                            is_const_var(&params[index].0),
-                                        );
-                                    } else {
-                                        return;
-                                    }
-                                } else {
+                            return fn_def.return_type
+                                .as_ref()
+                                .cloned()
+                                .map(|(x, _)| x)
+                                .unwrap_or(TypeExpr::Tuple(vec![]))
+                        },
+                        ValueExpr::FieldAccess {
+                            target_obj,
+                            field_name
+                        } => {
+                            let t = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
+                            let TypeExpr::Struct {
+                                name: struct_name,
+                                type_params: struct_type_params,
+                            } = t
+                            else {
+                                panic!("{t:?}")
+                            };
+
+                            let replaced_generics = type_env
+                                .get_struct_def_with_type_params_mut(
+                                    &struct_name,
+                                    &struct_type_params,
+                                    *complete_span,
+                                )
+                                .name
+                                .clone();
+
+                            let (_new_fn_name, global_generic_generation_id) = {
+                                let new_method_name = [field_name.clone()]
+                                    .into_iter()
+                                    .chain(
+                                        type_params
+                                            .iter()
+                                            .map(|(t, _)| t.as_clean_go_type_name(type_env)),
+                                    )
+                                    .collect::<Vec<_>>();
+
+                                let mut gen_id = new_method_name.clone();
+                                gen_id.insert(0, replaced_generics.clone());
+                                (new_method_name.join(MANGLE_SEP), gen_id.join(MANGLE_SEP))
+                            };
+
+                            let header = type_env.get_method_header(&global_generic_generation_id);
+
+                            let params  = header.params;
+                            for (index, param) in params.iter().enumerate() {
+                                let given_type = in_param_types.get(index).expect("todo: len doesnt match");
+                                check_type_compatability_full(param, given_type, type_env, false);
+                            }
+
+                            return header
+                                .return_type
+                                .clone()
+                                .map(|(x, _)| x)
+                                .unwrap_or(TypeExpr::Tuple(vec![]));
+                        }
+                        _ => {}
+                    };
+                }
+
+                let mut target_type = TypeExpr::from_value_expr(target.as_ref(), type_env);
+                if let TypeExpr::Fun(param_types, return_type, _) = &mut target_type {
+                    param_types
+                        .iter_mut()
+                        .enumerate()
+                        .for_each(|(index, param_type)| {
+                            if matches!(param_type.1.0, TypeExpr::Any) {
+                                return;
+                            }
+
+                            if let Some(param_name) = &param_type.0
+                                && param_name == "self"
+                            {
+                                if !is_extension_call {
                                     check_type_compatability_full(
                                         &param_type.1,
                                         in_param_types.get(index).unwrap(),
                                         type_env,
                                         is_const_var(&params[index].0),
                                     );
+                                } else {
+                                    return;
                                 }
+                            } else {
+                                check_type_compatability_full(
+                                    &param_type.1,
+                                    in_param_types.get(index).unwrap(),
+                                    type_env,
+                                    is_const_var(&params[index].0),
+                                );
+                            }
 
-                                // variant any replace
-                                if let TypeExpr::Array(boxed) =
-                                    &in_param_types.get(index).unwrap().0
-                                    && let TypeExpr::Or(_) = boxed.as_ref().0
-                                {
-                                    param_type.1.0 =
-                                        TypeExpr::Array(Box::new((TypeExpr::Any, empty_range())))
-                                }
-                            });
+                            // variant any replace
+                            if let TypeExpr::Array(boxed) =
+                                &in_param_types.get(index).unwrap().0
+                                && let TypeExpr::Or(_) = boxed.as_ref().0
+                            {
+                                param_type.1.0 =
+                                    TypeExpr::Array(Box::new((TypeExpr::Any, empty_range())))
+                            }
+                        });
 
-                        return return_type
-                            .clone()
-                            .map_or(TypeExpr::Tuple(vec![]), |x| x.as_ref().0.clone());
-                    }
+                    return return_type
+                        .clone()
+                        .map_or(TypeExpr::Tuple(vec![]), |x| x.as_ref().0.clone());
                 }
 
                 failure(
@@ -1237,7 +1254,6 @@ pub fn check_type_compatability_full(
     type_env: &mut TypeEnv,
     given_const_var: bool,
 ) {
-    println!("comparing {required_type:?} with {given_type:?}");
     let mut given_type = given_type.clone();
     let fail_requirement = |explain_required: String, explain_given: String| {
         let (smaller, larger) = if required_type.1.start <= given_type.1.start {
