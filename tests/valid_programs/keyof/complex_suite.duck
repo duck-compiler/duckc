@@ -98,7 +98,7 @@ fn main() {
     let nested_key1: keyof NestedType = .outer;
     println("✓ Nested duck type keyof works");
 
-    let key_array: (keyof User)[] = [.username, .age, .email];
+    let key_array: keyof User[] = [.username, .age, .email];
     println("✓ Array of keyof types works");
 
     let user_key_alt: keyof User = .email;
