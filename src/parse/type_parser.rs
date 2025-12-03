@@ -43,6 +43,10 @@ pub enum TypeExpr {
     },
     Go(String),
     Duck(Duck),
+    NamedDuck {
+        name: String,
+        type_params: Vec<Spanned<TypeExpr>>,
+    },
     Tuple(Vec<Spanned<TypeExpr>>),
     RawTypeName(bool, Vec<String>, Vec<Spanned<TypeParam>>),
     TypeName(bool, String, Vec<Spanned<TypeParam>>),
@@ -628,6 +632,22 @@ impl Display for TypeExpr {
                 )
             }
             TypeExpr::Go(s) => write!(f, "go {s}"),
+            TypeExpr::NamedDuck { name, type_params } => write!(
+                f,
+                "Named Duck {name}{}",
+                if type_params.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "<{}>",
+                        type_params
+                            .iter()
+                            .map(|f| f.0.as_clean_user_faced_type_name())
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    )
+                }
+            ),
             TypeExpr::Duck(d) => write!(f, "{d}"), // Delegates to Duck's Display impl
             TypeExpr::Tuple(elements) => {
                 write!(f, "(")?;

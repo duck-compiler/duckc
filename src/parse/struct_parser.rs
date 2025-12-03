@@ -14,6 +14,13 @@ use crate::parse::{
 use super::lexer::Token;
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct NamedDuckDefinition {
+    pub name: String,
+    pub fields: Vec<Field>,
+    pub generics: Vec<Spanned<Generic>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct StructDefinition {
     pub name: String,
     pub fields: Vec<Field>,

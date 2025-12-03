@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::panic::Location;
 use std::process;
 
 use chumsky::container::Seq;
 use colored::Colorize;
 
-use crate::parse::struct_parser::StructDefinition;
+use crate::parse::struct_parser::{NamedDuckDefinition, StructDefinition};
 use crate::parse::type_parser::{Duck, TypeExpr};
 use crate::parse::value_parser::{empty_range, type_expr_into_empty_range};
 use crate::parse::{Field, SS, failure_with_occurence};
@@ -413,25 +414,32 @@ impl TypeExpr {
 
                             let fn_def = fn_def.expect("this should exist");
 
-                            let params  = fn_def.params.clone();
+                            let params = fn_def.params.clone();
                             if params.is_some() {
                                 let params = params.unwrap();
                                 for (index, param) in params.iter().enumerate() {
-                                    let given_type = in_param_types.get(index).expect("todo: len doesnt match");
+                                    let given_type =
+                                        in_param_types.get(index).expect("todo: len doesnt match");
                                     // TODO: check if we should clone the typeenv
-                                    check_type_compatability_full(&param.1.clone(), given_type, &mut type_env.clone(), false);
+                                    check_type_compatability_full(
+                                        &param.1.clone(),
+                                        given_type,
+                                        &mut type_env.clone(),
+                                        false,
+                                    );
                                 }
                             }
 
-                            return fn_def.return_type
+                            return fn_def
+                                .return_type
                                 .as_ref()
                                 .cloned()
                                 .map(|(x, _)| x)
-                                .unwrap_or(TypeExpr::Tuple(vec![]))
-                        },
+                                .unwrap_or(TypeExpr::Tuple(vec![]));
+                        }
                         ValueExpr::FieldAccess {
                             target_obj,
-                            field_name
+                            field_name,
                         } => {
                             let t = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
                             let TypeExpr::Struct {
@@ -468,9 +476,10 @@ impl TypeExpr {
 
                             let header = type_env.get_method_header(&global_generic_generation_id);
 
-                            let params  = header.params;
+                            let params = header.params;
                             for (index, param) in params.iter().enumerate() {
-                                let given_type = in_param_types.get(index).expect("todo: len doesnt match");
+                                let given_type =
+                                    in_param_types.get(index).expect("todo: len doesnt match");
                                 check_type_compatability_full(param, given_type, type_env, false);
                             }
 
@@ -517,8 +526,7 @@ impl TypeExpr {
                             }
 
                             // variant any replace
-                            if let TypeExpr::Array(boxed) =
-                                &in_param_types.get(index).unwrap().0
+                            if let TypeExpr::Array(boxed) = &in_param_types.get(index).unwrap().0
                                 && let TypeExpr::Or(_) = boxed.as_ref().0
                             {
                                 param_type.1.0 =
@@ -637,7 +645,7 @@ impl TypeExpr {
                         },
                         vec![(
                             format!(
-                                "this value is not object like and has no fields to access"
+                                "this value is not object like and has no fields to access {target_obj_type_expr:?}"
                             ),
                             span,
                         )],
@@ -813,7 +821,7 @@ impl TypeExpr {
 
     pub fn is_object_like(&self) -> bool {
         match self {
-            Self::Tuple(..) | Self::Duck(..) | Self::Struct { .. } => true,
+            Self::Tuple(..) | Self::Duck(..) | Self::Struct { .. } | Self::NamedDuck { .. } => true,
             _ => false,
         }
     }
@@ -827,7 +835,7 @@ impl TypeExpr {
 
     pub fn is_duck(&self) -> bool {
         match self {
-            Self::Duck(..) => true,
+            Self::Duck(..) | Self::NamedDuck { .. } => true,
             _ => false,
         }
     }
@@ -927,6 +935,22 @@ impl TypeExpr {
 
                 fields.iter().any(|f| f.name.as_str() == name.as_str())
             }
+            Self::NamedDuck {
+                name: duck_name,
+                type_params,
+            } => {
+                let NamedDuckDefinition {
+                    name: _,
+                    fields,
+                    generics: _,
+                } = type_env.get_duck_def_with_type_params_mut(
+                    duck_name,
+                    type_params,
+                    empty_range(),
+                );
+
+                fields.iter().any(|f| f.name.as_str() == name.as_str())
+            }
             Self::Duck(duck) => duck
                 .fields
                 .iter()
@@ -1017,6 +1041,23 @@ impl TypeExpr {
                             }),
                     )
                     .find(|struct_field| struct_field.0 == field_name)
+                    .expect("Tried to access field that doesn't exist")
+                    .1
+                    .clone()
+            }
+            Self::NamedDuck { name, type_params } => {
+                let NamedDuckDefinition {
+                    name: _,
+                    fields,
+                    generics: _,
+                } = type_env
+                    .get_duck_def_with_type_params_mut(name, type_params, empty_range())
+                    .clone();
+
+                fields
+                    .iter()
+                    .map(|x| (x.name.clone(), x.type_expr.0.clone()))
+                    .find(|duck_field| duck_field.0 == field_name)
                     .expect("Tried to access field that doesn't exist")
                     .1
                     .clone()
@@ -1280,6 +1321,68 @@ pub fn check_type_compatability_full(
     };
 
     match &required_type.0 {
+        TypeExpr::NamedDuck { name, type_params } => {
+            let def = type_env
+                .get_duck_def_with_type_params_mut(name, type_params, required_type.1)
+                .clone();
+            let is_matched =
+                match &given_type.0 {
+                    TypeExpr::Duck(Duck { fields }) => {
+                        fields.len() >= def.fields.len()
+                            && def.fields.iter().zip(fields.iter()).all(
+                                |(def_field, given_field)| {
+                                    check_type_compatability(
+                                        &def_field.type_expr,
+                                        &given_field.type_expr,
+                                        type_env,
+                                    );
+                                    def_field.name == given_field.name
+                                },
+                            )
+                    }
+                    TypeExpr::Struct { name, type_params } => {
+                        let s_def = type_env
+                            .get_struct_def_with_type_params_mut(name, type_params, given_type.1)
+                            .clone();
+                        let struct_fields = s_def
+                            .fields
+                            .iter()
+                            .map(|f| (f.name.clone(), f.type_expr.clone()))
+                            .chain(s_def.methods.iter().map(|m| {
+                                let mut method_type = m.type_expr();
+                                let TypeExpr::Fun(_, _, ref mut is_mut) = method_type.0 else {
+                                    panic!("how is this not a method {method_type:?}")
+                                };
+                                *is_mut = s_def.mut_methods.contains(&m.name);
+                                (m.name.clone(), method_type)
+                            }))
+                            .fold(HashMap::new(), |mut acc, (name, ty)| {
+                                acc.insert(name, ty);
+                                acc
+                            });
+                        for def_field in &def.fields {
+                            if let Some(field_type) = struct_fields.get(&def_field.name) {
+                                check_type_compatability(&def_field.type_expr, &field_type, type_env);
+                            } else {
+                                panic!("field {} not found", def_field.name);
+                            }
+                        }
+                        true
+                    }
+                    TypeExpr::NamedDuck { name: given_name, type_params } => {
+                        if !type_params.is_empty() {
+                            todo!("type params not impl yet");
+                        }
+
+                        given_name == &def.name
+                    }
+                    _ => false,
+                };
+
+            if !is_matched {
+                panic!("mismatch {name} {:?}", given_type.0);
+            }
+        }
         TypeExpr::Ref(req_t) => {
             if let TypeExpr::Ref(given_t) | TypeExpr::RefMut(given_t) = &given_type.0 {
                 check_type_compatability(req_t, given_t, type_env);
@@ -1401,6 +1504,22 @@ pub fn check_type_compatability_full(
                         type_env,
                     );
                 }
+            }
+            TypeExpr::NamedDuck { name, type_params } => {
+                assert_eq!(
+                    required_type.0.type_id(type_env),
+                    given_type.0.type_id(type_env)
+                );
+                return;
+                // let def =
+                //     type_env.get_duck_def_with_type_params_mut(name, type_params, given_type.1);
+                // let as_duck = (
+                //     TypeExpr::Duck(Duck {
+                //         fields: def.fields.clone(),
+                //     }),
+                //     given_type.1,
+                // );
+                // check_type_compatability_full(&required_type, &as_duck, type_env, given_const_var);
             }
             TypeExpr::Struct {
                 name: struct_name,

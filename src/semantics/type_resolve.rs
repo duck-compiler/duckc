@@ -1,4 +1,5 @@
 use std::{
+    cell::Cell,
     collections::{HashMap, HashSet},
     sync::mpsc::Sender,
 };
@@ -15,7 +16,7 @@ use crate::{
         failure_with_occurence,
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         source_file_parser::SourceFile,
-        struct_parser::StructDefinition,
+        struct_parser::{NamedDuckDefinition, StructDefinition},
         test_parser::TestCase,
         tsx_component_parser::{
             Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
@@ -147,13 +148,16 @@ pub struct TypeEnv<'a> {
     pub duckx_components: Vec<DuckxComponent>,
     pub tsx_component_dependencies: HashMap<String, TsxComponentDependencies>,
     pub struct_definitions: Vec<StructDefinition>,
+    pub named_duck_definitions: Vec<NamedDuckDefinition>,
     pub type_definitions: Vec<TypeDefinition>,
 
     pub generic_fns_generated: Vec<FunctionDefintion>,
     pub generic_structs_generated: Vec<StructDefinition>,
+    pub generic_ducks_generated: Vec<NamedDuckDefinition>,
     pub generic_methods_generated: HashMap<String, Vec<FunctionDefintion>>,
     pub prevent_generic_generation: HashSet<String>,
     pub tailwind_sender: Option<&'a Sender<String>>,
+    pub is_recursive_type_alias: HashSet<String>,
 }
 
 impl Default for TypeEnv<'_> {
@@ -170,13 +174,16 @@ impl Default for TypeEnv<'_> {
             function_headers: HashMap::new(),
             function_definitions: Vec::new(),
             struct_definitions: Vec::new(),
+            named_duck_definitions: Vec::new(),
             type_definitions: Vec::new(),
 
             generic_fns_generated: Vec::new(),
             generic_structs_generated: Vec::new(),
+            generic_ducks_generated: Vec::new(),
             generic_methods_generated: HashMap::new(),
             prevent_generic_generation: HashSet::new(),
             tailwind_sender: None,
+            is_recursive_type_alias: HashSet::new(),
         }
     }
 }
@@ -201,6 +208,92 @@ pub fn build_struct_generic_id(
 }
 
 impl TypeEnv<'_> {
+    pub fn get_duck_def_with_type_params_mut<'a>(
+        &'a mut self,
+        name: &str,
+        type_params: &[Spanned<TypeExpr>],
+        span: SS,
+    ) -> &'a mut NamedDuckDefinition {
+        let name = name;
+        let type_params = type_params;
+
+        let generic_id = build_struct_generic_id(name, type_params, self);
+
+        if !type_params.is_empty()
+            && let Some((idx, _def)) = self
+                .generic_ducks_generated
+                .iter()
+                .enumerate()
+                .find(|(_, stored_def)| stored_def.name.as_str() == generic_id.as_ref())
+        {
+            return &mut self.generic_ducks_generated[idx];
+        }
+
+        if type_params.is_empty() {
+            return self
+                .named_duck_definitions
+                .iter_mut()
+                .find(|d| d.name == name)
+                .unwrap();
+        }
+
+        let cloned_def = self
+            .named_duck_definitions
+            .iter()
+            .chain(self.generic_ducks_generated.iter())
+            .find(|user_struct_definition| user_struct_definition.name.as_str() == name)
+            .cloned();
+
+        if let Some(mut cloned_def) = cloned_def {
+            let generic_arguments = cloned_def
+                .generics
+                .iter()
+                .map(|(x, _)| x)
+                .zip(type_params.iter())
+                .fold(IndexMap::new(), |mut acc, (def, arg)| {
+                    if let Some(c) = def.constraint.as_ref() {
+                        check_type_compatability(c, arg, self);
+                    }
+                    acc.insert(def.name.clone(), arg.0.clone());
+                    acc
+                });
+
+            let new_duck_name = [cloned_def.name.clone()]
+                .into_iter()
+                .chain(
+                    generic_arguments
+                        .iter()
+                        .map(|(_, x)| x.as_clean_go_type_name(self)),
+                )
+                .collect::<Vec<_>>()
+                .join(MANGLE_SEP);
+
+            cloned_def.generics = vec![];
+
+            if self
+                .prevent_generic_generation
+                .insert(new_duck_name.clone())
+            {
+                replace_generics_in_named_duck_def(&mut cloned_def, &generic_arguments);
+                cloned_def.name = new_duck_name.clone();
+                for f in &mut cloned_def.fields {
+                    resolve_all_aliases_type_expr(&mut f.type_expr, self);
+                }
+                self.generic_ducks_generated.push(cloned_def.clone());
+            }
+            self.generic_ducks_generated
+                .iter_mut()
+                .find(|f| f.name.as_str() == new_duck_name.as_str())
+                .unwrap()
+        } else {
+            failure_with_occurence(
+                format!("This duck does not exist {name}"),
+                span,
+                [(format!("duck {name} does not exist"), span)],
+            );
+        }
+    }
+
     pub fn get_struct_def_with_type_params_mut<'a>(
         &'a mut self,
         name: &str,
@@ -347,6 +440,13 @@ impl TypeEnv<'_> {
         self.struct_definitions
             .iter()
             .chain(self.generic_structs_generated.iter())
+            .find(|x| x.name.as_str() == name)
+    }
+
+    pub fn get_duck_def_opt<'a>(&'a self, name: &str) -> Option<&'a NamedDuckDefinition> {
+        self.named_duck_definitions
+            .iter()
+            .chain(self.generic_ducks_generated.iter())
             .find(|x| x.name.as_str() == name)
     }
 
@@ -523,6 +623,9 @@ impl TypeEnv<'_> {
         std::panic::set_hook(Box::new(|_| {}));
 
         all_types.retain(|f| {
+            if f.type_id(self).contains("MyString") {
+                return true;
+            }
             let mut cloned_env = self.clone();
             if !std::panic::catch_unwind(move || {
                 interface_implementations(
@@ -564,6 +667,14 @@ where
 {
     f_t(v, env);
     match &mut v.0 {
+        TypeExpr::NamedDuck {
+            name: _,
+            type_params,
+        } => {
+            for t in type_params {
+                trav_type_expr(f_t.clone(), t, env);
+            }
+        }
         TypeExpr::Duck(fields) => {
             for f in &mut fields.fields {
                 trav_type_expr(f_t.clone(), &mut f.type_expr, env);
@@ -804,12 +915,15 @@ fn resolve_all_aliases_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv
         |node, env| match &mut node.0 {
             TypeExpr::TypeOf(identifier) => {
                 let type_expr = env.get_identifier_type(identifier);
-                *node = resolve_type_expr(&(type_expr.expect("couldn't find identifier type"), span), env);
-            },
+                *node = resolve_type_expr(
+                    &(type_expr.expect("couldn't find identifier type"), span),
+                    env,
+                );
+            }
             TypeExpr::KeyOf(type_expr) => {
                 let type_expr = type_expr.as_mut();
                 *type_expr = resolve_type_expr(type_expr, env);
-            },
+            }
             TypeExpr::TypeName(..) => {
                 *node = resolve_type_expr(node, env);
             }
@@ -830,11 +944,11 @@ fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeE
             TypeExpr::TypeOf(_identifier) => {
                 // let type_expr = env.get_identifier_type(identifier);
                 // *node = resolve_type_expr(&(type_expr.expect("couldn't find identifier type"), node.1), env);
-            },
+            }
             TypeExpr::KeyOf(type_expr) => {
                 let type_expr = type_expr.as_mut();
                 *type_expr = resolve_type_expr(type_expr, env);
-            },
+            }
             TypeExpr::TypeName(..) => {
                 *node = resolve_type_expr(node, env);
             }
@@ -1182,6 +1296,15 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &IndexMap<St
     }
 }
 
+fn replace_generics_in_named_duck_def(
+    def: &mut NamedDuckDefinition,
+    set_params: &IndexMap<String, TypeExpr>,
+) {
+    for f in &mut def.fields {
+        replace_generics_in_type_expr(&mut f.type_expr.0, set_params);
+    }
+}
+
 fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &IndexMap<String, TypeExpr>) {
     match expr {
         TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
@@ -1237,6 +1360,17 @@ fn replace_generics_in_type_expr(expr: &mut TypeExpr, set_params: &IndexMap<Stri
                 replace_generics_in_type_expr(&mut t.0, set_params);
             }
         }
+        TypeExpr::NamedDuck { name, type_params } => {
+            if let Some(TypeExpr::TypeName(_, new_name, g)) = set_params.get(name)
+                && g.is_empty()
+            {
+                *name = new_name.clone();
+            }
+
+            for t in type_params {
+                replace_generics_in_type_expr(&mut t.0, set_params);
+            }
+        }
         TypeExpr::Any
         | TypeExpr::Char
         | TypeExpr::Bool(..)
@@ -1273,8 +1407,19 @@ pub fn resolve_type_expr(type_expr: &Spanned<TypeExpr>, env: &mut TypeEnv) -> Sp
             }
             TypeExpr::TypeName(_, name, generics) => (name, generics),
             TypeExpr::Struct { name, type_params } => (name, type_params),
+            TypeExpr::NamedDuck { name, type_params } => (name, type_params),
             _ => break,
         };
+
+        if let Some(s_def) = env.get_duck_def_opt(name)
+            && !matches!(res.0, TypeExpr::NamedDuck { .. })
+        {
+            res.0 = TypeExpr::NamedDuck {
+                name: s_def.name.clone(),
+                type_params: generics.to_vec(),
+            };
+            continue;
+        }
 
         if let Some(s_def) = env.get_struct_def_opt(name)
             && !matches!(res.0, TypeExpr::Struct { .. })
@@ -1587,6 +1732,7 @@ pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
         | TypeExpr::Int(_)
         | TypeExpr::String(_)
         | TypeExpr::TypeName(..)
+        | TypeExpr::NamedDuck { .. }
         | TypeExpr::Struct { .. }
         | TypeExpr::Tag(..) => {}
         TypeExpr::And(variants) => {
@@ -1724,10 +1870,53 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     println!("{} insert type definitions", Tag::TypeResolve);
 
+    let mut to_remove_from_type_defs = Vec::new();
+
     source_file
         .type_definitions
         .iter_mut()
-        .for_each(|type_def| {
+        .enumerate()
+        .for_each(|(idx, type_def)| {
+            if let TypeExpr::Duck(..) = &type_def.type_expression.0 {
+                let to_find = &type_def.name;
+                let is_recursive = Cell::new(false);
+                trav_type_expr(
+                    |t: &mut Spanned<TypeExpr>, _: &mut TypeEnv<'_>| match &t.0 {
+                        TypeExpr::TypeName(_, n, type_params) => {
+                            if n == to_find {
+                                *t = (
+                                    TypeExpr::NamedDuck {
+                                        name: n.clone(),
+                                        type_params: type_params.clone(),
+                                    },
+                                    t.1,
+                                );
+                                is_recursive.set(true);
+                            }
+                        }
+                        _ => {}
+                    },
+                    &mut type_def.type_expression,
+                    type_env,
+                );
+                if is_recursive.get() {
+                    let TypeExpr::Duck(Duck { mut fields }) = type_def.type_expression.0.clone()
+                    else {
+                        unreachable!()
+                    };
+                    for f in &mut fields {
+                        resolve_all_aliases_type_expr(&mut f.type_expr, type_env);
+                    }
+                    type_env.named_duck_definitions.push(NamedDuckDefinition {
+                        name: to_find.clone(),
+                        fields: fields.clone(),
+                        generics: type_def.generics.clone(),
+                    });
+                    to_remove_from_type_defs.push(idx);
+                    return;
+                }
+            }
+
             if let TypeExpr::And(_) = &mut type_def.type_expression.0 {
                 type_def.type_expression.0 =
                     translate_intersection_to_duck(&type_def.type_expression.0);
@@ -1833,6 +2022,15 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                         process_keyof_in_type_expr(&mut p.0, type_env);
                     }
                 }
+            }
+
+            for type_param in function_definition
+                .generics
+                .iter_mut()
+                .flat_map(|v| v.iter_mut().flat_map(|g| g.0.constraint.iter_mut()))
+            {
+                println!("replacing type params in {}", function_definition.name);
+                resolve_all_aliases_type_expr(type_param, type_env);
             }
 
             if let Some(r) = function_definition.return_type.as_mut() {
@@ -2261,10 +2459,14 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             typeresolve_value_expr((&mut target_obj.0, target_obj.1), type_env);
         }
         ValueExpr::Struct { .. } => typeresolve_struct((value_expr, *span), type_env),
-        ValueExpr::Return(Some(value_expr)) => typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env),
+        ValueExpr::Return(Some(value_expr)) => {
+            typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
+        }
         ValueExpr::VarAssign(..) => typeresolve_var_assign((value_expr, *span), type_env),
         ValueExpr::Match { .. } => typeresolve_match((value_expr, *span), type_env),
-        ValueExpr::BoolNegate(value_expr) => typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env),
+        ValueExpr::BoolNegate(value_expr) => {
+            typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
+        }
         ValueExpr::Equals(lhs, rhs)
         | ValueExpr::NotEquals(lhs, rhs)
         | ValueExpr::LessThan(lhs, rhs)
@@ -2299,7 +2501,13 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 }
 
 fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let ValueExpr::Match { value_expr, arms, else_arm, span: _ } = value_expr.0 else {
+    let ValueExpr::Match {
+        value_expr,
+        arms,
+        else_arm,
+        span: _,
+    } = value_expr.0
+    else {
         unreachable!("only pass match exprs to this function")
     };
 
@@ -2311,11 +2519,7 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
 
         type_env.push_identifier_types();
         if let Some(identifier) = &arm.identifier_binding {
-            type_env.insert_identifier_type(
-                identifier.clone(),
-                arm.type_case.0.clone(),
-                false,
-            );
+            type_env.insert_identifier_type(identifier.clone(), arm.type_case.0.clone(), false);
             if let Some(condition) = &mut arm.condition {
                 typeresolve_value_expr((&mut condition.0, condition.1), type_env);
             }
@@ -2330,11 +2534,7 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
             if let Some(condition) = &mut arm.condition {
                 typeresolve_value_expr((&mut condition.0, condition.1), type_env);
             }
-            type_env.insert_identifier_type(
-                identifier.clone(),
-                arm.type_case.0.clone(),
-                false,
-            );
+            type_env.insert_identifier_type(identifier.clone(), arm.type_case.0.clone(), false);
         }
         typeresolve_value_expr((&mut arm.value_expr.0, arm.value_expr.1), type_env);
         type_env.pop_identifier_types();
@@ -2343,7 +2543,13 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
 
 fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
     let span = value_expr.1;
-    let ValueExpr::FunctionCall { target, params, type_params, is_extension_call: _ } = value_expr.0 else {
+    let ValueExpr::FunctionCall {
+        target,
+        params,
+        type_params,
+        is_extension_call: _,
+    } = value_expr.0
+    else {
         unreachable!("only pass functioncalls to this function")
     };
 
@@ -2375,9 +2581,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                     .cloned()
                     .expect(&format!("could not find {name}"));
 
-                if type_params.len()
-                != fn_def.generics.as_ref().map(|v| v.len()).unwrap_or(0)
-                {
+                if type_params.len() != fn_def.generics.as_ref().map(|v| v.len()).unwrap_or(0) {
                     let msg = "Wrong number of type parameters";
                     failure_with_occurence(msg, span, [(msg, span)])
                 }
@@ -2417,12 +2621,8 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                     .insert(new_fn_name.clone());
 
                 if prevent_generic_generation {
-                    replace_generics_in_function_definition(
-                        &mut cloned_fn_def,
-                        &generic_arguments,
-                    );
-                    for p in &mut cloned_fn_def.params.iter_mut().flat_map(|v| v.iter_mut())
-                    {
+                    replace_generics_in_function_definition(&mut cloned_fn_def, &generic_arguments);
+                    for p in &mut cloned_fn_def.params.iter_mut().flat_map(|v| v.iter_mut()) {
                         process_keyof_in_type_expr(&mut p.1.0, type_env);
                     }
                     for p in &mut cloned_fn_def.return_type.iter_mut() {
@@ -2465,8 +2665,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
             } => {
                 typeresolve_value_expr((&mut target_obj.0, target_obj.1), type_env);
 
-                let self_type =
-                    TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
+                let self_type = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
 
                 let TypeExpr::Struct {
                     name: struct_name,
@@ -2543,12 +2742,8 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                     .prevent_generic_generation
                     .insert(global_generic_generation_id.clone())
                 {
-                    replace_generics_in_function_definition(
-                        &mut cloned_fn_def,
-                        &generic_arguments,
-                    );
-                    for p in &mut cloned_fn_def.params.iter_mut().flat_map(|v| v.iter_mut())
-                    {
+                    replace_generics_in_function_definition(&mut cloned_fn_def, &generic_arguments);
+                    for p in &mut cloned_fn_def.params.iter_mut().flat_map(|v| v.iter_mut()) {
                         resolve_all_aliases_type_expr(&mut p.1, type_env);
                         process_keyof_in_type_expr(&mut p.1.0, type_env);
                     }
@@ -2671,7 +2866,12 @@ fn typeresolve_var_assign(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
 fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
     let span = value_expr.1;
-    let ValueExpr::Struct { name, fields, type_params } = value_expr.0 else {
+    let ValueExpr::Struct {
+        name,
+        fields,
+        type_params,
+    } = value_expr.0
+    else {
         unreachable!("only pass structs to this function")
     };
 
@@ -2686,12 +2886,13 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
         .get_struct_def_with_type_params_mut(name.as_str(), type_params.as_slice(), span)
         .clone();
 
-    fields.iter_mut().zip(def.fields.iter()).for_each(
-        |((_field_name, value_expr), def_field)| {
+    fields
+        .iter_mut()
+        .zip(def.fields.iter())
+        .for_each(|((_field_name, value_expr), def_field)| {
             infer_against(value_expr, &def_field.type_expr, type_env);
             typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
-        },
-    );
+        });
 
     let ty = TypeExpr::from_value_expr(&(value_expr.0.clone(), span), type_env);
     type_env.insert_type(ty);
@@ -2703,9 +2904,9 @@ fn typeresolve_block(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
     };
 
     type_env.push_identifier_types();
-    value_exprs.iter_mut().for_each(|value_expr| {
-        typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
-    });
+    value_exprs
+        .iter_mut()
+        .for_each(|value_expr| typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env));
     type_env.pop_identifier_types();
 }
 
@@ -2729,9 +2930,9 @@ fn typeresolve_tuple(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
         unreachable!("only pass structs to this function")
     };
 
-    value_exprs.iter_mut().for_each(|value_expr| {
-        typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
-    });
+    value_exprs
+        .iter_mut()
+        .for_each(|value_expr| typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env));
     let ty = TypeExpr::from_value_expr(&(value_expr.0.clone(), span), type_env);
     type_env.insert_type(ty);
 }
@@ -2748,7 +2949,12 @@ fn typeresolve_while(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
 }
 
 fn typeresolve_if_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let ValueExpr::If { condition, then, r#else } = value_expr.0 else {
+    let ValueExpr::If {
+        condition,
+        then,
+        r#else,
+    } = value_expr.0
+    else {
         unreachable!("only pass structs to this function")
     };
 

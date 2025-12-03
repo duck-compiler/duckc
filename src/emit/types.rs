@@ -2,7 +2,7 @@ use crate::{
     emit::value::{IrInstruction, IrValue, ToIr},
     parse::{
         Field,
-        struct_parser::StructDefinition,
+        struct_parser::{NamedDuckDefinition, StructDefinition},
         type_parser::{Duck, TypeExpr},
         value_parser::empty_range,
     },
@@ -388,7 +388,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                     type_params,
                 } => {
                     let StructDefinition {
-                        name: _,
+                        name,
                         fields,
                         methods: _,
                         mut_methods: _,
@@ -402,7 +402,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                         .clone();
 
                     IrInstruction::StructDef(
-                        type_name,
+                        name,
                         fields
                             .iter()
                             .map(
@@ -430,6 +430,45 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                         )
                         .collect::<Vec<_>>(),
                 ),
+                TypeExpr::NamedDuck { name, type_params } => {
+                    let NamedDuckDefinition {
+                        name,
+                        fields,
+                        generics: _,
+                    } = type_env
+                        .get_duck_def_with_type_params_mut(name, type_params, empty_range())
+                        .clone();
+
+                    let mut interface_fields = vec![];
+
+                    for field in &fields {
+                        interface_fields.extend([
+                            (
+                                format!("Get{}", field.name),
+                                vec![],
+                                Some(field.type_expr.0.as_go_type_annotation(type_env)),
+                            ),
+                            (
+                                format!("GetPtr{}", field.name),
+                                vec![],
+                                Some(format!(
+                                    "*{}",
+                                    field.type_expr.0.as_go_type_annotation(type_env)
+                                )),
+                            ),
+                            (
+                                format!("Set{}", field.name),
+                                vec![(
+                                    "param".into(),
+                                    field.type_expr.0.as_go_type_annotation(type_env),
+                                )],
+                                None,
+                            ),
+                        ])
+                    }
+
+                    IrInstruction::InterfaceDef(type_name.clone(), vec![], interface_fields)
+                }
                 _ => panic!("cant create for {type_name}"),
             });
             instructions
@@ -488,6 +527,9 @@ impl TypeExpr {
                 name: _struct,
                 type_params: _,
             } => format!("*{}", self.as_clean_go_type_name(type_env)),
+            TypeExpr::NamedDuck { .. } => {
+                format!("{}", self.as_clean_go_type_name(type_env))
+            }
             TypeExpr::Duck(duck) => {
                 let mut fields = duck.fields.clone();
                 fields.sort_by_key(|field| field.name.clone());
@@ -561,7 +603,14 @@ impl TypeExpr {
                     .collect::<Vec<_>>()
                     .join("_")
             ),
-            TypeExpr::Struct { name: s, .. } => s.clone(),
+            TypeExpr::NamedDuck { name, type_params } => type_env
+                .get_duck_def_with_type_params_mut(name.as_str(), type_params, empty_range())
+                .name
+                .clone(),
+            TypeExpr::Struct { name, type_params } => type_env
+                .get_struct_def_with_type_params_mut(name, type_params, empty_range())
+                .name
+                .clone(),
             TypeExpr::Tuple(fields) => {
                 format!(
                     "Tup_{}",
@@ -617,11 +666,16 @@ impl TypeExpr {
                     .unwrap_or_else(|| "".to_string())
             ),
             TypeExpr::Struct { .. } => self.as_clean_go_type_name(type_env),
+            TypeExpr::NamedDuck { .. } => self.as_clean_go_type_name(type_env),
             TypeExpr::Duck(duck) => format!(
                 "Duck_{}",
                 duck.fields
                     .iter()
-                    .map(|field| format!("{}_{}", field.name, field.type_expr.0.type_id(type_env)))
+                    .map(|field| format!(
+                        "{}_{}",
+                        field.name,
+                        field.type_expr.0.as_clean_user_faced_type_name()
+                    ))
                     .collect::<Vec<_>>()
                     .join("_")
             ),
@@ -695,9 +749,9 @@ impl TypeExpr {
             TypeExpr::Tag(identifier) => format!("Tag__{identifier}"),
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
-            TypeExpr::TypeName(_, name, _type_params) => TypeExpr::Struct {
+            TypeExpr::TypeName(_, name, type_params) => TypeExpr::Struct {
                 name: name.clone(),
-                type_params: _type_params.clone(),
+                type_params: type_params.clone(),
             }
             .as_clean_go_type_name(type_env),
             TypeExpr::InlineGo => "InlineGo".to_string(),
@@ -719,6 +773,18 @@ impl TypeExpr {
                     .unwrap_or_else(|| "".to_string())
             ),
             TypeExpr::Struct {
+                name: s,
+                type_params,
+            } => vec![s.clone()]
+                .into_iter()
+                .chain(
+                    type_params
+                        .iter()
+                        .map(|(x, _)| x.as_clean_go_type_name(type_env)),
+                )
+                .collect::<Vec<_>>()
+                .join(MANGLE_SEP),
+            TypeExpr::NamedDuck {
                 name: s,
                 type_params,
             } => vec![s.clone()]

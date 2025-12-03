@@ -29,7 +29,7 @@ where
                                     let span = type_expr.1;
                                     match &type_expr.0 {
                                         TypeExpr::Duck(_) => type_expr,
-                                        other => {
+                                        other if false => {
                                             failure_with_occurence(
                                                 "Invalid Syntax".to_string(),
                                                 span,
@@ -43,6 +43,7 @@ where
                                                 ],
                                             );
                                         }
+                                        _ => type_expr,
                                     }
                                 })
                         )
