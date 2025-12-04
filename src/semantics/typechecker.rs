@@ -645,7 +645,8 @@ impl TypeExpr {
                         },
                         vec![(
                             format!(
-                                "this value is not object like and has no fields to access {target_obj_type_expr:?}"
+                                "this value is of type {}, which not object like and has no fields to access",
+                                format!("{}", target_obj_type_expr).bright_yellow(),
                             ),
                             span,
                         )],
