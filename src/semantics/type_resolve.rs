@@ -1,6 +1,7 @@
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
+    rc::Rc,
     sync::mpsc::Sender,
 };
 
@@ -186,6 +187,13 @@ impl Default for TypeEnv<'_> {
             is_recursive_type_alias: HashSet::new(),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum NeedsSearchResult {
+    Duck { fields: Vec<Field> },
+    Tuple { fields: Vec<Spanned<TypeExpr>> },
+    Tag { name: String },
 }
 
 #[derive(Clone, Debug)]
@@ -589,75 +597,128 @@ impl TypeEnv<'_> {
         found
     }
 
-    pub fn summarize(&mut self) -> TypesSummary {
-        let mut all_types = self.all_types.clone();
+    pub fn find_ducks_and_tuples(&mut self) -> Vec<NeedsSearchResult> {
+        let mut result = Vec::new();
 
-        all_types.extend(TypeExpr::primitives());
-        all_types.extend(
-            self.tsx_components
-                .iter()
-                .map(|x| x.props_type.0.clone())
-                .collect::<Vec<_>>(),
-        );
-        all_types.extend(
-            self.duckx_components
-                .iter()
-                .map(|x| x.props_type.0.clone())
-                .collect::<Vec<_>>(),
-        );
-        all_types.push(TypeExpr::Tuple(vec![]));
-        let mut param_names_used = Vec::new();
-
-        let hook = std::panic::take_hook();
-
-        std::panic::set_hook(hook);
-
-        let mut to_push = Vec::new();
-        all_types.iter_mut().for_each(|type_expr| {
-            to_push.append(&mut self.flatten_types(type_expr, &mut param_names_used));
-        });
-
-        all_types.append(&mut to_push);
-
-        let hook = std::panic::take_hook();
-        std::panic::set_hook(Box::new(|_| {}));
-
-        all_types.retain(|f| {
-            if f.type_id(self).contains("MyString") {
-                return true;
-            }
-            let mut cloned_env = self.clone();
-            if !std::panic::catch_unwind(move || {
-                interface_implementations(
-                    f.as_clean_go_type_name(&mut cloned_env),
-                    f,
-                    &mut cloned_env,
-                    &mut ToIr::default(),
-                );
-                f.as_go_concrete_annotation(&mut cloned_env);
-                f.as_go_type_annotation(&mut cloned_env);
-                f.type_id(&mut cloned_env);
-            })
-            .is_ok()
+        for fun_def in self
+            .function_definitions
+            .clone()
+            .iter_mut()
+            .chain(self.generic_fns_generated.clone().iter_mut())
+            .chain(
+                self.generic_methods_generated
+                    .clone()
+                    .values_mut()
+                    .flat_map(|v| v.iter_mut()),
+            )
+            .chain(
+                self.struct_definitions
+                    .clone()
+                    .iter_mut()
+                    .flat_map(|s| s.methods.iter_mut()),
+            )
+            .chain(
+                self.generic_structs_generated
+                    .clone()
+                    .iter_mut()
+                    .flat_map(|s| s.methods.iter_mut()),
+            )
+            .filter(|f| f.generics.as_ref().is_none_or(|v| v.is_empty()))
+        {
+            for t in fun_def
+                .params
+                .iter_mut()
+                .flat_map(|v| v.iter_mut().map(|v| &mut v.1))
+                .chain(fun_def.return_type.iter_mut())
             {
-                // println!("removing {f:?}");
-                false
-            } else {
-                true
+                self.find_ducks_and_tuples_type_expr(t, &mut result);
             }
-        });
 
-        std::panic::set_hook(hook);
+            self.find_tuples_and_ducks_value_expr(&mut fun_def.value_expr, &mut result);
+        }
 
-        all_types.sort_by_key(|type_expr| type_expr.type_id(self));
-        all_types.dedup_by_key(|type_expr| type_expr.type_id(self));
+        for s in self
+            .struct_definitions
+            .clone()
+            .iter_mut()
+            .chain(self.generic_structs_generated.clone().iter_mut())
+            .filter(|s| s.generics.is_empty())
+        {
+            for m in &mut s.fields {
+                self.find_ducks_and_tuples_type_expr(&mut m.type_expr, &mut result);
+            }
+        }
 
-        param_names_used.dedup();
+        for s in self
+            .named_duck_definitions
+            .clone()
+            .iter_mut()
+            .chain(self.generic_ducks_generated.clone().iter_mut())
+            .filter(|s| s.generics.is_empty())
+        {
+            for m in &mut s.fields {
+                self.find_ducks_and_tuples_type_expr(&mut m.type_expr, &mut result);
+            }
+        }
 
-        return TypesSummary {
-            types_used: all_types,
-            param_names_used,
-        };
+        result
+    }
+
+    fn find_ducks_and_tuples_type_expr(
+        &mut self,
+        v: &mut Spanned<TypeExpr>,
+        out: &mut Vec<NeedsSearchResult>,
+    ) {
+        let out = Rc::new(RefCell::new(out));
+        trav_type_expr(build_tuples_and_ducks_type_expr_trav_fn(out), v, self);
+    }
+
+    fn find_tuples_and_ducks_value_expr(
+        &mut self,
+        v: &mut Spanned<ValueExpr>,
+        out: &mut Vec<NeedsSearchResult>,
+    ) {
+        let out = Rc::new(RefCell::new(out));
+        trav_value_expr(
+            build_tuples_and_ducks_type_expr_trav_fn(out.clone()),
+            build_tuples_and_ducks_value_expr_trav_fn(out.clone()),
+            v,
+            self,
+        );
+    }
+}
+
+fn build_tuples_and_ducks_type_expr_trav_fn(
+    out: Rc<RefCell<&mut Vec<NeedsSearchResult>>>,
+) -> impl Fn(&mut Spanned<TypeExpr>, &mut TypeEnv<'_>) + Clone {
+    move |t, _| match &t.0 {
+        TypeExpr::Tuple(fields) => {
+            out.borrow_mut().push(NeedsSearchResult::Tuple {
+                fields: fields.clone(),
+            });
+        }
+        TypeExpr::Duck(fields) => {
+            out.borrow_mut().push(NeedsSearchResult::Duck {
+                fields: fields.fields.clone(),
+            });
+        }
+        TypeExpr::Tag(name) => {
+            out.borrow_mut()
+                .push(NeedsSearchResult::Tag { name: name.clone() });
+        }
+        _ => {}
+    }
+}
+
+fn build_tuples_and_ducks_value_expr_trav_fn(
+    out: Rc<RefCell<&mut Vec<NeedsSearchResult>>>,
+) -> impl Fn(&mut Spanned<ValueExpr>, &mut TypeEnv<'_>) + Clone {
+    move |v, _| match &v.0 {
+        ValueExpr::Tag(name) => {
+            out.borrow_mut()
+                .push(NeedsSearchResult::Tag { name: name.clone() });
+        }
+        _ => {}
     }
 }
 
