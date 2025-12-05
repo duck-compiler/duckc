@@ -6,3 +6,11 @@ To declare a variable you can use the `let` keyword. Which will bind a value to 
 ```duck
 let my_variable: String = "Hallo, Welt";
 ```
+
+## Type Inference
+We try to help you write less code, therefore we infer some of the types so you don't have to write them out manually.
+```duck
+let my_variable = "Hallo, Welt";
+```
+
+Duck will automatically detect, that the type of `my_variable` is `String`.
