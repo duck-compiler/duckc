@@ -551,9 +551,9 @@ fn walk_access_raw(
                         ref type_params,
                     } => {
                         let NamedDuckDefinition {
-                            name,
+                            name: _,
                             fields,
-                            generics,
+                            generics: _,
                         } = type_env.get_duck_def_with_type_params_mut(
                             name,
                             type_params,

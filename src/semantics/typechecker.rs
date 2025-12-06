@@ -1326,59 +1326,63 @@ pub fn check_type_compatability_full(
             let def = type_env
                 .get_duck_def_with_type_params_mut(name, type_params, required_type.1)
                 .clone();
-            let is_matched =
-                match &given_type.0 {
-                    TypeExpr::Duck(Duck { fields }) => {
-                        fields.len() >= def.fields.len()
-                            && def.fields.iter().zip(fields.iter()).all(
-                                |(def_field, given_field)| {
-                                    check_type_compatability(
-                                        &def_field.type_expr,
-                                        &given_field.type_expr,
-                                        type_env,
-                                    );
-                                    def_field.name == given_field.name
-                                },
-                            )
-                    }
-                    TypeExpr::Struct { name, type_params } => {
-                        let s_def = type_env
-                            .get_struct_def_with_type_params_mut(name, type_params, given_type.1)
-                            .clone();
-                        let struct_fields = s_def
+            let is_matched = match &given_type.0 {
+                TypeExpr::Duck(Duck { fields }) => {
+                    fields.len() >= def.fields.len()
+                        && def
                             .fields
                             .iter()
-                            .map(|f| (f.name.clone(), f.type_expr.clone()))
-                            .chain(s_def.methods.iter().map(|m| {
-                                let mut method_type = m.type_expr();
-                                let TypeExpr::Fun(_, _, ref mut is_mut) = method_type.0 else {
-                                    panic!("how is this not a method {method_type:?}")
-                                };
-                                *is_mut = s_def.mut_methods.contains(&m.name);
-                                (m.name.clone(), method_type)
-                            }))
-                            .fold(HashMap::new(), |mut acc, (name, ty)| {
-                                acc.insert(name, ty);
-                                acc
-                            });
-                        for def_field in &def.fields {
-                            if let Some(field_type) = struct_fields.get(&def_field.name) {
-                                check_type_compatability(&def_field.type_expr, &field_type, type_env);
-                            } else {
-                                panic!("field {} not found", def_field.name);
-                            }
+                            .zip(fields.iter())
+                            .all(|(def_field, given_field)| {
+                                check_type_compatability(
+                                    &def_field.type_expr,
+                                    &given_field.type_expr,
+                                    type_env,
+                                );
+                                def_field.name == given_field.name
+                            })
+                }
+                TypeExpr::Struct { name, type_params } => {
+                    let s_def = type_env
+                        .get_struct_def_with_type_params_mut(name, type_params, given_type.1)
+                        .clone();
+                    let struct_fields = s_def
+                        .fields
+                        .iter()
+                        .map(|f| (f.name.clone(), f.type_expr.clone()))
+                        .chain(s_def.methods.iter().map(|m| {
+                            let mut method_type = m.type_expr();
+                            let TypeExpr::Fun(_, _, ref mut is_mut) = method_type.0 else {
+                                panic!("how is this not a method {method_type:?}")
+                            };
+                            *is_mut = s_def.mut_methods.contains(&m.name);
+                            (m.name.clone(), method_type)
+                        }))
+                        .fold(HashMap::new(), |mut acc, (name, ty)| {
+                            acc.insert(name, ty);
+                            acc
+                        });
+                    for def_field in &def.fields {
+                        if let Some(field_type) = struct_fields.get(&def_field.name) {
+                            check_type_compatability(&def_field.type_expr, &field_type, type_env);
+                        } else {
+                            panic!("field {} not found", def_field.name);
                         }
-                        true
                     }
-                    TypeExpr::NamedDuck { name: given_name, type_params } => {
-                        if !type_params.is_empty() {
-                            todo!("type params not impl yet");
-                        }
+                    true
+                }
+                TypeExpr::NamedDuck {
+                    name: given_name,
+                    type_params,
+                } => {
+                    if !type_params.is_empty() {
+                        todo!("type params not impl yet");
+                    }
 
-                        given_name == &def.name
-                    }
-                    _ => false,
-                };
+                    given_name == &def.name
+                }
+                _ => false,
+            };
 
             if !is_matched {
                 panic!("mismatch {name} {:?}", given_type.0);
@@ -1506,7 +1510,7 @@ pub fn check_type_compatability_full(
                     );
                 }
             }
-            TypeExpr::NamedDuck { name, type_params } => {
+            TypeExpr::NamedDuck { name: _, type_params: _ } => {
                 assert_eq!(
                     required_type.0.type_id(type_env),
                     given_type.0.type_id(type_env)
@@ -1901,7 +1905,7 @@ mod test {
             source_file_parser::SourceFile,
             value_parser::{empty_range, type_expr_into_empty_range, value_expr_parser},
         },
-        semantics::type_resolve::{TypesSummary, typeresolve_source_file},
+        semantics::type_resolve::typeresolve_source_file,
     };
     use chumsky::prelude::*;
 
@@ -2010,158 +2014,6 @@ mod test {
             assert_eq!(type_expr.0, expected_type_expr);
         }
     }
-
-    // #[test]
-    // fn test_type_summary() {
-    //     // the summary always holds the type of main and it's return type and all the primitives
-    //     let primitive_and_main_len = TypeExpr::primitives().len() + 1 /* main fn type */ + 1 /* main fn return type -> () */;
-    //     let src_and_summary_check_funs: Vec<(&str, Box<dyn FnOnce(&TypesSummary)>)> = vec![
-    //         (
-    //             "{ let y: { x: String, y: Int } = { x: \"\", y: 0 }; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let y: { x: String, y: Int, a: { b: { c: { d: { e: String }}}} } = {}; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 // +1 because of the empty duck
-    //                 assert_eq!(summary.types_used.len(), 5 + primitive_and_main_len);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let x: Int = 5; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 assert_eq!(summary.types_used.len(), 0 + primitive_and_main_len);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let x: { a: Char, b: Char } = {}; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let y: { x: { y: Int } } = {}; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let y: { x: Int } = {}; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 assert_eq!(summary.types_used.len(), 1 + primitive_and_main_len);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let y: { x: Int, y: String, z: { x: Int } } = { }; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let y: { x: Int, y: String, z: { x: Int }, w: () } = {}; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let a: { b: { c: { d: { e: { f: { a: Int }}}}}} = {}; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 assert_eq!(summary.types_used.len() - primitive_and_main_len, 6);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let y: { x: String } | { y: String } = {}; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 assert_eq!(summary.types_used.len(), 3 + primitive_and_main_len);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let y: { x: String } | { y: String } | { z: String } = {}; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 assert_eq!(summary.types_used.len(), 4 + primitive_and_main_len);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let y: { x: { x: String } | { y: String } | { z: String } }  = {}; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 assert_eq!(summary.types_used.len() - primitive_and_main_len, 5);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let y: { x: String } | { y: String } | { z: String } | { u: String } | { v: String } | { w: String } = {}; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 assert_eq!(summary.types_used.len(), 7 + primitive_and_main_len);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let y: { x: String } | { x: String } | { x: String } | { x: String } | { x: String } | { x: String } = {}; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
-    //             }),
-    //         ),
-    //         (
-    //             "{ let y: { abc: { x: String, y: String }, abc2: { x: String, y: String } } = {}; }",
-    //             Box::new(|summary: &TypesSummary| {
-    //                 // +1 because of empty duck
-    //                 assert_eq!(summary.types_used.len(), 2 + primitive_and_main_len);
-    //             }),
-    //         ),
-    //     ];
-
-    //     for (src, summary_check_fun) in src_and_summary_check_funs {
-    //         let lexer_parse_result = lex_parser("test", "").parse(src);
-    //         assert_eq!(lexer_parse_result.has_errors(), false, "Couldn't lex {src}");
-    //         assert_eq!(lexer_parse_result.has_output(), true, "Couldn't lex {src}");
-
-    //         let Some(tokens) = lexer_parse_result.into_output() else {
-    //             unreachable!()
-    //         };
-
-    //         let value_expr_parse_result =
-    //             value_expr_parser(make_input).parse(make_input(empty_range(), tokens.as_slice()));
-
-    //         assert_eq!(
-    //             value_expr_parse_result.has_errors(),
-    //             false,
-    //             "Couldn't parse value expr {src}"
-    //         );
-
-    //         assert_eq!(
-    //             value_expr_parse_result.has_output(),
-    //             true,
-    //             "Couldn't parse value expr {src}"
-    //         );
-
-    //         let value_expr = value_expr_parse_result.into_output().unwrap();
-    //         let mut source_file = SourceFile {
-    //             function_definitions: vec![FunctionDefintion {
-    //                 name: "main".to_string(),
-    //                 params: None,
-    //                 return_type: None,
-    //                 value_expr: value_expr,
-    //                 generics: None,
-    //                 span: empty_range(),
-    //             }],
-    //             ..Default::default()
-    //         };
-
-    //         let mut type_env = TypeEnv::default();
-    //         typeresolve_source_file(&mut source_file, &mut type_env);
-
-    //         let summary = type_env.summarize();
-
-    //         summary
-    //             .types_used
-    //             .iter()
-    //             .map(|type_expr| type_expr.as_clean_go_type_name(&mut type_env))
-    //             .for_each(|type_name| println!("\t{type_name}"));
-
-    //         dbg!(src);
-    //         summary_check_fun(&summary);
-    //     }
-    // }
 
     #[test]
     fn test_type_compatibility_success() {

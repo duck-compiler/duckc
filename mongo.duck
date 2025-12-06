@@ -69,20 +69,8 @@ type Fisch = {
     sub_fische: Fisch[],
 };
 
-struct MyString = {
-    s: String,
-} impl {
-    fn eq(other: &MyString) -> Bool {
-        return self.s == other.s;
-    }
-};
-
 type Equals<T> = { eq: fn(other: &T) -> Bool };
 type Hashable = { hash: fn() -> Int };
-
-fn check_for_eq<T: Equals<T>>(t1: &T, t2: &T) -> Bool {
-    return t1.eq(t2);
-}
 
 type Deserializer = {
     deserialize_string: mut fn(input: String, schema: Opt<StringSchema>)
@@ -122,16 +110,11 @@ struct JsonSerializer = {} impl {
 
 type Serializable = { serialize: fn(s: Serializer) -> String };
 
-fn abc(x: { name: String, x: Int }) {
-    x.name -> x.Getname()
-}
-
 struct Player = {
     id: String,
     wins: Int,
 } impl {
     fn serialize(s: Serializer) -> String {
-        const sssss: Serializable = Player {..};
         return s.serialize_struct(fn (s) {
             s.put_string("id", self.id);
             s.put_int("wins", self.wins);
@@ -231,28 +214,12 @@ fn create_mongo_client() -> MongoConnection | .not {
     return .not;
 }
 
-fn json_serializer<T: anyduck>(x: T) {
-    for field in [] {
-        id, wins
-    }
-}
-
 fn main() {
-    const p: { id: String, wins: Int,  } = Player {
+    const p = Player {
         id: "Robin",
         wins: 67,
-        file_handle: ...
     };
 
     let json_serializer = JsonSerializer {};
     p.serialize(json_serializer)->std::io::println();
-
-    if (check_for_eq<MyString>(
-        &MyString { s: "abc" },
-        &MyString { s: "abc" },
-        )) {
-            std::io::println("are equal");
-            } else {
-            std::io::println("not are equal");
-            }
 }

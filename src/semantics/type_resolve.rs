@@ -9,7 +9,6 @@ use chumsky::container::Container;
 use indexmap::IndexMap;
 
 use crate::{
-    emit::{types::interface_implementations, value::ToIr},
     parse::{
         Field, SS, Spanned, SpannedMutRef,
         duckx_component_parser::DuckxComponent,
@@ -547,56 +546,6 @@ impl TypeEnv<'_> {
         None
     }
 
-    fn flatten_types(
-        &mut self,
-        type_expr: &mut TypeExpr,
-        param_names_used: &mut Vec<String>,
-    ) -> Vec<TypeExpr> {
-        let mut found = vec![];
-
-        match type_expr {
-            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
-                found.extend(self.flatten_types(&mut t.0, param_names_used));
-            }
-            TypeExpr::Duck(duck) => duck.fields.iter_mut().for_each(|field| {
-                param_names_used.push(field.name.clone());
-
-                if !field.type_expr.0.has_subtypes() {
-                    found.push(field.type_expr.0.clone());
-                    return;
-                }
-
-                let mut type_expr = field.type_expr.0.clone();
-                let mut flattened_types_from_type_expr =
-                    self.flatten_types(&mut type_expr, param_names_used);
-
-                found.push(type_expr.clone());
-                found.append(&mut flattened_types_from_type_expr);
-            }),
-            TypeExpr::Tuple(types) => types.iter_mut().for_each(|type_expr| {
-                found.extend(self.flatten_types(&mut type_expr.0, param_names_used));
-            }),
-            TypeExpr::Fun(params, return_type, _) => {
-                params.iter_mut().for_each(|param| {
-                    found.extend(self.flatten_types(&mut param.1.0, param_names_used))
-                });
-
-                if let Some(type_expr) = return_type.as_mut() {
-                    found.extend(self.flatten_types(&mut type_expr.0, param_names_used));
-                }
-            }
-            TypeExpr::Or(types) => types.iter_mut().for_each(|(type_expr, ..)| {
-                found.push(type_expr.clone());
-                found.extend(self.flatten_types(type_expr, param_names_used));
-            }),
-            _ => {
-                found.push(type_expr.clone());
-            }
-        }
-
-        found
-    }
-
     pub fn find_ducks_and_tuples(&mut self) -> Vec<NeedsSearchResult> {
         let mut result = Vec::new();
 
@@ -615,12 +564,14 @@ impl TypeEnv<'_> {
                 self.struct_definitions
                     .clone()
                     .iter_mut()
+                    .filter(|s| s.generics.is_empty())
                     .flat_map(|s| s.methods.iter_mut()),
             )
             .chain(
                 self.generic_structs_generated
                     .clone()
                     .iter_mut()
+                    .filter(|s| s.generics.is_empty())
                     .flat_map(|s| s.methods.iter_mut()),
             )
             .filter(|f| f.generics.as_ref().is_none_or(|v| v.is_empty()))
@@ -660,6 +611,32 @@ impl TypeEnv<'_> {
                 self.find_ducks_and_tuples_type_expr(&mut m.type_expr, &mut result);
             }
         }
+
+        result.sort_by_key(|e| match e {
+            NeedsSearchResult::Duck { fields } => TypeExpr::Duck(Duck {
+                fields: fields.clone(),
+            })
+            .as_clean_go_type_name(self),
+            NeedsSearchResult::Tuple { fields } => {
+                TypeExpr::Tuple(fields.clone()).as_clean_go_type_name(self)
+            }
+            NeedsSearchResult::Tag { name } => {
+                TypeExpr::Tag(name.clone()).as_clean_go_type_name(self)
+            }
+        });
+
+        result.dedup_by_key(|e| match e {
+            NeedsSearchResult::Duck { fields } => TypeExpr::Duck(Duck {
+                fields: fields.clone(),
+            })
+            .as_clean_go_type_name(self),
+            NeedsSearchResult::Tuple { fields } => {
+                TypeExpr::Tuple(fields.clone()).as_clean_go_type_name(self)
+            }
+            NeedsSearchResult::Tag { name } => {
+                TypeExpr::Tag(name.clone()).as_clean_go_type_name(self)
+            }
+        });
 
         result
     }
@@ -713,10 +690,22 @@ fn build_tuples_and_ducks_type_expr_trav_fn(
 fn build_tuples_and_ducks_value_expr_trav_fn(
     out: Rc<RefCell<&mut Vec<NeedsSearchResult>>>,
 ) -> impl Fn(&mut Spanned<ValueExpr>, &mut TypeEnv<'_>) + Clone {
-    move |v, _| match &v.0 {
+    move |v, env| match &v.0 {
         ValueExpr::Tag(name) => {
             out.borrow_mut()
                 .push(NeedsSearchResult::Tag { name: name.clone() });
+        }
+        ValueExpr::Duck(..) => {
+            let TypeExpr::Duck(Duck { fields }) = TypeExpr::from_value_expr(&v, env) else {
+                panic!()
+            };
+            out.borrow_mut().push(NeedsSearchResult::Duck { fields });
+        }
+        ValueExpr::Tuple(..) => {
+            let TypeExpr::Tuple(fields) = TypeExpr::from_value_expr(&v, env) else {
+                panic!()
+            };
+            out.borrow_mut().push(NeedsSearchResult::Tuple { fields });
         }
         _ => {}
     }
