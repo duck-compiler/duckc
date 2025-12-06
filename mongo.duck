@@ -32,7 +32,7 @@ struct JsonStructSerializer = {
     out: String,
 } impl {
     mut fn append(key: String, ser_string: String) {
-        self.out = f"{if (self.out == "") {""} else {f"{self.out},"}}\\\"{key}\\\": {ser_string}";
+        self.out = f"{if (self.out == "") {""} else {f"{self.out},"}}\"{key}\": {ser_string}";
     }
 
     mut fn put_int(key: String, i: Int) {
@@ -52,7 +52,7 @@ struct JsonStructSerializer = {
     }
 
     fn build() -> String {
-        return f"{"{"}{self.out}{"}"}";
+        return f"\{{self.out}}";
     }
 
 };
@@ -88,7 +88,7 @@ struct JsonSerializer = {} impl {
         return std::string::from_int(i);
     }
     mut fn serialize_string(abc: String) -> String {
-        return f"\\\"{abc}\\\"";
+        return f"\"{abc}\"";
     }
     mut fn serialize_struct(f: fn(array_serializer: StructSerializer)) -> String {
         let struct_serializer = JsonStructSerializer {
@@ -131,8 +131,8 @@ struct Player = {
 };
 
 struct MongoConnection = {
-    mongo_connection: &go `mongo.Client`,
-    context: go `context.Context`,
+    mongo_connection: &go "mongo.Client",
+    context: go "context.Context",
     cancel: fn ()
 } impl {
     fn get_database(database_name: String) -> MongoDatabase {
@@ -148,13 +148,13 @@ struct MongoConnection = {
 
 struct MongoDatabase = {
     connection: &MongoConnection,
-    database: &go `mongo.Database`,
+    database: &go "mongo.Database",
 } impl {
     fn get_collection<T>(
         collection_name: String,
     ) -> MongoCollection<T> {
         let none = .not;
-        let collection: &go `mongo.Collection` | .not = .not;
+        let collection: &go "mongo.Collection" | .not = .not;
 
         let database = self.database;
 
@@ -167,7 +167,7 @@ struct MongoDatabase = {
             .not => {
 
             },
-            &go `mongo.Collection` @mongo_collection => {
+            &go "mongo.Collection" @mongo_collection => {
                 return MongoCollection<T> {
                     collection: mongo_collection,
                     connection: self.connection,
@@ -179,7 +179,7 @@ struct MongoDatabase = {
 
 struct MongoCollection<DocumentType> = {
     connection: &MongoConnection,
-    collection: &go `mongo.Collection`,
+    collection: &go "mongo.Collection",
 } impl {
     fn insert(document: DocumentType) -> .ok | .not {
         let ctx = self.connection.context;

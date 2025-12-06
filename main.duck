@@ -46,6 +46,8 @@ fn main() {
     const a = gimme_s<GenS<Int>>(GenS<Int> { x: 1000 });
     const b = NoGen { x: "yo" };
 
+    let a: go `mongo.client`;
+
     take_s("a");
     gen_fun<Int>(0);
     gen_fun<String>("yoo");

@@ -131,19 +131,7 @@ where
                 .ignore_then(select_ref! { Token::Ident(identifier) => identifier.clone() })
                 .map(TypeExpr::TypeOf);
 
-            let go_type_identifier = just(Token::ControlChar('`'))
-                .ignore_then(
-                    choice((
-                        select_ref! { Token::Ident(ident) => ident.to_string() },
-                        just(Token::ControlChar('[')).map(|c| c.to_string()),
-                        just(Token::ControlChar(']')).map(|c| c.to_string()),
-                        just(Token::ControlChar('.')).map(|c| c.to_string()),
-                    ))
-                    .repeated()
-                    .collect::<Vec<_>>(),
-                )
-                .then_ignore(just(Token::ControlChar('`')))
-                .map(|strs| strs.join(""));
+            let go_type_identifier = select_ref! { Token::StringLiteral(n) => n.to_string() };
 
             let go_type = just(Token::Go)
                 .ignore_then(go_type_identifier)
@@ -340,19 +328,7 @@ where
                 .allow_trailing()
                 .collect::<Vec<(Option<String>, Spanned<TypeExpr>)>>();
 
-            let go_type_identifier = just(Token::ControlChar('`'))
-                .ignore_then(
-                    choice((
-                        select_ref! { Token::Ident(ident) => ident.to_string() },
-                        just(Token::ControlChar('[')).map(|c| c.to_string()),
-                        just(Token::ControlChar(']')).map(|c| c.to_string()),
-                        just(Token::ControlChar('.')).map(|c| c.to_string()),
-                    ))
-                    .repeated()
-                    .collect::<Vec<_>>(),
-                )
-                .then_ignore(just(Token::ControlChar('`')))
-                .map(|strs| strs.join(""));
+            let go_type_identifier = select_ref! { Token::StringLiteral(n) => n.to_string() };
 
             let go_type = just(Token::Go)
                 .ignore_then(go_type_identifier)
@@ -1491,7 +1467,7 @@ pub mod tests {
         );
 
         assert_type_expression(
-            "fn(x: Int) -> go `fmt.Stringer`",
+            "fn(x: Int) -> go \"fmt.Stringer\"",
             TypeExpr::Fun(
                 vec![(
                     "x".to_string().into(),
@@ -1528,9 +1504,9 @@ pub mod tests {
         assert_type_expression("{}", TypeExpr::Any);
         assert_type_expression("duck {}", TypeExpr::Any);
 
-        assert_type_expression("go `fmt`", TypeExpr::Go("fmt".to_string()));
+        assert_type_expression("go \"fmt\"", TypeExpr::Go("fmt".to_string()));
         assert_type_expression(
-            "go `sync.WaitGroup`",
+            "go \"sync.WaitGroup\"",
             TypeExpr::Go("sync.WaitGroup".to_string()),
         );
 
@@ -1855,8 +1831,8 @@ pub mod tests {
             "type Tup = (Int, String, (Float, {x: String}));",
             "type Tup = (Int, String, (Float, {x: String}),);",
             "type Tup = (Int, String, (Float, {x: String}),);",
-            "type Tup = go `fmt`;",
-            "type Tup = go `sync.WaitGroup`;",
+            "type Tup = go \"fmt\";",
+            "type Tup = go \"sync.WaitGroup\";",
             "type X = ::String;",
             "type X = String::ABC::C;",
             "type X = ::String::ABC::C;",
@@ -1899,7 +1875,7 @@ pub mod tests {
             "{ x: {}, y: {}, z: {} }",
             "duck { x: duck {}, y: duck {}, z: duck {} }",
             "duck { x: String, y: duck {}, z: {}, w: { a: String, b: {}, c: duck { aa: String } } }",
-            "go `sync.WaitGroup`",
+            "go \"sync.WaitGroup\"",
             "::X",
             "::X::Y",
             "X::Y::Z",

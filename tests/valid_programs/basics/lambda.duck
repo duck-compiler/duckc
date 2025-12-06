@@ -15,7 +15,7 @@ fn main() {
         return 1;
     })(1);
 
-    let c: fn() -> go `any` = fn() -> go `any` { go { return nil } };
+    let c: fn() -> go "any" = fn() -> go "any" { go { return nil } };
 
     c();
 

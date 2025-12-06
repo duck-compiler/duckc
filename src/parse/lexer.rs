@@ -578,7 +578,7 @@ pub fn lex_single<'a>(
                 }
 
                 if !s.is_empty() {
-                    xx.push(FmtStringContents::String(s.replace("\n", "\\n")));
+                    xx.push(FmtStringContents::String(s));
                 }
 
                 Token::FormatStringLiteral(xx)
@@ -598,7 +598,7 @@ pub fn lex_single<'a>(
                 .map(Token::InlineDuckx))
             .or(just("&mut")
                 .then_ignore(whitespace().at_least(1))
-                .map(|_| Token::RefMut))
+                .to(Token::RefMut))
             .or(doc_comment)
             .or(comment)
             .or(fmt_string)
