@@ -6,7 +6,31 @@ type A struct {
 	x int
 }
 
-func abc() {
+type ZZZ struct {
+}
+
+func (self ZZZ) ZZFun() {}
+
+type ZZ interface {
+	ZZFun()
+}
+
+func main() {
+	var x any
+	x = ZZZ{}
+	switch x.(type) {
+		case ZZ:
+			fmt.Println("is zz")
+			break
+		case ZZZ:
+			fmt.Println("is zz")
+			break
+		default:
+			fmt.Println(1)
+	}
+
+	return
+
 	for _, e := range []string{}{
 		e = ""
 		_ = e
@@ -28,23 +52,4 @@ type C struct {
 
 type D struct {
 	c *C
-}
-
-func main() {
-	var aa any
-	aa = true
-	_ = aa
-
-	a := &A{0}
-	b := &B{&a}
-	x := D{
-		&C{
-			&b,
-		},
-	}
-	_ = x
-
-	(a).a()
-
-	fmt.Println(a)
 }

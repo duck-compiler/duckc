@@ -623,11 +623,13 @@ where
                                         res.push(ValFmtStringContents::String(s.to_owned()))
                                     }
                                     FmtStringContents::Tokens(s) => {
-                                        let expr = value_expr_parser
-                                            .parse(make_input(empty_range(), s.as_slice()))
-                                            .into_result()
-                                            .expect("invalid code");
-                                        res.push(ValFmtStringContents::Expr(expr));
+                                        if !s.is_empty() {
+                                            let expr = value_expr_parser
+                                                .parse(make_input(empty_range(), s.as_slice()))
+                                                .into_result()
+                                                .expect("invalid code");
+                                            res.push(ValFmtStringContents::Expr(expr));
+                                        }
                                     }
                                 }
                             }

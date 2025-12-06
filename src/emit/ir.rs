@@ -381,8 +381,21 @@ impl IrValue {
             IrValue::Bool(b) => format!("{b}"),
             IrValue::Int(i) => format!("{i}"),
             IrValue::Float(f) => format!("{f}"),
-            IrValue::Char(c) => format!("'{c}'"),
-            IrValue::String(s, _is_const) => format!("\"{}\"", s.replace("\n", "\\n")),
+            IrValue::Char(c) => format!(
+                "'{}'",
+                c.to_string()
+                    .replace("\\", "\\\\")
+                    .replace("\t", "\\t")
+                    .replace("\n", "\\n")
+                    .replace("\'", "\\'")
+            ),
+            IrValue::String(s, _is_const) => format!(
+                "\"{}\"",
+                s.replace("\\", "\\\\")
+                    .replace("\n", "\\n")
+                    .replace("\"", "\\\"")
+                    .replace("\t", "\\\t")
+            ),
             IrValue::Var(v) => v.to_string(),
             IrValue::Struct(s, fields) => {
                 format!(
