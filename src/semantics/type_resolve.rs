@@ -1995,6 +1995,8 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 );
             }
 
+            type_env.struct_definitions.push(struct_definition.clone());
+
             for field in &mut struct_definition.fields {
                 resolve_all_aliases_type_expr(&mut field.type_expr, type_env);
             }
@@ -2009,6 +2011,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 }
                 resolve_all_aliases_value_expr(&mut fun_def.value_expr, type_env);
             }
+            type_env.struct_definitions.retain(|s| s.name.as_str() != struct_definition.name.as_str());
             type_env.struct_definitions.push(struct_definition.clone());
         });
 
