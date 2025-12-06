@@ -14,12 +14,19 @@ use crate::parse::{
 use super::lexer::Token;
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct NamedDuckDefinition {
+    pub name: String,
+    pub fields: Vec<Field>,
+    pub generics: Vec<Spanned<Generic>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct StructDefinition {
     pub name: String,
     pub fields: Vec<Field>,
     pub methods: Vec<FunctionDefintion>,
     pub mut_methods: HashSet<String>,
-    pub generics: Option<Vec<Spanned<Generic>>>,
+    pub generics: Vec<Spanned<Generic>>,
 }
 
 pub fn struct_definition_parser<'src, M, I>(
@@ -79,7 +86,7 @@ where
                 fields,
                 methods,
                 mut_methods: mut_methods_names,
-                generics,
+                generics: generics.unwrap_or_default(),
             }
         })
 }
@@ -117,28 +124,22 @@ pub mod tests {
                 is_mut,
             ),
             TypeExpr::Or(variants) => TypeExpr::Or(variants.into_iter().map(strip_spans).collect()),
-            TypeExpr::TypeName(is_global, type_name, Some(generics)) => TypeExpr::TypeName(
+            TypeExpr::TypeName(is_global, type_name, generics) => TypeExpr::TypeName(
                 is_global,
                 type_name,
-                Some(
-                    generics
-                        .into_iter()
-                        .map(|generic| strip_spans(generic))
-                        .collect::<Vec<_>>(),
-                ),
+                generics
+                    .into_iter()
+                    .map(|generic| strip_spans(generic))
+                    .collect::<Vec<_>>(),
             ),
-            TypeExpr::RawTypeName(is_global, raw_type_name, Some(generics)) => {
-                TypeExpr::RawTypeName(
-                    is_global,
-                    raw_type_name,
-                    Some(
-                        generics
-                            .into_iter()
-                            .map(|generic| strip_spans(generic))
-                            .collect::<Vec<_>>(),
-                    ),
-                )
-            }
+            TypeExpr::RawTypeName(is_global, raw_type_name, generics) => TypeExpr::RawTypeName(
+                is_global,
+                raw_type_name,
+                generics
+                    .into_iter()
+                    .map(|generic| strip_spans(generic))
+                    .collect::<Vec<_>>(),
+            ),
             TypeExpr::Array(type_expr) => {
                 TypeExpr::Array(Box::new(strip_spans(type_expr.as_ref().clone())))
             }
@@ -151,11 +152,11 @@ pub mod tests {
         for field in &mut def.fields {
             field.type_expr = strip_spans(field.type_expr.clone());
         }
-        if let Some(generics) = &mut def.generics {
-            for generic in generics {
-                generic.1 = empty_range();
-            }
+
+        for generic in &mut def.generics {
+            generic.1 = empty_range();
         }
+
         def
     }
 
@@ -241,7 +242,7 @@ pub mod tests {
                 ],
                 methods: vec![],
                 mut_methods: HashSet::new(),
-                generics: None,
+                generics: vec![],
             },
         );
 
@@ -252,7 +253,7 @@ pub mod tests {
                 fields: vec![],
                 methods: vec![],
                 mut_methods: HashSet::new(),
-                generics: None,
+                generics: vec![],
             },
         );
 
@@ -266,7 +267,7 @@ pub mod tests {
                 ],
                 methods: vec![],
                 mut_methods: HashSet::new(),
-                generics: None,
+                generics: vec![],
             },
         );
 
@@ -276,17 +277,17 @@ pub mod tests {
                 name: "Option".to_string(),
                 fields: vec![Field::new(
                     "value".to_string(),
-                    TypeExpr::RawTypeName(false, vec!["T".to_string()], None).into_empty_span(),
+                    TypeExpr::RawTypeName(false, vec!["T".to_string()], vec![]).into_empty_span(),
                 )],
                 methods: vec![],
                 mut_methods: HashSet::new(),
-                generics: Some(vec![(
+                generics: vec![(
                     Generic {
                         name: "T".to_string(),
                         constraint: None,
                     },
                     empty_range(),
-                )]),
+                )],
             },
         );
 
@@ -300,12 +301,12 @@ pub mod tests {
                         TypeExpr::RawTypeName(
                             false,
                             vec!["Entry".to_string()],
-                            Some(vec![
-                                TypeExpr::RawTypeName(false, vec!["K".to_string()], None)
+                            vec![
+                                TypeExpr::RawTypeName(false, vec!["K".to_string()], vec![])
                                     .into_empty_span(),
-                                TypeExpr::RawTypeName(false, vec!["V".to_string()], None)
+                                TypeExpr::RawTypeName(false, vec!["V".to_string()], vec![])
                                     .into_empty_span(),
-                            ]),
+                            ],
                         )
                         .into_empty_span(),
                     ))
@@ -313,7 +314,7 @@ pub mod tests {
                 )],
                 methods: vec![],
                 mut_methods: HashSet::new(),
-                generics: Some(vec![
+                generics: vec![
                     (
                         Generic {
                             name: "K".to_string(),
@@ -328,7 +329,7 @@ pub mod tests {
                         },
                         empty_range(),
                     ),
-                ]),
+                ],
             },
         );
 

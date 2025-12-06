@@ -273,10 +273,8 @@ pub fn mangle_type_expression(
                 path.extend(mangled);
             }
 
-            if let Some(type_params) = type_params {
-                for (type_param, _) in type_params {
-                    mangle_type_expression(type_param, prefix, mangle_env);
-                }
+            for (type_param, _) in type_params.iter_mut() {
+                mangle_type_expression(type_param, prefix, mangle_env);
             }
 
             *type_expr = TypeExpr::TypeName(true, mangle(path), type_params.clone());
@@ -523,7 +521,9 @@ pub fn mangle_value_expr(
                 value_expr,
             } = &mut **lambda_expr;
             for (_, param_type) in params {
-                mangle_type_expression(&mut param_type.0, prefix, mangle_env);
+                if let Some(param_type) = param_type {
+                    mangle_type_expression(&mut param_type.0, prefix, mangle_env);
+                }
             }
             if let Some(return_type) = return_type {
                 mangle_type_expression(&mut return_type.0, prefix, mangle_env);
@@ -543,10 +543,8 @@ pub fn mangle_value_expr(
             params.iter_mut().for_each(|param| {
                 mangle_value_expr(&mut param.0, global_prefix, prefix, mangle_env)
             });
-            if let Some(type_params) = type_params {
-                for param in type_params {
-                    mangle_type_expression(&mut param.0, prefix, mangle_env);
-                }
+            for param in type_params {
+                mangle_type_expression(&mut param.0, prefix, mangle_env);
             }
         }
         ValueExpr::RawVariable(is_global, path) => {
@@ -607,10 +605,8 @@ pub fn mangle_value_expr(
                 mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
             });
 
-            if let Some(type_params) = type_params {
-                for (g, _) in type_params {
-                    mangle_type_expression(g, prefix, mangle_env);
-                }
+            for (g, _) in type_params {
+                mangle_type_expression(g, prefix, mangle_env);
             }
         }
         ValueExpr::ExtensionAccess { target_obj, .. } => {

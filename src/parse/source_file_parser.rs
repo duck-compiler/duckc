@@ -652,7 +652,9 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
                 value_expr,
             } = &mut **lambda_expr;
             for (_, param_type) in params {
-                append_global_prefix_type_expr(&mut param_type.0, mangle_env);
+                if let Some(param_type) = param_type.as_mut() {
+                    append_global_prefix_type_expr(&mut param_type.0, mangle_env);
+                }
             }
             if let Some(return_type) = return_type {
                 append_global_prefix_type_expr(&mut return_type.0, mangle_env);
@@ -672,10 +674,8 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             params
                 .iter_mut()
                 .for_each(|param| append_global_prefix_value_expr(&mut param.0, mangle_env));
-            if let Some(type_params) = type_params {
-                for param in type_params {
-                    append_global_prefix_type_expr(&mut param.0, mangle_env);
-                }
+            for param in type_params {
+                append_global_prefix_type_expr(&mut param.0, mangle_env);
             }
         }
         ValueExpr::RawVariable(..) => panic!("raw variable shouldn't be here"),
@@ -738,10 +738,8 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
                 append_global_prefix_value_expr(&mut value_expr.0, mangle_env)
             });
 
-            if let Some(type_params) = type_params {
-                for (g, _) in type_params {
-                    append_global_prefix_type_expr(g, mangle_env);
-                }
+            for (g, _) in type_params {
+                append_global_prefix_type_expr(g, mangle_env);
             }
         }
         ValueExpr::FieldAccess { target_obj, .. } => {
@@ -1079,7 +1077,7 @@ mod tests {
                             )],
                         })
                         .into_empty_span(),
-                        generics: None,
+                        generics: vec![],
                     }],
                     ..Default::default()
                 },
@@ -1095,7 +1093,7 @@ mod tests {
                         )],
                         methods: vec![],
                         mut_methods: HashSet::new(),
-                        generics: None,
+                        generics: vec![],
                     }],
                     ..Default::default()
                 },
@@ -1187,7 +1185,7 @@ mod tests {
                             )],
                         })
                         .into_empty_span(),
-                        generics: None,
+                        generics: vec![],
                     }],
                     ..Default::default()
                 },

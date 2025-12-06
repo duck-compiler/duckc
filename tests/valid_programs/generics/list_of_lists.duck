@@ -1,3 +1,5 @@
+use go "fmt";
+
 struct List<T> = {
     elems: T[],
 } impl {

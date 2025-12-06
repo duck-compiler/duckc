@@ -18,3 +18,4 @@ tree-sitter-typescript = "0.23.2"
 tree-sitter-javascript = "0.25.0"
 tree-sitter-html = "0.23.2"
 duckwind = { git = "https://github.com/duck-compiler/duckwind.git" }
+indexmap = "2.12.0"

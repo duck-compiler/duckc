@@ -1,0 +1,225 @@
+use go "go.mongodb.org/mongo-driver/v2/mongo";
+use go "go.mongodb.org/mongo-driver/v2/mongo/options";
+use go "context";
+use go "fmt";
+
+use std::io::{debug, println};
+
+type ArraySerializer = {
+    add_int: mut fn(i: Int),
+};
+
+struct JsonArraySerializer = {
+    parent: &mut JsonSerializer,
+    out: String,
+} impl {
+    fn get_out() -> String {
+        return if (self.out == "") {""} else {f"{self.out},"};
+    }
+
+    mut fn add_int(i: Int) {
+        self.out = f"{self.get_out()}{std::string::from_int(i)}"
+    }
+
+    fn build() -> String {
+        return f"[{self.out}]";
+    }
+
+};
+
+struct JsonStructSerializer = {
+    parent: &mut JsonSerializer,
+    out: String,
+} impl {
+    mut fn append(key: String, ser_string: String) {
+        self.out = f"{if (self.out == "") {""} else {f"{self.out},"}}\\\"{key}\\\": {ser_string}";
+    }
+
+    mut fn put_int(key: String, i: Int) {
+        self.append(key, self.parent.serialize_int(i));
+    }
+
+    mut fn put_string(key: String, s: String) {
+        self.append(key, self.parent.serialize_string(s));
+    }
+
+    mut fn put_array(key: String, f: fn(ArraySerializer)) {
+        self.append(key, self.parent.serialize_array(f));
+    }
+
+    mut fn put_struct(key: String, f: fn(StructSerializer)) {
+        self.append(key, self.parent.serialize_struct(f));
+    }
+
+    fn build() -> String {
+        return f"{"{"}{self.out}{"}"}";
+    }
+
+};
+
+type StructSerializer = {
+    put_int: mut fn(key: String, i: Int),
+    put_string: mut fn(key: String, s: String),
+    put_array: mut fn(key: String, f: fn(s: ArraySerializer)),
+    put_struct: mut fn(key: String, f: fn(s: StructSerializer)),
+};
+
+type Fisch = {
+    name: String,
+    sub_fische: Fisch[],
+};
+
+type Equals<T> = { eq: fn(other: &T) -> Bool };
+type Hashable = { hash: fn() -> Int };
+
+type Deserializer = {
+    deserialize_string: mut fn(input: String, schema: Opt<StringSchema>)
+};
+
+type Serializer = {
+    serialize_int: mut fn(i: Int) -> String,
+    serialize_string: mut fn(s: String) -> String,
+    serialize_array: mut fn(f: fn(array_serializer: ArraySerializer)) -> String,
+    serialize_struct: mut fn(f: fn(struct_serializer: StructSerializer)) -> String,
+};
+
+struct JsonSerializer = {} impl {
+    mut fn serialize_int(i: Int) -> String {
+        return std::string::from_int(i);
+    }
+    mut fn serialize_string(abc: String) -> String {
+        return f"\\\"{abc}\\\"";
+    }
+    mut fn serialize_struct(f: fn(array_serializer: StructSerializer)) -> String {
+        let struct_serializer = JsonStructSerializer {
+            parent: self,
+            out: ""
+        };
+        f(struct_serializer);
+        return struct_serializer.build();
+    }
+    mut fn serialize_array(f: fn(array_serializer: ArraySerializer)) -> String {
+        let array_serializer = JsonArraySerializer {
+            parent: self,
+            out: ""
+        };
+        f(array_serializer);
+        return array_serializer.build();
+    }
+};
+
+type Serializable = { serialize: fn(s: Serializer) -> String };
+
+struct Player = {
+    id: String,
+    wins: Int,
+} impl {
+    fn serialize(s: Serializer) -> String {
+        return s.serialize_struct(fn (s) {
+            s.put_string("id", self.id);
+            s.put_int("wins", self.wins);
+            s.put_array("test_arr1", fn(s){});
+            s.put_array("test_arr2", fn(s) {
+                s.add_int(10);
+                s.add_int(20);
+            });
+            s.put_struct("embedded_struct", fn(s) {
+                s.put_string("hello_im_am_embedded", "yoooooooooooo this seems to work");
+            });
+        });
+    }
+};
+
+struct MongoConnection = {
+    mongo_connection: &go `mongo.Client`,
+    context: go `context.Context`,
+    cancel: fn ()
+} impl {
+    fn get_database(database_name: String) -> MongoDatabase {
+        go {
+            database := (*self).mongo_connection.Database(database_name);
+            return &MongoDatabase {
+                connection: self,
+                database: database,
+            }
+        }
+    }
+};
+
+struct MongoDatabase = {
+    connection: &MongoConnection,
+    database: &go `mongo.Database`,
+} impl {
+    fn get_collection<T>(
+        collection_name: String,
+    ) -> MongoCollection<T> {
+        let none = .not;
+        let collection: &go `mongo.Collection` | .not = .not;
+
+        let database = self.database;
+
+        go {
+            db_collection := database.Collection(collection_name);
+            collection = db_collection;
+        }
+
+        match collection {
+            .not => {
+
+            },
+            &go `mongo.Collection` @mongo_collection => {
+                return MongoCollection<T> {
+                    collection: mongo_collection,
+                    connection: self.connection,
+                }
+            }
+        }
+    }
+};
+
+struct MongoCollection<DocumentType> = {
+    connection: &MongoConnection,
+    collection: &go `mongo.Collection`,
+} impl {
+    fn insert(document: DocumentType) -> .ok | .not {
+        let ctx = self.connection.context;
+        let col = self.collection;
+
+        go {
+            col.InsertOne(ctx, document);
+        }
+
+        return .ok;
+    }
+};
+
+
+fn create_mongo_client() -> MongoConnection | .not {
+    let none = .not;
+
+    go {
+        ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+        client, err := mongo.Connect(options.Client().ApplyURI("mongodb://mongo:eOmwIaxlqsanCrsrjXYylVfrzuIWyUPJ@switchback.proxy.rlwy.net:48702"))
+        if err != nil {
+            return none;
+        }
+
+        return &MongoConnection {
+            mongo_connection: client,
+            context: ctx,
+            cancel: func () { cancel() },
+        }
+    }
+
+    return .not;
+}
+
+fn main() {
+    const p = Player {
+        id: "Robin",
+        wins: 67,
+    };
+
+    let json_serializer = JsonSerializer {};
+    p.serialize(json_serializer)->std::io::println();
+}

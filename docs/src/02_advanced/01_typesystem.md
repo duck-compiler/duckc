@@ -23,18 +23,7 @@ type MyType = {
 The MyType is a symbols, which we'll refer to as a typename.
 
 ## Ducks
-
-The above `MyType` refers to a duck type.
-You could alternatively specify explicitly that it's a duck type, by passing the `duck` keyword infront of the "object" description, like
-
-```duck
-type MyType = duck {
-    field_one: String,
-    field_two: String,
-};
-```
-
-But that's not neccessary. Just for you to make sure, you know that when a object description occurs without any keyword infront it's always a duck.
+The above `MyType` refers to a duck type, that's why we call them Ducks.
 You can nest ducks as deep as you want them to be nested. For example
 
 ```duck
@@ -52,20 +41,38 @@ type MyType = duck {
 
 ## Structs
 
-If you've asked yourself, why is there even an option to tell explicitly that it's a duck, then you're asking the right questions.
-It's because we do not only have ducks, but we also support structs. These structs, have an identity, which ducks don't have, as they live after "if it quacks like a duck, it is a duck".
-Structs are more structured, they keep the order of the fields for example and also they're really checked by identity, so you can't just replace a struct by a just equivalent struct, it has to be the exact same one.
-
-You can define structs as following
-
+We also support more structured data. Structs keep the order of the fields and structs itself are bound to an identity, which is defined by their name and module "path".
 ```duck
-type MyStructType = struct {
+struct MyStructType = {
     field_one: String,
 };
 ```
 
+Structs can be initialized by passing the name followed by curly braces and init args as shown it the following example
+```duck
+let x = MyStructType { field_one: "Hi" };
+```
+
+Structs can define member functions, which are functions that directly correspond to the structs they're defined in and always have the self parameter invisibily passed.
+You can add them by having an `impl` block along the struct.
+```duck
+struct MyStructType = {
+    field_one: String,
+} impl {
+    fn my_fn() {
+        std::io::println(self.field_one);
+    }
+};
+```
+
+Now you can call these functions directly on values of the type `MyStructType`
+```duck
+let x = MyStructType { field_one: "Hi" };
+x.my_fn();
+```
+
 # Unions / Variant Types
-We also support union/variant types, therefore you have to use the `|` ("or") type operator, which will define a type which can be either one the given variants.
+You can define union/variant types,  you have the `|` ("or") type operator available, which will define a type that can be either one of the given variants.
 
 ```duck
 type MyUnion = Int | String;
@@ -79,13 +86,13 @@ The or's can be chained, so you can define as many variants as you like. For exa
 type Primitive = Int | String | Bool | Char | Float;
 ```
 
-# Literal types
-Duck supports literal types, so some values can be used as types. For example, the string `"whatever"` can be used as a type.
+# Tags
+Duck supports tag types, which are an literal values that have no structure or actual usable value.
 ```duck
-let x: "whatever" = "whatever";
+let x: .whatever = .whatever;
 ```
 
-This means that the type of x must be of type string with the value "whatever". This allows us to be more expressive in our apis.
+This means that the type of x must be of type tag .whatever. This allows us to be more expressive in our apis.
 For example, when you have a subset of strategies your program can follow to execute a given algorithm - you will need to have some way to "flag" your code for the current strategy.
 Let's draw it out
 
@@ -123,15 +130,15 @@ fn my_algorithm(strategy: String) {
 ```
 
 Now we can be a bit more expressive when calling the function and pass a string with the name of the strategy to use. But we haven't actually limited the options a user could pass to us.
-Here the literal types come in handy. You can limit the options of a specific value, without having to define a helper structure.
+Here the literal tag types come in handy. You can limit the options of a specific value, without having to define a helper structure, while stile maintaining some literal meaning to the values.
 
 ```duck
-fn my_algorithm(strategy: "improved" | "legacy") {
+fn my_algorithm(strategy: .improved | .legacy) {
     match (strategy) {
-        "improved" _ -> println("run with strategy 1"),
-        "legacy" _ -> println("run with strategy 2"),
+        .improved => println("run with strategy 1"),
+        .legacy => println("run with strategy 2"),
     }
 }
 ```
 
-By that we not only have limited the options a user could pass to our function but we now also know if we're covering every possibility, as it's a known subset.
+By that we have not only limited the options a user can pass to our function but we now also know if we're covering every possibility, as it's a known set.
