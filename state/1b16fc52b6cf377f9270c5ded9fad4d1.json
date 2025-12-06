@@ -1,7 +1,7 @@
 {
     "id": "1b16fc52b6cf377f9270c5ded9fad4d1",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 1024,
+    "line_number": 1137,
     "title": "Implement other literal types",
     "tag": "todo",
     "module_tag": "semantics",

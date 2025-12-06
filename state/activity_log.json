@@ -1,6 +1,66 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-12-06T20:33:48.257255",
+        "issue_id": "29f7b87e59b410f52e0db883df661090",
+        "issue_title": "check if we should clone the typeenv",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-12-06T20:33:48.257255",
+        "issue_id": "b90752d1ad30b201ca304123ce9ec245",
+        "issue_title": "todo!(\"type params not impl yet\"); in typechecker.rs @ line 1379",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-12-06T20:33:48.257255",
+        "issue_id": "3849d474f8457250bace59f302873341",
+        "issue_title": "todo!(); in type_resolve.rs @ line 1087",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-12-06T20:33:48.257255",
+        "issue_id": "eaa4be15ded1bf103d5de778e31aa3cf",
+        "issue_title": "support generics in typeof",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-12-06T20:33:48.257255",
+        "issue_id": "6ea3f5e1bb98d03f9bd37d524217fe17",
+        "issue_title": "require name and implement typing for structs",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-12-06T20:33:48.257255",
+        "issue_id": "4dc6129b55b30463cb0f36dde3ca7e72",
+        "issue_title": "fix this panic workaround",
+        "author_info": {
+            "name": "Apfelfrosch",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-10-25T04:01:43.750945",
         "issue_id": "d143368bcfbf509206f9ba783934e568",
         "issue_title": "mutable extension fns?",

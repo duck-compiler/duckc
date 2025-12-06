@@ -1,7 +1,7 @@
 {
     "id": "e514f2aaa7e6dfc194295cef72572cdb",
     "file_path": "../../src/semantics/ident_mangler.rs",
-    "line_number": 337,
+    "line_number": 335,
     "title": "use our scope resolution syntax",
     "tag": "todo",
     "module_tag": "semantics",

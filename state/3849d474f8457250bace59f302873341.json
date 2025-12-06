@@ -1,8 +1,8 @@
 {
-    "id": "61a150d8a9fd7d63506c740228dd8469",
-    "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 391,
-    "title": "type_params",
+    "id": "3849d474f8457250bace59f302873341",
+    "file_path": "../../src/semantics/type_resolve.rs",
+    "line_number": 1087,
+    "title": "todo!(); in type_resolve.rs @ line 1087",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Apfelfrosch",
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
-    "source_line": "// todo: type_params",
+    "source_line": "todo!();",
     "status": "open",
-    "first_seen": "2025-07-14T09:44:03.705824",
+    "first_seen": "2025-12-06T20:33:48.263619",
     "history": []
 }

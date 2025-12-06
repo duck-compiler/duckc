@@ -1,8 +1,8 @@
 {
-    "id": "514af71611f0eae8e0992677743467e6",
+    "id": "29f7b87e59b410f52e0db883df661090",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 1805,
-    "title": "discuss if we just allow passing ints as floats",
+    "line_number": 423,
+    "title": "check if we should clone the typeenv",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Apfelfrosch",
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
-    "source_line": "// todo: discuss if we just allow passing ints as floats",
+    "source_line": "// TODO: check if we should clone the typeenv",
     "status": "open",
-    "first_seen": "2025-08-24T22:43:39.039693",
+    "first_seen": "2025-12-06T20:33:48.262065",
     "history": []
 }
