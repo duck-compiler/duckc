@@ -633,30 +633,31 @@ impl TypeExpr {
                 let target_obj_type_expr =
                     TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
 
-                if !target_obj_type_expr.is_object_like()
-                    && !target_obj_type_expr.ref_is_object_like()
-                {
-                    failure_with_occurence(
-                        "Invalid Field Access".to_string(),
-                        {
-                            let mut span = span;
-                            span.end += 2;
-                            span
-                        },
-                        vec![(
-                            format!(
-                                "this value is of type {}, which not object like and has no fields to access",
-                                format!("{}", target_obj_type_expr).bright_yellow(),
-                            ),
-                            span,
-                        )],
-                    )
-                }
+                // if !target_obj_type_expr.ref_is_object_like()
+                // {
+                //     failure_with_occurence(
+                //         "Invalid Field Access".to_string(),
+                //         {
+                //             let mut span = span;
+                //             span.end += 2;
+                //             span
+                //         },
+                //         vec![(
+                //             format!(
+                //                 "this value is of type {}, which not object like and has no fields to access",
+                //                 format!("{}", target_obj_type_expr).bright_yellow(),
+                //             ),
+                //             span,
+                //         )],
+                //     )
+                // }
 
                 if !(target_obj_type_expr.has_field_by_name(field_name.clone(), type_env)
                     || target_obj_type_expr.has_method_by_name(field_name.clone(), type_env)
                     || target_obj_type_expr.ref_has_field_by_name(field_name.clone(), type_env)
-                    || target_obj_type_expr.ref_has_method_by_name(field_name.clone(), type_env))
+                    || target_obj_type_expr.ref_has_method_by_name(field_name.clone(), type_env)
+                    || target_obj_type_expr.has_extension_by_name(field_name.clone(), type_env)
+                )
                 {
                     failure_with_occurence(
                         "Invalid Field Access".to_string(),
@@ -683,7 +684,7 @@ impl TypeExpr {
                     .or_else(|| {
                         target_obj_type_expr.ref_typeof_field(field_name.to_string(), type_env)
                     })
-                    .expect("Invalid Field Access")
+                    .expect("Invalid field access")
             }
             ValueExpr::ExtensionAccess {
                 target_obj,
@@ -960,6 +961,11 @@ impl TypeExpr {
         }
     }
 
+    fn has_extension_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
+        let extension_fn_name = &self.build_extension_access_function_name(&name, type_env);
+        return type_env.extension_functions.contains_key(&extension_fn_name.clone());
+    }
+
     fn ref_has_field_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
         match self {
             Self::Ref(t) | Self::RefMut(t) => {
@@ -1071,7 +1077,16 @@ impl TypeExpr {
                 .type_expr
                 .0
                 .clone(),
-            _ => return None,
+            _ => {
+                let extension_fn_name = self.build_extension_access_function_name(&field_name, type_env);
+                let extension = type_env.extension_functions.get(&extension_fn_name);
+                match extension {
+                    Some(extension_def) => {
+                        return Some(extension_def.0.clone())
+                    },
+                    None => return None,
+                }
+            }
         })
     }
 

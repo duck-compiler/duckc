@@ -361,46 +361,60 @@ fn walk_access_raw(
                     field_name,
                 } = &target.0
                 {
-                    let ty = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
+                    let target_field_type = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
 
-                    if let TypeExpr::Struct {
-                        name: struct_name,
-                        type_params: struct_type_params,
-                    } = ty
-                    {
-                        let struct_def = type_env.get_struct_def_with_type_params_mut(
-                            struct_name.as_str(),
-                            &struct_type_params,
-                            empty_range(),
-                        );
-                        if struct_def.mut_methods.contains(field_name)
-                            && !can_do_mut_stuff_through(target_obj, type_env)
-                        {
-                            failure_with_occurence(
-                                "This needs to allow mutable access".to_string(),
-                                target.1,
-                                [(
-                                    "This needs to allow mutable access".to_string(),
-                                    target_obj.1,
-                                )],
-                            );
+                    match target_field_type {
+                        TypeExpr::Int(..) => {
+                            let extension_fn_name = target_field_type.build_extension_access_function_name(field_name, type_env);
+                            let extension_fn = type_env.extension_functions.get(&extension_fn_name);
+
+                            if let Some(extension_fn) = extension_fn {
+
+                            }
                         }
-                    } else if let TypeExpr::Duck(duck) = ty
-                        && let Some(duck_field) = duck
-                            .fields
-                            .iter()
-                            .find(|field| field.name.as_str() == field_name.as_str())
-                        && let TypeExpr::Fun(_, _, true) = duck_field.type_expr.0
-                        && !can_do_mut_stuff_through(target_obj, type_env)
-                    {
-                        failure_with_occurence(
-                            "This needs to allow mutable access".to_string(),
-                            target.1,
-                            [(
-                                "This needs to allow mutable access".to_string(),
-                                target_obj.1,
-                            )],
-                        );
+                        TypeExpr::Struct {
+                            name: struct_name,
+                            type_params: struct_type_params,
+                        } => {
+                            let struct_def = type_env.get_struct_def_with_type_params_mut(
+                                struct_name.as_str(),
+                                &struct_type_params,
+                                empty_range(),
+                            );
+                            if struct_def.mut_methods.contains(field_name)
+                            && !can_do_mut_stuff_through(target_obj, type_env)
+                            {
+                                failure_with_occurence(
+                                    "This needs to allow mutable access".to_string(),
+                                    target.1,
+                                    [(
+                                        "This needs to allow mutable access".to_string(),
+                                        target_obj.1,
+                                    )],
+                                );
+                            }
+                        },
+                        TypeExpr::Duck(duck) => {
+                            if let Some(duck_field) = duck
+                                .fields
+                                .iter()
+                                .find(|field| field.name.as_str() == field_name.as_str())
+                            && let TypeExpr::Fun(_, _, true) = duck_field.type_expr.0
+                            && !can_do_mut_stuff_through(target_obj, type_env)
+                            {
+                                failure_with_occurence(
+                                    "This needs to allow mutable access".to_string(),
+                                    target.1,
+                                    [(
+                                        "This needs to allow mutable access".to_string(),
+                                        target_obj.1,
+                                    )],
+                                );
+                            }
+                        },
+                        _ => {
+
+                        }
                     }
                 }
 
