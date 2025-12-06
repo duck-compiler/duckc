@@ -89,9 +89,8 @@ impl FunctionDefintion {
                 "func () {}",
                 self.return_type
                     .clone()
-                    .expect("compiler error: expect")
-                    .0
-                    .as_go_return_type(type_env)
+                    .map(|return_type| return_type.0.as_go_return_type(type_env))
+                    .unwrap_or_else(|| String::new())
             )),
             vec![IrInstruction::Return(Some(IrValue::Lambda(
                 self.params
@@ -103,9 +102,8 @@ impl FunctionDefintion {
                 Some(
                     self.return_type
                         .clone()
-                        .expect("compiler error: expect")
-                        .0
-                        .as_go_return_type(type_env),
+                        .map(|return_type| return_type.0.as_go_return_type(type_env))
+                        .unwrap_or_else(|| String::new())
                 ),
                 emitted_body,
             )))],
