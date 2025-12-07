@@ -379,7 +379,7 @@ fn walk_access_raw(
 
                             if let Some(..) = extension_fn {
                                 println!("{field_name} exists");
-                                flag = Some((field_name.clone(),));
+                                flag = Some((extension_fn_name,));
                             }
                         }
                         TypeExpr::Struct {
