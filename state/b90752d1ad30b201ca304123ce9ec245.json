@@ -1,16 +1,16 @@
 {
     "id": "b90752d1ad30b201ca304123ce9ec245",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 1379,
-    "title": "todo!(\"type params not impl yet\"); in typechecker.rs @ line 1379",
+    "line_number": 1409,
+    "title": "todo!(\"type params not impl yet\"); in typechecker.rs @ line 1409",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Apfelfrosch",
-        "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "todo!(\"type params not impl yet\");",
     "status": "open",

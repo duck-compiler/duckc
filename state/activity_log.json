@@ -1,6 +1,16 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-12-07T22:33:28.340810",
+        "issue_id": "cd8e2e0fcb691de2400b5db2cb395e35",
+        "issue_title": "check we should probably not clone here",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-12-06T20:33:48.257255",
         "issue_id": "29f7b87e59b410f52e0db883df661090",
         "issue_title": "check if we should clone the typeenv",
