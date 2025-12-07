@@ -82,16 +82,22 @@ impl FunctionDefintion {
             target_type.build_extension_access_function_name(&self.name, type_env),
             None,
             final_params
+                .first()
                 .iter()
                 .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
                 .collect::<Vec<_>>(),
             Some(format!(
-                "func () {}",
+                "func ({}) {}",
+                final_params
+                    .iter()
+                    .filter(|(name, ..)| name != "self")
+                    .map(|(_name, (ty, _))| ty.as_go_type_annotation(type_env))
+                    .collect::<Vec<_>>()
+                    .join(","),
                 self.return_type
                     .clone()
-                    .expect("compiler error: expect")
-                    .0
-                    .as_go_return_type(type_env)
+                    .map(|return_type| return_type.0.as_go_return_type(type_env))
+                    .unwrap_or_else(|| String::new())
             )),
             vec![IrInstruction::Return(Some(IrValue::Lambda(
                 self.params
@@ -103,9 +109,8 @@ impl FunctionDefintion {
                 Some(
                     self.return_type
                         .clone()
-                        .expect("compiler error: expect")
-                        .0
-                        .as_go_return_type(type_env),
+                        .map(|return_type| return_type.0.as_go_return_type(type_env))
+                        .unwrap_or_else(|| String::new())
                 ),
                 emitted_body,
             )))],
