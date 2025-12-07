@@ -371,17 +371,15 @@ fn walk_access_raw(
                     let target_field_type =
                         TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
 
-                    match target_field_type {
-                        TypeExpr::Int(..) => {
-                            let extension_fn_name = target_field_type
-                                .build_extension_access_function_name(field_name, type_env);
-                            let extension_fn = type_env.extension_functions.get(&extension_fn_name);
+                    let extension_fn_name = target_field_type
+                        .build_extension_access_function_name(field_name, type_env);
+                    let extension_fn = type_env.extension_functions.get(&extension_fn_name);
 
-                            if let Some(..) = extension_fn {
-                                println!("{field_name} exists");
-                                flag = Some((extension_fn_name,));
-                            }
-                        }
+                    if let Some(..) = extension_fn {
+                        flag = Some((extension_fn_name,));
+                    }
+
+                    match target_field_type {
                         TypeExpr::Struct {
                             name: struct_name,
                             type_params: struct_type_params,
@@ -471,7 +469,7 @@ fn walk_access_raw(
                     derefs.push(FrontPart::ExtCall(f.clone()));
                     let param_res = param_res.join(", ");
                     s.push_front(format!(
-                        "{}{param_res})",
+                        "{})({param_res})",
                         if param_res.is_empty() { "" } else { "," }
                     ));
                 } else {
