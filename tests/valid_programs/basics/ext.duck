@@ -1,0 +1,14 @@
+extend Int with impl {
+    fn yoo() -> &&&Int {
+        return &&&5;
+    }
+
+    fn zz(x: Bool) -> &&&Int {
+        return &&&10;
+    }
+}
+
+fn main() {
+    let x = &5;
+    x.yoo().zz(true).zz(true).yoo();
+}

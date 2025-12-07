@@ -250,7 +250,7 @@ pub fn can_do_mut_stuff_through(v: &Spanned<ValueExpr>, type_env: &mut TypeEnv) 
 #[derive(Debug, Clone, PartialEq)]
 enum FrontPart {
     Deref(usize),
-    ExtCall(String),
+    ExtCall(String, usize),
 }
 
 fn walk_access_raw(
@@ -368,15 +368,15 @@ fn walk_access_raw(
                     field_name,
                 } = &target.0
                 {
-                    let target_field_type =
-                        TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
+                    let (target_field_type, stars_count) =
+                        TypeExpr::from_value_expr_dereferenced_with_count(target_obj, type_env);
 
                     let extension_fn_name = target_field_type
                         .build_extension_access_function_name(field_name, type_env);
                     let extension_fn = type_env.extension_functions.get(&extension_fn_name);
 
                     if let Some(..) = extension_fn {
-                        flag = Some((extension_fn_name,));
+                        flag = Some((extension_fn_name, stars_count));
                     }
 
                     match target_field_type {
@@ -446,6 +446,7 @@ fn walk_access_raw(
                     while let TypeExpr::RefMut(v) = type_expr {
                         type_expr = v.0;
                         stars_to_set += 1;
+
                     }
                     if let TypeExpr::Ref(_) = type_expr {
                         panic!(
@@ -460,20 +461,17 @@ fn walk_access_raw(
                     }
                 }
 
+                if let Some((f, stars_count)) = flag.as_ref() {
+                    derefs.push(FrontPart::ExtCall(f.clone(), *stars_count));
+                    let param_res = param_res.join(", ");
+                    s.push_front(format!(")({param_res})",));
+                } else {
+                    s.push_front(format!("({})", param_res.join(", ")));
+                }
+
                 if stars > 0 {
                     derefs.push(FrontPart::Deref(stars));
                     s[0].push(')');
-                }
-
-                if let Some((f,)) = flag.as_ref() {
-                    derefs.push(FrontPart::ExtCall(f.clone()));
-                    let param_res = param_res.join(", ");
-                    s.push_front(format!(
-                        "{})({param_res})",
-                        if param_res.is_empty() { "" } else { "," }
-                    ));
-                } else {
-                    s.push_front(format!("({})", param_res.join(", ")));
                 }
 
                 stars = stars_to_set;
@@ -684,7 +682,10 @@ fn walk_access_raw(
                 }
                 s[0].insert(0, '(');
             }
-            FrontPart::ExtCall(e) => {
+            FrontPart::ExtCall(e, stars_count) => {
+                for _ in 0..*stars_count {
+                    s[0].insert(0, '*');
+                }
                 s[0].insert_str(0, e);
                 s[0].insert(e.len(), '(');
             }

@@ -45,6 +45,21 @@ impl TypeExpr {
         res
     }
 
+    pub fn from_value_expr_dereferenced_with_count(
+        value_expr: &Spanned<ValueExpr>,
+        type_env: &mut TypeEnv,
+    ) -> (TypeExpr, usize) {
+        let mut res = TypeExpr::from_value_expr(value_expr, type_env);
+        let mut counter = 0;
+
+        while let TypeExpr::Ref(v) | TypeExpr::RefMut(v) = res {
+            res = v.0;
+            counter += 1;
+        }
+
+        (res, counter)
+    }
+
     #[track_caller]
     pub fn from_value_expr(value_expr: &Spanned<ValueExpr>, type_env: &mut TypeEnv) -> TypeExpr {
         let complete_span = &value_expr.1;
