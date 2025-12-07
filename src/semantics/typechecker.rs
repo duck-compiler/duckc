@@ -2025,6 +2025,7 @@ mod test {
                     value_expr: value_expr,
                     generics: None,
                     span: empty_range(),
+                    comments: Vec::new()
                 }],
                 ..Default::default()
             };
