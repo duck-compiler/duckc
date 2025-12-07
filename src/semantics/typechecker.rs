@@ -719,7 +719,7 @@ impl TypeExpr {
                             )],
                         )
                     });
-                return extension_function.0.clone();
+                return extension_function.0.0.clone();
             }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
@@ -1082,7 +1082,7 @@ impl TypeExpr {
                 let extension = type_env.extension_functions.get(&extension_fn_name);
                 match extension {
                     Some(extension_def) => {
-                        return Some(extension_def.0.clone())
+                        return Some(extension_def.0.0.clone())
                     },
                     None => return None,
                 }

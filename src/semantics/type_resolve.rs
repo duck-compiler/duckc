@@ -65,7 +65,7 @@ fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, type_env: &mut
             continue;
         }
 
-        let underlying_fn_type = extension_method.0.type_expr().0;
+        let underlying_fn_type = extension_method.0.type_expr();
 
         let access_fn_type = TypeExpr::Fun(
             vec![(Some("self".to_string()), type_expr.clone())],
@@ -80,7 +80,7 @@ fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, type_env: &mut
         );
 
         type_env.insert_type(access_fn_type);
-        type_env.insert_type(underlying_fn_type);
+        type_env.insert_type(underlying_fn_type.0);
 
         typeresolve_function_definition(&mut extension_method.0, type_env);
     }
@@ -140,7 +140,7 @@ pub struct TypeEnv<'a> {
     pub identifier_types: Vec<HashMap<String, (TypeExpr, bool)>>,
     pub type_aliases: Vec<HashMap<String, TypeExpr>>,
     pub all_types: Vec<TypeExpr>,
-    pub extension_functions: HashMap<String, (TypeExpr, TypeExpr)>, // key = extension function name, (actual_fn_type, access_fn_type)
+    pub extension_functions: HashMap<String, (Spanned<TypeExpr>, TypeExpr)>, // key = extension function name, (actual_fn_type, access_fn_type)
 
     pub function_headers: HashMap<String, FunHeader>,
     pub function_definitions: Vec<FunctionDefintion>,
@@ -586,6 +586,12 @@ impl TypeEnv<'_> {
             }
 
             self.find_tuples_and_ducks_value_expr(&mut fun_def.value_expr, &mut result);
+        }
+
+        // todo: check we should probably not clone here
+        let mut extension_functions = self.extension_functions.clone();
+        for extension_fun in extension_functions.iter_mut() {
+            self.find_ducks_and_tuples_type_expr(&mut extension_fun.1.0, &mut result);
         }
 
         for s in self

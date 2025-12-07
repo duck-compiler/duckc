@@ -926,7 +926,7 @@ impl ValueExpr {
                         let var_name = env.new_var();
                         emit_instr.push(IrInstruction::VarDecl(
                             var_name.clone(),
-                            extension_fn_type.0.as_go_type_annotation(type_env),
+                            extension_fn_type.0.0.as_go_type_annotation(type_env),
                         ));
                         return (
                             emit_instr
