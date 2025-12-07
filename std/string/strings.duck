@@ -1,5 +1,154 @@
 use go "strings";
 use go "strconv";
+use go "unicode/utf8";
+
+use ::col::{empty_array_list, ArrayList};
+
+extend String with impl {
+    fn len() -> Int {
+        let len_var: Int = 0;
+        go {
+            len_var = len(self)
+        }
+
+        return len_var;
+    }
+
+    fn count() -> Int {
+        let count: Int = 0;
+        go {
+            count = utf8.RuneCountInString(self)
+        }
+        return count;
+    }
+
+    fn is_empty() -> Bool {
+        return self.len() == 0;
+    }
+
+    fn contains(substr: String) -> Bool {
+        let exists: Bool = false;
+        go {
+            exists = strings.Contains(self, substr)
+        }
+        return exists;
+    }
+
+    fn starts_with(prefix: String) -> Bool {
+        let res: Bool = false;
+        go {
+            res = strings.HasPrefix(self, prefix)
+        }
+        return res;
+    }
+
+    fn ends_with(suffix: String) -> Bool {
+        let res: Bool = false;
+        go {
+            res = strings.HasSuffix(self, suffix)
+        }
+        return res;
+    }
+
+    fn index_of(substr: String) -> Int | .none {
+        let idx: Int = -1;
+        go {
+            idx = strings.Index(self, substr)
+        }
+
+        if (idx == -1) {
+            return .none;
+        }
+
+        return idx;
+    }
+
+    fn to_upper() -> String {
+        let s: String = "";
+        go {
+            s = strings.ToUpper(self)
+        }
+        return s;
+    }
+
+    fn to_lower() -> String {
+        let s: String = "";
+        go {
+            s = strings.ToLower(self)
+        }
+        return s;
+    }
+
+    fn trim() -> String {
+        let s: String = "";
+        go {
+            s = strings.TrimSpace(self)
+        }
+        return s;
+    }
+
+    fn replace(old_s: String, new_s: String) -> String {
+        let s: String = "";
+        go {
+            s = strings.ReplaceAll(self, old_s, new_s)
+        }
+        return s;
+    }
+
+    fn substring(start: Int, end: Int) -> String | .err_out_of_bounds {
+        let s: String = "";
+        let err: Bool = false;
+
+        go {
+            if start < 0 || end > len(self) || start > end {
+                err = true
+            } else {
+                s = (self)[start:end]
+            }
+        }
+
+        if (err) {
+            return .err_out_of_bounds;
+        }
+        return s;
+    }
+
+    fn repeat(count: Int) -> String {
+        let s: String = "";
+        go {
+            s = strings.Repeat(self, count)
+        }
+        return s;
+    }
+
+    fn to_int() -> Int | .err_parsing {
+        let res: Int = 0;
+        let err_occurred: Bool = false;
+        go {
+            i, err := strconv.Atoi(self)
+            if err != nil {
+                err_occurred = true
+            } else {
+                res = i
+            }
+        }
+
+        if (err_occurred) {
+            return .err_parsing;
+        }
+
+        return res;
+    }
+
+    fn to_bytes() -> Int[] {
+        let bytes: Int[] = [];
+        go {
+             b := []byte(self)
+             bytes = *(*[]int)(unsafe.Pointer(&b))
+        }
+        return bytes;
+    }
+}
 
 fn to_upper(s: String) -> String {
     let res: String = "";
@@ -49,10 +198,4 @@ fn from_bool(x: Bool) -> String {
         res = strconv.FormatBool(x)
     }
     return res;
-}
-
-extend String with impl {
-    fn to_int() -> Int {
-        return self->to_int();
-    }
 }
