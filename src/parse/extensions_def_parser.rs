@@ -17,6 +17,7 @@ pub type Param = (String, Spanned<TypeExpr>);
 pub struct ExtensionsDef {
     pub target_type_expr: Spanned<TypeExpr>,
     pub function_definitions: Vec<Spanned<FunctionDefintion>>,
+    pub doc_comments: Vec<Spanned<String>>,
     pub span: SS,
 }
 
@@ -27,8 +28,15 @@ where
     I: BorrowInput<'src, Token = Token, Span = SS>,
     M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
 {
-    just(Token::Extend)
-        .ignore_then(type_expression_parser())
+    let doc_comments_parser = select_ref! { Token::DocComment(comment) => comment.to_string() }
+        .map_with(|comment, ctx| (comment, ctx.span()))
+        .repeated()
+        .collect()
+        .or_not();
+
+    doc_comments_parser
+        .then_ignore(just(Token::Extend))
+        .then(type_expression_parser())
         .then_ignore(just(Token::With))
         .then_ignore(just(Token::Impl))
         .then(
@@ -39,10 +47,11 @@ where
                 .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}'))),
         )
         .map_with(
-            |(target_type_expr, function_definitions), ctx| ExtensionsDef {
+            |((doc_comments, target_type_expr), function_definitions), ctx| ExtensionsDef {
                 target_type_expr,
                 function_definitions,
                 span: ctx.span(),
+                doc_comments: doc_comments.unwrap_or_else(|| Vec::new())
             },
         )
 }
