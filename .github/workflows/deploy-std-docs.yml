@@ -5,34 +5,21 @@ on:
   workflow_dispatch:
 
 jobs:
-  update-and-deploy:
+  generate-docs-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Setup Rust Toolchain
+      - name: setup rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      - name: checkout main branch
-        uses: actions/checkout@v4
-        with:
-          path: ./main-branch
-
-      - name: fetch gh-pages branch for the historical data
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: ./gh-pages
-          continue-on-error: true
 
       - name: generate new state and prepare for deploy
         run: |
-            # copy the state from gh-pages branch into the main-branch checkout
-            mkdir -p ./main-branch/.github/scripts/.issues/state
-            cp -r gh-pages/state ./main-branch/.github/scripts/.issues &2>/dev/null || true
+            chmod +x install_std.sh
+            ./install_std.sh
 
-            pushd main-branch/std
+            pushd std
 
             cargo run docs std.duck
 
@@ -41,7 +28,7 @@ jobs:
             mkdir docs
             cp ./main-branch/std/docs_output.html docs/docs_output.html
 
-      - name: Deploy to GitHub Pages
+      - name: deploy to github pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
