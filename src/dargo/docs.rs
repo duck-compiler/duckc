@@ -275,42 +275,68 @@ fn layout_html(fn_docs: &Vec<FunctionDoc>, struct_docs: &Vec<StructDoc>, extensi
 
     let body_content = format!(
         r#"
-        <div class="flex h-screen bg-[#282828] overflow-hidden font-sans text-[#ebdbb2]">
-            <aside class="w-72 bg-[#1d2021] border-r border-[#3c3836] flex flex-col">
-                <div class="p-5 border-b border-[#3c3836]">
-                    <h1 class="text-xl font-bold text-[#fabd2f] mb-3 tracking-wide">Duck<span class="text-[#ebdbb2]">Docs</span></h1>
-                    <input
-                        type="text"
-                        id="search-input"
-                        placeholder="Search docs..."
-                        class="w-full px-3 py-2 bg-[#32302f] border border-[#504945] rounded text-[#ebdbb2] placeholder-[#a89984] focus:outline-none focus:border-[#d79921] focus:ring-1 focus:ring-[#d79921] transition-all text-sm"
-                        onkeyup="filterDocs()"
-                    />
+        <div class="flex flex-col md:flex-row h-screen w-full bg-[#282828] overflow-hidden font-sans text-[#ebdbb2]">
+
+            <div class="md:hidden flex items-center justify-between p-4 bg-[#1d2021] border-b border-[#3c3836] shrink-0 z-40">
+                <h1 class="text-lg font-bold text-[#fabd2f] tracking-wide">Duck<span class="text-[#ebdbb2]">Docs</span></h1>
+                <button onclick="toggleSidebar()" class="text-[#ebdbb2] focus:outline-none p-2 rounded hover:bg-[#32302f]">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <div id="sidebar-overlay" onclick="closeSidebar()" class="fixed inset-0 bg-[#1d2021] bg-opacity-90 z-40 hidden transition-opacity opacity-0 md:hidden glass-blur"></div>
+
+            <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-72 h-full bg-[#1d2021] border-r border-[#3c3836] flex flex-col transform -translate-x-full transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:inset-auto shadow-2xl md:shadow-none shrink-0">
+
+                <div class="p-5 border-b border-[#3c3836] flex justify-between items-center bg-[#1d2021] shrink-0">
+                    <div class="w-full">
+                        <div class="flex justify-between items-center mb-3">
+                            <h1 class="text-xl font-bold text-[#fabd2f] tracking-wide hidden md:block">Duck<span class="text-[#ebdbb2]">Docs</span></h1>
+                            <h1 class="text-xl font-bold text-[#fabd2f] tracking-wide md:hidden">Menu</h1>
+
+                            <button onclick="closeSidebar()" class="md:hidden text-[#a89984] hover:text-[#fabd2f]">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <input
+                            type="text"
+                            id="search-input"
+                            placeholder="Search docs..."
+                            class="w-full px-3 py-2 bg-[#32302f] border border-[#504945] rounded text-[#ebdbb2] placeholder-[#a89984] focus:outline-none focus:border-[#d79921] focus:ring-1 focus:ring-[#d79921] transition-all text-sm"
+                            onkeyup="filterDocs()"
+                        />
+                    </div>
                 </div>
+
                 <nav class="flex-1 overflow-y-auto p-4 space-y-8 scrollbar-thin scrollbar-thumb-[#504945] scrollbar-track-transparent" id="sidebar-nav">
                     {sidebar_html}
                 </nav>
             </aside>
 
-            <main class="flex-1 overflow-y-auto bg-[#282828] scroll-smooth scrollbar-thin scrollbar-thumb-[#504945]">
-                <div class="max-w-5xl mx-auto p-10 space-y-16" id="main-content">
+            <main class="flex-1 h-full overflow-y-auto bg-[#282828] scroll-smooth scrollbar-thin scrollbar-thumb-[#504945] relative w-full">
+                <div class="max-w-5xl mx-auto p-6 md:p-10 space-y-12 md:space-y-16 pb-24" id="main-content">
                     <section>
-                        <h2 class="text-3xl font-bold text-[#fabd2f] mb-8 border-b border-[#3c3836] pb-3">Structs</h2>
-                        <div class="space-y-16">
+                        <h2 class="text-2xl md:text-3xl font-bold text-[#fabd2f] mb-6 md:mb-8 border-b border-[#3c3836] pb-3">Structs</h2>
+                        <div class="space-y-12 md:space-y-16">
                             {structs_html}
                         </div>
                     </section>
 
                     <section>
-                        <h2 class="text-3xl font-bold text-[#8ec07c] mb-8 border-b border-[#3c3836] pb-3">Extensions</h2>
-                        <div class="space-y-16">
+                        <h2 class="text-2xl md:text-3xl font-bold text-[#8ec07c] mb-6 md:mb-8 border-b border-[#3c3836] pb-3">Extensions</h2>
+                        <div class="space-y-12 md:space-y-16">
                             {extensions_html}
                         </div>
                     </section>
 
                     <section>
-                        <h2 class="text-3xl font-bold text-[#b8bb26] mb-8 border-b border-[#3c3836] pb-3">Global Functions</h2>
-                        <div class="space-y-10">
+                        <h2 class="text-2xl md:text-3xl font-bold text-[#b8bb26] mb-6 md:mb-8 border-b border-[#3c3836] pb-3">Global Functions</h2>
+                        <div class="space-y-8 md:space-y-10">
                             {fns_html}
                         </div>
                     </section>
@@ -356,6 +382,42 @@ fn layout_html(fn_docs: &Vec<FunctionDoc>, struct_docs: &Vec<StructDoc>, extensi
 
                 document.getElementById('no-results').style.display = hasVisibleItems ? 'none' : 'block';
             }
+
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+
+            function toggleSidebar() {
+                const isClosed = sidebar.classList.contains('-translate-x-full');
+                if (isClosed) {
+                    openSidebar();
+                } else {
+                    closeSidebar();
+                }
+            }
+
+            function openSidebar() {
+                sidebar.classList.remove('-translate-x-full');
+                overlay.classList.remove('hidden');
+                setTimeout(() => {
+                    overlay.classList.remove('opacity-0');
+                }, 10);
+            }
+
+            function closeSidebar() {
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.add('opacity-0');
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 300);
+            }
+
+            document.querySelectorAll('#sidebar-nav a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth < 768) {
+                        closeSidebar();
+                    }
+                });
+            });
         </script>
     "#;
 
@@ -368,6 +430,10 @@ fn layout_html(fn_docs: &Vec<FunctionDoc>, struct_docs: &Vec<StructDoc>, extensi
                 <title>Duck Documentation</title>
                 <style>
                     body {{ margin: 0; background-color: #282828; color: #ebdbb2; }}
+                    ::-webkit-scrollbar {{ width: 8px; }}
+                    ::-webkit-scrollbar-track {{ background: #1d2021; }}
+                    ::-webkit-scrollbar-thumb {{ background: #504945; border-radius: 4px; }}
+                    ::-webkit-scrollbar-thumb:hover {{ background: #665c54; }}
                     {output_css}
                 </style>
             </head>
@@ -439,8 +505,8 @@ fn render_struct(doc: &StructDoc) -> String {
 
         format!(
             r#"
-            <div class="mt-5 mb-8 bg-[#1d2021] rounded border border-[#3c3836] overflow-hidden">
-                <table class="w-full text-left">
+            <div class="mt-5 mb-8 bg-[#1d2021] rounded border border-[#3c3836] overflow-x-auto">
+                <table class="w-full text-left min-w-[300px]">
                     <thead class="bg-[#32302f] border-b border-[#3c3836]">
                         <tr>
                             <th class="py-2 px-4 text-xs font-bold text-[#a89984] uppercase tracking-wider">Field</th>
@@ -466,7 +532,7 @@ fn render_struct(doc: &StructDoc) -> String {
 
         format!(
             r#"
-            <div class="mt-8 pl-5 border-l-2 border-[#504945]">
+            <div class="mt-8 pl-4 md:pl-5 border-l-2 border-[#504945]">
                 <h4 class="text-sm font-bold text-[#fe8019] uppercase tracking-widest mb-6">Methods</h4>
                 <div class="space-y-8">
                     {methods}
@@ -481,7 +547,7 @@ fn render_struct(doc: &StructDoc) -> String {
         <div id="struct-{name}" class="doc-item scroll-mt-24" data-name="{name}">
             <div class="flex items-center gap-3 mb-4">
                 <span class="text-xs font-bold text-[#1d2021] bg-[#fabd2f] px-2 py-0.5 rounded uppercase tracking-wide">Struct</span>
-                <h3 class="text-2xl font-bold text-[#fbf1c7] tracking-tight">{name}</h3>
+                <h3 class="text-xl md:text-2xl font-bold text-[#fbf1c7] tracking-tight break-all">{name}</h3>
             </div>
             <div class="prose max-w-none mb-4 text-[#ebdbb2]">
                 {comments}
@@ -512,7 +578,7 @@ fn render_extension(doc: &ExtensionsDoc) -> String {
 
         format!(
             r#"
-            <div class="mt-8 pl-5 border-l-2 border-[#504945]">
+            <div class="mt-8 pl-4 md:pl-5 border-l-2 border-[#504945]">
                 <h4 class="text-sm font-bold text-[#fe8019] uppercase tracking-widest mb-6">Extension Methods</h4>
                 <div class="space-y-8">
                     {methods}
@@ -527,7 +593,7 @@ fn render_extension(doc: &ExtensionsDoc) -> String {
         <div id="ext-{name}" class="doc-item scroll-mt-24" data-name="{name}">
             <div class="flex items-center gap-3 mb-4">
                 <span class="text-xs font-bold text-[#1d2021] bg-[#8ec07c] px-2 py-0.5 rounded uppercase tracking-wide">Extension</span>
-                <h3 class="text-2xl font-bold text-[#8ec07c] tracking-tight">on {name}</h3>
+                <h3 class="text-xl md:text-2xl font-bold text-[#8ec07c] tracking-tight break-all">on {name}</h3>
             </div>
             <div class="prose max-w-none mb-4 text-[#ebdbb2]">
                 {comments}
@@ -563,13 +629,13 @@ fn render_function(doc: &FunctionDoc, is_method: bool) -> String {
     format!(
         r#"
         <div id="{id_prefix}-{name}" class="doc-item scroll-mt-24" data-name="{name}">
-            <div class="flex items-center gap-3 mb-3">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
                 {badge}
-                <h3 class="text-xl font-bold {title_color} font-mono tracking-tight">{name}</h3>
+                <h3 class="text-lg md:text-xl font-bold {title_color} font-mono tracking-tight break-all">{name}</h3>
             </div>
 
             <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
-                <code class="text-[#8ec07c]">{annotation}</code>
+                <code class="text-[#8ec07c] whitespace-pre">{annotation}</code>
             </div>
 
             <div class="prose max-w-none text-[#ebdbb2]">
