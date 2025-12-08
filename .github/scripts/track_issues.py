@@ -375,7 +375,7 @@ def generate_html_report(git_info):
     """
     Generates a collapsible, tabbed HTML report with an activity log.
     """
-    report_path = os.path.join(ISSUES_DIR, "index.html")
+    report_path = os.path.join(ISSUES_DIR, "issues.html")
     all_issues = []
     if os.path.exists(STATE_DIR):
         for filename in sorted(os.listdir(STATE_DIR)):

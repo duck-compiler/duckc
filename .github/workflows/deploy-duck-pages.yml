@@ -58,7 +58,7 @@ jobs:
             popd
             popd
 
-            cp ./main-branch/std/docs_output.html ./.issues/docs_output.html
+            cp ./main-branch/std/docs_output.html ./.issues/index.html
 
       - name: deploy to github actions
         uses: peaceiris/actions-gh-pages@v4
