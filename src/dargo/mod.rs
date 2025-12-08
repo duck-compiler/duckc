@@ -7,3 +7,4 @@ pub mod init;
 pub mod loader;
 pub mod run;
 pub mod test;
+pub mod docs;

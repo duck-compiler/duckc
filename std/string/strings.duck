@@ -4,7 +4,9 @@ use go "unicode/utf8";
 
 use ::col::{empty_array_list, ArrayList};
 
+/// these are the main string utilities of the duck std library
 extend String with impl {
+    /// returns the length of the string self
     fn len() -> Int {
         let len_var: Int = 0;
         go {
@@ -14,6 +16,7 @@ extend String with impl {
         return len_var;
     }
 
+    /// returns the count of actual utf8 runes in the string
     fn count() -> Int {
         let count: Int = 0;
         go {
@@ -22,10 +25,12 @@ extend String with impl {
         return count;
     }
 
+    /// returns if the string is empty
     fn is_empty() -> Bool {
         return self.len() == 0;
     }
 
+    /// returns if the string contains the given substr
     fn contains(substr: String) -> Bool {
         let exists: Bool = false;
         go {
@@ -34,6 +39,7 @@ extend String with impl {
         return exists;
     }
 
+    /// returns if the string starts with given prefix
     fn starts_with(prefix: String) -> Bool {
         let res: Bool = false;
         go {
@@ -42,6 +48,7 @@ extend String with impl {
         return res;
     }
 
+    /// returns if the string ends with the given suffix
     fn ends_with(suffix: String) -> Bool {
         let res: Bool = false;
         go {
@@ -50,6 +57,7 @@ extend String with impl {
         return res;
     }
 
+    /// returns the index of the given substr or .none if not found
     fn index_of(substr: String) -> Int | .none {
         let idx: Int = -1;
         go {
@@ -63,6 +71,7 @@ extend String with impl {
         return idx;
     }
 
+    /// returns the string in uppercase
     fn to_upper() -> String {
         let s: String = "";
         go {
@@ -71,6 +80,7 @@ extend String with impl {
         return s;
     }
 
+    /// returns the string in lowercase
     fn to_lower() -> String {
         let s: String = "";
         go {
@@ -79,6 +89,7 @@ extend String with impl {
         return s;
     }
 
+    /// returns the string with trimmed space at the beginning and end of the string
     fn trim() -> String {
         let s: String = "";
         go {
@@ -87,6 +98,7 @@ extend String with impl {
         return s;
     }
 
+    /// returns the string with given old_s replaced with given new_s
     fn replace(old_s: String, new_s: String) -> String {
         let s: String = "";
         go {
@@ -95,6 +107,7 @@ extend String with impl {
         return s;
     }
 
+    /// returns a substring of the string
     fn substring(start: Int, end: Int) -> String | .err_out_of_bounds {
         let s: String = "";
         let err: Bool = false;
@@ -113,6 +126,7 @@ extend String with impl {
         return s;
     }
 
+    /// returns the string repeated
     fn repeat(count: Int) -> String {
         let s: String = "";
         go {
@@ -121,6 +135,7 @@ extend String with impl {
         return s;
     }
 
+    /// returns the string as a int or .err_parsing if couldn't parse to int
     fn to_int() -> Int | .err_parsing {
         let res: Int = 0;
         let err_occurred: Bool = false;
@@ -140,6 +155,7 @@ extend String with impl {
         return res;
     }
 
+    /// returns a byte array of the string
     fn to_bytes() -> Int[] {
         let bytes: Int[] = [];
         go {
@@ -183,6 +199,7 @@ fn from_int(x: Int) -> String {
     return res;
 }
 
+/// returns x in uppercase
 fn to_int(x: String) -> Int {
     let res: Int = 0;
     go {

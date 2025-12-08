@@ -152,7 +152,8 @@ fn lex(file_name: &'static str, file_contents: &'static str) -> Vec<Spanned<Toke
 
     lex.unwrap()
         .iter()
-        .filter(|(token, _)| !matches!(token, Token::Comment(..) | Token::DocComment(..)))
+        // .filter(|(token, _)| !matches!(token, Token::Comment(..) | Token::DocComment(..)))
+        .filter(|(token, _)| !matches!(token, Token::Comment(..)))
         .cloned()
         .collect::<Vec<_>>()
 }

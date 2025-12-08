@@ -195,6 +195,7 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "serde",
+ "serde_json",
  "tempfile",
  "toml",
  "tree-sitter",

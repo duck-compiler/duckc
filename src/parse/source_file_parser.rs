@@ -1094,6 +1094,7 @@ mod tests {
                         methods: vec![],
                         mut_methods: HashSet::new(),
                         generics: vec![],
+                        doc_comments: vec![],
                     }],
                     ..Default::default()
                 },

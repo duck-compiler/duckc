@@ -1,12 +1,13 @@
-name: Update and Deploy Issue Tracker
+name: deploy-duck-pages
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
   update-and-deploy:
+    name: update and deploy
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -29,7 +30,7 @@ jobs:
           path: ./gh-pages
           continue-on-error: true
 
-      - name: generate new state and prepare for deploy
+      - name: generate new state for issue tracking and prepare for deploy
         run: |
             # copy the state from gh-pages branch into the main-branch checkout
             mkdir -p ./main-branch/.github/scripts/.issues/state
@@ -44,11 +45,26 @@ jobs:
 
             cp -r ./main-branch/.github/scripts/.issues/ ./.issues
 
-      - name: Deploy to GitHub Pages
+      - name: generate new docs_output.html from std/std.duck and prepare for deploy
+        run: |
+            pushd main-branch
+            chmod +x install_std.sh
+            ./install_std.sh
+
+            pushd std
+
+            cargo run docs std.duck
+
+            popd
+            popd
+
+            cp ./main-branch/std/docs_output.html ./.issues/docs_output.html
+
+      - name: deploy to github actions
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./.issues
           publish_branch: gh-pages
           force_orphan: false
-          commit_message: "docs: Update issue tracker report [skip ci]"
+          commit_message: "docs: generate std docs and track issues [skip ci]"

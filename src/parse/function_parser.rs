@@ -26,6 +26,7 @@ pub struct FunctionDefintion {
     pub value_expr: Spanned<ValueExpr>,
     pub generics: Option<Vec<Spanned<Generic>>>,
     pub span: SS,
+    pub comments: Vec<Spanned<String>>,
 }
 
 impl FunctionDefintion {
@@ -88,6 +89,7 @@ impl Default for FunctionDefintion {
             value_expr: ValueExpr::Block(vec![]).into_empty_span(),
             generics: None,
             span: empty_range(),
+            comments: Vec::new(),
         }
     }
 }
@@ -107,6 +109,12 @@ where
     I: BorrowInput<'src, Token = Token, Span = SS>,
     M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
 {
+    let doc_comments_parser = select_ref! { Token::DocComment(comment) => comment.to_string() }
+        .map_with(|comment, ctx| (comment, ctx.span()))
+        .repeated()
+        .collect()
+        .or_not();
+
     let param_parser = select_ref! { Token::Ident(identifier) => identifier.to_string() }
         .then_ignore(just(Token::ControlChar(':')))
         .then(type_expression_parser())
@@ -120,8 +128,8 @@ where
 
     let return_type_parser = just(Token::ThinArrow).ignore_then(type_expression_parser());
 
-    just(Token::Sus)
-        .or_not()
+    doc_comments_parser
+        .then(just(Token::Sus).or_not())
         .then_ignore(just(Token::Function))
         .then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
         .then(generics_parser().or_not())
@@ -131,7 +139,7 @@ where
         .then(return_type_parser.or_not())
         .then(value_expr_parser(make_input))
         .map_with(
-            |(((((has_sus, identifier), generics), params), return_type), mut value_expr), ctx| {
+            |((((((doc_comments, has_sus), identifier), generics), params), return_type), mut value_expr), ctx| {
                 let is_sus = has_sus.is_some();
 
                 if is_sus && return_type.is_some() {
@@ -179,6 +187,7 @@ where
                     value_expr,
                     generics,
                     span: ctx.span(),
+                    comments: doc_comments.unwrap_or_else(|| Vec::new()),
                 }
             },
         )
@@ -260,6 +269,7 @@ pub mod tests {
                     )]),
                     value_expr: ValueExpr::Block(vec![]).into_empty_span(),
                     span: empty_range(),
+                    comments: Vec::new(),
                 },
             ),
             (
@@ -286,6 +296,7 @@ pub mod tests {
                     ]),
                     value_expr: ValueExpr::Block(vec![]).into_empty_span(),
                     span: empty_range(),
+                    comments: Vec::new(),
                 },
             ),
             (
@@ -319,6 +330,7 @@ pub mod tests {
                     ]),
                     value_expr: ValueExpr::Block(vec![]).into_empty_span(),
                     span: empty_range(),
+                    comments: Vec::new(),
                 },
             ),
         ];

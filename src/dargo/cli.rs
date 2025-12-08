@@ -2,7 +2,7 @@ use clap::{Parser as CliParser, Subcommand};
 use std::path::PathBuf;
 
 use crate::{
-    dargo::{self, compile::CompileErrKind, init::InitErrKind, run::RunErrKind, test::TestErrKind},
+    dargo::{self, compile::CompileErrKind, docs::DocsErrKind, init::InitErrKind, run::RunErrKind, test::TestErrKind},
     tags::Tag,
 };
 
@@ -28,6 +28,7 @@ pub enum Commands {
     Clean,
     Run(RunArgs),
     Test(TestArgs),
+    Docs(DocsGenerateArgs),
 }
 
 #[derive(clap::Args, Debug)]
@@ -49,6 +50,11 @@ pub struct CompileArgs {
     pub output_name: Option<String>,
     #[arg(long, short = 'G')]
     pub optimize_go: bool,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct DocsGenerateArgs {
+    pub file: PathBuf,
 }
 
 #[derive(clap::Args, Debug)]
@@ -87,6 +93,7 @@ pub enum CliErrKind {
     Clean(CleanErrKind),
     Run(RunErrKind),
     Test(TestErrKind),
+    Docs(DocsErrKind),
 }
 
 pub fn run_cli() -> Result<(), (String, CliErrKind)> {
@@ -135,6 +142,15 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
                     CliErrKind::Test(err.1),
                 )
             })?;
+        }
+        Commands::Docs(docs_generate_args) => {
+            dargo::docs::generate(docs_generate_args)
+                .map_err(|err| {
+                    (
+                        format!("{}{}{}", Tag::Dargo, Tag::Docs, err.0,),
+                        CliErrKind::Docs(err.1)
+                    )
+                })?;
         }
     }
 

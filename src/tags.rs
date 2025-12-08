@@ -17,6 +17,7 @@ pub enum Tag {
     Git,
     Build,
     Run,
+    Docs,
     Dependency,
     Setup,
     IO,
@@ -36,6 +37,7 @@ impl Display for Tag {
             Self::Lexer => write!(f, "{}", " lexer ".on_bright_white().black()),
             Self::Parser => write!(f, "{}", " parser ".on_white().black()),
             Self::Compiler => write!(f, "{}", " compiler ".on_black().bright_white()),
+            Self::Docs => write!(f, "{}", " docs ".on_green().bright_white()),
             Self::Git => write!(
                 f,
                 "{}",
