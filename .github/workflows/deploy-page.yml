@@ -2,7 +2,7 @@ name: generate issue tracking and std lib docs and deploy them to github pages
 
 on:
   push:
-    # branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
