@@ -29,7 +29,7 @@ jobs:
           path: ./gh-pages
           continue-on-error: true
 
-      - name: generate new state and prepare for deploy
+      - name: generate new state for issue tracking and prepare for deploy
         run: |
             # copy the state from gh-pages branch into the main-branch checkout
             mkdir -p ./main-branch/.github/scripts/.issues/state
