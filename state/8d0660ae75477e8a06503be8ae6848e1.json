@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "we already have the function lex_with_comments, right below this issue.\nnow the only thing we have to do is lex the code with comments and then generate some kind of report, maybe in json, which can be interpreted by some docs generator.\nor maybe just generate the html docs directly",
     "blame": {
-        "name": "Maurice Schmidt",
+        "name": "Mvmo",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo(@Mvmo): code doc generation, using doc comments",
