@@ -27,6 +27,7 @@ pub struct StructDefinition {
     pub methods: Vec<FunctionDefintion>,
     pub mut_methods: HashSet<String>,
     pub generics: Vec<Spanned<Generic>>,
+    pub doc_comments: Vec<Spanned<String>>,
 }
 
 pub fn struct_definition_parser<'src, M, I>(
@@ -56,8 +57,15 @@ where
         .or_not()
         .map(|x| x.or_else(|| Some(vec![])).unwrap());
 
-    just(Token::Struct)
-        .ignore_then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
+    let doc_comments_parser = select_ref! { Token::DocComment(comment) => comment.to_string() }
+        .map_with(|comment, ctx| (comment, ctx.span()))
+        .repeated()
+        .collect()
+        .or_not();
+
+    doc_comments_parser
+        .then_ignore(just(Token::Struct))
+        .then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
         .then(generics_parser().or_not())
         .then_ignore(just(Token::ControlChar('=')))
         .then_ignore(just(Token::ControlChar('{')))
@@ -70,7 +78,7 @@ where
         .then_ignore(just(Token::ControlChar('}')))
         .then(impl_parser)
         .then_ignore(just(Token::ControlChar(';')))
-        .map(|(((identifier, generics), fields), methods)| {
+        .map(|((((doc_comments, identifier), generics), fields), methods)| {
             let (mut_methods_names, methods) = methods.into_iter().fold(
                 (HashSet::new(), Vec::new()),
                 |(mut mut_method_names, mut methods), (is_mut, elem)| {
@@ -87,6 +95,7 @@ where
                 methods,
                 mut_methods: mut_methods_names,
                 generics: generics.unwrap_or_default(),
+                doc_comments: doc_comments.unwrap_or_else(|| Vec::new()),
             }
         })
 }
@@ -149,6 +158,10 @@ pub mod tests {
     }
 
     fn strip_struct_definition_spans(mut def: StructDefinition) -> StructDefinition {
+        for comment in &mut def.doc_comments {
+            comment.1 = empty_range();
+        }
+
         for field in &mut def.fields {
             field.type_expr = strip_spans(field.type_expr.clone());
         }
@@ -243,6 +256,7 @@ pub mod tests {
                 methods: vec![],
                 mut_methods: HashSet::new(),
                 generics: vec![],
+                doc_comments: vec![],
             },
         );
 
@@ -254,6 +268,7 @@ pub mod tests {
                 methods: vec![],
                 mut_methods: HashSet::new(),
                 generics: vec![],
+                doc_comments: vec![],
             },
         );
 
@@ -268,6 +283,7 @@ pub mod tests {
                 methods: vec![],
                 mut_methods: HashSet::new(),
                 generics: vec![],
+                doc_comments: vec![],
             },
         );
 
@@ -288,6 +304,7 @@ pub mod tests {
                     },
                     empty_range(),
                 )],
+                doc_comments: vec![],
             },
         );
 
@@ -330,6 +347,50 @@ pub mod tests {
                         empty_range(),
                     ),
                 ],
+                doc_comments: vec![],
+            },
+        );
+
+        assert_struct_definition(
+            "/// hello\nstruct Map<K, V> = { entries: Entry<K, V>[] };",
+            StructDefinition {
+                name: "Map".to_string(),
+                fields: vec![Field::new(
+                    "entries".to_string(),
+                    TypeExpr::Array(Box::new(
+                        TypeExpr::RawTypeName(
+                            false,
+                            vec!["Entry".to_string()],
+                            vec![
+                                TypeExpr::RawTypeName(false, vec!["K".to_string()], vec![])
+                                    .into_empty_span(),
+                                TypeExpr::RawTypeName(false, vec!["V".to_string()], vec![])
+                                    .into_empty_span(),
+                            ],
+                        )
+                        .into_empty_span(),
+                    ))
+                    .into_empty_span(),
+                )],
+                methods: vec![],
+                mut_methods: HashSet::new(),
+                generics: vec![
+                    (
+                        Generic {
+                            name: "K".to_string(),
+                            constraint: None,
+                        },
+                        empty_range(),
+                    ),
+                    (
+                        Generic {
+                            name: "V".to_string(),
+                            constraint: None,
+                        },
+                        empty_range(),
+                    ),
+                ],
+                doc_comments: vec![("hello".to_string(), empty_range())],
             },
         );
 

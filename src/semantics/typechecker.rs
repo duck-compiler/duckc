@@ -910,6 +910,7 @@ impl TypeExpr {
                     methods,
                     mut_methods: _,
                     generics: _,
+                    doc_comments: _
                 } = type_env
                     .get_struct_def_with_type_params_mut(
                         r#struct.as_str(),
@@ -944,6 +945,7 @@ impl TypeExpr {
                     methods: _,
                     mut_methods: _,
                     generics: _,
+                    doc_comments: _,
                 } = type_env.get_struct_def_with_type_params_mut(
                     struct_name,
                     type_params,
@@ -1014,6 +1016,7 @@ impl TypeExpr {
                     methods,
                     mut_methods: _,
                     generics: _,
+                    doc_comments: _
                 } = type_env
                     .get_struct_def_with_type_params_mut(
                         r#struct.as_str(),

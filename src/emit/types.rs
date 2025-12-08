@@ -135,6 +135,7 @@ pub fn interface_implementations(
                 methods,
                 mut_methods: _,
                 generics: _,
+                doc_comments: _
             } = type_env
                 .get_struct_def_with_type_params_mut(s.as_str(), type_params, empty_range())
                 .clone();
@@ -470,6 +471,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
             methods,
             mut_methods: _,
             generics: _,
+            doc_comments: _,
         } = s;
 
         let mut instructions: Vec<IrInstruction> = fields
