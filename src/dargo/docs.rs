@@ -2,10 +2,10 @@ use colored::Colorize;
 use duckwind::EmitEnv;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use std::{ffi::OsString, fs, path::{Path, PathBuf}, sync::mpsc, time::Duration};
+use std::{fs::{self, File, OpenOptions}, io::Write, path::{Path, PathBuf}, sync::mpsc};
 
 use crate::{
-    cli::go_cli::{self, GoCliErrKind}, dargo::cli::{CompileArgs, DocsGenerateArgs}, emit::{ir::join_ir, types::escape_string_for_go}, go_fixup::remove_unused_imports::cleanup_go_source, lex, parse::{value_parser::empty_range, Spanned}, parse_src_file, tags::Tag, typecheck, write_in_duck_dotdir, DARGO_DOT_DIR
+    cli::go_cli::GoCliErrKind, dargo::cli::DocsGenerateArgs, emit::function, lex, parse_src_file, tags::Tag, typecheck
 };
 
 #[derive(Debug)]
@@ -23,7 +23,23 @@ lazy_static! {
 
 pub struct DocsOutput {
     pub json_output_path: PathBuf,
-    pub fn_docs: Vec<FunctionDoc>
+    pub fn_docs: Vec<FunctionDoc>,
+    pub struct_docs: Vec<StructDoc>
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DocsField {
+    // pub comments: Vec<String>,
+    pub field_name: String,
+    pub type_annotation: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StructDoc {
+    pub struct_name: String,
+    pub fields: Vec<DocsField>,
+    pub comments: Vec<String>,
+    pub function_docs: Vec<FunctionDoc>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -131,7 +147,37 @@ pub fn generate(generate_args: DocsGenerateArgs) -> Result<DocsOutput, (String, 
     });
 
     let mut fn_docs = vec![];
+    let mut struct_docs = vec![];
+
     let type_env = typecheck(&mut src_file_ast, &tailwind_worker_send);
+    type_env.struct_definitions.iter().for_each(|struct_definition| {
+        let mut fn_docs = vec![];
+        struct_definition
+            .methods
+            .iter()
+            .for_each(|function_def| {
+                if !function_def.comments.is_empty() {
+                    fn_docs.push(FunctionDoc {
+                        function_name: function_def.name.clone(),
+                        function_annotation: function_def.type_expr().0.as_clean_user_faced_type_name(),
+                        comments: function_def.comments.iter().map(|c| c.0.clone()).collect(),
+                    });
+                }
+            });
+
+        if !(fn_docs.is_empty() && struct_definition.doc_comments.is_empty()) {
+            struct_docs.push(StructDoc {
+                function_docs: fn_docs,
+                struct_name: struct_definition.name.clone(),
+                comments: struct_definition.doc_comments.iter().map(|c| c.0.clone()).collect(),
+                fields: struct_definition.fields.iter().map(|field| DocsField {
+                    field_name: field.name.clone(),
+                    type_annotation: field.type_expr.0.as_clean_user_faced_type_name()
+                }).collect()
+            });
+        }
+    });
+
     type_env.function_definitions.iter().for_each(|function_def| {
         if !function_def.comments.is_empty() {
             fn_docs.push(FunctionDoc {
@@ -139,7 +185,6 @@ pub fn generate(generate_args: DocsGenerateArgs) -> Result<DocsOutput, (String, 
                 function_annotation: function_def.type_expr().0.as_clean_user_faced_type_name(),
                 comments: function_def.comments.iter().map(|c| c.0.clone()).collect(),
             });
-            dbg!(&function_def);
             println!()
         }
     });
@@ -151,11 +196,58 @@ pub fn generate(generate_args: DocsGenerateArgs) -> Result<DocsOutput, (String, 
         Tag::Check,
     );
 
+    let json_output = serde_json::to_string(&struct_docs).unwrap();
+    dbg!(json_output);
     let json_output = serde_json::to_string(&fn_docs).unwrap();
     dbg!(json_output);
+
+    let html = layout_html(&fn_docs, &struct_docs);
+    println!("{}", layout_html(&fn_docs, &struct_docs));
+
+    let file = Path::new("./docs_output.html");
+    fs::write(file, html).expect("couldn't write docs");
 
     return Ok(DocsOutput {
         json_output_path: Path::new("here").to_path_buf(),
         fn_docs: fn_docs,
+        struct_docs: struct_docs,
     });
+}
+
+fn layout_html(fn_docs: &Vec<FunctionDoc>, struct_docs: &Vec<StructDoc>) -> String {
+    let fn_docs_html = fn_docs
+            .iter()
+            .map(function_doc_to_html)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+    let mut duckwind_emit_env = duckwind::EmitEnv::new_with_default_config();
+    duckwind_emit_env.parse_full_string(None, &fn_docs_html);
+
+    let output_css = duckwind_emit_env.to_css_stylesheet(true);
+
+    return format!("
+        <!doctype html>
+        <html>
+            <head>
+                <title>Duck Docs</title>
+                <style>
+                    {output_css}
+                </style>
+            </head>
+            <body>
+                {fn_docs_html}
+            </body>
+        </html>
+    ")
+}
+
+fn function_doc_to_html(fn_doc: &FunctionDoc) -> String {
+    return format!("
+        <div class=\"text-black\">
+            <div class='text-2xl'>
+                {}
+            </div>
+        </div>
+    ", fn_doc.function_name)
 }
