@@ -1,0 +1,2353 @@
+<!doctype html>
+        <html lang='en'>
+            <head>
+                <meta charset='UTF-8'>
+                <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                <title>Duck Documentation</title>
+                <style>
+                    body { margin: 0; background-color: #282828; color: #ebdbb2; }
+                    ::-webkit-scrollbar { width: 8px; }
+                    ::-webkit-scrollbar-track { background: #1d2021; }
+                    ::-webkit-scrollbar-thumb { background: #504945; border-radius: 4px; }
+                    ::-webkit-scrollbar-thumb:hover { background: #665c54; }
+                    /*
+  1. Prevent padding and border from affecting element width. (https://github.com/mozdevs/cssremedy/issues/4)
+  2. Remove default margins and padding
+  3. Reset all borders.
+*/
+
+*,
+::after,
+::before,
+::backdrop,
+::file-selector-button {
+  box-sizing: border-box; /* 1 */
+  margin: 0; /* 2 */
+  padding: 0; /* 2 */
+  border: 0 solid; /* 3 */
+}
+
+/*
+  1. Use a consistent sensible line-height in all browsers.
+  2. Prevent adjustments of font size after orientation changes in iOS.
+  3. Use a more readable tab size.
+  4. Use the user's configured `sans` font-family by default.
+  5. Use the user's configured `sans` font-feature-settings by default.
+  6. Use the user's configured `sans` font-variation-settings by default.
+  7. Disable tap highlights on iOS.
+*/
+
+html,
+:host {
+  line-height: 1.5; /* 1 */
+  -webkit-text-size-adjust: 100%; /* 2 */
+  tab-size: 4; /* 3 */
+  font-family:
+    var(--default-font-family),
+    ui-sans-serif,
+    system-ui,
+    sans-serif,
+    'Apple Color Emoji',
+    'Segoe UI Emoji',
+    'Segoe UI Symbol',
+    'Noto Color Emoji'; /* 4 */
+  font-feature-settings: var(--default-font-feature-settings, normal); /* 5 */
+  font-variation-settings: var(--default-font-variation-settings, normal); /* 6 */
+  -webkit-tap-highlight-color: transparent; /* 7 */
+}
+
+/*
+  1. Add the correct height in Firefox.
+  2. Correct the inheritance of border color in Firefox. (https://bugzilla.mozilla.org/show_bug.cgi?id=190655)
+  3. Reset the default border style to a 1px solid border.
+*/
+
+hr {
+  height: 0; /* 1 */
+  color: inherit; /* 2 */
+  border-top-width: 1px; /* 3 */
+}
+
+/*
+  Add the correct text decoration in Chrome, Edge, and Safari.
+*/
+
+abbr:where([title]) {
+  -webkit-text-decoration: underline dotted;
+  text-decoration: underline dotted;
+}
+
+/*
+  Remove the default font size and weight for headings.
+*/
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/*
+  Reset links to optimize for opt-in styling instead of opt-out.
+*/
+
+a {
+  color: inherit;
+  -webkit-text-decoration: inherit;
+  text-decoration: inherit;
+}
+
+/*
+  Add the correct font weight in Edge and Safari.
+*/
+
+b,
+strong {
+  font-weight: bolder;
+}
+
+/*
+  1. Use the user's configured `mono` font-family by default.
+  2. Use the user's configured `mono` font-feature-settings by default.
+  3. Use the user's configured `mono` font-variation-settings by default.
+  4. Correct the odd `em` font sizing in all browsers.
+*/
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(
+    --default-mono-font-family),
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    'Liberation Mono',
+    'Courier New',
+    monospace; /* 1 */
+  font-feature-settings: var(--default-mono-font-feature-settings, normal); /* 2 */
+  font-variation-settings: var(--default-mono-font-variation-settings, normal); /* 3 */
+  font-size: 1em; /* 4 */
+}
+
+/*
+  Add the correct font size in all browsers.
+*/
+
+small {
+  font-size: 80%;
+}
+
+/*
+  Prevent `sub` and `sup` elements from affecting the line height in all browsers.
+*/
+
+sub,
+sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+sub {
+  bottom: -0.25em;
+}
+
+sup {
+  top: -0.5em;
+}
+
+/*
+  1. Remove text indentation from table contents in Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=999088, https://bugs.webkit.org/show_bug.cgi?id=201297)
+  2. Correct table border color inheritance in all Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=935729, https://bugs.webkit.org/show_bug.cgi?id=195016)
+  3. Remove gaps between table borders by default.
+*/
+
+table {
+  text-indent: 0; /* 1 */
+  border-color: inherit; /* 2 */
+  border-collapse: collapse; /* 3 */
+}
+
+/*
+  Use the modern Firefox focus style for all focusable elements.
+*/
+
+:-moz-focusring {
+  outline: auto;
+}
+
+/*
+  Add the correct vertical alignment in Chrome and Firefox.
+*/
+
+progress {
+  vertical-align: baseline;
+}
+
+/*
+  Add the correct display in Chrome and Safari.
+*/
+
+summary {
+  display: list-item;
+}
+
+/*
+  Make lists unstyled by default.
+*/
+
+ol,
+ul,
+menu {
+  list-style: none;
+}
+
+/*
+  1. Make replaced elements `display: block` by default. (https://github.com/mozdevs/cssremedy/issues/14)
+  2. Add `vertical-align: middle` to align replaced elements more sensibly by default. (https://github.com/jensimmons/cssremedy/issues/14#issuecomment-634934210)
+      This can trigger a poorly considered lint error in some tools but is included by design.
+*/
+
+img,
+svg,
+video,
+canvas,
+audio,
+iframe,
+embed,
+object {
+  display: block; /* 1 */
+  vertical-align: middle; /* 2 */
+}
+
+/*
+  Constrain images and videos to the parent width and preserve their intrinsic aspect ratio. (https://github.com/mozdevs/cssremedy/issues/14)
+*/
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+/*
+  1. Inherit font styles in all browsers.
+  2. Remove border radius in all browsers.
+  3. Remove background color in all browsers.
+  4. Ensure consistent opacity for disabled states in all browsers.
+*/
+
+button,
+input,
+select,
+optgroup,
+textarea,
+::file-selector-button {
+  font: inherit; /* 1 */
+  font-feature-settings: inherit; /* 1 */
+  font-variation-settings: inherit; /* 1 */
+  letter-spacing: inherit; /* 1 */
+  color: inherit; /* 1 */
+  border-radius: 0; /* 2 */
+  background-color: transparent; /* 3 */
+  opacity: 1; /* 4 */
+}
+
+/*
+  Restore default font weight.
+*/
+
+:where(select:is([multiple], [size])) optgroup {
+  font-weight: bolder;
+}
+
+/*
+  Restore indentation.
+*/
+
+:where(select:is([multiple], [size])) optgroup option {
+  padding-inline-start: 20px;
+}
+
+/*
+  Restore space after button.
+*/
+
+::file-selector-button {
+  margin-inline-end: 4px;
+}
+
+/*
+  Reset the default placeholder opacity in Firefox. (https://github.com/tailwindlabs/tailwindcss/issues/3300)
+*/
+
+::placeholder {
+  opacity: 1;
+}
+
+/*
+  Set the default placeholder color to a semi-transparent version of the current text color in browsers that do not
+  crash when using `color-mix(…)` with `currentcolor`. (https://github.com/tailwindlabs/tailwindcss/issues/17194)
+*/
+
+@supports (not (-webkit-appearance: -apple-pay-button)) /* Not Safari */ or
+  (contain-intrinsic-size: 1px) /* Safari 17+ */ {
+  ::placeholder {
+    color: color-mix(in oklab, currentcolor 50%, transparent);
+  }
+}
+
+/*
+  Prevent resizing textareas horizontally by default.
+*/
+
+textarea {
+  resize: vertical;
+}
+
+/*
+  Remove the inner padding in Chrome and Safari on macOS.
+*/
+
+::-webkit-search-decoration {
+  -webkit-appearance: none;
+}
+
+/*
+  1. Ensure date/time inputs have the same height when empty in iOS Safari.
+  2. Ensure text alignment can be changed on date/time inputs in iOS Safari.
+*/
+
+::-webkit-date-and-time-value {
+  min-height: 1lh; /* 1 */
+  text-align: inherit; /* 2 */
+}
+
+/*
+  Prevent height from changing on date/time inputs in macOS Safari when the input is set to `display: block`.
+*/
+
+::-webkit-datetime-edit {
+  display: inline-flex;
+}
+
+/*
+  Remove excess padding from pseudo-elements in date/time inputs to ensure consistent height across browsers.
+*/
+
+::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+
+::-webkit-datetime-edit,
+::-webkit-datetime-edit-year-field,
+::-webkit-datetime-edit-month-field,
+::-webkit-datetime-edit-day-field,
+::-webkit-datetime-edit-hour-field,
+::-webkit-datetime-edit-minute-field,
+::-webkit-datetime-edit-second-field,
+::-webkit-datetime-edit-millisecond-field,
+::-webkit-datetime-edit-meridiem-field {
+  padding-block: 0;
+}
+
+/*
+  Center dropdown marker shown on inputs with paired `<datalist>`s in Chrome. (https://github.com/tailwindlabs/tailwindcss/issues/18499)
+*/
+
+::-webkit-calendar-picker-indicator {
+  line-height: 1;
+}
+
+/*
+  Remove the additional `:invalid` styles in Firefox. (https://github.com/mozilla/gecko-dev/blob/2f9eacd9d3d995c937b4251a5557d95d494c9be1/layout/style/res/forms.css#L728-L737)
+*/
+
+:-moz-ui-invalid {
+  box-shadow: none;
+}
+
+/*
+  Correct the inability to style the border radius in iOS Safari.
+*/
+
+button,
+input:where([type='button'], [type='reset'], [type='submit']),
+::file-selector-button {
+  appearance: button;
+}
+
+/*
+  Correct the cursor style of increment and decrement buttons in Safari.
+*/
+
+::-webkit-inner-spin-button,
+::-webkit-outer-spin-button {
+  height: auto;
+}
+
+/*
+  Make elements with the HTML hidden attribute stay hidden by default.
+*/
+
+[hidden]:where(:not([hidden='until-found'])) {
+  display: none !important;
+}
+
+@property --tw-translate-x {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-translate-y {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-translate-z {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-space-y-reverse {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-divide-y-reverse {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-border-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
+@property --tw-gradient-position {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-gradient-from {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: #0000;
+}
+@property --tw-gradient-via {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: #0000;
+}
+@property --tw-gradient-to {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: #0000;
+}
+@property --tw-gradient-stops {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-gradient-via-stops {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-gradient-from-position {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+@property --tw-gradient-via-position {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 50%;
+}
+@property --tw-gradient-to-position {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --tw-font-weight {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-tracking {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-shadow-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --tw-inset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-inset-shadow-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-inset-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --tw-ring-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-inset-ring-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-inset-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-ring-inset {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-ring-offset-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --tw-ring-offset-color {
+  syntax: "*";
+  inherits: false;
+  initial-value: #fff;
+}
+@property --tw-ring-offset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-blur {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-brightness {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-contrast {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-grayscale {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-hue-rotate {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-invert {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-opacity {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-saturate {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-sepia {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-drop-shadow {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-drop-shadow-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-drop-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --tw-drop-shadow-size {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-outline-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
+:root {
+--color-slate-700: oklch(37.2% 0.044 257.287);
+--color-teal-400: oklch(77.7% 0.152 181.912);
+--color-fuchsia-500: oklch(66.7% 0.295 322.15);
+--color-purple-100: oklch(94.6% 0.033 307.174);
+--spacing: 0.25rem;
+--text-9xl--line-height: 1;
+--color-violet-950: oklch(28.3% 0.141 291.089);
+--color-violet-600: oklch(54.1% 0.281 293.009);
+--text-6xl--line-height: 1;
+--color-indigo-700: oklch(45.7% 0.24 277.023);
+--color-blue-50: oklch(97% 0.014 254.604);
+--text-4xl: 2.25rem;
+--text-lg--line-height: calc(1.75 / 1.125);
+--color-purple-50: oklch(97.7% 0.014 308.299);
+--perspective-distant: 1200px;
+--color-gray-950: oklch(13% 0.028 261.692);
+--color-indigo-950: oklch(25.7% 0.09 281.288);
+--container-xs: 20rem;
+--color-blue-300: oklch(80.9% 0.105 251.813);
+--color-emerald-500: oklch(69.6% 0.17 162.48);
+--color-neutral-800: oklch(26.9% 0 0);
+--color-red-700: oklch(50.5% 0.213 27.518);
+--color-zinc-300: oklch(87.1% 0.006 286.286);
+--drop-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.15);
+--color-slate-600: oklch(44.6% 0.043 257.281);
+--color-cyan-950: oklch(30.2% 0.056 229.695);
+--color-indigo-600: oklch(51.1% 0.262 276.966);
+--color-orange-400: oklch(75% 0.183 55.934);
+--font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+--color-fuchsia-100: oklch(95.2% 0.037 318.852);
+--color-indigo-800: oklch(39.8% 0.195 277.366);
+--color-rose-200: oklch(89.2% 0.058 10.001);
+--radius-3xl: 1.5rem;
+--color-green-600: oklch(62.7% 0.194 149.214);
+--color-zinc-400: oklch(70.5% 0.015 286.067);
+--blur: 8px;
+--color-red-600: oklch(57.7% 0.245 27.325);
+--leading-loose: 2;
+--color-cyan-200: oklch(91.7% 0.08 205.041);
+--color-orange-50: oklch(98% 0.016 73.684);
+--color-orange-200: oklch(90.1% 0.076 70.697);
+--color-neutral-50: oklch(98.5% 0 0);
+--shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+--color-red-50: oklch(97.1% 0.013 17.38);
+--color-yellow-600: oklch(68.1% 0.162 75.834);
+--color-emerald-600: oklch(59.6% 0.145 163.225);
+--text-8xl--line-height: 1;
+--container-xl: 36rem;
+--inset-shadow-sm: inset 0 2px 4px rgb(0 0 0 / 0.05);
+--color-zinc-900: oklch(21% 0.006 285.885);
+--container-5xl: 64rem;
+--leading-tight: 1.25;
+--color-stone-700: oklch(37.4% 0.01 67.558);
+--color-violet-100: oklch(94.3% 0.029 294.588);
+--color-green-300: oklch(87.1% 0.15 154.449);
+--color-cyan-400: oklch(78.9% 0.154 211.53);
+--radius-4xl: 2rem;
+--drop-shadow-xs: 0 1px 1px rgb(0 0 0 / 0.05);
+--color-fuchsia-600: oklch(59.1% 0.293 322.896);
+--color-blue-100: oklch(93.2% 0.032 255.585);
+--color-slate-50: oklch(98.4% 0.003 247.858);
+--drop-shadow-lg: 0 4px 4px rgb(0 0 0 / 0.15);
+--font-weight-medium: 500;
+--color-lime-800: oklch(45.3% 0.124 130.933);
+--color-stone-100: oklch(97% 0.001 106.424);
+--color-slate-900: oklch(20.8% 0.042 265.755);
+--text-lg: 1.125rem;
+--color-zinc-950: oklch(14.1% 0.005 285.823);
+--color-green-100: oklch(96.2% 0.044 156.743);
+--color-pink-300: oklch(82.3% 0.12 346.018);
+--font-weight-thin: 100;
+--text-sm: 0.875rem;
+--color-rose-100: oklch(94.1% 0.03 12.58);
+--breakpoint-md: 48rem;
+--color-fuchsia-700: oklch(51.8% 0.253 323.949);
+--perspective-dramatic: 100px;
+--color-orange-500: oklch(70.5% 0.213 47.604);
+--color-purple-800: oklch(43.8% 0.218 303.724);
+--color-yellow-400: oklch(85.2% 0.199 91.936);
+--color-zinc-800: oklch(27.4% 0.006 286.033);
+--color-teal-700: oklch(51.1% 0.096 186.391);
+--tracking-normal: 0em;
+--color-yellow-950: oklch(28.6% 0.066 53.813);
+--radius-xl: 0.75rem;
+--ease-out: cubic-bezier(0, 0, 0.2, 1);
+--color-green-700: oklch(52.7% 0.154 150.069);
+--color-red-300: oklch(80.8% 0.114 19.571);
+--color-neutral-600: oklch(43.9% 0 0);
+--shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+--color-blue-600: oklch(54.6% 0.245 262.881);
+--text-7xl--line-height: 1;
+--text-shadow-md: 0px 1px 1px rgb(0 0 0 / 0.1), 0px 1px 2px rgb(0 0 0 / 0.1), 0px 2px 4px rgb(0 0 0 / 0.1);
+--text-4xl--line-height: calc(2.5 / 2.25);
+--color-lime-100: oklch(96.7% 0.067 122.328);
+--color-fuchsia-200: oklch(90.3% 0.076 319.62);
+--color-slate-500: oklch(55.4% 0.046 257.417);
+--color-lime-900: oklch(40.5% 0.101 131.063);
+--color-sky-950: oklch(29.3% 0.066 243.157);
+--text-3xl: 1.875rem;
+--font-weight-semibold: 600;
+--color-rose-50: oklch(96.9% 0.015 12.422);
+--inset-shadow-2xs: inset 0 1px rgb(0 0 0 / 0.05);
+--color-orange-600: oklch(64.6% 0.222 41.116);
+--color-indigo-900: oklch(35.9% 0.144 278.697);
+--color-indigo-200: oklch(87% 0.065 274.039);
+--color-yellow-200: oklch(94.5% 0.129 101.54);
+--color-slate-100: oklch(96.8% 0.007 247.896);
+--color-pink-100: oklch(94.8% 0.028 342.258);
+--aspect-video: 16 / 9;
+--drop-shadow-md: 0 3px 3px rgb(0 0 0 / 0.12);
+--color-orange-900: oklch(40.8% 0.123 38.172);
+--color-teal-50: oklch(98.4% 0.014 180.72);
+--color-violet-500: oklch(60.6% 0.25 292.717);
+--animate-bounce: bounce 1s infinite;
+--color-emerald-700: oklch(50.8% 0.118 165.612);
+--color-orange-300: oklch(83.7% 0.128 66.29);
+--color-sky-50: oklch(97.7% 0.013 236.62);
+--drop-shadow-xl: 0 9px 7px rgb(0 0 0 / 0.1);
+--text-9xl: 8rem;
+--leading-normal: 1.5;
+--color-fuchsia-400: oklch(74% 0.238 322.16);
+--color-yellow-800: oklch(47.6% 0.114 61.907);
+--drop-shadow: 0 1px 2px rgb(0 0 0 / 0.1), 0 1px 1px rgb(0 0 0 / 0.06);
+--color-lime-50: oklch(98.6% 0.031 120.757);
+--container-lg: 32rem;
+--color-stone-800: oklch(26.8% 0.007 34.298);
+--color-pink-800: oklch(45.9% 0.187 3.815);
+--font-weight-extralight: 200;
+--font-weight-light: 300;
+--container-4xl: 56rem;
+--blur-xs: 4px;
+--tracking-tight: -0.025em;
+--color-gray-500: oklch(55.1% 0.027 264.364);
+--color-sky-600: oklch(58.8% 0.158 241.966);
+--font-sans: ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+--color-pink-900: oklch(40.8% 0.153 2.432);
+--color-purple-300: oklch(82.7% 0.119 306.383);
+--color-zinc-100: oklch(96.7% 0.001 286.375);
+--breakpoint-sm: 40rem;
+--color-lime-300: oklch(89.7% 0.196 126.665);
+--color-gray-50: oklch(98.5% 0.002 247.839);
+--container-6xl: 72rem;
+--blur-sm: 8px;
+--color-blue-700: oklch(48.8% 0.243 264.376);
+--color-rose-400: oklch(71.2% 0.194 13.428);
+--text-5xl--line-height: 1;
+--color-blue-500: oklch(62.3% 0.214 259.815);
+--color-neutral-700: oklch(37.1% 0 0);
+--color-red-950: oklch(25.8% 0.092 26.042);
+--color-green-950: oklch(26.6% 0.065 152.934);
+--text-shadow-2xs: 0px 1px 0px rgb(0 0 0 / 0.15);
+--color-cyan-300: oklch(86.5% 0.127 207.078);
+--color-emerald-950: oklch(26.2% 0.051 172.552);
+--color-neutral-400: oklch(70.8% 0 0);
+--color-rose-600: oklch(58.6% 0.253 17.585);
+--color-amber-100: oklch(96.2% 0.059 95.617);
+--color-amber-500: oklch(76.9% 0.188 70.08);
+--radius-sm: 0.25rem;
+--color-yellow-300: oklch(90.5% 0.182 98.111);
+--color-violet-900: oklch(38% 0.189 293.745);
+--radius-xs: 0.125rem;
+--color-green-900: oklch(39.3% 0.095 152.535);
+--color-yellow-700: oklch(55.4% 0.135 66.442);
+--color-pink-500: oklch(65.6% 0.241 354.308);
+--text-shadow-xs: 0px 1px 1px rgb(0 0 0 / 0.2);
+--text-sm--line-height: calc(1.25 / 0.875);
+--text-xs--line-height: calc(1 / 0.75);
+--color-blue-200: oklch(88.2% 0.059 254.128);
+--color-rose-800: oklch(45.5% 0.188 13.697);
+--color-purple-600: oklch(55.8% 0.288 302.321);
+--default-font-variation-settings: var(--font-sans--font-variation-settings, initial);
+--color-stone-300: oklch(86.9% 0.005 56.366);
+--shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+--color-lime-600: oklch(64.8% 0.2 131.684);
+--color-neutral-950: oklch(14.5% 0 0);
+--shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+--text-2xl: 1.5rem;
+--color-black: #000;
+--color-amber-800: oklch(47.3% 0.137 46.201);
+--color-amber-700: oklch(55.5% 0.163 48.998);
+--color-green-400: oklch(79.2% 0.209 151.711);
+--color-fuchsia-50: oklch(97.7% 0.017 320.058);
+--color-gray-400: oklch(70.7% 0.022 261.325);
+--color-purple-950: oklch(29.1% 0.149 302.717);
+--shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+--container-3xl: 48rem;
+--color-rose-950: oklch(27.1% 0.105 12.094);
+--default-mono-font-family: var(--font-mono, initial);
+--color-amber-900: oklch(41.4% 0.112 45.904);
+--color-zinc-500: oklch(55.2% 0.016 285.938);
+--color-teal-600: oklch(60% 0.118 184.704);
+--color-lime-400: oklch(84.1% 0.238 128.85);
+--default-transition-duration: 150ms;
+--color-indigo-400: oklch(67.3% 0.182 276.935);
+--leading-relaxed: 1.625;
+--color-amber-400: oklch(82.8% 0.189 84.429);
+--color-purple-400: oklch(71.4% 0.203 305.504);
+--max-width-prose: 65ch;
+--color-orange-700: oklch(55.3% 0.195 38.402);
+--color-white: #fff;
+--color-pink-200: oklch(89.9% 0.061 343.231);
+--text-xl: 1.25rem;
+--color-cyan-50: oklch(98.4% 0.019 200.873);
+--animate-spin: spin 1s linear infinite;
+--color-purple-200: oklch(90.2% 0.063 306.703);
+--color-teal-300: oklch(85.5% 0.138 181.071);
+--color-gray-200: oklch(92.8% 0.006 264.531);
+--color-neutral-300: oklch(87% 0 0);
+--text-xl--line-height: calc(1.75 / 1.25);
+--color-red-100: oklch(93.6% 0.032 17.717);
+--color-emerald-900: oklch(37.8% 0.077 168.94);
+--color-amber-950: oklch(27.9% 0.077 45.635);
+--color-violet-50: oklch(96.9% 0.016 293.756);
+--color-stone-400: oklch(70.9% 0.01 56.259);
+--color-yellow-100: oklch(97.3% 0.071 103.193);
+--text-shadow-lg: 0px 1px 2px rgb(0 0 0 / 0.1), 0px 3px 2px rgb(0 0 0 / 0.1), 0px 4px 8px rgb(0 0 0 / 0.1);
+--tracking-wider: 0.05em;
+--color-lime-700: oklch(53.2% 0.157 131.589);
+--color-indigo-500: oklch(58.5% 0.233 277.117);
+--font-weight-normal: 400;
+--container-sm: 24rem;
+--color-fuchsia-950: oklch(29.3% 0.136 325.661);
+--color-rose-300: oklch(81% 0.117 11.638);
+--font-weight-bold: 700;
+--color-cyan-800: oklch(45% 0.085 224.283);
+--color-cyan-600: oklch(60.9% 0.126 221.723);
+--color-violet-800: oklch(43.2% 0.232 292.759);
+--color-zinc-200: oklch(92% 0.004 286.32);
+--color-violet-700: oklch(49.1% 0.27 292.581);
+--blur-2xl: 40px;
+--color-gray-900: oklch(21% 0.034 264.665);
+--color-pink-50: oklch(97.1% 0.014 343.198);
+--shadow-2xs: 0 1px rgb(0 0 0 / 0.05);
+--perspective-midrange: 800px;
+--color-gray-300: oklch(87.2% 0.01 258.338);
+--color-stone-950: oklch(14.7% 0.004 49.25);
+--color-zinc-600: oklch(44.2% 0.017 285.786);
+--color-orange-800: oklch(47% 0.157 37.304);
+--color-slate-300: oklch(86.9% 0.022 252.894);
+--color-blue-950: oklch(28.2% 0.091 267.935);
+--color-rose-700: oklch(51.4% 0.222 16.935);
+--color-sky-900: oklch(39.1% 0.09 240.876);
+--color-cyan-700: oklch(52% 0.105 223.128);
+--color-teal-800: oklch(43.7% 0.078 188.216);
+--breakpoint-xl: 80rem;
+--color-sky-700: oklch(50% 0.134 242.749);
+--text-3xl--line-height: calc(2.25 / 1.875);
+--color-neutral-100: oklch(97% 0 0);
+--color-stone-200: oklch(92.3% 0.003 48.717);
+--color-lime-950: oklch(27.4% 0.072 132.109);
+--tracking-widest: 0.1em;
+--color-slate-800: oklch(27.9% 0.041 260.031);
+--color-fuchsia-300: oklch(83.3% 0.145 321.434);
+--color-purple-700: oklch(49.6% 0.265 301.924);
+--radius-lg: 0.5rem;
+--color-red-500: oklch(63.7% 0.237 25.331);
+--color-gray-600: oklch(44.6% 0.03 256.802);
+--color-violet-400: oklch(70.2% 0.183 293.541);
+--ease-in: cubic-bezier(0.4, 0, 1, 1);
+--text-6xl: 3.75rem;
+--blur-lg: 16px;
+--radius-md: 0.375rem;
+--text-2xl--line-height: calc(2 / 1.5);
+--color-emerald-200: oklch(90.5% 0.093 164.15);
+--color-orange-100: oklch(95.4% 0.038 75.164);
+--container-md: 28rem;
+--color-red-200: oklch(88.5% 0.062 18.334);
+--color-violet-300: oklch(81.1% 0.111 293.571);
+--text-8xl: 6rem;
+--color-red-900: oklch(39.6% 0.141 25.723);
+--color-slate-200: oklch(92.9% 0.013 255.508);
+--color-teal-950: oklch(27.7% 0.046 192.524);
+--color-fuchsia-900: oklch(40.1% 0.17 325.612);
+--color-zinc-50: oklch(98.5% 0 0);
+--color-yellow-50: oklch(98.7% 0.026 102.212);
+--color-red-400: oklch(70.4% 0.191 22.216);
+--default-mono-font-variation-settings: var(--font-mono--font-variation-settings, initial);
+--default-font-feature-settings: var(--font-sans--font-feature-settings, initial);
+--color-teal-100: oklch(95.3% 0.051 180.801);
+--blur-xl: 24px;
+--color-teal-500: oklch(70.4% 0.14 182.503);
+--color-lime-500: oklch(76.8% 0.233 130.85);
+--color-slate-400: oklch(70.4% 0.04 256.788);
+--color-indigo-300: oklch(78.5% 0.115 274.713);
+--color-yellow-900: oklch(42.1% 0.095 57.708);
+--animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+--color-emerald-800: oklch(43.2% 0.095 166.913);
+--text-7xl: 4.5rem;
+--color-gray-700: oklch(37.3% 0.034 259.733);
+--color-amber-300: oklch(87.9% 0.169 91.605);
+--text-base: 1rem;
+--color-orange-950: oklch(26.6% 0.079 36.259);
+--color-cyan-500: oklch(71.5% 0.143 215.221);
+--color-stone-50: oklch(98.5% 0.001 106.423);
+--tracking-wide: 0.025em;
+--blur-3xl: 64px;
+--color-purple-500: oklch(62.7% 0.265 303.9);
+--ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+--color-blue-800: oklch(42.4% 0.199 265.638);
+--color-pink-400: oklch(71.8% 0.202 349.761);
+--color-rose-900: oklch(41% 0.159 10.272);
+--color-yellow-500: oklch(79.5% 0.184 86.047);
+--container-2xl: 42rem;
+--color-amber-600: oklch(66.6% 0.179 58.318);
+--shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+--color-teal-200: oklch(91% 0.096 180.426);
+--breakpoint-lg: 64rem;
+--color-pink-950: oklch(28.4% 0.109 3.907);
+--color-amber-200: oklch(92.4% 0.12 95.746);
+--color-emerald-300: oklch(84.5% 0.143 164.978);
+--color-sky-400: oklch(74.6% 0.16 232.661);
+--color-neutral-500: oklch(55.6% 0 0);
+--color-sky-100: oklch(95.1% 0.026 236.824);
+--animate-ping: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+--default-mono-font-feature-settings: var(--font-mono--font-feature-settings, initial);
+--shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+--color-pink-700: oklch(52.5% 0.223 3.958);
+--color-red-800: oklch(44.4% 0.177 26.899);
+--radius: 0.25rem;
+--blur-md: 12px;
+--color-green-50: oklch(98.2% 0.018 155.826);
+--perspective-normal: 500px;
+--color-blue-400: oklch(70.7% 0.165 254.624);
+--color-emerald-100: oklch(95% 0.052 163.051);
+--shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+--color-pink-600: oklch(59.2% 0.249 0.584);
+--text-base--line-height: calc(1.5 / 1);
+--color-sky-800: oklch(44.3% 0.11 240.79);
+--leading-snug: 1.375;
+--color-amber-50: oklch(98.7% 0.022 95.277);
+--color-purple-900: oklch(38.1% 0.176 304.987);
+--default-ring-width: 1px;
+--color-gray-100: oklch(96.7% 0.003 264.542);
+--color-neutral-200: oklch(92.2% 0 0);
+--default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+--tracking-tighter: -0.05em;
+--color-blue-900: oklch(37.9% 0.146 265.522);
+--container-3xs: 16rem;
+--text-xs: 0.75rem;
+--color-emerald-50: oklch(97.9% 0.021 166.113);
+--radius-2xl: 1rem;
+--color-green-500: oklch(72.3% 0.219 149.579);
+--text-5xl: 3rem;
+--color-stone-900: oklch(21.6% 0.006 56.043);
+--breakpoint-2xl: 96rem;
+--color-lime-200: oklch(93.8% 0.127 124.321);
+--font-weight-extrabold: 800;
+--container-2xs: 18rem;
+--color-teal-900: oklch(38.6% 0.063 188.416);
+--color-indigo-50: oklch(96.2% 0.018 272.314);
+--color-sky-200: oklch(90.1% 0.058 230.902);
+--color-cyan-900: oklch(39.8% 0.07 227.392);
+--color-sky-500: oklch(68.5% 0.169 237.323);
+--drop-shadow-2xl: 0 25px 25px rgb(0 0 0 / 0.15);
+--color-emerald-400: oklch(76.5% 0.177 163.223);
+--color-rose-500: oklch(64.5% 0.246 16.439);
+--text-shadow-sm: 0px 1px 0px rgb(0 0 0 / 0.075), 0px 1px 1px rgb(0 0 0 / 0.075), 0px 2px 2px rgb(0 0 0 / 0.075);
+--color-green-200: oklch(92.5% 0.084 155.995);
+--color-stone-600: oklch(44.4% 0.011 73.639);
+--color-cyan-100: oklch(95.6% 0.045 203.388);
+--font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+--default-ring-color: currentcolor;
+--color-neutral-900: oklch(20.5% 0 0);
+--perspective-near: 300px;
+--inset-shadow-xs: inset 0 1px 1px rgb(0 0 0 / 0.05);
+--color-sky-300: oklch(82.8% 0.111 230.318);
+--color-slate-950: oklch(12.9% 0.042 264.695);
+--default-font-family: var(--font-sans, initial);
+--container-7xl: 80rem;
+--color-fuchsia-800: oklch(45.2% 0.211 324.591);
+--font-weight-black: 900;
+--color-zinc-700: oklch(37% 0.013 285.805);
+--color-indigo-100: oklch(93% 0.034 272.788);
+--color-violet-200: oklch(89.4% 0.057 293.283);
+--color-stone-500: oklch(55.3% 0.013 58.071);
+--color-gray-800: oklch(27.8% 0.033 256.848);
+--color-green-800: oklch(44.8% 0.119 151.328);
+}
+@keyframes ping {
+    75%,
+    100% {
+      transform: scale(2);
+      opacity: 0;
+    }
+  }
+@keyframes bounce {
+    0%,
+    100% {
+      transform: translateY(-25%);
+      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    }
+
+    50% {
+      transform: none;
+      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+    }
+  }
+@keyframes pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+@keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+.flex{
+
+    display: flex;
+
+}
+.flex-col{
+
+    flex-direction: column;
+
+}
+.md\:flex-row{
+@media (width >= 48rem) {
+
+    flex-direction: row;
+
+}
+}
+.h-screen{
+
+    height: 100vw;
+
+}
+.w-full{
+
+    width: 100%;
+
+}
+.bg-\[\#282828\]{
+    background-color: #282828;
+}
+.overflow-hidden{
+
+    overflow: hidden;
+
+}
+.font-sans{
+    font-family: ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+}
+.text-\[\#ebdbb2\]{
+    color: #ebdbb2;
+}
+.md\:hidden{
+@media (width >= 48rem) {
+
+    display: none;
+
+}
+}
+.items-center{
+
+    align-items: center;
+
+}
+.justify-between{
+
+    justify-content: space-between;
+
+}
+.p-4{
+    padding: calc(var(--spacing) * 4);
+}
+.bg-\[\#1d2021\]{
+    background-color: #1d2021;
+}
+.border-b{
+
+    border-bottom-width: 1px;
+
+}
+.border-\[\#3c3836\]{
+    border-color: #3c3836;
+}
+.shrink-0{
+    flex-shrink: 0;
+}
+.z-40{
+    z-index: 40;
+}
+.text-lg{
+    font-size: 1.125rem; line-height: calc(1.75 / 1.125);
+}
+.font-bold{
+
+    font-weight: 700;
+
+}
+.text-\[\#fabd2f\]{
+    color: #fabd2f;
+}
+.tracking-wide{
+
+    letter-spacing: var(--tracking-wide);
+
+}
+.-\[\#ebdbb2\]{
+-#ebdbb2
+}
+.\[\#ebdbb2\]{
+#ebdbb2
+}
+.focus\:outline-none{
+&:focus {
+    outline-style: none;
+
+
+}
+}
+.p-2{
+    padding: calc(var(--spacing) * 2);
+}
+.hover\:bg-\[\#32302f\]{
+
+    @media (hover: hover) {
+        &:hover {
+                background-color: #32302f;
+        }
+    }
+
+}
+.w-6{
+    width: calc(var(--spacing) * 6);
+}
+.h-6{
+    height: calc(var(--spacing) * 6);
+}
+.h16{
+    height: calc(var(--spacing) * 6);
+}
+.fixed{
+
+    position: fixed;
+
+}
+.inset-0{
+    inset: calc(var(--spacing) * 0);
+}
+.-\[\#1d2021\]{
+-#1d2021
+}
+.opacity-90{
+    opacity: 90%;
+}
+.hidden{
+
+    display: none;
+
+}
+.opacity-0{
+    opacity: 0%;
+}
+.inset-y-0{
+    inset-block: calc(var(--spacing) * 0);
+}
+.left-0{
+    left: calc(var(--spacing) * 0);
+}
+.z-50{
+    z-index: 50;
+}
+.w-72{
+    width: calc(var(--spacing) * 72);
+}
+.h-full{
+
+    height: 100%;
+
+}
+.\[\#1d2021\]{
+#1d2021
+}
+.border-r{
+
+    border-right-width: 1px;
+
+}
+.-\[\#3c3836\]{
+-#3c3836
+}
+.transform{
+
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;
+    transition-timing-function: var(--default-transition-timing-function); /* cubic-bezier(0.4, 0, 0.2, 1) */
+    transition-duration: var(--default-transition-duration); /* 150ms */
+
+}
+.-translate-x-full{
+
+    --tw-translate-x: -100%;
+    translate: var(--tw-translate-x, 0) var(--tw-translate-y, 0);
+
+}
+.duration-300{
+    transition-duration: 300ms;
+}
+.ease-in-out{
+
+    transition-timing-function: var(--ease-in-out); /* cubic-bezier(0.4, 0, 1, 1) */
+
+}
+.md\:relative{
+@media (width >= 48rem) {
+
+    position: relative;
+
+}
+}
+.md\:translate-x-0{
+@media (width >= 48rem) {
+    --tw-translate-x: calc(var(--spacing) * 0); translate: var(--tw-translate-x, 0) var(--tw-translate-y, 0);
+}
+}
+.md\:inset-auto{
+@media (width >= 48rem) {
+
+    inset: auto;
+
+}
+}
+.shadow-2xl{
+    --tw-shadow-color: 0 25px 50px -12px rgb(0 0 0 / 0.25); box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+}
+.md\:shadow-none{
+@media (width >= 48rem) {
+
+    --tw-shadow-color: 0 0 #0000;
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+
+}
+}
+.p-5{
+    padding: calc(var(--spacing) * 5);
+}
+.\[\#3c3836\]{
+#3c3836
+}
+.mb-3{
+    margin-bottom: calc(var(--spacing) * 3);
+}
+.text-xl{
+    font-size: 1.25rem; line-height: calc(1.75 / 1.25);
+}
+.-\[\#fabd2f\]{
+-#fabd2f
+}
+.md\:block{
+@media (width >= 48rem) {
+
+    display: block;
+
+}
+}
+.\[\#fabd2f\]{
+#fabd2f
+}
+.text-\[\#a89984\]{
+    color: #a89984;
+}
+.hover\:text-\[\#fabd2f\]{
+
+    @media (hover: hover) {
+        &:hover {
+                color: #fabd2f;
+        }
+    }
+
+}
+.px-3{
+    padding-inline: calc(var(--spacing) * 3);
+}
+.py-2{
+    padding-block: calc(var(--spacing) * 2);
+}
+.bg-\[\#32302f\]{
+    background-color: #32302f;
+}
+.border{
+
+    border-width: 1px;
+
+}
+.border-\[\#504945\]{
+    border-color: #504945;
+}
+.-\[\#a89984\]{
+-#a89984
+}
+.outline-none{
+
+    outline-style: none;
+
+}
+.focus\:border-\[\#d79921\]{
+&:focus {    border-color: #d79921;
+
+}
+}
+.focus\:ring-1{
+&:focus {    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, var(--default-ring-color, currentcolor)); box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+
+}
+}
+.focus\:ring-\[\#d79921\]{
+&:focus {    --tw-ring-color: #d79921; box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+
+}
+}
+.text-sm{
+    font-size: 0.875rem; line-height: calc(1.25 / 0.875);
+}
+.flex-1{
+    flex: 1;
+}
+.overflow-y-auto{
+
+    overflow-y: auto;
+
+}
+.space-y-8{
+    & > :not(:last-child) { --tw-space-x-reverse: 0; margin-block-start: calc( calc(var(--spacing) * 8) * var(--tw-space-x-reverse) ); margin-block-end: calc( calc(var(--spacing) * 8) * calc(1 - var(--tw-space-x-reverse)) ); }
+}
+.mb-\[\#504945\]{
+    margin-bottom: #504945;
+}
+.uppercase{
+
+    text-transform: uppercase;
+
+}
+.tracking-wider{
+
+    letter-spacing: var(--tracking-wider);
+
+}
+.text-xs{
+    font-size: 0.75rem; line-height: calc(1 / 0.75);
+}
+.ml-2{
+    margin-left: calc(var(--spacing) * 2);
+}
+.space-y-0\.5{
+    & > :not(:last-child) { --tw-space-x-reverse: 0; margin-block-start: calc( calc(var(--spacing) * 0.5) * var(--tw-space-x-reverse) ); margin-block-end: calc( calc(var(--spacing) * 0.5) * calc(1 - var(--tw-space-x-reverse)) ); }
+}
+.text-\[\#8ec07c\]{
+    color: #8ec07c;
+}
+.ring{
+
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(var(--default-ring-width, 1px) + var(--tw-ring-offset-width)) var(--tw-ring-color, var(--default-ring-color, currentcolor));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+
+}
+.block{
+
+    display: block;
+
+}
+.\[\#a89984\]{
+#a89984
+}
+.hover\:text-\[\#8ec07c\]{
+
+    @media (hover: hover) {
+        &:hover {
+                color: #8ec07c;
+        }
+    }
+
+}
+.-\[\#32302f\]{
+-#32302f
+}
+.px-2{
+    padding-inline: calc(var(--spacing) * 2);
+}
+.py-1\.5{
+    padding-block: calc(var(--spacing) * 1.5);
+}
+.duration-200{
+    transition-duration: 200ms;
+}
+.-\[\#8ec07c\]{
+-#8ec07c
+}
+.\[\#32302f\]{
+#32302f
+}
+.text-\[\#b8bb26\]{
+    color: #b8bb26;
+}
+.hover\:text-\[\#b8bb26\]{
+
+    @media (hover: hover) {
+        &:hover {
+                color: #b8bb26;
+        }
+    }
+
+}
+.-\[\#b8bb26\]{
+-#b8bb26
+}
+.-\[\#282828\]{
+-#282828
+}
+.scroll-smooth{
+
+    scroll-behavior: smooth;
+
+}
+.-\[\#504945\]{
+-#504945
+}
+.relative{
+
+    position: relative;
+
+}
+.max-w-5xl{
+    max-width: 64rem;
+}
+.mx-auto{
+    margin-inline: auto;
+}
+.p-6{
+    padding: calc(var(--spacing) * 6);
+}
+.md\:p-10{
+@media (width >= 48rem) {
+    padding: calc(var(--spacing) * 10);
+}
+}
+.space-y-12{
+    & > :not(:last-child) { --tw-space-x-reverse: 0; margin-block-start: calc( calc(var(--spacing) * 12) * var(--tw-space-x-reverse) ); margin-block-end: calc( calc(var(--spacing) * 12) * calc(1 - var(--tw-space-x-reverse)) ); }
+}
+.md\:space-y-16{
+@media (width >= 48rem) {
+    & > :not(:last-child) { --tw-space-x-reverse: 0; margin-block-start: calc( calc(var(--spacing) * 16) * var(--tw-space-x-reverse) ); margin-block-end: calc( calc(var(--spacing) * 16) * calc(1 - var(--tw-space-x-reverse)) ); }
+}
+}
+.pb-24{
+    padding-bottom: calc(var(--spacing) * 24);
+}
+.text-2xl{
+    font-size: 1.5rem; line-height: calc(2 / 1.5);
+}
+.md\:text-3xl{
+@media (width >= 48rem) {
+    font-size: 1.875rem; line-height: calc(2.25 / 1.875);
+}
+}
+.mb-6{
+    margin-bottom: calc(var(--spacing) * 6);
+}
+.md\:mb-8{
+@media (width >= 48rem) {
+    margin-bottom: calc(var(--spacing) * 8);
+}
+}
+.pb-3{
+    padding-bottom: calc(var(--spacing) * 3);
+}
+.space-y-16{
+    & > :not(:last-child) { --tw-space-x-reverse: 0; margin-block-start: calc( calc(var(--spacing) * 16) * var(--tw-space-x-reverse) ); margin-block-end: calc( calc(var(--spacing) * 16) * calc(1 - var(--tw-space-x-reverse)) ); }
+}
+.text-3xl{
+    font-size: 1.875rem; line-height: calc(2.25 / 1.875);
+}
+.\[\#8ec07c\]{
+#8ec07c
+}
+.mb-8{
+    margin-bottom: calc(var(--spacing) * 8);
+}
+.scroll-mt-24{
+    scroll-margin-top: calc(var(--spacing) * 24);
+}
+.gap-3{
+    gap: calc(var(--spacing) * 3);
+}
+.mb-4{
+    margin-bottom: calc(var(--spacing) * 4);
+}
+.text-\[\#1d2021\]{
+    color: #1d2021;
+}
+.bg-\[\#8ec07c\]{
+    background-color: #8ec07c;
+}
+.py-0\.5{
+    padding-block: calc(var(--spacing) * 0.5);
+}
+.md\:text-2xl{
+@media (width >= 48rem) {
+    font-size: 1.5rem; line-height: calc(2 / 1.5);
+}
+}
+.tracking-tight{
+
+    letter-spacing: var(--tracking-tight);
+
+}
+.break-all{
+
+    word-break: break-all;
+
+}
+.max-w-none{
+    max-width: none;
+}
+.opacity-80{
+    opacity: 80%;
+}
+.mb-2{
+    margin-bottom: calc(var(--spacing) * 2);
+}
+.mt-8{
+    margin-top: calc(var(--spacing) * 8);
+}
+.pl-4{
+    padding-left: calc(var(--spacing) * 4);
+}
+.md\:pl-5{
+@media (width >= 48rem) {
+    padding-left: calc(var(--spacing) * 5);
+}
+}
+.border-l-2{
+    border-left-width: 2px;
+}
+.\[\#504945\]{
+#504945
+}
+.text-\[\#fe8019\]{
+    color: #fe8019;
+}
+.tracking-widest{
+
+    letter-spacing: var(--tracking-widest);
+
+}
+.-mt-24{
+    margin-top: calc(var(--spacing) * -24);
+}
+.flex-wrap{
+
+    flex-wrap: wrap;
+
+}
+.p-3{
+    padding: calc(var(--spacing) * 3);
+}
+.md\:text-xl{
+@media (width >= 48rem) {
+    font-size: 1.25rem; line-height: calc(1.75 / 1.25);
+}
+}
+.font-mono{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+}
+.overflow-x-auto{
+
+    overflow-x: auto;
+
+}
+.shadow-sm{
+    --tw-shadow-color: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+}
+.whitespace-pre{
+
+    white-space: pre;
+
+}
+.mt-24{
+    margin-top: calc(var(--spacing) * 24);
+}
+.w-sm{
+    width: 24rem;
+}
+.lowercase{
+
+    text-transform: lowercase;
+
+}
+.\[\]{
+
+}
+.pl-5{
+    padding-left: calc(var(--spacing) * 5);
+}
+.-\[\#fe8019\]{
+-#fe8019
+}
+.\[\#b8bb26\]{
+#b8bb26
+}
+.md\:space-y-10{
+@media (width >= 48rem) {
+    & > :not(:last-child) { --tw-space-x-reverse: 0; margin-block-start: calc( calc(var(--spacing) * 10) * var(--tw-space-x-reverse) ); margin-block-end: calc( calc(var(--spacing) * 10) * calc(1 - var(--tw-space-x-reverse)) ); }
+}
+}
+.bg-\[\#b8bb26\]{
+    background-color: #b8bb26;
+}
+.text-\[\#fbf1c7\]{
+    color: #fbf1c7;
+}
+.-\[\#fbf1c7\]{
+-#fbf1c7
+}
+.text-center{
+
+    text-align: center;
+
+}
+.py-12{
+    padding-block: calc(var(--spacing) * 12);
+}
+.p-10{
+    padding: calc(var(--spacing) * 10);
+}
+.border-t{
+
+    border-top-width: 1px;
+
+}
+.mt-20{
+    margin-top: calc(var(--spacing) * 20);
+}
+
+
+                </style>
+            </head>
+            <body>
+                
+        <div class="flex flex-col md:flex-row h-screen w-full bg-[#282828] overflow-hidden font-sans text-[#ebdbb2]">
+
+            <div class="md:hidden flex items-center justify-between p-4 bg-[#1d2021] border-b border-[#3c3836] shrink-0 z-40">
+                <h1 class="text-lg font-bold text-[#fabd2f] tracking-wide">Duck<span class="text-[#ebdbb2]">Docs</span></h1>
+                <button onclick="toggleSidebar()" class="text-[#ebdbb2] focus:outline-none p-2 rounded hover:bg-[#32302f]">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <div id="sidebar-overlay" onclick="closeSidebar()" class="fixed inset-0 bg-[#1d2021] bg-opacity-90 z-40 hidden transition-opacity opacity-0 md:hidden glass-blur"></div>
+
+            <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-72 h-full bg-[#1d2021] border-r border-[#3c3836] flex flex-col transform -translate-x-full transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:inset-auto shadow-2xl md:shadow-none shrink-0">
+
+                <div class="p-5 border-b border-[#3c3836] flex justify-between items-center bg-[#1d2021] shrink-0">
+                    <div class="w-full">
+                        <div class="flex justify-between items-center mb-3">
+                            <h1 class="text-xl font-bold text-[#fabd2f] tracking-wide hidden md:block">Duck<span class="text-[#ebdbb2]">Docs</span></h1>
+                            <h1 class="text-xl font-bold text-[#fabd2f] tracking-wide md:hidden">Menu</h1>
+
+                            <button onclick="closeSidebar()" class="md:hidden text-[#a89984] hover:text-[#fabd2f]">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <input
+                            type="text"
+                            id="search-input"
+                            placeholder="Search docs..."
+                            class="w-full px-3 py-2 bg-[#32302f] border border-[#504945] rounded text-[#ebdbb2] placeholder-[#a89984] focus:outline-none focus:border-[#d79921] focus:ring-1 focus:ring-[#d79921] transition-all text-sm"
+                            onkeyup="filterDocs()"
+                        />
+                    </div>
+                </div>
+
+                <nav class="flex-1 overflow-y-auto p-4 space-y-8 scrollbar-thin scrollbar-thumb-[#504945] scrollbar-track-transparent" id="sidebar-nav">
+                    
+        <div>
+            <h3 class="font-bold text-[#fabd2f] uppercase tracking-wider text-xs mb-3 ml-2">Structs</h3>
+            <ul class="space-y-0.5 text-sm"></ul>
+        </div>
+        <div>
+            <h3 class="font-bold text-[#8ec07c] uppercase tracking-wider text-xs mb-3 ml-2">Extensions</h3>
+            <ul class="space-y-0.5 text-sm"><li><a href='#ext-String' class='block text-[#a89984] hover:text-[#8ec07c] hover:bg-[#32302f] px-2 py-1.5 rounded transition-colors duration-200'>String</a></li><li><a href='#ext-String' class='block text-[#a89984] hover:text-[#8ec07c] hover:bg-[#32302f] px-2 py-1.5 rounded transition-colors duration-200'>String</a></li></ul>
+        </div>
+        <div>
+            <h3 class="font-bold text-[#b8bb26] uppercase tracking-wider text-xs mb-3 ml-2">Functions</h3>
+            <ul class="space-y-0.5 text-sm"><li><a href='#fn-string_____to_int' class='block text-[#a89984] hover:text-[#b8bb26] hover:bg-[#32302f] px-2 py-1.5 rounded transition-colors duration-200'>string_____to_int</a></li><li><a href='#fn-std_____string_____to_int' class='block text-[#a89984] hover:text-[#b8bb26] hover:bg-[#32302f] px-2 py-1.5 rounded transition-colors duration-200'>std_____string_____to_int</a></li></ul>
+        </div>
+        
+                </nav>
+            </aside>
+
+            <main class="flex-1 h-full overflow-y-auto bg-[#282828] scroll-smooth scrollbar-thin scrollbar-thumb-[#504945] relative w-full">
+                <div class="max-w-5xl mx-auto p-6 md:p-10 space-y-12 md:space-y-16 pb-24" id="main-content">
+                    <section>
+                        <h2 class="text-2xl md:text-3xl font-bold text-[#fabd2f] mb-6 md:mb-8 border-b border-[#3c3836] pb-3">Structs</h2>
+                        <div class="space-y-12 md:space-y-16">
+                            
+                        </div>
+                    </section>
+
+                    <section>
+                        <h2 class="text-2xl md:text-3xl font-bold text-[#8ec07c] mb-6 md:mb-8 border-b border-[#3c3836] pb-3">Extensions</h2>
+                        <div class="space-y-12 md:space-y-16">
+                            
+        <div id="ext-String" class="doc-item scroll-mt-24" data-name="String">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="text-xs font-bold text-[#1d2021] bg-[#8ec07c] px-2 py-0.5 rounded uppercase tracking-wide">Extension</span>
+                <h3 class="text-xl md:text-2xl font-bold text-[#8ec07c] tracking-tight break-all">on String</h3>
+            </div>
+            <div class="prose max-w-none mb-4 text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>these are the main string utilities of the duck std library</p>
+            </div>
+            
+            <div class="mt-8 pl-4 md:pl-5 border-l-2 border-[#504945]">
+                <h4 class="text-sm font-bold text-[#fe8019] uppercase tracking-widest mb-6">Extension Methods</h4>
+                <div class="space-y-8">
+                    
+        <div id="method-len" class="doc-item scroll-mt-24" data-name="len">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">len</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> Int</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the length of the string self</p>
+            </div>
+        </div>
+        
+
+        <div id="method-count" class="doc-item scroll-mt-24" data-name="count">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">count</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> Int</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the count of actual utf8 runes in the string</p>
+            </div>
+        </div>
+        
+
+        <div id="method-is_empty" class="doc-item scroll-mt-24" data-name="is_empty">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">is_empty</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> Bool</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns if the string is empty</p>
+            </div>
+        </div>
+        
+
+        <div id="method-contains" class="doc-item scroll-mt-24" data-name="contains">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">contains</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(substr: String) -> Bool</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns if the string contains the given substr</p>
+            </div>
+        </div>
+        
+
+        <div id="method-starts_with" class="doc-item scroll-mt-24" data-name="starts_with">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">starts_with</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(prefix: String) -> Bool</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns if the string starts with given prefix</p>
+            </div>
+        </div>
+        
+
+        <div id="method-ends_with" class="doc-item scroll-mt-24" data-name="ends_with">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">ends_with</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(suffix: String) -> Bool</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns if the string ends with the given suffix</p>
+            </div>
+        </div>
+        
+
+        <div id="method-index_of" class="doc-item scroll-mt-24" data-name="index_of">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">index_of</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(substr: String) -> Int | .none</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the index of the given substr or .none if not found</p>
+            </div>
+        </div>
+        
+
+        <div id="method-to_upper" class="doc-item scroll-mt-24" data-name="to_upper">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">to_upper</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> String</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the string in uppercase</p>
+            </div>
+        </div>
+        
+
+        <div id="method-to_lower" class="doc-item scroll-mt-24" data-name="to_lower">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">to_lower</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> String</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the string in lowercase</p>
+            </div>
+        </div>
+        
+
+        <div id="method-trim" class="doc-item scroll-mt-24" data-name="trim">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">trim</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> String</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the string with trimmed space at the beginning and end of the string</p>
+            </div>
+        </div>
+        
+
+        <div id="method-replace" class="doc-item scroll-mt-24" data-name="replace">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">replace</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(old_s: String, new_s: String) -> String</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the string with given old_s replaced with given new_s</p>
+            </div>
+        </div>
+        
+
+        <div id="method-substring" class="doc-item scroll-mt-24" data-name="substring">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">substring</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(start: Int, end: Int) -> String | .err_out_of_bounds</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns a substring of the string</p>
+            </div>
+        </div>
+        
+
+        <div id="method-repeat" class="doc-item scroll-mt-24" data-name="repeat">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">repeat</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(count: Int) -> String</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the string repeated</p>
+            </div>
+        </div>
+        
+
+        <div id="method-to_int" class="doc-item scroll-mt-24" data-name="to_int">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">to_int</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> Int | .err_parsing</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the string as a int or .err_parsing if couldn't parse to int</p>
+            </div>
+        </div>
+        
+
+        <div id="method-to_bytes" class="doc-item scroll-mt-24" data-name="to_bytes">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">to_bytes</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> Int[]</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns a byte array of the string</p>
+            </div>
+        </div>
+        
+                </div>
+            </div>
+            
+        </div>
+        
+
+        <div id="ext-String" class="doc-item scroll-mt-24" data-name="String">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="text-xs font-bold text-[#1d2021] bg-[#8ec07c] px-2 py-0.5 rounded uppercase tracking-wide">Extension</span>
+                <h3 class="text-xl md:text-2xl font-bold text-[#8ec07c] tracking-tight break-all">on String</h3>
+            </div>
+            <div class="prose max-w-none mb-4 text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>these are the main string utilities of the duck std library</p>
+            </div>
+            
+            <div class="mt-8 pl-4 md:pl-5 border-l-2 border-[#504945]">
+                <h4 class="text-sm font-bold text-[#fe8019] uppercase tracking-widest mb-6">Extension Methods</h4>
+                <div class="space-y-8">
+                    
+        <div id="method-len" class="doc-item scroll-mt-24" data-name="len">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">len</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> Int</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the length of the string self</p>
+            </div>
+        </div>
+        
+
+        <div id="method-count" class="doc-item scroll-mt-24" data-name="count">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">count</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> Int</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the count of actual utf8 runes in the string</p>
+            </div>
+        </div>
+        
+
+        <div id="method-is_empty" class="doc-item scroll-mt-24" data-name="is_empty">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">is_empty</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> Bool</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns if the string is empty</p>
+            </div>
+        </div>
+        
+
+        <div id="method-contains" class="doc-item scroll-mt-24" data-name="contains">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">contains</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(substr: String) -> Bool</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns if the string contains the given substr</p>
+            </div>
+        </div>
+        
+
+        <div id="method-starts_with" class="doc-item scroll-mt-24" data-name="starts_with">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">starts_with</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(prefix: String) -> Bool</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns if the string starts with given prefix</p>
+            </div>
+        </div>
+        
+
+        <div id="method-ends_with" class="doc-item scroll-mt-24" data-name="ends_with">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">ends_with</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(suffix: String) -> Bool</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns if the string ends with the given suffix</p>
+            </div>
+        </div>
+        
+
+        <div id="method-index_of" class="doc-item scroll-mt-24" data-name="index_of">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">index_of</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(substr: String) -> Int | .none</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the index of the given substr or .none if not found</p>
+            </div>
+        </div>
+        
+
+        <div id="method-to_upper" class="doc-item scroll-mt-24" data-name="to_upper">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">to_upper</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> String</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the string in uppercase</p>
+            </div>
+        </div>
+        
+
+        <div id="method-to_lower" class="doc-item scroll-mt-24" data-name="to_lower">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">to_lower</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> String</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the string in lowercase</p>
+            </div>
+        </div>
+        
+
+        <div id="method-trim" class="doc-item scroll-mt-24" data-name="trim">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">trim</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> String</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the string with trimmed space at the beginning and end of the string</p>
+            </div>
+        </div>
+        
+
+        <div id="method-replace" class="doc-item scroll-mt-24" data-name="replace">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">replace</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(old_s: String, new_s: String) -> String</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the string with given old_s replaced with given new_s</p>
+            </div>
+        </div>
+        
+
+        <div id="method-substring" class="doc-item scroll-mt-24" data-name="substring">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">substring</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(start: Int, end: Int) -> String | .err_out_of_bounds</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns a substring of the string</p>
+            </div>
+        </div>
+        
+
+        <div id="method-repeat" class="doc-item scroll-mt-24" data-name="repeat">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">repeat</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(count: Int) -> String</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the string repeated</p>
+            </div>
+        </div>
+        
+
+        <div id="method-to_int" class="doc-item scroll-mt-24" data-name="to_int">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">to_int</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> Int | .err_parsing</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns the string as a int or .err_parsing if couldn't parse to int</p>
+            </div>
+        </div>
+        
+
+        <div id="method-to_bytes" class="doc-item scroll-mt-24" data-name="to_bytes">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#ebdbb2] font-mono tracking-tight break-all">to_bytes</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn() -> Int[]</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns a byte array of the string</p>
+            </div>
+        </div>
+        
+                </div>
+            </div>
+            
+        </div>
+        
+                        </div>
+                    </section>
+
+                    <section>
+                        <h2 class="text-2xl md:text-3xl font-bold text-[#b8bb26] mb-6 md:mb-8 border-b border-[#3c3836] pb-3">Global Functions</h2>
+                        <div class="space-y-8 md:space-y-10">
+                            
+        <div id="fn-string_____to_int" class="doc-item scroll-mt-24" data-name="string_____to_int">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#1d2021] bg-[#b8bb26] px-2 py-0.5 rounded uppercase tracking-wide">Fn</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#fbf1c7] font-mono tracking-tight break-all">string_____to_int</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(x: String) -> Int</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns x in uppercase</p>
+            </div>
+        </div>
+        
+
+        <div id="fn-std_____string_____to_int" class="doc-item scroll-mt-24" data-name="std_____string_____to_int">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <span class="text-xs font-bold text-[#1d2021] bg-[#b8bb26] px-2 py-0.5 rounded uppercase tracking-wide">Fn</span>
+                <h3 class="text-lg md:text-xl font-bold text-[#fbf1c7] font-mono tracking-tight break-all">std_____string_____to_int</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c] whitespace-pre">fn(x: String) -> Int</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                <p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>returns x in uppercase</p>
+            </div>
+        </div>
+        
+                        </div>
+                    </section>
+                    
+        <div id="no-results" class="hidden text-center py-12 text-[#a89984]">
+            <p class="text-xl">No results found matching your search.</p>
+        </div>
+    
+                </div>
+
+                <footer class="p-10 text-center text-[#a89984] text-sm border-t border-[#3c3836] mt-20">
+                    Generated by Dargo
+                </footer>
+            </main>
+        </div>
+        
+                
+        <script>
+            function filterDocs() {
+                const input = document.getElementById('search-input');
+                const filter = input.value.toLowerCase();
+
+                const sidebarLinks = document.querySelectorAll('#sidebar-nav a');
+                sidebarLinks.forEach(link => {
+                    const text = link.innerText.toLowerCase();
+                    link.parentElement.style.display = text.includes(filter) ? "" : "none";
+                });
+
+                const contentItems = document.querySelectorAll('.doc-item');
+                let hasVisibleItems = false;
+
+                contentItems.forEach(item => {
+                    const name = item.getAttribute('data-name').toLowerCase();
+                    if (name.includes(filter)) {
+                        item.style.display = "";
+                        hasVisibleItems = true;
+                    } else {
+                        item.style.display = "none";
+                    }
+                });
+
+                document.getElementById('no-results').style.display = hasVisibleItems ? 'none' : 'block';
+            }
+
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+
+            function toggleSidebar() {
+                const isClosed = sidebar.classList.contains('-translate-x-full');
+                if (isClosed) {
+                    openSidebar();
+                } else {
+                    closeSidebar();
+                }
+            }
+
+            function openSidebar() {
+                sidebar.classList.remove('-translate-x-full');
+                overlay.classList.remove('hidden');
+                setTimeout(() => {
+                    overlay.classList.remove('opacity-0');
+                }, 10);
+            }
+
+            function closeSidebar() {
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.add('opacity-0');
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 300);
+            }
+
+            document.querySelectorAll('#sidebar-nav a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth < 768) {
+                        closeSidebar();
+                    }
+                });
+            });
+        </script>
+    
+            </body>
+        </html>

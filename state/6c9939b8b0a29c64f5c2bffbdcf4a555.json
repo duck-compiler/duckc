@@ -1,7 +1,7 @@
 {
     "id": "6c9939b8b0a29c64f5c2bffbdcf4a555",
     "file_path": "../../src/parse/source_file_parser.rs",
-    "line_number": 1503,
+    "line_number": 1504,
     "title": "respect the new way to create structs",
     "tag": "todo",
     "module_tag": "parse",

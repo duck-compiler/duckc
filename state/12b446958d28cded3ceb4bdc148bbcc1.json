@@ -1,7 +1,7 @@
 {
     "id": "12b446958d28cded3ceb4bdc148bbcc1",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 1481,
+    "line_number": 1484,
     "title": "produce snapshot for the given error",
     "tag": "todo",
     "module_tag": "semantics",

@@ -1,7 +1,7 @@
 {
     "id": "0086b69c22ddbacd6a9a2c01661b3395",
     "file_path": "../../src/parse/function_parser.rs",
-    "line_number": 54,
+    "line_number": 55,
     "title": "retrieve correct span for function defintions typeexpr",
     "tag": "todo",
     "module_tag": "parse",
