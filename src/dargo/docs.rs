@@ -2,10 +2,10 @@ use colored::Colorize;
 use duckwind::EmitEnv;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use std::{fs::{self, File, OpenOptions}, io::Write, path::{Path, PathBuf}, sync::mpsc};
+use std::{fs, path::{Path, PathBuf}, sync::mpsc};
 
 use crate::{
-    cli::go_cli::GoCliErrKind, dargo::cli::DocsGenerateArgs, emit::function, lex, parse_src_file, tags::Tag, typecheck
+    cli::go_cli::GoCliErrKind, dargo::cli::DocsGenerateArgs, lex, parse_src_file, tags::Tag, typecheck
 };
 
 #[derive(Debug)]
@@ -32,6 +32,13 @@ pub struct DocsField {
     // pub comments: Vec<String>,
     pub field_name: String,
     pub type_annotation: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExtensionsDoc {
+    pub target_type_annotation: String,
+    pub comments: Vec<String>,
+    pub function_docs: Vec<FunctionDoc>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -127,7 +134,7 @@ pub fn generate(generate_args: DocsGenerateArgs) -> Result<DocsOutput, (String, 
     let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
 
     let (tailwind_worker_send, tailwind_worker_receive) = mpsc::channel::<String>();
-    let (tailwind_result_send, tailwind_result_receive) = mpsc::channel::<String>();
+    let (tailwind_result_send, _tailwind_result_receive) = mpsc::channel::<String>();
 
     let tailwind_prefix = None::<String>;
 
@@ -148,6 +155,7 @@ pub fn generate(generate_args: DocsGenerateArgs) -> Result<DocsOutput, (String, 
 
     let mut fn_docs = vec![];
     let mut struct_docs = vec![];
+    let mut extensions_docs = vec![];
 
     let type_env = typecheck(&mut src_file_ast, &tailwind_worker_send);
     type_env.struct_definitions.iter().for_each(|struct_definition| {
@@ -178,6 +186,30 @@ pub fn generate(generate_args: DocsGenerateArgs) -> Result<DocsOutput, (String, 
         }
     });
 
+    src_file_ast.extensions_defs.iter().for_each(|extensions_def| {
+        let mut fn_docs = vec![];
+        extensions_def
+            .function_definitions
+            .iter()
+            .for_each(|(function_def, _)| {
+                if !function_def.comments.is_empty() {
+                    fn_docs.push(FunctionDoc {
+                        function_name: function_def.name.clone(),
+                        function_annotation: function_def.type_expr().0.as_clean_user_faced_type_name(),
+                        comments: function_def.comments.iter().map(|c| c.0.clone()).collect(),
+                    });
+                }
+            });
+
+        if !(fn_docs.is_empty() && extensions_def.doc_comments.is_empty()) {
+            extensions_docs.push(ExtensionsDoc {
+                target_type_annotation: extensions_def.target_type_expr.0.as_clean_user_faced_type_name(),
+                function_docs: fn_docs,
+                comments: extensions_def.doc_comments.iter().map(|c| c.0.clone()).collect(),
+            });
+        }
+    });
+
     type_env.function_definitions.iter().for_each(|function_def| {
         if !function_def.comments.is_empty() {
             fn_docs.push(FunctionDoc {
@@ -201,8 +233,8 @@ pub fn generate(generate_args: DocsGenerateArgs) -> Result<DocsOutput, (String, 
     let json_output = serde_json::to_string(&fn_docs).unwrap();
     dbg!(json_output);
 
-    let html = layout_html(&fn_docs, &struct_docs);
-    println!("{}", layout_html(&fn_docs, &struct_docs));
+    let html = layout_html(&fn_docs, &struct_docs, &extensions_docs);
+    // println!("{}", layout_html(&fn_docs, &struct_docs, &extensions_docs));
 
     let file = Path::new("./docs_output.html");
     fs::write(file, html).expect("couldn't write docs");
@@ -214,40 +246,342 @@ pub fn generate(generate_args: DocsGenerateArgs) -> Result<DocsOutput, (String, 
     });
 }
 
-fn layout_html(fn_docs: &Vec<FunctionDoc>, struct_docs: &Vec<StructDoc>) -> String {
-    let fn_docs_html = fn_docs
-            .iter()
-            .map(function_doc_to_html)
-            .collect::<Vec<_>>()
-            .join("\n");
+fn layout_html(fn_docs: &Vec<FunctionDoc>, struct_docs: &Vec<StructDoc>, extensions_docs: &Vec<ExtensionsDoc>) -> String {
+    let sidebar_html = render_sidebar(fn_docs, struct_docs, extensions_docs);
+
+    let structs_html = struct_docs
+        .iter()
+        .map(render_struct)
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let extensions_html = extensions_docs
+        .iter()
+        .map(render_extension)
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let fns_html = fn_docs
+        .iter()
+        .map(|f| render_function(f, false))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let empty_state_html = r#"
+        <div id="no-results" class="hidden text-center py-12 text-[#a89984]">
+            <p class="text-xl">No results found matching your search.</p>
+        </div>
+    "#;
+
+    let body_content = format!(
+        r#"
+        <div class="flex h-screen bg-[#282828] overflow-hidden font-sans text-[#ebdbb2]">
+            <aside class="w-72 bg-[#1d2021] border-r border-[#3c3836] flex flex-col">
+                <div class="p-5 border-b border-[#3c3836]">
+                    <h1 class="text-xl font-bold text-[#fabd2f] mb-3 tracking-wide">Duck<span class="text-[#ebdbb2]">Docs</span></h1>
+                    <input
+                        type="text"
+                        id="search-input"
+                        placeholder="Search docs..."
+                        class="w-full px-3 py-2 bg-[#32302f] border border-[#504945] rounded text-[#ebdbb2] placeholder-[#a89984] focus:outline-none focus:border-[#d79921] focus:ring-1 focus:ring-[#d79921] transition-all text-sm"
+                        onkeyup="filterDocs()"
+                    />
+                </div>
+                <nav class="flex-1 overflow-y-auto p-4 space-y-8 scrollbar-thin scrollbar-thumb-[#504945] scrollbar-track-transparent" id="sidebar-nav">
+                    {sidebar_html}
+                </nav>
+            </aside>
+
+            <main class="flex-1 overflow-y-auto bg-[#282828] scroll-smooth scrollbar-thin scrollbar-thumb-[#504945]">
+                <div class="max-w-5xl mx-auto p-10 space-y-16" id="main-content">
+                    <section>
+                        <h2 class="text-3xl font-bold text-[#fabd2f] mb-8 border-b border-[#3c3836] pb-3">Structs</h2>
+                        <div class="space-y-16">
+                            {structs_html}
+                        </div>
+                    </section>
+
+                    <section>
+                        <h2 class="text-3xl font-bold text-[#8ec07c] mb-8 border-b border-[#3c3836] pb-3">Extensions</h2>
+                        <div class="space-y-16">
+                            {extensions_html}
+                        </div>
+                    </section>
+
+                    <section>
+                        <h2 class="text-3xl font-bold text-[#b8bb26] mb-8 border-b border-[#3c3836] pb-3">Global Functions</h2>
+                        <div class="space-y-10">
+                            {fns_html}
+                        </div>
+                    </section>
+                    {empty_state_html}
+                </div>
+
+                <footer class="p-10 text-center text-[#a89984] text-sm border-t border-[#3c3836] mt-20">
+                    Generated by Dargo
+                </footer>
+            </main>
+        </div>
+        "#
+    );
 
     let mut duckwind_emit_env = duckwind::EmitEnv::new_with_default_config();
-    duckwind_emit_env.parse_full_string(None, &fn_docs_html);
-
+    duckwind_emit_env.parse_full_string(None, &body_content);
     let output_css = duckwind_emit_env.to_css_stylesheet(true);
 
-    return format!("
-        <!doctype html>
-        <html>
+    let script = r#"
+        <script>
+            function filterDocs() {
+                const input = document.getElementById('search-input');
+                const filter = input.value.toLowerCase();
+
+                const sidebarLinks = document.querySelectorAll('#sidebar-nav a');
+                sidebarLinks.forEach(link => {
+                    const text = link.innerText.toLowerCase();
+                    link.parentElement.style.display = text.includes(filter) ? "" : "none";
+                });
+
+                const contentItems = document.querySelectorAll('.doc-item');
+                let hasVisibleItems = false;
+
+                contentItems.forEach(item => {
+                    const name = item.getAttribute('data-name').toLowerCase();
+                    if (name.includes(filter)) {
+                        item.style.display = "";
+                        hasVisibleItems = true;
+                    } else {
+                        item.style.display = "none";
+                    }
+                });
+
+                document.getElementById('no-results').style.display = hasVisibleItems ? 'none' : 'block';
+            }
+        </script>
+    "#;
+
+    format!(
+        "<!doctype html>
+        <html lang='en'>
             <head>
-                <title>Duck Docs</title>
+                <meta charset='UTF-8'>
+                <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                <title>Duck Documentation</title>
                 <style>
+                    body {{ margin: 0; background-color: #282828; color: #ebdbb2; }}
                     {output_css}
                 </style>
             </head>
             <body>
-                {fn_docs_html}
+                {body_content}
+                {script}
             </body>
-        </html>
-    ")
+        </html>"
+    )
 }
 
-fn function_doc_to_html(fn_doc: &FunctionDoc) -> String {
-    return format!("
-        <div class=\"text-black\">
-            <div class='text-2xl'>
-                {}
+fn render_sidebar(fn_docs: &Vec<FunctionDoc>, struct_docs: &Vec<StructDoc>, extensions_docs: &Vec<ExtensionsDoc>) -> String {
+    let struct_links = struct_docs.iter().map(|s| {
+        format!(
+            "<li><a href='#struct-{}' class='block text-[#a89984] hover:text-[#fabd2f] hover:bg-[#32302f] px-2 py-1.5 rounded transition-colors duration-200'>{}</a></li>",
+            s.struct_name, s.struct_name
+        )
+    }).collect::<Vec<_>>().join("");
+
+    let extension_links = extensions_docs.iter().map(|e| {
+        format!(
+            "<li><a href='#ext-{}' class='block text-[#a89984] hover:text-[#8ec07c] hover:bg-[#32302f] px-2 py-1.5 rounded transition-colors duration-200'>{}</a></li>",
+            e.target_type_annotation, e.target_type_annotation
+        )
+    }).collect::<Vec<_>>().join("");
+
+    let fn_links = fn_docs.iter().map(|f| {
+        format!(
+            "<li><a href='#fn-{}' class='block text-[#a89984] hover:text-[#b8bb26] hover:bg-[#32302f] px-2 py-1.5 rounded transition-colors duration-200'>{}</a></li>",
+            f.function_name, f.function_name
+        )
+    }).collect::<Vec<_>>().join("");
+
+    format!(
+        r#"
+        <div>
+            <h3 class="font-bold text-[#fabd2f] uppercase tracking-wider text-xs mb-3 ml-2">Structs</h3>
+            <ul class="space-y-0.5 text-sm">{struct_links}</ul>
+        </div>
+        <div>
+            <h3 class="font-bold text-[#8ec07c] uppercase tracking-wider text-xs mb-3 ml-2">Extensions</h3>
+            <ul class="space-y-0.5 text-sm">{extension_links}</ul>
+        </div>
+        <div>
+            <h3 class="font-bold text-[#b8bb26] uppercase tracking-wider text-xs mb-3 ml-2">Functions</h3>
+            <ul class="space-y-0.5 text-sm">{fn_links}</ul>
+        </div>
+        "#
+    )
+}
+
+fn render_struct(doc: &StructDoc) -> String {
+    let comments_html = doc.comments.iter()
+        .map(|c| format!("<p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>{}</p>", c))
+        .collect::<Vec<_>>().join("");
+
+    let fields_html = if doc.fields.is_empty() {
+        String::new()
+    } else {
+        let rows = doc.fields.iter().map(|field| {
+            format!(
+                "<tr class='border-b border-[#3c3836] last:border-0 hover:bg-[#32302f] transition-colors'>
+                    <td class='py-3 px-4 font-mono text-sm text-[#83a598]'>{}</td>
+                    <td class='py-3 px-4 font-mono text-sm text-[#d3869b]'>{}</td>
+                </tr>",
+                field.field_name, field.type_annotation
+            )
+        }).collect::<Vec<_>>().join("");
+
+        format!(
+            r#"
+            <div class="mt-5 mb-8 bg-[#1d2021] rounded border border-[#3c3836] overflow-hidden">
+                <table class="w-full text-left">
+                    <thead class="bg-[#32302f] border-b border-[#3c3836]">
+                        <tr>
+                            <th class="py-2 px-4 text-xs font-bold text-[#a89984] uppercase tracking-wider">Field</th>
+                            <th class="py-2 px-4 text-xs font-bold text-[#a89984] uppercase tracking-wider">Type</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows}
+                    </tbody>
+                </table>
+            </div>
+            "#
+        )
+    };
+
+    let methods_html = if doc.function_docs.is_empty() {
+        String::new()
+    } else {
+        let methods = doc.function_docs.iter()
+            .map(|f| render_function(f, true))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        format!(
+            r#"
+            <div class="mt-8 pl-5 border-l-2 border-[#504945]">
+                <h4 class="text-sm font-bold text-[#fe8019] uppercase tracking-widest mb-6">Methods</h4>
+                <div class="space-y-8">
+                    {methods}
+                </div>
+            </div>
+            "#
+        )
+    };
+
+    format!(
+        r#"
+        <div id="struct-{name}" class="doc-item scroll-mt-24" data-name="{name}">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="text-xs font-bold text-[#1d2021] bg-[#fabd2f] px-2 py-0.5 rounded uppercase tracking-wide">Struct</span>
+                <h3 class="text-2xl font-bold text-[#fbf1c7] tracking-tight">{name}</h3>
+            </div>
+            <div class="prose max-w-none mb-4 text-[#ebdbb2]">
+                {comments}
+            </div>
+            {fields}
+            {methods}
+        </div>
+        "#,
+        name = doc.struct_name,
+        comments = comments_html,
+        fields = fields_html,
+        methods = methods_html
+    )
+}
+
+fn render_extension(doc: &ExtensionsDoc) -> String {
+    let comments_html = doc.comments.iter()
+        .map(|c| format!("<p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>{}</p>", c))
+        .collect::<Vec<_>>().join("");
+
+    let methods_html = if doc.function_docs.is_empty() {
+        String::new()
+    } else {
+        let methods = doc.function_docs.iter()
+            .map(|f| render_function(f, true))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        format!(
+            r#"
+            <div class="mt-8 pl-5 border-l-2 border-[#504945]">
+                <h4 class="text-sm font-bold text-[#fe8019] uppercase tracking-widest mb-6">Extension Methods</h4>
+                <div class="space-y-8">
+                    {methods}
+                </div>
+            </div>
+            "#
+        )
+    };
+
+    format!(
+        r#"
+        <div id="ext-{name}" class="doc-item scroll-mt-24" data-name="{name}">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="text-xs font-bold text-[#1d2021] bg-[#8ec07c] px-2 py-0.5 rounded uppercase tracking-wide">Extension</span>
+                <h3 class="text-2xl font-bold text-[#8ec07c] tracking-tight">on {name}</h3>
+            </div>
+            <div class="prose max-w-none mb-4 text-[#ebdbb2]">
+                {comments}
+            </div>
+            {methods}
+        </div>
+        "#,
+        name = doc.target_type_annotation,
+        comments = comments_html,
+        methods = methods_html
+    )
+}
+
+fn render_function(doc: &FunctionDoc, is_method: bool) -> String {
+    let comments_html = doc.comments.iter()
+        .map(|c| format!("<p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>{}</p>", c))
+        .collect::<Vec<_>>().join("");
+
+    let (badge, title_color) = if is_method {
+        (
+            r#"<span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>"#,
+            "text-[#ebdbb2]"
+        )
+    } else {
+        (
+            r#"<span class="text-xs font-bold text-[#1d2021] bg-[#b8bb26] px-2 py-0.5 rounded uppercase tracking-wide">Fn</span>"#,
+            "text-[#fbf1c7]"
+        )
+    };
+
+    let id_prefix = if is_method { "method" } else { "fn" };
+
+    format!(
+        r#"
+        <div id="{id_prefix}-{name}" class="doc-item scroll-mt-24" data-name="{name}">
+            <div class="flex items-center gap-3 mb-3">
+                {badge}
+                <h3 class="text-xl font-bold {title_color} font-mono tracking-tight">{name}</h3>
+            </div>
+
+            <div class="bg-[#32302f] rounded p-4 font-mono text-sm overflow-x-auto shadow-sm mb-4 border border-[#3c3836]">
+                <code class="text-[#8ec07c]">{annotation}</code>
+            </div>
+
+            <div class="prose max-w-none text-[#ebdbb2]">
+                {comments}
             </div>
         </div>
-    ", fn_doc.function_name)
+        "#,
+        id_prefix = id_prefix,
+        name = doc.function_name,
+        badge = badge,
+        title_color = title_color,
+        annotation = doc.function_annotation,
+        comments = comments_html
+    )
 }
