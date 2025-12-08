@@ -1,4 +1,4 @@
-name: generate issue tracking and std lib docs and deploy them to github pages
+name: deploy-duck-pages
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
 
 jobs:
   update-and-deploy:
+    name: update and deploy
     runs-on: ubuntu-latest
     permissions:
       contents: write

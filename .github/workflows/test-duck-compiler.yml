@@ -1,4 +1,4 @@
-name: cargo test and python test scripts
+name: test-duck-compiler
 
 on:
   push:
@@ -12,7 +12,7 @@ env:
 
 jobs:
   run_cargo_tests:
-    name: run 'cargo test'
+    name: cargo test
     runs-on: ubuntu-latest
 
     steps:
@@ -20,7 +20,7 @@ jobs:
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - run: cargo test
   run_python_tests:
-    name: run python test scripts against compiler
+    name: python test script
     runs-on: ubuntu-latest
 
     steps:
