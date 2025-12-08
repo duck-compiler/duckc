@@ -17,7 +17,7 @@ jobs:
       - name: setup rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
-      - name: generate new state and prepare for deploy
+      - name: generate new docs_output.html from std/std.duck and prepare for deploy
         run: |
             chmod +x install_std.sh
             ./install_std.sh
@@ -28,14 +28,14 @@ jobs:
 
             popd
 
-            mkdir docs
-            cp std/docs_output.html docs/docs_output.html
+            mkdir docs_html
+            cp std/docs_output.html docs_html/docs_output.html
 
       - name: deploy to github pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
+          publish_dir: ./docs_html
           publish_branch: gh-pages
           force_orphan: false
           commit_message: "docs: generate std docs [skip ci]"
