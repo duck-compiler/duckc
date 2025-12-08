@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "can this be deleted?",
     "blame": {
-        "name": "Mvmo",
+        "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo(@Apfelfrosch): implement flatten for struct definitions",
