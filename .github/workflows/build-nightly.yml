@@ -40,245 +40,26 @@ jobs:
         echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
         echo "release version: $VERSION (channel: $CHANNEL)"
 
-  build-linux-x86_64:
-    runs-on: ubuntu-latest
-    needs: setup
-    steps:
-    - name: checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: install rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        components: rustfmt, clippy
-
-    - name: clean cargo cache and update toolchain
-      run: |
-        cargo clean
-        rustup update
-
-    - name: cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-
-    - name: build for linux (x86_64)
-      run: cargo build --release --target x86_64-unknown-linux-gnu
-
-    - name: upload linux x86_64 artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-x86_64
-        path: target/x86_64-unknown-linux-gnu/release/dargo
-
-  build-linux-aarch64:
-    runs-on: ubuntu-latest
-    needs: setup
-    steps:
-    - name: checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: install rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        components: rustfmt, clippy
-
-    - name: clean cargo cache and update toolchain
-      run: |
-        cargo clean
-        rustup update
-
-    - name: install cross-compilation toolchain
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-aarch64-linux-gnu
-        rustup target add aarch64-unknown-linux-gnu
-
-    - name: cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-
-    - name: build for linux (arm64)
-      run: |
-        export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-        export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
-        export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
-        export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-
-        cargo build --release --target aarch64-unknown-linux-gnu
-
-    - name: upload linux arm64 artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-aarch64
-        path: target/aarch64-unknown-linux-gnu/release/dargo
-
-  build-linux-armv7:
-    runs-on: ubuntu-latest
-    needs: setup
-    steps:
-    - name: checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: install rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        components: rustfmt, clippy
-
-    - name: clean cargo cache and update toolchain
-      run: |
-        cargo clean
-        rustup update
-
-    - name: install cross-compilation toolchain
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-arm-linux-gnueabihf
-        rustup target add armv7-unknown-linux-gnueabihf
-
-    - name: cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-
-    - name: build for linux (ARMv7)
-      run: |
-        export CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc
-        export CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++
-        export AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar
-        export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
-        cargo build --release --target armv7-unknown-linux-gnueabihf
-
-    - name: upload Linux ARMv7 artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-armv7
-        path: target/armv7-unknown-linux-gnueabihf/release/dargo
-
-  build-macos-x86_64:
-    runs-on: macos-15
-    needs: setup
-    steps:
-    - name: checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: install rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        components: rustfmt, clippy
-
-    - name: clean cargo cache and update toolchain
-      run: |
-        cargo clean
-        rustup update
-
-    - name: cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-
-    - name: build for macOS (x86_64) - native
-      run: cargo build --release
-
-    - name: Upload macOS x86_64 artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: macos-x86_64
-        path: target/release/dargo
-
-  build-macos-aarch64:
-    runs-on: macos-15
-    needs: setup
-    steps:
-    - name: checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: install rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        components: rustfmt, clippy
-
-    - name: clean cargo cache and update toolchain
-      run: |
-        cargo clean
-        rustup update
-
-    - name: cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-
-    - name: build for macOS (arm64) - native
-      run: cargo build --release
-
-    - name: upload macOS arm64 artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: macos-aarch64
-        path: target/release/dargo
-
-  # Windows build (disabled)
-  # build-windows:
-  #   runs-on: windows-2025
+  # build-linux-x86_64:
+  #   runs-on: ubuntu-latest
   #   needs: setup
   #   steps:
-  #   - name: Checkout code
+  #   - name: checkout repository
   #     uses: actions/checkout@v4
   #     with:
   #       fetch-depth: 0
 
-  #   - name: Install Rust
+  #   - name: install rust toolchain
   #     uses: actions-rust-lang/setup-rust-toolchain@v1
   #     with:
   #       components: rustfmt, clippy
 
-  #   - name: Clean cargo cache and update toolchain
+  #   - name: clean cargo cache and update toolchain
   #     run: |
   #       cargo clean
   #       rustup update
 
-  #   - name: Cache cargo registry
+  #   - name: cache cargo registry
   #     uses: actions/cache@v4
   #     with:
   #       path: |
@@ -289,14 +70,232 @@ jobs:
   #       restore-keys: |
   #         ${{ runner.os }}-cargo-
 
-  #   - name: Build for Windows (x86_64)
-  #     run: cargo build --release --target x86_64-pc-windows-msvc
+  #   - name: build for linux (x86_64)
+  #     run: cargo build --release --target x86_64-unknown-linux-gnu
 
-  #   - name: Upload Windows artifact
+  #   - name: upload linux x86_64 artifact
   #     uses: actions/upload-artifact@v4
   #     with:
-  #       name: windows-x86_64
-  #       path: target/x86_64-pc-windows-msvc/release/dargo.exe
+  #       name: linux-x86_64
+  #       path: target/x86_64-unknown-linux-gnu/release/dargo
+
+  # build-linux-aarch64:
+  #   runs-on: ubuntu-latest
+  #   needs: setup
+  #   steps:
+  #   - name: checkout repository
+  #     uses: actions/checkout@v4
+  #     with:
+  #       fetch-depth: 0
+
+  #   - name: install rust toolchain
+  #     uses: actions-rust-lang/setup-rust-toolchain@v1
+  #     with:
+  #       components: rustfmt, clippy
+
+  #   - name: clean cargo cache and update toolchain
+  #     run: |
+  #       cargo clean
+  #       rustup update
+
+  #   - name: install cross-compilation toolchain
+  #     run: |
+  #       sudo apt-get update
+  #       sudo apt-get install -y gcc-aarch64-linux-gnu
+  #       rustup target add aarch64-unknown-linux-gnu
+
+  #   - name: cache cargo registry
+  #     uses: actions/cache@v4
+  #     with:
+  #       path: |
+  #         ~/.cargo/registry
+  #         ~/.cargo/git
+  #         target
+  #       key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+  #       restore-keys: |
+  #         ${{ runner.os }}-cargo-
+
+  #   - name: build for linux (arm64)
+  #     run: |
+  #       export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+  #       export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+  #       export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
+  #       export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+
+  #       cargo build --release --target aarch64-unknown-linux-gnu
+
+  #   - name: upload linux arm64 artifact
+  #     uses: actions/upload-artifact@v4
+  #     with:
+  #       name: linux-aarch64
+  #       path: target/aarch64-unknown-linux-gnu/release/dargo
+
+  # build-linux-armv7:
+  #   runs-on: ubuntu-latest
+  #   needs: setup
+  #   steps:
+  #   - name: checkout repository
+  #     uses: actions/checkout@v4
+  #     with:
+  #       fetch-depth: 0
+
+  #   - name: install rust toolchain
+  #     uses: actions-rust-lang/setup-rust-toolchain@v1
+  #     with:
+  #       components: rustfmt, clippy
+
+  #   - name: clean cargo cache and update toolchain
+  #     run: |
+  #       cargo clean
+  #       rustup update
+
+  #   - name: install cross-compilation toolchain
+  #     run: |
+  #       sudo apt-get update
+  #       sudo apt-get install -y gcc-arm-linux-gnueabihf
+  #       rustup target add armv7-unknown-linux-gnueabihf
+
+  #   - name: cache cargo registry
+  #     uses: actions/cache@v4
+  #     with:
+  #       path: |
+  #         ~/.cargo/registry
+  #         ~/.cargo/git
+  #         target
+  #       key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+  #       restore-keys: |
+  #         ${{ runner.os }}-cargo-
+
+  #   - name: build for linux (ARMv7)
+  #     run: |
+  #       export CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc
+  #       export CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++
+  #       export AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar
+  #       export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
+  #       cargo build --release --target armv7-unknown-linux-gnueabihf
+
+  #   - name: upload Linux ARMv7 artifact
+  #     uses: actions/upload-artifact@v4
+  #     with:
+  #       name: linux-armv7
+  #       path: target/armv7-unknown-linux-gnueabihf/release/dargo
+
+  # build-macos-x86_64:
+  #   runs-on: macos-15
+  #   needs: setup
+  #   steps:
+  #   - name: checkout repository
+  #     uses: actions/checkout@v4
+  #     with:
+  #       fetch-depth: 0
+
+  #   - name: install rust toolchain
+  #     uses: actions-rust-lang/setup-rust-toolchain@v1
+  #     with:
+  #       components: rustfmt, clippy
+
+  #   - name: clean cargo cache and update toolchain
+  #     run: |
+  #       cargo clean
+  #       rustup update
+
+  #   - name: cache cargo registry
+  #     uses: actions/cache@v4
+  #     with:
+  #       path: |
+  #         ~/.cargo/registry
+  #         ~/.cargo/git
+  #         target
+  #       key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+  #       restore-keys: |
+  #         ${{ runner.os }}-cargo-
+
+  #   - name: build for macOS (x86_64) - native
+  #     run: cargo build --release
+
+  #   - name: Upload macOS x86_64 artifact
+  #     uses: actions/upload-artifact@v4
+  #     with:
+  #       name: macos-x86_64
+  #       path: target/release/dargo
+
+  # build-macos-aarch64:
+  #   runs-on: macos-15
+  #   needs: setup
+  #   steps:
+  #   - name: checkout repository
+  #     uses: actions/checkout@v4
+  #     with:
+  #       fetch-depth: 0
+
+  #   - name: install rust toolchain
+  #     uses: actions-rust-lang/setup-rust-toolchain@v1
+  #     with:
+  #       components: rustfmt, clippy
+
+  #   - name: clean cargo cache and update toolchain
+  #     run: |
+  #       cargo clean
+  #       rustup update
+
+  #   - name: cache cargo registry
+  #     uses: actions/cache@v4
+  #     with:
+  #       path: |
+  #         ~/.cargo/registry
+  #         ~/.cargo/git
+  #         target
+  #       key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+  #       restore-keys: |
+  #         ${{ runner.os }}-cargo-
+
+  #   - name: build for macOS (arm64) - native
+  #     run: cargo build --release
+
+  #   - name: upload macOS arm64 artifact
+  #     uses: actions/upload-artifact@v4
+  #     with:
+  #       name: macos-aarch64
+  #       path: target/release/dargo
+
+  build-windows:
+    runs-on: windows-2025
+    needs: setup
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: install rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        components: rustfmt, clippy
+
+    - name: clean cargo cache and update toolchain
+      run: |
+        cargo clean
+        rustup update
+
+    - name: cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Build for Windows (x86_64)
+      run: cargo build --release --target x86_64-pc-windows-msvc
+
+    # - name: upload windows artifact
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: windows-x86_64
+    #     path: target/x86_64-pc-windows-msvc/release/dargo.exe
 
   # Create nightly release
   # create-nightly-release:
