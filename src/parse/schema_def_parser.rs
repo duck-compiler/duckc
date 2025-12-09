@@ -14,24 +14,24 @@ use super::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct IfBranch {
-    condition: Spanned<ValueExpr>,
-    value_expr: Option<Spanned<ValueExpr>>,
+    pub condition: Spanned<ValueExpr>,
+    pub value_expr: Option<Spanned<ValueExpr>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Field {
-    name: String,
-    type_expr: Spanned<TypeExpr>,
-    if_branch: Option<Spanned<IfBranch>>,
-    else_branch_value_expr: Option<Spanned<ValueExpr>>,
-    span: SS,
+pub struct SchemaField {
+    pub name: String,
+    pub type_expr: Spanned<TypeExpr>,
+    pub if_branch: Option<Spanned<IfBranch>>,
+    pub else_branch_value_expr: Option<Spanned<ValueExpr>>,
+    pub span: SS,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct SchemaDefinition {
     pub name: String,
-    pub fields: Vec<Field>,
+    pub fields: Vec<SchemaField>,
     pub comments: Vec<Spanned<String>>,
     pub span: SS,
 }
@@ -74,7 +74,7 @@ where
         .then(type_expression_parser())
         .then(if_branch_parser.or_not())
         .then(else_branch_parser.or_not())
-        .map_with(|(((identifier, type_expr), if_branch), else_branch), ctx| Field {
+        .map_with(|(((identifier, type_expr), if_branch), else_branch), ctx| SchemaField {
             name: identifier,
             type_expr: type_expr,
             if_branch: if_branch,
@@ -86,7 +86,7 @@ where
         .separated_by(just(Token::ControlChar(',')))
         .allow_trailing()
         .at_least(1)
-        .collect::<Vec<Field>>();
+        .collect::<Vec<SchemaField>>();
 
     doc_comments_parser
         .then_ignore(just(Token::Schema))

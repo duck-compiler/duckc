@@ -5,22 +5,10 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        Context, SS, Spanned,
-        duckx_component_parser::{DuckxComponent, duckx_component_parser},
-        extensions_def_parser::{ExtensionsDef, extensions_def_parser},
-        function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
-        lexer::{Token, lex_parser},
-        make_input, parse_failure,
-        struct_parser::{StructDefinition, struct_definition_parser},
-        test_parser::{TestCase, test_parser},
-        tsx_component_parser::{TsxComponent, tsx_component_parser},
-        type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
-        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
-        value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr},
+        duckx_component_parser::{duckx_component_parser, DuckxComponent}, extensions_def_parser::{extensions_def_parser, ExtensionsDef}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, schema_def_parser::{self, SchemaDefinition}, struct_parser::{struct_definition_parser, StructDefinition}, test_parser::{test_parser, TestCase}, tsx_component_parser::{tsx_component_parser, TsxComponent}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, Spanned, SS
     },
     semantics::ident_mangler::{
-        MangleEnv, mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression,
-        mangle_value_expr, unmangle,
+        mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
     },
 };
 
@@ -35,11 +23,13 @@ pub struct SourceFile {
     pub tsx_components: Vec<TsxComponent>,
     pub duckx_components: Vec<DuckxComponent>,
     pub test_cases: Vec<TestCase>,
+    pub schema_defs: Vec<SchemaDefinition>
 }
 
 #[derive(Debug, Clone)]
 pub enum SourceUnit {
     Func(FunctionDefintion),
+    Schema(SchemaDefinition),
     Type(TypeDefinition),
     Extensions(ExtensionsDef),
     Component(TsxComponent),
@@ -904,7 +894,8 @@ where
             duckx_component_parser(make_input.clone()).map(SourceUnit::Template),
             struct_definition_parser(make_input.clone()).map(SourceUnit::Struct),
             function_definition_parser(make_input.clone()).map(SourceUnit::Func),
-            test_parser(make_input).map(SourceUnit::Test),
+            test_parser(make_input.clone()).map(SourceUnit::Test),
+            schema_def_parser::schema_definition_parser(make_input).map(SourceUnit::Schema),
             just(Token::Module)
                 .ignore_then(select_ref! { Token::Ident(i) => i.to_owned() })
                 .then(choice((
@@ -933,6 +924,7 @@ where
             let mut tsx_components = Vec::new();
             let mut template_components = Vec::new();
             let mut test_cases = Vec::new();
+            let mut schema_defs = Vec::new();
 
             for source_unit in source_units {
                 use SourceUnit::*;
@@ -946,6 +938,7 @@ where
                     Component(tsx_component) => tsx_components.push(tsx_component),
                     Template(duckx_component) => template_components.push(duckx_component),
                     Test(test_case) => test_cases.push(test_case.0),
+                    Schema(schema_def) => schema_defs.push(schema_def),
                 }
             }
 
@@ -959,6 +952,7 @@ where
                 tsx_components,
                 duckx_components: template_components,
                 test_cases,
+                schema_defs,
             }
         })
     })
@@ -971,19 +965,9 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        Field,
-        function_parser::FunctionDefintion,
-        lexer::lex_parser,
-        make_input,
-        source_file_parser::{SourceFile, source_file_parser},
-        struct_parser::StructDefinition,
-        tsx_component_parser::TsxComponent,
-        type_parser::{Duck, TypeDefinition, TypeExpr},
-        use_statement_parser::{Indicator, UseStatement},
-        value_parser::{
-            IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
-            type_expr_into_empty_range, value_expr_into_empty_range,
-        },
+        function_parser::FunctionDefintion, lexer::lex_parser, make_input, schema_def_parser::{IfBranch, SchemaDefinition, SchemaField}, source_file_parser::{source_file_parser, SourceFile}, struct_parser::StructDefinition, tsx_component_parser::TsxComponent, type_parser::{Duck, TypeDefinition, TypeExpr}, use_statement_parser::{Indicator, UseStatement}, value_parser::{
+            empty_range, source_file_into_empty_range, type_expr_into_empty_range, value_expr_into_empty_range, IntoBlock, ValueExpr
+        }, Field
     };
 
     #[test]
@@ -995,6 +979,27 @@ mod tests {
                     function_definitions: vec![FunctionDefintion {
                         name: "abc".into(),
                         ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            ),
+            (
+                "schema Yoo = { name: String if true }",
+                SourceFile {
+                    schema_defs: vec![SchemaDefinition {
+                        name: "Yoo".into(),
+                        fields: vec![SchemaField {
+                            name: "name".to_string(),
+                            type_expr: (TypeExpr::String(None), empty_range()),
+                            if_branch: Some((IfBranch {
+                                condition: (ValueExpr::Bool(true), empty_range()),
+                                value_expr: None,
+                            }, empty_range())),
+                            else_branch_value_expr: None,
+                            span: empty_range()
+                        }],
+                        comments: vec![],
+                        span: empty_range()
                     }],
                     ..Default::default()
                 },
