@@ -1,10 +1,10 @@
 use std::io::{self, ErrorKind as IOErrKind};
 use std::path::{Path, PathBuf};
-use std::{env, fs, os};
+use std::{env, fs};
 
 use crate::DARGO_DOT_DIR;
 use crate::cli::git_cli::{self, GitCliErrKind};
-use crate::dargo::cli::{CliErrKind, CompileArgs};
+use crate::dargo::cli::{CompileArgs};
 use crate::tags::Tag;
 
 use super::cli::BuildArgs;
