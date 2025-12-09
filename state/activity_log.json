@@ -1,5 +1,15 @@
 [
     {
+        "type": "closed",
+        "timestamp": "2025-12-09T01:57:15.655179",
+        "issue_id": "fe7bbea4368102b886c67bf2bedada4a",
+        "issue_title": "windows :(",
+        "author_info": {
+            "name": "Mvmo",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
         "type": "created",
         "timestamp": "2025-12-07T22:33:28.340810",
         "issue_id": "cd8e2e0fcb691de2400b5db2cb395e35",
