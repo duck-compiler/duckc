@@ -1130,6 +1130,25 @@ pub fn source_file_into_empty_range(v: &mut SourceFile) {
         source_file_into_empty_range(&mut x.1);
     }
 
+    for schema_def in &mut v.schema_defs {
+        schema_def.span = empty_range();
+        for field in &mut schema_def.fields {
+            field.span = empty_range();
+            type_expr_into_empty_range(&mut field.type_expr);
+            if let Some(if_branch) = &mut field.if_branch {
+                if_branch.1 = empty_range();
+                value_expr_into_empty_range(&mut if_branch.0.condition);
+                if let Some(value_expr) = &mut if_branch.0.value_expr {
+                    value_expr_into_empty_range(value_expr);
+                }
+            }
+
+            if let Some(else_branch_value_expr) = &mut field.else_branch_value_expr {
+                value_expr_into_empty_range(else_branch_value_expr);
+            }
+        }
+    }
+
     for x in &mut v.tsx_components {
         x.typescript_source.1 = empty_range()
     }
