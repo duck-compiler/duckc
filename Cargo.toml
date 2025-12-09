@@ -24,3 +24,5 @@ serde_json = "1.0"
 [profile.release]
 debug = false
 strip = true
+split-debuginfo = "off"
+lto = true
