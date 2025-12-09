@@ -1,10 +1,10 @@
-use std::io::ErrorKind as IOErrKind;
+use std::io::{self, ErrorKind as IOErrKind};
 use std::path::{Path, PathBuf};
-use std::{env, fs, os};
+use std::{env, fs};
 
 use crate::DARGO_DOT_DIR;
 use crate::cli::git_cli::{self, GitCliErrKind};
-use crate::dargo::cli::CompileArgs;
+use crate::dargo::cli::{CompileArgs};
 use crate::tags::Tag;
 
 use super::cli::BuildArgs;
@@ -107,15 +107,13 @@ pub fn build(build_args: &BuildArgs) -> Result<BuildOutput, (String, BuildErrKin
                 .clone();
 
             current_dir.push(format!(".dargo/git/{module_name}/src"));
-            let absolute_src_dir = current_dir;
+            let absolute_src_dir: PathBuf = current_dir;
 
-            // TODO: windows :(
-            os::unix::fs::symlink(absolute_src_dir, target_dir).map_err(|err| {
-                (
+            create_symlink(absolute_src_dir, target_dir)
+                .map_err(|err| (
                     format!("{}{} error creating symlink - {err}", Tag::IO, Tag::Err,),
                     BuildErrKind::IOErr(err.kind()),
-                )
-            })?;
+                ))?;
         }
     }
 
@@ -226,4 +224,24 @@ fn copy_dir_all(
         }
     }
     Ok(())
+}
+
+pub fn create_symlink<OriginalG: AsRef<Path>, LinkG: AsRef<Path>>(
+    original: OriginalG,
+    link: LinkG
+) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(original, link)
+    }
+
+    #[cfg(windows)]
+    {
+        std::os::windows::fs::symlink_file(original, link)
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+        Err(io::Error::new(io::ErrorKind::Unsupported, "platform not supported"))
+    }
 }
