@@ -21,6 +21,7 @@ pub mod tsx_component_parser;
 pub mod type_parser;
 pub mod use_statement_parser;
 pub mod value_parser;
+pub mod schema_def_parser;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Context {
