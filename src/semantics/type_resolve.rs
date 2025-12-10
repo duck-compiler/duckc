@@ -9,18 +9,16 @@ use chumsky::container::Container;
 use indexmap::IndexMap;
 
 use crate::{
-    parse::{
+    emit::{function, schema_def}, parse::{
         duckx_component_parser::DuckxComponent, extensions_def_parser::ExtensionsDef, failure_with_occurence, function_parser::{FunctionDefintion, LambdaFunctionExpr}, schema_def_parser::SchemaDefinition, source_file_parser::SourceFile, struct_parser::{NamedDuckDefinition, StructDefinition}, test_parser::TestCase, tsx_component_parser::{
             do_edits, Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit
         }, type_parser::{Duck, TypeDefinition, TypeExpr}, value_parser::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
         }, Field, Spanned, SpannedMutRef, SS
-    },
-    semantics::{
+    }, semantics::{
         ident_mangler::{mangle, MANGLE_SEP},
         typechecker::{check_type_compatability, check_type_compatability_full},
-    },
-    tags::Tag,
+    }, tags::Tag
 };
 
 fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
@@ -630,6 +628,21 @@ impl TypeEnv<'_> {
         let mut extension_functions = self.extension_functions.clone();
         for extension_fun in extension_functions.iter_mut() {
             self.find_ducks_and_tuples_type_expr(&mut extension_fun.1.0, &mut result);
+        }
+
+        let mut schema_defs = self.schema_defs.clone();
+        for schema_def in &mut schema_defs {
+            for schema_field in &mut schema_def.fields {
+                self.find_ducks_and_tuples_type_expr(&mut schema_field.type_expr, &mut result);
+            }
+
+            if let Some(out_type) = &mut schema_def.out_type {
+                self.find_ducks_and_tuples_type_expr(out_type, &mut result);
+            }
+
+            if let Some(function_type) = &mut schema_def.schema_fn_type {
+                self.find_ducks_and_tuples_type_expr(function_type, &mut result);
+            }
         }
 
         for s in self
@@ -1943,10 +1956,20 @@ pub fn typeresolve_schema_def(
         resolve_all_aliases_type_expr(&mut schema_field.type_expr, type_env);
     }
 
+    if let Some(out_type) = &mut schema_def.out_type {
+        resolve_all_aliases_type_expr(out_type, type_env);
+    }
+
+    if let Some(fn_type) = &mut schema_def.schema_fn_type {
+        resolve_all_aliases_type_expr(fn_type, type_env);
+    }
+
     type_env.schema_defs.push(schema_def.clone());
 
     type_env.pop_type_aliases();
-    // type_env.all_types.insert(0, self_type.clone());
+    if let Some(fn_type) = &mut schema_def.schema_fn_type {
+        type_env.all_types.insert(0, fn_type.clone().0);
+    }
 }
 
 pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut TypeEnv) {
@@ -2139,30 +2162,40 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 fields_with_type.push((schema_field.name.clone(), field_type_expr.clone()));
             }
 
+            let schema_fn_return_type = (
+                TypeExpr::Duck(Duck { fields: vec![Field {
+                    name: "from_json".to_string(),
+                    type_expr: (TypeExpr::Fun(
+                        vec![(None,(TypeExpr::String(None), schema_def.span))],
+                        Some(Box::new((TypeExpr::Or(vec![
+                            (TypeExpr::Duck(Duck {
+                                fields: fields_with_type.iter()
+                                    .map(|(name, type_expr)| Field {
+                                        name: name.clone(),
+                                        type_expr: type_expr.clone()
+                                    })
+                                    .collect::<Vec<_>>()
+                            }), schema_def.span),
+                            (TypeExpr::Tag("err".to_string()), schema_def.span)
+                        ]), schema_def.span))), false), schema_def.span)
+                }] }),
+                schema_def.span
+            );
+
+            let schema_fn_type = TypeExpr::Fun(
+                vec![],
+                Some(Box::new(schema_fn_return_type.clone())),
+                false
+            );
+
+            type_env.insert_type(schema_fn_return_type.clone().0);
+
+            schema_def.out_type = Some(schema_fn_return_type);
+            schema_def.schema_fn_type = Some((schema_fn_type.clone(), schema_def.span));
+
             type_env.insert_identifier_type(
                 schema_def.name.clone(),
-                TypeExpr::Fun(
-                    vec![],
-                    Some(Box::new((
-                        TypeExpr::Duck(Duck { fields: vec![Field {
-                            name: "from_json".to_string(),
-                            type_expr: (TypeExpr::Fun(
-                                vec![(None,(TypeExpr::String(None), schema_def.span))],
-                                Some(Box::new((TypeExpr::Or(vec![
-                                    (TypeExpr::Duck(Duck {
-                                        fields: fields_with_type.iter()
-                                            .map(|(name, type_expr)| Field {
-                                                name: name.clone(),
-                                                type_expr: type_expr.clone()
-                                            })
-                                            .collect::<Vec<_>>()
-                                    }), schema_def.span),
-                                    (TypeExpr::Tag("err".to_string()), schema_def.span)
-                                ]), schema_def.span))), false), schema_def.span)
-                        }] }), schema_def.span
-                    ))),
-                    false
-                ),
+                schema_fn_type,
                 true,
                 true
             );
@@ -2323,6 +2356,13 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     for extensions_def in &mut source_file.extensions_defs {
         typeresolve_extensions_def(extensions_def, type_env);
     }
+
+    source_file
+        .schema_defs
+        .iter_mut()
+        .for_each(|schema_def| {
+            typeresolve_schema_def(schema_def, type_env);
+        });
 
     source_file
         .struct_definitions
