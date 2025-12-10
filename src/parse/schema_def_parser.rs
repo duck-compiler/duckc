@@ -34,6 +34,8 @@ pub struct SchemaDefinition {
     pub fields: Vec<SchemaField>,
     pub comments: Vec<Spanned<String>>,
     pub span: SS,
+    pub out_type: Option<Spanned<TypeExpr>>,
+    pub schema_fn_type: Option<Spanned<TypeExpr>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -108,6 +110,8 @@ where
                     fields: fields,
                     span: ctx.span(),
                     comments: doc_comments.unwrap_or_else(|| Vec::new()),
+                    out_type: None,
+                    schema_fn_type: None,
                 }
             },
         )

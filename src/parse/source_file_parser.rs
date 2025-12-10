@@ -1047,7 +1047,9 @@ mod tests {
                             span: empty_range()
                         }],
                         comments: vec![],
-                        span: empty_range()
+                        span: empty_range(),
+                        out_type: None,
+                        schema_fn_type: None,
                     }],
                     ..Default::default()
                 },
