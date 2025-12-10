@@ -124,6 +124,11 @@ impl SourceFile {
                     result.struct_definitions.push(struct_definition);
                 }
 
+                for schema_def in src.schema_defs {
+                    mangle_env.insert_type(schema_def.name[prefix.len()..].to_string());
+                    result.schema_defs.push(schema_def);
+                }
+
                 for tsx_component in src.tsx_components {
                     mangle_env.insert_ident(tsx_component.name[prefix.len()..].to_string());
                     result.tsx_components.push(tsx_component);
@@ -263,6 +268,49 @@ impl SourceFile {
 
                 result.struct_definitions.push(struct_def);
             }
+
+            for schema_def in &s.schema_defs {
+                let mut schema_def = schema_def.clone();
+
+                let mut new_name = Vec::new();
+                new_name.extend_from_slice(prefix);
+                new_name.push(schema_def.name.clone());
+
+                // schema_def.name = mangle(&new_name);
+
+                for schema_field in &mut schema_def.fields {
+                    mangle_type_expression(&mut schema_field.type_expr.0, prefix, &mut mangle_env);
+                    if let Some(branch) = &mut schema_field.if_branch {
+                        mangle_value_expr(
+                            &mut branch.0.condition.0,
+                            global_prefix,
+                            prefix,
+                            &mut mangle_env
+                        );
+
+                        if let Some(value_expr) = &mut branch.0.value_expr {
+                            mangle_value_expr(
+                                &mut value_expr.0,
+                                global_prefix,
+                                prefix,
+                                &mut mangle_env
+                            );
+                        }
+                    }
+
+                    if let Some(value_expr) = &mut schema_field.else_branch_value_expr {
+                        mangle_value_expr(
+                            &mut value_expr.0,
+                            global_prefix,
+                            prefix,
+                            &mut mangle_env
+                        );
+                    }
+                }
+
+                result.schema_defs.push(schema_def);
+            }
+
 
             for component in &s.tsx_components {
                 // todo: mangle components in tsx
@@ -1204,6 +1252,7 @@ mod tests {
                 .parse(make_input(empty_range(), &lex))
                 .into_result()
                 .expect(src);
+
             source_file_into_empty_range(&mut parse);
 
             for c in parse.tsx_components.iter_mut() {
