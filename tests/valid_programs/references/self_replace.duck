@@ -1,0 +1,14 @@
+struct S = {
+    v: Int
+} impl {
+    mut fn abc() {
+        *self = S { v: 20 };
+    }
+};
+
+fn main() {
+    let s = S { v: 10 };
+    s.v->std::string::from_int()->std::io::println();
+    s.abc();
+    s.v->std::string::from_int()->std::io::println();
+}

@@ -541,6 +541,7 @@ pub fn lex_single<'a>(
             .ignore_then(just('"'))
             .ignore_then(
                 choice((
+                    just("\\{").to(RawFmtStringContents::Char('{')),
                     just("{")
                         .rewind()
                         .ignore_then(tokens_in_curly_braces(lexer.clone()))
@@ -577,7 +578,7 @@ pub fn lex_single<'a>(
                 }
 
                 if !s.is_empty() {
-                    xx.push(FmtStringContents::String(s.replace("\n", "\\n")));
+                    xx.push(FmtStringContents::String(s));
                 }
 
                 Token::FormatStringLiteral(xx)
@@ -597,7 +598,7 @@ pub fn lex_single<'a>(
                 .map(Token::InlineDuckx))
             .or(just("&mut")
                 .then_ignore(whitespace().at_least(1))
-                .map(|_| Token::RefMut))
+                .to(Token::RefMut))
             .or(doc_comment)
             .or(comment)
             .or(fmt_string)
@@ -709,15 +710,15 @@ fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'sr
 fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, char>>> + Clone {
     just('"')
         .ignore_then(
-            none_of("\\\n\t\"")
-                .or(choice((
-                    just("\\\\").to('\\'),
-                    just("\\n").to('\n'),
-                    just("\\t").to('\t'),
-                    just("\\\"").to('"'),
-                )))
-                .repeated()
-                .collect::<String>(),
+            choice((
+                just("\\\\").to('\\'),
+                just("\\n").to('\n'),
+                just("\\t").to('\t'),
+                just("\\\"").to('"'),
+                any().and_is(just("\"").not()),
+            ))
+            .repeated()
+            .collect::<String>(),
         )
         .then_ignore(just('"'))
         .map(Token::StringLiteral)

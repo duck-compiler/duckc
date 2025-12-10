@@ -1,8 +1,0 @@
-struct S = {} impl {
-    mut fn abc() {}
-};
-
-fn main() {
-    let x = 10
-    let z = 2
-}

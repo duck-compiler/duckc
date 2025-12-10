@@ -12,8 +12,8 @@ fn array_for<E>(arr: E[], f: fn(e: E, i: Int) -> Bool) {
 
  type KV<K, V> = (K, V);
 
- struct BoxedInt = {
-     v: go int,
+ struct BigInt = {
+     v: Int,
  } impl {
      fn eq(other: &BigInt) -> Bool {
          return self.v == other.v;
@@ -87,7 +87,7 @@ struct HashMap<K: { eq: fn(other: &K) -> Bool, hash: fn() -> Int }, V> = {
                     match found {
                         .none => {},
                         Int @found_idx => {
-                            let res = [:KV<K, V>];
+                            let res = [] as KV<K, V>[];
 
                             go {
                                 if len(kv) == 1 {
@@ -165,20 +165,20 @@ type Bucket<K, V> = (K, V)[];
 
 fn main() {
     let m = HashMap<BigInt, Int> {
-        buffer: [:Opt<Bucket<BigInt, Int>>, .none, .none, .none, .none],
+        buffer: [.none, .none, .none, .none],
         _len: 0
     };
     m.insert(BigInt { v: 1000 }, 2);
     m.insert(BigInt { v: 2 }, 5);
     m.insert(BigInt { v: 5 }, 1000);
     m.insert(BigInt { v: 1000 }, 5);
-    m.for_each(fn (k: &BigInt, v: &Int) {
+    m.for_each(fn (k, v) {
         std::io::println(f"{std::string::from_int(k.v)} -> {std::string::from_int(*v)}");
     });
-    m.for_each_mut(fn (k: &BigInt, v: &mut Int) {
+    m.for_each_mut(fn (k, v) {
         *v = *v * 2;
     });
-    m.for_each(fn (k: &BigInt, v: &Int) {
+    m.for_each(fn (k, v) {
         std::io::println(f"{std::string::from_int(k.v)} -> {std::string::from_int(*v)}");
     });
 }

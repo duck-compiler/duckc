@@ -70,268 +70,31 @@ pub fn primitive_type_name(primitive_type_expr: &TypeExpr) -> &'static str {
     }
 }
 
-pub fn interface_implementations(
-    typename: String,
-    type_expr: &TypeExpr,
-    type_env: &mut TypeEnv,
-    to_ir: &mut ToIr,
-) -> Vec<IrInstruction> {
-    return match type_expr {
-        TypeExpr::Duck(duck) => duck
-            .fields
-            .iter()
-            .flat_map(|field| {
-                vec![
-                    IrInstruction::FunDef(
-                        format!("Get{}", field.name),
-                        Some(("self".into(), format!("*{}", typename.clone()))),
-                        vec![],
-                        Some(field.type_expr.0.as_go_type_annotation(type_env)),
-                        vec![IrInstruction::Return(Some(IrValue::FieldAccess(
-                            IrValue::Var("self".into()).into(),
-                            field.name.clone(),
-                        )))],
-                    ),
-                    IrInstruction::FunDef(
-                        format!("GetPtr{}", field.name),
-                        Some(("self".into(), format!("*{}", typename.clone()))),
-                        vec![],
-                        Some(format!(
-                            "*{}",
-                            field.type_expr.0.as_go_type_annotation(type_env)
-                        )),
-                        vec![IrInstruction::Return(Some(IrValue::Pointer(
-                            IrValue::FieldAccess(
-                                IrValue::Var("self".into()).into(),
-                                field.name.clone(),
-                            )
-                            .into(),
-                        )))],
-                    ),
-                    IrInstruction::FunDef(
-                        format!("Set{}", field.name),
-                        Some(("self".into(), format!("*{}", typename.clone()))),
-                        vec![(
-                            "param".into(),
-                            field.type_expr.0.as_go_type_annotation(type_env),
-                        )],
-                        None,
-                        vec![IrInstruction::VarAssignment(
-                            format!("self.{}", field.name),
-                            IrValue::Var("param".into()),
-                        )],
-                    ),
-                ]
-                .into_iter()
-            })
-            .collect::<Vec<_>>(),
-        TypeExpr::Struct {
-            name: s,
-            type_params,
-        } => {
-            let StructDefinition {
-                name: struct_name,
-                fields,
-                methods,
-                mut_methods: _,
-                generics: _,
-                doc_comments: _
-            } = type_env
-                .get_struct_def_with_type_params_mut(s.as_str(), type_params, empty_range())
-                .clone();
-
-            let mut instructions: Vec<IrInstruction> = fields
-                .iter()
-                .flat_map(|field| {
-                    vec![
-                        IrInstruction::FunDef(
-                            format!("Get{}", field.name),
-                            Some(("self".into(), format!("*{}", typename.clone()))),
-                            vec![],
-                            Some(field.type_expr.0.as_go_type_annotation(type_env)),
-                            vec![IrInstruction::Return(Some(IrValue::FieldAccess(
-                                IrValue::Var("self".into()).into(),
-                                field.name.clone(),
-                            )))],
-                        ),
-                        IrInstruction::FunDef(
-                            format!("GetPtr{}", field.name),
-                            Some(("self".into(), format!("*{}", typename.clone()))),
-                            vec![],
-                            Some(format!(
-                                "*{}",
-                                field.type_expr.0.as_go_type_annotation(type_env)
-                            )),
-                            vec![IrInstruction::Return(Some(IrValue::Pointer(
-                                IrValue::FieldAccess(
-                                    IrValue::Var("self".into()).into(),
-                                    field.name.clone(),
-                                )
-                                .into(),
-                            )))],
-                        ),
-                        IrInstruction::FunDef(
-                            format!("Set{}", field.name),
-                            Some(("self".into(), format!("*{}", typename.clone()))),
-                            vec![(
-                                "param".into(),
-                                field.type_expr.0.as_go_type_annotation(type_env),
-                            )],
-                            None,
-                            vec![IrInstruction::VarAssignment(
-                                format!("self.{}", field.name),
-                                IrValue::Var("param".into()),
-                            )],
-                        ),
-                    ]
-                    .into_iter()
-                })
-                .collect();
-
-            for method in methods.iter() {
-                if method.generics.is_some() {
-                    continue;
-                }
-
-                let func_type_str = format!(
-                    "func ({}) {}",
-                    method
-                        .params
-                        .iter()
-                        .flat_map(|params| params.iter())
-                        .map(|param| format!(
-                            "{} {}",
-                            param.0,
-                            param.1.0.as_go_type_annotation(type_env)
-                        ))
-                        .collect::<Vec<_>>()
-                        .join(","),
-                    method
-                        .return_type
-                        .as_ref()
-                        .filter(|x| !x.0.is_unit())
-                        .map(|(type_expr, _)| type_expr.as_go_type_annotation(type_env))
-                        .unwrap_or_default()
-                );
-
-                let instructions_to_be_duck_conform = vec![
-                    IrInstruction::FunDef(
-                        format!("Get{}", method.name),
-                        Some(("self".into(), format!("*{}", typename.clone()))),
-                        vec![],
-                        Some(method.type_expr().0.as_go_return_type(type_env)),
-                        vec![
-                            IrInstruction::VarDecl("result".to_string(), func_type_str.clone()),
-                            IrInstruction::VarAssignment(
-                                "result".to_string(),
-                                IrValue::Lambda(
-                                    method
-                                        .params
-                                        .iter()
-                                        .flat_map(|params| params.iter())
-                                        .map(|param| {
-                                            (
-                                                param.0.clone(),
-                                                param.1.0.as_go_type_annotation(type_env),
-                                            )
-                                        })
-                                        .collect::<Vec<_>>(),
-                                    method.return_type.as_ref().map(|return_type| {
-                                        return_type.0.as_go_type_annotation(type_env)
-                                    }),
-                                    vec![IrInstruction::InlineGo(format!(
-                                        "{} self.{}({})",
-                                        if method.return_type.is_some() {
-                                            "return"
-                                        } else {
-                                            ""
-                                        },
-                                        method.name,
-                                        method
-                                            .params
-                                            .iter()
-                                            .flat_map(|params| params.iter())
-                                            .map(|param| param.0.clone())
-                                            .collect::<Vec<_>>()
-                                            .join(", "),
-                                    ))],
-                                ),
-                            ),
-                            IrInstruction::Return(Some(IrValue::Var("result".to_string()))),
-                        ],
-                    ),
-                    IrInstruction::FunDef(
-                        format!("GetPtr{}", method.name),
-                        Some(("self".into(), format!("*{}", typename.clone()))),
-                        vec![],
-                        Some(format!(
-                            "*{}",
-                            method.type_expr().0.as_go_return_type(type_env)
-                        )),
-                        vec![IrInstruction::Return(Some(IrValue::Nil))],
-                    ),
-                    IrInstruction::FunDef(
-                        format!("Set{}", method.name),
-                        Some(("self".into(), format!("*{}", typename.clone()))),
-                        vec![("param".into(), func_type_str)],
-                        None,
-                        vec![],
-                    ),
-                ];
-
-                instructions.extend(instructions_to_be_duck_conform);
-
-                let mut body = method.emit(
-                    Some(("duck_internal_self".to_string(), format!("*{struct_name}"))),
-                    type_env,
-                    to_ir,
-                );
-                if let IrInstruction::FunDef(_, _, _, _, body) = &mut body {
-                    body.insert(
-                        0,
-                        IrInstruction::VarDecl("self".to_string(), format!("**{struct_name}")),
-                    );
-                    body.insert(
-                        1,
-                        IrInstruction::VarAssignment(
-                            "self".to_string(),
-                            IrValue::Imm("&duck_internal_self".to_string()),
-                        ),
-                    );
-                }
-
-                instructions.push(body);
-            }
-
-            for generic_method in type_env.get_generic_methods(struct_name.clone()).clone() {
-                let mut body = generic_method.emit(
-                    Some(("duck_internal_self".to_string(), format!("*{struct_name}"))),
-                    type_env,
-                    to_ir,
-                );
-                if let IrInstruction::FunDef(_, _, _, _, body) = &mut body {
-                    body.insert(
-                        0,
-                        IrInstruction::VarDecl("self".to_string(), format!("**{struct_name}")),
-                    );
-                    body.insert(
-                        1,
-                        IrInstruction::VarAssignment(
-                            "self".to_string(),
-                            IrValue::Imm("&duck_internal_self".to_string()),
-                        ),
-                    );
-                }
-                instructions.push(body);
-            }
-
-            instructions
-        }
-
-        _ => {
-            vec![]
-        }
-    };
+pub fn fixup_method_body(struct_name: &str, body: &mut Vec<IrInstruction>) {
+    body.insert(
+        0,
+        IrInstruction::VarDecl("Δorg_addr".to_string(), format!("*{struct_name}")),
+    );
+    body.insert(
+        1,
+        IrInstruction::VarAssignment(
+            "Δorg_addr".to_string(),
+            IrValue::Imm("duck_internal_self".to_string()),
+        ),
+    );
+    body.insert(
+        2,
+        IrInstruction::VarDecl("self".to_string(), format!("**{struct_name}")),
+    );
+    body.insert(
+        3,
+        IrInstruction::VarAssignment(
+            "self".to_string(),
+            IrValue::Imm("&duck_internal_self".to_string()),
+        ),
+    );
+    // body.push(IrInstruction::InlineGo("*Δorg_addr = **self".to_string()));
+    body.insert(4, IrInstruction::InlineGo("defer func() { *Δorg_addr = **self }()".to_string()));
 }
 
 pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<IrInstruction> {
@@ -618,17 +381,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                 to_ir,
             );
             if let IrInstruction::FunDef(_, _, _, _, body) = &mut body {
-                body.insert(
-                    0,
-                    IrInstruction::VarDecl("self".to_string(), format!("**{struct_name}")),
-                );
-                body.insert(
-                    1,
-                    IrInstruction::VarAssignment(
-                        "self".to_string(),
-                        IrValue::Imm("&duck_internal_self".to_string()),
-                    ),
-                );
+                fixup_method_body(struct_name.as_str(), body);
             }
 
             instructions.push(body);
@@ -641,17 +394,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                 to_ir,
             );
             if let IrInstruction::FunDef(_, _, _, _, body) = &mut body {
-                body.insert(
-                    0,
-                    IrInstruction::VarDecl("self".to_string(), format!("**{struct_name}")),
-                );
-                body.insert(
-                    1,
-                    IrInstruction::VarAssignment(
-                        "self".to_string(),
-                        IrValue::Imm("&duck_internal_self".to_string()),
-                    ),
-                );
+                fixup_method_body(struct_name.as_str(), body);
             }
             instructions.push(body);
         }

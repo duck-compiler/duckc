@@ -623,11 +623,13 @@ where
                                         res.push(ValFmtStringContents::String(s.to_owned()))
                                     }
                                     FmtStringContents::Tokens(s) => {
-                                        let expr = value_expr_parser
-                                            .parse(make_input(empty_range(), s.as_slice()))
-                                            .into_result()
-                                            .expect("invalid code");
-                                        res.push(ValFmtStringContents::Expr(expr));
+                                        if !s.is_empty() {
+                                            let expr = value_expr_parser
+                                                .parse(make_input(empty_range(), s.as_slice()))
+                                                .into_result()
+                                                .expect("invalid code");
+                                            res.push(ValFmtStringContents::Expr(expr));
+                                        }
                                     }
                                 }
                             }
@@ -3239,7 +3241,7 @@ mod tests {
             "let x: { h: Int, x: { y: Int }} = { h: 4, x: { y: 8 } }",
             "let x: Int = false",
             "let x: String = \"Hallo, Welt!\"",
-            "let x: go `sync.WaitGroup` = {}",
+            "let x: go \"sync.WaitGroup\" = {}",
         ];
 
         for valid_declaration in valid_declarations {

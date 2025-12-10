@@ -89,6 +89,22 @@ where
                     (mut_method_names, methods)
                 },
             );
+
+            let mut names = HashSet::new();
+
+            let mut is_name_available = |s: String| -> bool { names.insert(s) };
+            let fields: Vec<Field> = fields;
+
+            for name in fields
+                .iter()
+                .map(|f| &f.name)
+                .chain(methods.iter().map(|m| &m.name))
+            {
+                if !is_name_available(name.clone()) {
+                    panic!("Error: {} already declared in {identifier}", name);
+                }
+            }
+
             StructDefinition {
                 name: identifier,
                 fields,
