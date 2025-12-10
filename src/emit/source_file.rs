@@ -52,6 +52,14 @@ impl SourceFile {
             }
         }
 
+        let mut emitted = HashSet::new();
+        for schema_def in self.schema_defs {
+            if emitted.insert(schema_def.name.clone()) {
+                let fn_instr = schema_def.emit(None, type_env, &mut to_ir);
+                instructions.push(fn_instr);
+            }
+        }
+
         instructions.push(IrInstruction::StructDef(
             "RenderCall".to_string(),
             vec![
