@@ -1,6 +1,6 @@
 use crate::{
-    emit::{ir::join_ir, schema_def, value::{IrInstruction, IrValue, ToIr}},
-    parse::{function_parser::FunctionDefintion, schema_def_parser::{SchemaDefinition, SchemaField}, type_parser::{Duck, TypeExpr}, value_parser::{empty_range, ValueExpr}, Field},
+    emit::{ir::join_ir, value::{IrInstruction, ToIr}},
+    parse::{schema_def_parser::{SchemaDefinition, SchemaField}, value_parser::{Assignment, ValueExpr}},
     semantics::type_resolve::TypeEnv,
 };
 
@@ -20,7 +20,7 @@ impl SchemaDefinition {
         };
 
         return format!(
-            "F_{0} {1} `json:\"{0}{2}\"`",
+            "F_{0} *{1} `json:\"{0}{2}\"`",
             field.name,
             field.type_expr.0.as_go_type_annotation(type_env),
             omit_empty
@@ -29,7 +29,6 @@ impl SchemaDefinition {
 
     pub fn emit(
         &self,
-        receiver: Option<(String, String)>,
         type_env: &mut TypeEnv,
         to_ir: &mut ToIr,
     ) -> IrInstruction {
@@ -54,11 +53,30 @@ impl SchemaDefinition {
         // let mut validation_srcs = vec![];
         for schema_field in &self.fields {
             let field_name = &schema_field.name;
+            let field_type_annotation = if schema_field.else_branch_value_expr.is_some() {
+                "any".to_string()
+            } else {
+                schema_field.type_expr.0.as_go_type_annotation(type_env)
+            };
+
+            let null_action_emitted = if let Some(value_expr) = &schema_field.else_branch_value_expr {
+                ValueExpr::VarAssign(Box::new((Assignment{
+                    target: (ValueExpr::Variable(false, format!("ref_struct.F_{field_name}"), Some(schema_field.type_expr.0.clone()), None), schema_field.span),
+                    value_expr: value_expr.clone()
+                }, schema_field.span))).emit(type_env, to_ir, schema_field.span)
+            } else {
+                ValueExpr::InlineGo("return Tag__err {}".to_string()).emit(type_env, to_ir, schema_field.span)
+            };
+
+            let null_action_src = join_ir(&null_action_emitted.0);
 
             let src = format!("
-                var field_{field_name} {} = ref_struct.F_{field_name}
+                if ref_struct.F_{field_name} == nil {{
+                    {null_action_src}
+                }}
+
+                var field_{field_name} {field_type_annotation} = *ref_struct.F_{field_name}
                 ",
-                schema_field.type_expr.0.as_go_type_annotation(type_env)
             );
 
             schema_struct_access_srcs.push(src);
@@ -121,7 +139,7 @@ impl SchemaDefinition {
             "
         );
 
-        let check_fields_src = {};
+        let _check_fields_src = {};
 
         let instr = IrInstruction::InlineGo(
             format!(
