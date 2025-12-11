@@ -2315,8 +2315,8 @@ mod tests {
 
             import (
                 "fmt"
-                "sync"
                 "time"
+                "sync"
                 "context"
                 "net/http"
                 "encoding/json"
@@ -2373,6 +2373,7 @@ mod tests {
             import (
                 "fmt"
                 "time"
+                "sync"
             )
 
             type Worker struct {
@@ -2903,6 +2904,7 @@ mod tests {
                 "fmt"
                 "time"
                 "context"
+                "sync"
                 "math/rand"
             )
 
