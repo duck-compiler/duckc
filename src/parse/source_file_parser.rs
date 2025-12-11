@@ -425,6 +425,10 @@ impl SourceFile {
             c.extend(unmangle(&struct_definition.name));
             struct_definition.name = mangle(&c);
 
+            for field in &mut struct_definition.fields {
+                append_global_prefix_type_expr(&mut field.type_expr.0, &mut mangle_env);
+            }
+
             for method in &mut struct_definition.methods {
                 for type_expr in method
                     .return_type

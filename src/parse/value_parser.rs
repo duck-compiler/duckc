@@ -630,7 +630,7 @@ where
                                             let expr = value_expr_parser
                                                 .parse(make_input(empty_range(), s.as_slice()))
                                                 .into_result()
-                                                .expect("invalid code");
+                                                .expect(&format!("invalid code {s:?}"));
                                             res.push(ValFmtStringContents::Expr(expr));
                                         }
                                     }

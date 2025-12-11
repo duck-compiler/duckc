@@ -1,0 +1,121 @@
+use go "fmt";
+use go "net/http";
+use go "bytes";
+use go "io/ioutil";
+
+type FetchMethod = .GET | .POST;
+type HttpHeader = .Authorization | .Proxy_Authenticate | .Proxy_Authorization | .WWW_Authenticate;
+
+fn http_header_to_string(header: HttpHeader) -> String {
+    return match header {
+        .Authorization => "Authorization",
+        .Proxy_Authenticate => "Proxy-Authenticate",
+        .Proxy_Authorization => "Proxy-Authorization",
+        .WWW_Authenticate => "WWW-Authenticate",
+    };
+}
+
+struct Fetch = {
+    method: FetchMethod,
+    url: String,
+    body: ::Opt<String>,
+    headers: go "map[string]string",
+} impl {
+    mut fn set_body(s: String) -> &mut Fetch {
+        self.body = s;
+        return self;
+    }
+
+    mut fn put_header(header: HttpHeader, header_value: String) -> &mut Fetch {
+        const header_name = header->http_header_to_string();
+
+        go {
+            (*self).headers[header_name] = header_value
+        }
+        return self
+    }
+
+    mut fn put_header_raw(header_name: String, header_value: String) -> &mut Fetch {
+        go {
+            (*self).headers[header_name] = header_value
+        }
+        return self
+    }
+
+    fn to_string() -> String {
+        let headers_string = "";
+        go {
+            for k, v := range (*self).headers {
+            	headers_string = fmt.Sprintf("%s\n%s:\t%s", headers_string, k, v)
+            }
+        }
+
+        return f"
+            \nRequest method: {
+                match self.method {
+                    .GET => "GET",
+                    .POST => "POST"
+                }
+            }
+            \nHeaders:{headers_string}\n
+            ";
+    }
+
+    fn send() -> String | .http_error {
+        const method_name = match self.method {
+            .GET => "get",
+            .POST => "post",
+        };
+
+        const req_body = match self.body {
+            .none => "",
+            String @s => s,
+        };
+
+        const http_error = .http_error;
+
+        return go {
+            var goHttpMethod string
+            if method_name == "get" {
+                goHttpMethod = http.MethodGet
+            } else if method_name == "post" {
+                goHttpMethod = http.MethodPost
+            }
+
+            req_body_bytes := bytes.NewBuffer([]byte(req_body))
+            req, _ := http.NewRequest(goHttpMethod, (*self).url, req_body_bytes)
+
+            for header_name, header_value := range (*self).headers {
+                req.Header.Add(header_name, header_value)
+            }
+
+            resp, err := http.DefaultClient.Do(req)
+
+            if err != nil {
+                return http_error
+            }
+
+            defer resp.Body.Close()
+
+            body, err := ioutil.ReadAll(resp.Body)
+
+            if err != nil {
+                return http_error
+            }
+            return string(body)
+        }
+    }
+};
+
+fn fetch(method: FetchMethod, url: String) -> Fetch {
+    const headers_map: go "map[string]string";
+    go {
+        headers_map = make(map[string]string)
+    }
+    return Fetch {
+        method: method,
+        url: url,
+        body: .none,
+        headers: headers_map,
+    };
+}

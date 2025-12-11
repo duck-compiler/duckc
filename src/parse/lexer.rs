@@ -173,8 +173,8 @@ pub fn tokens_in_curly_braces<'a>(
                 v.extend(x.into_iter().flatten());
                 v.push((Token::ControlChar('}'), empty_range()));
                 v
-            })
-    })
+            }).padded()
+    }).padded()
 }
 
 #[derive(Debug, Clone)]
