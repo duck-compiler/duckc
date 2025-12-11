@@ -1,0 +1,41 @@
+use std::sync::{Mutex};
+use std::sync::{AtomicBool};
+use std::sync::{new_atomic_bool};
+use std::sync::{new_mutex};
+use std::io::{println};
+
+fn bool_to_string(b: Bool) -> String {
+    return if (b) {
+        "true"
+    } else {
+        "false"
+    };
+}
+
+fn main() {
+    const m = new_mutex<String>("hi");
+    const am = new_atomic_bool();
+
+    am.set(true);
+    am.compare_and_swap(false, true)->bool_to_string()->println();
+
+    std::task::spawn(fn() {
+        std::task::sleep({ seconds: 1 });
+        const lock_result = m.try_lock(fn(v){});
+        if (lock_result) {
+            println("locking worked");
+        } else {
+            println("locking did not work");
+        }
+    });
+
+    m.lock(fn(v) {
+        println(*v);
+        std::task::sleep({ seconds: 2 });
+        *v = "changed";
+    });
+
+    m.lock(fn(v) {
+        println(f"should be \"changed\": {*v}");
+    });
+}

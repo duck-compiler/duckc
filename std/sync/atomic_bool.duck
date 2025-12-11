@@ -1,0 +1,32 @@
+use go "sync.atomic";
+
+struct AtomicBool = {
+    inner: go "atomic.Bool",
+} impl {
+    /// Returns true if the swap succeeded
+    fn compare_and_swap(compare_against: Bool, new_value: Bool) -> Bool {
+        return go {
+            return (*self).inner.CompareAndSwap(compare_against, new_value)
+        };
+    }
+
+    /// Returns old value
+    fn set(new_value: Bool) -> Bool {
+        return go {
+            return (*self).inner.Store(new_value)
+        };
+    }
+};
+
+fn new_atomic_bool() -> AtomicBool {
+    const inner_make = fn() -> go "atomic.Bool" {
+        return go {
+            var result atomic.Bool
+            return result
+        };
+    };
+
+    return AtomicBool {
+        inner: inner_make(),
+    };
+}

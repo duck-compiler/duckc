@@ -1,0 +1,3 @@
+struct Channel<T> = {
+    inner: go "chan $T"
+};

@@ -2303,9 +2303,12 @@ impl ValueExpr {
                 }
                 ValueExpr::Return(expr) => {
                     if let Some(expr) = expr {
+                        let is_inline_go = matches!(expr.0, ValueExpr::InlineGo(..));
                         let (expr, _) = &**expr;
                         let (mut instr, res) = expr.direct_or_with_instr(type_env, env, span);
-                        instr.push(IrInstruction::Return(res));
+                        if !is_inline_go {
+                            instr.push(IrInstruction::Return(res));
+                        }
                         (instr, None)
                     } else {
                         (vec![IrInstruction::Return(None)], None)
