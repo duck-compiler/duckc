@@ -283,7 +283,7 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
 
     fn extract_package_name_from_node(node: &Node, go_source: &str) -> Option<String> {
         return match node.kind() {
-            "identifier" => Some(go_source[node.start_byte()..node.end_byte()].to_string()),
+            "package_identifier" | "identifier" => Some(go_source[node.start_byte()..node.end_byte()].to_string()),
             _ => None,
         };
     }
@@ -294,6 +294,13 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
                 let text = &go_source[node.start_byte()..node.end_byte()];
                 if !local_variables.contains(text) && !is_part_of_selector_expression(&node) {
                     used_imports.insert(text.to_string());
+                }
+            }
+            "qualified_type" => {
+                if let Some(package_node) = node.child_by_field_name("package")
+                && let Some(package_name) = extract_package_name_from_node(&package_node, go_source)
+                && !local_variables.contains(&package_name) {
+                    used_imports.insert(package_name);
                 }
             }
             "selector_expression" => {
@@ -821,7 +828,7 @@ fn find_receiver_type_name(node: &Node, source: &[u8]) -> Option<String> {
 
 fn find_dependencies(node: Node, source: &[u8], deps: &mut HashSet<String>) {
     match node.kind() {
-        "identifier" | "type_identifier" | "field_identifier" => {
+        "identifier" | "type_identifier" | "field_identifier" | "package_identifier" => {
             deps.insert(node.utf8_text(source).unwrap().to_string());
         }
         "selector_expression" => {
@@ -4482,6 +4489,35 @@ mod tests {
                 // Using strings package functions
                 result := strings.ToUpper("test")
                 fmt.Println(result)
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_type_access() {
+        let input = r#"
+            package main
+
+            import (
+                "sync"
+            )
+
+            func main() {
+                var x sync.Mutex
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "sync"
+            )
+
+            func main() {
+                var x sync.Mutex
             }
         "#;
 
