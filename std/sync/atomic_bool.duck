@@ -13,20 +13,20 @@ struct AtomicBool = {
     /// Returns old value
     fn set(new_value: Bool) -> Bool {
         return go {
-            (*self).inner.Swap(new_value)
+            return (*self).inner.Swap(new_value)
         };
+    }
+
+    fn get() -> Bool {
+        return go {
+            return (*self).inner.Load()
+        }
     }
 };
 
 fn new_atomic_bool() -> AtomicBool {
-    const inner_make = fn() -> go "atomic.Bool" {
-        return go {
-            var result atomic.Bool
-            return result
-        };
-    };
-
+    const go_atomic_bool: go "atomic.Bool";
     return AtomicBool {
-        inner: inner_make(),
+        inner: go_atomic_bool,
     };
 }

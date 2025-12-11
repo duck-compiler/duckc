@@ -32,15 +32,10 @@ struct Mutex<T> = {
 };
 
 fn new_mutex<T>(v: T) -> Mutex<T> {
-    const make_go_mutex = fn() -> go "sync.Mutex" {
-        return go {
-            var result sync.Mutex
-            return result
-        }
-    };
+    const mutex: go "sync.Mutex";
 
     const result = Mutex<T> {
-        inner: make_go_mutex(),
+        inner: mutex,
         value: v
     };
     return result;
