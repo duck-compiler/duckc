@@ -9,7 +9,7 @@ use chumsky::container::Container;
 use indexmap::IndexMap;
 
 use crate::{
-    emit::{function, schema_def}, parse::{
+    parse::{
         duckx_component_parser::DuckxComponent, extensions_def_parser::ExtensionsDef, failure_with_occurence, function_parser::{FunctionDefintion, LambdaFunctionExpr}, schema_def_parser::SchemaDefinition, source_file_parser::SourceFile, struct_parser::{NamedDuckDefinition, StructDefinition}, test_parser::TestCase, tsx_component_parser::{
             do_edits, Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit
         }, type_parser::{Duck, TypeDefinition, TypeExpr}, value_parser::{
