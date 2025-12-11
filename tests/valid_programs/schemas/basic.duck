@@ -11,10 +11,7 @@ schema Yoo = {
 }
 
 fn main() {
-    let str = "";
-    go {
-        str = "{ \"hello\": \"Yoo\" }"
-    }
+    let str = "{\"hello\": \"Yoo\"}";
     let x = Yoo().from_json(str);
     match x {
         { hello: String } @yoo => assert(yoo.hello == "Yoo", "hello is not Yoo"),
