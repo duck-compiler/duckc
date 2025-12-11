@@ -1,4 +1,4 @@
-use go "sync.atomic";
+use go "sync/atomic";
 
 struct AtomicBool = {
     inner: go "atomic.Bool",
@@ -13,7 +13,7 @@ struct AtomicBool = {
     /// Returns old value
     fn set(new_value: Bool) -> Bool {
         return go {
-            return (*self).inner.Store(new_value)
+            (*self).inner.Swap(new_value)
         };
     }
 };

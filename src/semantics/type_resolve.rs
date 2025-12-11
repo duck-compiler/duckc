@@ -10,15 +10,28 @@ use indexmap::IndexMap;
 
 use crate::{
     parse::{
-        duckx_component_parser::DuckxComponent, extensions_def_parser::ExtensionsDef, failure_with_occurence, function_parser::{FunctionDefintion, LambdaFunctionExpr}, schema_def_parser::SchemaDefinition, source_file_parser::SourceFile, struct_parser::{NamedDuckDefinition, StructDefinition}, test_parser::TestCase, tsx_component_parser::{
-            do_edits, Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit
-        }, type_parser::{Duck, TypeDefinition, TypeExpr}, value_parser::{
+        Field, SS, Spanned, SpannedMutRef,
+        duckx_component_parser::DuckxComponent,
+        extensions_def_parser::ExtensionsDef,
+        failure_with_occurence,
+        function_parser::{FunctionDefintion, LambdaFunctionExpr},
+        schema_def_parser::SchemaDefinition,
+        source_file_parser::SourceFile,
+        struct_parser::{NamedDuckDefinition, StructDefinition},
+        test_parser::TestCase,
+        tsx_component_parser::{
+            Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
+        },
+        type_parser::{Duck, TypeDefinition, TypeExpr},
+        value_parser::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
-        }, Field, Spanned, SpannedMutRef, SS
-    }, semantics::{
-        ident_mangler::{mangle, MANGLE_SEP},
+        },
+    },
+    semantics::{
+        ident_mangler::{MANGLE_SEP, mangle},
         typechecker::{check_type_compatability, check_type_compatability_full},
-    }, tags::Tag
+    },
+    tags::Tag,
 };
 
 fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
@@ -442,9 +455,7 @@ impl TypeEnv<'_> {
     }
 
     pub fn get_schema_def_opt<'a>(&'a self, name: &str) -> Option<&'a SchemaDefinition> {
-        self.schema_defs
-            .iter()
-            .find(|x| x.name.as_str() == name)
+        self.schema_defs.iter().find(|x| x.name.as_str() == name)
     }
 
     pub fn get_duck_def_opt<'a>(&'a self, name: &str) -> Option<&'a NamedDuckDefinition> {
@@ -533,19 +544,22 @@ impl TypeEnv<'_> {
         self.get_identifier_type_and_const(identifier)
             .map(|(x, _, schema)| {
                 if schema {
-                    if let TypeExpr::Fun(_, Some(return_duck), _) = x &&
-                        let TypeExpr::Duck(duck) = &return_duck.as_ref().0 {
-                            let fields = &duck.fields;
-                            let from_json_fun = fields.iter().find(|field| field.name == "from_json")
-                                .expect("compiler error: schema without from json in object");
+                    if let TypeExpr::Fun(_, Some(return_duck), _) = x
+                        && let TypeExpr::Duck(duck) = &return_duck.as_ref().0
+                    {
+                        let fields = &duck.fields;
+                        let from_json_fun = fields
+                            .iter()
+                            .find(|field| field.name == "from_json")
+                            .expect("compiler error: schema without from json in object");
 
-                            dbg!(&from_json_fun);
+                        dbg!(&from_json_fun);
 
-                            if let TypeExpr::Fun(_, Some(return_type), _) = &from_json_fun.type_expr.0 {
-                                return return_type.as_ref().clone().0
-                            }
+                        if let TypeExpr::Fun(_, Some(return_type), _) = &from_json_fun.type_expr.0 {
+                            return return_type.as_ref().clone().0;
+                        }
 
-                            panic!("compiler error: schema without function")
+                        panic!("compiler error: schema without function")
                     } else {
                         panic!("compiler error: schema without function")
                     }
@@ -555,7 +569,10 @@ impl TypeEnv<'_> {
             })
     }
 
-    pub fn get_identifier_type_and_const(&self, identifier: &str) -> Option<(TypeExpr, bool, bool)> {
+    pub fn get_identifier_type_and_const(
+        &self,
+        identifier: &str,
+    ) -> Option<(TypeExpr, bool, bool)> {
         for i in self.identifier_types.iter().rev() {
             let r = i.get(identifier).cloned();
             if r.is_some() {
@@ -960,7 +977,9 @@ where
             if let Some(t) = decl.0.type_expr.as_mut() {
                 trav_type_expr(f_t.clone(), t, env);
             }
-            trav_value_expr(f_t.clone(), f_vv.clone(), &mut decl.0.initializer, env);
+            if let Some(initializer) = decl.0.initializer.as_mut() {
+                trav_value_expr(f_t.clone(), f_vv.clone(), initializer, env);
+            }
         }
         ValueExpr::If {
             condition,
@@ -1359,7 +1378,9 @@ fn replace_generics_in_value_expr(expr: &mut ValueExpr, set_params: &IndexMap<St
             if let Some(type_expr) = &mut decl.0.type_expr {
                 replace_generics_in_type_expr(&mut type_expr.0, set_params);
             }
-            replace_generics_in_value_expr(&mut decl.0.initializer.0, set_params);
+            if let Some(initializer) = decl.0.initializer.as_mut() {
+                replace_generics_in_value_expr(&mut initializer.0, set_params);
+            }
         }
         ValueExpr::VarAssign(a) => {
             replace_generics_in_value_expr(&mut a.0.target.0, set_params);
@@ -1641,7 +1662,9 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
                 sort_fields_type_expr(&mut type_expr.0);
             }
 
-            sort_fields_value_expr(&mut initializer.0);
+            if let Some(initializer) = initializer.as_mut() {
+                sort_fields_value_expr(&mut initializer.0);
+            }
         }
         ValueExpr::Lambda(l) => {
             let LambdaFunctionExpr {
@@ -1935,10 +1958,7 @@ pub fn typeresolve_struct_def(
     type_env.all_types.insert(0, self_type.clone());
 }
 
-pub fn typeresolve_schema_def(
-    schema_def: &mut SchemaDefinition,
-    type_env: &mut TypeEnv,
-) {
+pub fn typeresolve_schema_def(schema_def: &mut SchemaDefinition, type_env: &mut TypeEnv) {
     type_env.push_type_aliases();
 
     for schema_field in &mut schema_def.fields {
@@ -2008,24 +2028,21 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             sort_fields_value_expr(&mut function_definition.value_expr.0);
         });
 
-    source_file
-        .schema_defs
-        .iter_mut()
-        .for_each(|schema_def| {
-            for schema_field in &mut schema_def.fields {
-                sort_fields_type_expr(&mut schema_field.type_expr.0);
-                if let Some(branch) = &mut schema_field.if_branch {
-                    sort_fields_value_expr(&mut branch.0.condition.0);
-                    if let Some((value_expr, _)) = &mut branch.0.value_expr {
-                        sort_fields_value_expr(value_expr);
-                    }
-                }
-
-                if let Some(value_expr) = &mut schema_field.else_branch_value_expr {
-                    sort_fields_value_expr(&mut value_expr.0);
+    source_file.schema_defs.iter_mut().for_each(|schema_def| {
+        for schema_field in &mut schema_def.fields {
+            sort_fields_type_expr(&mut schema_field.type_expr.0);
+            if let Some(branch) = &mut schema_field.if_branch {
+                sort_fields_value_expr(&mut branch.0.condition.0);
+                if let Some((value_expr, _)) = &mut branch.0.value_expr {
+                    sort_fields_value_expr(value_expr);
                 }
             }
-        });
+
+            if let Some(value_expr) = &mut schema_field.else_branch_value_expr {
+                sort_fields_value_expr(&mut value_expr.0);
+            }
+        }
+    });
 
     source_file
         .test_cases
@@ -2119,87 +2136,101 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 }
                 resolve_all_aliases_value_expr(&mut fun_def.value_expr, type_env);
             }
-            type_env.struct_definitions.retain(|s| s.name.as_str() != struct_definition.name.as_str());
+            type_env
+                .struct_definitions
+                .retain(|s| s.name.as_str() != struct_definition.name.as_str());
             type_env.struct_definitions.push(struct_definition.clone());
         });
 
-    source_file
-        .schema_defs
-        .iter_mut()
-        .for_each(|schema_def| {
-            let mut fields_with_type: Vec<(String, Spanned<TypeExpr>)> = vec![];
+    source_file.schema_defs.iter_mut().for_each(|schema_def| {
+        let mut fields_with_type: Vec<(String, Spanned<TypeExpr>)> = vec![];
 
-            for schema_field in &mut schema_def.fields {
-                let mut potential_types = vec![];
+        for schema_field in &mut schema_def.fields {
+            let mut potential_types = vec![];
 
-                resolve_all_aliases_type_expr(&mut schema_field.type_expr, type_env);
-                potential_types.push((schema_field.type_expr.0.clone(), schema_field.type_expr.1));
+            resolve_all_aliases_type_expr(&mut schema_field.type_expr, type_env);
+            potential_types.push((schema_field.type_expr.0.clone(), schema_field.type_expr.1));
 
-                if let Some(branch) = &mut schema_field.if_branch {
-                    resolve_all_aliases_value_expr(&mut branch.0.condition, type_env);
-                    if let Some(value_expr) = &mut branch.0.value_expr {
-                        resolve_all_aliases_value_expr(value_expr, type_env);
-                        potential_types.push((TypeExpr::from_value_expr(value_expr, type_env), value_expr.1));
-                    }
-                }
-
-                if let Some(value_expr) = &mut schema_field.else_branch_value_expr {
+            if let Some(branch) = &mut schema_field.if_branch {
+                resolve_all_aliases_value_expr(&mut branch.0.condition, type_env);
+                if let Some(value_expr) = &mut branch.0.value_expr {
                     resolve_all_aliases_value_expr(value_expr, type_env);
-                    potential_types.push((TypeExpr::from_value_expr(value_expr, type_env), value_expr.1));
+                    potential_types.push((
+                        TypeExpr::from_value_expr(value_expr, type_env),
+                        value_expr.1,
+                    ));
                 }
-
-                resolve_all_aliases_type_expr(&mut schema_field.type_expr, type_env);
-
-                let field_type_expr = if potential_types.is_empty() {
-                    unreachable!("compiler error: schemas should not allow no typings?")
-                } else if potential_types.len() == 1 {
-                    potential_types.get(0).unwrap()
-                } else {
-                    // todo: concat spans
-                    &(TypeExpr::Or(potential_types.clone()), potential_types.get(0).unwrap().1)
-                };
-
-                fields_with_type.push((schema_field.name.clone(), field_type_expr.clone()));
             }
 
-            let schema_fn_return_type = (
-                TypeExpr::Duck(Duck { fields: vec![Field {
+            if let Some(value_expr) = &mut schema_field.else_branch_value_expr {
+                resolve_all_aliases_value_expr(value_expr, type_env);
+                potential_types.push((
+                    TypeExpr::from_value_expr(value_expr, type_env),
+                    value_expr.1,
+                ));
+            }
+
+            resolve_all_aliases_type_expr(&mut schema_field.type_expr, type_env);
+
+            let field_type_expr = if potential_types.is_empty() {
+                unreachable!("compiler error: schemas should not allow no typings?")
+            } else if potential_types.len() == 1 {
+                potential_types.get(0).unwrap()
+            } else {
+                // todo: concat spans
+                &(
+                    TypeExpr::Or(potential_types.clone()),
+                    potential_types.get(0).unwrap().1,
+                )
+            };
+
+            fields_with_type.push((schema_field.name.clone(), field_type_expr.clone()));
+        }
+
+        let schema_fn_return_type = (
+            TypeExpr::Duck(Duck {
+                fields: vec![Field {
                     name: "from_json".to_string(),
-                    type_expr: (TypeExpr::Fun(
-                        vec![(None,(TypeExpr::String(None), schema_def.span))],
-                        Some(Box::new((TypeExpr::Or(vec![
-                            (TypeExpr::Duck(Duck {
-                                fields: fields_with_type.iter()
-                                    .map(|(name, type_expr)| Field {
-                                        name: name.clone(),
-                                        type_expr: type_expr.clone()
-                                    })
-                                    .collect::<Vec<_>>()
-                            }), schema_def.span),
-                            (TypeExpr::Tag("err".to_string()), schema_def.span)
-                        ]), schema_def.span))), false), schema_def.span)
-                }] }),
-                schema_def.span
-            );
+                    type_expr: (
+                        TypeExpr::Fun(
+                            vec![(None, (TypeExpr::String(None), schema_def.span))],
+                            Some(Box::new((
+                                TypeExpr::Or(vec![
+                                    (
+                                        TypeExpr::Duck(Duck {
+                                            fields: fields_with_type
+                                                .iter()
+                                                .map(|(name, type_expr)| Field {
+                                                    name: name.clone(),
+                                                    type_expr: type_expr.clone(),
+                                                })
+                                                .collect::<Vec<_>>(),
+                                        }),
+                                        schema_def.span,
+                                    ),
+                                    (TypeExpr::Tag("err".to_string()), schema_def.span),
+                                ]),
+                                schema_def.span,
+                            ))),
+                            false,
+                        ),
+                        schema_def.span,
+                    ),
+                }],
+            }),
+            schema_def.span,
+        );
 
-            let schema_fn_type = TypeExpr::Fun(
-                vec![],
-                Some(Box::new(schema_fn_return_type.clone())),
-                false
-            );
+        let schema_fn_type =
+            TypeExpr::Fun(vec![], Some(Box::new(schema_fn_return_type.clone())), false);
 
-            type_env.insert_type(schema_fn_return_type.clone().0);
+        type_env.insert_type(schema_fn_return_type.clone().0);
 
-            schema_def.out_type = Some(schema_fn_return_type);
-            schema_def.schema_fn_type = Some((schema_fn_type.clone(), schema_def.span));
+        schema_def.out_type = Some(schema_fn_return_type);
+        schema_def.schema_fn_type = Some((schema_fn_type.clone(), schema_def.span));
 
-            type_env.insert_identifier_type(
-                schema_def.name.clone(),
-                schema_fn_type,
-                true,
-                true
-            );
-        });
+        type_env.insert_identifier_type(schema_def.name.clone(), schema_fn_type, true, true);
+    });
 
     source_file
         .tsx_components
@@ -2220,7 +2251,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     true,
                 ),
                 true,
-                false
+                false,
             );
         });
 
@@ -2357,12 +2388,9 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         typeresolve_extensions_def(extensions_def, type_env);
     }
 
-    source_file
-        .schema_defs
-        .iter_mut()
-        .for_each(|schema_def| {
-            typeresolve_schema_def(schema_def, type_env);
-        });
+    source_file.schema_defs.iter_mut().for_each(|schema_def| {
+        typeresolve_schema_def(schema_def, type_env);
+    });
 
     source_file
         .struct_definitions
@@ -2775,7 +2803,12 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
 
         type_env.push_identifier_types();
         if let Some(identifier) = &arm.identifier_binding {
-            type_env.insert_identifier_type(identifier.clone(), arm.type_case.0.clone(), false, false);
+            type_env.insert_identifier_type(
+                identifier.clone(),
+                arm.type_case.0.clone(),
+                false,
+                false,
+            );
             if let Some(condition) = &mut arm.condition {
                 typeresolve_value_expr((&mut condition.0, condition.1), type_env);
             }
@@ -2790,7 +2823,12 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
             if let Some(condition) = &mut arm.condition {
                 typeresolve_value_expr((&mut condition.0, condition.1), type_env);
             }
-            type_env.insert_identifier_type(identifier.clone(), arm.type_case.0.clone(), false, false);
+            type_env.insert_identifier_type(
+                identifier.clone(),
+                arm.type_case.0.clone(),
+                false,
+                false,
+            );
         }
         typeresolve_value_expr((&mut arm.value_expr.0, arm.value_expr.1), type_env);
         type_env.pop_identifier_types();
@@ -3065,20 +3103,19 @@ fn typeresolve_var_decl(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
         }
 
         resolve_all_aliases_type_expr(type_expr, type_env);
-        infer_against(&mut declaration.initializer, type_expr, type_env);
 
-        typeresolve_value_expr(
-            (&mut declaration.initializer.0, declaration.initializer.1),
-            type_env,
-        );
+        if let Some(initializer) = declaration.initializer.as_mut() {
+            infer_against(initializer, type_expr, type_env);
+
+            typeresolve_value_expr((&mut initializer.0, initializer.1), type_env);
+        }
     } else {
-        typeresolve_value_expr(
-            (&mut declaration.initializer.0, declaration.initializer.1),
-            type_env,
-        );
+        if let Some(initializer) = declaration.initializer.as_mut() {
+            typeresolve_value_expr((&mut initializer.0, initializer.1), type_env);
 
-        let type_expr = TypeExpr::from_value_expr(&declaration.initializer, type_env);
-        declaration.type_expr = Some((type_expr.clone(), declaration.initializer.1));
+            let type_expr = TypeExpr::from_value_expr(initializer, type_env);
+            declaration.type_expr = Some((type_expr.clone(), initializer.1));
+        }
     }
 
     type_env.insert_identifier_type(

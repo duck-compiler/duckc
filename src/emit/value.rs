@@ -1885,19 +1885,21 @@ impl ValueExpr {
                     let mut v = Vec::new();
                     v.push(IrInstruction::VarDecl(name.clone(), type_expression));
 
-                    if let Some(direct) = initializer.0.direct_emit(type_env, env, span) {
-                        v.push(IrInstruction::VarAssignment(name.clone(), direct));
-                    } else {
-                        let (init_r, inti_r_res) =
-                            walk_access(initializer, type_env, env, span, true, false, false);
-                        v.extend(init_r);
-                        if let Some(init_r_res) = inti_r_res {
-                            v.push(IrInstruction::VarAssignment(
-                                name.clone(),
-                                IrValue::Imm(init_r_res),
-                            ));
+                    if let Some(initializer) = initializer.as_ref() {
+                        if let Some(direct) = initializer.0.direct_emit(type_env, env, span) {
+                            v.push(IrInstruction::VarAssignment(name.clone(), direct));
                         } else {
-                            return (v, None);
+                            let (init_r, inti_r_res) =
+                                walk_access(initializer, type_env, env, span, true, false, false);
+                            v.extend(init_r);
+                            if let Some(init_r_res) = inti_r_res {
+                                v.push(IrInstruction::VarAssignment(
+                                    name.clone(),
+                                    IrValue::Imm(init_r_res),
+                                ));
+                            } else {
+                                return (v, None);
+                            }
                         }
                     }
 
