@@ -1,7 +1,7 @@
 {
     "id": "67253afb2d99d44e686ad77b0cd44619",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 1899,
+    "line_number": 1988,
     "title": "check if we'd rather sort after generic generation",
     "tag": "todo",
     "module_tag": "semantics",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Apfelfrosch",
-        "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: check if we'd rather sort after generic generation",
     "status": "open",

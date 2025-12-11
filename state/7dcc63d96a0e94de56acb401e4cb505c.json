@@ -1,0 +1,19 @@
+{
+    "id": "7dcc63d96a0e94de56acb401e4cb505c",
+    "file_path": "../../src/parse/schema_def_parser.rs",
+    "line_number": 102,
+    "title": "do a check if all fields if's value_exprs have a block for the value expr",
+    "tag": "todo",
+    "module_tag": "parse",
+    "user": null,
+    "issue_ref": null,
+    "description": "value_expr = match value_expr {\n(ValueExpr::Duck(x), loc) if x.is_empty() => (ValueExpr::Block(vec![]), loc),\nx @ (ValueExpr::Block(_), _) => x,\n_ => panic!(\"Function must be block\"),",
+    "blame": {
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
+    },
+    "source_line": "// todo: do a check if all fields if's value_exprs have a block for the value expr",
+    "status": "open",
+    "first_seen": "2025-12-11T19:20:27.253157",
+    "history": []
+}

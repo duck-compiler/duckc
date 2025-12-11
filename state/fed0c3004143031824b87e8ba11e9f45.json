@@ -1,8 +1,8 @@
 {
-    "id": "d143368bcfbf509206f9ba783934e568",
+    "id": "fed0c3004143031824b87e8ba11e9f45",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 62,
-    "title": "mutable extension fns?",
+    "line_number": 2158,
+    "title": "concat spans",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
-    "source_line": "// todo: mutable extension fns?",
+    "source_line": "// todo: concat spans",
     "status": "open",
-    "first_seen": "2025-10-25T04:01:43.755808",
+    "first_seen": "2025-12-11T19:20:27.257593",
     "history": []
 }
