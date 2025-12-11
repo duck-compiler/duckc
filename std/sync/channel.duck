@@ -1,3 +1,5 @@
+use go "time";
+
 struct Channel<T> = {
     inner: go "chan {T}"
 } impl {
@@ -7,9 +9,34 @@ struct Channel<T> = {
         }
     }
 
-    fn recv() -> T {
+    fn recv_block() -> T {
         return go {
             return <-(*self).inner
+        }
+    }
+
+    fn recv_timeout(duration: ::time::Duration) -> Opt<T> {
+        const tag_none = .none;
+        const as_seconds = ::time::to_millis(duration);
+        return go {
+            select {
+                case v := <- (*self).inner:
+                    return v
+                case <-time.After(time.Duration(as_seconds) * time.Millisecond):
+                    return tag_none
+            }
+        }
+    }
+
+    fn try_recv() -> ::Opt<T> {
+        const tag_none = .none;
+        go {
+            select {
+                case v := <-(*self).inner:
+                    return v
+                default:
+                    return tag_none
+            }
         }
     }
 };
