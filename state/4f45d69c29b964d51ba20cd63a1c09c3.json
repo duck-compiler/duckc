@@ -9,7 +9,7 @@
     "issue_ref": null,
     "description": "maybe we need a way to tell that it should be consted here. e.g.\n`(5,\"hallo\")`",
     "blame": {
-        "name": "Maurice Schmidt",
+        "name": "Mvmo",
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: check if we really want to unconst tuple values",
