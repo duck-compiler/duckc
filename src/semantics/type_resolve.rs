@@ -10,32 +10,20 @@ use indexmap::IndexMap;
 
 use crate::{
     parse::{
-        Field, SS, Spanned, SpannedMutRef,
-        duckx_component_parser::DuckxComponent,
-        extensions_def_parser::ExtensionsDef,
-        failure_with_occurence,
-        function_parser::{FunctionDefintion, LambdaFunctionExpr},
-        source_file_parser::SourceFile,
-        struct_parser::{NamedDuckDefinition, StructDefinition},
-        test_parser::TestCase,
-        tsx_component_parser::{
-            Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
-        },
-        type_parser::{Duck, TypeDefinition, TypeExpr},
-        value_parser::{
+        duckx_component_parser::DuckxComponent, extensions_def_parser::ExtensionsDef, failure_with_occurence, function_parser::{FunctionDefintion, LambdaFunctionExpr}, schema_def_parser::SchemaDefinition, source_file_parser::SourceFile, struct_parser::{NamedDuckDefinition, StructDefinition}, test_parser::TestCase, tsx_component_parser::{
+            do_edits, Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit
+        }, type_parser::{Duck, TypeDefinition, TypeExpr}, value_parser::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
-        },
-    },
-    semantics::{
-        ident_mangler::{MANGLE_SEP, mangle},
+        }, Field, Spanned, SpannedMutRef, SS
+    }, semantics::{
+        ident_mangler::{mangle, MANGLE_SEP},
         typechecker::{check_type_compatability, check_type_compatability_full},
-    },
-    tags::Tag,
+    }, tags::Tag
 };
 
 fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
     type_env.push_identifier_types();
-    type_env.insert_identifier_type("props".to_string(), c.props_type.0.clone(), false);
+    type_env.insert_identifier_type("props".to_string(), c.props_type.0.clone(), false, false);
     type_env.all_types.push(c.props_type.0.clone());
     typeresolve_value_expr((&mut c.value_expr.0, c.value_expr.1), type_env);
     type_env.pop_identifier_types();
@@ -46,6 +34,7 @@ fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, type_env: &mut
     type_env.insert_identifier_type(
         "self".to_string(),
         extensions_def.target_type_expr.0.clone(),
+        false,
         false,
     );
 
@@ -137,7 +126,7 @@ pub struct FunHeader {
 
 #[derive(Debug, Clone)]
 pub struct TypeEnv<'a> {
-    pub identifier_types: Vec<HashMap<String, (TypeExpr, bool)>>,
+    pub identifier_types: Vec<HashMap<String, (TypeExpr, bool, bool)>>, // (type_expr, is_const, is_schema)
     pub type_aliases: Vec<HashMap<String, TypeExpr>>,
     pub all_types: Vec<TypeExpr>,
     pub extension_functions: HashMap<String, (Spanned<TypeExpr>, TypeExpr)>, // key = extension function name, (actual_fn_type, access_fn_type)
@@ -148,6 +137,7 @@ pub struct TypeEnv<'a> {
     pub duckx_components: Vec<DuckxComponent>,
     pub tsx_component_dependencies: HashMap<String, TsxComponentDependencies>,
     pub struct_definitions: Vec<StructDefinition>,
+    pub schema_defs: Vec<SchemaDefinition>,
     pub named_duck_definitions: Vec<NamedDuckDefinition>,
     pub type_definitions: Vec<TypeDefinition>,
 
@@ -174,6 +164,7 @@ impl Default for TypeEnv<'_> {
             function_headers: HashMap::new(),
             function_definitions: Vec::new(),
             struct_definitions: Vec::new(),
+            schema_defs: Vec::new(),
             named_duck_definitions: Vec::new(),
             type_definitions: Vec::new(),
 
@@ -450,11 +441,29 @@ impl TypeEnv<'_> {
             .find(|x| x.name.as_str() == name)
     }
 
+    pub fn get_schema_def_opt<'a>(&'a self, name: &str) -> Option<&'a SchemaDefinition> {
+        self.schema_defs
+            .iter()
+            .find(|x| x.name.as_str() == name)
+    }
+
     pub fn get_duck_def_opt<'a>(&'a self, name: &str) -> Option<&'a NamedDuckDefinition> {
         self.named_duck_definitions
             .iter()
             .chain(self.generic_ducks_generated.iter())
             .find(|x| x.name.as_str() == name)
+    }
+
+    pub fn get_schema_def<'a>(&'a self, name: &str) -> &'a SchemaDefinition {
+        self.get_schema_def_opt(name)
+            .unwrap_or_else(|| panic!("Could not find struct {name}"))
+    }
+
+    pub fn get_schema_def_mut<'a>(&'a mut self, name: &str) -> &'a mut SchemaDefinition {
+        self.schema_defs
+            .iter_mut()
+            .find(|x| x.name.as_str() == name)
+            .unwrap_or_else(|| panic!("Could not find struct {name}"))
     }
 
     pub fn get_struct_def<'a>(&'a self, name: &str) -> &'a StructDefinition {
@@ -501,12 +510,13 @@ impl TypeEnv<'_> {
         identifier: String,
         type_expr: TypeExpr,
         is_const: bool,
+        is_schema: bool,
     ) {
         self.insert_type(type_expr.clone());
         self.identifier_types
             .last_mut()
             .expect("At least one env should exist. :(")
-            .insert(identifier, (type_expr, is_const));
+            .insert(identifier, (type_expr, is_const, is_schema));
     }
 
     pub fn insert_type(&mut self, type_expr: TypeExpr) -> TypeExpr {
@@ -516,10 +526,36 @@ impl TypeEnv<'_> {
 
     pub fn get_identifier_type(&self, identifier: &str) -> Option<TypeExpr> {
         self.get_identifier_type_and_const(identifier)
-            .map(|(x, _)| x)
+            .map(|(x, _, _)| x)
     }
 
-    pub fn get_identifier_type_and_const(&self, identifier: &str) -> Option<(TypeExpr, bool)> {
+    pub fn get_identifier_type_in_typeof(&self, identifier: &str) -> Option<TypeExpr> {
+        self.get_identifier_type_and_const(identifier)
+            .map(|(x, _, schema)| {
+                if schema {
+                    if let TypeExpr::Fun(_, Some(return_duck), _) = x &&
+                        let TypeExpr::Duck(duck) = &return_duck.as_ref().0 {
+                            let fields = &duck.fields;
+                            let from_json_fun = fields.iter().find(|field| field.name == "from_json")
+                                .expect("compiler error: schema without from json in object");
+
+                            dbg!(&from_json_fun);
+
+                            if let TypeExpr::Fun(_, Some(return_type), _) = &from_json_fun.type_expr.0 {
+                                return return_type.as_ref().clone().0
+                            }
+
+                            panic!("compiler error: schema without function")
+                    } else {
+                        panic!("compiler error: schema without function")
+                    }
+                } else {
+                    x
+                }
+            })
+    }
+
+    pub fn get_identifier_type_and_const(&self, identifier: &str) -> Option<(TypeExpr, bool, bool)> {
         for i in self.identifier_types.iter().rev() {
             let r = i.get(identifier).cloned();
             if r.is_some() {
@@ -592,6 +628,21 @@ impl TypeEnv<'_> {
         let mut extension_functions = self.extension_functions.clone();
         for extension_fun in extension_functions.iter_mut() {
             self.find_ducks_and_tuples_type_expr(&mut extension_fun.1.0, &mut result);
+        }
+
+        let mut schema_defs = self.schema_defs.clone();
+        for schema_def in &mut schema_defs {
+            for schema_field in &mut schema_def.fields {
+                self.find_ducks_and_tuples_type_expr(&mut schema_field.type_expr, &mut result);
+            }
+
+            if let Some(out_type) = &mut schema_def.out_type {
+                self.find_ducks_and_tuples_type_expr(out_type, &mut result);
+            }
+
+            if let Some(function_type) = &mut schema_def.schema_fn_type {
+                self.find_ducks_and_tuples_type_expr(function_type, &mut result);
+            }
         }
 
         for s in self
@@ -970,7 +1021,7 @@ fn resolve_all_aliases_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv
     trav_type_expr(
         |node, env| match &mut node.0 {
             TypeExpr::TypeOf(identifier) => {
-                let type_expr = env.get_identifier_type(identifier);
+                let type_expr = env.get_identifier_type_in_typeof(identifier);
                 *node = resolve_type_expr(
                     &(type_expr.expect("couldn't find identifier type"), span),
                     env,
@@ -1862,7 +1913,7 @@ pub fn typeresolve_struct_def(
 
         if let Some(params) = m.params.clone().as_mut() {
             for p in params {
-                type_env.insert_identifier_type(p.0.clone(), p.1.0.clone(), false);
+                type_env.insert_identifier_type(p.0.clone(), p.1.0.clone(), false, false);
             }
         }
 
@@ -1874,6 +1925,7 @@ pub fn typeresolve_struct_def(
                 TypeExpr::Ref(self_type.clone().into_empty_span().into())
             },
             true,
+            false,
         );
         typeresolve_value_expr((&mut m.value_expr.0, m.value_expr.1), type_env);
         type_env.pop_identifier_types();
@@ -1881,6 +1933,43 @@ pub fn typeresolve_struct_def(
 
     type_env.pop_type_aliases();
     type_env.all_types.insert(0, self_type.clone());
+}
+
+pub fn typeresolve_schema_def(
+    schema_def: &mut SchemaDefinition,
+    type_env: &mut TypeEnv,
+) {
+    type_env.push_type_aliases();
+
+    for schema_field in &mut schema_def.fields {
+        if let Some(branch) = &mut schema_field.if_branch {
+            resolve_all_aliases_value_expr(&mut branch.0.condition, type_env);
+            if let Some(value_expr) = &mut branch.0.value_expr {
+                resolve_all_aliases_value_expr(value_expr, type_env)
+            }
+        }
+
+        if let Some(value_expr) = &mut schema_field.else_branch_value_expr {
+            resolve_all_aliases_value_expr(value_expr, type_env);
+        }
+
+        resolve_all_aliases_type_expr(&mut schema_field.type_expr, type_env);
+    }
+
+    if let Some(out_type) = &mut schema_def.out_type {
+        resolve_all_aliases_type_expr(out_type, type_env);
+    }
+
+    if let Some(fn_type) = &mut schema_def.schema_fn_type {
+        resolve_all_aliases_type_expr(fn_type, type_env);
+    }
+
+    type_env.schema_defs.push(schema_def.clone());
+
+    type_env.pop_type_aliases();
+    if let Some(fn_type) = &mut schema_def.schema_fn_type {
+        type_env.all_types.insert(0, fn_type.clone().0);
+    }
 }
 
 pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut TypeEnv) {
@@ -1917,6 +2006,25 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .for_each(|function_definition| {
             sort_fields_type_expr(&mut function_definition.props_type.0);
             sort_fields_value_expr(&mut function_definition.value_expr.0);
+        });
+
+    source_file
+        .schema_defs
+        .iter_mut()
+        .for_each(|schema_def| {
+            for schema_field in &mut schema_def.fields {
+                sort_fields_type_expr(&mut schema_field.type_expr.0);
+                if let Some(branch) = &mut schema_field.if_branch {
+                    sort_fields_value_expr(&mut branch.0.condition.0);
+                    if let Some((value_expr, _)) = &mut branch.0.value_expr {
+                        sort_fields_value_expr(value_expr);
+                    }
+                }
+
+                if let Some(value_expr) = &mut schema_field.else_branch_value_expr {
+                    sort_fields_value_expr(&mut value_expr.0);
+                }
+            }
         });
 
     source_file
@@ -2016,6 +2124,84 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         });
 
     source_file
+        .schema_defs
+        .iter_mut()
+        .for_each(|schema_def| {
+            let mut fields_with_type: Vec<(String, Spanned<TypeExpr>)> = vec![];
+
+            for schema_field in &mut schema_def.fields {
+                let mut potential_types = vec![];
+
+                resolve_all_aliases_type_expr(&mut schema_field.type_expr, type_env);
+                potential_types.push((schema_field.type_expr.0.clone(), schema_field.type_expr.1));
+
+                if let Some(branch) = &mut schema_field.if_branch {
+                    resolve_all_aliases_value_expr(&mut branch.0.condition, type_env);
+                    if let Some(value_expr) = &mut branch.0.value_expr {
+                        resolve_all_aliases_value_expr(value_expr, type_env);
+                        potential_types.push((TypeExpr::from_value_expr(value_expr, type_env), value_expr.1));
+                    }
+                }
+
+                if let Some(value_expr) = &mut schema_field.else_branch_value_expr {
+                    resolve_all_aliases_value_expr(value_expr, type_env);
+                    potential_types.push((TypeExpr::from_value_expr(value_expr, type_env), value_expr.1));
+                }
+
+                resolve_all_aliases_type_expr(&mut schema_field.type_expr, type_env);
+
+                let field_type_expr = if potential_types.is_empty() {
+                    unreachable!("compiler error: schemas should not allow no typings?")
+                } else if potential_types.len() == 1 {
+                    potential_types.get(0).unwrap()
+                } else {
+                    // todo: concat spans
+                    &(TypeExpr::Or(potential_types.clone()), potential_types.get(0).unwrap().1)
+                };
+
+                fields_with_type.push((schema_field.name.clone(), field_type_expr.clone()));
+            }
+
+            let schema_fn_return_type = (
+                TypeExpr::Duck(Duck { fields: vec![Field {
+                    name: "from_json".to_string(),
+                    type_expr: (TypeExpr::Fun(
+                        vec![(None,(TypeExpr::String(None), schema_def.span))],
+                        Some(Box::new((TypeExpr::Or(vec![
+                            (TypeExpr::Duck(Duck {
+                                fields: fields_with_type.iter()
+                                    .map(|(name, type_expr)| Field {
+                                        name: name.clone(),
+                                        type_expr: type_expr.clone()
+                                    })
+                                    .collect::<Vec<_>>()
+                            }), schema_def.span),
+                            (TypeExpr::Tag("err".to_string()), schema_def.span)
+                        ]), schema_def.span))), false), schema_def.span)
+                }] }),
+                schema_def.span
+            );
+
+            let schema_fn_type = TypeExpr::Fun(
+                vec![],
+                Some(Box::new(schema_fn_return_type.clone())),
+                false
+            );
+
+            type_env.insert_type(schema_fn_return_type.clone().0);
+
+            schema_def.out_type = Some(schema_fn_return_type);
+            schema_def.schema_fn_type = Some((schema_fn_type.clone(), schema_def.span));
+
+            type_env.insert_identifier_type(
+                schema_def.name.clone(),
+                schema_fn_type,
+                true,
+                true
+            );
+        });
+
+    source_file
         .tsx_components
         .iter_mut()
         .for_each(|tsx_component| {
@@ -2034,6 +2220,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     true,
                 ),
                 true,
+                false
             );
         });
 
@@ -2055,6 +2242,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     true,
                 ),
                 true,
+                false,
             );
             type_env.duckx_components.push(duckx_component.clone());
         });
@@ -2139,6 +2327,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     function_definition.name.clone(),
                     fn_type_expr,
                     true,
+                    false,
                 );
             }
             type_env
@@ -2167,6 +2356,13 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     for extensions_def in &mut source_file.extensions_defs {
         typeresolve_extensions_def(extensions_def, type_env);
     }
+
+    source_file
+        .schema_defs
+        .iter_mut()
+        .for_each(|schema_def| {
+            typeresolve_schema_def(schema_def, type_env);
+        });
 
     source_file
         .struct_definitions
@@ -2218,7 +2414,7 @@ fn typeresolve_method_definition(
 
     if let Some(params) = function_definition.params.clone().as_mut() {
         for p in params {
-            type_env.insert_identifier_type(p.0.clone(), p.1.0.clone(), false);
+            type_env.insert_identifier_type(p.0.clone(), p.1.0.clone(), false, false);
         }
     }
 
@@ -2230,6 +2426,7 @@ fn typeresolve_method_definition(
             TypeExpr::Ref(self_type.into())
         },
         true,
+        false,
     );
 
     typeresolve_value_expr(
@@ -2264,7 +2461,7 @@ fn typeresolve_function_definition(
 
     if let Some(params) = function_definition.params.clone().as_mut() {
         for p in params {
-            type_env.insert_identifier_type(p.0.clone(), p.1.0.clone(), false);
+            type_env.insert_identifier_type(p.0.clone(), p.1.0.clone(), false, false);
         }
     }
 
@@ -2443,7 +2640,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
             type_env.push_identifier_types();
             *ty = Some(target_type.clone());
-            type_env.insert_identifier_type(ident.clone(), target_type, *is_const);
+            type_env.insert_identifier_type(ident.clone(), target_type, *is_const, false);
             typeresolve_value_expr((&mut block.0, block.1), type_env);
             type_env.pop_identifier_types();
         }
@@ -2464,7 +2661,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         }
         ValueExpr::RawVariable(_, path) => {
             let ident = mangle(path);
-            let (type_expr, is_const) = type_env
+            let (type_expr, is_const, _) = type_env
                 .get_identifier_type_and_const(&ident)
                 .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {ident}"));
             resolve_all_aliases_type_expr(&mut type_expr.clone().into_empty_span(), type_env);
@@ -2578,7 +2775,7 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
 
         type_env.push_identifier_types();
         if let Some(identifier) = &arm.identifier_binding {
-            type_env.insert_identifier_type(identifier.clone(), arm.type_case.0.clone(), false);
+            type_env.insert_identifier_type(identifier.clone(), arm.type_case.0.clone(), false, false);
             if let Some(condition) = &mut arm.condition {
                 typeresolve_value_expr((&mut condition.0, condition.1), type_env);
             }
@@ -2593,7 +2790,7 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
             if let Some(condition) = &mut arm.condition {
                 typeresolve_value_expr((&mut condition.0, condition.1), type_env);
             }
-            type_env.insert_identifier_type(identifier.clone(), arm.type_case.0.clone(), false);
+            type_env.insert_identifier_type(identifier.clone(), arm.type_case.0.clone(), false, false);
         }
         typeresolve_value_expr((&mut arm.value_expr.0, arm.value_expr.1), type_env);
         type_env.pop_identifier_types();
@@ -2893,6 +3090,7 @@ fn typeresolve_var_decl(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
             .expect("should be unreachable")
             .0,
         declaration.is_const,
+        false,
     );
 }
 
@@ -3036,7 +3234,7 @@ fn typeresolve_variable(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
     //     resolve_all_aliases_type_expr(type_expr, type_env);
     //     return;
     // }
-    let (type_expr, is_const) = type_env
+    let (type_expr, is_const, _) = type_env
         .get_identifier_type_and_const(&identifier)
         .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));
 
@@ -3060,7 +3258,7 @@ fn typeresolve_lambda(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
     let captured = type_env.identifier_types[1..]
         .iter()
         .flat_map(|v| v.iter())
-        .fold(HashMap::new(), |mut acc, (name, (ty, is_const))| {
+        .fold(HashMap::new(), |mut acc, (name, (ty, is_const, _))| {
             if !type_env.identifier_types[0].contains_key(name)  // don't capture top level identifiers like functions
             && !params.iter().any(|(param_name, _)| param_name == name)
             // don't capture shadowed variables
@@ -3073,12 +3271,12 @@ fn typeresolve_lambda(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
     type_env.push_identifier_types();
 
     for (name, (ty, capture_as_mut)) in captured {
-        type_env.insert_identifier_type(name, ty, !capture_as_mut);
+        type_env.insert_identifier_type(name, ty, !capture_as_mut, false);
     }
 
     for (name, ty) in params {
         let ty = ty.as_mut().unwrap();
-        type_env.insert_identifier_type(name.to_owned(), ty.0.clone(), false);
+        type_env.insert_identifier_type(name.to_owned(), ty.0.clone(), false, false);
         resolve_all_aliases_type_expr(ty, type_env);
     }
 
