@@ -191,7 +191,10 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
                         .0
                         .emit(
                             &mut type_env,
-                            &mut crate::emit::value::ToIr { var_counter: 0, labels: Vec::new(), },
+                            &mut crate::emit::value::ToIr {
+                                var_counter: 0,
+                                labels: Vec::new(),
+                            },
                             test_case.body.1
                         )
                         .0

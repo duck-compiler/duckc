@@ -1,4 +1,9 @@
-use std::{env, ffi::OsString, path::{Path, PathBuf}, process::Command};
+use std::{
+    env,
+    ffi::OsString,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use crate::tags::Tag;
 

@@ -1081,27 +1081,29 @@ fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeE
             }
             _ => {}
         },
-        |f, env| if let ValueExpr::Struct {
+        |f, env| {
+            if let ValueExpr::Struct {
                 name,
                 fields: _,
                 type_params,
             } = &mut f.0
-            && let TypeExpr::Struct {
-                name: new_name,
-                type_params: new_type_params,
-            } = resolve_type_expr(
-                &TypeExpr::Struct {
-                    name: name.clone(),
-                    type_params: type_params.clone(),
-                }
-                .into_empty_span(),
-                env,
-            )
-            .0
+                && let TypeExpr::Struct {
+                    name: new_name,
+                    type_params: new_type_params,
+                } = resolve_type_expr(
+                    &TypeExpr::Struct {
+                        name: name.clone(),
+                        type_params: type_params.clone(),
+                    }
+                    .into_empty_span(),
+                    env,
+                )
+                .0
             {
                 *name = new_name;
                 *type_params = new_type_params;
-            },
+            }
+        },
         expr,
         env,
     );
@@ -2115,8 +2117,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 let to_find = &type_def.name;
                 let is_recursive = Cell::new(false);
                 trav_type_expr(
-                    |t: &mut Spanned<TypeExpr>, _: &mut TypeEnv<'_>| if let TypeExpr::TypeName(_, n, type_params) = &t.0
-                        && n == to_find {
+                    |t: &mut Spanned<TypeExpr>, _: &mut TypeEnv<'_>| {
+                        if let TypeExpr::TypeName(_, n, type_params) = &t.0
+                            && n == to_find
+                        {
                             *t = (
                                 TypeExpr::NamedDuck {
                                     name: n.clone(),
@@ -2125,7 +2129,8 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                                 t.1,
                             );
                             is_recursive.set(true);
-                        },
+                        }
+                    },
                     &mut type_def.type_expression,
                     type_env,
                 );

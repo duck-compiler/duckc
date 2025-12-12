@@ -14,6 +14,7 @@ pub mod extensions_def_parser;
 pub mod function_parser;
 pub mod generics_parser;
 pub mod lexer;
+pub mod schema_def_parser;
 pub mod source_file_parser;
 pub mod struct_parser;
 pub mod test_parser;
@@ -21,7 +22,6 @@ pub mod tsx_component_parser;
 pub mod type_parser;
 pub mod use_statement_parser;
 pub mod value_parser;
-pub mod schema_def_parser;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Context {

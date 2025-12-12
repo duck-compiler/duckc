@@ -1,10 +1,6 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
-use crate::{
-    parse::{
-        SS, Spanned,
-    },
-};
+use crate::parse::{SS, Spanned};
 
 use super::{
     lexer::Token,
@@ -62,10 +58,15 @@ where
     let if_branch_parser = just(Token::If)
         .ignore_then(value_expr_parser(make_input.clone()))
         .then(value_expr_parser(make_input.clone()).or_not())
-        .map_with(|(condition, maybe_value_expr), ctx| (IfBranch {
-            condition,
-            value_expr: maybe_value_expr
-        }, ctx.span()));
+        .map_with(|(condition, maybe_value_expr), ctx| {
+            (
+                IfBranch {
+                    condition,
+                    value_expr: maybe_value_expr,
+                },
+                ctx.span(),
+            )
+        });
 
     let else_branch_parser = just(Token::Else)
         .ignore_then(value_expr_parser(make_input))
@@ -76,13 +77,15 @@ where
         .then(type_expression_parser())
         .then(if_branch_parser.or_not())
         .then(else_branch_parser.or_not())
-        .map_with(|(((identifier, type_expr), if_branch), else_branch), ctx| SchemaField {
-            name: identifier,
-            type_expr,
-            if_branch,
-            else_branch_value_expr: else_branch,
-            span: ctx.span(),
-        });
+        .map_with(
+            |(((identifier, type_expr), if_branch), else_branch), ctx| SchemaField {
+                name: identifier,
+                type_expr,
+                if_branch,
+                else_branch_value_expr: else_branch,
+                span: ctx.span(),
+            },
+        );
 
     let fields_parser = field_parser
         .separated_by(just(Token::ControlChar(',')))
@@ -97,24 +100,22 @@ where
         .then_ignore(just(Token::ControlChar('{')))
         .then(fields_parser)
         .then_ignore(just(Token::ControlChar('}')))
-        .map_with(
-            |((doc_comments, identifier), fields), ctx| {
-                // todo: do a check if all fields if's value_exprs have a block for the value expr
-                // value_expr = match value_expr {
-                //     (ValueExpr::Duck(x), loc) if x.is_empty() => (ValueExpr::Block(vec![]), loc),
-                //     x @ (ValueExpr::Block(_), _) => x,
-                //     _ => panic!("Function must be block"),
+        .map_with(|((doc_comments, identifier), fields), ctx| {
+            // todo: do a check if all fields if's value_exprs have a block for the value expr
+            // value_expr = match value_expr {
+            //     (ValueExpr::Duck(x), loc) if x.is_empty() => (ValueExpr::Block(vec![]), loc),
+            //     x @ (ValueExpr::Block(_), _) => x,
+            //     _ => panic!("Function must be block"),
 
-                SchemaDefinition {
-                    name: identifier,
-                    fields,
-                    span: ctx.span(),
-                    comments: doc_comments.unwrap_or_else(Vec::new),
-                    out_type: None,
-                    schema_fn_type: None,
-                }
-            },
-        )
+            SchemaDefinition {
+                name: identifier,
+                fields,
+                span: ctx.span(),
+                comments: doc_comments.unwrap_or_else(Vec::new),
+                out_type: None,
+                schema_fn_type: None,
+            }
+        })
 }
 
 #[cfg(test)]

@@ -164,7 +164,7 @@ pub fn tokens_in_curly_braces<'a>(
                         .map(|x| vec![x]),
                 ))
                 .repeated()
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
             )
             .then_ignore(just("}"))
             .map(|x| {

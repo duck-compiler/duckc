@@ -809,7 +809,6 @@ impl ValueExpr {
         env: &mut ToIr,
         span: SS,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
-        
         {
             match self {
                 ValueExpr::Async(e) => {
@@ -2404,17 +2403,17 @@ impl ValueExpr {
                             target_obj: _,
                             field_name,
                         } = &mut v_target.0
-                        {
-                            *field_name = [field_name.clone()]
-                                .into_iter()
-                                .chain(
-                                    type_params
-                                        .iter()
-                                        .map(|(t, _)| t.as_clean_go_type_name(type_env)),
-                                )
-                                .collect::<Vec<_>>()
-                                .join(MANGLE_SEP);
-                        }
+                    {
+                        *field_name = [field_name.clone()]
+                            .into_iter()
+                            .chain(
+                                type_params
+                                    .iter()
+                                    .map(|(t, _)| t.as_clean_go_type_name(type_env)),
+                            )
+                            .collect::<Vec<_>>()
+                            .join(MANGLE_SEP);
+                    }
 
                     let res = v_target.0.direct_emit(type_env, env, span);
                     let mut instr = Vec::new();

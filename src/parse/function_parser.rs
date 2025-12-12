@@ -139,7 +139,11 @@ where
         .then(return_type_parser.or_not())
         .then(value_expr_parser(make_input))
         .map_with(
-            |((((((doc_comments, has_sus), identifier), generics), params), return_type), mut value_expr), ctx| {
+            |(
+                (((((doc_comments, has_sus), identifier), generics), params), return_type),
+                mut value_expr,
+            ),
+             ctx| {
                 let is_sus = has_sus.is_some();
 
                 if is_sus && return_type.is_some() {
