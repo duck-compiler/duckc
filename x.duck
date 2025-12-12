@@ -1,0 +1,10 @@
+use std::http::{fetch};
+use std::io::{println};
+
+fn a() -> String {
+    return "abc";
+}
+
+fn main() {
+    (async a()).recv_block()->std::io::println();
+}

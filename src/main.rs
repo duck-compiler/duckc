@@ -248,7 +248,7 @@ fn parse_src_file(
 
     fn typename_reset_global_value_expr(type_expr: &mut ValueExpr) {
         match type_expr {
-            ValueExpr::Defer(d) => typename_reset_global_value_expr(&mut d.0),
+            ValueExpr::Async(d) | ValueExpr::Defer(d) => typename_reset_global_value_expr(&mut d.0),
             ValueExpr::As(v, t) => {
                 typename_reset_global(&mut t.0);
                 typename_reset_global_value_expr(&mut v.0);

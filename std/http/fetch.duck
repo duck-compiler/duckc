@@ -51,12 +51,9 @@ struct Fetch = {
         }
 
         return f"
-            \nRequest method: {
-                match self.method {
+            \nRequest method: {match self.method {
                     .GET => "GET",
-                    .POST => "POST"
-                }
-            }
+                    .POST => "POST"}}
             \nHeaders:{headers_string}\n
             ";
     }

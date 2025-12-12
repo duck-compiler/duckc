@@ -55,6 +55,7 @@ pub struct Assignment {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueExpr {
     Defer(Box<Spanned<ValueExpr>>),
+    Async(Box<Spanned<ValueExpr>>),
     For {
         ident: (String, bool, Option<TypeExpr>),
         target: Box<Spanned<ValueExpr>>,
@@ -158,6 +159,7 @@ impl ValueExpr {
 
     pub fn needs_semicolon(&self) -> bool {
         match self {
+            ValueExpr::Async(..) => true,
             ValueExpr::Defer(..) => true,
             ValueExpr::As(..) => true,
             ValueExpr::For { .. } => false,
@@ -1073,6 +1075,11 @@ where
                 .map(|b| ValueExpr::Defer(Box::new(b)))
                 .map_with(|x, e| (x, e.span()));
 
+            let async_call = just(Token::Async)
+                .ignore_then(value_expr_parser.clone())
+                .map(|b| ValueExpr::Async(Box::new(b)))
+                .map_with(|x, e| (x, e.span()));
+
             let casted = choice((assignment, or, declaration, pen, atom))
                 .then(
                     just(Token::As)
@@ -1085,7 +1092,7 @@ where
                 })
                 .map_with(|x, e| (x, e.span()));
 
-            choice((inline_go, casted, defer))
+            choice((inline_go, casted, defer, async_call))
                 .labelled("expression")
                 .boxed()
         },
@@ -2536,7 +2543,9 @@ mod tests {
                     (
                         Declaration {
                             name: "x".into(),
-                            initializer: Some(ValueExpr::String("".to_string(), true).into_empty_span()),
+                            initializer: Some(
+                                ValueExpr::String("".to_string(), true).into_empty_span(),
+                            ),
                             type_expr: Some(TypeExpr::String(None).into_empty_span()),
                             is_const: true,
                         },

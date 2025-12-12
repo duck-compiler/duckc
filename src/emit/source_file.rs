@@ -130,25 +130,6 @@ impl SourceFile {
 	case float32:
 		s := target.(float32)
 		return fmt.Sprintf("%f", s)
-	case float64:
-		s := target.(float64)
-		return fmt.Sprintf("%f", s)
-	case bool:
-		s := target.(bool)
-		if s {
-			return "true"
-		} else {
-			return "false"
-		}
-	case string:
-		s := target.(string)
-		return fmt.Sprintf("\"%s\"", s)
-	case int:
-		s := target.(int)
-		return fmt.Sprintf("%d", s)
-	case float32:
-		s := target.(float32)
-		return fmt.Sprintf("%f", s)
 	case bool:
 		s := target.(bool)
 		if s {

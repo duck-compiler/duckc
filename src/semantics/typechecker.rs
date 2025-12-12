@@ -13,7 +13,7 @@ use crate::parse::{
     Spanned, failure,
     value_parser::{ValFmtStringContents, ValueExpr},
 };
-use crate::semantics::ident_mangler::MANGLE_SEP;
+use crate::semantics::ident_mangler::{MANGLE_SEP, mangle};
 use crate::semantics::type_resolve::{TypeEnv, is_const_var};
 
 impl TypeExpr {
@@ -66,6 +66,13 @@ impl TypeExpr {
         let value_expr = &value_expr.0;
 
         return match value_expr {
+            ValueExpr::Async(e) => {
+                let inner = TypeExpr::from_value_expr(e, type_env);
+                TypeExpr::Struct {
+                    name: mangle(&["std", "sync", "Channel"]),
+                    type_params: vec![(inner, *complete_span)],
+                }
+            }
             ValueExpr::Defer(..) => TypeExpr::Tuple(vec![]),
             ValueExpr::As(v, t) => {
                 if let ValueExpr::Array(exprs) = &v.0

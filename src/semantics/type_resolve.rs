@@ -964,6 +964,9 @@ where
         ValueExpr::Defer(v) => {
             trav_value_expr(f_t.clone(), f_vv.clone(), v, env);
         }
+        ValueExpr::Async(v) => {
+            trav_value_expr(f_t.clone(), f_vv.clone(), v, env);
+        }
         ValueExpr::Array(exprs) => {
             for v in exprs {
                 trav_value_expr(f_t.clone(), f_vv.clone(), v, env);
@@ -1233,7 +1236,9 @@ fn replace_generics_in_value_expr(
     type_env: &mut TypeEnv<'_>,
 ) {
     match expr {
-        ValueExpr::Defer(d) => replace_generics_in_value_expr(&mut d.0, set_params, type_env),
+        ValueExpr::Async(d) | ValueExpr::Defer(d) => {
+            replace_generics_in_value_expr(&mut d.0, set_params, type_env)
+        }
         ValueExpr::As(v, t) => {
             replace_generics_in_value_expr(&mut v.0, set_params, type_env);
             replace_generics_in_type_expr(&mut t.0, set_params, type_env);
@@ -1681,7 +1686,7 @@ pub fn resolve_type_expr(type_expr: &Spanned<TypeExpr>, env: &mut TypeEnv) -> Sp
 
 pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
     match expr {
-        ValueExpr::Defer(d) => sort_fields_value_expr(&mut d.0),
+        ValueExpr::Async(d) | ValueExpr::Defer(d) => sort_fields_value_expr(&mut d.0),
         ValueExpr::As(v, t) => {
             sort_fields_value_expr(&mut v.0);
             sort_fields_type_expr(&mut t.0);
@@ -2671,7 +2676,54 @@ fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: 
 fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
     let span = &value_expr.1;
     let value_expr = value_expr.0;
+    let owned = value_expr.clone();
     match value_expr {
+        ValueExpr::Async(inner) => {
+            typeresolve_value_expr((&mut inner.0, inner.1), type_env);
+            let inner_type = TypeExpr::from_value_expr(inner.as_ref(), type_env);
+
+            let channel_type = TypeExpr::from_value_expr(&(owned, *span), type_env);
+            let TypeExpr::Struct {
+                ref name,
+                ref type_params,
+            } = channel_type
+            else {
+                panic!("compiler error -> async needs to return channel")
+            };
+            type_env.get_struct_def_with_type_params_mut(name, type_params, *span);
+
+            let new_channel_fn_name = mangle(&["std", "sync", "new_channel"]);
+
+            let fn_type = type_env
+                .function_definitions
+                .iter()
+                .find(|s| &s.name == &new_channel_fn_name)
+                .expect("new channel fn not found")
+                .type_expr();
+
+            let mut new_channel_call = ValueExpr::FunctionCall {
+                target: (
+                    ValueExpr::Variable(
+                        true,
+                        new_channel_fn_name.clone(),
+                        Some(fn_type.0),
+                        Some(true),
+                    ),
+                    *span,
+                )
+                    .into(),
+                params: vec![],
+                type_params: vec![(inner_type, *span)],
+                is_extension_call: false,
+            };
+
+            typeresolve_function_call((&mut new_channel_call, *span), type_env);
+
+            if !matches!(inner.0, ValueExpr::FunctionCall { .. }) {
+                let msg = "Can only async call a function call".to_string();
+                failure_with_occurence(msg.clone(), *span, [(msg.clone(), inner.1)]);
+            }
+        }
         ValueExpr::Defer(inner) => {
             typeresolve_value_expr((&mut inner.0, inner.1), type_env);
             if !matches!(inner.0, ValueExpr::FunctionCall { .. }) {

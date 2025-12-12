@@ -446,7 +446,6 @@ fn walk_access_raw(
                     while let TypeExpr::RefMut(v) = type_expr {
                         type_expr = v.0;
                         stars_to_set += 1;
-
                     }
                     if let TypeExpr::Ref(_) = type_expr {
                         panic!(
@@ -812,6 +811,74 @@ impl ValueExpr {
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         let res = {
             match self {
+                ValueExpr::Async(e) => {
+                    let return_type = TypeExpr::from_value_expr(&(self.clone(), span), type_env);
+                    let inner_return_type = TypeExpr::from_value_expr(e, type_env);
+
+                    let var_name = env.new_var();
+                    let mut res_instr = Vec::new();
+
+                    res_instr.push(IrInstruction::VarDecl(
+                        var_name.clone(),
+                        return_type.as_go_type_annotation(type_env),
+                    ));
+                    res_instr.push(IrInstruction::VarAssignment(
+                        var_name.clone(),
+                        IrValue::Imm(format!(
+                            "{}()",
+                            mangle(&[
+                                "std",
+                                "sync",
+                                "new_channel",
+                                &inner_return_type.as_clean_go_type_name(type_env),
+                            ])
+                        )),
+                    ));
+
+                    let tmp = ValueExpr::FunctionCall {
+                        target: (
+                            ValueExpr::FieldAccess {
+                                target_obj: (
+                                    ValueExpr::Variable(
+                                        false,
+                                        var_name.clone(),
+                                        Some(return_type.clone()),
+                                        Some(true),
+                                    ),
+                                    span,
+                                )
+                                    .into(),
+                                field_name: "send".to_string(),
+                            },
+                            span,
+                        )
+                            .into(),
+                        params: vec![e.as_ref().clone()],
+                        type_params: vec![],
+                        is_extension_call: false,
+                    };
+
+                    let as_lambda = ValueExpr::Lambda(
+                        LambdaFunctionExpr {
+                            is_mut: false,
+                            params: vec![],
+                            return_type: None,
+                            value_expr: (tmp, e.1),
+                        }
+                        .into(),
+                    );
+
+                    let (lambda_instr, lambda_res) = as_lambda.emit(type_env, env, e.1);
+
+                    let Some(IrValue::Var(lambda_var_name)) = lambda_res else {
+                        panic!("lambda_res needs to be a var {lambda_res:?}")
+                    };
+
+                    res_instr.extend(lambda_instr);
+                    res_instr.push(IrInstruction::InlineGo(format!("go {lambda_var_name}()")));
+
+                    (res_instr, as_rvar(var_name))
+                }
                 ValueExpr::Defer(e) => {
                     let (mut inner_emit, _) = e.0.emit(type_env, env, span);
                     let last = inner_emit.last_mut().expect("nothing emitted?");

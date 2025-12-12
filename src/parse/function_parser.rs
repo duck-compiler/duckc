@@ -129,7 +129,7 @@ where
     let return_type_parser = just(Token::ThinArrow).ignore_then(type_expression_parser());
 
     doc_comments_parser
-        .then(just(Token::Sus).or_not())
+        .then(just(Token::Async).or_not())
         .then_ignore(just(Token::Function))
         .then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
         .then(generics_parser().or_not())
