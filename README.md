@@ -5,13 +5,21 @@ Duck is a modern, compiled and batteries included programming language for full-
 
 This repository hosts the source code for [Duck](https://duck-lang.org). It contains the compiler, it's build tool [dargo](https://github.com/duck-compiler/duck-spielwiese/blob/main/docs/002-dargo.md), the standard library and documentation.
 
+### Installing Duck using duckup
+The Duck Toolchain is managed by duckup, it allows you to have have multiple versions of duck installed on your machine and switch between them.
+
+**Homebrew**
 ```sh
-git clone git@github.com:duck-compiler/duckc.git
-cd duckc
-cargo install --path .
+brew tap duck-compiler/duckup
+brew install duckup
+duckup update
 ```
 
-This will install dargo onto your system.
+This will install the newest version of dargo and all its dependencies (Go, Standard Library) onto your system.
+To see if the installation was successful, run following command
+```sh
+dargo --help
+```
 
 ### NOTE:
 
