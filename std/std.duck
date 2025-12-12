@@ -8,6 +8,7 @@ module string;
 module col;
 module error;
 module http;
+module sync;
 
 component lol() tsx {
     return (<><p>yo</p></>);

@@ -70,31 +70,39 @@ pub fn primitive_type_name(primitive_type_expr: &TypeExpr) -> &'static str {
     }
 }
 
-pub fn fixup_method_body(struct_name: &str, body: &mut Vec<IrInstruction>) {
-    body.insert(
-        0,
-        IrInstruction::VarDecl("Δorg_addr".to_string(), format!("*{struct_name}")),
-    );
-    body.insert(
-        1,
-        IrInstruction::VarAssignment(
+pub fn fixup_method_body(struct_name: &str, body: &mut Vec<IrInstruction>, insert_org_addr: bool) {
+    let mut to_insert = Vec::new();
+
+    if insert_org_addr {
+        to_insert.push(IrInstruction::VarDecl(
+            "Δorg_addr".to_string(),
+            format!("*{struct_name}"),
+        ));
+        to_insert.push(IrInstruction::VarAssignment(
             "Δorg_addr".to_string(),
             IrValue::Imm("duck_internal_self".to_string()),
-        ),
-    );
-    body.insert(
-        2,
-        IrInstruction::VarDecl("self".to_string(), format!("**{struct_name}")),
-    );
-    body.insert(
-        3,
-        IrInstruction::VarAssignment(
-            "self".to_string(),
-            IrValue::Imm("&duck_internal_self".to_string()),
-        ),
-    );
-    // body.push(IrInstruction::InlineGo("*Δorg_addr = **self".to_string()));
-    body.insert(4, IrInstruction::InlineGo("defer func() { *Δorg_addr = **self }()".to_string()));
+        ));
+    }
+
+    to_insert.push(IrInstruction::VarDecl(
+        "self".to_string(),
+        format!("**{struct_name}"),
+    ));
+    to_insert.push(IrInstruction::VarAssignment(
+        "self".to_string(),
+        IrValue::Imm("&duck_internal_self".to_string()),
+    ));
+
+    if insert_org_addr {
+        to_insert.push(IrInstruction::InlineGo(
+            "defer func() { *Δorg_addr = **self }()".to_string(),
+        ));
+    }
+
+    to_insert
+        .into_iter()
+        .rev()
+        .for_each(|elem| body.insert(0, elem));
 }
 
 pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<IrInstruction> {
@@ -381,7 +389,11 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                 to_ir,
             );
             if let IrInstruction::FunDef(_, _, _, _, body) = &mut body {
-                fixup_method_body(struct_name.as_str(), body);
+                fixup_method_body(
+                    struct_name.as_str(),
+                    body,
+                    s.mut_methods.contains(&method.name),
+                );
             }
 
             instructions.push(body);
@@ -394,7 +406,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                 to_ir,
             );
             if let IrInstruction::FunDef(_, _, _, _, body) = &mut body {
-                fixup_method_body(struct_name.as_str(), body);
+                fixup_method_body(struct_name.as_str(), body, true);
             }
             instructions.push(body);
         }

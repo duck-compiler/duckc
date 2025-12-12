@@ -79,7 +79,7 @@ pub enum Token {
     ThickArrow,
     Comment(String),
     DocComment(String),
-    Sus,
+    Async,
     Component,
     Template,
     For,
@@ -143,7 +143,7 @@ impl Display for Token {
             Token::HtmlString(..) => "html string",
             Token::DocComment(comment) => &format!("/// {comment}"),
             Token::Comment(comment) => &format!("// {comment}"),
-            Token::Sus => "sus",
+            Token::Async => "async",
         };
         write!(f, "{t}")
     }
@@ -164,7 +164,7 @@ pub fn tokens_in_curly_braces<'a>(
                         .map(|x| vec![x]),
                 ))
                 .repeated()
-                .collect::<Vec<_>>(),
+                .collect::<Vec<_>>()
             )
             .then_ignore(just("}"))
             .map(|x| {
@@ -490,7 +490,7 @@ pub fn lex_single<'a>(
             "continue" => Token::Continue,
             "as" => Token::As,
             "match" => Token::Match,
-            "sus" => Token::Sus,
+            "async" => Token::Async,
             "and" => Token::And,
             "or" => Token::Or,
             "template" => Token::Template,
@@ -1670,8 +1670,7 @@ mod tests {
                     FmtStringContents::Tokens(vec![(Token::Ident("var".into()), empty_range())]),
                 ])],
             ),
-            ("sus", vec![Token::Sus]),
-            ("sus fn", vec![Token::Sus, Token::Function]),
+            ("async", vec![Token::Async]),
             ("test", vec![Token::Test]),
             ("keyof", vec![Token::KeyOf]),
             ("typeof", vec![Token::TypeOf]),

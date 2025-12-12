@@ -42,7 +42,7 @@ pub enum DuckxContents {
 pub struct Declaration {
     pub name: String,
     pub type_expr: Option<Spanned<TypeExpr>>,
-    pub initializer: Spanned<ValueExpr>,
+    pub initializer: Option<Spanned<ValueExpr>>,
     pub is_const: bool,
 }
 
@@ -55,6 +55,7 @@ pub struct Assignment {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueExpr {
     Defer(Box<Spanned<ValueExpr>>),
+    Async(Box<Spanned<ValueExpr>>),
     For {
         ident: (String, bool, Option<TypeExpr>),
         target: Box<Spanned<ValueExpr>>,
@@ -158,6 +159,7 @@ impl ValueExpr {
 
     pub fn needs_semicolon(&self) -> bool {
         match self {
+            ValueExpr::Async(..) => true,
             ValueExpr::Defer(..) => true,
             ValueExpr::As(..) => true,
             ValueExpr::For { .. } => false,
@@ -414,29 +416,32 @@ where
                 .or_not()
                 .boxed();
 
-            let declaration = just(Token::Let)
-                .or(just(Token::Const))
+            let declaration = choice((just(Token::Let), just(Token::Const)))
                 .then(
                     select_ref! { Token::Ident(identifier) => identifier.to_string() }
                         .map_with(|x, e| (x, e.span())),
                 )
                 .then(declare_type)
-                .then(initializer)
-                .map(|(((let_or_const, (ident, _)), type_expr), initializer)| {
-                    ValueExpr::VarDecl(
+                .then(initializer.or_not())
+                .map_with(
+                    |(((let_or_const, (ident, _)), type_expr), initializer), e| {
                         (
-                            Declaration {
-                                name: ident,
-                                type_expr,
-                                initializer: initializer.clone(),
-                                is_const: matches!(let_or_const, Token::Const),
-                            },
-                            initializer.1,
+                            ValueExpr::VarDecl(
+                                (
+                                    Declaration {
+                                        name: ident,
+                                        type_expr,
+                                        initializer: initializer.clone(),
+                                        is_const: matches!(let_or_const, Token::Const),
+                                    },
+                                    initializer.as_ref().map(|obj| obj.1).unwrap_or(e.span()),
+                                )
+                                    .into(),
+                            ),
+                            e.span(),
                         )
-                            .into(),
-                    )
-                })
-                .map_with(|x, e| (x, e.span()))
+                    },
+                )
                 .boxed();
 
             let struct_type_params_parser = just(Token::ControlChar('<'))
@@ -627,7 +632,7 @@ where
                                             let expr = value_expr_parser
                                                 .parse(make_input(empty_range(), s.as_slice()))
                                                 .into_result()
-                                                .expect("invalid code");
+                                                .expect(&format!("invalid code {s:?}"));
                                             res.push(ValFmtStringContents::Expr(expr));
                                         }
                                     }
@@ -1070,6 +1075,11 @@ where
                 .map(|b| ValueExpr::Defer(Box::new(b)))
                 .map_with(|x, e| (x, e.span()));
 
+            let async_call = just(Token::Async)
+                .ignore_then(value_expr_parser.clone())
+                .map(|b| ValueExpr::Async(Box::new(b)))
+                .map_with(|x, e| (x, e.span()));
+
             let casted = choice((assignment, or, declaration, pen, atom))
                 .then(
                     just(Token::As)
@@ -1082,7 +1092,7 @@ where
                 })
                 .map_with(|x, e| (x, e.span()));
 
-            choice((inline_go, casted, defer))
+            choice((inline_go, casted, defer, async_call))
                 .labelled("expression")
                 .boxed()
         },
@@ -1309,7 +1319,9 @@ pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
         }
         ValueExpr::VarDecl(b) => {
             b.1 = empty_range();
-            value_expr_into_empty_range(&mut b.0.initializer);
+            if let Some(initializer) = b.0.initializer.as_mut() {
+                value_expr_into_empty_range(initializer);
+            }
             if let Some(type_expr) = &mut b.0.type_expr {
                 type_expr_into_empty_range(type_expr);
             }
@@ -2514,7 +2526,9 @@ mod tests {
                     (
                         Declaration {
                             name: "x".into(),
-                            initializer: ValueExpr::String("".to_string(), true).into_empty_span(),
+                            initializer: Some(
+                                ValueExpr::String("".to_string(), true).into_empty_span(),
+                            ),
                             type_expr: Some(TypeExpr::String(None).into_empty_span()),
                             is_const: false,
                         },
@@ -2529,7 +2543,9 @@ mod tests {
                     (
                         Declaration {
                             name: "x".into(),
-                            initializer: ValueExpr::String("".to_string(), true).into_empty_span(),
+                            initializer: Some(
+                                ValueExpr::String("".to_string(), true).into_empty_span(),
+                            ),
                             type_expr: Some(TypeExpr::String(None).into_empty_span()),
                             is_const: true,
                         },
@@ -3188,7 +3204,7 @@ mod tests {
                 Declaration {
                     name: "x".to_string(),
                     type_expr: Some(TypeExpr::String(None).into_empty_span()),
-                    initializer: ValueExpr::String("".to_string(), true).into_empty_span(),
+                    initializer: Some(ValueExpr::String("".to_string(), true).into_empty_span()),
                     is_const: false,
                 },
             ),
@@ -3205,7 +3221,7 @@ mod tests {
                         })
                         .into_empty_span(),
                     ),
-                    initializer: ValueExpr::Block(vec![]).into_empty_span(),
+                    initializer: Some(ValueExpr::Block(vec![]).into_empty_span()),
                     is_const: false,
                 },
             ),
@@ -3214,7 +3230,7 @@ mod tests {
                 Declaration {
                     name: "z".to_string(),
                     type_expr: Some(TypeExpr::Any.into_empty_span()),
-                    initializer: empty_block().into_empty_span(),
+                    initializer: Some(empty_block().into_empty_span()),
                     is_const: false,
                 },
             ),
@@ -3240,7 +3256,9 @@ mod tests {
                 unreachable!()
             };
 
-            value_expr_into_empty_range(&mut declaration.0.initializer);
+            if let Some(initializer) = declaration.0.initializer.as_mut() {
+                value_expr_into_empty_range(initializer);
+            }
 
             if let Some(type_expr) = &mut declaration.0.type_expr {
                 type_expr_into_empty_range(type_expr);

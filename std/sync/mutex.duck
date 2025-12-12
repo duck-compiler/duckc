@@ -1,0 +1,42 @@
+use go "sync";
+
+struct Mutex<T> = {
+    inner: go "sync.Mutex",
+    value: T,
+} impl {
+    fn lock(accessor: fn(v: &mut T)) {
+        go {
+            defer (*self).inner.Unlock()
+            (*self).inner.Lock()
+        }
+
+        accessor(&mut self.value);
+    }
+
+    fn try_lock(accessor: fn(v: &mut T)) -> Bool {
+        let lock_result = false;
+        go {
+            if (*self).inner.TryLock() {
+            	lock_result = true;
+             	defer (*self).inner.Unlock()
+            } else {
+            	lock_result = false;
+            }
+        }
+
+        if (lock_result) {
+            accessor(&mut self.value);
+        }
+        return lock_result;
+    }
+};
+
+fn new_mutex<T>(v: T) -> Mutex<T> {
+    const mutex: go "sync.Mutex";
+
+    const result = Mutex<T> {
+        inner: mutex,
+        value: v
+    };
+    return result;
+}

@@ -1,0 +1,49 @@
+use std::sync::{Mutex};
+use std::sync::{AtomicBool};
+use std::sync::{new_atomic_bool};
+use std::sync::{new_mutex};
+use std::sync::{new_channel};
+use std::io::{println};
+
+fn bool_to_string(b: Bool) -> String {
+    return if (b) {
+        "true"
+    } else {
+        "false"
+    };
+}
+
+fn main() {
+    const m = new_mutex<String>("hi");
+
+    const atomic_bool = new_atomic_bool();
+    atomic_bool.set(true);
+    atomic_bool.compare_and_swap(false, true)->bool_to_string()->println();
+
+    const test_channel = new_channel<Int>();
+    std::task::spawn(fn() {
+        test_channel.send(67);
+    });
+    test_channel.recv_block()->std::string::from_int()->println();
+    println(f"Trying to read from channel (should be none) { match test_channel.try_recv() { .none => "none", else => "something is there" }}");
+    println(f"Trying to read from channel with timeout 500ms (should be none) { match test_channel.recv_timeout({ millis: 500 }) { .none => "none", else => "something is there" }}");
+    std::task::spawn(fn() {
+        std::task::sleep({ seconds: 1 });
+        const lock_result = m.try_lock(fn(v){});
+        if (lock_result) {
+            println("locking worked");
+        } else {
+            println("locking did not work");
+        }
+    });
+
+    m.lock(fn(v) {
+        println(*v);
+        std::task::sleep({ seconds: 2 });
+        *v = "changed";
+    });
+
+    m.lock(fn(v) {
+        println(f"should be \"changed\": {*v}");
+    });
+}

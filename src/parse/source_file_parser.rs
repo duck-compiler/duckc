@@ -5,10 +5,23 @@ use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
     parse::{
-        duckx_component_parser::{duckx_component_parser, DuckxComponent}, extensions_def_parser::{extensions_def_parser, ExtensionsDef}, function_parser::{function_definition_parser, FunctionDefintion, LambdaFunctionExpr}, lexer::{lex_parser, Token}, make_input, parse_failure, schema_def_parser::{self, SchemaDefinition}, struct_parser::{struct_definition_parser, StructDefinition}, test_parser::{test_parser, TestCase}, tsx_component_parser::{tsx_component_parser, TsxComponent}, type_parser::{type_definition_parser, Duck, TypeDefinition, TypeExpr}, use_statement_parser::{use_statement_parser, Indicator, UseStatement}, value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr}, Context, Spanned, SS
+        Context, SS, Spanned,
+        duckx_component_parser::{DuckxComponent, duckx_component_parser},
+        extensions_def_parser::{ExtensionsDef, extensions_def_parser},
+        function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
+        lexer::{Token, lex_parser},
+        make_input, parse_failure,
+        schema_def_parser::{self, SchemaDefinition},
+        struct_parser::{StructDefinition, struct_definition_parser},
+        test_parser::{TestCase, test_parser},
+        tsx_component_parser::{TsxComponent, tsx_component_parser},
+        type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
+        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
+        value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr},
     },
     semantics::ident_mangler::{
-        mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression, mangle_value_expr, unmangle, MangleEnv
+        MangleEnv, mangle, mangle_duckx_component, mangle_tsx_component, mangle_type_expression,
+        mangle_value_expr, unmangle,
     },
 };
 
@@ -23,7 +36,7 @@ pub struct SourceFile {
     pub tsx_components: Vec<TsxComponent>,
     pub duckx_components: Vec<DuckxComponent>,
     pub test_cases: Vec<TestCase>,
-    pub schema_defs: Vec<SchemaDefinition>
+    pub schema_defs: Vec<SchemaDefinition>,
 }
 
 #[derive(Debug, Clone)]
@@ -285,7 +298,7 @@ impl SourceFile {
                             &mut branch.0.condition.0,
                             global_prefix,
                             prefix,
-                            &mut mangle_env
+                            &mut mangle_env,
                         );
 
                         if let Some(value_expr) = &mut branch.0.value_expr {
@@ -293,7 +306,7 @@ impl SourceFile {
                                 &mut value_expr.0,
                                 global_prefix,
                                 prefix,
-                                &mut mangle_env
+                                &mut mangle_env,
                             );
                         }
                     }
@@ -303,14 +316,13 @@ impl SourceFile {
                             &mut value_expr.0,
                             global_prefix,
                             prefix,
-                            &mut mangle_env
+                            &mut mangle_env,
                         );
                     }
                 }
 
                 result.schema_defs.push(schema_def);
             }
-
 
             for component in &s.tsx_components {
                 // todo: mangle components in tsx
@@ -412,6 +424,10 @@ impl SourceFile {
             let mut c = global_prefix.clone();
             c.extend(unmangle(&struct_definition.name));
             struct_definition.name = mangle(&c);
+
+            for field in &mut struct_definition.fields {
+                append_global_prefix_type_expr(&mut field.type_expr.0, &mut mangle_env);
+            }
 
             for method in &mut struct_definition.methods {
                 for type_expr in method
@@ -524,7 +540,9 @@ fn append_global_prefix_type_expr(type_expr: &mut TypeExpr, mangle_env: &mut Man
 
 fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut MangleEnv) {
     match value_expr {
-        ValueExpr::Defer(d) => append_global_prefix_value_expr(&mut d.0, mangle_env),
+        ValueExpr::Async(d) | ValueExpr::Defer(d) => {
+            append_global_prefix_value_expr(&mut d.0, mangle_env)
+        }
         ValueExpr::As(v, t) => {
             append_global_prefix_type_expr(&mut t.0, mangle_env);
             append_global_prefix_value_expr(&mut v.0, mangle_env);
@@ -800,7 +818,9 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             }
             mangle_env.insert_ident(declaration.name.clone());
 
-            append_global_prefix_value_expr(&mut declaration.initializer.0, mangle_env);
+            if let Some(initializer) = declaration.initializer.as_mut() {
+                append_global_prefix_value_expr(&mut initializer.0, mangle_env);
+            }
         }
         ValueExpr::Add(lhs, rhs) => {
             append_global_prefix_value_expr(&mut lhs.0, mangle_env);
@@ -1013,9 +1033,20 @@ mod tests {
     use chumsky::Parser;
 
     use crate::parse::{
-        function_parser::FunctionDefintion, lexer::lex_parser, make_input, schema_def_parser::{IfBranch, SchemaDefinition, SchemaField}, source_file_parser::{source_file_parser, SourceFile}, struct_parser::StructDefinition, tsx_component_parser::TsxComponent, type_parser::{Duck, TypeDefinition, TypeExpr}, use_statement_parser::{Indicator, UseStatement}, value_parser::{
-            empty_range, source_file_into_empty_range, type_expr_into_empty_range, value_expr_into_empty_range, IntoBlock, ValueExpr
-        }, Field
+        Field,
+        function_parser::FunctionDefintion,
+        lexer::lex_parser,
+        make_input,
+        schema_def_parser::{IfBranch, SchemaDefinition, SchemaField},
+        source_file_parser::{SourceFile, source_file_parser},
+        struct_parser::StructDefinition,
+        tsx_component_parser::TsxComponent,
+        type_parser::{Duck, TypeDefinition, TypeExpr},
+        use_statement_parser::{Indicator, UseStatement},
+        value_parser::{
+            IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
+            type_expr_into_empty_range, value_expr_into_empty_range,
+        },
     };
 
     #[test]
@@ -1039,12 +1070,15 @@ mod tests {
                         fields: vec![SchemaField {
                             name: "name".to_string(),
                             type_expr: (TypeExpr::String(None), empty_range()),
-                            if_branch: Some((IfBranch {
-                                condition: (ValueExpr::Bool(true), empty_range()),
-                                value_expr: None,
-                            }, empty_range())),
+                            if_branch: Some((
+                                IfBranch {
+                                    condition: (ValueExpr::Bool(true), empty_range()),
+                                    value_expr: None,
+                                },
+                                empty_range(),
+                            )),
                             else_branch_value_expr: None,
-                            span: empty_range()
+                            span: empty_range(),
                         }],
                         comments: vec![],
                         span: empty_range(),

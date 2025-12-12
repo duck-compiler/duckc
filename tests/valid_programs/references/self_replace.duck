@@ -4,6 +4,11 @@ struct S = {
     mut fn abc() {
         *self = S { v: 20 };
     }
+
+    mut fn replace_and_return() -> &mut S {
+        *self = S { v: 123 };
+        return self;
+    }
 };
 
 fn main() {
@@ -11,4 +16,5 @@ fn main() {
     s.v->std::string::from_int()->std::io::println();
     s.abc();
     s.v->std::string::from_int()->std::io::println();
+    s.replace_and_return().v->std::string::from_int()->std::io::println();
 }

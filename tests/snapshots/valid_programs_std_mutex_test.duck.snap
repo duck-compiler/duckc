@@ -1,0 +1,4 @@
+{
+    "stdout": "false\n67\nTrying to read from channel (should be none) none\nTrying to read from channel with timeout 500ms (should be none) none\nhi\nlocking did not work\nshould be \"changed\": changed\n",
+    "stderr": ""
+}

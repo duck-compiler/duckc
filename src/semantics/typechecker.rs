@@ -13,7 +13,7 @@ use crate::parse::{
     Spanned, failure,
     value_parser::{ValFmtStringContents, ValueExpr},
 };
-use crate::semantics::ident_mangler::MANGLE_SEP;
+use crate::semantics::ident_mangler::{MANGLE_SEP, mangle};
 use crate::semantics::type_resolve::{TypeEnv, is_const_var};
 
 impl TypeExpr {
@@ -66,6 +66,13 @@ impl TypeExpr {
         let value_expr = &value_expr.0;
 
         return match value_expr {
+            ValueExpr::Async(e) => {
+                let inner = TypeExpr::from_value_expr(e, type_env);
+                TypeExpr::Struct {
+                    name: mangle(&["std", "sync", "Channel"]),
+                    type_params: vec![(inner, *complete_span)],
+                }
+            }
             ValueExpr::Defer(..) => TypeExpr::Tuple(vec![]),
             ValueExpr::As(v, t) => {
                 if let ValueExpr::Array(exprs) = &v.0
@@ -212,16 +219,18 @@ impl TypeExpr {
             ValueExpr::VarAssign(_assignment) => TypeExpr::Tuple(vec![]),
             ValueExpr::VarDecl(decl) => {
                 let decl = decl.as_ref();
-                check_type_compatability(
-                    decl.0.type_expr.as_ref().expect(
-                        "compiler error: i expect the implicit types to be resolved by now",
-                    ),
-                    &(
-                        TypeExpr::from_value_expr(&decl.0.initializer, type_env),
-                        decl.0.initializer.1,
-                    ),
-                    type_env,
-                );
+                if let Some(initializer) = decl.0.initializer.as_ref() {
+                    check_type_compatability(
+                        decl.0.type_expr.as_ref().expect(
+                            "compiler error: i expect the implicit types to be resolved by now",
+                        ),
+                        &(
+                            TypeExpr::from_value_expr(initializer, type_env),
+                            initializer.1,
+                        ),
+                        type_env,
+                    );
+                }
 
                 TypeExpr::Tuple(vec![])
             }
@@ -671,8 +680,7 @@ impl TypeExpr {
                     || target_obj_type_expr.has_method_by_name(field_name.clone(), type_env)
                     || target_obj_type_expr.ref_has_field_by_name(field_name.clone(), type_env)
                     || target_obj_type_expr.ref_has_method_by_name(field_name.clone(), type_env)
-                    || target_obj_type_expr.has_extension_by_name(field_name.clone(), type_env)
-                )
+                    || target_obj_type_expr.has_extension_by_name(field_name.clone(), type_env))
                 {
                     failure_with_occurence(
                         "Invalid Field Access".to_string(),
@@ -910,7 +918,7 @@ impl TypeExpr {
                     methods,
                     mut_methods: _,
                     generics: _,
-                    doc_comments: _
+                    doc_comments: _,
                 } = type_env
                     .get_struct_def_with_type_params_mut(
                         r#struct.as_str(),
@@ -980,7 +988,9 @@ impl TypeExpr {
 
     fn has_extension_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
         let extension_fn_name = &self.build_extension_access_function_name(&name, type_env);
-        return type_env.extension_functions.contains_key(&extension_fn_name.clone());
+        return type_env
+            .extension_functions
+            .contains_key(&extension_fn_name.clone());
     }
 
     fn ref_has_field_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
@@ -1016,7 +1026,7 @@ impl TypeExpr {
                     methods,
                     mut_methods: _,
                     generics: _,
-                    doc_comments: _
+                    doc_comments: _,
                 } = type_env
                     .get_struct_def_with_type_params_mut(
                         r#struct.as_str(),
@@ -1096,12 +1106,11 @@ impl TypeExpr {
                 .0
                 .clone(),
             _ => {
-                let extension_fn_name = self.build_extension_access_function_name(&field_name, type_env);
+                let extension_fn_name =
+                    self.build_extension_access_function_name(&field_name, type_env);
                 let extension = type_env.extension_functions.get(&extension_fn_name);
                 match extension {
-                    Some(extension_def) => {
-                        return Some(extension_def.0.0.clone())
-                    },
+                    Some(extension_def) => return Some(extension_def.0.0.clone()),
                     None => return None,
                 }
             }
@@ -1543,7 +1552,10 @@ pub fn check_type_compatability_full(
                     );
                 }
             }
-            TypeExpr::NamedDuck { name: _, type_params: _ } => {
+            TypeExpr::NamedDuck {
+                name: _,
+                type_params: _,
+            } => {
                 assert_eq!(
                     required_type.0.type_id(type_env),
                     given_type.0.type_id(type_env)
@@ -2028,7 +2040,7 @@ mod test {
                     value_expr: value_expr,
                     generics: None,
                     span: empty_range(),
-                    comments: Vec::new()
+                    comments: Vec::new(),
                 }],
                 ..Default::default()
             };

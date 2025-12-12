@@ -5,3 +5,13 @@ type Hours = { hours: Int };
 type Days = { days: Int };
 
 type Duration = Millis | Seconds | Minutes | Hours | Days;
+
+fn to_millis(d: Duration) -> Int {
+    return match d {
+        { millis: Int } @millis => millis.millis,
+        { seconds: Int } @seconds => seconds.seconds * 1000,
+        { minutes: Int } @minutes => minutes.minutes * 60 * 1000,
+        { hours: Int } @hours => hours.hours * 60 * 60 * 1000,
+        { days: Int } @days => days.days * 24 * 60 * 60 * 1000,
+    }
+}

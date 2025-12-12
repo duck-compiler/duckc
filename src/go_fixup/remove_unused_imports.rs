@@ -27,6 +27,7 @@ pub fn cleanup_go_source(go_source: &str, remove_exported: bool) -> String {
         .expect("compiler error: couldn't load treesitter go parser");
 
     let tree = parser.parse(go_source, None).unwrap();
+    let used_types = find_used_types(go_source, tree.root_node());
 
     let (declarations, _imports, _package_usages) =
         analyze_source(tree.root_node(), go_source.as_bytes());
@@ -36,7 +37,10 @@ pub fn cleanup_go_source(go_source: &str, remove_exported: bool) -> String {
     let mut ranges_to_delete = Vec::new();
 
     for (name, decl) in &declarations {
-        if !live_set.contains(name) && (!decl.is_exported || remove_exported) {
+        if !used_types.contains(name)
+            && !live_set.contains(name)
+            && (!decl.is_exported || remove_exported)
+        {
             if matches!(decl.kind, DeclKind::Method) {
                 if let Some(dot_pos) = name.find('.') {
                     let receiver_type = &name[..dot_pos];
@@ -283,7 +287,9 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
 
     fn extract_package_name_from_node(node: &Node, go_source: &str) -> Option<String> {
         return match node.kind() {
-            "package_identifier" | "identifier" => Some(go_source[node.start_byte()..node.end_byte()].to_string()),
+            "package_identifier" | "identifier" => {
+                Some(go_source[node.start_byte()..node.end_byte()].to_string())
+            }
             _ => None,
         };
     }
@@ -298,8 +304,10 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
             }
             "qualified_type" => {
                 if let Some(package_node) = node.child_by_field_name("package")
-                && let Some(package_name) = extract_package_name_from_node(&package_node, go_source)
-                && !local_variables.contains(&package_name) {
+                    && let Some(package_name) =
+                        extract_package_name_from_node(&package_node, go_source)
+                    && !local_variables.contains(&package_name)
+                {
                     used_imports.insert(package_name);
                 }
             }
@@ -432,6 +440,22 @@ fn extract_package_name_from_path(package_path: &str) -> String {
     } else {
         package_path.to_string()
     };
+}
+
+fn find_used_types(src: &str, n: Node) -> HashSet<String> {
+    fn trav(src: &[u8], n: Node, out: &mut HashSet<String>) {
+        if n.kind() == "type_identifier" {
+            out.insert(n.utf8_text(src).unwrap().to_string());
+        }
+
+        for i in 0..n.child_count() {
+            trav(src, n.child(i).unwrap(), out);
+        }
+    }
+
+    let mut res = HashSet::new();
+    trav(src.as_bytes(), n, &mut res);
+    res
 }
 
 fn analyze_source(
