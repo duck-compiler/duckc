@@ -811,6 +811,7 @@ where
         | TypeExpr::Html
         | TypeExpr::Go(..)
         | TypeExpr::Any
+        | TypeExpr::TemplParam(..)
         | TypeExpr::InlineGo => {}
         TypeExpr::And(types) | TypeExpr::Or(types) | TypeExpr::Tuple(types) => {
             for t in types {
@@ -1462,6 +1463,11 @@ fn replace_generics_in_type_expr(
     type_env: &mut TypeEnv<'_>,
 ) {
     match expr {
+        TypeExpr::TemplParam(name) => {
+            if let Some(replacement) = set_params.get(name).cloned() {
+                *expr = replacement;
+            }
+        }
         TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
             replace_generics_in_type_expr(&mut t.0, set_params, type_env)
         }
@@ -1878,6 +1884,7 @@ pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
         TypeExpr::Ref(t) | TypeExpr::RefMut(t) => sort_fields_type_expr(&mut t.0),
         TypeExpr::Html => {}
         TypeExpr::TypeOf(..) => {}
+        TypeExpr::TemplParam(..) => {}
         TypeExpr::KeyOf(type_expr) => {
             sort_fields_type_expr(&mut type_expr.0);
         }
@@ -2166,6 +2173,12 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .for_each(|struct_definition| {
             type_env.struct_definitions.push(struct_definition.clone());
 
+            type_env.push_type_aliases();
+
+            for (g, _) in &struct_definition.generics {
+                type_env.insert_type_alias(g.name.clone(), TypeExpr::TemplParam(g.name.clone()));
+            }
+
             for field in &mut struct_definition.fields {
                 resolve_all_aliases_type_expr(&mut field.type_expr, type_env);
             }
@@ -2180,6 +2193,8 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 }
                 resolve_all_aliases_value_expr(&mut fun_def.value_expr, type_env);
             }
+
+            type_env.pop_type_aliases();
             type_env
                 .struct_definitions
                 .retain(|s| s.name.as_str() != struct_definition.name.as_str());
@@ -2346,6 +2361,12 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 }
             }
 
+            type_env.push_type_aliases();
+
+            for (g, _) in function_definition.generics.iter().flat_map(|v| v.iter()) {
+                type_env.insert_type_alias(g.name.clone(), TypeExpr::TemplParam(g.name.clone()));
+            }
+
             for type_param in function_definition
                 .generics
                 .iter_mut()
@@ -2396,6 +2417,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             if function_definition.name.starts_with("gimme") {
                 // dbg!(&function_definition.value_expr);
             }
+            type_env.pop_type_aliases();
 
             if function_definition.generics.is_none() {
                 type_env.insert_identifier_type(

@@ -35,6 +35,7 @@ pub struct Struct {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeExpr {
     Html,
+    TemplParam(String),
     Any,
     InlineGo,
     Struct {
@@ -574,6 +575,7 @@ where
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            TypeExpr::TemplParam(name) => write!(f, "TemplParam {name}"),
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => write!(f, "&{}", t.0),
             TypeExpr::Html => write!(f, "html"),
             TypeExpr::Tag(identifier) => write!(f, ".{identifier}"),

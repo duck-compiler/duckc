@@ -1,0 +1,24 @@
+use std::col::{new_go_map};
+
+fn main() {
+    let m = new_go_map<String, Int>();
+
+    m.set("A", 22);
+    m.set("B", 23);
+    m.set("D", 100);
+
+    match m.get(&"A") {
+        &Int @i => (*i)->std::string::from_int()->std::io::println(),
+        else => {}
+    }
+
+    match m.get_mut(&"A") {
+        &mut Int @i => *i = 10,
+        else => {}
+    }
+
+    match m.get(&"A") {
+        &Int @i => (*i)->std::string::from_int()->std::io::println(),
+        else => {}
+    }
+}

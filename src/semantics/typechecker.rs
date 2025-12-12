@@ -1338,6 +1338,11 @@ pub fn check_type_compatability_full(
     given_const_var: bool,
 ) {
     let given_type = given_type.clone();
+
+    if matches!(given_type.0, TypeExpr::TemplParam(..)) {
+        return;
+    }
+
     let fail_requirement = |explain_required: String, explain_given: String| {
         let (smaller, larger) = if required_type.1.start <= given_type.1.start {
             (required_type.1, given_type.1)
@@ -1363,6 +1368,7 @@ pub fn check_type_compatability_full(
     };
 
     match &required_type.0 {
+        TypeExpr::TemplParam(..) => return,
         TypeExpr::NamedDuck { name, type_params } => {
             let def = type_env
                 .get_duck_def_with_type_params_mut(name, type_params, required_type.1)
