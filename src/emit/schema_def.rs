@@ -82,16 +82,16 @@ impl SchemaDefinition {
             schema_struct_access_srcs.push(src);
 
             if let Some((branch, span)) = &schema_field.if_branch {
-                let emitted_condition = branch.condition.0.emit(type_env, to_ir, span.clone());
+                let emitted_condition = branch.condition.0.emit(type_env, to_ir, *span);
                 let condition_src = join_ir(&emitted_condition.0);
 
                 let condition_var_src = emitted_condition.1.expect("expect result var")
                     .emit_as_go();
 
                 let condition_based_value_emitted = if let Some(value_expr) = &branch.value_expr {
-                    ValueExpr::Return(Some(Box::new(value_expr.clone()))).emit(type_env, to_ir, span.clone())
+                    ValueExpr::Return(Some(Box::new(value_expr.clone()))).emit(type_env, to_ir, *span)
                 } else {
-                    ValueExpr::InlineGo("".to_string()).emit(type_env, to_ir, span.clone())
+                    ValueExpr::InlineGo("".to_string()).emit(type_env, to_ir, *span)
                 };
 
                 let condition_based_src = join_ir(&condition_based_value_emitted.0);
@@ -139,7 +139,7 @@ impl SchemaDefinition {
             "
         );
 
-        let _check_fields_src = {};
+        {};
 
         let instr = IrInstruction::InlineGo(
             format!(

@@ -225,9 +225,6 @@ impl TypeEnv<'_> {
         type_params: &[Spanned<TypeExpr>],
         span: SS,
     ) -> &'a mut NamedDuckDefinition {
-        let name = name;
-        let type_params = type_params;
-
         let generic_id = build_struct_generic_id(name, type_params, self);
 
         if !type_params.is_empty()
@@ -311,9 +308,6 @@ impl TypeEnv<'_> {
         type_params: &[Spanned<TypeExpr>],
         span: SS,
     ) -> &'a mut StructDefinition {
-        let name = name;
-        let type_params = type_params;
-
         let generic_id = build_struct_generic_id(name, type_params, self);
 
         if !type_params.is_empty()
@@ -444,7 +438,7 @@ impl TypeEnv<'_> {
         self.function_headers
             .get(name)
             .cloned()
-            .expect(&format!("{:?}\nSearched for {name}", self.function_headers))
+            .unwrap_or_else(|| panic!("{:?}\nSearched for {name}", self.function_headers))
     }
 
     pub fn get_struct_def_opt<'a>(&'a self, name: &str) -> Option<&'a StructDefinition> {
@@ -770,13 +764,13 @@ fn build_tuples_and_ducks_value_expr_trav_fn(
                 .push(NeedsSearchResult::Tag { name: name.clone() });
         }
         ValueExpr::Duck(..) => {
-            let TypeExpr::Duck(Duck { fields }) = TypeExpr::from_value_expr(&v, env) else {
+            let TypeExpr::Duck(Duck { fields }) = TypeExpr::from_value_expr(v, env) else {
                 panic!()
             };
             out.borrow_mut().push(NeedsSearchResult::Duck { fields });
         }
         ValueExpr::Tuple(..) => {
-            let TypeExpr::Tuple(fields) = TypeExpr::from_value_expr(&v, env) else {
+            let TypeExpr::Tuple(fields) = TypeExpr::from_value_expr(v, env) else {
                 panic!()
             };
             out.borrow_mut().push(NeedsSearchResult::Tuple { fields });
@@ -1039,7 +1033,7 @@ where
 }
 
 fn resolve_all_aliases_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv) {
-    let span = expr.1.clone();
+    let span = expr.1;
     trav_type_expr(
         |node, env| match &mut node.0 {
             TypeExpr::TypeOf(identifier) => {
@@ -1087,31 +1081,27 @@ fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeE
             }
             _ => {}
         },
-        |f, env| match &mut f.0 {
-            ValueExpr::Struct {
+        |f, env| if let ValueExpr::Struct {
                 name,
                 fields: _,
                 type_params,
-            } => {
-                if let TypeExpr::Struct {
-                    name: new_name,
-                    type_params: new_type_params,
-                } = resolve_type_expr(
-                    &TypeExpr::Struct {
-                        name: name.clone(),
-                        type_params: type_params.clone(),
-                    }
-                    .into_empty_span(),
-                    env,
-                )
-                .0
-                {
-                    *name = new_name;
-                    *type_params = new_type_params;
+            } = &mut f.0
+            && let TypeExpr::Struct {
+                name: new_name,
+                type_params: new_type_params,
+            } = resolve_type_expr(
+                &TypeExpr::Struct {
+                    name: name.clone(),
+                    type_params: type_params.clone(),
                 }
-            }
-            _ => {}
-        },
+                .into_empty_span(),
+                env,
+            )
+            .0
+            {
+                *name = new_name;
+                *type_params = new_type_params;
+            },
         expr,
         env,
     );
@@ -1648,7 +1638,7 @@ pub fn resolve_type_expr(type_expr: &Spanned<TypeExpr>, env: &mut TypeEnv) -> Sp
                 .generics
                 .iter()
                 .map(|g| (g.0.name.clone(), g.0.constraint.clone()))
-                .zip(generics.clone().into_iter())
+                .zip(generics.clone())
                 .fold(IndexMap::new(), |mut acc, ((name, constraint), exp)| {
                     if let Some(constraint) = constraint {
                         check_type_compatability(&constraint, &exp, env);
@@ -2125,21 +2115,17 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 let to_find = &type_def.name;
                 let is_recursive = Cell::new(false);
                 trav_type_expr(
-                    |t: &mut Spanned<TypeExpr>, _: &mut TypeEnv<'_>| match &t.0 {
-                        TypeExpr::TypeName(_, n, type_params) => {
-                            if n == to_find {
-                                *t = (
-                                    TypeExpr::NamedDuck {
-                                        name: n.clone(),
-                                        type_params: type_params.clone(),
-                                    },
-                                    t.1,
-                                );
-                                is_recursive.set(true);
-                            }
-                        }
-                        _ => {}
-                    },
+                    |t: &mut Spanned<TypeExpr>, _: &mut TypeEnv<'_>| if let TypeExpr::TypeName(_, n, type_params) = &t.0
+                        && n == to_find {
+                            *t = (
+                                TypeExpr::NamedDuck {
+                                    name: n.clone(),
+                                    type_params: type_params.clone(),
+                                },
+                                t.1,
+                            );
+                            is_recursive.set(true);
+                        },
                     &mut type_def.type_expression,
                     type_env,
                 );
@@ -2173,16 +2159,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .struct_definitions
         .iter_mut()
         .for_each(|struct_definition| {
-            if false && struct_definition.generics.is_empty() {
-                type_env.insert_type_alias(
-                    struct_definition.name.clone(),
-                    TypeExpr::Struct {
-                        name: struct_definition.name.clone(),
-                        type_params: vec![],
-                    },
-                );
-            }
-
             type_env.struct_definitions.push(struct_definition.clone());
 
             for field in &mut struct_definition.fields {
@@ -2238,12 +2214,12 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             let field_type_expr = if potential_types.is_empty() {
                 unreachable!("compiler error: schemas should not allow no typings?")
             } else if potential_types.len() == 1 {
-                potential_types.get(0).unwrap()
+                potential_types.first().unwrap()
             } else {
                 // todo: concat spans
                 &(
                     TypeExpr::Or(potential_types.clone()),
-                    potential_types.get(0).unwrap().1,
+                    potential_types.first().unwrap().1,
                 )
             };
 
@@ -2697,7 +2673,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             let fn_type = type_env
                 .function_definitions
                 .iter()
-                .find(|s| &s.name == &new_channel_fn_name)
+                .find(|s| s.name == new_channel_fn_name)
                 .expect("new channel fn not found")
                 .type_expr();
 
@@ -2983,7 +2959,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                     .iter()
                     .find(|x| name.as_str() == x.name.as_str())
                     .cloned()
-                    .expect(&format!("could not find {name}"));
+                    .unwrap_or_else(|| panic!("could not find {name}"));
 
                 if type_params.len() != fn_def.generics.as_ref().map(|v| v.len()).unwrap_or(0) {
                     let msg = "Wrong number of type parameters";
@@ -3078,7 +3054,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                 let TypeExpr::Struct {
                     name: struct_name,
                     type_params: struct_type_params,
-                } = TypeExpr::from_value_expr_dereferenced(&target_obj, type_env)
+                } = TypeExpr::from_value_expr_dereferenced(target_obj, type_env)
                 else {
                     let msg = "Can only generic method call a struct";
                     failure_with_occurence(msg, span, [(msg, span)]);
@@ -3227,13 +3203,11 @@ fn typeresolve_var_decl(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
 
             typeresolve_value_expr((&mut initializer.0, initializer.1), type_env);
         }
-    } else {
-        if let Some(initializer) = declaration.initializer.as_mut() {
-            typeresolve_value_expr((&mut initializer.0, initializer.1), type_env);
+    } else if let Some(initializer) = declaration.initializer.as_mut() {
+        typeresolve_value_expr((&mut initializer.0, initializer.1), type_env);
 
-            let type_expr = TypeExpr::from_value_expr(initializer, type_env);
-            declaration.type_expr = Some((type_expr.clone(), initializer.1));
-        }
+        let type_expr = TypeExpr::from_value_expr(initializer, type_env);
+        declaration.type_expr = Some((type_expr.clone(), initializer.1));
     }
 
     type_env.insert_identifier_type(
@@ -3390,7 +3364,7 @@ fn typeresolve_variable(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
     //     return;
     // }
     let (type_expr, is_const, _) = type_env
-        .get_identifier_type_and_const(&identifier)
+        .get_identifier_type_and_const(identifier)
         .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));
 
     //resolve_all_aliases_type_expr(&mut type_expr, type_env, generics_to_ignore);

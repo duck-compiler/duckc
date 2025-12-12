@@ -63,7 +63,7 @@ where
         .ignore_then(value_expr_parser(make_input.clone()))
         .then(value_expr_parser(make_input.clone()).or_not())
         .map_with(|(condition, maybe_value_expr), ctx| (IfBranch {
-            condition: condition,
+            condition,
             value_expr: maybe_value_expr
         }, ctx.span()));
 
@@ -78,8 +78,8 @@ where
         .then(else_branch_parser.or_not())
         .map_with(|(((identifier, type_expr), if_branch), else_branch), ctx| SchemaField {
             name: identifier,
-            type_expr: type_expr,
-            if_branch: if_branch,
+            type_expr,
+            if_branch,
             else_branch_value_expr: else_branch,
             span: ctx.span(),
         });
@@ -107,9 +107,9 @@ where
 
                 SchemaDefinition {
                     name: identifier,
-                    fields: fields,
+                    fields,
                     span: ctx.span(),
-                    comments: doc_comments.unwrap_or_else(|| Vec::new()),
+                    comments: doc_comments.unwrap_or_else(Vec::new),
                     out_type: None,
                     schema_fn_type: None,
                 }

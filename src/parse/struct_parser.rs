@@ -101,7 +101,7 @@ where
                 .chain(methods.iter().map(|m| &m.name))
             {
                 if !is_name_available(name.clone()) {
-                    panic!("Error: {} already declared in {identifier}", name);
+                    panic!("Error: {name} already declared in {identifier}");
                 }
             }
 
@@ -111,7 +111,7 @@ where
                 methods,
                 mut_methods: mut_methods_names,
                 generics: generics.unwrap_or_default(),
-                doc_comments: doc_comments.unwrap_or_else(|| Vec::new()),
+                doc_comments: doc_comments.unwrap_or_else(Vec::new),
             }
         })
 }

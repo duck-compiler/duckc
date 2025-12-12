@@ -303,27 +303,25 @@ where
                             target: Box::new(expr),
                             block: Box::new(block),
                         }
-                    } else {
-                        if let ValueExpr::Struct {
-                            name,
-                            fields,
-                            type_params,
-                        } = &expr.0
-                            && fields.is_empty()
-                            && type_params.is_empty()
-                        {
-                            ValueExpr::For {
-                                ident: (ident, is_mut.is_none(), None),
-                                target: Box::new((
-                                    ValueExpr::RawVariable(false, vec![name.clone()]),
-                                    expr.1,
-                                )),
-                                block: Box::new((ValueExpr::Block(vec![]), expr.1)),
-                            }
-                        } else {
-                            let msg = "Invalid for target syntax".to_string();
-                            failure_with_occurence(msg.clone(), expr.1, [(msg.clone(), expr.1)]);
+                    } else if let ValueExpr::Struct {
+                        name,
+                        fields,
+                        type_params,
+                    } = &expr.0
+                        && fields.is_empty()
+                        && type_params.is_empty()
+                    {
+                        ValueExpr::For {
+                            ident: (ident, is_mut.is_none(), None),
+                            target: Box::new((
+                                ValueExpr::RawVariable(false, vec![name.clone()]),
+                                expr.1,
+                            )),
+                            block: Box::new((ValueExpr::Block(vec![]), expr.1)),
                         }
+                    } else {
+                        let msg = "Invalid for target syntax".to_string();
+                        failure_with_occurence(msg.clone(), expr.1, [(msg.clone(), expr.1)]);
                     }
                 })
                 .map_with(|x, e| (x, e.span()));
@@ -499,7 +497,7 @@ where
                         for (expr, has_semi) in &exprs[..exprs.len() - 1] {
                             if expr.0.needs_semicolon() && has_semi.is_none() {
                                 failure_with_occurence(
-                                    "This expression needs a semicolon".to_string(),
+                                    "This expression needs a semicolon",
                                     expr.1,
                                     [(
                                         "This expression needs a semicolon at the end".to_string(),
@@ -632,7 +630,7 @@ where
                                             let expr = value_expr_parser
                                                 .parse(make_input(empty_range(), s.as_slice()))
                                                 .into_result()
-                                                .expect(&format!("invalid code {s:?}"));
+                                                .unwrap_or_else(|_| panic!("invalid code {s:?}"));
                                             res.push(ValFmtStringContents::Expr(expr));
                                         }
                                     }
@@ -700,7 +698,7 @@ where
                 .allow_trailing()
                 .collect::<Vec<_>>()
                 .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')))
-                .map(|exprs| ValueExpr::Array(exprs))
+                .map(ValueExpr::Array)
                 .map_with(|x, e| (x, e.span()));
 
             #[derive(Debug, Clone)]

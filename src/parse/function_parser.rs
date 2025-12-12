@@ -187,7 +187,7 @@ where
                     value_expr,
                     generics,
                     span: ctx.span(),
-                    comments: doc_comments.unwrap_or_else(|| Vec::new()),
+                    comments: doc_comments.unwrap_or_else(Vec::new),
                 }
             },
         )
