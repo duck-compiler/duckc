@@ -1,16 +1,16 @@
 {
     "id": "3849d474f8457250bace59f302873341",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 1144,
-    "title": "todo!(); in type_resolve.rs @ line 1144",
+    "line_number": 1166,
+    "title": "todo!(); in type_resolve.rs @ line 1166",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Maurice Schmidt",
-        "email": "mvmogo@gmail.com"
+        "name": "Apfelfrosch",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "todo!();",
     "status": "open",

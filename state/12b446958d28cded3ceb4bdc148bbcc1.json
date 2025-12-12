@@ -1,7 +1,7 @@
 {
     "id": "12b446958d28cded3ceb4bdc148bbcc1",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 1484,
+    "line_number": 1493,
     "title": "produce snapshot for the given error",
     "tag": "todo",
     "module_tag": "semantics",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Maurice Schmidt",
-        "email": "mvmogo@gmail.com"
+        "name": "Apfelfrosch",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "// todo: produce snapshot for the given error",
     "status": "open",

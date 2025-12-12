@@ -1,7 +1,7 @@
 {
     "id": "0bf1fe21fe0b13b6e5303ca5ec7e0fc7",
     "file_path": "../../src/emit/value.rs",
-    "line_number": 2054,
+    "line_number": 2123,
     "title": "handle indices of type ! properly (do it in rest of emit too)",
     "tag": "todo",
     "module_tag": "emit",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Maurice Schmidt",
-        "email": "mvmogo@gmail.com"
+        "name": "Apfelfrosch",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "//todo(@Apfelfrosch) handle indices of type ! properly (do it in rest of emit too)",
     "status": "open",
