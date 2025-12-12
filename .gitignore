@@ -10,3 +10,5 @@ duck_gen*.go
 dargo.toml
 tests/dargo
 tests/dargo.exe
+cleanup_expected.txt
+cleanup_result.txt

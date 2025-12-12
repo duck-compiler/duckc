@@ -981,9 +981,16 @@ mod tests {
         let normalized_result = normalize_whitespace(&result);
         let normalized_expected = normalize_whitespace(expected);
 
+        let res = normalized_expected == normalized_result;
+
+        if !res {
+            std::fs::write("a.txt", expected).unwrap();
+            std::fs::write("b.txt", &result).unwrap();
+        }
+
         assert_eq!(
             normalized_result, normalized_expected,
-            "input: {}\nexpected: {}\ngot: {}",
+            "input: {expected}\n\ne:{result}\n\n{}expected: {}\n\ngot: {}",
             input, normalized_expected, normalized_result
         );
     }
@@ -2097,10 +2104,6 @@ mod tests {
 
             func (u User) GetName() string {
                 return u.Name
-            }
-
-            func (u User) unusedMethod() bool {
-                return false
             }
 
             type UserService struct {
