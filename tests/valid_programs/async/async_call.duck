@@ -2,7 +2,7 @@ use std::http::{fetch};
 use std::io::{println};
 
 fn a() -> String {
-    return "abc";
+    return "result from a()";
 }
 
 fn main() {
