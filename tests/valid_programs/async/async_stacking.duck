@@ -1,0 +1,10 @@
+use std::http::{fetch};
+use std::io::{println};
+
+fn a() -> String {
+    return "result from stacked a()";
+}
+
+fn main() {
+    (async (async (async (async a()).recv_block()).recv_block()).recv_block()).recv_block()->std::io::println();
+}
