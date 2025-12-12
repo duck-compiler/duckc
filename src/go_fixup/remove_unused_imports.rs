@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use tree_sitter::{Node, Parser, Range};
 
+use crate::multi_map::MultiMap;
+
 #[derive(Debug, Clone)]
 enum DeclKind {
     Function,
@@ -27,7 +29,6 @@ pub fn cleanup_go_source(go_source: &str, remove_exported: bool) -> String {
         .expect("compiler error: couldn't load treesitter go parser");
 
     let tree = parser.parse(go_source, None).unwrap();
-    let used_types = find_used_types(go_source, tree.root_node());
 
     let (declarations, _imports, _package_usages) =
         analyze_source(tree.root_node(), go_source.as_bytes());
@@ -36,11 +37,8 @@ pub fn cleanup_go_source(go_source: &str, remove_exported: bool) -> String {
 
     let mut ranges_to_delete = Vec::new();
 
-    for (name, decl) in &declarations {
-        if !used_types.contains(name)
-            && !live_set.contains(name)
-            && (!decl.is_exported || remove_exported)
-        {
+    for (name, decl) in declarations.iter_flat() {
+        if !live_set.contains(name) && (!decl.is_exported || remove_exported) {
             if matches!(decl.kind, DeclKind::Method) {
                 if let Some(dot_pos) = name.find('.') {
                     let receiver_type = &name[..dot_pos];
@@ -442,6 +440,7 @@ fn extract_package_name_from_path(package_path: &str) -> String {
     };
 }
 
+#[allow(dead_code)]
 fn find_used_types(src: &str, n: Node) -> HashSet<String> {
     fn trav(src: &[u8], n: Node, out: &mut HashSet<String>) {
         if n.kind() == "type_identifier" {
@@ -462,11 +461,11 @@ fn analyze_source(
     root_node: Node,
     source: &[u8],
 ) -> (
-    HashMap<String, Declaration>,
+    MultiMap<String, Declaration>,
     HashMap<String, Range>,
     HashSet<String>,
 ) {
-    let mut declarations = HashMap::new();
+    let mut declarations = MultiMap::new();
     let mut imports = HashMap::new();
 
     for node in root_node.children(&mut root_node.walk()) {
@@ -482,7 +481,7 @@ fn analyze_source(
 fn parse_node(
     node: Node,
     source: &[u8],
-    declarations: &mut HashMap<String, Declaration>,
+    declarations: &mut MultiMap<String, Declaration>,
     imports: &mut HashMap<String, Range>,
 ) {
     match node.kind() {
@@ -503,7 +502,7 @@ fn parse_node(
 }
 
 fn calculate_live_set(
-    declarations: &HashMap<String, Declaration>,
+    declarations: &MultiMap<String, Declaration>,
     _remove_exported: bool,
 ) -> HashSet<String> {
     let mut live_set = HashSet::new();
@@ -556,11 +555,11 @@ fn calculate_live_set(
 
 fn collect_required_methods(
     live_set: &HashSet<String>,
-    declarations: &HashMap<String, Declaration>,
+    declarations: &MultiMap<String, Declaration>,
 ) -> HashSet<String> {
     live_set
         .iter()
-        .filter_map(|name| declarations.get(name))
+        .flat_map(|name| declarations.get(name).into_iter())
         .filter_map(|decl| match &decl.kind {
             DeclKind::Interface { methods } => Some(methods.iter().cloned()),
             _ => None,
@@ -572,10 +571,10 @@ fn collect_required_methods(
 fn add_required_methods(
     live_set: &mut HashSet<String>,
     worklist: &mut VecDeque<String>,
-    declarations: &HashMap<String, Declaration>,
+    declarations: &MultiMap<String, Declaration>,
     required_methods: &HashSet<String>,
 ) {
-    for (name, decl) in declarations {
+    for (name, decl) in declarations.iter_flat() {
         let DeclKind::Method = &decl.kind else {
             continue;
         };
@@ -597,11 +596,11 @@ fn add_required_methods(
 
 fn find_receiver_types(
     live_set: &HashSet<String>,
-    declarations: &HashMap<String, Declaration>,
+    declarations: &MultiMap<String, Declaration>,
 ) -> HashSet<String> {
     let mut receiver_types = HashSet::new();
 
-    for (name, decl) in declarations {
+    for (name, decl) in declarations.iter_flat() {
         if !live_set.contains(name) {
             continue;
         }
@@ -621,11 +620,11 @@ fn find_receiver_types(
 
 fn find_type_methods(
     live_set: &HashSet<String>,
-    declarations: &HashMap<String, Declaration>,
+    declarations: &MultiMap<String, Declaration>,
 ) -> Vec<String> {
     let mut type_methods = Vec::new();
 
-    for (name, decl) in declarations {
+    for (name, decl) in declarations.iter_flat() {
         if !live_set.contains(name) {
             continue;
         }
@@ -635,7 +634,7 @@ fn find_type_methods(
             continue;
         }
 
-        for (method_name, method_decl) in declarations {
+        for (method_name, method_decl) in declarations.iter_flat() {
             let DeclKind::Method = &method_decl.kind else {
                 continue;
             };
@@ -659,10 +658,10 @@ fn find_special_method_names(live_set: &HashSet<String>) -> HashSet<String> {
 fn add_special_methods(
     live_set: &mut HashSet<String>,
     worklist: &mut VecDeque<String>,
-    declarations: &HashMap<String, Declaration>,
+    declarations: &MultiMap<String, Declaration>,
     method_names: &HashSet<String>,
 ) {
-    for (name, decl) in declarations {
+    for (name, decl) in declarations.iter_flat() {
         let DeclKind::Method = &decl.kind else {
             continue;
         };
@@ -682,16 +681,14 @@ fn add_special_methods(
 fn perform_reachability_analysis(
     live_set: &mut HashSet<String>,
     worklist: &mut VecDeque<String>,
-    declarations: &HashMap<String, Declaration>,
+    declarations: &MultiMap<String, Declaration>,
 ) {
     while let Some(name) = worklist.pop_front() {
-        let Some(decl) = declarations.get(&name) else {
-            continue;
-        };
-
-        for dep in &decl.dependencies {
-            if live_set.insert(dep.clone()) {
-                worklist.push_back(dep.clone());
+        for decl in declarations.get(&name) {
+            for dep in &decl.dependencies {
+                if live_set.insert(dep.clone()) {
+                    worklist.push_back(dep.clone());
+                }
             }
         }
     }
@@ -721,7 +718,7 @@ fn drain_ranges(go_source: &str, mut ranges: Vec<Range>) -> String {
 fn go_parse_declaration(
     node: Node,
     source: &[u8],
-    declarations: &mut HashMap<String, Declaration>,
+    declarations: &mut MultiMap<String, Declaration>,
 ) {
     let kind = match node.kind() {
         "function_declaration" => DeclKind::Function,
@@ -984,9 +981,16 @@ mod tests {
         let normalized_result = normalize_whitespace(&result);
         let normalized_expected = normalize_whitespace(expected);
 
+        let res = normalized_expected == normalized_result;
+
+        if !res {
+            std::fs::write("a.txt", expected).unwrap();
+            std::fs::write("b.txt", &result).unwrap();
+        }
+
         assert_eq!(
             normalized_result, normalized_expected,
-            "input: {}\nexpected: {}\ngot: {}",
+            "input: {expected}\n\ne:{result}\n\n{}expected: {}\n\ngot: {}",
             input, normalized_expected, normalized_result
         );
     }
@@ -2100,10 +2104,6 @@ mod tests {
 
             func (u User) GetName() string {
                 return u.Name
-            }
-
-            func (u User) unusedMethod() bool {
-                return false
             }
 
             type UserService struct {

@@ -47,6 +47,7 @@ pub mod parse;
 pub mod reports;
 pub mod semantics;
 pub mod tags;
+pub mod multi_map;
 
 lazy_static! {
     static ref DUCK_STD_PATH: PathBuf = {
