@@ -501,9 +501,7 @@ impl TypeExpr {
                 name: _struct,
                 type_params: _,
             } => format!("*{}", self.as_clean_go_type_name(type_env)),
-            TypeExpr::NamedDuck { .. } => {
-                format!("{}", self.as_clean_go_type_name(type_env))
-            }
+            TypeExpr::NamedDuck { .. } => self.as_clean_go_type_name(type_env).to_string(),
             TypeExpr::Duck(duck) => {
                 let mut fields = duck.fields.clone();
                 fields.sort_by_key(|field| field.name.clone());

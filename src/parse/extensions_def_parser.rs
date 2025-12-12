@@ -51,7 +51,7 @@ where
                 target_type_expr,
                 function_definitions,
                 span: ctx.span(),
-                doc_comments: doc_comments.unwrap_or_else(|| Vec::new())
+                doc_comments: doc_comments.unwrap_or_else(Vec::new),
             },
         )
 }

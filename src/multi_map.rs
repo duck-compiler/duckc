@@ -5,6 +5,12 @@ pub struct MultiMap<K: Eq + Hash, V> {
     inner: HashMap<K, Vec<V>>,
 }
 
+impl<K: Eq + Hash, V> Default for MultiMap<K, V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K: Eq + Hash, V> MultiMap<K, V> {
     pub fn new() -> Self {
         Self {

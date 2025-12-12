@@ -78,42 +78,44 @@ where
         .then_ignore(just(Token::ControlChar('}')))
         .then(impl_parser)
         .then_ignore(just(Token::ControlChar(';')))
-        .map(|((((doc_comments, identifier), generics), fields), methods)| {
-            let (mut_methods_names, methods) = methods.into_iter().fold(
-                (HashSet::new(), Vec::new()),
-                |(mut mut_method_names, mut methods), (is_mut, elem)| {
-                    if is_mut {
-                        mut_method_names.insert(elem.name.clone());
+        .map(
+            |((((doc_comments, identifier), generics), fields), methods)| {
+                let (mut_methods_names, methods) = methods.into_iter().fold(
+                    (HashSet::new(), Vec::new()),
+                    |(mut mut_method_names, mut methods), (is_mut, elem)| {
+                        if is_mut {
+                            mut_method_names.insert(elem.name.clone());
+                        }
+                        methods.push(elem);
+                        (mut_method_names, methods)
+                    },
+                );
+
+                let mut names = HashSet::new();
+
+                let mut is_name_available = |s: String| -> bool { names.insert(s) };
+                let fields: Vec<Field> = fields;
+
+                for name in fields
+                    .iter()
+                    .map(|f| &f.name)
+                    .chain(methods.iter().map(|m| &m.name))
+                {
+                    if !is_name_available(name.clone()) {
+                        panic!("Error: {name} already declared in {identifier}");
                     }
-                    methods.push(elem);
-                    (mut_method_names, methods)
-                },
-            );
-
-            let mut names = HashSet::new();
-
-            let mut is_name_available = |s: String| -> bool { names.insert(s) };
-            let fields: Vec<Field> = fields;
-
-            for name in fields
-                .iter()
-                .map(|f| &f.name)
-                .chain(methods.iter().map(|m| &m.name))
-            {
-                if !is_name_available(name.clone()) {
-                    panic!("Error: {} already declared in {identifier}", name);
                 }
-            }
 
-            StructDefinition {
-                name: identifier,
-                fields,
-                methods,
-                mut_methods: mut_methods_names,
-                generics: generics.unwrap_or_default(),
-                doc_comments: doc_comments.unwrap_or_else(|| Vec::new()),
-            }
-        })
+                StructDefinition {
+                    name: identifier,
+                    fields,
+                    methods,
+                    mut_methods: mut_methods_names,
+                    generics: generics.unwrap_or_default(),
+                    doc_comments: doc_comments.unwrap_or_else(Vec::new),
+                }
+            },
+        )
 }
 
 #[cfg(test)]

@@ -303,7 +303,7 @@ fn walk_access_raw(
                 if deref_needs_to_be_mut {
                     if !can_do_mut_stuff_through(&target_obj, type_env) {
                         failure_with_occurence(
-                            "This needs to allow mutable access".to_string(),
+                            "This needs to allow mutable access",
                             target_obj.1,
                             [(
                                 "This needs to allow mutable access".to_string(),
@@ -375,7 +375,7 @@ fn walk_access_raw(
                         .build_extension_access_function_name(field_name, type_env);
                     let extension_fn = type_env.extension_functions.get(&extension_fn_name);
 
-                    if let Some(..) = extension_fn {
+                    if extension_fn.is_some() {
                         flag = Some((extension_fn_name, stars_count));
                     }
 
@@ -393,7 +393,7 @@ fn walk_access_raw(
                                 && !can_do_mut_stuff_through(target_obj, type_env)
                             {
                                 failure_with_occurence(
-                                    "This needs to allow mutable access".to_string(),
+                                    "This needs to allow mutable access",
                                     target.1,
                                     [(
                                         "This needs to allow mutable access".to_string(),
@@ -411,7 +411,7 @@ fn walk_access_raw(
                                 && !can_do_mut_stuff_through(target_obj, type_env)
                             {
                                 failure_with_occurence(
-                                    "This needs to allow mutable access".to_string(),
+                                    "This needs to allow mutable access",
                                     target.1,
                                     [(
                                         "This needs to allow mutable access".to_string(),
@@ -487,7 +487,7 @@ fn walk_access_raw(
                         .collect::<Vec<_>>()
                         .join(MANGLE_SEP);
                     (
-                        ValueExpr::Variable(a.clone(), generic_name, b.clone(), c.clone()),
+                        ValueExpr::Variable(*a, generic_name, b.clone(), *c),
                         target.1,
                     )
                 } else if let ValueExpr::FieldAccess {
@@ -529,7 +529,7 @@ fn walk_access_raw(
                 if deref_needs_to_be_mut {
                     if !can_do_mut_stuff_through(&target_obj, type_env) {
                         failure_with_occurence(
-                            "This needs to allow mutable access".to_string(),
+                            "This needs to allow mutable access",
                             target_obj.1,
                             [(
                                 "This needs to allow mutable access".to_string(),
@@ -625,7 +625,7 @@ fn walk_access_raw(
                 if deref_needs_to_be_mut {
                     if !can_do_mut_stuff_through(&current_obj, type_env) {
                         failure_with_occurence(
-                            "This needs to allow mutable access".to_string(),
+                            "This needs to allow mutable access",
                             current_obj.1,
                             [(
                                 "This needs to allow mutable access".to_string(),
@@ -809,7 +809,7 @@ impl ValueExpr {
         env: &mut ToIr,
         span: SS,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
-        let res = {
+        {
             match self {
                 ValueExpr::Async(e) => {
                     let return_type = TypeExpr::from_value_expr(&(self.clone(), span), type_env);
@@ -895,7 +895,7 @@ impl ValueExpr {
                 }
                 ValueExpr::As(v, t) => {
                     if let ValueExpr::Array(exprs) = &v.0 {
-                        emit_array(&exprs, &t.0, type_env, env, span)
+                        emit_array(exprs, &t.0, type_env, env, span)
                     } else {
                         v.0.direct_or_with_instr(type_env, env, v.1)
                     }
@@ -1836,7 +1836,7 @@ impl ValueExpr {
 
                         if the_one.is_none() && else_arm.is_none() {
                             failure_with_occurence(
-                                "Unexhaustive Match".to_string(),
+                                "Unexhaustive Match",
                                 *span,
                                 vec![
                                     (
@@ -2158,7 +2158,7 @@ impl ValueExpr {
                                 if !matches!(target_type, TypeExpr::RefMut(..)) {
                                     if matches!(target_type, TypeExpr::Ref(..)) {
                                         failure_with_occurence(
-                                            "Can only dereference a mutable reference".to_string(),
+                                            "Can only dereference a mutable reference",
                                             span,
                                             vec![(
                                                 "This is not a mutable reference".to_string(),
@@ -2167,7 +2167,7 @@ impl ValueExpr {
                                         );
                                     }
                                     failure_with_occurence(
-                                        "Can only dereference a reference".to_string(),
+                                        "Can only dereference a reference",
                                         span,
                                         vec![("This is not a reference".to_string(), new_target.1)],
                                     );
@@ -2398,22 +2398,21 @@ impl ValueExpr {
                     )
                     .filter(|x| !x.0.is_unit());
 
-                    if !type_params.is_empty() {
-                        if let ValueExpr::FieldAccess {
+                    if !type_params.is_empty()
+                        && let ValueExpr::FieldAccess {
                             target_obj: _,
                             field_name,
                         } = &mut v_target.0
-                        {
-                            *field_name = [field_name.clone()]
-                                .into_iter()
-                                .chain(
-                                    type_params
-                                        .iter()
-                                        .map(|(t, _)| t.as_clean_go_type_name(type_env)),
-                                )
-                                .collect::<Vec<_>>()
-                                .join(MANGLE_SEP);
-                        }
+                    {
+                        *field_name = [field_name.clone()]
+                            .into_iter()
+                            .chain(
+                                type_params
+                                    .iter()
+                                    .map(|(t, _)| t.as_clean_go_type_name(type_env)),
+                            )
+                            .collect::<Vec<_>>()
+                            .join(MANGLE_SEP);
                     }
 
                     let res = v_target.0.direct_emit(type_env, env, span);
@@ -2831,8 +2830,7 @@ impl ValueExpr {
                     }
                 }
             }
-        };
-        res
+        }
     }
 }
 

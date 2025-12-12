@@ -96,7 +96,7 @@ impl TypeExpr {
                 let ty_expr = TypeExpr::from_value_expr(v, type_env);
                 if !matches!(ty_expr, TypeExpr::Ref(..) | TypeExpr::RefMut(..)) {
                     failure_with_occurence(
-                        "Can only dereference a reference".to_string(),
+                        "Can only dereference a reference",
                         *complete_span,
                         [("This is not a reference".to_string(), v.1)],
                     );
@@ -439,8 +439,7 @@ impl TypeExpr {
                             let fn_def = fn_def.expect("this should exist");
 
                             let params = fn_def.params.clone();
-                            if params.is_some() {
-                                let params = params.unwrap();
+                            if let Some(params) = params {
                                 for (index, param) in params.iter().enumerate() {
                                     let given_type =
                                         in_param_types.get(index).expect("todo: len doesnt match");
@@ -608,7 +607,7 @@ impl TypeExpr {
                 type_expr
                     .as_ref()
                     .cloned()
-                    .or(type_env.get_identifier_type(&ident))
+                    .or(type_env.get_identifier_type(ident))
                     .unwrap_or_else(|| {
                         panic!(
                             "{} - {s}",
@@ -683,7 +682,7 @@ impl TypeExpr {
                     || target_obj_type_expr.has_extension_by_name(field_name.clone(), type_env))
                 {
                     failure_with_occurence(
-                        "Invalid Field Access".to_string(),
+                        "Invalid Field Access",
                         {
                             let mut span = span;
                             span.end += 2;
@@ -724,7 +723,7 @@ impl TypeExpr {
                     .get(&extension_function_name)
                     .unwrap_or_else(|| {
                         failure_with_occurence(
-                            "Invalid Extension Access".to_string(),
+                            "Invalid Extension Access",
                             {
                                 let mut span = span;
                                 span.end += 2;
@@ -819,7 +818,7 @@ impl TypeExpr {
                         if !is_covered {
                             let missing_type = possible_type;
                             failure_with_occurence(
-                                "Unexhaustive Match".to_string(),
+                                "Unexhaustive Match",
                                 *complete_span,
                                 vec![(
                                     format!(
@@ -1354,7 +1353,7 @@ pub fn check_type_compatability_full(
         };
 
         failure_with_occurence(
-            "Incompatible Types".to_string(),
+            "Incompatible Types",
             given_type.1,
             vec![
                 (explain_required.to_string(), required_type.1),
@@ -1406,7 +1405,7 @@ pub fn check_type_compatability_full(
                         });
                     for def_field in &def.fields {
                         if let Some(field_type) = struct_fields.get(&def_field.name) {
-                            check_type_compatability(&def_field.type_expr, &field_type, type_env);
+                            check_type_compatability(&def_field.type_expr, field_type, type_env);
                         } else {
                             panic!("field {} not found", def_field.name);
                         }

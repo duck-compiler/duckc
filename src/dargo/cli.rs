@@ -2,7 +2,10 @@ use clap::{Parser as CliParser, Subcommand};
 use std::path::PathBuf;
 
 use crate::{
-    dargo::{self, compile::CompileErrKind, docs::DocsErrKind, init::InitErrKind, run::RunErrKind, test::TestErrKind},
+    dargo::{
+        self, compile::CompileErrKind, docs::DocsErrKind, init::InitErrKind, run::RunErrKind,
+        test::TestErrKind,
+    },
     tags::Tag,
 };
 
@@ -144,13 +147,12 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
             })?;
         }
         Commands::Docs(docs_generate_args) => {
-            dargo::docs::generate(docs_generate_args)
-                .map_err(|err| {
-                    (
-                        format!("{}{}{}", Tag::Dargo, Tag::Docs, err.0,),
-                        CliErrKind::Docs(err.1)
-                    )
-                })?;
+            dargo::docs::generate(docs_generate_args).map_err(|err| {
+                (
+                    format!("{}{}{}", Tag::Dargo, Tag::Docs, err.0,),
+                    CliErrKind::Docs(err.1),
+                )
+            })?;
         }
     }
 

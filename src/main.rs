@@ -43,11 +43,11 @@ pub mod cli;
 pub mod dargo;
 pub mod emit;
 pub mod go_fixup;
+pub mod multi_map;
 pub mod parse;
 pub mod reports;
 pub mod semantics;
 pub mod tags;
-pub mod multi_map;
 
 lazy_static! {
     static ref DUCK_STD_PATH: PathBuf = {
@@ -458,7 +458,10 @@ fn parse_src_file(
 
     // TODO: do this for all dependencies
     let mut result = src_file.unwrap().flatten(&vec![], true);
+
+    #[allow(clippy::nonminimal_bool)]
     if !false {
+        // <- use this if you want to test without std
         for s in &std_src_file.function_definitions {
             result.function_definitions.push(s.clone());
         }

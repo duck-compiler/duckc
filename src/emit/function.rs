@@ -97,7 +97,7 @@ impl FunctionDefintion {
                 self.return_type
                     .clone()
                     .map(|return_type| return_type.0.as_go_return_type(type_env))
-                    .unwrap_or_else(|| String::new())
+                    .unwrap_or_default()
             )),
             vec![IrInstruction::Return(Some(IrValue::Lambda(
                 self.params
@@ -110,7 +110,7 @@ impl FunctionDefintion {
                     self.return_type
                         .clone()
                         .map(|return_type| return_type.0.as_go_return_type(type_env))
-                        .unwrap_or_else(|| String::new())
+                        .unwrap_or_default(),
                 ),
                 emitted_body,
             )))],

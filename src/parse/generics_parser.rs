@@ -31,7 +31,7 @@ where
                                         TypeExpr::Duck(_) => type_expr,
                                         other if false => {
                                             failure_with_occurence(
-                                                "Invalid Syntax".to_string(),
+                                                "Invalid Syntax",
                                                 span,
                                                 vec![
                                                     (

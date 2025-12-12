@@ -2,10 +2,15 @@ use colored::Colorize;
 use duckwind::EmitEnv;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use std::{fs, path::{Path, PathBuf}, sync::mpsc};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::mpsc,
+};
 
 use crate::{
-    cli::go_cli::GoCliErrKind, dargo::cli::DocsGenerateArgs, lex, parse_src_file, tags::Tag, typecheck
+    cli::go_cli::GoCliErrKind, dargo::cli::DocsGenerateArgs, lex, parse_src_file, tags::Tag,
+    typecheck,
 };
 
 #[derive(Debug)]
@@ -24,7 +29,7 @@ lazy_static! {
 pub struct DocsOutput {
     pub json_output_path: PathBuf,
     pub fn_docs: Vec<FunctionDoc>,
-    pub struct_docs: Vec<StructDoc>
+    pub struct_docs: Vec<StructDoc>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -158,68 +163,95 @@ pub fn generate(generate_args: DocsGenerateArgs) -> Result<DocsOutput, (String, 
     let mut extensions_docs = vec![];
 
     let type_env = typecheck(&mut src_file_ast, &tailwind_worker_send);
-    type_env.struct_definitions.iter().for_each(|struct_definition| {
-        let mut fn_docs = vec![];
-        struct_definition
-            .methods
-            .iter()
-            .for_each(|function_def| {
+    type_env
+        .struct_definitions
+        .iter()
+        .for_each(|struct_definition| {
+            let mut fn_docs = vec![];
+            struct_definition.methods.iter().for_each(|function_def| {
                 if !function_def.comments.is_empty() {
                     fn_docs.push(FunctionDoc {
                         function_name: function_def.name.clone(),
-                        function_annotation: function_def.type_expr().0.as_clean_user_faced_type_name(),
+                        function_annotation: function_def
+                            .type_expr()
+                            .0
+                            .as_clean_user_faced_type_name(),
                         comments: function_def.comments.iter().map(|c| c.0.clone()).collect(),
                     });
                 }
             });
 
-        if !(fn_docs.is_empty() && struct_definition.doc_comments.is_empty()) {
-            struct_docs.push(StructDoc {
-                function_docs: fn_docs,
-                struct_name: struct_definition.name.clone(),
-                comments: struct_definition.doc_comments.iter().map(|c| c.0.clone()).collect(),
-                fields: struct_definition.fields.iter().map(|field| DocsField {
-                    field_name: field.name.clone(),
-                    type_annotation: field.type_expr.0.as_clean_user_faced_type_name()
-                }).collect()
-            });
-        }
-    });
+            if !(fn_docs.is_empty() && struct_definition.doc_comments.is_empty()) {
+                struct_docs.push(StructDoc {
+                    function_docs: fn_docs,
+                    struct_name: struct_definition.name.clone(),
+                    comments: struct_definition
+                        .doc_comments
+                        .iter()
+                        .map(|c| c.0.clone())
+                        .collect(),
+                    fields: struct_definition
+                        .fields
+                        .iter()
+                        .map(|field| DocsField {
+                            field_name: field.name.clone(),
+                            type_annotation: field.type_expr.0.as_clean_user_faced_type_name(),
+                        })
+                        .collect(),
+                });
+            }
+        });
 
-    src_file_ast.extensions_defs.iter().for_each(|extensions_def| {
-        let mut fn_docs = vec![];
-        extensions_def
-            .function_definitions
-            .iter()
-            .for_each(|(function_def, _)| {
-                if !function_def.comments.is_empty() {
-                    fn_docs.push(FunctionDoc {
-                        function_name: function_def.name.clone(),
-                        function_annotation: function_def.type_expr().0.as_clean_user_faced_type_name(),
-                        comments: function_def.comments.iter().map(|c| c.0.clone()).collect(),
-                    });
-                }
-            });
+    src_file_ast
+        .extensions_defs
+        .iter()
+        .for_each(|extensions_def| {
+            let mut fn_docs = vec![];
+            extensions_def
+                .function_definitions
+                .iter()
+                .for_each(|(function_def, _)| {
+                    if !function_def.comments.is_empty() {
+                        fn_docs.push(FunctionDoc {
+                            function_name: function_def.name.clone(),
+                            function_annotation: function_def
+                                .type_expr()
+                                .0
+                                .as_clean_user_faced_type_name(),
+                            comments: function_def.comments.iter().map(|c| c.0.clone()).collect(),
+                        });
+                    }
+                });
 
-        if !(fn_docs.is_empty() && extensions_def.doc_comments.is_empty()) {
-            extensions_docs.push(ExtensionsDoc {
-                target_type_annotation: extensions_def.target_type_expr.0.as_clean_user_faced_type_name(),
-                function_docs: fn_docs,
-                comments: extensions_def.doc_comments.iter().map(|c| c.0.clone()).collect(),
-            });
-        }
-    });
+            if !(fn_docs.is_empty() && extensions_def.doc_comments.is_empty()) {
+                extensions_docs.push(ExtensionsDoc {
+                    target_type_annotation: extensions_def
+                        .target_type_expr
+                        .0
+                        .as_clean_user_faced_type_name(),
+                    function_docs: fn_docs,
+                    comments: extensions_def
+                        .doc_comments
+                        .iter()
+                        .map(|c| c.0.clone())
+                        .collect(),
+                });
+            }
+        });
 
-    type_env.function_definitions.iter().for_each(|function_def| {
-        if !function_def.comments.is_empty() {
-            fn_docs.push(FunctionDoc {
-                function_name: function_def.name.clone(),
-                function_annotation: function_def.type_expr().0.as_clean_user_faced_type_name(),
-                comments: function_def.comments.iter().map(|c| c.0.clone()).collect(),
-            });
-            println!()
-        }
-    });
+    type_env
+        .function_definitions
+        .iter()
+        .for_each(|function_def| {
+            if !function_def.comments.is_empty() {
+                fn_docs.push(FunctionDoc {
+                    function_name: function_def.name.clone(),
+                    function_annotation: function_def.type_expr().0.as_clean_user_faced_type_name(),
+                    comments: function_def.comments.iter().map(|c| c.0.clone()).collect(),
+                });
+                println!()
+            }
+        });
 
     println!(
         "{}{}{} Successfully generated docs",
@@ -241,12 +273,16 @@ pub fn generate(generate_args: DocsGenerateArgs) -> Result<DocsOutput, (String, 
 
     return Ok(DocsOutput {
         json_output_path: Path::new("here").to_path_buf(),
-        fn_docs: fn_docs,
-        struct_docs: struct_docs,
+        fn_docs,
+        struct_docs,
     });
 }
 
-fn layout_html(fn_docs: &Vec<FunctionDoc>, struct_docs: &Vec<StructDoc>, extensions_docs: &Vec<ExtensionsDoc>) -> String {
+fn layout_html(
+    fn_docs: &[FunctionDoc],
+    struct_docs: &[StructDoc],
+    extensions_docs: &[ExtensionsDoc],
+) -> String {
     let sidebar_html = render_sidebar(fn_docs, struct_docs, extensions_docs);
 
     let structs_html = struct_docs
@@ -445,7 +481,11 @@ fn layout_html(fn_docs: &Vec<FunctionDoc>, struct_docs: &Vec<StructDoc>, extensi
     )
 }
 
-fn render_sidebar(fn_docs: &Vec<FunctionDoc>, struct_docs: &Vec<StructDoc>, extensions_docs: &Vec<ExtensionsDoc>) -> String {
+fn render_sidebar(
+    fn_docs: &[FunctionDoc],
+    struct_docs: &[StructDoc],
+    extensions_docs: &[ExtensionsDoc],
+) -> String {
     let struct_links = struct_docs.iter().map(|s| {
         format!(
             "<li><a href='#struct-{}' class='block text-[#a89984] hover:text-[#fabd2f] hover:bg-[#32302f] px-2 py-1.5 rounded transition-colors duration-200'>{}</a></li>",
@@ -486,9 +526,12 @@ fn render_sidebar(fn_docs: &Vec<FunctionDoc>, struct_docs: &Vec<StructDoc>, exte
 }
 
 fn render_struct(doc: &StructDoc) -> String {
-    let comments_html = doc.comments.iter()
-        .map(|c| format!("<p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>{}</p>", c))
-        .collect::<Vec<_>>().join("");
+    let comments_html = doc
+        .comments
+        .iter()
+        .map(|c| format!("<p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>{c}</p>"))
+        .collect::<Vec<_>>()
+        .join("");
 
     let fields_html = if doc.fields.is_empty() {
         String::new()
@@ -525,7 +568,9 @@ fn render_struct(doc: &StructDoc) -> String {
     let methods_html = if doc.function_docs.is_empty() {
         String::new()
     } else {
-        let methods = doc.function_docs.iter()
+        let methods = doc
+            .function_docs
+            .iter()
             .map(|f| render_function(f, true))
             .collect::<Vec<_>>()
             .join("\n");
@@ -564,14 +609,19 @@ fn render_struct(doc: &StructDoc) -> String {
 }
 
 fn render_extension(doc: &ExtensionsDoc) -> String {
-    let comments_html = doc.comments.iter()
-        .map(|c| format!("<p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>{}</p>", c))
-        .collect::<Vec<_>>().join("");
+    let comments_html = doc
+        .comments
+        .iter()
+        .map(|c| format!("<p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>{c}</p>"))
+        .collect::<Vec<_>>()
+        .join("");
 
     let methods_html = if doc.function_docs.is_empty() {
         String::new()
     } else {
-        let methods = doc.function_docs.iter()
+        let methods = doc
+            .function_docs
+            .iter()
             .map(|f| render_function(f, true))
             .collect::<Vec<_>>()
             .join("\n");
@@ -608,19 +658,22 @@ fn render_extension(doc: &ExtensionsDoc) -> String {
 }
 
 fn render_function(doc: &FunctionDoc, is_method: bool) -> String {
-    let comments_html = doc.comments.iter()
-        .map(|c| format!("<p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>{}</p>", c))
-        .collect::<Vec<_>>().join("");
+    let comments_html = doc
+        .comments
+        .iter()
+        .map(|c| format!("<p class='text-[#ebdbb2] opacity-80 mb-2 leading-relaxed'>{c}</p>"))
+        .collect::<Vec<_>>()
+        .join("");
 
     let (badge, title_color) = if is_method {
         (
             r#"<span class="text-xs font-bold text-[#a89984] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945] uppercase tracking-wide">Method</span>"#,
-            "text-[#ebdbb2]"
+            "text-[#ebdbb2]",
         )
     } else {
         (
             r#"<span class="text-xs font-bold text-[#1d2021] bg-[#b8bb26] px-2 py-0.5 rounded uppercase tracking-wide">Fn</span>"#,
-            "text-[#fbf1c7]"
+            "text-[#fbf1c7]",
         )
     };
 
