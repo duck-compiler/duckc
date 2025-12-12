@@ -1,7 +1,7 @@
 {
     "id": "29f7b87e59b410f52e0db883df661090",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 447,
+    "line_number": 446,
     "title": "check if we should clone the typeenv",
     "tag": "todo",
     "module_tag": "semantics",
