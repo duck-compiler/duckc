@@ -108,11 +108,7 @@ impl TypeExpr {
     }
 
     pub fn as_go_return_type(&self, type_env: &mut TypeEnv) -> String {
-        if self.is_unit() {
-            String::new()
-        } else {
-            self.as_go_type_annotation(type_env)
-        }
+        self.as_go_type_annotation(type_env)
     }
 
     pub fn primitives() -> Vec<TypeExpr> {

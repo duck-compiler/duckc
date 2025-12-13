@@ -3476,6 +3476,10 @@ fn typeresolve_lambda(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
         infer_against(value_expr, return_type, type_env);
     }
 
+    if return_type.is_none() {
+        *return_type = Some((TypeExpr::Tuple(vec![]), value_expr.1));
+    }
+
     typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
     type_env.pop_identifier_types();
 }

@@ -314,7 +314,6 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                 method
                     .return_type
                     .as_ref()
-                    .filter(|x| !x.0.is_unit())
                     .map(|(type_expr, _)| type_expr.as_go_type_annotation(type_env))
                     .unwrap_or_default()
             );
@@ -495,6 +494,7 @@ impl TypeExpr {
                     .join(","),
                 return_type
                     .as_ref()
+                    .or(Some(Box::new((TypeExpr::Tuple(vec![]), empty_range()))).as_ref())
                     .map(|x| x.0.as_go_return_type(type_env))
                     .unwrap_or_default(),
             ),

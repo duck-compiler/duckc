@@ -129,7 +129,6 @@ where
     let return_type_parser = just(Token::ThinArrow).ignore_then(type_expression_parser());
 
     doc_comments_parser
-        .then(just(Token::Async).or_not())
         .then_ignore(just(Token::Function))
         .then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
         .then(generics_parser().or_not())
@@ -139,54 +138,16 @@ where
         .then(return_type_parser.or_not())
         .then(value_expr_parser(make_input))
         .map_with(
-            |(
-                (((((doc_comments, has_sus), identifier), generics), params), return_type),
-                mut value_expr,
-            ),
+            |(((((doc_comments, identifier), generics), params), return_type), mut value_expr),
              ctx| {
-                let is_sus = has_sus.is_some();
-
-                if is_sus && return_type.is_some() {
-                    panic!("sus function is not allowed to return something");
-                }
-
                 value_expr = match value_expr {
-                    (ValueExpr::Duck(x), loc) if x.is_empty() => (ValueExpr::Block(vec![]), loc),
                     x @ (ValueExpr::Block(_), _) => x,
                     _ => panic!("Function must be block"),
                 };
 
-                if is_sus {
-                    value_expr = (
-                        ValueExpr::FunctionCall {
-                            target: ValueExpr::RawVariable(
-                                true,
-                                vec!["std".into(), "task".into(), "spawn".into()],
-                            )
-                            .into_empty_span()
-                            .into(),
-                            params: vec![
-                                ValueExpr::Lambda(
-                                    LambdaFunctionExpr {
-                                        is_mut: false,
-                                        params: vec![],
-                                        return_type: None,
-                                        value_expr: value_expr.clone(),
-                                    }
-                                    .into(),
-                                )
-                                .into_empty_span(),
-                            ],
-                            type_params: vec![],
-                            is_extension_call: false,
-                        },
-                        value_expr.1,
-                    );
-                }
-
                 FunctionDefintion {
                     name: identifier,
-                    return_type,
+                    return_type: return_type.or(Some((TypeExpr::Tuple(vec![]), ctx.span()))),
                     params,
                     value_expr,
                     generics,

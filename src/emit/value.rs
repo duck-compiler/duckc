@@ -4,7 +4,10 @@ use std::{
 };
 
 use crate::{
-    emit::types::escape_string_for_go,
+    emit::{
+        function::{function_epilogue, function_epilogue_2},
+        types::escape_string_for_go,
+    },
     parse::{
         SS, Spanned,
         duckx_component_parser::find_client_components,
@@ -790,15 +793,17 @@ impl ValueExpr {
 
                 let return_type = return_type
                     .as_ref()
-                    .map(|(x, _)| x.as_go_type_annotation(type_env));
+                    .or(Some((TypeExpr::Tuple(vec![]), span)).as_ref())
+                    .as_ref()
+                    .map(|(x, _)| x.as_go_type_annotation(type_env))
+                    .unwrap();
 
                 let (mut b_instr, b_res) = value_expr.0.emit(type_env, env, span);
-                if return_type.is_some()
-                    && let Some(b_res) = b_res
-                {
+                if let Some(b_res) = b_res {
                     b_instr.push(IrInstruction::Return(b_res.into()));
                 }
-                Some(IrValue::Lambda(rparams, return_type, b_instr))
+                b_instr.push(function_epilogue_2(&return_type));
+                Some(IrValue::Lambda(rparams, Some(return_type), b_instr))
             }
             _ => None,
         }
@@ -2542,9 +2547,7 @@ impl ValueExpr {
                                         tmp_var_name.clone(),
                                         IrValue::Imm(format!("make({anno}, len({x}))")),
                                     ),
-                                    IrInstruction::InlineGo(format!(
-                                        "copy({tmp_var_name}, {x})"
-                                    )),
+                                    IrInstruction::InlineGo(format!("copy({tmp_var_name}, {x})")),
                                 ]);
                                 (res_instr, as_rvar(tmp_var_name))
                             }

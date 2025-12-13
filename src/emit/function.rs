@@ -4,6 +4,20 @@ use crate::{
     semantics::type_resolve::TypeEnv,
 };
 
+pub fn function_epilogue_2(t: &str) -> IrInstruction {
+    if t == "Tup_" {
+        IrInstruction::InlineGo("return Tup_{}".to_string())
+    } else {
+        IrInstruction::InlineGo(format!("var ΔΔΔretΔΔΔ *{}\nreturn *ΔΔΔretΔΔΔ", t))
+    }
+}
+
+pub fn function_epilogue(t: &TypeExpr, type_env: &mut TypeEnv) -> IrInstruction {
+    let t = t.as_go_type_annotation(type_env);
+
+    function_epilogue_2(&t)
+}
+
 impl FunctionDefintion {
     pub fn emit(
         &self,
@@ -20,18 +34,11 @@ impl FunctionDefintion {
         }
 
         // println!("end value_body");
-        if self.return_type.is_some()
-            && self.name != "main"
-            && !self.return_type.as_ref().unwrap().0.is_unit()
-        {
-            emitted_body.push(IrInstruction::InlineGo(format!(
-                "var ΔΔΔretΔΔΔ *{}\nreturn *ΔΔΔretΔΔΔ",
-                self.return_type
-                    .as_ref()
-                    .unwrap()
-                    .0
-                    .as_go_type_annotation(type_env)
-            )));
+        if self.return_type.is_some() && self.name != "main" {
+            emitted_body.push(function_epilogue(
+                &self.return_type.as_ref().unwrap().0,
+                type_env,
+            ));
         }
 
         // TODO mvmo - 03.07.2025: this should check if the last is without a semicolon

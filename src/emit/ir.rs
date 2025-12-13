@@ -293,7 +293,6 @@ impl IrInstruction {
                         } else {
                             return_type.clone()
                         })
-                        .filter(|x| x != "Tup_")
                         .unwrap_or(String::new()),
                     format!(
                         "{}\n{}",
@@ -460,7 +459,6 @@ impl IrValue {
                     .join(", "),
                 return_type
                     .as_ref()
-                    .filter(|x| x.as_str() != "Tup_")
                     .cloned()
                     .unwrap_or_default(),
                 body.iter()
