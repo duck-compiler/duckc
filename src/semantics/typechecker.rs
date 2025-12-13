@@ -601,7 +601,7 @@ impl TypeExpr {
 
                 return ty;
             }
-            ValueExpr::Variable(_, ident, type_expr, _) => {
+            ValueExpr::Variable(_, ident, type_expr, _, _) => {
                 let s = Location::caller();
 
                 type_expr

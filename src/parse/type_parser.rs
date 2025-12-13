@@ -72,6 +72,37 @@ pub enum TypeExpr {
 }
 
 impl TypeExpr {
+    pub fn is_trivially_copyable(&self, type_env: &mut TypeEnv) -> bool {
+        match self {
+            TypeExpr::String(..)
+            | TypeExpr::Int(..)
+            | TypeExpr::Float
+            | TypeExpr::Bool(..)
+            | TypeExpr::Go(..)
+            | TypeExpr::Fun(..)
+            | TypeExpr::Tag(..)
+            | TypeExpr::Html
+            | TypeExpr::Char => true,
+            TypeExpr::Tuple(fields) | TypeExpr::Or(fields) => fields
+                .iter()
+                .all(|(t, _)| t.is_trivially_copyable(type_env)),
+            TypeExpr::Duck(Duck { fields: _ }) => true,
+            TypeExpr::Array(t) => t.0.is_trivially_copyable(type_env),
+            TypeExpr::InlineGo => true,
+            TypeExpr::Ref(..) => true,
+            TypeExpr::RefMut(..) => true,
+            TypeExpr::Struct { name, type_params } => {
+                let def =
+                    type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
+                def.fields
+                    .clone()
+                    .iter()
+                    .all(|f| f.type_expr.0.is_trivially_copyable(type_env))
+            }
+            _ => false,
+        }
+    }
+
     pub fn into_empty_span(self) -> Spanned<TypeExpr> {
         (self, empty_range())
     }
