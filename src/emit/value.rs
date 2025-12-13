@@ -239,7 +239,7 @@ pub fn can_do_mut_stuff_through2(
     {
         can_do_mut_stuff_through2(target_obj, type_env, var_needs_const)
     } else {
-        !var_needs_const || !matches!(&v.0, ValueExpr::Variable(_, _, _, Some(true)))
+        !var_needs_const || !matches!(&v.0, ValueExpr::Variable(_, _, _, Some(true), _))
     }
 }
 
@@ -274,9 +274,24 @@ fn walk_access_raw(
     loop {
         let cloned = is_calling_fun;
         is_calling_fun = false;
-        match current_obj.0 {
-            ValueExpr::Variable(_, name, _type_expr, is_const) => {
-                s.push_front(name.clone());
+        match current_obj.0.clone() {
+            ValueExpr::Variable(_, name, _type_expr, is_const, needs_copy) => {
+                if needs_copy {
+                    let (emit_instr, Some(IrValue::Var(var_name))) =
+                        current_obj.0.emit(type_env, env, current_obj.1)
+                    else {
+                        panic!("this should be a var")
+                    };
+
+                    emit_instr
+                        .into_iter()
+                        .rev()
+                        .for_each(|i| res_instr.push_front(i));
+
+                    s.push_front(var_name);
+                } else {
+                    s.push_front(name.clone());
+                }
 
                 if is_const.is_some_and(|v| v) && last_needs_mut && stars == 0 && !cloned {
                     failure(
@@ -474,7 +489,7 @@ fn walk_access_raw(
                 }
 
                 stars = stars_to_set;
-                current_obj = if let ValueExpr::Variable(a, var_name, b, c) = &target.0
+                current_obj = if let ValueExpr::Variable(a, var_name, b, c, needs_copy) = &target.0
                     && !type_params.is_empty()
                 {
                     let generic_name = [var_name.clone()]
@@ -487,7 +502,7 @@ fn walk_access_raw(
                         .collect::<Vec<_>>()
                         .join(MANGLE_SEP);
                     (
-                        ValueExpr::Variable(*a, generic_name, b.clone(), *c),
+                        ValueExpr::Variable(*a, generic_name, b.clone(), *c, *needs_copy),
                         target.1,
                     )
                 } else if let ValueExpr::FieldAccess {
@@ -844,6 +859,7 @@ impl ValueExpr {
                                         var_name.clone(),
                                         Some(return_type.clone()),
                                         Some(true),
+                                        false,
                                     ),
                                     span,
                                 )
@@ -1503,6 +1519,7 @@ impl ValueExpr {
                                                                 false,
                                                             )),
                                                             Some(false),
+                                                            false,
                                                         )
                                                         .into_empty_span()
                                                         .into(),
@@ -1518,6 +1535,7 @@ impl ValueExpr {
                                                                                 b.0.clone(),
                                                                                 Some(b.1),
                                                                                 Some(false),
+                                                                                true,
                                                                             )
                                                                             .into_empty_span(),
                                                                         )
@@ -1956,6 +1974,9 @@ impl ValueExpr {
                         if let Some(direct) = initializer.0.direct_emit(type_env, env, span) {
                             v.push(IrInstruction::VarAssignment(name.clone(), direct));
                         } else {
+                            if name == "instance_2" {
+                                dbg!(1, initializer);
+                            }
                             let (init_r, inti_r_res) =
                                 walk_access(initializer, type_env, env, span, true, false, false);
                             v.extend(init_r);
@@ -2480,7 +2501,59 @@ impl ValueExpr {
                     }
                 }
                 ValueExpr::RawVariable(_, p) => (vec![], as_rvar(mangle(p))),
-                ValueExpr::Variable(_, x, _, _) => (vec![], as_rvar(x.to_owned())),
+                ValueExpr::Variable(_, x, var_type, _, needs_copy) => {
+                    if *needs_copy {
+                        // TODO(@Apfelfrosch): do deep copy for composite types
+                        let var_type = var_type
+                            .as_ref()
+                            .expect(&format!("Var {x} doesnt have type"));
+
+                        let mut res_instr = Vec::new();
+                        let res_var_name = env.new_var();
+                        let anno = var_type.as_go_type_annotation(type_env);
+
+                        match var_type {
+                            TypeExpr::Struct { .. } => {
+                                let tmp_var_name = env.new_var();
+                                res_instr.extend([
+                                    IrInstruction::VarDecl(
+                                        tmp_var_name.clone(),
+                                        anno[1..].to_string(),
+                                    ),
+                                    IrInstruction::VarAssignment(
+                                        tmp_var_name.clone(),
+                                        IrValue::Imm(format!("*{x}")),
+                                    ),
+                                ]);
+                                res_instr.extend([
+                                    IrInstruction::VarDecl(res_var_name.clone(), anno.clone()),
+                                    IrInstruction::VarAssignment(
+                                        res_var_name.clone(),
+                                        IrValue::Imm(format!("&{tmp_var_name}")),
+                                    ),
+                                ]);
+                                (res_instr, Some(IrValue::Var(res_var_name)))
+                            }
+                            TypeExpr::Array(..) => {
+                                let tmp_var_name = env.new_var();
+                                res_instr.extend([
+                                    IrInstruction::VarDecl(tmp_var_name.clone(), anno.to_string()),
+                                    IrInstruction::VarAssignment(
+                                        tmp_var_name.clone(),
+                                        IrValue::Imm(format!("make({anno}, len({x}))")),
+                                    ),
+                                    IrInstruction::InlineGo(format!(
+                                        "copy({tmp_var_name}, {x})"
+                                    )),
+                                ]);
+                                (res_instr, as_rvar(tmp_var_name))
+                            }
+                            _ => (vec![], as_rvar(x.to_owned())),
+                        }
+                    } else {
+                        (vec![], as_rvar(x.to_owned()))
+                    }
+                }
                 ValueExpr::Equals(v1, v2) => {
                     let mut ir = Vec::new();
 

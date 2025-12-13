@@ -461,6 +461,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
                 format!("*{}", t.0.as_go_type_annotation(type_env))
             }
@@ -527,6 +528,7 @@ impl TypeExpr {
 
     pub fn as_go_concrete_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.as_go_concrete_annotation(type_env),
             TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
             TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
@@ -600,6 +602,7 @@ impl TypeExpr {
 
     pub fn type_id(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
             TypeExpr::Ref(t) => format!("Ref_{}", t.0.type_id(type_env)),
             TypeExpr::RefMut(t) => format!("RefMut_{}", t.0.type_id(type_env)),
             TypeExpr::Html => "Html".to_string(),
@@ -698,6 +701,7 @@ impl TypeExpr {
 
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
             TypeExpr::Ref(t) => format!("Ref___{}", t.0.as_clean_go_type_name(type_env)),
             TypeExpr::RefMut(t) => format!("RefMut___{}", t.0.as_clean_go_type_name(type_env)),
             TypeExpr::Html => "Html".to_string(),

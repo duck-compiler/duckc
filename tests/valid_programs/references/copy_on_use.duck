@@ -1,0 +1,35 @@
+struct AStruct = {
+    some_str: String,
+} impl {
+    fn print() {
+        std::io::println(f"{self.some_str}");
+    }
+};
+
+fn main() {
+    const instance_1 = AStruct {
+        some_str: "yo",
+    };
+    let instance_2 = instance_1;
+
+    instance_1.print();
+    instance_2.print();
+
+    instance_2.some_str = "abc xDD";
+
+    instance_1.print();
+    instance_2.print();
+
+    let arr = [1, 2, 3];
+    let arr2 = arr;
+
+    arr[0] = 100;
+
+    for num in arr {
+        num->std::string::from_int()->std::io::println();
+    }
+
+    for num in arr2 {
+        num->std::string::from_int()->std::io::println();
+    }
+}

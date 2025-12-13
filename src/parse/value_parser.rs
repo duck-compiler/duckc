@@ -73,7 +73,13 @@ pub enum ValueExpr {
     Float(f64),
     Char(char),
     RawVariable(bool, Vec<String>),
-    Variable(bool, String, Option<TypeExpr>, Option<bool>),
+    Variable(
+        bool, // is_global
+        String, // name
+        Option<TypeExpr>, // type
+        Option<bool>, // constness
+        bool, // needs_copy (for emit)
+    ),
     If {
         condition: Box<Spanned<ValueExpr>>,
         then: Box<Spanned<ValueExpr>>,
