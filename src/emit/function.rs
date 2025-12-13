@@ -25,7 +25,7 @@ impl FunctionDefintion {
             && !self.return_type.as_ref().unwrap().0.is_unit()
         {
             emitted_body.push(IrInstruction::InlineGo(format!(
-                "return *new({})",
+                "var ΔΔΔretΔΔΔ *{}\nreturn *ΔΔΔretΔΔΔ",
                 self.return_type
                     .as_ref()
                     .unwrap()
