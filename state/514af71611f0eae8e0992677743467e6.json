@@ -1,7 +1,7 @@
 {
     "id": "514af71611f0eae8e0992677743467e6",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 1983,
+    "line_number": 1988,
     "title": "discuss if we just allow passing ints as floats",
     "tag": "todo",
     "module_tag": "semantics",

@@ -1,7 +1,7 @@
 {
     "id": "f5901928e8ad348259b064be2aa120b4",
     "file_path": "../../src/parse/lexer.rs",
-    "line_number": 696,
+    "line_number": 699,
     "title": "[TSX] create tsx text parser",
     "tag": "todo",
     "module_tag": "parse",

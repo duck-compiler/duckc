@@ -1,8 +1,8 @@
 {
     "id": "b90752d1ad30b201ca304123ce9ec245",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 1555,
-    "title": "todo!(\"type params not impl yet\"); in typechecker.rs @ line 1555",
+    "line_number": 1560,
+    "title": "todo!(\"type params not impl yet\"); in typechecker.rs @ line 1560",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
