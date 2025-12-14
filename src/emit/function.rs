@@ -8,7 +8,7 @@ pub fn function_epilogue_2(t: &str) -> IrInstruction {
     if t == "Tup_" {
         IrInstruction::InlineGo("return Tup_{}".to_string())
     } else {
-        IrInstruction::InlineGo(format!("var ΔΔΔretΔΔΔ *{}\nreturn *ΔΔΔretΔΔΔ", t))
+        IrInstruction::InlineGo(format!("var ΔΔΔretΔΔΔ *{t}\nreturn *ΔΔΔretΔΔΔ"))
     }
 }
 

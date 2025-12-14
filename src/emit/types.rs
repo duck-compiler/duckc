@@ -113,12 +113,7 @@ pub fn fixup_method_body(
 }
 
 pub fn fix_type_name(s: &str, imports: &HashSet<String>) -> String {
-    let res = fix_ident_for_go(s, imports);
-    if false && res.starts_with("Δ") {
-        format!("Δ{res}")
-    } else {
-        res
-    }
+    fix_ident_for_go(s, imports)
 }
 
 pub fn emit_type_definitions(
@@ -520,12 +515,12 @@ impl TypeExpr {
                 "*{}",
                 fix_type_name(
                     &self.as_clean_go_type_name(type_env),
-                    &type_env.all_go_imports
+                    type_env.all_go_imports
                 )
             ),
             TypeExpr::NamedDuck { .. } => fix_type_name(
                 &self.as_clean_go_type_name(type_env),
-                &type_env.all_go_imports,
+                type_env.all_go_imports,
             ),
             TypeExpr::Duck(duck) => {
                 let mut fields = duck.fields.clone();

@@ -306,12 +306,9 @@ pub mod tests {
 
             let mut output = parse_result.into_result().expect(&src);
 
-            output
-                .generics
-                .iter_mut()
-                .for_each(|generic| {
-                    *generic = (generic.0.clone(), empty_range());
-                });
+            output.generics.iter_mut().for_each(|generic| {
+                *generic = (generic.0.clone(), empty_range());
+            });
 
             type_expr_into_empty_range(&mut output.return_type);
             output.span = empty_range();

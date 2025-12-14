@@ -2,7 +2,9 @@ use std::collections::HashSet;
 
 use crate::{
     emit::{
-        ir::fix_idents_in_ir, types::emit_type_definitions, value::{IrInstruction, ToIr}
+        ir::fix_idents_in_ir,
+        types::emit_type_definitions,
+        value::{IrInstruction, ToIr},
     },
     parse::{SS, source_file_parser::SourceFile, use_statement_parser::UseStatement},
     semantics::type_resolve::TypeEnv,

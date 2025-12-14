@@ -30,7 +30,9 @@ pub fn is_identifier_blocked_by_go(ident: &str) -> bool {
 }
 
 pub fn fix_ident_for_go(ident: &str, _imports: &HashSet<String>) -> String {
-    if is_identifier_blocked_by_go(ident) /*|| imports.contains(ident)*/ {
+    if is_identifier_blocked_by_go(ident)
+    /*|| imports.contains(ident)*/
+    {
         format!("Δ{ident}")
     } else {
         ident.to_string()
@@ -152,14 +154,14 @@ pub fn fix_all_idents_value_expr(
             } => {
                 for arm in arms {
                     if let Some(ident) = arm.identifier_binding.as_mut() {
-                        *ident = fix_ident_for_go(&ident, imports);
+                        *ident = fix_ident_for_go(ident, imports);
                     }
                 }
 
-                if let Some(arm) = else_arm {
-                    if let Some(ident) = arm.identifier_binding.as_mut() {
-                        *ident = fix_ident_for_go(&ident, imports);
-                    }
+                if let Some(arm) = else_arm
+                    && let Some(ident) = arm.identifier_binding.as_mut()
+                {
+                    *ident = fix_ident_for_go(ident, imports);
                 }
             }
             _ => {}

@@ -2953,11 +2953,8 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
         unreachable!("only pass functioncalls to this function")
     };
 
-    match &mut target.0 {
-        ValueExpr::Variable(_, _, _, _, needs_copy) => {
-            *needs_copy = false;
-        }
-        _ => {}
+    if let ValueExpr::Variable(_, _, _, _, needs_copy) = &mut target.0 {
+        *needs_copy = false;
     }
 
     let header: FunHeader;
@@ -3149,7 +3146,8 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                         resolve_all_aliases_type_expr(&mut p.1, type_env);
                         process_keyof_in_type_expr(&mut p.1.0, type_env);
                     }
-                    for p in [&mut cloned_fn_def.return_type].into_iter() {
+                    {
+                        let p = &mut cloned_fn_def.return_type;
                         resolve_all_aliases_type_expr(p, type_env);
                         process_keyof_in_type_expr(&mut p.0, type_env);
                     }

@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use crate::emit::{
-    fix_ident_for_go, value::{Case, IrInstruction, IrValue}
+    fix_ident_for_go,
+    value::{Case, IrInstruction, IrValue},
 };
 
 impl IrInstruction {

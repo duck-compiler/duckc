@@ -2491,7 +2491,7 @@ impl ValueExpr {
                         // TODO(@Apfelfrosch): do deep copy for composite types
                         let var_type = var_type
                             .as_ref()
-                            .expect(&format!("Var {x} doesnt have type"));
+                            .unwrap_or_else(|| panic!("Var {x} doesnt have type"));
 
                         let mut res_instr = Vec::new();
                         let res_var_name = env.new_var();
@@ -2868,12 +2868,13 @@ impl ValueExpr {
                     if let Some(d) = self.direct_emit(type_env, env, span) {
                         let ty = TypeExpr::from_value_expr(&(self.clone(), span), type_env);
                         let res_var = env.new_var();
-                        let mut instr = Vec::new();
-                        instr.push(IrInstruction::VarDecl(
-                            res_var.clone(),
-                            ty.as_go_type_annotation(type_env),
-                        ));
-                        instr.push(IrInstruction::VarAssignment(res_var.clone(), d));
+                        let instr = vec![
+                            IrInstruction::VarDecl(
+                                res_var.clone(),
+                                ty.as_go_type_annotation(type_env),
+                            ),
+                            IrInstruction::VarAssignment(res_var.clone(), d),
+                        ];
                         (instr, Some(IrValue::Var(res_var)))
                     } else {
                         todo!()
