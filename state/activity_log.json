@@ -1,6 +1,56 @@
 [
     {
         "type": "created",
+        "timestamp": "2025-12-14T20:07:37.578435",
+        "issue_id": "7aba35999532a01c0afe956b2420893e",
+        "issue_title": "FIND COMMON DECAYED TYPE",
+        "author_info": {
+            "name": "Robin F\u00fcllgraf",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2025-12-14T20:07:37.578435",
+        "issue_id": "9a078054679bc6f12681e4df536fa7fb",
+        "issue_title": "do deep copy for composite types",
+        "author_info": {
+            "name": "Robin F\u00fcllgraf",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-12-14T20:07:37.578435",
+        "issue_id": "7ca202446ad9d30d5c9dd75fcc8f32cb",
+        "issue_title": "mvmo - 03.07.2025: this should check if the last is without a semicolon",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-12-14T20:07:37.578435",
+        "issue_id": "08d4ea6633203a66f7130937bdba9646",
+        "issue_title": "add correct return type of block",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "closed",
+        "timestamp": "2025-12-14T20:07:37.578435",
+        "issue_id": "fcb3f9eb5327dfccc556c11af2cad15a",
+        "issue_title": "!(\"combine then and else, then return combined type\");",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
         "timestamp": "2025-12-11T19:20:27.249993",
         "issue_id": "7dcc63d96a0e94de56acb401e4cb505c",
         "issue_title": "do a check if all fields if's value_exprs have a block for the value expr",

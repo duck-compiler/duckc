@@ -1,7 +1,7 @@
 {
     "id": "e514f2aaa7e6dfc194295cef72572cdb",
     "file_path": "../../src/semantics/ident_mangler.rs",
-    "line_number": 335,
+    "line_number": 333,
     "title": "use our scope resolution syntax",
     "tag": "todo",
     "module_tag": "semantics",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Maurice Schmidt",
-        "email": "mvmogo@gmail.com"
+        "name": "Robin F\u00fcllgraf",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "//todo(@Apfelfrosch): use our scope resolution syntax",
     "status": "open",

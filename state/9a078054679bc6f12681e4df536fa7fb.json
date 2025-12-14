@@ -1,19 +1,19 @@
 {
-    "id": "2f878b6ff80b3a8f3cebcdff3aba8c5d",
+    "id": "9a078054679bc6f12681e4df536fa7fb",
     "file_path": "../../src/emit/value.rs",
-    "line_number": 2298,
-    "title": "type_params",
+    "line_number": 2398,
+    "title": "do deep copy for composite types",
     "tag": "todo",
     "module_tag": "emit",
-    "user": null,
+    "user": "@Apfelfrosch",
     "issue_ref": null,
     "description": "",
     "blame": {
         "name": "Robin F\u00fcllgraf",
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
-    "source_line": "// todo: type_params",
+    "source_line": "// TODO(@Apfelfrosch): do deep copy for composite types",
     "status": "open",
-    "first_seen": "2025-07-14T09:44:03.704951",
+    "first_seen": "2025-12-14T20:07:37.585535",
     "history": []
 }

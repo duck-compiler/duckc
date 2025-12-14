@@ -1,7 +1,7 @@
 {
     "id": "f106d45a2f0896c577cbc389a0884150",
     "file_path": "../../src/parse/type_parser.rs",
-    "line_number": 1246,
+    "line_number": 1294,
     "title": "allow no return type in fn's type expr",
     "tag": "todo",
     "module_tag": "parse",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "case example right below issue.",
     "blame": {
-        "name": "Maurice Schmidt",
-        "email": "mvmogo@gmail.com"
+        "name": "Robin F\u00fcllgraf",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "// TODO: allow no return type in fn's type expr",
     "status": "open",
