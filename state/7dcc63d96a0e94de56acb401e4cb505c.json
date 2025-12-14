@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "value_expr = match value_expr {\n(ValueExpr::Duck(x), loc) if x.is_empty() => (ValueExpr::Block(vec![]), loc),\nx @ (ValueExpr::Block(_), _) => x,\n_ => panic!(\"Function must be block\"),",
     "blame": {
-        "name": "Apfelfrosch",
-        "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        "name": "Maurice Schmidt",
+        "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: do a check if all fields if's value_exprs have a block for the value expr",
     "status": "open",
