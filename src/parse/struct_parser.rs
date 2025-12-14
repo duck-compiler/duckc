@@ -32,7 +32,8 @@ pub struct StructDefinition {
 
 pub fn struct_definition_parser<'src, M, I>(
     make_input: M,
-) -> impl Parser<'src, I, StructDefinition, extra::Err<Rich<'src, Token, SS>>> + Clone
+) -> impl Parser<'src, I, (StructDefinition, Vec<FunctionDefintion>), extra::Err<Rich<'src, Token, SS>>>
++ Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
     M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
@@ -46,8 +47,8 @@ where
         .ignore_then(just(Token::ControlChar('{')))
         .ignore_then(
             (just(Token::Mut)
+                .or(just(Token::Static))
                 .or_not()
-                .map(|x| x.is_some())
                 .then(function_definition_parser(make_input)))
             .repeated()
             .at_least(0)
@@ -80,14 +81,23 @@ where
         .then_ignore(just(Token::ControlChar(';')))
         .map(
             |((((doc_comments, identifier), generics), fields), methods)| {
-                let (mut_methods_names, methods) = methods.into_iter().fold(
-                    (HashSet::new(), Vec::new()),
-                    |(mut mut_method_names, mut methods), (is_mut, elem)| {
-                        if is_mut {
+                let (mut_methods_names, methods, static_methods) = methods.into_iter().fold(
+                    (HashSet::new(), Vec::new(), Vec::new()),
+                    |(mut mut_method_names, mut methods, mut static_methods), (modifier, elem)| {
+                        if modifier.as_ref().is_some_and(|v| matches!(v, Token::Mut)) {
                             mut_method_names.insert(elem.name.clone());
                         }
-                        methods.push(elem);
-                        (mut_method_names, methods)
+
+                        if modifier
+                            .as_ref()
+                            .is_some_and(|v| matches!(v, Token::Static))
+                        {
+                            static_methods.push(elem);
+                        } else {
+                            methods.push(elem);
+                        }
+
+                        (mut_method_names, methods, static_methods)
                     },
                 );
 
@@ -100,20 +110,24 @@ where
                     .iter()
                     .map(|f| &f.name)
                     .chain(methods.iter().map(|m| &m.name))
+                    .chain(static_methods.iter().map(|m| &m.name))
                 {
                     if !is_name_available(name.clone()) {
                         panic!("Error: {name} already declared in {identifier}");
                     }
                 }
 
-                StructDefinition {
-                    name: identifier,
-                    fields,
-                    methods,
-                    mut_methods: mut_methods_names,
-                    generics: generics.unwrap_or_default(),
-                    doc_comments: doc_comments.unwrap_or_else(Vec::new),
-                }
+                (
+                    StructDefinition {
+                        name: identifier,
+                        fields,
+                        methods,
+                        mut_methods: mut_methods_names,
+                        generics: generics.unwrap_or_default(),
+                        doc_comments: doc_comments.unwrap_or_else(Vec::new),
+                    },
+                    static_methods,
+                )
             },
         )
 }
@@ -220,7 +234,7 @@ pub mod tests {
                 .collect::<Vec<_>>()
         );
 
-        let parsed_def = parse_result.output().unwrap().clone();
+        let parsed_def = parse_result.output().unwrap().clone().0;
         let stripped_parsed = strip_struct_definition_spans(parsed_def);
 
         assert_eq!(

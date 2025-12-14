@@ -31,6 +31,7 @@ pub enum RawHtmlStringContents {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
+    Static,
     Mut,
     Use,
     Type,
@@ -90,6 +91,7 @@ pub enum Token {
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = match self {
+            Token::Static => "static",
             Token::Defer => "defer",
             Token::For => "for",
             Token::In => "in",
@@ -461,6 +463,7 @@ pub fn lex_single<'a>(
 ) -> impl Parser<'a, &'a str, Spanned<Token>, extra::Err<Rich<'a, char>>> + Clone {
     recursive(|lexer| {
         let keyword_or_ident = text::ident().map(|str| match str {
+            "static" => Token::Static,
             "defer" => Token::Defer,
             "for" => Token::For,
             "in" => Token::In,

@@ -47,7 +47,7 @@ pub enum SourceUnit {
     Extensions(ExtensionsDef),
     Component(TsxComponent),
     Template(DuckxComponent),
-    Struct(StructDefinition),
+    Struct((StructDefinition, Vec<FunctionDefintion>)),
     Use(UseStatement),
     Module(String, SourceFile),
     Test(Spanned<TestCase>),
@@ -953,7 +953,7 @@ where
             let mut extensions_defs = Vec::new();
             let mut struct_definitions = Vec::new();
             let mut use_statements = Vec::new();
-            let mut sub_modules = Vec::new();
+            let mut sub_modules: Vec<(String, SourceFile)> = Vec::new();
             let mut tsx_components = Vec::new();
             let mut template_components = Vec::new();
             let mut test_cases = Vec::new();
@@ -965,7 +965,22 @@ where
                     Func(def) => function_definitions.push(def),
                     Type(def) => type_definitions.push(def),
                     Extensions(def) => extensions_defs.push(def),
-                    Struct(def) => struct_definitions.push(def),
+                    Struct((def, static_methods)) => {
+                        if !static_methods.is_empty()
+                            && !sub_modules
+                                .iter()
+                                .any(|(name, _)| name.as_str() == def.name.as_str())
+                        {
+                            sub_modules.push((def.name.clone(), SourceFile::default()));
+
+                            let struct_mod = sub_modules
+                                .iter_mut()
+                                .find(|(name, _)| name.as_str() == def.name.as_str())
+                                .unwrap();
+                            struct_mod.1.function_definitions.extend(static_methods);
+                        }
+                        struct_definitions.push(def);
+                    }
                     Use(def) => use_statements.push(def),
                     Module(name, def) => sub_modules.push((name, def)),
                     Component(tsx_component) => tsx_components.push(tsx_component),
