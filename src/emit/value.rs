@@ -1890,10 +1890,6 @@ impl ValueExpr {
                     .0
                     .as_go_type_annotation(type_env);
 
-                if type_expression.contains("map") {
-                    dbg!(&type_expression);
-                }
-
                 let mut v = Vec::new();
                 v.push(IrInstruction::VarDecl(name.clone(), type_expression));
 
@@ -1901,9 +1897,6 @@ impl ValueExpr {
                     if let Some(direct) = initializer.0.direct_emit(type_env, env, span) {
                         v.push(IrInstruction::VarAssignment(name.clone(), direct));
                     } else {
-                        if name == "instance_2" {
-                            dbg!(1, initializer);
-                        }
                         let (init_r, inti_r_res) =
                             walk_access(initializer, type_env, env, span, true, false, false);
                         v.extend(init_r);
@@ -2874,7 +2867,17 @@ mod tests {
                 ],
             ),
             ("(true, break, 2)", vec![IrInstruction::Break(None)]),
-            ("(true, return, 2)", vec![IrInstruction::Return(None)]),
+            (
+                "(true, return, 2)",
+                vec![
+                    IrInstruction::VarDecl("var_0".to_string(), "Tup_".to_string()),
+                    IrInstruction::VarAssignment(
+                        "var_0".to_string(),
+                        IrValue::Tuple("Tup_".to_string(), vec![]),
+                    ),
+                    IrInstruction::Return(Some(IrValue::Var("var_0".to_string()))),
+                ],
+            ),
             ("(true, continue, 3)", vec![IrInstruction::Continue(None)]),
             (
                 "1 == 2",

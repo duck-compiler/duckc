@@ -145,6 +145,17 @@ pub trait IntoBlock {
     fn into_block(self) -> Spanned<ValueExpr>;
 }
 
+pub trait IntoReturn {
+    fn into_return(self) -> Spanned<ValueExpr>;
+}
+
+impl IntoReturn for Spanned<ValueExpr> {
+    fn into_return(self) -> Spanned<ValueExpr> {
+        let cl = self.1;
+        (ValueExpr::Return(Some(self.into())), cl)
+    }
+}
+
 impl IntoBlock for Spanned<ValueExpr> {
     fn into_block(self) -> Spanned<ValueExpr> {
         let cl = self.1;
@@ -213,6 +224,10 @@ impl ValueExpr {
 
     pub fn into_empty_span_and_block(self) -> Spanned<ValueExpr> {
         self.into_empty_span().into_block()
+    }
+
+    pub fn into_empty_span_and_block_and_return(self) -> Spanned<ValueExpr> {
+        self.into_empty_span().into_block().into_return()
     }
 
     pub fn needs_semicolon(&self) -> bool {
@@ -550,7 +565,6 @@ where
                     if exprs.len() >= 2 {
                         for (expr, has_semi) in &exprs[..exprs.len() - 1] {
                             if expr.0.needs_semicolon() && has_semi.is_none() {
-                                dbg!(&expr);
                                 failure_with_occurence(
                                     "This expression needs a semicolon",
                                     expr.1,

@@ -1,6 +1,7 @@
 use crate::{
     emit::value::{IrInstruction, IrValue, ToIr},
     parse::{
+        failure_with_occurence,
         function_parser::FunctionDefintion,
         type_parser::TypeExpr,
         value_parser::{ValueExpr, empty_range},
@@ -43,11 +44,13 @@ impl FunctionDefintion {
         }
 
         if self.name != "main" {
-            // if result.is_some() {
-            //     emitted_body.push(IrInstruction::Return(result));
-            // }
             emitted_body.push(function_epilogue(&self.return_type.0, type_env));
         } else {
+            if !self.return_type.0.is_unit() {
+                let msg = "Main must not have a return type";
+                failure_with_occurence(msg, self.span, [(msg, self.span)]);
+            }
+
             let wrapped_in_lambda = IrValue::Lambda(
                 vec![],
                 Some(self.return_type.0.as_go_return_type(type_env)),

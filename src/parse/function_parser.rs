@@ -71,7 +71,8 @@ impl Default for FunctionDefintion {
             name: Default::default(),
             return_type: TypeExpr::Tuple(vec![]).into_empty_span(),
             params: Default::default(),
-            value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+            value_expr: ValueExpr::Return(Some(ValueExpr::Block(vec![]).into_empty_span().into()))
+                .into_empty_span(),
             generics: vec![],
             span: empty_range(),
             comments: Vec::new(),
@@ -150,7 +151,7 @@ pub mod tests {
     use crate::parse::{
         lexer::lex_parser,
         make_input,
-        value_parser::{empty_range, type_expr_into_empty_range},
+        value_parser::{empty_range, type_expr_into_empty_range, value_expr_into_empty_range},
     };
 
     use super::*;
@@ -223,7 +224,10 @@ pub mod tests {
                         },
                         empty_range(),
                     )],
-                    value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                    value_expr: ValueExpr::Return(Some(
+                        ValueExpr::Block(vec![]).into_empty_span().into(),
+                    ))
+                    .into_empty_span(),
                     span: empty_range(),
                     comments: Vec::new(),
                 },
@@ -250,7 +254,10 @@ pub mod tests {
                             empty_range(),
                         ),
                     ],
-                    value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                    value_expr: ValueExpr::Return(Some(
+                        ValueExpr::Block(vec![]).into_empty_span().into(),
+                    ))
+                    .into_empty_span(),
                     span: empty_range(),
                     comments: Vec::new(),
                 },
@@ -284,7 +291,10 @@ pub mod tests {
                             empty_range(),
                         ),
                     ],
-                    value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                    value_expr: ValueExpr::Return(Some(
+                        ValueExpr::Block(vec![]).into_empty_span().into(),
+                    ))
+                    .into_empty_span(),
                     span: empty_range(),
                     comments: Vec::new(),
                 },
@@ -314,8 +324,8 @@ pub mod tests {
             });
 
             type_expr_into_empty_range(&mut output.return_type);
+            value_expr_into_empty_range(&mut output.value_expr);
             output.span = empty_range();
-            output.value_expr = ValueExpr::Block(vec![]).into_empty_span();
 
             assert_eq!(output, expected_fns, "{i}: {}", src);
         }

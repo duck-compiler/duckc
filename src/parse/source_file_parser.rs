@@ -1340,14 +1340,21 @@ mod tests {
                             function_definitions: vec![
                                 FunctionDefintion {
                                     name: "some_abc_func".into(),
-                                    value_expr: ValueExpr::String("Hello from module".into(), true)
-                                        .into_empty_span()
-                                        .into_block(),
+                                    value_expr: ValueExpr::Return(Some(
+                                        ValueExpr::String("Hello from module".into(), true)
+                                            .into_empty_span()
+                                            .into_block()
+                                            .into(),
+                                    ))
+                                    .into_empty_span(),
                                     ..Default::default()
                                 },
                                 FunctionDefintion {
                                     name: "some_xyz_func".into(),
-                                    value_expr: ValueExpr::Int(1).into_empty_span().into_block(),
+                                    value_expr: ValueExpr::Return(Some(
+                                        ValueExpr::Int(1).into_empty_span().into_block().into(),
+                                    ))
+                                    .into_empty_span(),
                                     ..Default::default()
                                 },
                             ],
@@ -1371,12 +1378,13 @@ mod tests {
                                             "Hello from module".into(),
                                             true,
                                         )
-                                        .into_empty_span_and_block(),
+                                        .into_empty_span_and_block_and_return(),
                                         ..Default::default()
                                     },
                                     FunctionDefintion {
                                         name: "some_xyz_func".into(),
-                                        value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
+                                        value_expr: ValueExpr::Int(1)
+                                            .into_empty_span_and_block_and_return(),
                                         ..Default::default()
                                     },
                                 ],
@@ -1433,12 +1441,13 @@ mod tests {
                                             "Hello from module".into(),
                                             true,
                                         )
-                                        .into_empty_span_and_block(),
+                                        .into_empty_span_and_block_and_return(),
                                         ..Default::default()
                                     },
                                     FunctionDefintion {
                                         name: "some_xyz_func".into(),
-                                        value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
+                                        value_expr: ValueExpr::Int(1)
+                                            .into_empty_span_and_block_and_return(),
                                         ..Default::default()
                                     },
                                 ],
