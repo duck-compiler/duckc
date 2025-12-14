@@ -1,0 +1,14 @@
+struct S<T> = {
+    inner: T,
+} impl {
+    static fn new<T>(val: T) -> S<T> {
+        S<T> {
+            inner: val,
+        }
+    }
+};
+
+fn main() {
+    const s = S::new<Int>(10000);
+    s.inner->std::string::from_int()->std::io::println();
+}
