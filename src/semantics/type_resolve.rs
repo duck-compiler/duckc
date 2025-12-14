@@ -161,6 +161,8 @@ pub struct TypeEnv<'a> {
     pub prevent_generic_generation: HashSet<String>,
     pub tailwind_sender: Option<&'a Sender<String>>,
     pub is_recursive_type_alias: HashSet<String>,
+
+    pub all_go_imports: &'static HashSet<String>,
 }
 
 impl Default for TypeEnv<'_> {
@@ -188,6 +190,8 @@ impl Default for TypeEnv<'_> {
             prevent_generic_generation: HashSet::new(),
             tailwind_sender: None,
             is_recursive_type_alias: HashSet::new(),
+
+            all_go_imports: Box::leak(Box::new(HashSet::new())),
         }
     }
 }
@@ -779,12 +783,13 @@ fn build_tuples_and_ducks_value_expr_trav_fn(
     }
 }
 
-fn trav_type_expr<F1>(f_t: F1, v: &mut Spanned<TypeExpr>, env: &mut TypeEnv)
+pub fn trav_type_expr<F1>(f_t: F1, v: &mut Spanned<TypeExpr>, env: &mut TypeEnv)
 where
     F1: Fn(&mut Spanned<TypeExpr>, &mut TypeEnv) + Clone,
 {
     f_t(v, env);
     match &mut v.0 {
+        TypeExpr::Never => {},
         TypeExpr::NamedDuck {
             name: _,
             type_params,
@@ -856,6 +861,8 @@ where
             if let Some(ret) = l.return_type.as_mut() {
                 trav_type_expr(f_t.clone(), ret, env);
             }
+
+            trav_value_expr(f_t, f_vv, &mut l.value_expr, env);
         }
         ValueExpr::Return(e) => {
             if let Some(e) = e {
@@ -1463,6 +1470,7 @@ fn replace_generics_in_type_expr(
     type_env: &mut TypeEnv<'_>,
 ) {
     match expr {
+        TypeExpr::Never => {}
         TypeExpr::TemplParam(name) => {
             if let Some(replacement) = set_params.get(name).cloned() {
                 *expr = replacement;
@@ -1881,6 +1889,7 @@ pub fn is_const_var(v: &ValueExpr) -> bool {
 
 pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
+        TypeExpr::Never => {},
         TypeExpr::Ref(t) | TypeExpr::RefMut(t) => sort_fields_type_expr(&mut t.0),
         TypeExpr::Html => {}
         TypeExpr::TypeOf(..) => {}

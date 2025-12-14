@@ -2,29 +2,47 @@ use std::collections::HashSet;
 
 use crate::{
     emit::{
-        types::emit_type_definitions,
-        value::{IrInstruction, ToIr},
+        ir::fix_idents_in_ir, types::emit_type_definitions, value::{IrInstruction, ToIr}
     },
     parse::{SS, source_file_parser::SourceFile, use_statement_parser::UseStatement},
     semantics::type_resolve::TypeEnv,
 };
 
 impl SourceFile {
-    pub fn emit(self, pkg_name: String, type_env: &mut TypeEnv, span: SS) -> Vec<IrInstruction> {
+    pub fn emit(
+        mut self,
+        pkg_name: String,
+        type_env: &mut TypeEnv,
+        span: SS,
+    ) -> Vec<IrInstruction> {
         let mut to_ir = ToIr::default();
+
+        let mut go_imports = vec![];
+
+        let mut imports = HashSet::new();
+
+        for use_statement in self.use_statements {
+            if let UseStatement::Go(name, alias) = use_statement {
+                let import_name = alias
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or_else(|| name.split("/").last().unwrap().to_string());
+
+                if !import_name.is_empty() && import_name != "." && import_name != "_" {
+                    imports.insert(import_name.clone());
+                }
+
+                go_imports.push((alias, name));
+            }
+        }
+
+        let imports = Box::leak(Box::new(imports)) as &'static HashSet<String>;
+        type_env.all_go_imports = imports;
 
         let type_definitions = emit_type_definitions(type_env, &mut to_ir);
 
         let mut instructions = Vec::new();
         instructions.push(IrInstruction::GoPackage(pkg_name));
-
-        let mut go_imports = vec![];
-
-        for use_statement in self.use_statements {
-            if let UseStatement::Go(name, alias) = use_statement {
-                go_imports.push((alias, name));
-            }
-        }
 
         instructions.push(IrInstruction::GoImports(go_imports));
 
@@ -32,13 +50,30 @@ impl SourceFile {
 
         for function_definition in self
             .function_definitions
-            .iter()
-            .chain(type_env.generic_fns_generated.clone().iter())
+            .iter_mut()
+            .chain(type_env.generic_fns_generated.clone().iter_mut())
         {
             // generic functions shouldn't be emitted, as they have incomplete type information
             if function_definition.generics.is_some() {
                 continue;
             }
+
+            // function_definition.name = fix_ident_for_go(&function_definition.name, imports);
+
+            // for p in &mut function_definition
+            //     .params
+            //     .iter_mut()
+            //     .flat_map(|v| v.iter_mut())
+            // {
+            //     p.0 = fix_ident_for_go(&p.0, imports);
+            //     fix_all_idents_type_expr(&mut p.1, type_env, imports);
+            // }
+
+            // if let Some(return_type) = function_definition.return_type.as_mut() {
+            //     fix_all_idents_type_expr(return_type, type_env, imports);
+            // }
+
+            // fix_all_idents_value_expr(&mut function_definition.value_expr, type_env, imports);
 
             if emitted.insert(function_definition.name.clone()) {
                 let mut fn_instr = function_definition.emit(None, type_env, &mut to_ir);
@@ -207,7 +242,9 @@ impl SourceFile {
         }
 
         instructions.extend(type_definitions);
-
+        for i in &mut instructions {
+            fix_idents_in_ir(i, imports);
+        }
         instructions
     }
 }

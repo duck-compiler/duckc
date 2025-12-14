@@ -34,6 +34,7 @@ pub struct Struct {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeExpr {
+    Never,
     Html,
     TemplParam(String),
     Any,
@@ -82,6 +83,7 @@ impl TypeExpr {
             | TypeExpr::Fun(..)
             | TypeExpr::Tag(..)
             | TypeExpr::Html
+            | TypeExpr::Never
             | TypeExpr::Char => true,
             TypeExpr::Tuple(fields) | TypeExpr::Or(fields) => fields
                 .iter()
@@ -271,6 +273,7 @@ where
                 .clone()
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                 .or(choice((
+                    just(Token::ControlChar('!')).to(TypeExpr::Never),
                     string_literal,
                     int_literal,
                     bool_literal,
@@ -476,6 +479,7 @@ where
                 .clone()
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                 .or(choice((
+                    just(Token::ControlChar('!')).to(TypeExpr::Never),
                     int_literal,
                     bool_literal,
                     string_literal,
@@ -602,6 +606,7 @@ where
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            TypeExpr::Never => write!(f, "never"),
             TypeExpr::TemplParam(name) => write!(f, "TemplParam {name}"),
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => write!(f, "&{}", t.0),
             TypeExpr::Html => write!(f, "html"),

@@ -299,35 +299,13 @@ where
                 .then(
                     just(Token::ControlChar('{'))
                         .rewind()
-                        .ignore_then(value_expr_parser.clone())
-                        .or_not(),
+                        .ignore_then(value_expr_parser.clone()),
                 )
                 .map(|(((is_mut, ident), expr), block)| {
-                    if let Some(block) = block {
-                        ValueExpr::For {
-                            ident: (ident, is_mut.is_none(), None),
-                            target: Box::new(expr),
-                            block: Box::new(block),
-                        }
-                    } else if let ValueExpr::Struct {
-                        name,
-                        fields,
-                        type_params,
-                    } = &expr.0
-                        && fields.is_empty()
-                        && type_params.is_empty()
-                    {
-                        ValueExpr::For {
-                            ident: (ident, is_mut.is_none(), None),
-                            target: Box::new((
-                                ValueExpr::RawVariable(false, vec![name.clone()]),
-                                expr.1,
-                            )),
-                            block: Box::new((ValueExpr::Block(vec![]), expr.1)),
-                        }
-                    } else {
-                        let msg = "Invalid for target syntax".to_string();
-                        failure_with_occurence(msg.clone(), expr.1, [(msg.clone(), expr.1)]);
+                    ValueExpr::For {
+                        ident: (ident, is_mut.is_none(), None),
+                        target: Box::new(expr),
+                        block: Box::new(block),
                     }
                 })
                 .map_with(|x, e| (x, e.span()));
@@ -745,7 +723,7 @@ where
                         char_expr,
                         tuple,
                         duck_expression,
-                        block_expression,
+                        block_expression.clone(),
                         just(Token::Break)
                             .to(ValueExpr::Break)
                             .map_with(|x, e| (x, e.span())),

@@ -84,7 +84,7 @@ impl Default for FunctionDefintion {
     fn default() -> Self {
         FunctionDefintion {
             name: Default::default(),
-            return_type: None,
+            return_type: Some(TypeExpr::Tuple(vec![]).into_empty_span()),
             params: Some(Default::default()),
             value_expr: ValueExpr::Block(vec![]).into_empty_span(),
             generics: None,
@@ -160,7 +160,7 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::{lexer::lex_parser, make_input, value_parser::empty_range};
+    use crate::parse::{lexer::lex_parser, make_input, value_parser::{empty_range, type_expr_into_empty_range}};
 
     use super::*;
 
@@ -224,7 +224,7 @@ pub mod tests {
                 FunctionDefintion {
                     name: "y".to_string(),
                     params: Some(vec![]),
-                    return_type: None,
+                    return_type: Some(TypeExpr::Tuple(vec![]).into_empty_span()),
                     generics: Some(vec![(
                         Generic {
                             name: "TYPENAME".to_string(),
@@ -242,7 +242,7 @@ pub mod tests {
                 FunctionDefintion {
                     name: "y".to_string(),
                     params: Some(vec![]),
-                    return_type: None,
+                    return_type: Some(TypeExpr::Tuple(vec![]).into_empty_span()),
                     generics: Some(vec![
                         (
                             Generic {
@@ -269,7 +269,7 @@ pub mod tests {
                 FunctionDefintion {
                     name: "y".to_string(),
                     params: Some(vec![]),
-                    return_type: None,
+                    return_type: Some(TypeExpr::Tuple(vec![]).into_empty_span()),
                     generics: Some(vec![
                         (
                             Generic {
@@ -327,6 +327,7 @@ pub mod tests {
                     *generic = (generic.0.clone(), empty_range());
                 });
 
+            type_expr_into_empty_range(output.return_type.as_mut().unwrap());
             output.span = empty_range();
             output.value_expr = ValueExpr::Block(vec![]).into_empty_span();
 

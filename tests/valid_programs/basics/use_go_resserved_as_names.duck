@@ -1,0 +1,40 @@
+use std::io::{println};
+
+struct string = {
+    string: String,
+};
+
+struct int8 = {
+    chan: Int,
+} impl {
+    fn select() {
+        println("hello from method select");
+    }
+
+    fn map() {
+        println("hello from method map");
+    }
+
+    fn uintptr(select: String, string: String, uint32: string) {
+        println(f"select: {select}, string {{string}}, uint32: {{{uint32}.string}}");
+    }
+};
+
+fn map(int: {map: int8}) {
+    println(f"hello from map {int.map.chan->std::string::from_int()}");
+    int.map.select();
+    int.map.map();
+}
+
+fn main() {
+    const int = 800;
+    map({map: int8 { chan: 100 }});
+
+    int8 { chan: 300 }.uintptr("A", "B", string { string: "C" });
+    std::string::from_int(int)->println();
+
+    for var in &mut [1, 2, 3, 4] {
+        *var = *var * 10;
+        std::string::from_int(*var)->println();
+    }
+}

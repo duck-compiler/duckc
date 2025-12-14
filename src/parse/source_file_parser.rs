@@ -1057,6 +1057,7 @@ mod tests {
                 SourceFile {
                     function_definitions: vec![FunctionDefintion {
                         name: "abc".into(),
+                        return_type: Some(TypeExpr::Tuple(vec![]).into_empty_span()),
                         ..Default::default()
                     }],
                     ..Default::default()
@@ -1134,10 +1135,12 @@ mod tests {
                     function_definitions: vec![
                         FunctionDefintion {
                             name: "abc".into(),
+                            return_type: Some(TypeExpr::Tuple(vec![]).into_empty_span()),
                             ..Default::default()
                         },
                         FunctionDefintion {
                             name: "xyz".into(),
+                            return_type: Some(TypeExpr::Tuple(vec![]).into_empty_span()),
                             ..Default::default()
                         },
                     ],
@@ -1240,6 +1243,7 @@ mod tests {
                             )],
                             function_definitions: vec![FunctionDefintion {
                                 name: "abc".into(),
+                                return_type: Some(TypeExpr::Tuple(vec![]).into_empty_span()),
                                 ..Default::default()
                             }],
                             ..Default::default()
@@ -1259,6 +1263,7 @@ mod tests {
                         },
                         FunctionDefintion {
                             name: "xyz".into(),
+                            return_type: Some(TypeExpr::Tuple(vec![]).into_empty_span()),
                             ..Default::default()
                         },
                     ],

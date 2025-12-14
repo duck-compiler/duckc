@@ -212,10 +212,9 @@ impl TypeExpr {
                     TypeExpr::String(None)
                 }
             }
-            ValueExpr::Break => TypeExpr::Tuple(vec![]),
-            ValueExpr::Continue => TypeExpr::Tuple(vec![]),
-            ValueExpr::Return(Some(value_expr)) => TypeExpr::from_value_expr(value_expr, type_env),
-            ValueExpr::Return(None) => TypeExpr::Any, // TODO return never !
+            ValueExpr::Break => TypeExpr::Never,
+            ValueExpr::Continue => TypeExpr::Never,
+            ValueExpr::Return(..) => TypeExpr::Never,
             ValueExpr::VarAssign(_assignment) => TypeExpr::Tuple(vec![]),
             ValueExpr::VarDecl(decl) => {
                 let decl = decl.as_ref();
@@ -832,6 +831,8 @@ impl TypeExpr {
                     });
                 }
 
+                arm_types.retain(|t| !t.0.is_never());
+
                 if arm_types.is_empty() {
                     TypeExpr::Tuple(vec![])
                 } else if arm_types.len() == 1 {
@@ -1339,7 +1340,7 @@ pub fn check_type_compatability_full(
 ) {
     let given_type = given_type.clone();
 
-    if matches!(given_type.0, TypeExpr::TemplParam(..)) {
+    if matches!(given_type.0, TypeExpr::TemplParam(..) | TypeExpr::Never) {
         return;
     }
 
@@ -1368,7 +1369,7 @@ pub fn check_type_compatability_full(
     };
 
     match &required_type.0 {
-        TypeExpr::TemplParam(..) => return,
+        TypeExpr::TemplParam(..) | TypeExpr::Never => return,
         TypeExpr::NamedDuck { name, type_params } => {
             let def = type_env
                 .get_duck_def_with_type_params_mut(name, type_params, required_type.1)
