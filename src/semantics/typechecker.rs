@@ -68,7 +68,24 @@ impl TypeExpr {
         return match value_expr {
             ValueExpr::Async(e) => {
                 let inner = TypeExpr::from_value_expr(e, type_env);
-                // TODO: NEVER TYPE
+
+                let ValueExpr::FunctionCall {
+                    target,
+                    params,
+                    type_params: _,
+                } = &e.0
+                else {
+                    panic!("can only async func call")
+                };
+
+                if [target.as_ref()]
+                    .into_iter()
+                    .chain(params.iter())
+                    .any(|v| TypeExpr::from_value_expr(v, type_env).is_never())
+                {
+                    return TypeExpr::Never;
+                }
+
                 TypeExpr::Struct {
                     name: mangle(&["std", "sync", "Channel"]),
                     type_params: vec![(inner, *complete_span)],
@@ -150,7 +167,10 @@ impl TypeExpr {
                 for c in contents {
                     if let ValFmtStringContents::Expr(e) = c {
                         let ty = TypeExpr::from_value_expr(e, type_env);
-                        require(ty.is_string(), "Needs to be string".into());
+                        if ty.is_never() {
+                            return TypeExpr::Never;
+                        }
+                        require(ty.is_string(), format!("Needs to be string, is {ty:?}"));
                     }
                 }
                 TypeExpr::String(None)

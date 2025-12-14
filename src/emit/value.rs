@@ -855,48 +855,41 @@ impl ValueExpr {
                     )),
                 ));
 
-                let tmp = ValueExpr::FunctionCall {
-                    target: (
-                        ValueExpr::FieldAccess {
-                            target_obj: (
-                                ValueExpr::Variable(
-                                    false,
-                                    var_name.clone(),
-                                    Some(return_type.clone()),
-                                    Some(true),
-                                    false,
-                                ),
-                                span,
-                            )
-                                .into(),
-                            field_name: "send".to_string(),
-                        },
-                        span,
-                    )
-                        .into(),
-                    params: vec![e.as_ref().clone()],
-                    type_params: vec![],
+                let ValueExpr::FunctionCall {
+                    target: e_target,
+                    params: e_params,
+                    type_params: _,
+                } = &e.0
+                else {
+                    panic!("Compiler Bug: Can only async on function calls");
                 };
 
-                let as_lambda = ValueExpr::Lambda(
-                    LambdaFunctionExpr {
-                        is_mut: false,
-                        params: vec![],
-                        return_type: None,
-                        value_expr: (tmp, e.1),
-                    }
-                    .into(),
-                );
+                let (e_target_instr, e_target_res) = e_target.0.emit(type_env, env, e_target.1);
 
-                let (lambda_instr, lambda_res) = as_lambda.emit(type_env, env, e.1);
+                res_instr.extend(e_target_instr);
 
-                let Some(IrValue::Var(lambda_var_name)) = lambda_res else {
-                    panic!("lambda_res needs to be a var {lambda_res:?}")
+                let Some(IrValue::Var(e_target_res) | IrValue::Imm(e_target_res)) = e_target_res
+                else {
+                    return (res_instr, None);
                 };
 
-                res_instr.extend(lambda_instr);
-                res_instr.push(IrInstruction::InlineGo(format!("go {lambda_var_name}()")));
+                let mut e_params_res = Vec::new();
 
+                for e_param in e_params {
+                    let (e_param_instr, e_param_res) = e_param.0.emit(type_env, env, e_param.1);
+                    res_instr.extend(e_param_instr);
+                    let Some(IrValue::Var(e_param_res) | IrValue::Imm(e_param_res)) = e_param_res
+                    else {
+                        return (res_instr, None);
+                    };
+                    e_params_res.push(e_param_res);
+                }
+
+                let call_e = IrInstruction::InlineGo(format!(
+                    "go func() {{ async_res := {e_target_res}({})\n{var_name}.send(async_res) }}()",
+                    e_params_res.join(",")
+                ));
+                res_instr.push(call_e);
                 (res_instr, as_rvar(var_name))
             }
             ValueExpr::Defer(e) => {

@@ -475,7 +475,7 @@ impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::Statement => "Tup_".to_string(),
-            TypeExpr::Never => "Never".to_string(),
+            TypeExpr::Never => "any".to_string(),
             TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
                 format!("*{}", t.0.as_go_type_annotation(type_env))

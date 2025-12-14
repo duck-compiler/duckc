@@ -2659,15 +2659,13 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             let inner_type = TypeExpr::from_value_expr(inner.as_ref(), type_env);
 
             let channel_type = TypeExpr::from_value_expr(&(owned, *span), type_env);
-            let TypeExpr::Struct {
+            if let TypeExpr::Struct {
                 ref name,
                 ref type_params,
             } = channel_type
-            else {
-                panic!("compiler error -> async needs to return channel")
-            };
-            type_env.get_struct_def_with_type_params_mut(name, type_params, *span);
-
+            {
+                type_env.get_struct_def_with_type_params_mut(name, type_params, *span);
+            }
             let new_channel_fn_name = mangle(&["std", "sync", "new_channel"]);
 
             let fn_type = type_env

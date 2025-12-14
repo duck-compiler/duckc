@@ -1,0 +1,12 @@
+use std::io::{println};
+use std::string::{from_int};
+
+fn main() {
+    for i in [1, 2, 3] {
+        const as_str = from_int(i);
+
+        println(f"{as_str} before continue");
+        const x: String = continue;
+        println(f"{as_str} after continue");
+    }
+}

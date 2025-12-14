@@ -1,0 +1,12 @@
+fn get_int() -> Int {
+    3
+}
+
+fn main() {
+    std::io::println(f"Result: {
+        (async (fn(i: Int) -> String {
+            std::io::println(f"Param: {std::string::from_int(i)}");
+            std::string::from_int(i * 10) })(get_int()))
+        .recv_block()
+    } <- Should be 30");
+}
