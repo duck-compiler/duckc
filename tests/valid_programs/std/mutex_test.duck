@@ -1,8 +1,6 @@
 use std::sync::{Mutex};
 use std::sync::{AtomicBool};
-use std::sync::{new_atomic_bool};
-use std::sync::{new_mutex};
-use std::sync::{new_channel};
+use std::sync::{Channel};
 use std::io::{println};
 
 fn bool_to_string(b: Bool) -> String {
@@ -14,13 +12,13 @@ fn bool_to_string(b: Bool) -> String {
 }
 
 fn main() {
-    const m = new_mutex<String>("hi");
+    const m = Mutex::new<String>("hi");
 
-    const atomic_bool = new_atomic_bool();
+    const atomic_bool = AtomicBool::new();
     atomic_bool.set(true);
     atomic_bool.compare_and_swap(false, true)->bool_to_string()->println();
 
-    const test_channel = new_channel<Int>();
+    const test_channel = Channel::new<Int>();
     async (fn() {
         test_channel.send(67);
     })();

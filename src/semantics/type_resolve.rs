@@ -2666,7 +2666,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             {
                 type_env.get_struct_def_with_type_params_mut(name, type_params, *span);
             }
-            let new_channel_fn_name = mangle(&["std", "sync", "new_channel"]);
+            let new_channel_fn_name = mangle(&["std", "sync", "Channel", "new"]);
 
             let fn_type = type_env
                 .function_definitions
@@ -2976,7 +2976,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                     .iter()
                     .find(|x| name.as_str() == x.name.as_str())
                     .cloned()
-                    .unwrap_or_else(|| panic!("could not find {name}"));
+                    .unwrap_or_else(|| panic!("could not find {name} {type_params:?}"));
 
                 if type_params.len() != fn_def.generics.len() {
                     let msg = "Wrong number of type parameters";

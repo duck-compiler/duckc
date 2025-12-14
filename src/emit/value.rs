@@ -849,7 +849,8 @@ impl ValueExpr {
                         mangle(&[
                             "std",
                             "sync",
-                            "new_channel",
+                            "Channel",
+                            "new",
                             &inner_return_type.as_clean_go_type_name(type_env),
                         ])
                     )),

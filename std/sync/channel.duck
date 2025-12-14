@@ -3,6 +3,13 @@ use go "time";
 struct Channel<T> = {
     inner: go "chan {T}"
 } impl {
+    static fn new<T>() -> Channel<T> {
+        const go_chan: go "chan {T}" = go { $$$res$$$ = make(chan <<<T>>>) };
+        Channel<T> {
+            inner: go_chan,
+        }
+    }
+
     fn send(x: T) {
         go {
             (*self).inner <- x
@@ -40,10 +47,3 @@ struct Channel<T> = {
         } as !
     }
 };
-
-fn new_channel<T>() -> Channel<T> {
-    const go_chan: go "chan {T}" = go { $$$res$$$ = make(chan <<<T>>>) };
-    return Channel<T> {
-        inner: go_chan,
-    };
-}

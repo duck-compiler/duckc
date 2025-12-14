@@ -1,7 +1,7 @@
-use std::sync::{new_channel};
+use std::sync::{Channel};
 
 fn main() {
-    const chan = new_channel<()>();
+    const chan = Channel::new<()>();
 
     let sending_task = async (fn(){
         std::io::println("Sleeping for 1s and then sending a ()");

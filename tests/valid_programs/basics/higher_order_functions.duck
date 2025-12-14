@@ -9,7 +9,7 @@ fn my_filter<T>(arr: std::col::ArrayList<T>, predicate: fn(t: T) -> Bool) -> std
 fn main() {
     std::io::println("Testing higher-order functions (map and filter)");
 
-    let numbers: std::col::ArrayList<Int> = std::col::empty_array_list<Int>();
+    let numbers: std::col::ArrayList<Int> = std::col::ArrayList::new<Int>();
     numbers.push(1);
     numbers.push(2);
     numbers.push(3);

@@ -182,7 +182,7 @@ impl MangleEnv {
             return Some(res);
         }
 
-        if self.is_top_level_ident(ident.first()?) {
+        if self.is_top_level_ident(ident.first()?) || self.is_top_level_type(ident.first()?) {
             let mut x = Vec::new();
             x.extend_from_slice(prefix);
             x.extend_from_slice(ident);

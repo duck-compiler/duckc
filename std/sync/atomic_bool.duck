@@ -3,6 +3,13 @@ use go "sync/atomic";
 struct AtomicBool = {
     inner: go "atomic.Bool",
 } impl {
+    static fn new() -> AtomicBool {
+        const go_atomic_bool: go "atomic.Bool";
+        return AtomicBool {
+            inner: go_atomic_bool,
+        };
+    }
+
     /// Returns true if the swap succeeded
     fn compare_and_swap(compare_against: Bool, new_value: Bool) -> Bool {
         go {
@@ -23,10 +30,3 @@ struct AtomicBool = {
         } as Bool
     }
 };
-
-fn new_atomic_bool() -> AtomicBool {
-    const go_atomic_bool: go "atomic.Bool";
-    return AtomicBool {
-        inner: go_atomic_bool,
-    };
-}

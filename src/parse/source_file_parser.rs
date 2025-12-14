@@ -966,18 +966,9 @@ where
                     Type(def) => type_definitions.push(def),
                     Extensions(def) => extensions_defs.push(def),
                     Struct((def, static_methods)) => {
-                        if !static_methods.is_empty()
-                            && !sub_modules
-                                .iter()
-                                .any(|(name, _)| name.as_str() == def.name.as_str())
-                        {
-                            sub_modules.push((def.name.clone(), SourceFile::default()));
-
-                            let struct_mod = sub_modules
-                                .iter_mut()
-                                .find(|(name, _)| name.as_str() == def.name.as_str())
-                                .unwrap();
-                            struct_mod.1.function_definitions.extend(static_methods);
+                        for mut static_method in static_methods {
+                            static_method.name = mangle(&[&def.name, &static_method.name]);
+                            function_definitions.push(static_method);
                         }
                         struct_definitions.push(def);
                     }

@@ -2,8 +2,6 @@ use go "strings";
 use go "strconv";
 use go "unicode/utf8";
 
-use ::col::{empty_array_list, ArrayList};
-
 /// these are the main string utilities of the duck std library
 extend String with impl {
     /// returns the length of the string self

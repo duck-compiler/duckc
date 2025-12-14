@@ -4,6 +4,15 @@ struct Mutex<T> = {
     inner: go "sync.Mutex",
     value: T,
 } impl {
+    static fn new<T>(v: T) -> Mutex<T> {
+        const mutex: go "sync.Mutex";
+
+        Mutex<T> {
+            inner: mutex,
+            value: v
+        }
+    }
+
     fn lock(accessor: fn(v: &mut T)) {
         go {
             defer (*self).inner.Unlock()
@@ -30,13 +39,3 @@ struct Mutex<T> = {
         return lock_result;
     }
 };
-
-fn new_mutex<T>(v: T) -> Mutex<T> {
-    const mutex: go "sync.Mutex";
-
-    const result = Mutex<T> {
-        inner: mutex,
-        value: v
-    };
-    return result;
-}

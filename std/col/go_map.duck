@@ -1,6 +1,16 @@
 struct GoMap<K, V> = {
     inner: go "map[{K}]*{V}",
 } impl {
+    static fn new<K, V>() -> GoMap<K, V> {
+        const go_map: go "map[{K}]*{V}" = go {
+            $$$res$$$ = make(map[<<<K>>>]*<<<V>>>)
+        };
+
+        return GoMap<K, V> {
+            inner: go_map,
+        };
+    }
+
     fn contains_key(k: K) -> Bool {
         go {
             _, ok := (*self).inner[k]
@@ -53,13 +63,3 @@ struct GoMap<K, V> = {
     }
 
 };
-
-fn new_go_map<K, V>() -> GoMap<K, V> {
-    const go_map: go "map[{K}]*{V}" = go {
-        $$$res$$$ = make(map[<<<K>>>]*<<<V>>>)
-    };
-
-    return GoMap<K, V> {
-        inner: go_map,
-    };
-}
