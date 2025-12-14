@@ -872,12 +872,6 @@ where
         } => {
             trav_value_expr(f_t.clone(), f_vv.clone(), target_obj, env);
         }
-        ValueExpr::ExtensionAccess {
-            target_obj,
-            extension_name: _,
-        } => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), target_obj, env);
-        }
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {
@@ -934,7 +928,6 @@ where
             target,
             params,
             type_params,
-            is_extension_call: _,
         } => {
             trav_value_expr(f_t.clone(), f_vv.clone(), target, env);
             for p in params {
@@ -1323,9 +1316,6 @@ fn replace_generics_in_value_expr(
             for t in type_params.iter_mut() {
                 replace_generics_in_type_expr(&mut t.0, set_params, type_env);
             }
-        }
-        ValueExpr::ExtensionAccess { target_obj, .. } => {
-            replace_generics_in_value_expr(&mut target_obj.as_mut().0, set_params, type_env);
         }
         ValueExpr::If {
             condition,
@@ -1791,9 +1781,6 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
                     sort_fields_value_expr(&mut e.0);
                 }
             }
-        }
-        ValueExpr::ExtensionAccess { target_obj, .. } => {
-            sort_fields_value_expr(&mut target_obj.as_mut().0);
         }
         ValueExpr::FunctionCall {
             target,
@@ -2704,7 +2691,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     .into(),
                 params: vec![],
                 type_params: vec![(inner_type, *span)],
-                is_extension_call: false,
             };
 
             typeresolve_function_call((&mut new_channel_call, *span), type_env);
@@ -2843,10 +2829,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 *ty = Some(TypeExpr::unit_with_span(*span));
             }
         }
-        ValueExpr::ExtensionAccess { target_obj, .. } => {
-            let target = target_obj.as_mut();
-            typeresolve_value_expr((&mut target.0, target.1), type_env);
-        }
         ValueExpr::Lambda(..) => typeresolve_lambda((value_expr, *span), type_env),
         ValueExpr::FunctionCall { .. } => typeresolve_function_call((value_expr, *span), type_env),
         ValueExpr::Variable(..) => typeresolve_variable((value_expr, *span), type_env),
@@ -2961,7 +2943,6 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
         target,
         params,
         type_params,
-        is_extension_call: _,
     } = value_expr.0
     else {
         unreachable!("only pass functioncalls to this function")

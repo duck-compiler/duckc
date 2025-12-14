@@ -769,9 +769,6 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
         ValueExpr::FieldAccess { target_obj, .. } => {
             append_global_prefix_value_expr(&mut target_obj.0, mangle_env);
         }
-        ValueExpr::ExtensionAccess { target_obj, .. } => {
-            append_global_prefix_value_expr(&mut target_obj.0, mangle_env);
-        }
         ValueExpr::Return(Some(value_expr)) => {
             append_global_prefix_value_expr(&mut value_expr.0, mangle_env)
         }

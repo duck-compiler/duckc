@@ -877,7 +877,6 @@ impl ValueExpr {
                             .into(),
                         params: vec![e.as_ref().clone()],
                         type_params: vec![],
-                        is_extension_call: false,
                     };
 
                     let as_lambda = ValueExpr::Lambda(
@@ -991,54 +990,6 @@ impl ValueExpr {
                         (target_instr, None)
                     } else {
                         (target_instr, None)
-                    }
-                }
-                ValueExpr::ExtensionAccess {
-                    target_obj,
-                    extension_name,
-                } => {
-                    let target_type = TypeExpr::from_value_expr(target_obj, type_env);
-
-                    let extension_fn_name =
-                        target_type.build_extension_access_function_name(extension_name, type_env);
-                    if !type_env
-                        .extension_functions
-                        .contains_key(&extension_fn_name)
-                    {
-                        panic!("doesn't have extension fuuun")
-                    }
-
-                    let extension_fn_type = type_env
-                        .extension_functions
-                        .get(&extension_fn_name)
-                        .expect("we've just checked that it exists")
-                        .clone();
-
-                    let (mut emit_instr, emit_res) =
-                        target_obj.as_ref().0.emit(type_env, env, span);
-                    if let Some(emit_res) = emit_res {
-                        let var_name = env.new_var();
-                        emit_instr.push(IrInstruction::VarDecl(
-                            var_name.clone(),
-                            extension_fn_type.0.0.as_go_type_annotation(type_env),
-                        ));
-                        return (
-                            emit_instr
-                                .iter()
-                                .chain(
-                                    vec![IrInstruction::FunCall(
-                                        Some(var_name.clone()),
-                                        IrValue::Imm(extension_fn_name.to_string()),
-                                        vec![emit_res],
-                                    )]
-                                    .iter(),
-                                )
-                                .cloned()
-                                .collect::<Vec<_>>(),
-                            as_rvar(var_name),
-                        );
-                    } else {
-                        return (vec![], None);
                     }
                 }
                 ValueExpr::Deref(v) => {
@@ -1553,7 +1504,6 @@ impl ValueExpr {
                                                             .into_empty_span(),
                                                         ],
                                                         type_params: vec![],
-                                                        is_extension_call: false,
                                                     }
                                                     .into_empty_span(),
                                                 ),

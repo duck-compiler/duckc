@@ -205,9 +205,7 @@ impl TypeExpr {
                 ),
                 lambda_expr.is_mut,
             ),
-            ValueExpr::InlineGo(_, ty) => {
-                ty.as_ref().cloned().or(Some(TypeExpr::unit())).unwrap().0
-            }
+            ValueExpr::InlineGo(_, ty) => ty.as_ref().cloned().unwrap_or(TypeExpr::unit()).0,
             ValueExpr::Int(value) => TypeExpr::Int(Some(*value)),
             ValueExpr::Bool(value) => TypeExpr::Bool(Some(*value)),
             ValueExpr::Char(..) => TypeExpr::Char,
@@ -416,7 +414,6 @@ impl TypeExpr {
                 target,
                 params,
                 type_params,
-                is_extension_call,
             } => {
                 // todo: type_params
                 let in_param_types = params
@@ -524,16 +521,12 @@ impl TypeExpr {
                             if let Some(param_name) = &param_type.0
                                 && param_name == "self"
                             {
-                                if !is_extension_call {
-                                    check_type_compatability_full(
-                                        &param_type.1,
-                                        in_param_types.get(index).unwrap(),
-                                        type_env,
-                                        is_const_var(&params[index].0),
-                                    );
-                                } else {
-                                    return;
-                                }
+                                check_type_compatability_full(
+                                    &param_type.1,
+                                    in_param_types.get(index).unwrap(),
+                                    type_env,
+                                    is_const_var(&params[index].0),
+                                );
                             } else {
                                 check_type_compatability_full(
                                     &param_type.1,
@@ -700,41 +693,6 @@ impl TypeExpr {
                         target_obj_type_expr.ref_typeof_field(field_name.to_string(), type_env)
                     })
                     .expect("Invalid field access")
-            }
-            ValueExpr::ExtensionAccess {
-                target_obj,
-                extension_name,
-            } => {
-                let span = target_obj.as_ref().1;
-                let target_obj_type_expr =
-                    TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
-
-                let extension_function_name = target_obj_type_expr
-                    .build_extension_access_function_name(extension_name, type_env);
-                let extension_function = type_env
-                    .extension_functions
-                    .get(&extension_function_name)
-                    .unwrap_or_else(|| {
-                        failure_with_occurence(
-                            "Invalid Extension Access",
-                            {
-                                let mut span = span;
-                                span.end += 2;
-                                span
-                            },
-                            vec![(
-                                format!(
-                                    "this is of type {} and it has no extension '{}'",
-                                    target_obj_type_expr
-                                        .as_clean_user_faced_type_name()
-                                        .bright_yellow(),
-                                    extension_name.bright_blue()
-                                ),
-                                span,
-                            )],
-                        )
-                    });
-                return extension_function.0.0.clone();
             }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
