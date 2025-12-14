@@ -239,7 +239,13 @@ impl IrInstruction {
                         .join(", ")
                 )
             }
-            IrInstruction::VarDecl(name, ty) => format!("var {name} {ty}\n_ = {name}"),
+            IrInstruction::VarDecl(name, ty) => {
+                if ty == "Tup_" {
+                    format!("var {name} {ty}\n{name} = Tup_{{}}\n_ = {name}")
+                } else {
+                    format!("var {name} {ty}\n_ = {name}")
+                }
+            }
             IrInstruction::VarAssignment(name, v) => format!("{name} = {}", v.emit_as_go()),
             IrInstruction::If(cond, then, els) => {
                 format!(

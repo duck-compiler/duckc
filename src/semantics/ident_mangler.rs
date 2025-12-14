@@ -430,7 +430,10 @@ pub fn mangle_value_expr(
                 mangle_value_expr(&mut expr.0, global_prefix, prefix, mangle_env);
             }
         }
-        ValueExpr::InlineGo(t) => {
+        ValueExpr::InlineGo(t, ty) => {
+            if let Some(ty) = ty {
+                mangle_type_expression(&mut ty.0, prefix, mangle_env);
+            }
             let mut parser = Parser::new();
             parser
                 .set_language(&tree_sitter_go::LANGUAGE.into())

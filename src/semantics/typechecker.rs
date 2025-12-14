@@ -205,7 +205,9 @@ impl TypeExpr {
                 ),
                 lambda_expr.is_mut,
             ),
-            ValueExpr::InlineGo(..) => TypeExpr::InlineGo,
+            ValueExpr::InlineGo(_, ty) => {
+                ty.as_ref().cloned().or(Some(TypeExpr::unit())).unwrap().0
+            }
             ValueExpr::Int(value) => TypeExpr::Int(Some(*value)),
             ValueExpr::Bool(value) => TypeExpr::Bool(Some(*value)),
             ValueExpr::Char(..) => TypeExpr::Char,
@@ -860,7 +862,6 @@ impl TypeExpr {
     pub fn is_unit(&self) -> bool {
         match self {
             Self::Tuple(v) => v.is_empty(),
-            Self::InlineGo => true,
             _ => false,
         }
     }
@@ -1463,7 +1464,6 @@ pub fn check_type_compatability_full(
         TypeExpr::TypeOf(..) => panic!("typeof should have been replaced"),
         TypeExpr::KeyOf(..) => panic!("keyof should have been replaced"),
         TypeExpr::Any => return,
-        TypeExpr::InlineGo => todo!("should inline go be typechecked?"),
         TypeExpr::Go(_) => return,
         TypeExpr::Tag(required_identifier) => {
             if let TypeExpr::Tag(given_identifier) = &given_type.0 {

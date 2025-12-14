@@ -131,7 +131,7 @@ pub enum ValueExpr {
     GreaterThanOrEquals(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
     And(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
     Or(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
-    InlineGo(String),
+    InlineGo(String, Option<Spanned<TypeExpr>>),
     Lambda(Box<LambdaFunctionExpr>),
     ArrayAccess(Box<Spanned<ValueExpr>>, Box<Spanned<ValueExpr>>),
     Match {
@@ -184,7 +184,7 @@ impl ValueExpr {
                 body: _,
             } => false,
             ValueExpr::Block(_) => false,
-            ValueExpr::InlineGo(_) => false,
+            ValueExpr::InlineGo(..) => false,
             ValueExpr::Match { .. } => false,
             ValueExpr::Add(..)
             | ValueExpr::Mul(..)
@@ -716,6 +716,11 @@ where
                 Deref,
             }
 
+            let inline_go = select_ref! { Token::InlineGo(x) => x.to_owned() }
+                .map(|s| ValueExpr::InlineGo(s, None))
+                .map_with(|x, e| (x, e.span()))
+                .boxed();
+
             let atom = choice((
                 just(Token::ControlChar('&')).map(|_| AtomPreParseUnit::Ref),
                 just(Token::RefMut).map(|_| AtomPreParseUnit::RefMut),
@@ -730,6 +735,7 @@ where
                     .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                     .or(choice((
                         array.clone(),
+                        inline_go,
                         float_expr,
                         int,
                         fmt_string,
@@ -1069,10 +1075,6 @@ where
                 })
                 .boxed();
 
-            let inline_go = select_ref! { Token::InlineGo(x) => x.to_owned() }
-                .map(ValueExpr::InlineGo)
-                .map_with(|x, e| (x, e.span()))
-                .boxed();
 
             let defer = just(Token::Defer)
                 .ignore_then(value_expr_parser.clone())
@@ -1096,7 +1098,7 @@ where
                 })
                 .map_with(|x, e| (x, e.span()));
 
-            choice((inline_go, casted, defer, async_call, for_parser))
+            choice((casted, defer, async_call, for_parser))
                 .labelled("expression")
                 .boxed()
         },
@@ -2602,10 +2604,29 @@ mod tests {
                         .into(),
                 ),
             ),
-            ("go {}", ValueExpr::InlineGo(String::new())),
+            ("go {}", ValueExpr::InlineGo(String::new(), None)),
+            (
+                "a(go {} as Int)",
+                ValueExpr::FunctionCall {
+                    target: Box::new(
+                        ValueExpr::RawVariable(false, vec!["a".to_string()]).into_empty_span(),
+                    ),
+                    params: vec![
+                        ValueExpr::As(
+                            ValueExpr::InlineGo("".to_string(), None)
+                                .into_empty_span()
+                                .into(),
+                            TypeExpr::Int(None).into_empty_span(),
+                        )
+                        .into_empty_span(),
+                    ],
+                    type_params: vec![],
+                    is_extension_call: false,
+                },
+            ),
             (
                 "go { go func() {} }",
-                ValueExpr::InlineGo(String::from(" go func() {} ")),
+                ValueExpr::InlineGo(String::from(" go func() {} "), None),
             ),
             (
                 "fn() {}",
@@ -2687,7 +2708,7 @@ mod tests {
             (
                 "{go {} 1;2}",
                 ValueExpr::Block(vec![
-                    ValueExpr::InlineGo("".into()).into_empty_span(),
+                    ValueExpr::InlineGo("".into(), None).into_empty_span(),
                     ValueExpr::Int(1).into_empty_span(),
                     ValueExpr::Int(2).into_empty_span(),
                 ]),
@@ -2697,7 +2718,7 @@ mod tests {
                 ValueExpr::If {
                     condition: ValueExpr::Bool(true).into_empty_span().into(),
                     then: ValueExpr::Block(vec![
-                        ValueExpr::InlineGo("".into()).into_empty_span(),
+                        ValueExpr::InlineGo("".into(), None).into_empty_span(),
                         ValueExpr::Int(1).into_empty_span(),
                         ValueExpr::Int(2).into_empty_span(),
                     ])

@@ -25,16 +25,16 @@ impl FunctionDefintion {
         type_env: &mut TypeEnv,
         to_ir: &mut ToIr,
     ) -> IrInstruction {
-        // what's r?
-        // println!("value_body {:?}", self.value_expr.0);
-        let (mut emitted_body, _r) = self.value_expr.0.emit(type_env, to_ir, self.span);
+        let (mut emitted_body, result) = self.value_expr.0.emit(type_env, to_ir, self.span);
 
         if let Some(IrInstruction::Block(block_body)) = emitted_body.first() {
             emitted_body = block_body.clone();
         }
 
-        // println!("end value_body");
         if self.name != "main" {
+            // if result.is_some() {
+            //     emitted_body.push(IrInstruction::Return(result));
+            // }
             emitted_body.push(function_epilogue(&self.return_type.0, type_env));
         }
 

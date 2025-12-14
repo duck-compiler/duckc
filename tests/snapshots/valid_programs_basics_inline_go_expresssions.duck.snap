@@ -1,0 +1,4 @@
+{
+    "stdout": "hello from the go routine inside the inline go expr\n",
+    "stderr": ""
+}

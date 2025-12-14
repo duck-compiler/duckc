@@ -816,8 +816,7 @@ where
         | TypeExpr::Html
         | TypeExpr::Go(..)
         | TypeExpr::Any
-        | TypeExpr::TemplParam(..)
-        | TypeExpr::InlineGo => {}
+        | TypeExpr::TemplParam(..) => {}
         TypeExpr::And(types) | TypeExpr::Or(types) | TypeExpr::Tuple(types) => {
             for t in types {
                 trav_type_expr(f_t.clone(), t, env);
@@ -1417,7 +1416,10 @@ fn replace_generics_in_value_expr(
                 replace_generics_in_value_expr(&mut arm.value_expr.0, set_params, type_env);
             }
         }
-        ValueExpr::InlineGo(go_src) => {
+        ValueExpr::InlineGo(go_src, ty) => {
+            if let Some(ty) = ty {
+                replace_generics_in_type_expr(&mut ty.0, set_params, type_env);
+            }
             let mut to_replace = go_src.to_string();
             loop {
                 let start_idx = to_replace.find("<<<");
@@ -1570,8 +1572,7 @@ fn replace_generics_in_type_expr(
         | TypeExpr::Int(..)
         | TypeExpr::Float
         | TypeExpr::String(..)
-        | TypeExpr::Tag(..)
-        | TypeExpr::InlineGo => {}
+        | TypeExpr::Tag(..) => {}
         TypeExpr::RawTypeName(_, typename, _) => {
             if typename.len() == 1
                 && let Some(replacement) = set_params.get(&typename[0])
@@ -1922,7 +1923,6 @@ pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
         | TypeExpr::Char
         | TypeExpr::Float
         | TypeExpr::Go(_)
-        | TypeExpr::InlineGo
         | TypeExpr::Int(_)
         | TypeExpr::String(_)
         | TypeExpr::TypeName(..)
@@ -2589,6 +2589,11 @@ pub fn translate_intersection_to_duck(interception_type: &TypeExpr) -> TypeExpr 
 
 fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: &TypeEnv) {
     match &mut v.0 {
+        ValueExpr::InlineGo(_, ty) => {
+            if ty.is_none() {
+                *ty = Some(req.clone());
+            }
+        }
         ValueExpr::Ref(target) | ValueExpr::RefMut(target) => {
             if let TypeExpr::Ref(next_ty) | TypeExpr::RefMut(next_ty) = &req.0 {
                 infer_against(target, next_ty, type_env);
@@ -2718,6 +2723,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         }
         ValueExpr::As(v, t) => {
             type_env.insert_type(t.0.clone());
+
+            if let ValueExpr::InlineGo(_, ty) = &mut v.0 {
+                *ty = Some(t.clone());
+            }
+
             typeresolve_value_expr((&mut v.0, v.1), type_env);
             let _ = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
         }
@@ -2828,7 +2838,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             let ty = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
             type_env.insert_type(ty);
         }
-        ValueExpr::InlineGo(..) => {}
+        ValueExpr::InlineGo(_, ty) => {
+            if ty.is_none() {
+                *ty = Some(TypeExpr::unit_with_span(*span));
+            }
+        }
         ValueExpr::ExtensionAccess { target_obj, .. } => {
             let target = target_obj.as_mut();
             typeresolve_value_expr((&mut target.0, target.1), type_env);

@@ -486,7 +486,6 @@ impl TypeExpr {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
             TypeExpr::Bool(..) => "bool".to_string(),
-            TypeExpr::InlineGo => "any".to_string(),
             TypeExpr::Int(..) => "int".to_string(),
             TypeExpr::Float => "float32".to_string(),
             TypeExpr::Char => "rune".to_string(),
@@ -569,7 +568,6 @@ impl TypeExpr {
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
             TypeExpr::TypeName(_, name, _type_params) => name.clone(),
-            TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type, _) => format!(
                 "Fun_From_{}_To_{}",
                 params
@@ -674,7 +672,6 @@ impl TypeExpr {
                 type_params: type_params.clone(),
             }
             .as_clean_go_type_name(type_env),
-            TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type, is_mut) => format!(
                 "Fun_{}_From_{}_To_{}",
                 if *is_mut { "Mut" } else { "NotMut" },

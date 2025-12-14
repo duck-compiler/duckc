@@ -582,7 +582,10 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
                 append_global_prefix_value_expr(&mut expr.0, mangle_env);
             }
         }
-        ValueExpr::InlineGo(t) => {
+        ValueExpr::InlineGo(t, ty) => {
+            if let Some(ty) = ty {
+                append_global_prefix_type_expr(&mut ty.0, mangle_env);
+            }
             let mut parser = TSParser::new();
             parser
                 .set_language(&tree_sitter_go::LANGUAGE.into())

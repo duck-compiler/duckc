@@ -38,7 +38,6 @@ pub enum TypeExpr {
     Html,
     TemplParam(String),
     Any,
-    InlineGo,
     Struct {
         name: String,
         type_params: Vec<Spanned<TypeExpr>>,
@@ -90,7 +89,6 @@ impl TypeExpr {
                 .all(|(t, _)| t.is_trivially_copyable(type_env)),
             TypeExpr::Duck(Duck { fields: _ }) => true,
             TypeExpr::Array(t) => t.0.is_trivially_copyable(type_env),
-            TypeExpr::InlineGo => true,
             TypeExpr::Ref(..) => true,
             TypeExpr::RefMut(..) => true,
             TypeExpr::Struct { name, type_params } => {
@@ -634,7 +632,7 @@ impl Display for TypeExpr {
                 identifier.as_ref().0.as_clean_user_faced_type_name()
             ),
             TypeExpr::Any => write!(f, "any"),
-            TypeExpr::InlineGo => write!(f, "inline_go"),
+
             TypeExpr::Struct {
                 name: s,
                 type_params,

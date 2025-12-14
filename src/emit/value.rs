@@ -1992,7 +1992,20 @@ impl ValueExpr {
 
                     (v, Some(IrValue::empty_tuple()))
                 }
-                ValueExpr::InlineGo(s) => (vec![IrInstruction::InlineGo(s.clone())], None),
+                ValueExpr::InlineGo(s, ty) => {
+                    let ty = ty
+                        .as_ref()
+                        .unwrap_or(&TypeExpr::unit())
+                        .0
+                        .as_go_type_annotation(type_env);
+                    let result_var = env.new_var();
+
+                    let mut res_instr = vec![IrInstruction::VarDecl(result_var.clone(), ty)];
+                    let inline_go_text = s.replace("$$$res$$$", &result_var);
+                    res_instr.push(IrInstruction::InlineGo(inline_go_text));
+
+                    (res_instr, Some(IrValue::Var(result_var)))
+                }
                 ValueExpr::While { condition, body } => {
                     let (mut cond_instr, cond_res) =
                         condition.0.direct_or_with_instr(type_env, env, span);
