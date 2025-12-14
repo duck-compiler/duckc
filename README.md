@@ -5,23 +5,111 @@ Duck is a modern, compiled and batteries included programming language for full-
 
 This repository hosts the source code for [Duck](https://duck-lang.org). It contains the compiler, it's build tool [dargo](https://github.com/duck-compiler/duck-spielwiese/blob/main/docs/002-dargo.md), the standard library and documentation.
 
-### Installing Duck using duckup
-The Duck Toolchain is managed by duckup, it allows you to have have multiple versions of duck installed on your machine and switch between them.
+## ✨ Key Features
+* **Compiles to Go**: The program compiles down to a native Go binary, easy cross-compilation, and the performance of Go.
+* **Structural "Duck" Typing**: Based on Go structs, but flexible. You don't need explicit interface declarations; if the shape matches, it fits.
+* **Compiletime enforced mutability checks**: mutations to references are explicit and must be annotated, with the `&mut`.
+* **Web Native**:
+  * **SSR**: Built-in HTML template parsing for server-side rendering.
+  * **Components**: Use React components directly within templates (with native JS support).
+  * **Duckwind**: Includes [Duckwind](https://github.com/duck-compiler/duckwind), a feature-complete Tailwind CSS alternative written in Rust that integrates directly with the language.
 
-**Homebrew**
+-------------
+
+## 🛠️ Installation
+
+Duck supports **MacOS**, **Linux** and **Windows**. To manage your installation, use `duckup`, our official toolchain installer and version manager.
+
+**MacOS/Homebrew**
 ```sh
 brew tap duck-compiler/duckup
 brew install duckup
-duckup update
 ```
 
-This will install the newest version of dargo and all its dependencies (Go, Standard Library) onto your system.
-To see if the installation was successful, run following command
+**Other**
+
+ Download the latest release of `duckup` for your OS from the [duckup](https://github.com/duck-compiler/duckup).
+ 
+**Completing Installation**
+
 ```sh
-dargo --help
+# This will install the newest version of dargo and all its dependencies (Go, Standard Library) onto your system.
+duckup update
+
+# To see if the installation was successful, run following command
+dargo help
 ```
 
-### NOTE:
+-------------
+
+## 👋 "Hello, World" in Duck
+
+
+```bash
+# Create a new directory and initialize a Duck project
+mkdir my-duck-app
+cd my-duck-app
+dargo init
+```
+
+This will setup a project with `src/main.duck` looking somewhat like:
+
+```rust
+use std::io::{println};
+
+fn main() {
+     println("Hello, World");
+}
+```
+
+run.
+```bash
+# Compile and run your application:
+dargo run
+```
+
+-------------
+
+
+## 📖 Language Quick Tour
+
+### Structural Typing
+
+Duck uses structural typing (duck typing) on top of Go structs. You don't need to define strict types for everything; partial matches work automatically.
+
+```rust
+type User = { name: String, email: String, age: Int };
+
+// This function only cares that the argument has a 'name' field
+fn print_name(u: { name: String }) {
+    println(u.name);
+}
+
+fn main() {
+    let u = User { name: "Duck", email: "robing@gmail.com", age: 5 };
+    
+    // Works perfectly because 'User' satisfies the shape { name: String }
+    print_name(u); 
+}
+```
+
+### Web Components
+
+Duck is built for the web. You can define React components that include native JavaScript and reference them directly in your server-side templates.
+
+```jsx
+component MyComponent(props: { name: String }) tsx {
+  const [name, setName] = useState(props.name);
+  return <>
+    <span>{name}</span>
+    <input type="text" onChange={function (event) {
+      setName(event.target.value);
+    }}/>
+  </>
+}
+```
+
+*(More Documentation on component syntax coming soon)*
 
 At the current state of the compiler we don't allow any pull requests apart from out core team.
 Development is actively running (probably on another branch) and we're also not open for issues yet. But we're open to discuss topics on our [Discord](https://discord.gg/J6Q7qyeESM)
