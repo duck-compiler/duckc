@@ -1521,11 +1521,9 @@ impl ValueExpr {
                                                                         .props_type
                                                                         .clone(),
                                                                 )],
-                                                                Some(
-                                                                    TypeExpr::Html
-                                                                        .into_empty_span()
-                                                                        .into(),
-                                                                ),
+                                                                TypeExpr::Html
+                                                                    .into_empty_span()
+                                                                    .into(),
                                                                 false,
                                                             )),
                                                             Some(false),

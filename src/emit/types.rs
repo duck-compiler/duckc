@@ -9,7 +9,6 @@ use crate::{
         Field,
         struct_parser::StructDefinition,
         type_parser::{Duck, TypeExpr},
-        value_parser::empty_range,
     },
     semantics::{
         ident_mangler::MANGLE_SEP,
@@ -318,7 +317,7 @@ pub fn emit_type_definitions(
             .collect();
 
         for method in methods.iter() {
-            if method.generics.is_some() {
+            if !method.generics.is_empty() {
                 continue;
             }
 
@@ -327,7 +326,6 @@ pub fn emit_type_definitions(
                 method
                     .params
                     .iter()
-                    .flat_map(|params| params.iter())
                     .map(|param| format!(
                         "{} {}",
                         param.0,
@@ -335,11 +333,7 @@ pub fn emit_type_definitions(
                     ))
                     .collect::<Vec<_>>()
                     .join(","),
-                method
-                    .return_type
-                    .as_ref()
-                    .map(|(type_expr, _)| type_expr.as_go_type_annotation(type_env))
-                    .unwrap_or_default()
+                method.return_type.0.as_go_type_annotation(type_env),
             );
 
             let instructions_to_be_duck_conform = vec![
@@ -356,26 +350,17 @@ pub fn emit_type_definitions(
                                 method
                                     .params
                                     .iter()
-                                    .flat_map(|params| params.iter())
                                     .map(|param| {
                                         (param.0.clone(), param.1.0.as_go_type_annotation(type_env))
                                     })
                                     .collect::<Vec<_>>(),
-                                method.return_type.as_ref().map(|return_type| {
-                                    return_type.0.as_go_type_annotation(type_env)
-                                }),
+                                Some(method.return_type.0.as_go_type_annotation(type_env)),
                                 vec![IrInstruction::InlineGo(format!(
-                                    "{} self.{}({})",
-                                    if method.return_type.is_some() {
-                                        "return"
-                                    } else {
-                                        ""
-                                    },
+                                    "return self.{}({})",
                                     fix_ident_for_go(&method.name, imports),
                                     method
                                         .params
                                         .iter()
-                                        .flat_map(|params| params.iter())
                                         .map(|param| param.0.clone())
                                         .collect::<Vec<_>>()
                                         .join(", "),
@@ -526,11 +511,7 @@ impl TypeExpr {
                     })
                     .collect::<Vec<_>>()
                     .join(","),
-                return_type
-                    .as_ref()
-                    .or(Some(Box::new((TypeExpr::Tuple(vec![]), empty_range()))).as_ref())
-                    .map(|x| x.0.as_go_return_type(type_env))
-                    .unwrap_or_default(),
+                return_type.0.as_go_return_type(type_env),
             ),
             TypeExpr::Struct {
                 name: _struct,
@@ -595,7 +576,7 @@ impl TypeExpr {
             TypeExpr::TypeName(_, name, _type_params) => name.clone(),
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type, _) => format!(
-                "Fun_From_{}{}",
+                "Fun_From_{}_To_{}",
                 params
                     .iter()
                     .map(|(name, type_expr)| format!(
@@ -605,10 +586,7 @@ impl TypeExpr {
                     ))
                     .collect::<Vec<_>>()
                     .join("_"),
-                return_type
-                    .as_ref()
-                    .map(|type_expr| format!("_To_{}", type_expr.0.type_id(type_env)))
-                    .unwrap_or_else(|| "".to_string())
+                return_type.0.type_id(type_env),
             ),
             TypeExpr::Struct { .. } => self.as_clean_go_type_name(type_env),
             TypeExpr::NamedDuck { .. } => self.as_clean_go_type_name(type_env),
@@ -703,7 +681,7 @@ impl TypeExpr {
             .as_clean_go_type_name(type_env),
             TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type, is_mut) => format!(
-                "Fun_{}_From_{}{}",
+                "Fun_{}_From_{}_To_{}",
                 if *is_mut { "Mut" } else { "NotMut" },
                 params
                     .iter()
@@ -714,10 +692,7 @@ impl TypeExpr {
                     ))
                     .collect::<Vec<_>>()
                     .join("_"),
-                return_type
-                    .as_ref()
-                    .map(|type_expr| format!("_To_{}", type_expr.0.as_clean_go_type_name(type_env)))
-                    .unwrap_or_else(|| "".to_string())
+                return_type.0.as_clean_go_type_name(type_env),
             ),
             TypeExpr::Struct {
                 name: s,

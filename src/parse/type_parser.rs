@@ -62,7 +62,7 @@ pub enum TypeExpr {
     And(Vec<Spanned<TypeExpr>>),
     Fun(
         Vec<(Option<String>, Spanned<TypeExpr>)>, // params
-        Option<Box<Spanned<TypeExpr>>>,           // return type
+        Box<Spanned<TypeExpr>>,                   // return type
         bool,                                     // is mut
     ),
     Array(Box<Spanned<TypeExpr>>),
@@ -121,6 +121,14 @@ impl TypeExpr {
             TypeExpr::String(None),
             TypeExpr::Char,
         ];
+    }
+
+    pub fn unit() -> Spanned<TypeExpr> {
+        (TypeExpr::Tuple(vec![]), empty_range())
+    }
+
+    pub fn unit_with_span(e: SS) -> Spanned<TypeExpr> {
+        (TypeExpr::Tuple(vec![]), e)
     }
 }
 
@@ -221,8 +229,12 @@ where
                         .then_ignore(just(Token::ControlChar(')')))
                         .then(just(Token::ThinArrow).ignore_then(p.clone()).or_not()),
                 )
-                .map(|(is_mut, (params, return_type))| {
-                    TypeExpr::Fun(params, return_type.map(Box::new), is_mut.is_some())
+                .map_with(|(is_mut, (params, return_type)), e| {
+                    TypeExpr::Fun(
+                        params,
+                        Box::new(return_type.unwrap_or((TypeExpr::Tuple(vec![]), e.span()))),
+                        is_mut.is_some(),
+                    )
                 });
 
             let tuple = p
@@ -427,8 +439,12 @@ where
                         .then_ignore(just(Token::ControlChar(')')))
                         .then(just(Token::ThinArrow).ignore_then(p.clone()).or_not()),
                 )
-                .map(|(is_mut, (params, return_type))| {
-                    TypeExpr::Fun(params, return_type.map(Box::new), is_mut.is_some())
+                .map_with(|(is_mut, (params, return_type)), e| {
+                    TypeExpr::Fun(
+                        params,
+                        Box::new(return_type.unwrap_or((TypeExpr::Tuple(vec![]), e.span()))),
+                        is_mut.is_some(),
+                    )
                 });
 
             let tuple = p
@@ -765,9 +781,7 @@ impl Display for TypeExpr {
                         write!(f, "{}", type_expr.0)
                     })?;
                 write!(f, ")")?;
-                if let Some(rt) = return_type {
-                    write!(f, " -> {}", rt.0)?;
-                }
+                write!(f, " -> {}", return_type.0)?;
                 Ok(())
             }
             TypeExpr::Array(inner) => write!(f, "{}[]", inner.0),
@@ -822,7 +836,7 @@ pub mod tests {
                     .into_iter()
                     .map(|(name, param_type_expr)| (name, strip_spans(param_type_expr)))
                     .collect(),
-                return_type.map(|rt_box| Box::new(strip_spans(*rt_box))),
+                Box::new(strip_spans(*return_type)),
                 is_mut,
             ),
             TypeExpr::Or(variants) => TypeExpr::Or(variants.into_iter().map(strip_spans).collect()),
@@ -904,7 +918,7 @@ pub mod tests {
             "fn() -> String",
             TypeExpr::Fun(
                 vec![],
-                Some(Box::new(TypeExpr::String(None).into_empty_span())),
+                Box::new(TypeExpr::String(None).into_empty_span()),
                 false,
             ),
         );
@@ -955,7 +969,7 @@ pub mod tests {
                     "x".to_string().into(),
                     TypeExpr::Int(None).into_empty_span(),
                 )],
-                Some(Box::new(TypeExpr::Bool(None).into_empty_span())),
+                Box::new(TypeExpr::Bool(None).into_empty_span()),
                 false,
             ),
         );
@@ -970,7 +984,7 @@ pub mod tests {
                         TypeExpr::String(None).into_empty_span(),
                     ),
                 ],
-                Some(Box::new(TypeExpr::Char.into_empty_span())),
+                Box::new(TypeExpr::Char.into_empty_span()),
                 false,
             ),
         );
@@ -1156,14 +1170,14 @@ pub mod tests {
                     )
                     .into_empty_span(),
                 )],
-                Some(Box::new(
+                Box::new(
                     TypeExpr::RawTypeName(
                         false,
                         vec!["Future".to_string()],
                         vec![TypeExpr::String(None).into_empty_span()],
                     )
                     .into_empty_span(),
-                )),
+                ),
                 false,
             ),
         );
@@ -1229,7 +1243,7 @@ pub mod tests {
                             "x".to_string().into(),
                             TypeExpr::String(None).into_empty_span(),
                         )],
-                        Some(Box::new(TypeExpr::Int(None).into_empty_span())),
+                        Box::new(TypeExpr::Int(None).into_empty_span()),
                         false,
                     )
                     .into_empty_span(),
@@ -1298,12 +1312,12 @@ pub mod tests {
                             )
                             .into_empty_span(),
                         )],
-                        Some(Box::new(TypeExpr::Tuple(vec![]).into_empty_span())),
+                        Box::new(TypeExpr::Tuple(vec![]).into_empty_span()),
                         false,
                     )
                     .into_empty_span(),
                 )],
-                Some(Box::new(
+                Box::new(
                     TypeExpr::RawTypeName(
                         false,
                         vec!["Subscription".to_string()],
@@ -1313,7 +1327,7 @@ pub mod tests {
                         ],
                     )
                     .into_empty_span(),
-                )),
+                ),
                 false,
             ),
         );
@@ -1394,7 +1408,7 @@ pub mod tests {
                     TypeExpr::RawTypeName(false, vec!["TypeName".to_string()], vec![])
                         .into_empty_span(),
                 )],
-                Some(Box::new(TypeExpr::Tuple(Vec::new()).into_empty_span())),
+                Box::new(TypeExpr::Tuple(Vec::new()).into_empty_span()),
                 false,
             ),
         );
@@ -1416,10 +1430,10 @@ pub mod tests {
                     })
                     .into_empty_span(),
                 )],
-                Some(Box::new(
+                Box::new(
                     TypeExpr::RawTypeName(true, vec!["MyResult".to_string()], vec![])
                         .into_empty_span(),
-                )),
+                ),
                 false,
             ),
         );
@@ -1428,13 +1442,13 @@ pub mod tests {
             "fn() -> (Int, String)",
             TypeExpr::Fun(
                 vec![],
-                Some(Box::new(
+                Box::new(
                     TypeExpr::Tuple(vec![
                         TypeExpr::Int(None).into_empty_span(),
                         TypeExpr::String(None).into_empty_span(),
                     ])
                     .into_empty_span(),
-                )),
+                ),
                 false,
             ),
         );
@@ -1507,9 +1521,7 @@ pub mod tests {
                     "x".to_string().into(),
                     TypeExpr::Int(None).into_empty_span(),
                 )],
-                Some(Box::new(
-                    TypeExpr::Go("fmt.Stringer".to_string()).into_empty_span(),
-                )),
+                Box::new(TypeExpr::Go("fmt.Stringer".to_string()).into_empty_span()),
                 false,
             ),
         );
@@ -1518,7 +1530,7 @@ pub mod tests {
             "fn() -> (Int, duck { val: Char })",
             TypeExpr::Fun(
                 vec![],
-                Some(Box::new(
+                Box::new(
                     TypeExpr::Tuple(vec![
                         TypeExpr::Int(None).into_empty_span(),
                         TypeExpr::Duck(Duck {
@@ -1530,7 +1542,7 @@ pub mod tests {
                         .into_empty_span(),
                     ])
                     .into_empty_span(),
-                )),
+                ),
                 false,
             ),
         );

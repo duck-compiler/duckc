@@ -301,12 +301,10 @@ where
                         .rewind()
                         .ignore_then(value_expr_parser.clone()),
                 )
-                .map(|(((is_mut, ident), expr), block)| {
-                    ValueExpr::For {
-                        ident: (ident, is_mut.is_none(), None),
-                        target: Box::new(expr),
-                        block: Box::new(block),
-                    }
+                .map(|(((is_mut, ident), expr), block)| ValueExpr::For {
+                    ident: (ident, is_mut.is_none(), None),
+                    target: Box::new(expr),
+                    block: Box::new(block),
                 })
                 .map_with(|x, e| (x, e.span()));
 
@@ -1108,11 +1106,9 @@ pub fn source_file_into_empty_range(v: &mut SourceFile) {
     for x in &mut v.function_definitions {
         x.span = empty_range();
         value_expr_into_empty_range(&mut x.value_expr);
-        x.return_type.as_mut().map(type_expr_into_empty_range);
-        if let Some(params) = &mut x.params {
-            for (_, p) in params {
-                type_expr_into_empty_range(p);
-            }
+        type_expr_into_empty_range(&mut x.return_type);
+        for (_, p) in &mut x.params {
+            type_expr_into_empty_range(p);
         }
     }
     for x in &mut v.type_definitions {
@@ -1169,9 +1165,7 @@ pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
             }
         }
         TypeExpr::Fun(params, return_type, _) => {
-            if let Some(x) = return_type.as_mut() {
-                type_expr_into_empty_range(x)
-            }
+            type_expr_into_empty_range(return_type);
             for (_, p) in params {
                 type_expr_into_empty_range(p);
             }

@@ -1,7 +1,5 @@
 use crate::{
-    emit::{
-        value::{IrInstruction, IrValue, ToIr},
-    },
+    emit::value::{IrInstruction, IrValue, ToIr},
     parse::{function_parser::FunctionDefintion, type_parser::TypeExpr, value_parser::empty_range},
     semantics::type_resolve::TypeEnv,
 };
@@ -36,36 +34,21 @@ impl FunctionDefintion {
         }
 
         // println!("end value_body");
-        if self.return_type.is_some() && self.name != "main" {
-            emitted_body.push(function_epilogue(
-                &self.return_type.as_ref().unwrap().0,
-                type_env,
-            ));
-        }
-
-        // TODO mvmo - 03.07.2025: this should check if the last is without a semicolon
-        if self.return_type.is_some()
-            && !matches!(emitted_body.last(), Some(IrInstruction::Return(_)))
-        {
-            // mvmo - 03.07.2025: I've commented this out to make my tests pass again
-            // emitted_body.push(IrInstruction::Return(r));
+        if self.name != "main" {
+            emitted_body.push(function_epilogue(&self.return_type.0, type_env));
         }
 
         IrInstruction::FunDef(
             self.name.clone(),
             receiver,
             self.params
-                .as_ref()
-                .unwrap()
                 .iter()
                 .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
                 .collect::<Vec<_>>(),
             if self.name == "main" {
                 None
             } else {
-                self.return_type
-                    .as_ref()
-                    .map(|x| x.0.as_go_return_type(type_env))
+                Some(self.return_type.0.as_go_return_type(type_env))
             },
             emitted_body,
         )
@@ -83,9 +66,7 @@ impl FunctionDefintion {
         }
 
         let mut final_params = vec![("self".to_string(), (target_type.clone(), empty_range()))];
-        if let Some(existing_params) = &self.params {
-            final_params.extend(existing_params.clone());
-        }
+        final_params.extend_from_slice(&self.params);
 
         IrInstruction::FunDef(
             target_type.build_extension_access_function_name(&self.name, type_env),
@@ -103,24 +84,14 @@ impl FunctionDefintion {
                     .map(|(_name, (ty, _))| ty.as_go_type_annotation(type_env))
                     .collect::<Vec<_>>()
                     .join(","),
-                self.return_type
-                    .clone()
-                    .map(|return_type| return_type.0.as_go_return_type(type_env))
-                    .unwrap_or_default()
+                self.return_type.0.as_go_return_type(type_env),
             )),
             vec![IrInstruction::Return(Some(IrValue::Lambda(
                 self.params
-                    .clone()
-                    .unwrap_or_default()
                     .iter()
                     .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
                     .collect::<Vec<_>>(),
-                Some(
-                    self.return_type
-                        .clone()
-                        .map(|return_type| return_type.0.as_go_return_type(type_env))
-                        .unwrap_or_default(),
-                ),
+                Some(self.return_type.0.as_go_return_type(type_env)),
                 emitted_body,
             )))],
         )

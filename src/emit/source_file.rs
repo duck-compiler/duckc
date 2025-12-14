@@ -54,26 +54,9 @@ impl SourceFile {
             .chain(type_env.generic_fns_generated.clone().iter_mut())
         {
             // generic functions shouldn't be emitted, as they have incomplete type information
-            if function_definition.generics.is_some() {
+            if !function_definition.generics.is_empty() {
                 continue;
             }
-
-            // function_definition.name = fix_ident_for_go(&function_definition.name, imports);
-
-            // for p in &mut function_definition
-            //     .params
-            //     .iter_mut()
-            //     .flat_map(|v| v.iter_mut())
-            // {
-            //     p.0 = fix_ident_for_go(&p.0, imports);
-            //     fix_all_idents_type_expr(&mut p.1, type_env, imports);
-            // }
-
-            // if let Some(return_type) = function_definition.return_type.as_mut() {
-            //     fix_all_idents_type_expr(return_type, type_env, imports);
-            // }
-
-            // fix_all_idents_value_expr(&mut function_definition.value_expr, type_env, imports);
 
             if emitted.insert(function_definition.name.clone()) {
                 let mut fn_instr = function_definition.emit(None, type_env, &mut to_ir);

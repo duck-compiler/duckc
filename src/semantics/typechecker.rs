@@ -197,7 +197,12 @@ impl TypeExpr {
                         (Some(name.clone()), type_expr.as_ref().cloned().unwrap())
                     })
                     .collect(),
-                lambda_expr.return_type.clone().map(Box::new),
+                Box::new(
+                    lambda_expr
+                        .return_type
+                        .clone()
+                        .unwrap_or(TypeExpr::unit_with_span(*complete_span)),
+                ),
                 lambda_expr.is_mut,
             ),
             ValueExpr::InlineGo(..) => TypeExpr::InlineGo,
@@ -438,26 +443,19 @@ impl TypeExpr {
                             let fn_def = fn_def.expect("this should exist");
 
                             let params = fn_def.params.clone();
-                            if let Some(params) = params {
-                                for (index, param) in params.iter().enumerate() {
-                                    let given_type =
-                                        in_param_types.get(index).expect("todo: len doesnt match");
-                                    // TODO: check if we should clone the typeenv
-                                    check_type_compatability_full(
-                                        &param.1.clone(),
-                                        given_type,
-                                        &mut type_env.clone(),
-                                        false,
-                                    );
-                                }
+                            for (index, param) in params.iter().enumerate() {
+                                let given_type =
+                                    in_param_types.get(index).expect("todo: len doesnt match");
+                                // TODO: check if we should clone the typeenv
+                                check_type_compatability_full(
+                                    &param.1.clone(),
+                                    given_type,
+                                    &mut type_env.clone(),
+                                    false,
+                                );
                             }
 
-                            return fn_def
-                                .return_type
-                                .as_ref()
-                                .cloned()
-                                .map(|(x, _)| x)
-                                .unwrap_or(TypeExpr::Tuple(vec![]));
+                            return fn_def.return_type.clone().0;
                         }
                         ValueExpr::FieldAccess {
                             target_obj,
@@ -505,11 +503,7 @@ impl TypeExpr {
                                 check_type_compatability_full(param, given_type, type_env, false);
                             }
 
-                            return header
-                                .return_type
-                                .clone()
-                                .map(|(x, _)| x)
-                                .unwrap_or(TypeExpr::Tuple(vec![]));
+                            return header.return_type.clone().0;
                         }
                         _ => {}
                     };
@@ -556,9 +550,7 @@ impl TypeExpr {
                             }
                         });
 
-                    return return_type
-                        .clone()
-                        .map_or(TypeExpr::Tuple(vec![]), |x| x.as_ref().0.clone());
+                    return return_type.clone().0;
                 }
 
                 failure(
@@ -1043,12 +1035,10 @@ impl TypeExpr {
                             x.name.clone(),
                             TypeExpr::Fun(
                                 x.params
-                                    .clone()
-                                    .unwrap_or_default()
                                     .iter()
                                     .map(|x| (Some(x.0.clone()), x.1.clone()))
                                     .collect(),
-                                x.return_type.clone().map(Box::new),
+                                Box::new(x.return_type.clone()),
                                 true,
                             ),
                         )
@@ -1064,12 +1054,10 @@ impl TypeExpr {
                                     x.name.clone(),
                                     TypeExpr::Fun(
                                         x.params
-                                            .clone()
-                                            .unwrap_or_default()
                                             .iter()
                                             .map(|x| (Some(x.0.clone()), x.1.clone()))
                                             .collect(),
-                                        x.return_type.clone().map(Box::new),
+                                        Box::new(x.return_type.clone()),
                                         true,
                                     ),
                                 )
@@ -1903,24 +1891,7 @@ pub fn check_type_compatability_full(
 
                 check_type_compatability(&param.1, &given_param.1, type_env);
             }
-
-            if let Some(required_return_type) = required_return_type {
-                if given_return_type.clone().is_none() {
-                    fail_requirement(
-                        format!(
-                            "this requires a function that returns {}",
-                            required_return_type.clone().0
-                        ),
-                        "this function doesn't return anything".to_string(),
-                    )
-                }
-
-                let given_return_type = given_return_type
-                    .as_ref()
-                    .expect("we've just handled is_none");
-
-                check_type_compatability(required_return_type, given_return_type, type_env);
-            }
+            check_type_compatability(required_return_type, given_return_type, type_env);
         }
         TypeExpr::Array(content_type) => {
             if !given_type.0.is_array() {
@@ -2041,10 +2012,10 @@ mod test {
             let mut source_file = SourceFile {
                 function_definitions: vec![FunctionDefintion {
                     name: "main".to_string(),
-                    params: None,
-                    return_type: None,
+                    params: vec![],
+                    return_type: TypeExpr::unit(),
                     value_expr: value_expr,
-                    generics: None,
+                    generics: vec![],
                     span: empty_range(),
                     comments: Vec::new(),
                 }],

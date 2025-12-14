@@ -294,9 +294,7 @@ pub fn mangle_type_expression(
                 mangle_type_expression(&mut param_type.0, prefix, mangle_env);
             }
 
-            if let Some(return_type) = return_type {
-                mangle_type_expression(&mut return_type.0, prefix, mangle_env);
-            }
+            mangle_type_expression(&mut return_type.0, prefix, mangle_env);
         }
         TypeExpr::Or(s) => {
             for t in s {

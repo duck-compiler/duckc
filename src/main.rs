@@ -202,15 +202,11 @@ fn parse_src_file(
     .flatten(&vec!["std".to_string()], false);
 
     for func in std_src_file.function_definitions.iter_mut() {
-        if let Some(params) = &mut func.params {
-            for (_, p) in params {
-                typename_reset_global(&mut p.0);
-            }
+        for (_, p) in &mut func.params {
+            typename_reset_global(&mut p.0);
         }
 
-        if let Some(ret) = &mut func.return_type {
-            typename_reset_global(&mut ret.0);
-        }
+        typename_reset_global(&mut func.return_type.0);
 
         typename_reset_global_value_expr(&mut func.value_expr.0);
     }
@@ -239,9 +235,7 @@ fn parse_src_file(
                     typename_reset_global(&mut p.0);
                 }
 
-                if let Some(ret) = ret {
-                    typename_reset_global(&mut ret.0);
-                }
+                typename_reset_global(&mut ret.0);
             }
             _ => {}
         }
