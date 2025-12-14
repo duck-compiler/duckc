@@ -1,9 +1,12 @@
-use crate::parse::{
-    Context, SS, Spanned, failure_with_occurence,
-    function_parser::LambdaFunctionExpr,
-    lexer::{FmtStringContents, HtmlStringContents},
-    source_file_parser::SourceFile,
-    type_parser::type_expression_parser,
+use crate::{
+    parse::{
+        Context, SS, Spanned, failure_with_occurence,
+        function_parser::LambdaFunctionExpr,
+        lexer::{FmtStringContents, HtmlStringContents},
+        source_file_parser::SourceFile,
+        type_parser::type_expression_parser,
+    },
+    semantics::type_resolve::TypeEnv,
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
@@ -288,26 +291,6 @@ where
                     .boxed()
             };
 
-            let for_parser = just(Token::For)
-                .ignore_then(
-                    just(Token::Mut)
-                        .or_not()
-                        .then(select_ref! { Token::Ident(ident) => ident.to_owned() }),
-                )
-                .then_ignore(just(Token::In))
-                .then(value_expr_parser.clone())
-                .then(
-                    just(Token::ControlChar('{'))
-                        .rewind()
-                        .ignore_then(value_expr_parser.clone()),
-                )
-                .map(|(((is_mut, ident), expr), block)| ValueExpr::For {
-                    ident: (ident, is_mut.is_none(), None),
-                    target: Box::new(expr),
-                    block: Box::new(block),
-                })
-                .map_with(|x, e| (x, e.span()));
-
             let params = value_expr_parser
                 .clone()
                 .separated_by(just(Token::ControlChar(',')))
@@ -453,6 +436,47 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
+            let for_parser = just(Token::For)
+                .ignore_then(
+                    just(Token::Mut)
+                        .or_not()
+                        .then(select_ref! { Token::Ident(ident) => ident.to_owned() }),
+                )
+                .then_ignore(just(Token::In))
+                .then(choice((
+                    value_expr_parser.clone().then(
+                        just(Token::ControlChar('{'))
+                            .rewind()
+                            .ignore_then(value_expr_parser.clone()),
+                    ),
+                    struct_expression.clone().map(|(s, span)| {
+                        let ValueExpr::Struct {
+                            name,
+                            fields,
+                            type_params,
+                        } = s
+                        else {
+                            panic!("not a struct? {s:?}")
+                        };
+
+                        if fields.is_empty() && type_params.is_empty() {
+                            (
+                                (ValueExpr::RawVariable(false, vec![name]), span),
+                                (ValueExpr::Block(vec![]), span),
+                            )
+                        } else {
+                            let msg = "Wrap this struct expression inside parantheses";
+                            failure_with_occurence(msg, span, [(msg, span)]);
+                        }
+                    }),
+                )))
+                .map(|((is_mut, ident), (target, block))| ValueExpr::For {
+                    ident: (ident, is_mut.is_none(), None),
+                    target: Box::new(target),
+                    block: Box::new(block),
+                })
+                .map_with(|x, e| (x, e.span()));
+
             let duck_expression = select_ref! { Token::Ident(ident) => ident.to_owned() }
                 .then_ignore(just(Token::ControlChar(':')))
                 .then(value_expr_parser.clone())
@@ -478,6 +502,7 @@ where
                     if exprs.len() >= 2 {
                         for (expr, has_semi) in &exprs[..exprs.len() - 1] {
                             if expr.0.needs_semicolon() && has_semi.is_none() {
+                                dbg!(&expr);
                                 failure_with_occurence(
                                     "This expression needs a semicolon",
                                     expr.1,
@@ -705,7 +730,6 @@ where
                     .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                     .or(choice((
                         array.clone(),
-                        for_parser,
                         float_expr,
                         int,
                         fmt_string,
@@ -1072,7 +1096,7 @@ where
                 })
                 .map_with(|x, e| (x, e.span()));
 
-            choice((inline_go, casted, defer, async_call))
+            choice((inline_go, casted, defer, async_call, for_parser))
                 .labelled("expression")
                 .boxed()
         },
@@ -1143,216 +1167,47 @@ pub fn source_file_into_empty_range(v: &mut SourceFile) {
 }
 
 pub fn type_expr_into_empty_range(t: &mut Spanned<TypeExpr>) {
-    t.1 = empty_range();
-    match &mut t.0 {
-        TypeExpr::Ref(t) | TypeExpr::RefMut(t) => type_expr_into_empty_range(t),
-        TypeExpr::Duck(d) => {
-            for f in &mut d.fields {
-                type_expr_into_empty_range(&mut f.type_expr);
-            }
-        }
-        TypeExpr::Array(t) => {
-            type_expr_into_empty_range(t);
-        }
-        TypeExpr::Tuple(fields) => {
-            for f in fields {
-                type_expr_into_empty_range(f);
-            }
-        }
-        TypeExpr::Or(types) => {
-            for t in types {
-                type_expr_into_empty_range(t);
-            }
-        }
-        TypeExpr::Fun(params, return_type, _) => {
-            type_expr_into_empty_range(return_type);
-            for (_, p) in params {
-                type_expr_into_empty_range(p);
-            }
-        }
-        TypeExpr::TypeName(_, _, params) => {
-            for p in params {
-                type_expr_into_empty_range(p);
-            }
-        }
-        TypeExpr::RawTypeName(_, _, params) => {
-            for p in params {
-                type_expr_into_empty_range(p);
-            }
-        }
-        TypeExpr::Struct {
-            name: _,
-            type_params,
-        } => {
-            for p in type_params {
-                type_expr_into_empty_range(p);
-            }
-        }
-        _ => {}
-    }
+    use crate::semantics::type_resolve::trav_type_expr;
+    trav_type_expr(
+        |t, _| {
+            t.1 = empty_range();
+        },
+        t,
+        &mut TypeEnv::default(),
+    );
 }
 
 pub fn value_expr_into_empty_range(v: &mut Spanned<ValueExpr>) {
-    v.1 = empty_range();
-    match &mut v.0 {
-        ValueExpr::As(v, t) => {
-            value_expr_into_empty_range(v);
-            type_expr_into_empty_range(t);
-        }
-        ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
-            value_expr_into_empty_range(&mut *v)
-        }
-        ValueExpr::ArrayAccess(target, idx_expr) => {
-            value_expr_into_empty_range(target);
-            value_expr_into_empty_range(idx_expr);
-        }
-        ValueExpr::Array(elems) => {
-            for elem in elems {
-                value_expr_into_empty_range(elem);
-            }
-        }
-        ValueExpr::FunctionCall {
-            target,
-            params,
-            type_params,
-            ..
-        } => {
-            value_expr_into_empty_range(target);
-            for p in params {
-                value_expr_into_empty_range(p);
-            }
-
-            type_params.iter_mut().for_each(|type_param| {
-                type_expr_into_empty_range(type_param);
-            })
-        }
-        ValueExpr::Sub(lhs, rhs)
-        | ValueExpr::Mod(lhs, rhs)
-        | ValueExpr::Div(lhs, rhs)
-        | ValueExpr::Add(lhs, rhs) => {
-            value_expr_into_empty_range(lhs);
-            value_expr_into_empty_range(rhs);
-        }
-        ValueExpr::If {
-            condition,
-            then,
-            r#else,
-        } => {
-            value_expr_into_empty_range(condition);
-            value_expr_into_empty_range(then);
-            if let Some(r#else) = r#else {
-                value_expr_into_empty_range(r#else);
-            }
-        }
-        ValueExpr::Mul(v1, v2) => {
-            value_expr_into_empty_range(v1);
-            value_expr_into_empty_range(v2);
-        }
-        ValueExpr::Duck(fields) => {
-            for field in fields {
-                value_expr_into_empty_range(&mut field.1);
-            }
-        }
-        ValueExpr::Block(exprs) => {
-            for expr in exprs {
-                value_expr_into_empty_range(expr);
-            }
-        }
-        ValueExpr::Tuple(fields) => {
-            for field in fields {
-                value_expr_into_empty_range(field);
-            }
-        }
-        ValueExpr::Equals(lhs, rhs)
-        | ValueExpr::NotEquals(lhs, rhs)
-        | ValueExpr::LessThan(lhs, rhs)
-        | ValueExpr::LessThanOrEquals(lhs, rhs)
-        | ValueExpr::GreaterThan(lhs, rhs)
-        | ValueExpr::GreaterThanOrEquals(lhs, rhs)
-        | ValueExpr::And(lhs, rhs)
-        | ValueExpr::Or(lhs, rhs) => {
-            value_expr_into_empty_range(lhs);
-            value_expr_into_empty_range(rhs);
-        }
-        ValueExpr::Lambda(b) => {
-            value_expr_into_empty_range(&mut b.value_expr);
-            b.return_type.as_mut().map(type_expr_into_empty_range);
-            for (_, p) in &mut b.params {
-                if let Some(p) = p.as_mut() {
-                    type_expr_into_empty_range(p);
+    use crate::semantics::type_resolve::trav_value_expr;
+    trav_value_expr(
+        |t, _| {
+            t.1 = empty_range();
+        },
+        |v, _| {
+            v.1 = empty_range();
+            match &mut v.0 {
+                ValueExpr::VarAssign(a) => a.1 = empty_range(),
+                ValueExpr::VarDecl(a) => a.1 = empty_range(),
+                ValueExpr::Match {
+                    value_expr: _,
+                    arms,
+                    else_arm,
+                    span,
+                } => {
+                    *span = empty_range();
+                    for arm in arms {
+                        arm.span = empty_range();
+                    }
+                    if let Some(else_arm) = else_arm.as_mut() {
+                        else_arm.span = empty_range();
+                    }
                 }
+                _ => {}
             }
-        }
-        ValueExpr::Return(Some(v)) => value_expr_into_empty_range(v),
-        ValueExpr::Struct { fields, .. } => {
-            for field in fields {
-                value_expr_into_empty_range(&mut field.1);
-            }
-        }
-        ValueExpr::While { condition, body } => {
-            value_expr_into_empty_range(condition);
-            value_expr_into_empty_range(body);
-        }
-        ValueExpr::VarDecl(b) => {
-            b.1 = empty_range();
-            if let Some(initializer) = b.0.initializer.as_mut() {
-                value_expr_into_empty_range(initializer);
-            }
-            if let Some(type_expr) = &mut b.0.type_expr {
-                type_expr_into_empty_range(type_expr);
-            }
-        }
-        ValueExpr::VarAssign(a) => {
-            a.1 = empty_range();
-            value_expr_into_empty_range(&mut a.0.target);
-            value_expr_into_empty_range(&mut a.0.value_expr);
-        }
-        ValueExpr::BoolNegate(b) => value_expr_into_empty_range(b),
-        ValueExpr::FieldAccess {
-            target_obj,
-            field_name: _,
-        } => {
-            value_expr_into_empty_range(target_obj);
-        }
-        ValueExpr::ExtensionAccess {
-            target_obj,
-            extension_name: _,
-        } => {
-            value_expr_into_empty_range(target_obj);
-        }
-        ValueExpr::Match {
-            value_expr,
-            arms,
-            else_arm,
-            span,
-        } => {
-            *span = empty_range();
-
-            value_expr_into_empty_range(value_expr);
-            arms.iter_mut().for_each(|arm| {
-                type_expr_into_empty_range(&mut arm.type_case);
-                value_expr_into_empty_range(&mut arm.value_expr);
-                if let Some(condition) = &mut arm.condition {
-                    value_expr_into_empty_range(condition);
-                }
-                arm.span = empty_range();
-            });
-
-            if let Some(arm) = else_arm {
-                arm.span = empty_range();
-                type_expr_into_empty_range(&mut arm.type_case);
-                value_expr_into_empty_range(&mut arm.value_expr);
-            }
-        }
-        ValueExpr::HtmlString(contents) => {
-            for c in contents {
-                if let ValHtmlStringContents::Expr(e) = c {
-                    value_expr_into_empty_range(e);
-                }
-            }
-        }
-        _ => {}
-    }
+        },
+        v,
+        &mut TypeEnv::default(),
+    );
 }
 
 #[cfg(test)]
@@ -1401,6 +1256,25 @@ mod tests {
     #[test]
     fn test_value_expression_parser() {
         let test_cases = vec![
+            // (
+            //     r#"
+            //     {
+            //     for i in a {}
+            //     for i in a {}
+            //     for i in a {}
+            //     for i in a {}
+            //     const x = 10;
+            //     const x = 10;
+            //     for i in a {}
+            //     const x = 10;
+            //     for i in a {}
+            //     for i in a {}
+            //     const x = 10;
+            //     }
+
+            //     "#,
+            //     ValueExpr::Break,
+            // ),
             (
                 "duckx {5;<h1>{<p></p>}</h1>}",
                 ValueExpr::Block(vec![
