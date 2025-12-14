@@ -43,12 +43,12 @@ struct Fetch = {
     }
 
     fn to_string() -> String {
-        let headers_string = "";
+        const headers_string: String =
         go {
             for k, v := range (*self).headers {
-            	headers_string = fmt.Sprintf("%s\n%s:\t%s", headers_string, k, v)
+            	$$$res$$$ = fmt.Sprintf("%s\n%s:\t%s", $$$res$$$, k, v)
             }
-        }
+        };
 
         return f"
             \nRequest method: {match self.method {
@@ -71,7 +71,7 @@ struct Fetch = {
 
         const http_error = .http_error;
 
-        return go {
+        go {
             var goHttpMethod string
             if method_name == "get" {
                 goHttpMethod = http.MethodGet
@@ -100,15 +100,15 @@ struct Fetch = {
                 return http_error
             }
             return string(body)
-        }
+        } as !
     }
 };
 
 fn fetch(method: FetchMethod, url: String) -> Fetch {
-    const headers_map: go "map[string]string";
+    const headers_map: go "map[string]string" =
     go {
-        headers_map = make(map[string]string)
-    }
+    $$$res$$$ = make(map[string]string)
+    };
     return Fetch {
         method: method,
         url: url,

@@ -156,6 +156,7 @@ impl IntoBlock for Spanned<ValueExpr> {
 pub enum NeverReturnAnalysisResult {
     Global, // entire function / Program
     Local,  // loop scope
+    Partial,
     None,
 }
 
@@ -173,6 +174,19 @@ pub fn value_expr_returns_never(
                 failure_with_occurence(msg, span, [(msg, span)]);
             }
             Local
+        }
+
+        ValueExpr::While { condition, body } => {
+            let condition_res = value_expr_returns_never(condition, is_in_loop);
+            if condition_res != None {
+                return condition_res;
+            }
+
+            if value_expr_returns_never(body, true) != None {
+                Partial
+            } else {
+                None
+            }
         }
 
         ValueExpr::For {
@@ -801,7 +815,12 @@ where
                         just(Token::Return)
                             .ignore_then(value_expr_parser.clone().or_not())
                             .map_with(|x: Option<Spanned<ValueExpr>>, e| {
-                                (ValueExpr::Return(x.map(Box::new)), e.span())
+                                (
+                                    ValueExpr::Return(Some(Box::new(
+                                        x.unwrap_or((ValueExpr::Tuple(vec![]), e.span())),
+                                    ))),
+                                    e.span(),
+                                )
                             }),
                     ))),
             )

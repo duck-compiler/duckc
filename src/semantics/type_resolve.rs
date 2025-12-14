@@ -789,7 +789,7 @@ where
 {
     f_t(v, env);
     match &mut v.0 {
-        TypeExpr::Never => {}
+        TypeExpr::Never | TypeExpr::Statement => {}
         TypeExpr::NamedDuck {
             name: _,
             type_params,
@@ -1459,7 +1459,7 @@ fn replace_generics_in_type_expr(
     type_env: &mut TypeEnv<'_>,
 ) {
     match expr {
-        TypeExpr::Never => {}
+        TypeExpr::Statement | TypeExpr::Never => {}
         TypeExpr::TemplParam(name) => {
             if let Some(replacement) = set_params.get(name).cloned() {
                 *expr = replacement;
@@ -1872,7 +1872,7 @@ pub fn is_const_var(v: &ValueExpr) -> bool {
 
 pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
-        TypeExpr::Never => {}
+        TypeExpr::Statement | TypeExpr::Never => {}
         TypeExpr::Ref(t) | TypeExpr::RefMut(t) => sort_fields_type_expr(&mut t.0),
         TypeExpr::Html => {}
         TypeExpr::TypeOf(..) => {}

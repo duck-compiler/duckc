@@ -1,6 +1,10 @@
 use crate::{
     emit::value::{IrInstruction, IrValue, ToIr},
-    parse::{function_parser::FunctionDefintion, type_parser::TypeExpr, value_parser::empty_range},
+    parse::{
+        function_parser::FunctionDefintion,
+        type_parser::TypeExpr,
+        value_parser::{ValueExpr, empty_range},
+    },
     semantics::type_resolve::TypeEnv,
 };
 
@@ -25,10 +29,17 @@ impl FunctionDefintion {
         type_env: &mut TypeEnv,
         to_ir: &mut ToIr,
     ) -> IrInstruction {
-        let (mut emitted_body, result) = self.value_expr.0.emit(type_env, to_ir, self.span);
+        let ValueExpr::Return(Some(what)) = &self.value_expr.0 else {
+            panic!(
+                "every function needs to return something {} {:?}",
+                self.name, self.value_expr.0
+            )
+        };
 
-        if let Some(IrInstruction::Block(block_body)) = emitted_body.first() {
-            emitted_body = block_body.clone();
+        let (mut emitted_body, result_ir_value) = what.0.emit(type_env, to_ir, self.span);
+
+        if let Some(result) = result_ir_value {
+            emitted_body.push(IrInstruction::Return(Some(result)));
         }
 
         if self.name != "main" {
@@ -36,6 +47,13 @@ impl FunctionDefintion {
             //     emitted_body.push(IrInstruction::Return(result));
             // }
             emitted_body.push(function_epilogue(&self.return_type.0, type_env));
+        } else {
+            let wrapped_in_lambda = IrValue::Lambda(
+                vec![],
+                Some(self.return_type.0.as_go_return_type(type_env)),
+                emitted_body,
+            );
+            emitted_body = vec![IrInstruction::FunCall(None, wrapped_in_lambda, vec![])];
         }
 
         IrInstruction::FunDef(
@@ -60,10 +78,7 @@ impl FunctionDefintion {
         to_ir: &mut ToIr,
         target_type: &TypeExpr,
     ) -> IrInstruction {
-        let (mut emitted_body, _result_var) = self.value_expr.0.emit(type_env, to_ir, self.span);
-        if let Some(IrInstruction::Block(block_body)) = emitted_body.first() {
-            emitted_body = block_body.clone();
-        }
+        let (emitted_body, _result_var) = self.value_expr.0.emit(type_env, to_ir, self.span);
 
         let mut final_params = vec![("self".to_string(), (target_type.clone(), empty_range()))];
         final_params.extend_from_slice(&self.params);

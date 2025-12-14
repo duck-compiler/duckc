@@ -133,7 +133,10 @@ where
                     name: identifier,
                     return_type: return_type.unwrap_or((TypeExpr::Tuple(vec![]), ctx.span())),
                     params,
-                    value_expr,
+                    value_expr: (
+                        ValueExpr::Return(Some(Box::new(value_expr.clone()))),
+                        value_expr.1,
+                    ),
                     generics: generics.unwrap_or_default(),
                     span: ctx.span(),
                     comments: doc_comments.unwrap_or_else(Vec::new),

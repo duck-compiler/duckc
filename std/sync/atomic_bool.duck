@@ -5,22 +5,22 @@ struct AtomicBool = {
 } impl {
     /// Returns true if the swap succeeded
     fn compare_and_swap(compare_against: Bool, new_value: Bool) -> Bool {
-        return go {
-            return (*self).inner.CompareAndSwap(compare_against, new_value)
-        };
+        go {
+            $$$res$$$ = (*self).inner.CompareAndSwap(compare_against, new_value)
+        } as Bool
     }
 
     /// Returns old value
     fn set(new_value: Bool) -> Bool {
-        return go {
-            return (*self).inner.Swap(new_value)
-        };
+        go {
+            $$$res$$$ = (*self).inner.Swap(new_value)
+        } as Bool
     }
 
     fn get() -> Bool {
-        return go {
-            return (*self).inner.Load()
-        }
+        go {
+            $$$res$$$ = (*self).inner.Load()
+        } as Bool
     }
 };
 

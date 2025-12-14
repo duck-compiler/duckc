@@ -424,6 +424,7 @@ pub fn emit_type_definitions(
     }
 
     result.push(IrInstruction::StructDef("Never".to_string(), vec![]));
+    result.push(IrInstruction::StructDef("Statement".to_string(), vec![]));
 
     for named_duck_def in type_env
         .named_duck_definitions
@@ -473,6 +474,7 @@ pub fn emit_type_definitions(
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Statement => "Tup_".to_string(),
             TypeExpr::Never => "Never".to_string(),
             TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
@@ -546,6 +548,7 @@ impl TypeExpr {
 
     pub fn type_id(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Statement => "Statement".to_string(),
             TypeExpr::Never => "Never".to_string(),
             TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
             TypeExpr::Ref(t) => format!("Ref_{}", t.0.type_id(type_env)),
@@ -644,8 +647,13 @@ impl TypeExpr {
         matches!(self, TypeExpr::Never)
     }
 
+    pub fn is_statement(&self) -> bool {
+        matches!(self, TypeExpr::Statement)
+    }
+
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Statement => "Statement".to_string(),
             TypeExpr::Never => "Never".to_string(),
             TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
             TypeExpr::Ref(t) => format!("Ref___{}", t.0.as_clean_go_type_name(type_env)),

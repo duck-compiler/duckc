@@ -14,19 +14,19 @@ struct Mutex<T> = {
     }
 
     fn try_lock(accessor: fn(v: &mut T)) -> Bool {
-        let lock_result = false;
-        go {
+        const lock_result: Bool = go {
             if (*self).inner.TryLock() {
-            	lock_result = true;
+            	$$$res$$$ = true;
              	defer (*self).inner.Unlock()
             } else {
-            	lock_result = false;
+            	$$$res$$$ = false;
             }
-        }
+        };
 
         if (lock_result) {
             accessor(&mut self.value);
         }
+
         return lock_result;
     }
 };

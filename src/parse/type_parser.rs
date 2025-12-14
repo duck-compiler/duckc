@@ -34,6 +34,7 @@ pub struct Struct {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeExpr {
+    Statement,
     Never,
     Html,
     TemplParam(String),
@@ -620,6 +621,7 @@ where
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            TypeExpr::Statement => write!(f, "Statement"),
             TypeExpr::Never => write!(f, "never"),
             TypeExpr::TemplParam(name) => write!(f, "TemplParam {name}"),
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => write!(f, "&{}", t.0),

@@ -1,4 +1,4 @@
 type X = "";
 
-fn assert(expr: Bool) {
+fn assert(expr: Bool) -> ! {
 }
