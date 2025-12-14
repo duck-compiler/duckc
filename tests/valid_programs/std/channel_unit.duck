@@ -1,0 +1,17 @@
+use std::sync::{new_channel};
+
+fn main() {
+    const chan = new_channel<()>();
+
+    let sending_task = async (fn(){
+        std::io::println("Sleeping for 1s and then sending a ()");
+        std::task::sleep({seconds: 1});
+        chan.send(());
+        std::io::println("Sent");
+    })();
+
+    std::io::println("Waiting for ()");
+    chan.recv_block();
+    sending_task.recv_block();
+    std::io::println("Got ()");
+}

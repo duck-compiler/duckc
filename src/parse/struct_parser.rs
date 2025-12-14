@@ -147,7 +147,7 @@ pub mod tests {
                     .into_iter()
                     .map(|(name, param_type_expr)| (name, strip_spans(param_type_expr)))
                     .collect(),
-                return_type.map(|rt_box| Box::new(strip_spans(*rt_box))),
+                Box::new(strip_spans(*return_type)),
                 is_mut,
             ),
             TypeExpr::Or(variants) => TypeExpr::Or(variants.into_iter().map(strip_spans).collect()),

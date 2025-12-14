@@ -16,9 +16,21 @@ fn take_array_ref(a: &Int[]) {
 }
 
 fn take_array_mut(a: &mut Int[]) {
-    for i in a {
+    for i in a {}
+}
 
-    }
+fn take_array_mut2(a: &mut Int[]) {
+    for i in a {}
+    for i in a {}
+    for i in a {}
+    for i in a {}
+    const x = 10;
+    const x = 10;
+    for i in a {}
+    const x = 10;
+    for i in a {}
+    for i in a {}
+    const x = 10;
 }
 
 fn take_array_in_tuple(t: (&Int[],)) {

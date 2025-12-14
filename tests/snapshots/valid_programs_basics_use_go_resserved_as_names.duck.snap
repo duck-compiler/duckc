@@ -1,0 +1,4 @@
+{
+    "stdout": "hello from map 100\nhello from method select\nhello from method map\nselect: A, string B, uint32: C\n800\n10\n20\n30\n40\n",
+    "stderr": ""
+}

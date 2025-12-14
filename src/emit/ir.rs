@@ -1,4 +1,9 @@
-use crate::emit::value::{Case, IrInstruction, IrValue};
+use std::collections::HashSet;
+
+use crate::emit::{
+    fix_ident_for_go,
+    value::{Case, IrInstruction, IrValue},
+};
 
 impl IrInstruction {
     fn emit_as_go(&self) -> String {
@@ -234,7 +239,13 @@ impl IrInstruction {
                         .join(", ")
                 )
             }
-            IrInstruction::VarDecl(name, ty) => format!("var {name} {ty}\n_ = {name}"),
+            IrInstruction::VarDecl(name, ty) => {
+                if ty == "Tup_" {
+                    format!("var {name} {ty}\n{name} = Tup_{{}}\n_ = {name}")
+                } else {
+                    format!("var {name} {ty}\n_ = {name}")
+                }
+            }
             IrInstruction::VarAssignment(name, v) => format!("{name} = {}", v.emit_as_go()),
             IrInstruction::If(cond, then, els) => {
                 format!(
@@ -293,7 +304,6 @@ impl IrInstruction {
                         } else {
                             return_type.clone()
                         })
-                        .filter(|x| x != "Tup_")
                         .unwrap_or(String::new()),
                     format!(
                         "{}\n{}",
@@ -349,6 +359,241 @@ impl IrInstruction {
                         .collect::<Vec<_>>()
                         .join("\n"),
                 )
+            }
+        }
+    }
+}
+
+pub fn fix_idents_in_ir_value(v: &mut IrValue, imports: &HashSet<String>) {
+    match v {
+        IrValue::Array(_ty, sub_values) => {
+            for sub in sub_values {
+                fix_idents_in_ir_value(sub, imports);
+            }
+        }
+
+        IrValue::ArrayAccess(target, idx) => {
+            fix_idents_in_ir_value(target, imports);
+            fix_idents_in_ir_value(idx, imports);
+        }
+
+        IrValue::BoolNegate(neg) => {
+            fix_idents_in_ir_value(neg, imports);
+        }
+
+        IrValue::Deref(v) => fix_idents_in_ir_value(v, imports),
+
+        IrValue::FieldAccess(v, field_name) => {
+            *field_name = fix_ident_for_go(field_name, imports);
+            fix_idents_in_ir_value(v, imports);
+        }
+
+        IrValue::Imm(_s) => {
+            // *s = fix_ident_for_go(s, imports);
+        }
+
+        IrValue::Lambda(params, _ret, body) => {
+            for p in params {
+                p.0 = fix_ident_for_go(&p.0, imports);
+            }
+
+            for body in body {
+                fix_idents_in_ir(body, imports);
+            }
+        }
+
+        IrValue::Struct(struct_name, fields) => {
+            *struct_name = fix_ident_for_go(struct_name, imports);
+            for field in fields {
+                field.0 = fix_ident_for_go(&field.0, imports);
+                fix_idents_in_ir_value(&mut field.1, imports);
+            }
+        }
+
+        IrValue::Tuple(_tuple_struct_name, fields) => {
+            for field in fields {
+                fix_idents_in_ir_value(field, imports);
+            }
+        }
+
+        IrValue::Duck(_duck_struct_name, fields) => {
+            for field in fields {
+                field.0 = fix_ident_for_go(&field.0, imports);
+                fix_idents_in_ir_value(&mut field.1, imports);
+            }
+        }
+
+        IrValue::Pointer(d) => fix_idents_in_ir_value(d, imports),
+        IrValue::Var(var_name) => *var_name = fix_ident_for_go(var_name, imports),
+
+        IrValue::Bool(..)
+        | IrValue::Char(..)
+        | IrValue::Nil
+        | IrValue::String(..)
+        | IrValue::Float(..)
+        | IrValue::Int(..)
+        | IrValue::Tag(..) => {}
+    }
+}
+
+pub fn fix_idents_in_ir(v: &mut IrInstruction, imports: &HashSet<String>) {
+    match v {
+        IrInstruction::Add(res, lhs, rhs, res_ty)
+        | IrInstruction::Sub(res, lhs, rhs, res_ty)
+        | IrInstruction::Mul(res, lhs, rhs, res_ty)
+        | IrInstruction::Div(res, lhs, rhs, res_ty)
+        | IrInstruction::Mod(res, lhs, rhs, res_ty)
+        | IrInstruction::Equals(res, lhs, rhs, res_ty)
+        | IrInstruction::NotEquals(res, lhs, rhs, res_ty)
+        | IrInstruction::LessThan(res, lhs, rhs, res_ty)
+        | IrInstruction::LessThanOrEquals(res, lhs, rhs, res_ty)
+        | IrInstruction::GreaterThan(res, lhs, rhs, res_ty)
+        | IrInstruction::GreaterThanOrEquals(res, lhs, rhs, res_ty)
+        | IrInstruction::And(res, lhs, rhs, res_ty)
+        | IrInstruction::Or(res, lhs, rhs, res_ty) => {
+            let _res_type = res_ty;
+            *res = fix_ident_for_go(res, imports);
+
+            fix_idents_in_ir_value(lhs, imports);
+            fix_idents_in_ir_value(rhs, imports);
+        }
+
+        IrInstruction::Block(sub) => {
+            for sub in sub {
+                fix_idents_in_ir(sub, imports);
+            }
+        }
+
+        IrInstruction::Break(..) | IrInstruction::Continue(..) => {}
+
+        IrInstruction::Defer(sub) => fix_idents_in_ir(sub, imports),
+        IrInstruction::ForRangeElem {
+            ident,
+            range_target,
+            body,
+            label: _,
+        } => {
+            *ident = fix_ident_for_go(ident, imports);
+            fix_idents_in_ir_value(range_target, imports);
+            for body in body {
+                fix_idents_in_ir(body, imports);
+            }
+        }
+
+        IrInstruction::VarDecl(name, _ty) => {
+            *name = fix_ident_for_go(name, imports);
+        }
+
+        IrInstruction::VarAssignment(name, v) => {
+            *name = fix_ident_for_go(name, imports);
+            fix_idents_in_ir_value(v, imports);
+        }
+
+        IrInstruction::FunCall(_result, target, params) => {
+            fix_idents_in_ir_value(target, imports);
+            for param in params {
+                fix_idents_in_ir_value(param, imports);
+            }
+        }
+
+        IrInstruction::StringConcat(_res, values) => {
+            for v in values {
+                fix_idents_in_ir_value(v, imports);
+            }
+        }
+
+        IrInstruction::Return(v) => {
+            if let Some(v) = v.as_mut() {
+                fix_idents_in_ir_value(v, imports)
+            }
+        }
+
+        IrInstruction::InlineGo(..) => {}
+        IrInstruction::If(cond, then, el) => {
+            fix_idents_in_ir_value(cond, imports);
+            for instr in then
+                .iter_mut()
+                .chain(el.iter_mut().flat_map(|el| el.iter_mut()))
+            {
+                fix_idents_in_ir(instr, imports);
+            }
+        }
+
+        IrInstruction::Loop(body, label) => {
+            *label = fix_ident_for_go(label, imports);
+
+            for body in body {
+                fix_idents_in_ir(body, imports);
+            }
+        }
+
+        IrInstruction::GoPackage(package_name) => {
+            *package_name = fix_ident_for_go(package_name, imports);
+        }
+
+        IrInstruction::GoImports(..) => {}
+
+        IrInstruction::FunDef(name, receiver, params, _ret, body) => {
+            *name = fix_ident_for_go(name, imports);
+            if let Some(receiver) = receiver.as_mut() {
+                receiver.0 = fix_ident_for_go(&receiver.0, imports);
+            }
+
+            for param in params {
+                param.0 = fix_ident_for_go(&param.0, imports);
+            }
+
+            for body in body {
+                fix_idents_in_ir(body, imports);
+            }
+        }
+
+        IrInstruction::StructDef(_name, fields) => {
+            for field in fields {
+                field.0 = fix_ident_for_go(&field.0, imports);
+            }
+        }
+
+        IrInstruction::InterfaceDef(_name, type_params, methods) => {
+            for type_param in type_params {
+                type_param.0 = fix_ident_for_go(&type_param.0, imports);
+            }
+
+            for method in methods {
+                method.0 = fix_ident_for_go(&method.0, imports);
+                for param in &mut method.1 {
+                    param.0 = fix_ident_for_go(&param.0, imports);
+                }
+            }
+        }
+
+        IrInstruction::SwitchType(v, cases) => {
+            fix_idents_in_ir_value(v, imports);
+            for case in cases {
+                for branch in case
+                    .conditional_branches
+                    .iter_mut()
+                    .flat_map(|v| v.iter_mut())
+                {
+                    for i in &mut branch.0.0 {
+                        fix_idents_in_ir(i, imports);
+                    }
+                    if let Some(cond) = branch.0.1.as_mut() {
+                        fix_idents_in_ir_value(cond, imports);
+                    }
+                    if let Some(ident) = branch.1.identifier_binding.as_mut() {
+                        *ident = fix_ident_for_go(ident, imports);
+                    }
+                    for instr in &mut branch.1.instrs {
+                        fix_idents_in_ir(instr, imports);
+                    }
+                }
+                if let Some(ident) = case.identifier_binding.as_mut() {
+                    *ident = fix_ident_for_go(ident, imports);
+                }
+                for instr in &mut case.instrs {
+                    fix_idents_in_ir(instr, imports);
+                }
             }
         }
     }
@@ -428,17 +673,6 @@ impl IrValue {
             IrValue::FieldAccess(o, field_name) => {
                 format!("{}.{field_name}", o.emit_as_go())
             }
-            IrValue::MethodCall(o, method_name, params) => {
-                format!(
-                    "{}.{method_name}({})",
-                    o.emit_as_go(),
-                    params
-                        .iter()
-                        .map(|x| x.emit_as_go())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
             IrValue::Tuple(go_struct, fields) => {
                 format!(
                     "{go_struct}{{{}}}",
@@ -458,11 +692,7 @@ impl IrValue {
                     .map(|(name, ty)| format!("{name} {ty}"))
                     .collect::<Vec<_>>()
                     .join(", "),
-                return_type
-                    .as_ref()
-                    .filter(|x| x.as_str() != "Tup_")
-                    .cloned()
-                    .unwrap_or_default(),
+                return_type.as_ref().cloned().unwrap_or_default(),
                 body.iter()
                     .map(IrInstruction::emit_as_go)
                     .collect::<Vec<_>>()

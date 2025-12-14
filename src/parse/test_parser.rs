@@ -25,8 +25,7 @@ where
         .then(value_expr_parser(make_input))
         .map_with(|(name, mut body), ctx| {
             body = match body {
-                (ValueExpr::Duck(x), loc) if x.is_empty() => (ValueExpr::Block(vec![]), loc),
-                block @ (ValueExpr::Block(_), _) => block,
+                x @ (ValueExpr::Block(_), _) => x,
                 _ => panic!("Function must be block"),
             };
 
@@ -111,10 +110,8 @@ pub mod tests {
             "test \"lol\" { return }",
             TestCase {
                 name: "lol".to_string(),
-                body: (
-                    ValueExpr::Block(vec![(ValueExpr::Return(None), empty_range())]),
-                    empty_range(),
-                ),
+                body: ValueExpr::Return(Some(ValueExpr::Tuple(vec![]).into_empty_span().into()))
+                    .into_empty_span_and_block(),
             },
         );
     }

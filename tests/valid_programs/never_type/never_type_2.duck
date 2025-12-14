@@ -1,0 +1,3 @@
+fn main() {
+    (async (fn(i: ()){})(return));
+}

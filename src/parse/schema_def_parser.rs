@@ -34,14 +34,6 @@ pub struct SchemaDefinition {
     pub schema_fn_type: Option<Spanned<TypeExpr>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct LambdaFunctionExpr {
-    pub is_mut: bool,
-    pub params: Vec<(String, Option<Spanned<TypeExpr>>)>,
-    pub return_type: Option<Spanned<TypeExpr>>,
-    pub value_expr: Spanned<ValueExpr>,
-}
-
 pub fn schema_definition_parser<'src, I, M>(
     make_input: M,
 ) -> impl Parser<'src, I, SchemaDefinition, extra::Err<Rich<'src, Token, SS>>> + Clone

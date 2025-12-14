@@ -294,9 +294,7 @@ pub fn mangle_type_expression(
                 mangle_type_expression(&mut param_type.0, prefix, mangle_env);
             }
 
-            if let Some(return_type) = return_type {
-                mangle_type_expression(&mut return_type.0, prefix, mangle_env);
-            }
+            mangle_type_expression(&mut return_type.0, prefix, mangle_env);
         }
         TypeExpr::Or(s) => {
             for t in s {
@@ -432,7 +430,10 @@ pub fn mangle_value_expr(
                 mangle_value_expr(&mut expr.0, global_prefix, prefix, mangle_env);
             }
         }
-        ValueExpr::InlineGo(t) => {
+        ValueExpr::InlineGo(t, ty) => {
+            if let Some(ty) = ty {
+                mangle_type_expression(&mut ty.0, prefix, mangle_env);
+            }
             let mut parser = Parser::new();
             parser
                 .set_language(&tree_sitter_go::LANGUAGE.into())
@@ -553,7 +554,7 @@ pub fn mangle_value_expr(
             if let Some(mangled) = mangle_env.mangle_ident(*is_global, prefix, path) {
                 *path = mangled;
             }
-            *value_expr = ValueExpr::Variable(true, mangle(path), None, None);
+            *value_expr = ValueExpr::Variable(true, mangle(path), None, None, true);
         }
         ValueExpr::Variable(..) => panic!("variable shouldn't be here. {value_expr:?}"),
         ValueExpr::If {
@@ -610,9 +611,6 @@ pub fn mangle_value_expr(
             for (g, _) in type_params {
                 mangle_type_expression(g, prefix, mangle_env);
             }
-        }
-        ValueExpr::ExtensionAccess { target_obj, .. } => {
-            mangle_value_expr(&mut target_obj.0, global_prefix, prefix, mangle_env);
         }
         ValueExpr::FieldAccess { target_obj, .. } => {
             mangle_value_expr(&mut target_obj.0, global_prefix, prefix, mangle_env);

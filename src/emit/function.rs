@@ -1,8 +1,27 @@
 use crate::{
     emit::value::{IrInstruction, IrValue, ToIr},
-    parse::{function_parser::FunctionDefintion, type_parser::TypeExpr, value_parser::empty_range},
+    parse::{
+        failure_with_occurence,
+        function_parser::FunctionDefintion,
+        type_parser::TypeExpr,
+        value_parser::{ValueExpr, empty_range},
+    },
     semantics::type_resolve::TypeEnv,
 };
+
+pub fn function_epilogue_2(t: &str) -> IrInstruction {
+    if t == "Tup_" {
+        IrInstruction::InlineGo("return Tup_{}".to_string())
+    } else {
+        IrInstruction::InlineGo(format!("var ΔΔΔretΔΔΔ *{t}\nreturn *ΔΔΔretΔΔΔ"))
+    }
+}
+
+pub fn function_epilogue(t: &TypeExpr, type_env: &mut TypeEnv) -> IrInstruction {
+    let t = t.as_go_type_annotation(type_env);
+
+    function_epilogue_2(&t)
+}
 
 impl FunctionDefintion {
     pub fn emit(
@@ -11,52 +30,46 @@ impl FunctionDefintion {
         type_env: &mut TypeEnv,
         to_ir: &mut ToIr,
     ) -> IrInstruction {
-        // what's r?
-        // println!("value_body {:?}", self.value_expr.0);
-        let (mut emitted_body, _r) = self.value_expr.0.emit(type_env, to_ir, self.span);
+        let ValueExpr::Return(Some(what)) = &self.value_expr.0 else {
+            panic!(
+                "every function needs to return something {} {:?}",
+                self.name, self.value_expr.0
+            )
+        };
 
-        if let Some(IrInstruction::Block(block_body)) = emitted_body.first() {
-            emitted_body = block_body.clone();
+        let (mut emitted_body, result_ir_value) = what.0.emit(type_env, to_ir, self.span);
+
+        if let Some(result) = result_ir_value {
+            emitted_body.push(IrInstruction::Return(Some(result)));
         }
 
-        // println!("end value_body");
-        if self.return_type.is_some()
-            && self.name != "main"
-            && !self.return_type.as_ref().unwrap().0.is_unit()
-        {
-            emitted_body.push(IrInstruction::InlineGo(format!(
-                "return *new({})",
-                self.return_type
-                    .as_ref()
-                    .unwrap()
-                    .0
-                    .as_go_type_annotation(type_env)
-            )));
-        }
+        if self.name != "main" {
+            emitted_body.push(function_epilogue(&self.return_type.0, type_env));
+        } else {
+            if !self.return_type.0.is_unit() {
+                let msg = "Main must not have a return type";
+                failure_with_occurence(msg, self.span, [(msg, self.span)]);
+            }
 
-        // TODO mvmo - 03.07.2025: this should check if the last is without a semicolon
-        if self.return_type.is_some()
-            && !matches!(emitted_body.last(), Some(IrInstruction::Return(_)))
-        {
-            // mvmo - 03.07.2025: I've commented this out to make my tests pass again
-            // emitted_body.push(IrInstruction::Return(r));
+            let wrapped_in_lambda = IrValue::Lambda(
+                vec![],
+                Some(self.return_type.0.as_go_return_type(type_env)),
+                emitted_body,
+            );
+            emitted_body = vec![IrInstruction::FunCall(None, wrapped_in_lambda, vec![])];
         }
 
         IrInstruction::FunDef(
             self.name.clone(),
             receiver,
             self.params
-                .as_ref()
-                .unwrap()
                 .iter()
                 .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
                 .collect::<Vec<_>>(),
             if self.name == "main" {
                 None
             } else {
-                self.return_type
-                    .as_ref()
-                    .map(|x| x.0.as_go_return_type(type_env))
+                Some(self.return_type.0.as_go_return_type(type_env))
             },
             emitted_body,
         )
@@ -68,15 +81,10 @@ impl FunctionDefintion {
         to_ir: &mut ToIr,
         target_type: &TypeExpr,
     ) -> IrInstruction {
-        let (mut emitted_body, _result_var) = self.value_expr.0.emit(type_env, to_ir, self.span);
-        if let Some(IrInstruction::Block(block_body)) = emitted_body.first() {
-            emitted_body = block_body.clone();
-        }
+        let (emitted_body, _result_var) = self.value_expr.0.emit(type_env, to_ir, self.span);
 
         let mut final_params = vec![("self".to_string(), (target_type.clone(), empty_range()))];
-        if let Some(existing_params) = &self.params {
-            final_params.extend(existing_params.clone());
-        }
+        final_params.extend_from_slice(&self.params);
 
         IrInstruction::FunDef(
             target_type.build_extension_access_function_name(&self.name, type_env),
@@ -94,24 +102,14 @@ impl FunctionDefintion {
                     .map(|(_name, (ty, _))| ty.as_go_type_annotation(type_env))
                     .collect::<Vec<_>>()
                     .join(","),
-                self.return_type
-                    .clone()
-                    .map(|return_type| return_type.0.as_go_return_type(type_env))
-                    .unwrap_or_default()
+                self.return_type.0.as_go_return_type(type_env),
             )),
             vec![IrInstruction::Return(Some(IrValue::Lambda(
                 self.params
-                    .clone()
-                    .unwrap_or_default()
                     .iter()
                     .map(|(name, (ty, _))| (name.clone(), ty.as_go_type_annotation(type_env)))
                     .collect::<Vec<_>>(),
-                Some(
-                    self.return_type
-                        .clone()
-                        .map(|return_type| return_type.0.as_go_return_type(type_env))
-                        .unwrap_or_default(),
-                ),
+                Some(self.return_type.0.as_go_return_type(type_env)),
                 emitted_body,
             )))],
         )

@@ -1,0 +1,4 @@
+{
+    "stdout": "Param: 3\nResult: 30 <- Should be 30\n",
+    "stderr": ""
+}

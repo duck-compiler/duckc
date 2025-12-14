@@ -1,12 +1,14 @@
 use std::collections::HashSet;
 
 use crate::{
-    emit::value::{IrInstruction, IrValue, ToIr},
+    emit::{
+        fix_ident_for_go,
+        value::{IrInstruction, IrValue, ToIr},
+    },
     parse::{
         Field,
         struct_parser::StructDefinition,
         type_parser::{Duck, TypeExpr},
-        value_parser::empty_range,
     },
     semantics::{
         ident_mangler::MANGLE_SEP,
@@ -70,13 +72,18 @@ pub fn primitive_type_name(primitive_type_expr: &TypeExpr) -> &'static str {
     }
 }
 
-pub fn fixup_method_body(struct_name: &str, body: &mut Vec<IrInstruction>, insert_org_addr: bool) {
+pub fn fixup_method_body(
+    _struct_name: &str,
+    fixed_struct_method: &str,
+    body: &mut Vec<IrInstruction>,
+    insert_org_addr: bool,
+) {
     let mut to_insert = Vec::new();
 
     if insert_org_addr {
         to_insert.push(IrInstruction::VarDecl(
             "Δorg_addr".to_string(),
-            format!("*{struct_name}"),
+            format!("*{fixed_struct_method}"),
         ));
         to_insert.push(IrInstruction::VarAssignment(
             "Δorg_addr".to_string(),
@@ -86,7 +93,7 @@ pub fn fixup_method_body(struct_name: &str, body: &mut Vec<IrInstruction>, inser
 
     to_insert.push(IrInstruction::VarDecl(
         "self".to_string(),
-        format!("**{struct_name}"),
+        format!("**{fixed_struct_method}"),
     ));
     to_insert.push(IrInstruction::VarAssignment(
         "self".to_string(),
@@ -105,7 +112,17 @@ pub fn fixup_method_body(struct_name: &str, body: &mut Vec<IrInstruction>, inser
         .for_each(|elem| body.insert(0, elem));
 }
 
-pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<IrInstruction> {
+pub fn fix_type_name(s: &str, imports: &HashSet<String>) -> String {
+    fix_ident_for_go(s, imports)
+}
+
+pub fn emit_type_definitions(
+    type_env: &mut TypeEnv,
+    to_ir: &mut ToIr,
+    // imports: &'static HashSet<String>,
+) -> Vec<IrInstruction> {
+    let imports = type_env.all_go_imports;
+
     let mut result = Vec::new();
     let mut emitted_types = HashSet::new();
 
@@ -187,7 +204,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                             )],
                             None,
                             vec![IrInstruction::VarAssignment(
-                                format!("self.{}", field.name),
+                                format!("self.{}", fix_ident_for_go(&field.name, imports)),
                                 IrValue::Var("param".into()),
                             )],
                         ),
@@ -221,8 +238,9 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
         .chain(type_env.generic_structs_generated.clone().iter_mut())
         .filter(|s| s.generics.is_empty())
     {
+        let fixed_struct_name = format!("Struct_{}", s.name);
         result.push(IrInstruction::StructDef(
-            s.name.clone(),
+            fixed_struct_name.clone(),
             s.fields
                 .iter()
                 .map(
@@ -251,7 +269,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                 vec![
                     IrInstruction::FunDef(
                         format!("Get{}", field.name),
-                        Some(("self".into(), format!("*{}", struct_name.clone()))),
+                        Some(("self".into(), format!("*{fixed_struct_name}"))),
                         vec![],
                         Some(field.type_expr.0.as_go_type_annotation(type_env)),
                         vec![IrInstruction::Return(Some(IrValue::FieldAccess(
@@ -261,7 +279,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                     ),
                     IrInstruction::FunDef(
                         format!("GetPtr{}", field.name),
-                        Some(("self".into(), format!("*{}", struct_name.clone()))),
+                        Some(("self".into(), format!("*{fixed_struct_name}"))),
                         vec![],
                         Some(format!(
                             "*{}",
@@ -277,14 +295,14 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                     ),
                     IrInstruction::FunDef(
                         format!("Set{}", field.name),
-                        Some(("self".into(), format!("*{}", struct_name.clone()))),
+                        Some(("self".into(), format!("*{fixed_struct_name}"))),
                         vec![(
                             "param".into(),
                             field.type_expr.0.as_go_type_annotation(type_env),
                         )],
                         None,
                         vec![IrInstruction::VarAssignment(
-                            format!("self.{}", field.name),
+                            format!("self.{}", fix_ident_for_go(&field.name, imports)),
                             IrValue::Var("param".into()),
                         )],
                     ),
@@ -294,7 +312,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
             .collect();
 
         for method in methods.iter() {
-            if method.generics.is_some() {
+            if !method.generics.is_empty() {
                 continue;
             }
 
@@ -303,7 +321,6 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                 method
                     .params
                     .iter()
-                    .flat_map(|params| params.iter())
                     .map(|param| format!(
                         "{} {}",
                         param.0,
@@ -311,18 +328,13 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                     ))
                     .collect::<Vec<_>>()
                     .join(","),
-                method
-                    .return_type
-                    .as_ref()
-                    .filter(|x| !x.0.is_unit())
-                    .map(|(type_expr, _)| type_expr.as_go_type_annotation(type_env))
-                    .unwrap_or_default()
+                method.return_type.0.as_go_type_annotation(type_env),
             );
 
             let instructions_to_be_duck_conform = vec![
                 IrInstruction::FunDef(
                     format!("Get{}", method.name),
-                    Some(("self".into(), format!("*{}", struct_name.clone()))),
+                    Some(("self".into(), format!("*{fixed_struct_name}"))),
                     vec![],
                     Some(method.type_expr().0.as_go_return_type(type_env)),
                     vec![
@@ -333,26 +345,17 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                                 method
                                     .params
                                     .iter()
-                                    .flat_map(|params| params.iter())
                                     .map(|param| {
                                         (param.0.clone(), param.1.0.as_go_type_annotation(type_env))
                                     })
                                     .collect::<Vec<_>>(),
-                                method.return_type.as_ref().map(|return_type| {
-                                    return_type.0.as_go_type_annotation(type_env)
-                                }),
+                                Some(method.return_type.0.as_go_type_annotation(type_env)),
                                 vec![IrInstruction::InlineGo(format!(
-                                    "{} self.{}({})",
-                                    if method.return_type.is_some() {
-                                        "return"
-                                    } else {
-                                        ""
-                                    },
-                                    method.name,
+                                    "return self.{}({})",
+                                    fix_ident_for_go(&method.name, imports),
                                     method
                                         .params
                                         .iter()
-                                        .flat_map(|params| params.iter())
                                         .map(|param| param.0.clone())
                                         .collect::<Vec<_>>()
                                         .join(", "),
@@ -364,7 +367,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                 ),
                 IrInstruction::FunDef(
                     format!("GetPtr{}", method.name),
-                    Some(("self".into(), format!("*{}", struct_name.clone()))),
+                    Some(("self".into(), format!("*{fixed_struct_name}"))),
                     vec![],
                     Some(format!(
                         "*{}",
@@ -374,7 +377,7 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
                 ),
                 IrInstruction::FunDef(
                     format!("Set{}", method.name),
-                    Some(("self".into(), format!("*{}", struct_name.clone()))),
+                    Some(("self".into(), format!("*{fixed_struct_name}"))),
                     vec![("param".into(), func_type_str)],
                     None,
                     vec![],
@@ -384,13 +387,17 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
             instructions.extend(instructions_to_be_duck_conform);
 
             let mut body = method.emit(
-                Some(("duck_internal_self".to_string(), format!("*{struct_name}"))),
+                Some((
+                    "duck_internal_self".to_string(),
+                    format!("*{fixed_struct_name}"),
+                )),
                 type_env,
                 to_ir,
             );
             if let IrInstruction::FunDef(_, _, _, _, body) = &mut body {
                 fixup_method_body(
-                    struct_name.as_str(),
+                    struct_name,
+                    &fixed_struct_name,
                     body,
                     s.mut_methods.contains(&method.name),
                 );
@@ -401,17 +408,23 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
 
         for generic_method in type_env.get_generic_methods(struct_name.clone()).clone() {
             let mut body = generic_method.emit(
-                Some(("duck_internal_self".to_string(), format!("*{struct_name}"))),
+                Some((
+                    "duck_internal_self".to_string(),
+                    format!("*{fixed_struct_name}"),
+                )),
                 type_env,
                 to_ir,
             );
             if let IrInstruction::FunDef(_, _, _, _, body) = &mut body {
-                fixup_method_body(struct_name.as_str(), body, true);
+                fixup_method_body(struct_name, &fixed_struct_name, body, true);
             }
             instructions.push(body);
         }
         result.extend(instructions);
     }
+
+    result.push(IrInstruction::StructDef("Never".to_string(), vec![]));
+    result.push(IrInstruction::StructDef("Statement".to_string(), vec![]));
 
     for named_duck_def in type_env
         .named_duck_definitions
@@ -461,6 +474,9 @@ pub fn emit_type_definitions(type_env: &mut TypeEnv, to_ir: &mut ToIr) -> Vec<Ir
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Statement => "Tup_".to_string(),
+            TypeExpr::Never => "any".to_string(),
+            TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
                 format!("*{}", t.0.as_go_type_annotation(type_env))
             }
@@ -472,7 +488,6 @@ impl TypeExpr {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
             TypeExpr::Bool(..) => "bool".to_string(),
-            TypeExpr::InlineGo => "any".to_string(),
             TypeExpr::Int(..) => "int".to_string(),
             TypeExpr::Float => "float32".to_string(),
             TypeExpr::Char => "rune".to_string(),
@@ -492,16 +507,22 @@ impl TypeExpr {
                     })
                     .collect::<Vec<_>>()
                     .join(","),
-                return_type
-                    .as_ref()
-                    .map(|x| x.0.as_go_return_type(type_env))
-                    .unwrap_or_default(),
+                return_type.0.as_go_return_type(type_env),
             ),
             TypeExpr::Struct {
                 name: _struct,
                 type_params: _,
-            } => format!("*{}", self.as_clean_go_type_name(type_env)),
-            TypeExpr::NamedDuck { .. } => self.as_clean_go_type_name(type_env).to_string(),
+            } => format!(
+                "*{}",
+                fix_type_name(
+                    &self.as_clean_go_type_name(type_env),
+                    type_env.all_go_imports
+                )
+            ),
+            TypeExpr::NamedDuck { .. } => fix_type_name(
+                &self.as_clean_go_type_name(type_env),
+                type_env.all_go_imports,
+            ),
             TypeExpr::Duck(duck) => {
                 let mut fields = duck.fields.clone();
                 fields.sort_by_key(|field| field.name.clone());
@@ -525,81 +546,11 @@ impl TypeExpr {
         };
     }
 
-    pub fn as_go_concrete_annotation(&self, type_env: &mut TypeEnv) -> String {
-        return match self {
-            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.as_go_concrete_annotation(type_env),
-            TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
-            TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
-            TypeExpr::KeyOf(..) => panic!("keyof should be replaced"),
-            TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
-            TypeExpr::RawTypeName(..) => panic!(),
-            TypeExpr::Array(t) => format!("[]{}", t.0.as_go_concrete_annotation(type_env)),
-            TypeExpr::Any => "interface{}".to_string(),
-            TypeExpr::Bool(..) => "bool".to_string(),
-            TypeExpr::Int(..) => "int".to_string(),
-            TypeExpr::Float => "float32".to_string(),
-            TypeExpr::Char => "rune".to_string(),
-            TypeExpr::String(..) => "string".to_string(),
-            TypeExpr::Go(identifier) => identifier.clone(),
-            TypeExpr::InlineGo => "InlineGo".to_string(),
-            // todo: type params
-            TypeExpr::TypeName(_, name, _type_params) => {
-                panic!("type name should be replaced {name}")
-            }
-            TypeExpr::Fun(params, return_type, _) => format!(
-                "func({}) {}",
-                params
-                    .iter()
-                    .map(|(name, type_expr)| match name {
-                        Some(name) =>
-                            format!("{name} {}", type_expr.0.as_go_type_annotation(type_env)),
-                        None => type_expr.0.as_go_type_annotation(type_env),
-                    })
-                    .collect::<Vec<_>>()
-                    .join(","),
-                return_type
-                    .clone()
-                    .map_or("".to_string(), |return_type| return_type
-                        .0
-                        .as_go_type_annotation(type_env))
-            ),
-            TypeExpr::Duck(Duck { fields }) => format!(
-                "Duck_{}",
-                fields
-                    .iter()
-                    .map(|field| format!(
-                        "{}_{}",
-                        field.name,
-                        field.type_expr.0.as_clean_go_type_name(type_env)
-                    ))
-                    .collect::<Vec<_>>()
-                    .join("_")
-            ),
-            TypeExpr::NamedDuck { name, type_params } => type_env
-                .get_duck_def_with_type_params_mut(name.as_str(), type_params, empty_range())
-                .name
-                .clone(),
-            TypeExpr::Struct { name, type_params } => type_env
-                .get_struct_def_with_type_params_mut(name, type_params, empty_range())
-                .name
-                .clone(),
-            TypeExpr::Tuple(fields) => {
-                format!(
-                    "Tup_{}",
-                    fields
-                        .iter()
-                        .map(|type_expr| type_expr.0.as_clean_go_type_name(type_env).to_string())
-                        .collect::<Vec<_>>()
-                        .join("_")
-                )
-            }
-            TypeExpr::Or(_) => "any".to_string(),
-            TypeExpr::And(_) => panic!("and should be replaced"),
-        };
-    }
-
     pub fn type_id(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Statement => "Statement".to_string(),
+            TypeExpr::Never => "Never".to_string(),
+            TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
             TypeExpr::Ref(t) => format!("Ref_{}", t.0.type_id(type_env)),
             TypeExpr::RefMut(t) => format!("RefMut_{}", t.0.type_id(type_env)),
             TypeExpr::Html => "Html".to_string(),
@@ -620,9 +571,8 @@ impl TypeExpr {
             TypeExpr::Go(identifier) => identifier.clone(),
             // todo: type params
             TypeExpr::TypeName(_, name, _type_params) => name.clone(),
-            TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type, _) => format!(
-                "Fun_From_{}{}",
+                "Fun_From_{}_To_{}",
                 params
                     .iter()
                     .map(|(name, type_expr)| format!(
@@ -632,10 +582,7 @@ impl TypeExpr {
                     ))
                     .collect::<Vec<_>>()
                     .join("_"),
-                return_type
-                    .as_ref()
-                    .map(|type_expr| format!("_To_{}", type_expr.0.type_id(type_env)))
-                    .unwrap_or_else(|| "".to_string())
+                return_type.0.type_id(type_env),
             ),
             TypeExpr::Struct { .. } => self.as_clean_go_type_name(type_env),
             TypeExpr::NamedDuck { .. } => self.as_clean_go_type_name(type_env),
@@ -696,8 +643,19 @@ impl TypeExpr {
         );
     }
 
+    pub fn is_never(&self) -> bool {
+        matches!(self, TypeExpr::Never)
+    }
+
+    pub fn is_statement(&self) -> bool {
+        matches!(self, TypeExpr::Statement)
+    }
+
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Statement => "Statement".to_string(),
+            TypeExpr::Never => "Never".to_string(),
+            TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
             TypeExpr::Ref(t) => format!("Ref___{}", t.0.as_clean_go_type_name(type_env)),
             TypeExpr::RefMut(t) => format!("RefMut___{}", t.0.as_clean_go_type_name(type_env)),
             TypeExpr::Html => "Html".to_string(),
@@ -722,9 +680,8 @@ impl TypeExpr {
                 type_params: type_params.clone(),
             }
             .as_clean_go_type_name(type_env),
-            TypeExpr::InlineGo => "InlineGo".to_string(),
             TypeExpr::Fun(params, return_type, is_mut) => format!(
-                "Fun_{}_From_{}{}",
+                "Fun_{}_From_{}_To_{}",
                 if *is_mut { "Mut" } else { "NotMut" },
                 params
                     .iter()
@@ -735,35 +692,38 @@ impl TypeExpr {
                     ))
                     .collect::<Vec<_>>()
                     .join("_"),
-                return_type
-                    .as_ref()
-                    .map(|type_expr| format!("_To_{}", type_expr.0.as_clean_go_type_name(type_env)))
-                    .unwrap_or_else(|| "".to_string())
+                return_type.0.as_clean_go_type_name(type_env),
             ),
             TypeExpr::Struct {
                 name: s,
                 type_params,
-            } => vec![s.clone()]
-                .into_iter()
-                .chain(
-                    type_params
-                        .iter()
-                        .map(|(x, _)| x.as_clean_go_type_name(type_env)),
-                )
-                .collect::<Vec<_>>()
-                .join(MANGLE_SEP),
+            } => format!(
+                "Struct_{}",
+                vec![s.clone()]
+                    .into_iter()
+                    .chain(
+                        type_params
+                            .iter()
+                            .map(|(x, _)| x.as_clean_go_type_name(type_env)),
+                    )
+                    .collect::<Vec<_>>()
+                    .join(MANGLE_SEP)
+            ),
             TypeExpr::NamedDuck {
                 name: s,
                 type_params,
-            } => vec![s.clone()]
-                .into_iter()
-                .chain(
-                    type_params
-                        .iter()
-                        .map(|(x, _)| x.as_clean_go_type_name(type_env)),
-                )
-                .collect::<Vec<_>>()
-                .join(MANGLE_SEP),
+            } => format!(
+                "Interface_{}",
+                vec![s.clone()]
+                    .into_iter()
+                    .chain(
+                        type_params
+                            .iter()
+                            .map(|(x, _)| x.as_clean_go_type_name(type_env)),
+                    )
+                    .collect::<Vec<_>>()
+                    .join(MANGLE_SEP),
+            ),
             TypeExpr::Duck(duck) => format!(
                 "Duck_{}",
                 duck.fields

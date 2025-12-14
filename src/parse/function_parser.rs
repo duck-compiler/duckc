@@ -21,10 +21,10 @@ pub type Param = (String, Spanned<TypeExpr>);
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDefintion {
     pub name: String,
-    pub return_type: Option<Spanned<TypeExpr>>,
-    pub params: Option<Vec<Param>>,
+    pub return_type: Spanned<TypeExpr>,
+    pub params: Vec<Param>,
     pub value_expr: Spanned<ValueExpr>,
-    pub generics: Option<Vec<Spanned<Generic>>>,
+    pub generics: Vec<Spanned<Generic>>,
     pub span: SS,
     pub comments: Vec<Spanned<String>>,
 }
@@ -33,20 +33,13 @@ impl FunctionDefintion {
     pub fn to_header(&self) -> FunHeader {
         let mut return_type = self.return_type.clone();
 
-        if let Some((return_type_expr, _span)) = &mut return_type
-            && let TypeExpr::And(_) = &return_type_expr
-        {
+        if let TypeExpr::And(_) = &mut return_type.0 {
             use crate::semantics::type_resolve::translate_intersection_to_duck;
-            *return_type_expr = translate_intersection_to_duck(return_type_expr);
+            return_type.0 = translate_intersection_to_duck(&return_type.0);
         }
 
         FunHeader {
-            params: self
-                .params
-                .iter()
-                .flat_map(|x| x.iter())
-                .map(|x| x.1.clone())
-                .collect(),
+            params: self.params.iter().map(|x| x.1.clone()).collect(),
             return_type,
         }
     }
@@ -55,24 +48,16 @@ impl FunctionDefintion {
         // todo: retrieve correct span for function defintions typeexpr
         let mut return_type = self.return_type.clone();
 
-        if let Some((return_type_expr, _span)) = &mut return_type
-            && let TypeExpr::And(_) = &return_type_expr
-        {
-            use crate::semantics::type_resolve::translate_intersection_to_duck;
-            *return_type_expr = translate_intersection_to_duck(return_type_expr);
-        }
+        use crate::semantics::type_resolve::translate_intersection_to_duck;
+        return_type.0 = translate_intersection_to_duck(&return_type.0);
 
         return (
             TypeExpr::Fun(
                 self.params
-                    .clone()
-                    .or_else(|| Some(Vec::new()))
-                    .as_ref()
-                    .unwrap()
                     .iter()
                     .map(|(name, type_expr)| (Some(name.to_owned()), type_expr.to_owned()))
                     .collect::<Vec<_>>(),
-                return_type.map(Box::new),
+                return_type.into(),
                 true,
             ),
             self.value_expr.1,
@@ -84,10 +69,11 @@ impl Default for FunctionDefintion {
     fn default() -> Self {
         FunctionDefintion {
             name: Default::default(),
-            return_type: None,
-            params: Some(Default::default()),
-            value_expr: ValueExpr::Block(vec![]).into_empty_span(),
-            generics: None,
+            return_type: TypeExpr::Tuple(vec![]).into_empty_span(),
+            params: Default::default(),
+            value_expr: ValueExpr::Return(Some(ValueExpr::Block(vec![]).into_empty_span().into()))
+                .into_empty_span(),
+            generics: vec![],
             span: empty_range(),
             comments: Vec::new(),
         }
@@ -123,13 +109,11 @@ where
     let params_parser = param_parser
         .separated_by(just(Token::ControlChar(',')))
         .allow_trailing()
-        .collect::<Vec<Param>>()
-        .or_not();
+        .collect::<Vec<Param>>();
 
     let return_type_parser = just(Token::ThinArrow).ignore_then(type_expression_parser());
 
     doc_comments_parser
-        .then(just(Token::Async).or_not())
         .then_ignore(just(Token::Function))
         .then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
         .then(generics_parser().or_not())
@@ -139,57 +123,22 @@ where
         .then(return_type_parser.or_not())
         .then(value_expr_parser(make_input))
         .map_with(
-            |(
-                (((((doc_comments, has_sus), identifier), generics), params), return_type),
-                mut value_expr,
-            ),
+            |(((((doc_comments, identifier), generics), params), return_type), mut value_expr),
              ctx| {
-                let is_sus = has_sus.is_some();
-
-                if is_sus && return_type.is_some() {
-                    panic!("sus function is not allowed to return something");
-                }
-
                 value_expr = match value_expr {
-                    (ValueExpr::Duck(x), loc) if x.is_empty() => (ValueExpr::Block(vec![]), loc),
                     x @ (ValueExpr::Block(_), _) => x,
                     _ => panic!("Function must be block"),
                 };
 
-                if is_sus {
-                    value_expr = (
-                        ValueExpr::FunctionCall {
-                            target: ValueExpr::RawVariable(
-                                true,
-                                vec!["std".into(), "task".into(), "spawn".into()],
-                            )
-                            .into_empty_span()
-                            .into(),
-                            params: vec![
-                                ValueExpr::Lambda(
-                                    LambdaFunctionExpr {
-                                        is_mut: false,
-                                        params: vec![],
-                                        return_type: None,
-                                        value_expr: value_expr.clone(),
-                                    }
-                                    .into(),
-                                )
-                                .into_empty_span(),
-                            ],
-                            type_params: vec![],
-                            is_extension_call: false,
-                        },
-                        value_expr.1,
-                    );
-                }
-
                 FunctionDefintion {
                     name: identifier,
-                    return_type,
+                    return_type: return_type.unwrap_or((TypeExpr::Tuple(vec![]), ctx.span())),
                     params,
-                    value_expr,
-                    generics,
+                    value_expr: (
+                        ValueExpr::Return(Some(Box::new(value_expr.clone()))),
+                        value_expr.1,
+                    ),
+                    generics: generics.unwrap_or_default(),
                     span: ctx.span(),
                     comments: doc_comments.unwrap_or_else(Vec::new),
                 }
@@ -199,7 +148,11 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::{lexer::lex_parser, make_input, value_parser::empty_range};
+    use crate::parse::{
+        lexer::lex_parser,
+        make_input,
+        value_parser::{empty_range, type_expr_into_empty_range, value_expr_into_empty_range},
+    };
 
     use super::*;
 
@@ -262,16 +215,19 @@ pub mod tests {
                 "fn y<TYPENAME>() {}",
                 FunctionDefintion {
                     name: "y".to_string(),
-                    params: Some(vec![]),
-                    return_type: None,
-                    generics: Some(vec![(
+                    params: vec![],
+                    return_type: TypeExpr::Tuple(vec![]).into_empty_span(),
+                    generics: vec![(
                         Generic {
                             name: "TYPENAME".to_string(),
                             constraint: None,
                         },
                         empty_range(),
-                    )]),
-                    value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                    )],
+                    value_expr: ValueExpr::Return(Some(
+                        ValueExpr::Block(vec![]).into_empty_span().into(),
+                    ))
+                    .into_empty_span(),
                     span: empty_range(),
                     comments: Vec::new(),
                 },
@@ -280,9 +236,9 @@ pub mod tests {
                 "fn y<TYPENAME, TYPENAME2>() {}",
                 FunctionDefintion {
                     name: "y".to_string(),
-                    params: Some(vec![]),
-                    return_type: None,
-                    generics: Some(vec![
+                    params: vec![],
+                    return_type: TypeExpr::Tuple(vec![]).into_empty_span(),
+                    generics: vec![
                         (
                             Generic {
                                 name: "TYPENAME".to_string(),
@@ -297,8 +253,11 @@ pub mod tests {
                             },
                             empty_range(),
                         ),
-                    ]),
-                    value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                    ],
+                    value_expr: ValueExpr::Return(Some(
+                        ValueExpr::Block(vec![]).into_empty_span().into(),
+                    ))
+                    .into_empty_span(),
                     span: empty_range(),
                     comments: Vec::new(),
                 },
@@ -307,9 +266,9 @@ pub mod tests {
                 "fn y<TYPENAME, TYPENAME2, TYPENAME3>() {}",
                 FunctionDefintion {
                     name: "y".to_string(),
-                    params: Some(vec![]),
-                    return_type: None,
-                    generics: Some(vec![
+                    params: vec![],
+                    return_type: TypeExpr::Tuple(vec![]).into_empty_span(),
+                    generics: vec![
                         (
                             Generic {
                                 name: "TYPENAME".to_string(),
@@ -331,8 +290,11 @@ pub mod tests {
                             },
                             empty_range(),
                         ),
-                    ]),
-                    value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                    ],
+                    value_expr: ValueExpr::Return(Some(
+                        ValueExpr::Block(vec![]).into_empty_span().into(),
+                    ))
+                    .into_empty_span(),
                     span: empty_range(),
                     comments: Vec::new(),
                 },
@@ -357,17 +319,13 @@ pub mod tests {
 
             let mut output = parse_result.into_result().expect(&src);
 
-            output
-                .generics
-                .as_mut()
-                .unwrap()
-                .iter_mut()
-                .for_each(|generic| {
-                    *generic = (generic.0.clone(), empty_range());
-                });
+            output.generics.iter_mut().for_each(|generic| {
+                *generic = (generic.0.clone(), empty_range());
+            });
 
+            type_expr_into_empty_range(&mut output.return_type);
+            value_expr_into_empty_range(&mut output.value_expr);
             output.span = empty_range();
-            output.value_expr = ValueExpr::Block(vec![]).into_empty_span();
 
             assert_eq!(output, expected_fns, "{i}: {}", src);
         }

@@ -97,7 +97,7 @@ fn get_s() -> String {
 
 fn print_with_go(x: {}) {
     go {
-        y, _ := x.(*Lol)
+        y, _ := x.(*Struct_Lol)
         fmt.Println(y.kek, y.xyz)
     }
 }

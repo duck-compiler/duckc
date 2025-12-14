@@ -1,0 +1,65 @@
+struct GoMap<K, V> = {
+    inner: go "map[{K}]*{V}",
+} impl {
+    fn contains_key(k: K) -> Bool {
+        go {
+            _, ok := (*self).inner[k]
+            $$$res$$$ = ok
+        } as Bool
+    }
+
+    mut fn set(k: K, v: V) {
+       go {
+           (*self).inner[k] = &v
+       }
+    }
+
+    fn get(k: &K) -> ::Opt<&V> {
+        const tag_none = .none;
+        go {
+            val, ok := (*self).inner[*k]
+            if ok {
+               $$$res$$$ = val
+            } else {
+                $$$res$$$ = tag_none
+            }
+       } as ::Opt<&V>
+    }
+
+    mut fn get_mut(k: &K) -> ::Opt<&mut V> {
+        const tag_none = .none;
+        go {
+            val, ok := (*self).inner[*k]
+            if ok {
+               $$$res$$$ = val
+            } else {
+                $$$res$$$ = tag_none
+            }
+       } as ::Opt<&mut V>
+    }
+
+    mut fn remove(k: &K) -> ::Opt<V> {
+        const tag_none = .none;
+         go {
+            key_deref := *k
+            val, ok := (*self).inner[key_deref]
+            if ok {
+                delete((*self).inner, key_deref)
+                $$$res$$$ = val
+            } else {
+                $$$res$$$ = tag_none
+            }
+        } as ::Opt<V>
+    }
+
+};
+
+fn new_go_map<K, V>() -> GoMap<K, V> {
+    const go_map: go "map[{K}]*{V}" = go {
+        $$$res$$$ = make(map[<<<K>>>]*<<<V>>>)
+    };
+
+    return GoMap<K, V> {
+        inner: go_map,
+    };
+}

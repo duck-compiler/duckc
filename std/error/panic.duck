@@ -1,8 +1,8 @@
 use go "os";
 
-fn panic(m: {}) {
+fn panic(m: {}) -> ! {
     go {
         fmt.Println("panic:", m)
         os.Exit(1)
-    }
+    } as !
 }

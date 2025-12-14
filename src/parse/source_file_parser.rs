@@ -181,16 +181,12 @@ impl SourceFile {
                 p.push(func.name.clone());
                 func.name = mangle(&p);
 
-                if let Some(return_type) = &mut func.return_type {
-                    mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
-                }
+                mangle_type_expression(&mut func.return_type.0, prefix, &mut mangle_env);
 
                 mangle_env.push_idents();
-                if let Some(params) = &mut func.params {
-                    for (name, type_expr) in params {
-                        mangle_type_expression(&mut type_expr.0, prefix, &mut mangle_env);
-                        mangle_env.insert_ident(name.clone());
-                    }
+                for (name, type_expr) in &mut func.params {
+                    mangle_type_expression(&mut type_expr.0, prefix, &mut mangle_env);
+                    mangle_env.insert_ident(name.clone());
                 }
                 mangle_value_expr(
                     &mut func.value_expr.0,
@@ -208,17 +204,14 @@ impl SourceFile {
                 for func in &extensions_def.function_definitions {
                     let mut func = func.clone();
 
-                    if let Some(return_type) = &mut func.0.return_type {
-                        mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
-                    }
+                    mangle_type_expression(&mut func.0.return_type.0, prefix, &mut mangle_env);
 
                     mangle_env.push_idents();
-                    if let Some(params) = &mut func.0.params {
-                        for (name, type_expr) in params {
-                            mangle_type_expression(&mut type_expr.0, prefix, &mut mangle_env);
-                            mangle_env.insert_ident(name.clone());
-                        }
+                    for (name, type_expr) in &mut func.0.params {
+                        mangle_type_expression(&mut type_expr.0, prefix, &mut mangle_env);
+                        mangle_env.insert_ident(name.clone());
                     }
+
                     mangle_value_expr(
                         &mut func.0.value_expr.0,
                         global_prefix,
@@ -260,16 +253,14 @@ impl SourceFile {
                 }
 
                 for func in &mut struct_def.methods {
-                    if let Some(return_type) = &mut func.return_type {
-                        mangle_type_expression(&mut return_type.0, prefix, &mut mangle_env);
-                    }
+                    mangle_type_expression(&mut func.return_type.0, prefix, &mut mangle_env);
                     mangle_env.push_idents();
-                    if let Some(params) = &mut func.params {
-                        for (name, type_expr) in params {
-                            mangle_type_expression(&mut type_expr.0, prefix, &mut mangle_env);
-                            mangle_env.insert_ident(name.clone());
-                        }
+
+                    for (name, type_expr) in &mut func.params {
+                        mangle_type_expression(&mut type_expr.0, prefix, &mut mangle_env);
+                        mangle_env.insert_ident(name.clone());
                     }
+
                     mangle_value_expr(
                         &mut func.value_expr.0,
                         global_prefix,
@@ -395,16 +386,9 @@ impl SourceFile {
             c.extend(unmangle(&function_definition.name));
             function_definition.name = mangle(&c);
 
-            for type_expr in function_definition
-                .return_type
-                .iter_mut()
-                .map(|type_expr| &mut type_expr.0)
-                .chain(
-                    function_definition
-                        .params
-                        .iter_mut()
-                        .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0)),
-                )
+            for type_expr in [&mut function_definition.return_type.0]
+                .into_iter()
+                .chain(function_definition.params.iter_mut().map(|x| &mut x.1.0))
             {
                 append_global_prefix_type_expr(type_expr, &mut mangle_env);
             }
@@ -430,16 +414,9 @@ impl SourceFile {
             }
 
             for method in &mut struct_definition.methods {
-                for type_expr in method
-                    .return_type
-                    .iter_mut()
-                    .map(|type_expr| &mut type_expr.0)
-                    .chain(
-                        method
-                            .params
-                            .iter_mut()
-                            .flat_map(|x| x.iter_mut().map(|x| &mut x.1.0)),
-                    )
+                for type_expr in [&mut method.return_type.0]
+                    .into_iter()
+                    .chain(method.params.iter_mut().map(|x| &mut x.1.0))
                 {
                     append_global_prefix_type_expr(type_expr, &mut mangle_env);
                 }
@@ -470,20 +447,10 @@ impl SourceFile {
 
         for ext_def in &mut flattened_source_file.extensions_defs {
             for def in &mut ext_def.function_definitions {
-                for t in def
-                    .0
-                    .return_type
-                    .as_mut()
+                for t in [&mut def.0.return_type]
                     .into_iter()
                     .map(|(x, _)| x)
-                    .chain(
-                        def.0
-                            .params
-                            .as_mut()
-                            .into_iter()
-                            .flat_map(|v| v.iter_mut())
-                            .map(|(_, y)| &mut y.0),
-                    )
+                    .chain(def.0.params.iter_mut().map(|(_, y)| &mut y.0))
                 {
                     append_global_prefix_type_expr(t, &mut mangle_env);
                 }
@@ -522,9 +489,7 @@ fn append_global_prefix_type_expr(type_expr: &mut TypeExpr, mangle_env: &mut Man
                 append_global_prefix_type_expr(&mut param_type.0, mangle_env);
             }
 
-            if let Some(return_type) = return_type {
-                append_global_prefix_type_expr(&mut return_type.0, mangle_env);
-            }
+            append_global_prefix_type_expr(&mut return_type.0, mangle_env);
         }
         TypeExpr::Or(s) => {
             for t in s {
@@ -617,7 +582,10 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
                 append_global_prefix_value_expr(&mut expr.0, mangle_env);
             }
         }
-        ValueExpr::InlineGo(t) => {
+        ValueExpr::InlineGo(t, ty) => {
+            if let Some(ty) = ty {
+                append_global_prefix_type_expr(&mut ty.0, mangle_env);
+            }
             let mut parser = TSParser::new();
             parser
                 .set_language(&tree_sitter_go::LANGUAGE.into())
@@ -735,7 +703,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             }
         }
         ValueExpr::RawVariable(..) => panic!("raw variable shouldn't be here"),
-        ValueExpr::Variable(_, name, _, _) => {
+        ValueExpr::Variable(_, name, _, _, _) => {
             if mangle_env.is_top_level_ident(name) {
                 let mut v = Vec::new();
                 v.extend_from_slice(&mangle_env.global_prefix);
@@ -799,9 +767,6 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             }
         }
         ValueExpr::FieldAccess { target_obj, .. } => {
-            append_global_prefix_value_expr(&mut target_obj.0, mangle_env);
-        }
-        ValueExpr::ExtensionAccess { target_obj, .. } => {
             append_global_prefix_value_expr(&mut target_obj.0, mangle_env);
         }
         ValueExpr::Return(Some(value_expr)) => {
@@ -1057,6 +1022,7 @@ mod tests {
                 SourceFile {
                     function_definitions: vec![FunctionDefintion {
                         name: "abc".into(),
+                        return_type: TypeExpr::Tuple(vec![]).into_empty_span(),
                         ..Default::default()
                     }],
                     ..Default::default()
@@ -1134,10 +1100,12 @@ mod tests {
                     function_definitions: vec![
                         FunctionDefintion {
                             name: "abc".into(),
+                            return_type: TypeExpr::Tuple(vec![]).into_empty_span(),
                             ..Default::default()
                         },
                         FunctionDefintion {
                             name: "xyz".into(),
+                            return_type: TypeExpr::Tuple(vec![]).into_empty_span(),
                             ..Default::default()
                         },
                     ],
@@ -1240,6 +1208,7 @@ mod tests {
                             )],
                             function_definitions: vec![FunctionDefintion {
                                 name: "abc".into(),
+                                return_type: TypeExpr::Tuple(vec![]).into_empty_span(),
                                 ..Default::default()
                             }],
                             ..Default::default()
@@ -1254,11 +1223,12 @@ mod tests {
                     function_definitions: vec![
                         FunctionDefintion {
                             name: "abc".into(),
-                            return_type: Some(TypeExpr::String(None).into_empty_span()),
+                            return_type: TypeExpr::String(None).into_empty_span(),
                             ..Default::default()
                         },
                         FunctionDefintion {
                             name: "xyz".into(),
+                            return_type: TypeExpr::Tuple(vec![]).into_empty_span(),
                             ..Default::default()
                         },
                     ],
@@ -1370,14 +1340,21 @@ mod tests {
                             function_definitions: vec![
                                 FunctionDefintion {
                                     name: "some_abc_func".into(),
-                                    value_expr: ValueExpr::String("Hello from module".into(), true)
-                                        .into_empty_span()
-                                        .into_block(),
+                                    value_expr: ValueExpr::Return(Some(
+                                        ValueExpr::String("Hello from module".into(), true)
+                                            .into_empty_span()
+                                            .into_block()
+                                            .into(),
+                                    ))
+                                    .into_empty_span(),
                                     ..Default::default()
                                 },
                                 FunctionDefintion {
                                     name: "some_xyz_func".into(),
-                                    value_expr: ValueExpr::Int(1).into_empty_span().into_block(),
+                                    value_expr: ValueExpr::Return(Some(
+                                        ValueExpr::Int(1).into_empty_span().into_block().into(),
+                                    ))
+                                    .into_empty_span(),
                                     ..Default::default()
                                 },
                             ],
@@ -1401,12 +1378,13 @@ mod tests {
                                             "Hello from module".into(),
                                             true,
                                         )
-                                        .into_empty_span_and_block(),
+                                        .into_empty_span_and_block_and_return(),
                                         ..Default::default()
                                     },
                                     FunctionDefintion {
                                         name: "some_xyz_func".into(),
-                                        value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
+                                        value_expr: ValueExpr::Int(1)
+                                            .into_empty_span_and_block_and_return(),
                                         ..Default::default()
                                     },
                                 ],
@@ -1463,12 +1441,13 @@ mod tests {
                                             "Hello from module".into(),
                                             true,
                                         )
-                                        .into_empty_span_and_block(),
+                                        .into_empty_span_and_block_and_return(),
                                         ..Default::default()
                                     },
                                     FunctionDefintion {
                                         name: "some_xyz_func".into(),
-                                        value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
+                                        value_expr: ValueExpr::Int(1)
+                                            .into_empty_span_and_block_and_return(),
                                         ..Default::default()
                                     },
                                 ],

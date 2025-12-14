@@ -1,0 +1,16 @@
+use std::io::{println};
+
+fn give_s() -> String {
+    "hello from give_s"
+}
+
+fn give_s2() -> String {
+    {
+        "hello from give_s2"
+    }
+}
+
+fn main() {
+    give_s()->println();
+    give_s2()->println();
+}

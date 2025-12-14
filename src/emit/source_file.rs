@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use crate::{
     emit::{
+        ir::fix_idents_in_ir,
         types::emit_type_definitions,
         value::{IrInstruction, ToIr},
     },
@@ -10,21 +11,40 @@ use crate::{
 };
 
 impl SourceFile {
-    pub fn emit(self, pkg_name: String, type_env: &mut TypeEnv, span: SS) -> Vec<IrInstruction> {
+    pub fn emit(
+        mut self,
+        pkg_name: String,
+        type_env: &mut TypeEnv,
+        span: SS,
+    ) -> Vec<IrInstruction> {
         let mut to_ir = ToIr::default();
+
+        let mut go_imports = vec![];
+
+        let mut imports = HashSet::new();
+
+        for use_statement in self.use_statements {
+            if let UseStatement::Go(name, alias) = use_statement {
+                let import_name = alias
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or_else(|| name.split("/").last().unwrap().to_string());
+
+                if !import_name.is_empty() && import_name != "." && import_name != "_" {
+                    imports.insert(import_name.clone());
+                }
+
+                go_imports.push((alias, name));
+            }
+        }
+
+        let imports = Box::leak(Box::new(imports)) as &'static HashSet<String>;
+        type_env.all_go_imports = imports;
 
         let type_definitions = emit_type_definitions(type_env, &mut to_ir);
 
         let mut instructions = Vec::new();
         instructions.push(IrInstruction::GoPackage(pkg_name));
-
-        let mut go_imports = vec![];
-
-        for use_statement in self.use_statements {
-            if let UseStatement::Go(name, alias) = use_statement {
-                go_imports.push((alias, name));
-            }
-        }
 
         instructions.push(IrInstruction::GoImports(go_imports));
 
@@ -32,11 +52,11 @@ impl SourceFile {
 
         for function_definition in self
             .function_definitions
-            .iter()
-            .chain(type_env.generic_fns_generated.clone().iter())
+            .iter_mut()
+            .chain(type_env.generic_fns_generated.clone().iter_mut())
         {
             // generic functions shouldn't be emitted, as they have incomplete type information
-            if function_definition.generics.is_some() {
+            if !function_definition.generics.is_empty() {
                 continue;
             }
 
@@ -207,7 +227,9 @@ impl SourceFile {
         }
 
         instructions.extend(type_definitions);
-
+        for i in &mut instructions {
+            fix_idents_in_ir(i, imports);
+        }
         instructions
     }
 }

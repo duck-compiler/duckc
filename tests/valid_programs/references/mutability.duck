@@ -10,6 +10,13 @@ struct Person = {
     }
 
     fn clone() -> Person {
+        Person {
+            name: self.name,
+            r: &mut (*self.r),
+            r2: &(*self.r2),
+            age: self.age,
+            other: self.other,
+        }
     }
 
     fn a() -> S {

@@ -5,6 +5,7 @@ use crate::{
     },
     parse::{
         schema_def_parser::{SchemaDefinition, SchemaField},
+        type_parser::TypeExpr,
         value_parser::{Assignment, ValueExpr},
     },
     semantics::type_resolve::TypeEnv,
@@ -72,6 +73,7 @@ impl SchemaDefinition {
                                 format!("ref_struct.F_{field_name}"),
                                 Some(schema_field.type_expr.0.clone()),
                                 None,
+                                false,
                             ),
                             schema_field.span,
                         ),
@@ -81,11 +83,11 @@ impl SchemaDefinition {
                 )))
                 .emit(type_env, to_ir, schema_field.span)
             } else {
-                ValueExpr::InlineGo("return Tag__err {}".to_string()).emit(
-                    type_env,
-                    to_ir,
-                    schema_field.span,
+                ValueExpr::InlineGo(
+                    "return Tag__err {}".to_string(),
+                    Some((TypeExpr::Never, schema_field.span)),
                 )
+                .emit(type_env, to_ir, schema_field.span)
             };
 
             let null_action_src = join_ir(&null_action_emitted.0);
@@ -113,7 +115,7 @@ impl SchemaDefinition {
                     ValueExpr::Return(Some(Box::new(value_expr.clone())))
                         .emit(type_env, to_ir, *span)
                 } else {
-                    ValueExpr::InlineGo("".to_string()).emit(type_env, to_ir, *span)
+                    ValueExpr::InlineGo("".to_string(), None).emit(type_env, to_ir, *span)
                 };
 
                 let condition_based_src = join_ir(&condition_based_value_emitted.0);
@@ -144,6 +146,7 @@ impl SchemaDefinition {
                                     format!("field_{}", schema_field.name),
                                     Some(schema_field.type_expr.0.clone()),
                                     None,
+                                    false,
                                 ),
                                 schema_field.span,
                             ),
