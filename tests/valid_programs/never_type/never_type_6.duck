@@ -1,0 +1,12 @@
+fn main() {
+    const x: Int | String = "";
+
+    std::io::println("begin (nothing after here)");
+
+    const num = match x {
+        String => return,
+        Int @int => int,
+    };
+
+    num->std::string::from_int()->std::io::println();
+}

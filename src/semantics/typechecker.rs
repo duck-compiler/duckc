@@ -951,7 +951,12 @@ impl TypeExpr {
                     });
                 }
 
-                // arm_types.retain(|t| !t.0.is_never());
+                let was_empty_before = arm_types.is_empty();
+                arm_types.retain(|t| !t.0.is_never());
+
+                if arm_types.is_empty() && !was_empty_before {
+                    return TypeExpr::Never;
+                }
 
                 if arm_types.is_empty() {
                     TypeExpr::Tuple(vec![])
