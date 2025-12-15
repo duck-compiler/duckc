@@ -803,6 +803,7 @@ impl TypeExpr {
 
                     let mut both = vec![then_type_expr, else_type_expr];
                     both.retain(|t| !t.is_never());
+                    both.dedup_by_key(|x| x.type_id(type_env));
                     if both.len() > 1 {
                         return TypeExpr::Or(
                             both.into_iter().map(|x| x.into_empty_span()).collect(),
@@ -831,6 +832,7 @@ impl TypeExpr {
                     || target_obj_type_expr.ref_has_method_by_name(field_name.clone(), type_env)
                     || target_obj_type_expr.has_extension_by_name(field_name.clone(), type_env))
                 {
+                    // dbg!(&field_name, &target_obj_type_expr);
                     failure_with_occurence(
                         "Invalid Field Access",
                         {
@@ -856,7 +858,7 @@ impl TypeExpr {
                     .or_else(|| {
                         target_obj_type_expr.ref_typeof_field(field_name.to_string(), type_env)
                     })
-                    .expect("Invalid field access")
+                    .expect(&format!("Invalid field access {target_obj_type_expr}"))
             }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
@@ -1465,7 +1467,6 @@ pub fn check_type_compatability_full(
     given_const_var: bool,
 ) {
     let given_type = given_type.clone();
-    dbg!(&required_type.0);
 
     if matches!(given_type.0, TypeExpr::TemplParam(..) | TypeExpr::Never) {
         return;

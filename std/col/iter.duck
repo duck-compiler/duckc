@@ -87,20 +87,20 @@ struct Iter<T> = {
         Iter::from<T>(next_fn)
     }
 
-    mut fn indexed() -> Iter<T> {
+    mut fn indexed() -> Iter<(Int, T)> {
         let index = 0;
-        let next_fn = (mut fn () -> T | .no_next_elem {
-            const next = self.next_fn();
-            if (next == .no_next_elem) {
-                return .no_next_elem;
-            }
+        let next_fn = mut fn () -> (Int, T) | .no_next_elem {
+            const next = match self.next_fn() {
+                T @t => t,
+                .no_next_elem => return .no_next_elem,
+            };
 
-            const result = next;
+            const index_to_return = index;
             index = index + 1;
-            return result;
-        });
+            return (index_to_return, next);
+        };
 
-        return Iter::from<T>(next_fn);
+        return Iter::from<(Int, T)>(next_fn);
     }
 
     mut fn into_list() -> ArrayList<T> {

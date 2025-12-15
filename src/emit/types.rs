@@ -316,6 +316,10 @@ pub fn emit_type_definitions(
                 continue;
             }
 
+            if !type_env.is_resolved(struct_name, &method.name) {
+                continue;
+            }
+
             let func_type_str = format!(
                 "func ({}) {}",
                 method

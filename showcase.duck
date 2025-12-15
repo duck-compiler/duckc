@@ -1,0 +1,47 @@
+use std::io::{println};
+
+struct Person = {
+    name: String,
+    age: Int,
+} impl {
+    fn print_me() {
+        println(f"Hello my name is {self.name} and I am {std::string::from_int(self.age)} years old");
+    }
+};
+
+fn other_function() {
+    println("hello from other_function");
+}
+
+fn give_me_a_string(b: Bool) -> String | .none {
+    if (b) {
+        "yo"
+    } else {
+        .none
+    }
+}
+
+fn main() {
+    other_function();
+
+    match give_me_a_string(true) {
+        String @s => println(f"i received {s}"),
+        .none => println("nothing ;("),
+    }
+
+    let person = Person { name: "Robin", age: 22 };
+    person.print_me();
+    person.name = "Karina";
+    person.print_me();
+
+    println("before sleep");
+    const chan = async (fn() -> Int {
+        std::task::sleep({seconds: 10});
+        println("hello from async (main is sleeping)");
+        return 10;
+    })();
+    chan.recv_block();
+    std::task::sleep({seconds: 3});
+    println("after sleep");
+
+}

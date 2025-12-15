@@ -1,0 +1,19 @@
+use std::io::{File};
+
+struct ABC<T> = {
+} impl {
+    fn lol() -> ABC<ABC<T>>  {
+        ABC<ABC<T>>{}
+    }
+};
+
+fn main() {
+    ABC<String> {}.lol();
+
+    const file = match File::open("test_file.txt") { File @file => file, else => return, };
+    file.lines()
+        .indexed()
+        .for_each(fn(i) {
+            std::io::println(f"Line Nr {std::string::from_int(i.0 + 1)}: {i.1}");
+        });
+}

@@ -73,5 +73,5 @@ fn main() {
     take_array_mut(&mut []);
     take_array([]);
     take_array_in_tuple((&[],));
-    take_array_in_duck(if (true) { { x: &[], } } else { { x: &mut [], } });
+    take_array_in_duck(if (true) { { x: &[], } } else { { x: &[], } });
 }
