@@ -2848,7 +2848,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
             let idx = idx.as_mut();
             typeresolve_value_expr((&mut target.0, target.1), type_env);
-            typeresolve_value_expr((&mut idx.0, target.1), type_env);
+            typeresolve_value_expr((&mut idx.0, idx.1), type_env);
         }
         ValueExpr::Array(exprs) => {
             if exprs.is_empty() {
@@ -2901,7 +2901,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         | ValueExpr::Mod(lhs, rhs)
         | ValueExpr::Or(lhs, rhs) => {
             typeresolve_value_expr((&mut lhs.0, lhs.1), type_env);
-            typeresolve_value_expr((&mut rhs.0, lhs.1), type_env);
+            typeresolve_value_expr((&mut rhs.0, rhs.1), type_env);
         }
         ValueExpr::String(str, _) => {
             type_env.check_for_tailwind(str);
