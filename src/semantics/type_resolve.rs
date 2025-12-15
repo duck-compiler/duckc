@@ -3275,6 +3275,8 @@ fn typeresolve_var_assign(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         type_env,
     );
 
+    dbg!("fisch {:?}", &assignment.0.target.0);
+
     check_type_compatability_full(
         &(target_type, assignment.0.target.1),
         &(
