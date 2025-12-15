@@ -9,6 +9,16 @@ impl IrInstruction {
     fn emit_as_go(&self) -> String {
         #![allow(clippy::format_in_format_args)]
         match self {
+            IrInstruction::GlobalVarDecl {
+                name,
+                go_type,
+                init_code,
+            } => {
+                format!(
+                    "var {name} {go_type} = func() {go_type} {{ {} }}()",
+                    join_ir(init_code)
+                )
+            }
             IrInstruction::Defer(d) => {
                 let fun_call @ (IrInstruction::FunCall(None, ..) | IrInstruction::InlineGo(..)) =
                     d.as_ref()
@@ -438,6 +448,12 @@ pub fn fix_idents_in_ir_value(v: &mut IrValue, imports: &HashSet<String>) {
 
 pub fn fix_idents_in_ir(v: &mut IrInstruction, imports: &HashSet<String>) {
     match v {
+        IrInstruction::GlobalVarDecl { name, go_type: _, init_code } => {
+            *name = fix_ident_for_go(name, imports);
+            for instr in init_code {
+                fix_idents_in_ir(instr, imports);
+            }
+        }
         IrInstruction::Add(res, lhs, rhs, res_ty)
         | IrInstruction::Sub(res, lhs, rhs, res_ty)
         | IrInstruction::Mul(res, lhs, rhs, res_ty)

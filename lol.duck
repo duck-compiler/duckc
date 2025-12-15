@@ -1,0 +1,4 @@
+use std::col::{ArrayList};
+fn main() {
+    const x = ArrayList::new<Int>();
+}

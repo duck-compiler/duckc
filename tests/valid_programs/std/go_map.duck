@@ -1,7 +1,7 @@
-use std::col::{new_go_map};
+use std::col::{GoMap};
 
 fn main() {
-    let m = new_go_map<String, Int>();
+    let m = GoMap::new<String, Int>();
 
     m.set("A", 22);
     m.set("B", 23);

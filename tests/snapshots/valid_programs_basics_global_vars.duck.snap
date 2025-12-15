@@ -1,0 +1,4 @@
+{
+    "stdout": "static variable init\nstatic variable after change\n200\n",
+    "stderr": ""
+}

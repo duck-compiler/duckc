@@ -38,6 +38,11 @@ type ReturnType = Option<String>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrInstruction {
+    GlobalVarDecl {
+        name: String,
+        go_type: String,
+        init_code: Vec<IrInstruction>,
+    },
     Defer(Box<IrInstruction>),
     ForRangeElem {
         ident: String,
@@ -849,7 +854,8 @@ impl ValueExpr {
                         mangle(&[
                             "std",
                             "sync",
-                            "new_channel",
+                            "Channel",
+                            "new",
                             &inner_return_type.as_clean_go_type_name(type_env),
                         ])
                     )),

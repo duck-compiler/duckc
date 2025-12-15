@@ -1,21 +1,21 @@
 fn main() {
-    let numbers: std::col::ArrayList<Int> = std::col::empty_array_list<Int>();
+    let numbers: std::col::ArrayList<Int> = std::col::ArrayList::new<Int>();
     numbers.push(1);
     numbers.push(2);
     numbers.push(3);
     numbers.push(4);
     numbers.push(5);
     let sum: Int = 0;
-    
+
     std::io::println("Testing while loop with array [1, 2, 3, 4, 5]");
     std::io::println("Expected sum: 15");
-    
+
     let i: Int = 0;
     let length: Int = 0;
     go {
         length = numbers.len()
     }
-    
+
     while (i < length) {
         match numbers.get(i) {
             Int @value => sum = sum + value,
@@ -23,7 +23,7 @@ fn main() {
         }
         i = i + 1;
     }
-    
+
     std::io::println("Actual sum:");
     sum->std::string::from_int()->std::io::println();
 }

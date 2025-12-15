@@ -2074,6 +2074,14 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             sort_fields_value_expr(&mut function_definition.value_expr.0);
         });
 
+    source_file
+        .global_var_decls
+        .iter_mut()
+        .for_each(|global_var_decl| {
+            sort_fields_type_expr(&mut global_var_decl.type_expr.0);
+            sort_fields_value_expr(&mut global_var_decl.initializer.0);
+        });
+
     source_file.schema_defs.iter_mut().for_each(|schema_def| {
         for schema_field in &mut schema_def.fields {
             sort_fields_type_expr(&mut schema_field.type_expr.0);
@@ -2297,6 +2305,17 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             );
         });
 
+    for global in &mut source_file.global_var_decls {
+        resolve_all_aliases_type_expr(&mut global.type_expr, type_env);
+        resolve_all_aliases_value_expr(&mut global.initializer, type_env);
+        type_env.insert_identifier_type(
+            global.name.clone(),
+            global.type_expr.0.clone(),
+            !global.is_mut,
+            false,
+        );
+    }
+
     source_file
         .duckx_components
         .iter_mut()
@@ -2405,6 +2424,17 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     println!("{} typeresolve functions", Tag::TypeResolve);
     println!("{} final resolve of all functions", Tag::TypeResolve);
 
+    for global in &mut source_file.global_var_decls {
+        resolve_all_aliases_type_expr(&mut global.type_expr, type_env);
+        resolve_all_aliases_value_expr(&mut global.initializer, type_env);
+        typeresolve_value_expr((&mut global.initializer.0, global.initializer.1), type_env);
+        type_env.insert_identifier_type(
+            global.name.clone(),
+            global.type_expr.0.clone(),
+            !global.is_mut,
+            false,
+        );
+    }
     for s in &mut source_file.tsx_components {
         typeresolve_tsx_component(s, type_env);
     }
@@ -2666,7 +2696,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             {
                 type_env.get_struct_def_with_type_params_mut(name, type_params, *span);
             }
-            let new_channel_fn_name = mangle(&["std", "sync", "new_channel"]);
+            let new_channel_fn_name = mangle(&["std", "sync", "Channel", "new"]);
 
             let fn_type = type_env
                 .function_definitions
@@ -2976,7 +3006,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                     .iter()
                     .find(|x| name.as_str() == x.name.as_str())
                     .cloned()
-                    .unwrap_or_else(|| panic!("could not find {name}"));
+                    .unwrap_or_else(|| panic!("could not find {name} {type_params:?}"));
 
                 if type_params.len() != fn_def.generics.len() {
                     let msg = "Wrong number of type parameters";

@@ -1,31 +1,31 @@
 fn main() {
-    let matrix: std::col::ArrayList<std::col::ArrayList<Int>> = std::col::empty_array_list<std::col::ArrayList<Int>>();
-    
-    let row1: std::col::ArrayList<Int> = std::col::empty_array_list<Int>();
+    let matrix: std::col::ArrayList<std::col::ArrayList<Int>> = std::col::ArrayList::new<std::col::ArrayList<Int>>();
+
+    let row1: std::col::ArrayList<Int> = std::col::ArrayList::new<Int>();
     row1.push(1);
     row1.push(2);
-    let row2: std::col::ArrayList<Int> = std::col::empty_array_list<Int>();
+    let row2: std::col::ArrayList<Int> = std::col::ArrayList::new<Int>();
     row2.push(3);
     row2.push(4);
-    let row3: std::col::ArrayList<Int> = std::col::empty_array_list<Int>();
+    let row3: std::col::ArrayList<Int> = std::col::ArrayList::new<Int>();
     row3.push(5);
     row3.push(6);
-    
+
     matrix.push(row1);
     matrix.push(row2);
     matrix.push(row3);
-    
+
     let total: Int = 0;
-    
+
     std::io::println("Testing nested while loops with matrix [[1, 2], [3, 4], [5, 6]]");
     std::io::println("Expected sum: 21 (1+2+3+4+5+6)");
-    
+
     let i: Int = 0;
     let outer_length: Int = 0;
     go {
         outer_length = matrix.len()
     }
-    
+
     while (i < outer_length) {
         match matrix.get(i) {
             std::col::ArrayList<Int> @row => {
@@ -34,7 +34,7 @@ fn main() {
                 go {
                     inner_length = row.len()
                 }
-                
+
                 while (j < inner_length) {
                     match row.get(j) {
                         Int @value => total = total + value,
@@ -47,7 +47,7 @@ fn main() {
         }
         i = i + 1;
     }
-    
+
     std::io::println("Actual sum:");
     total->std::string::from_int()->std::io::println();
 }

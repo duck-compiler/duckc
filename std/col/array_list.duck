@@ -3,6 +3,18 @@ use ::{Opt};
 struct ArrayList<T> = {
     elems: T[]
 } impl {
+    static fn new<T>() -> ArrayList<T> {
+        ArrayList<T> {
+            elems: [] as T[],
+        }
+    }
+
+    static fn from_array<T>(initial_elements: T[]) -> ArrayList<T> {
+        ArrayList<T> {
+            elems: initial_elements
+        }
+    }
+
     mut fn push(new_elem: T) -> ArrayList<T> {
         go {
             (*self).elems = append((*self).elems, new_elem)
@@ -73,7 +85,7 @@ struct ArrayList<T> = {
     }
 
     fn map<U>(f: fn(x: T) -> U) -> ArrayList<U> {
-        let res: ArrayList<U> = empty_array_list<U>();
+        let res: ArrayList<U> = ArrayList::new<U>();
         go {
             for _, e := range (*self).elems {
                 res.elems = append(res.elems, f(e))
@@ -83,7 +95,7 @@ struct ArrayList<T> = {
     }
 
     fn filter(f: fn(x: T) -> Bool) -> ArrayList<T> {
-        let res: ArrayList<T> = empty_array_list<T>();
+        let res: ArrayList<T> = ArrayList::new<T>();
         go {
             for _, e := range (*self).elems {
                 if f(e) {
@@ -141,15 +153,3 @@ struct ArrayList<T> = {
     }
 
 };
-
-fn empty_array_list<T>() -> ArrayList<T> {
-    return ArrayList<T> {
-        elems: [] as T[],
-    };
-}
-
-fn array_of<T>(initial_elements: T[]) -> ArrayList<T> {
-    return ArrayList<T> {
-        elems: initial_elements
-    };
-}
