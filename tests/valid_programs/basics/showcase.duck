@@ -36,12 +36,12 @@ fn main() {
 
     println("before sleep");
     const chan = async (fn() -> Int {
-        std::task::sleep({seconds: 10});
+        std::task::sleep({seconds: 1});
         println("hello from async (main is sleeping)");
         return 10;
     })();
     chan.recv_block();
-    std::task::sleep({seconds: 3});
+    std::task::sleep({seconds: 2});
     println("after sleep");
 
 }

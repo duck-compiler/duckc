@@ -1,9 +1,0 @@
-use std::col::{empty_array_list};
-
-struct StrBuilder = {
-    segments: std::col::ArrayList<String>,
-};
-
-fn main() {
-    const str_builder = StrBuilder { segments: empty_array_list<String>() };
-}
