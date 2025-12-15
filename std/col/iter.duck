@@ -1,0 +1,117 @@
+use ::col::{ArrayList};
+
+struct Iter<T> = {
+    next_fn: mut fn() -> T | .no_next_elem,
+} impl {
+    static fn from<T>(next_fn: mut fn() -> T | .no_next_elem) -> Iter<T> {
+        return Iter<T> {
+            next_fn: next_fn,
+        }
+    }
+
+    mut fn for_each(f: fn(T)) {
+        while (true) {
+            let next = self.next_fn();
+            match next {
+                T @str => f(str),
+                .no_next_elem => return
+            }
+        }
+    }
+
+    mut fn map<U>(apply: fn(T) -> U) -> Iter<U> {
+        const next_fn = mut fn () -> U | .no_next_elem {
+            return match self.next_fn() {
+                T @t => apply(t),
+                .no_next_elem => .no_next_elem,
+            };
+        };
+
+        Iter::from<U>(next_fn)
+    }
+
+    mut fn filter(predicate: fn(T) -> Bool) -> Iter<T> {
+        const next_fn = mut fn () -> T | .no_next_elem {
+            while (true) {
+                match self.next_fn() {
+                    T @t => {
+                        if (predicate(t)) {
+                            return t;
+                        } else {
+                            continue;
+                        }
+                    },
+                    .no_next_elem => return .no_next_elem,
+                };
+            }
+        };
+
+        Iter::from<T>(next_fn)
+    }
+
+    mut fn skip(amount: Int) -> Iter<T> {
+        let to_skip = amount;
+        const next_fn = mut fn () -> T | .no_next_elem {
+            while (true) {
+                let next = self.next_fn();
+                if (to_skip > 0) {
+                    to_skip = to_skip - 1;
+                    continue;
+                }
+
+                return match next {
+                    T @t => t,
+                    .no_next_elem => return .no_next_elem,
+                };
+            }
+        };
+
+        Iter::from<T>(next_fn)
+    }
+
+    mut fn take(amount: Int) -> Iter<T> {
+        let to_take = 0;
+        const next_fn = mut fn () -> T | .no_next_elem {
+            let next = self.next_fn();
+            if (to_take >= amount) {
+                return .no_next_elem;
+            }
+
+            to_take = to_take + 1;
+            return match next {
+                T @t => t,
+                .no_next_elem => return .no_next_elem,
+            };
+        };
+
+        Iter::from<T>(next_fn)
+    }
+
+    mut fn indexed() -> Iter<T> {
+        let index = 0;
+        let next_fn = (mut fn () -> T | .no_next_elem {
+            const next = self.next_fn();
+            if (next == .no_next_elem) {
+                return .no_next_elem;
+            }
+
+            const result = next;
+            index = index + 1;
+            return result;
+        });
+
+        return Iter::from<T>(next_fn);
+    }
+
+    mut fn into_list() -> ArrayList<T> {
+        let arr = ArrayList::new<T>();
+        while (true) {
+            match self.next_fn() {
+                T @elem => arr.push(elem),
+                .no_next_elem => return arr,
+            }
+        }
+
+        return arr;
+    }
+};

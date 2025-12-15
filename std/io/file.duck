@@ -1,0 +1,90 @@
+use go "io";
+use go "bufio";
+use ::col::{Iter};
+
+struct File = {
+    file_ref: &go "os.File",
+} impl {
+    static fn new(path: String) -> File | .err {
+        let file_ref_or_err: &go "os.File";
+        go {
+            file, err := os.Create(path);
+            if err != nil {
+                return Tag__err{}
+            }
+
+            file_ref_or_err = file
+        }
+
+        File {
+            file_ref: file_ref_or_err
+        }
+    }
+
+    static fn open(path: String) -> File | .err {
+        let file_ref_or_err: &go "os.File";
+        go {
+            file, err := os.Open(path);
+            if err != nil {
+                return Tag__err{}
+            }
+
+            file_ref_or_err = file
+        }
+
+        File {
+            file_ref: file_ref_or_err
+        }
+    }
+
+
+    fn close() {
+        go {
+            (*self).file_ref.Close()
+        }
+    }
+
+    fn write_str(text: String) -> Int | .err {
+        go {
+            bytes_written, err := (*self).file_ref.WriteString(text)
+            if err != nil {
+                return Tag__err{ }
+            }
+
+            return bytes_written
+        }
+    }
+
+    fn read_str() -> String | .err {
+        go {
+            _, _ = (*self).file_ref.Seek(0, 0)
+            content_bytes, err := io.ReadAll((*self).file_ref)
+            if err != nil {
+                return Tag__err {}
+            }
+
+            content := string(content_bytes);
+            return content
+        }
+    }
+
+    fn lines() -> Iter<String> {
+        go {
+            var scanner = bufio.NewScanner((*self).file_ref)
+        }
+
+        let next_fn = mut fn() -> String | .no_next_elem {
+            go {
+                x := scanner.Scan()
+                if !x {
+                    return Tag__no_next_elem {}
+                }
+                line := scanner.Text()
+                return line
+            };
+        };
+
+        Iter::from<String>(next_fn)
+    }
+
+};
