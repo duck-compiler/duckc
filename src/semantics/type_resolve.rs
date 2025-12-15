@@ -37,7 +37,6 @@ use crate::{
 fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
     type_env.push_identifier_types();
     type_env.insert_identifier_type("props".to_string(), c.props_type.0.clone(), false, false);
-    type_env.all_types.push(c.props_type.0.clone());
     typeresolve_value_expr((&mut c.value_expr.0, c.value_expr.1), type_env);
     type_env.pop_identifier_types();
 }
@@ -51,9 +50,6 @@ fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, type_env: &mut
         false,
     );
 
-    type_env
-        .all_types
-        .push(extensions_def.target_type_expr.0.clone());
     let type_expr = extensions_def.target_type_expr.clone();
     for extension_method in &mut extensions_def.function_definitions {
         let extension_function_name = type_expr
@@ -81,9 +77,6 @@ fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, type_env: &mut
             (underlying_fn_type.clone(), access_fn_type.clone()),
         );
 
-        type_env.insert_type(access_fn_type);
-        type_env.insert_type(underlying_fn_type.0);
-
         typeresolve_function_definition(&mut extension_method.0, type_env);
     }
 }
@@ -95,7 +88,6 @@ fn typeresolve_test_case(test_case: &mut TestCase, type_env: &mut TypeEnv) {
 }
 
 fn typeresolve_tsx_component(c: &mut TsxComponent, type_env: &mut TypeEnv) {
-    type_env.all_types.push(c.props_type.0.clone());
     let units = c.find_units();
     let mut edits = Vec::new();
     for (range, unit) in units.iter() {
@@ -141,7 +133,6 @@ pub struct FunHeader {
 pub struct TypeEnv<'a> {
     pub identifier_types: Vec<HashMap<String, (TypeExpr, bool, bool)>>, // (type_expr, is_const, is_schema)
     pub type_aliases: Vec<HashMap<String, TypeExpr>>,
-    pub all_types: Vec<TypeExpr>,
     pub extension_functions: HashMap<String, (Spanned<TypeExpr>, TypeExpr)>, // key = extension function name, (actual_fn_type, access_fn_type)
 
     pub function_headers: HashMap<String, FunHeader>,
@@ -170,7 +161,6 @@ impl Default for TypeEnv<'_> {
         Self {
             identifier_types: vec![HashMap::new()],
             type_aliases: vec![HashMap::new()],
-            all_types: vec![],
 
             extension_functions: HashMap::new(),
             tsx_components: Vec::new(),
@@ -521,16 +511,10 @@ impl TypeEnv<'_> {
         is_const: bool,
         is_schema: bool,
     ) {
-        self.insert_type(type_expr.clone());
         self.identifier_types
             .last_mut()
             .expect("At least one env should exist. :(")
             .insert(identifier, (type_expr, is_const, is_schema));
-    }
-
-    pub fn insert_type(&mut self, type_expr: TypeExpr) -> TypeExpr {
-        self.all_types.push(type_expr.clone());
-        return type_expr;
     }
 
     pub fn get_identifier_type(&self, identifier: &str) -> Option<TypeExpr> {
@@ -2035,7 +2019,6 @@ pub fn typeresolve_struct_def(
     }
 
     type_env.pop_type_aliases();
-    type_env.all_types.insert(0, self_type.clone());
 }
 
 pub fn typeresolve_schema_def(schema_def: &mut SchemaDefinition, type_env: &mut TypeEnv) {
@@ -2067,9 +2050,6 @@ pub fn typeresolve_schema_def(schema_def: &mut SchemaDefinition, type_env: &mut 
     type_env.schema_defs.push(schema_def.clone());
 
     type_env.pop_type_aliases();
-    if let Some(fn_type) = &mut schema_def.schema_fn_type {
-        type_env.all_types.insert(0, fn_type.clone().0);
-    }
 }
 
 pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut TypeEnv) {
@@ -2308,8 +2288,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
         let schema_fn_type = TypeExpr::Fun(vec![], Box::new(schema_fn_return_type.clone()), false);
 
-        type_env.insert_type(schema_fn_return_type.clone().0);
-
         schema_def.out_type = Some(schema_fn_return_type);
         schema_def.schema_fn_type = Some((schema_fn_type.clone(), schema_def.span));
 
@@ -2422,7 +2400,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     .map(|(identifier, type_expr)| (Some(identifier.clone()), type_expr.clone()))
                     .collect::<Vec<_>>(),
                 Box::new((
-                    type_env.insert_type(function_definition.return_type.0.clone()),
+                    function_definition.return_type.0.clone(),
                     function_definition.return_type.1,
                 )),
                 true,
@@ -2537,7 +2515,6 @@ fn typeresolve_method_definition(
     if let TypeExpr::And(_) = &return_type {
         *return_type = translate_intersection_to_duck(return_type);
     }
-    *return_type = type_env.insert_type(return_type.clone());
 
     type_env.push_identifier_types();
 
@@ -2583,7 +2560,6 @@ fn typeresolve_function_definition(
     if let TypeExpr::And(_) = &return_type {
         *return_type = translate_intersection_to_duck(return_type);
     }
-    *return_type = type_env.insert_type(return_type.clone());
 
     type_env.push_identifier_types();
 
@@ -2771,8 +2747,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             }
         }
         ValueExpr::As(v, t) => {
-            type_env.insert_type(t.0.clone());
-
             if let ValueExpr::InlineGo(_, ty) = &mut v.0 {
                 *ty = Some(t.clone());
             }
@@ -2860,7 +2834,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                         typeresolve_value_expr((&mut e.0, e.1), type_env)
                     }
                     ValFmtStringContents::String(s) => {
-                        type_env.insert_type(TypeExpr::String(Some(s.clone())));
                         type_env.check_for_tailwind(s);
                     }
                 }
@@ -2884,8 +2857,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             for expr in exprs {
                 typeresolve_value_expr((&mut expr.0, expr.1), type_env);
             }
-            let ty = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
-            type_env.insert_type(ty);
         }
         ValueExpr::InlineGo(_, ty) => {
             if ty.is_none() {
@@ -2934,13 +2905,10 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         }
         ValueExpr::String(str, _) => {
             type_env.check_for_tailwind(str);
-            type_env.insert_type(TypeExpr::String(Some(str.clone())));
-        }
-        ValueExpr::Tag(tag) => {
-            type_env.insert_type(TypeExpr::Tag(tag.clone()));
         }
         ValueExpr::Int(..)
         | ValueExpr::Bool(..)
+        | ValueExpr::Tag(..)
         | ValueExpr::Char(..)
         | ValueExpr::Float(..)
         | ValueExpr::Break
@@ -3347,9 +3315,6 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
             infer_against(value_expr, &def_field.type_expr, type_env);
             typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
         });
-
-    let ty = TypeExpr::from_value_expr(&(value_expr.0.clone(), span), type_env);
-    type_env.insert_type(ty);
 }
 
 fn typeresolve_block(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
@@ -3365,7 +3330,6 @@ fn typeresolve_block(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
 }
 
 fn typeresolve_duck_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let span = value_expr.1;
     let ValueExpr::Duck(items) = value_expr.0 else {
         unreachable!("only pass structs to this function")
     };
@@ -3373,13 +3337,9 @@ fn typeresolve_duck_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &
     items.iter_mut().for_each(|(_, value_expr)| {
         typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env)
     });
-
-    let ty = TypeExpr::from_value_expr(&(value_expr.0.clone(), span), type_env);
-    type_env.insert_type(ty);
 }
 
 fn typeresolve_tuple(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let span = value_expr.1;
     let ValueExpr::Tuple(value_exprs) = value_expr.0 else {
         unreachable!("only pass structs to this function")
     };
@@ -3387,8 +3347,6 @@ fn typeresolve_tuple(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
     value_exprs
         .iter_mut()
         .for_each(|value_expr| typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env));
-    let ty = TypeExpr::from_value_expr(&(value_expr.0.clone(), span), type_env);
-    type_env.insert_type(ty);
 }
 
 fn typeresolve_while(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
