@@ -4,7 +4,7 @@ use crate::{
     emit::{
         ir::fix_idents_in_ir,
         types::emit_type_definitions,
-        value::{IrInstruction, ToIr},
+        value::{IrInstruction, IrValue, ToIr},
     },
     parse::{SS, source_file_parser::SourceFile, use_statement_parser::UseStatement},
     semantics::type_resolve::TypeEnv,
@@ -47,6 +47,24 @@ impl SourceFile {
         instructions.push(IrInstruction::GoPackage(pkg_name));
 
         instructions.push(IrInstruction::GoImports(go_imports));
+
+        for global_var in &self.global_var_decls {
+            let (mut init_code, Some(IrValue::Var(res_name) | IrValue::Imm(res_name))) =
+                global_var.initializer.0.emit(type_env, &mut to_ir, span)
+            else {
+                panic!(
+                    "Compiler Bug: need a var (global declaration {} {:?})",
+                    global_var.name, global_var.initializer.0
+                )
+            };
+            let go_type = global_var.type_expr.0.as_go_type_annotation(type_env);
+            init_code.push(IrInstruction::Return(Some(IrValue::Var(res_name))));
+            instructions.push(IrInstruction::GlobalVarDecl {
+                name: global_var.name.clone(),
+                go_type: go_type,
+                init_code: init_code,
+            });
+        }
 
         let mut emitted = HashSet::new();
 

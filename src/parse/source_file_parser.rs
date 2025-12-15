@@ -1,3 +1,4 @@
+use crate::parse::{type_parser::type_expression_parser, value_parser::value_expr_parser};
 use std::{collections::HashMap, fs::File, path::PathBuf};
 
 use chumsky::{input::BorrowInput, prelude::*};
@@ -37,6 +38,15 @@ pub struct SourceFile {
     pub duckx_components: Vec<DuckxComponent>,
     pub test_cases: Vec<TestCase>,
     pub schema_defs: Vec<SchemaDefinition>,
+    pub global_var_decls: Vec<GlobalVariableDeclaration>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GlobalVariableDeclaration {
+    pub is_mut: bool,
+    pub name: String,
+    pub type_expr: Spanned<TypeExpr>,
+    pub initializer: Spanned<ValueExpr>,
 }
 
 #[derive(Debug, Clone)]
@@ -51,6 +61,7 @@ pub enum SourceUnit {
     Use(UseStatement),
     Module(String, SourceFile),
     Test(Spanned<TestCase>),
+    GlobalVariableDecl(GlobalVariableDeclaration),
 }
 
 impl SourceFile {
@@ -103,6 +114,7 @@ impl SourceFile {
                     s.function_definitions
                         .iter()
                         .map(|x| x.name.clone())
+                        .chain(s.global_var_decls.iter().map(|x| x.name.clone()))
                         .collect::<Vec<_>>(),
                 ],
                 types: vec![
@@ -125,6 +137,11 @@ impl SourceFile {
                 for function_definition in src.function_definitions {
                     mangle_env.insert_ident(function_definition.name[prefix.len()..].to_string());
                     result.function_definitions.push(function_definition);
+                }
+
+                for global_var_decl in src.global_var_decls {
+                    mangle_env.insert_ident(global_var_decl.name[prefix.len()..].to_string());
+                    result.global_var_decls.push(global_var_decl);
                 }
 
                 for type_definition in src.type_definitions {
@@ -171,6 +188,25 @@ impl SourceFile {
                 if matches!(use_statement, UseStatement::Go(..)) {
                     result.push_use(use_statement);
                 }
+            }
+
+            for global in &s.global_var_decls {
+                let mut global = global.clone();
+
+                let mut p = Vec::new();
+                p.extend_from_slice(prefix);
+                p.push(global.name.clone());
+                global.name = mangle(&p);
+
+                mangle_type_expression(&mut global.type_expr.0, prefix, &mut mangle_env);
+                mangle_value_expr(
+                    &mut global.initializer.0,
+                    global_prefix,
+                    prefix,
+                    &mut mangle_env,
+                );
+
+                result.global_var_decls.push(global);
             }
 
             for func in &s.function_definitions {
@@ -364,6 +400,12 @@ impl SourceFile {
                     .function_definitions
                     .iter()
                     .map(|x| x.name.clone())
+                    .chain(
+                        flattened_source_file
+                            .global_var_decls
+                            .iter()
+                            .map(|x| x.name.clone()),
+                    )
                     .collect::<Vec<_>>(),
             ],
             types: vec![
@@ -394,6 +436,15 @@ impl SourceFile {
             }
 
             append_global_prefix_value_expr(&mut function_definition.value_expr.0, &mut mangle_env);
+        }
+
+        for global in &mut flattened_source_file.global_var_decls {
+            let mut p = global_prefix.clone();
+            p.extend(unmangle(&global.name));
+            global.name = mangle(&p);
+
+            append_global_prefix_type_expr(&mut global.type_expr.0, &mut mangle_env);
+            append_global_prefix_value_expr(&mut global.initializer.0, &mut mangle_env);
         }
 
         for type_definition in &mut flattened_source_file.type_definitions {
@@ -928,7 +979,22 @@ where
             struct_definition_parser(make_input.clone()).map(SourceUnit::Struct),
             function_definition_parser(make_input.clone()).map(SourceUnit::Func),
             test_parser(make_input.clone()).map(SourceUnit::Test),
-            schema_def_parser::schema_definition_parser(make_input).map(SourceUnit::Schema),
+            schema_def_parser::schema_definition_parser(make_input.clone()).map(SourceUnit::Schema),
+            choice((just(Token::Const).to(false), just(Token::Let).to(true)))
+                .then(select_ref! { Token::Ident(ident) => ident.clone() })
+                .then_ignore(just(Token::ControlChar(':')))
+                .then(type_expression_parser())
+                .then_ignore(just(Token::ControlChar('=')))
+                .then(value_expr_parser(make_input.clone()))
+                .then_ignore(just(Token::ControlChar(';')))
+                .map(|(((is_mut, name), ty), expr)| {
+                    SourceUnit::GlobalVariableDecl(GlobalVariableDeclaration {
+                        is_mut,
+                        name,
+                        type_expr: ty,
+                        initializer: expr,
+                    })
+                }),
             just(Token::Module)
                 .ignore_then(select_ref! { Token::Ident(i) => i.to_owned() })
                 .then(choice((
@@ -958,6 +1024,7 @@ where
             let mut template_components = Vec::new();
             let mut test_cases = Vec::new();
             let mut schema_defs = Vec::new();
+            let mut global_var_decls = Vec::new();
 
             for source_unit in source_units {
                 use SourceUnit::*;
@@ -978,6 +1045,7 @@ where
                     Template(duckx_component) => template_components.push(duckx_component),
                     Test(test_case) => test_cases.push(test_case.0),
                     Schema(schema_def) => schema_defs.push(schema_def),
+                    GlobalVariableDecl(decl) => global_var_decls.push(decl),
                 }
             }
 
@@ -992,6 +1060,7 @@ where
                 duckx_components: template_components,
                 test_cases,
                 schema_defs,
+                global_var_decls,
             }
         })
     })

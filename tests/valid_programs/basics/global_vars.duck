@@ -1,0 +1,14 @@
+use std::io::{println};
+use std::col::{GoMap};
+
+let global_string: String = "static variable init";
+let global_map: GoMap<String, Int> = GoMap::new<String, Int>();
+
+fn main() {
+    global_string->println();
+    global_string = "static variable after change";
+    global_string->println();
+
+    global_map.set("Test", 200);
+    match global_map.get(&"Test") { &Int @int => std::string::from_int(*int), else => return }->println();
+}

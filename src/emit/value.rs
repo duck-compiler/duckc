@@ -38,6 +38,11 @@ type ReturnType = Option<String>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrInstruction {
+    GlobalVarDecl {
+        name: String,
+        go_type: String,
+        init_code: Vec<IrInstruction>,
+    },
     Defer(Box<IrInstruction>),
     ForRangeElem {
         ident: String,
