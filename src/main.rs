@@ -407,6 +407,15 @@ fn parse_src_file(
                     typename_reset_global_value_expr(&mut field.1.0);
                 }
             }
+            ValueExpr::RawStruct { is_global, name: _, fields, type_params } => {
+                *is_global = false;
+                for field in fields {
+                    typename_reset_global_value_expr(&mut field.1.0);
+                }
+                for type_param in type_params {
+                    typename_reset_global(&mut type_param.0);
+                }
+            }
             ValueExpr::Break
             | ValueExpr::Char(..)
             | ValueExpr::Continue

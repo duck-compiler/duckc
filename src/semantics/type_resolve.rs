@@ -849,6 +849,19 @@ where
     f_vv(v, env);
 
     match &mut v.0 {
+        ValueExpr::RawStruct {
+            is_global: _,
+            name: _,
+            fields,
+            type_params,
+        } => {
+            for field in fields {
+                trav_value_expr(f_t.clone(), f_vv.clone(), &mut field.1, env);
+            }
+            for t in type_params {
+                trav_type_expr(f_t.clone(), t, env);
+            }
+        }
         ValueExpr::Lambda(l) => {
             for v in &mut l.params {
                 if let Some(t) = v.1.as_mut() {
@@ -1225,6 +1238,14 @@ fn replace_generics_in_value_expr(
     type_env: &mut TypeEnv<'_>,
 ) {
     match expr {
+        ValueExpr::RawStruct {
+            is_global,
+            name,
+            fields: _,
+            type_params: _,
+        } => {
+            panic!("Compiler Bug: raw struct sholdnt be here {name:?} {is_global}")
+        }
         ValueExpr::Async(d) | ValueExpr::Defer(d) => {
             replace_generics_in_value_expr(&mut d.0, set_params, type_env)
         }
@@ -1678,6 +1699,19 @@ pub fn resolve_type_expr(type_expr: &Spanned<TypeExpr>, env: &mut TypeEnv) -> Sp
 
 pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
     match expr {
+        ValueExpr::RawStruct {
+            is_global: _,
+            name: _,
+            fields,
+            type_params,
+        } => {
+            for field in fields {
+                sort_fields_value_expr(&mut field.1.0);
+            }
+            for t in type_params {
+                sort_fields_type_expr(&mut t.0);
+            }
+        }
         ValueExpr::Async(d) | ValueExpr::Defer(d) => sort_fields_value_expr(&mut d.0),
         ValueExpr::As(v, t) => {
             sort_fields_value_expr(&mut v.0);
@@ -2684,6 +2718,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     let value_expr = value_expr.0;
     let owned = value_expr.clone();
     match value_expr {
+        ValueExpr::RawStruct { .. } => panic!("raw struct should not be here {value_expr:?}"),
         ValueExpr::Async(inner) => {
             typeresolve_value_expr((&mut inner.0, inner.1), type_env);
             let inner_type = TypeExpr::from_value_expr(inner.as_ref(), type_env);

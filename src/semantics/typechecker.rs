@@ -66,6 +66,7 @@ impl TypeExpr {
         let value_expr = &value_expr.0;
 
         return match value_expr {
+            ValueExpr::RawStruct { .. } => panic!("raw struct should not be here"),
             ValueExpr::Async(e) => {
                 let inner = TypeExpr::from_value_expr(e, type_env);
 
@@ -289,7 +290,7 @@ impl TypeExpr {
                     return TypeExpr::Never;
                 }
 
-                value_type
+                TypeExpr::Statement
             }
             ValueExpr::VarDecl(decl) => {
                 let decl = decl.as_ref();
@@ -308,7 +309,7 @@ impl TypeExpr {
                     );
                 }
 
-                TypeExpr::Tuple(vec![])
+                TypeExpr::Statement
             }
             ValueExpr::Struct {
                 name,
