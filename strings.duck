@@ -1,6 +1,0 @@
-fn main() {
-    const z = "\"in strings\"";
-    const zz = f"{}{}{}";
-
-    zz->std::io::println();
-}

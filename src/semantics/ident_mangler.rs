@@ -353,6 +353,32 @@ pub fn mangle_value_expr(
     mangle_env: &mut MangleEnv,
 ) {
     match value_expr {
+        ValueExpr::RawStruct {
+            is_global,
+            name,
+            fields,
+            type_params,
+        } => {
+            if let Some(mangled) = mangle_env.mangle_type(*is_global, prefix, name) {
+                let mut m = mangle_env.global_prefix.clone();
+                m.extend(mangled);
+                *name = m;
+            }
+
+            fields.iter_mut().for_each(|(_, value_expr)| {
+                mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
+            });
+
+            for (g, _) in type_params.iter_mut() {
+                mangle_type_expression(g, prefix, mangle_env);
+            }
+
+            *value_expr = ValueExpr::Struct {
+                name: mangle(name),
+                fields: fields.clone(),
+                type_params: type_params.clone(),
+            };
+        }
         ValueExpr::Async(d) | ValueExpr::Defer(d) => {
             mangle_value_expr(&mut d.0, global_prefix, prefix, mangle_env)
         }

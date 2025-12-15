@@ -99,6 +99,12 @@ pub enum ValueExpr {
     HtmlString(Vec<ValHtmlStringContents>),
     Tag(String),
     As(Box<Spanned<ValueExpr>>, Spanned<TypeExpr>),
+    RawStruct {
+        is_global: bool,
+        name: Vec<String>,
+        fields: Vec<(String, Spanned<ValueExpr>)>,
+        type_params: Vec<Spanned<TypeParam>>,
+    },
     Struct {
         name: String,
         fields: Vec<(String, Spanned<ValueExpr>)>,
@@ -232,6 +238,7 @@ impl ValueExpr {
 
     pub fn needs_semicolon(&self) -> bool {
         match self {
+            ValueExpr::RawStruct { .. } => true,
             ValueExpr::Async(..) => true,
             ValueExpr::Defer(..) => true,
             ValueExpr::As(..) => true,
@@ -480,7 +487,15 @@ where
                 )
                 .then_ignore(just(Token::ControlChar('>')));
 
-            let struct_expression = select_ref! { Token::Ident(identifier) => identifier.clone() }
+            let struct_expression = just(Token::ScopeRes)
+                .or_not()
+                .map(|x| x.is_some())
+                .then(
+                    select_ref! { Token::Ident(identifier) => identifier.clone() }
+                        .separated_by(just(Token::ScopeRes))
+                        .at_least(1)
+                        .collect::<Vec<_>>(),
+                )
                 .then(struct_type_params_parser.or_not())
                 .then(
                     select_ref! { Token::Ident(ident) => ident.to_owned() }
@@ -491,11 +506,14 @@ where
                         .collect::<Vec<_>>()
                         .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}'))),
                 )
-                .map(|((identifier, generics), values)| ValueExpr::Struct {
-                    name: identifier,
-                    fields: values,
-                    type_params: generics.unwrap_or_default(),
-                })
+                .map(
+                    |(((is_global, identifier), generics), values)| ValueExpr::RawStruct {
+                        is_global,
+                        name: identifier,
+                        fields: values,
+                        type_params: generics.unwrap_or_default(),
+                    },
+                )
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
@@ -513,7 +531,8 @@ where
                             .ignore_then(value_expr_parser.clone()),
                     ),
                     struct_expression.clone().map(|(s, span)| {
-                        let ValueExpr::Struct {
+                        let ValueExpr::RawStruct {
+                            is_global,
                             name,
                             fields,
                             type_params,
@@ -524,7 +543,7 @@ where
 
                         if fields.is_empty() && type_params.is_empty() {
                             (
-                                (ValueExpr::RawVariable(false, vec![name]), span),
+                                (ValueExpr::RawVariable(is_global, name), span),
                                 (ValueExpr::Block(vec![]), span),
                             )
                         } else {
@@ -1600,23 +1619,35 @@ mod tests {
             ("true", ValueExpr::Bool(true)),
             ("false", ValueExpr::Bool(false)),
             (
+                "::MyStruct { x: 5 }",
+                ValueExpr::RawStruct {
+                    is_global: true,
+                    name: vec!["MyStruct".to_string()],
+                    fields: vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())],
+                    type_params: vec![],
+                },
+            ),
+            (
                 "MyStruct { x: 5 }",
-                ValueExpr::Struct {
-                    name: "MyStruct".to_string(),
+                ValueExpr::RawStruct {
+                    is_global: false,
+                    name: vec!["MyStruct".to_string()],
                     fields: vec![("x".to_string(), ValueExpr::Int(5).into_empty_span())],
                     type_params: vec![],
                 },
             ),
             (
                 "Outer { x: 5, y: Inner { x: 5 } }",
-                ValueExpr::Struct {
-                    name: "Outer".to_string(),
+                ValueExpr::RawStruct {
+                    is_global: false,
+                    name: vec!["Outer".to_string()],
                     fields: vec![
                         ("x".to_string(), ValueExpr::Int(5).into_empty_span()),
                         (
                             "y".to_string(),
-                            ValueExpr::Struct {
-                                name: "Inner".to_string(),
+                            ValueExpr::RawStruct {
+                                is_global: false,
+                                name: vec!["Inner".to_string()],
                                 fields: vec![(
                                     "x".to_string(),
                                     ValueExpr::Int(5).into_empty_span(),

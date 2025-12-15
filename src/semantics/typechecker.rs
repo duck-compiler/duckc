@@ -66,6 +66,7 @@ impl TypeExpr {
         let value_expr = &value_expr.0;
 
         return match value_expr {
+            ValueExpr::RawStruct { .. } => panic!("raw struct should not be here"),
             ValueExpr::Async(e) => {
                 let inner = TypeExpr::from_value_expr(e, type_env);
 
@@ -289,7 +290,7 @@ impl TypeExpr {
                     return TypeExpr::Never;
                 }
 
-                value_type
+                TypeExpr::Statement
             }
             ValueExpr::VarDecl(decl) => {
                 let decl = decl.as_ref();
@@ -308,7 +309,7 @@ impl TypeExpr {
                     );
                 }
 
-                TypeExpr::Tuple(vec![])
+                TypeExpr::Statement
             }
             ValueExpr::Struct {
                 name,
@@ -802,6 +803,12 @@ impl TypeExpr {
 
                     let mut both = vec![then_type_expr, else_type_expr];
                     both.retain(|t| !t.is_never());
+                    both.dedup_by_key(|x| x.type_id(type_env));
+                    if both.len() > 1 {
+                        return TypeExpr::Or(
+                            both.into_iter().map(|x| x.into_empty_span()).collect(),
+                        );
+                    }
                     return both[0].clone();
                 }
 
@@ -825,6 +832,7 @@ impl TypeExpr {
                     || target_obj_type_expr.ref_has_method_by_name(field_name.clone(), type_env)
                     || target_obj_type_expr.has_extension_by_name(field_name.clone(), type_env))
                 {
+                    // dbg!(&field_name, &target_obj_type_expr);
                     failure_with_occurence(
                         "Invalid Field Access",
                         {
@@ -850,7 +858,7 @@ impl TypeExpr {
                     .or_else(|| {
                         target_obj_type_expr.ref_typeof_field(field_name.to_string(), type_env)
                     })
-                    .expect("Invalid field access")
+                    .expect(&format!("Invalid field access {target_obj_type_expr}"))
             }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
@@ -1699,15 +1707,6 @@ pub fn check_type_compatability_full(
                     given_type.0.type_id(type_env)
                 );
                 return;
-                // let def =
-                //     type_env.get_duck_def_with_type_params_mut(name, type_params, given_type.1);
-                // let as_duck = (
-                //     TypeExpr::Duck(Duck {
-                //         fields: def.fields.clone(),
-                //     }),
-                //     given_type.1,
-                // );
-                // check_type_compatability_full(&required_type, &as_duck, type_env, given_const_var);
             }
             TypeExpr::Struct {
                 name: struct_name,
@@ -1861,91 +1860,6 @@ pub fn check_type_compatability_full(
                 check_type_compatability(required_item_type, given_item_type, type_env);
             }
         }
-        // this is a const time string check, which has been removed at 29.09.2025 by me mvmo m omo oo mo m o m
-        // yoooo
-        // TypeExpr::String(literal) => {
-        //     if !given_type.0.is_string() {
-        //         fail_requirement(
-        //             format!("this requires an at compile time known {}", required_type.0),
-        //             format!("this value isn't even a string, it's a {}.", given_type.0),
-        //         )
-        //     }
-
-        //     if !given_type.0.holds_const_value() {
-        //         fail_requirement(
-        //             format!("this requires a compile time known {}", required_type.0),
-        //             "this is a string, but it's not known at compile time".to_string(),
-        //         )
-        //     }
-
-        //     let required_string = literal;
-        //     let TypeExpr::String(given_string) = &given_type.0 else {
-        //         unreachable!("we've just checked that the given type is a string and is const")
-        //     };
-
-        //     // if given_string != required_string {
-        //     //     fail_requirement(
-        //     //         format!("this requires the compile time known string '{required_string}'"),
-        //     //         format!("this is a compile time known string, but it's '{given_string}'"),
-        //     //     )
-        //     // }
-        // }
-        // const int validation
-        // TypeExpr::Int(const_int) => {
-        //     if !given_type.0.is_int() {
-        //         fail_requirement(
-        //             "this requires an at compile time known Int".to_string(),
-        //             "this value isn't even an Int.".to_string(),
-        //         )
-        //     }
-
-        //     if !given_type.0.holds_const_value() {
-        //         fail_requirement(
-        //             "this requires a compile time known Int".to_string(),
-        //             "this is an Int, but it's not known at compile time".to_string(),
-        //         )
-        //     }
-
-        //     let required_int = const_int;
-        //     let TypeExpr::Int(given_int) = &given_type.0 else {
-        //         unreachable!("we've just checked that the given type is a int and is const")
-        //     };
-
-        //     if required_int != given_int {
-        //         fail_requirement(
-        //             format!("this requires the compile time known Int '{required_int}'"),
-        //             format!("this is a compile time known Int, but it's '{given_int}'"),
-        //         )
-        //     }
-        // }
-        // const bool validation
-        // TypeExpr::Bool(const_bool) => {
-        //     if !given_type.0.is_bool() {
-        //         fail_requirement(
-        //             "this requires an at compile time known Bool".to_string(),
-        //             "this value isn't even a Bool.".to_string(),
-        //         )
-        //     }
-
-        //     if !given_type.0.holds_const_value() {
-        //         fail_requirement(
-        //             "this requires a compile time known Bool".to_string(),
-        //             "this is an Bool, but it's not known at compile time".to_string(),
-        //         )
-        //     }
-
-        //     let required_bool = const_bool;
-        //     let TypeExpr::Bool(given_bool) = &given_type.0 else {
-        //         unreachable!("we've just checked that the given type is a bool and is const")
-        //     };
-
-        //     if required_bool != given_bool {
-        //         fail_requirement(
-        //             format!("this requires the compile time known Bool '{required_bool}'"),
-        //             format!("this is a compile time known Bool, but it's '{required_bool}'"),
-        //         )
-        //     }
-        // }
         TypeExpr::String(..) => {
             if !given_type.0.is_string() {
                 fail_requirement(

@@ -1,0 +1,4 @@
+{
+    "stdout": "hello from other_function\ni received yo\nHello my name is Robin and I am 22 years old\nHello my name is Karina and I am 22 years old\nbefore sleep\nhello from async (main is sleeping)\nafter sleep\n",
+    "stderr": ""
+}

@@ -1,0 +1,7 @@
+fn main() {
+    std::col::Iter::from<String>(mut fn() -> String | .no_next_elem {
+        .no_next_elem
+    }).indexed().for_each(fn(i) {
+        std::string::from_int(i.0)->std::io::println();
+    });
+}

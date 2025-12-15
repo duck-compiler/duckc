@@ -1,0 +1,29 @@
+struct ABC<T> = {
+} impl {
+    fn lol() -> ABC<ABC<T>>  {
+        ABC<ABC<T>>{}
+    }
+};
+
+fn main() {
+    ABC<String> {}.lol();
+
+    let count = 0;
+    let test_iter = std::col::Iter::from<String>(mut fn() -> String | .no_next_elem {
+        defer (mut fn() { count = count + 1; })();
+
+        if (count == 0) {
+            "first elem"
+        } else if (count == 1) {
+            "second elem"
+        } else {
+            .no_next_elem
+        }
+    });
+
+    test_iter
+        .indexed()
+        .for_each(fn(i) {
+            std::io::println(f"Idx {std::string::from_int(i.0 + 1)}: {i.1}");
+        });
+}

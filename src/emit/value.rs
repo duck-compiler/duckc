@@ -836,6 +836,9 @@ impl ValueExpr {
         span: SS,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
+            ValueExpr::RawStruct { .. } => {
+                panic!("Compiler Bug: Raw struct should be replaced {self:?}")
+            }
             ValueExpr::Async(e) => {
                 let return_type = TypeExpr::from_value_expr(&(self.clone(), span), type_env);
                 let inner_return_type = TypeExpr::from_value_expr(e, type_env);
