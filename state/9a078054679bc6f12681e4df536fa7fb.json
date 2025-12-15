@@ -1,7 +1,7 @@
 {
     "id": "9a078054679bc6f12681e4df536fa7fb",
     "file_path": "../../src/emit/value.rs",
-    "line_number": 2398,
+    "line_number": 2404,
     "title": "do deep copy for composite types",
     "tag": "todo",
     "module_tag": "emit",
