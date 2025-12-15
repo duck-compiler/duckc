@@ -1,70 +1,14 @@
-use go "fmt";
-use go "strconv";
-
-fn take_s(s: S) {}
-
-fn gen_fun<T>(x: C<T, T>) {
-}
-
-struct NoGen = {
-    x: String
-} impl {};
-
-struct GenS<T> = {
-    x: T,
-} impl {
-    fn abc() -> GenS<Int> {
-        return GenS<Int> { x: 100 };
-    }
-
-    fn xyz() -> GenS<Bool> {
-        return self.xx().y();
-    }
-
-    fn xx() -> GenS<Float> {
-        return GenS<Float> { x: 10.0 };
-    }
-
-    fn y() -> GenS<Bool> {
-        return GenS<Bool> { x: true };
-    }
-
-    fn mmap<U>(e: U) -> (GenS<U>, GenS<T>) {
-        return (GenS<U> { x: e }, *self);
-    }
-};
-
-fn gimme_s<E>(f: E) -> GenS<E> {
-    return GenS<E> { x: f };
-}
-
-type C<B, Y> = Y;
-type SS = C<Int, String>;
-type S = SS;
+use std::io::{File};
 
 fn main() {
-    const a = gimme_s<GenS<Int>>(GenS<Int> { x: 1000 });
-    const b = NoGen { x: "yo" };
+    const file = match File::new("example.txt") {
+        File @f => f,
+        else => return,
+    };
 
-    let a: go `mongo.client`;
+    let x = file.lines()
+        .into_list();
 
-    take_s("a");
-    gen_fun<Int>(0);
-    gen_fun<String>("yoo");
-    const x = GenS<String> { x: "yo" };
-    const y = x.abc();
-    const z = x.xyz();
-    if (z.x) {
-        go {
-            fmt.Println(1)
-        }
-    } else {
-        go {
-            fmt.Println(2)
-        }
-    }
-    const zz = z.mmap<Float>(3.0).0;
-    go {
-        fmt.Println(zz.x)
-    }
+    x.push("hello");
+    std::io::debug(x);
 }
