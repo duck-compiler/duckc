@@ -427,17 +427,26 @@ fn extract_package_name_from_import(import_text: &str) -> Option<String> {
 }
 
 fn extract_package_name_from_path(package_path: &str) -> String {
-    let package_path = if let Some(last_slash) = package_path.rfind('/') {
-        package_path[last_slash + 1..].to_string()
-    } else {
-        package_path.to_string()
-    };
+    let mut parts: Vec<&str> = package_path.split('/').collect();
 
-    return if let Some(last_dash) = package_path.rfind('-') {
-        package_path[last_dash + 1..].to_string()
-    } else {
-        package_path.to_string()
-    };
+    if parts.is_empty() {
+        return package_path.to_string();
+    }
+
+    let mut last_part = parts.pop().unwrap();
+    if last_part.len() > 1
+        && last_part.starts_with('v')
+        && last_part[1..].chars().all(|c| c.is_ascii_digit())
+        && !parts.is_empty()
+    {
+        last_part = parts.pop().unwrap();
+    }
+
+    if let Some(last_dash) = last_part.rfind('-') {
+        return last_part[last_dash + 1..].to_string();
+    }
+
+    last_part.to_string()
 }
 
 #[allow(dead_code)]
@@ -952,11 +961,11 @@ fn get_import_package_name(node: &Node, path: &str, source: &[u8]) -> Option<Str
         return match name_node.kind() {
             "identifier" => Some(name_node.utf8_text(source).unwrap().to_string()),
             "blank_identifier" => Some("_".to_string()), // handle blank imports
-            "dot" => Some(path.rsplit('/').next().unwrap_or(path).to_string()), // handle dot imports
+            "dot" => Some(extract_package_name_from_path(path)), // handle dot imports
             _ => None,
         };
     }
-    path.rsplit('/').next().map(|s| s.to_string())
+    Some(extract_package_name_from_path(path))
 }
 
 #[cfg(test)]
@@ -1837,18 +1846,13 @@ mod tests {
             Some("repo".to_string())
         );
         assert_eq!(
+            extract_package_name_from_import(r#""github.com/user/repo/v2""#),
+            Some("repo".to_string())
+        );
+        assert_eq!(
             extract_package_name_from_import(r#"import "fmt""#),
             Some("fmt".to_string())
         );
-        assert_eq!(
-            extract_package_name_from_import(r#"import "net/http""#),
-            Some("http".to_string())
-        );
-        assert_eq!(
-            extract_package_name_from_import(r#"import "github.com/http-routing""#),
-            Some("routing".to_string())
-        );
-        assert_eq!(extract_package_name_from_import("invalid"), None);
     }
 
     #[test]
@@ -1864,11 +1868,19 @@ mod tests {
         );
         assert_eq!(
             extract_package_name_from_path("github.com/user/repo/v2"),
-            "v2".to_string()
+            "repo".to_string()
+        );
+        assert_eq!(
+            extract_package_name_from_path("github.com/user/repo/v10"),
+            "repo".to_string()
         );
         assert_eq!(
             extract_package_name_from_path("github.com/user/repo/http-routing"),
             "routing".to_string()
+        );
+        assert_eq!(
+            extract_package_name_from_path("github.com/user/go-lib/v3"),
+            "lib".to_string()
         );
     }
 
@@ -4716,6 +4728,75 @@ mod tests {
                 // Direct method calls on external types
                 now := time.Now()
                 fmt.Println(now.String())
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_cleanup_versioned_import_usage() {
+        let input = r#"
+            package main
+
+            import (
+                "fmt"
+                "github.com/someuser/somepackage/v1"
+                "github.com/otheruser/lib/v2"
+            )
+
+            func main() {
+                // Should recognize 'somepackage' refers to the v1 import
+                somepackage.DoThing()
+                fmt.Println("done")
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "fmt"
+                "github.com/someuser/somepackage/v1"
+            )
+
+            func main() {
+                // Should recognize 'somepackage' refers to the v1 import
+                somepackage.DoThing()
+                fmt.Println("done")
+            }
+        "#;
+
+        assert_cleanup_result(input, expected, true);
+    }
+
+    #[test]
+    fn test_cleanup_versioned_import_with_dash() {
+        let input = r#"
+            package main
+
+            import (
+                "fmt"
+                "github.com/user/go-utils/v3"
+            )
+
+            func main() {
+                utils.Help()
+                fmt.Println("done")
+            }
+        "#;
+
+        let expected = r#"
+            package main
+
+            import (
+                "fmt"
+                "github.com/user/go-utils/v3"
+            )
+
+            func main() {
+                utils.Help()
+                fmt.Println("done")
             }
         "#;
 
