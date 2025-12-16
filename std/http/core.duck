@@ -3,15 +3,15 @@ use go "slices";
 use go "reflect";
 use go "unsafe";
 
-type RenderedTsx = (
+type RenderedJsx = (
     String,
     String,
 );
 
-type TsxComponent<P> = fn (props: P) -> RenderedTsx;
+type JsxComponent<P> = fn (props: P) -> RenderedJsx;
 
 fn with_react(
-    rendered_tsx: RenderedTsx
+    rendered_jsx: RenderedJsx
 ) -> String {
     let layout: String = f"
         <!DOCTYPE html>
@@ -24,8 +24,8 @@ fn with_react(
 
                     const html = htm.bind(h);
 
-                    {rendered_tsx.1}
-                    render(html`<$\{{rendered_tsx.0}} />`, document.body);
+                    {rendered_jsx.1}
+                    render(html`<$\{{rendered_jsx.0}} />`, document.body);
                 </script>
             </body>
         </html>
@@ -36,26 +36,26 @@ fn with_react(
 
 fn serve_component<P>(
     route: String,
-    tsx_component: TsxComponent<P>,
+    jsx_component: JsxComponent<P>,
     prop_supplier: fn () -> P,
 ) {
     let x = with_react;
     go {
         var h = x;
         http.HandleFunc(route, func (w http.ResponseWriter, r *http.Request) {
-            var tsx = tsx_component(prop_supplier());
-            w.Write([]byte(h(tsx)))
+            var jsx = jsx_component(prop_supplier());
+            w.Write([]byte(h(jsx)))
         })
     }
 }
 
 fn serve_string(
     route: String,
-    tsx_component: String,
+    jsx_component: String,
 ) {
     go {
         http.HandleFunc(route, func (w http.ResponseWriter, r *http.Request) {
-            w.Write([]byte(tsx_component))
+            w.Write([]byte(jsx_component))
         })
     }
 }

@@ -226,7 +226,7 @@ impl SourceFile {
             )],
         ));
 
-        for c in self.tsx_components {
+        for c in self.jsx_compontents {
             instructions.push(c.emit(type_env));
         }
 

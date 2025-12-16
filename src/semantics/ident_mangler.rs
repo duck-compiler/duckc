@@ -5,7 +5,7 @@ use tree_sitter::{Node, Parser};
 use crate::parse::{
     duckx_component_parser::DuckxComponent,
     function_parser::LambdaFunctionExpr,
-    tsx_component_parser::{Edit, TsxComponent, TsxSourceUnit, do_edits},
+    jsx_component_parser::{Edit, JsxComponent, JsxSourceUnit, do_edits},
     type_parser::{Duck, TypeExpr},
     value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr},
 };
@@ -17,7 +17,7 @@ pub struct MangleEnv {
     pub global_prefix: Vec<String>,
     pub names: Vec<Vec<String>>,
     pub types: Vec<Vec<String>>,
-    pub tsx_components: Vec<String>,
+    pub jsx_components: Vec<String>,
     pub duckx_components: Vec<String>,
 }
 
@@ -64,7 +64,7 @@ impl MangleEnv {
             return Some(res);
         }
 
-        if self.tsx_components.contains(ident.first().unwrap()) {
+        if self.jsx_components.contains(ident.first().unwrap()) {
             let mut x = Vec::new();
             if is_global {
                 // x.extend_from_slice(&self.global_prefix);
@@ -318,8 +318,8 @@ pub fn mangle_duckx_component(
     mangle_value_expr(&mut comp.value_expr.0, global_prefix, prefix, mangle_env);
 }
 
-pub fn mangle_tsx_component(
-    comp: &mut TsxComponent,
+pub fn mangle_jsx_component(
+    comp: &mut JsxComponent,
     _global_prefix: &[String],
     prefix: &[String],
     mangle_env: &mut MangleEnv,
@@ -328,8 +328,8 @@ pub fn mangle_tsx_component(
     let mut edits = Vec::new();
 
     for (range, unit) in units.iter() {
-        if let TsxSourceUnit::Ident = unit {
-            let old_ident = &comp.typescript_source.0[range.start_byte..range.end_byte];
+        if let JsxSourceUnit::Ident = unit {
+            let old_ident = &comp.javascript_source.0[range.start_byte..range.end_byte];
             //todo(@Apfelfrosch): use our scope resolution syntax
             let ident_str = mangle_env.mangle_component(prefix, &old_ident.replace("--", "::"));
 
@@ -343,7 +343,7 @@ pub fn mangle_tsx_component(
         }
     }
 
-    do_edits(&mut comp.typescript_source.0, &mut edits);
+    do_edits(&mut comp.javascript_source.0, &mut edits);
 }
 
 pub fn mangle_value_expr(

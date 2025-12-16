@@ -1631,7 +1631,7 @@ impl ValueExpr {
                                 let src = type_env.get_component(x.as_str()).unwrap();
                                 let js_src = format!(
                                     "function {}(props){{\n{}\n}}",
-                                    src.name, src.typescript_source.0
+                                    src.name, src.javascript_source.0
                                 );
                                 acc.push_str(&format!(
                                     "env.push_client_component(\"{}\")\n",

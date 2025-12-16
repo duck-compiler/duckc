@@ -1229,8 +1229,8 @@ pub fn source_file_into_empty_range(v: &mut SourceFile) {
         }
     }
 
-    for x in &mut v.tsx_components {
-        x.typescript_source.1 = empty_range()
+    for x in &mut v.jsx_compontents {
+        x.javascript_source.1 = empty_range()
     }
 }
 

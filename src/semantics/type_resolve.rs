@@ -19,8 +19,8 @@ use crate::{
         source_file_parser::SourceFile,
         struct_parser::{NamedDuckDefinition, StructDefinition},
         test_parser::TestCase,
-        tsx_component_parser::{
-            Edit, TsxComponent, TsxComponentDependencies, TsxSourceUnit, do_edits,
+        jsx_component_parser::{
+            Edit, JsxComponent, JsxComponentDependencies, JsxSourceUnit, do_edits,
         },
         type_parser::{Duck, TypeDefinition, TypeExpr},
         value_parser::{
@@ -88,27 +88,27 @@ fn typeresolve_test_case(test_case: &mut TestCase, type_env: &mut TypeEnv) {
     type_env.pop_identifier_types();
 }
 
-fn typeresolve_tsx_component(c: &mut TsxComponent, type_env: &mut TypeEnv) {
+fn typeresolve_jsx_component(c: &mut JsxComponent, type_env: &mut TypeEnv) {
     let units = c.find_units();
     let mut edits = Vec::new();
     for (range, unit) in units.iter() {
         match unit {
-            TsxSourceUnit::Jsx => {
+            JsxSourceUnit::Jsx => {
                 edits.push((range.start_byte, Edit::Insert("html`".to_string())));
                 edits.push((range.end_byte, Edit::Insert("`".to_string())));
             }
-            TsxSourceUnit::OpeningJsx => edits.push((range.start_byte, Edit::Delete(2))),
-            TsxSourceUnit::ClosingJsx => edits.push((range.start_byte, Edit::Delete(3))),
-            TsxSourceUnit::Expression => {
+            JsxSourceUnit::OpeningJsx => edits.push((range.start_byte, Edit::Delete(2))),
+            JsxSourceUnit::ClosingJsx => edits.push((range.start_byte, Edit::Delete(3))),
+            JsxSourceUnit::Expression => {
                 if range.start_byte > 0
-                    && &c.typescript_source.0[range.start_byte - 1..(range.start_byte)] != "$"
+                    && &c.javascript_source.0[range.start_byte - 1..(range.start_byte)] != "$"
                 {
                     edits.push((range.start_byte, Edit::Insert("$".to_string())))
                 }
             }
-            TsxSourceUnit::Ident => {
+            JsxSourceUnit::Ident => {
                 // here we could implement rpc calls
-                let ident = &c.typescript_source.0[range.start_byte..range.end_byte];
+                let ident = &c.javascript_source.0[range.start_byte..range.end_byte];
 
                 if let Some(found_comp) = type_env.get_component(ident) {
                     let found_name = found_comp.name.clone();
@@ -121,7 +121,7 @@ fn typeresolve_tsx_component(c: &mut TsxComponent, type_env: &mut TypeEnv) {
             }
         }
     }
-    do_edits(&mut c.typescript_source.0, &mut edits);
+    do_edits(&mut c.javascript_source.0, &mut edits);
 }
 
 #[derive(Debug, Clone)]
@@ -138,9 +138,9 @@ pub struct TypeEnv<'a> {
 
     pub function_headers: HashMap<String, FunHeader>,
     pub function_definitions: Vec<FunctionDefintion>,
-    pub tsx_components: Vec<TsxComponent>,
+    pub jsx_components: Vec<JsxComponent>,
     pub duckx_components: Vec<DuckxComponent>,
-    pub tsx_component_dependencies: HashMap<String, TsxComponentDependencies>,
+    pub jsx_component_dependencies: HashMap<String, JsxComponentDependencies>,
     pub struct_definitions: Vec<StructDefinition>,
     pub schema_defs: Vec<SchemaDefinition>,
     pub named_duck_definitions: Vec<NamedDuckDefinition>,
@@ -166,9 +166,9 @@ impl Default for TypeEnv<'_> {
             type_aliases: vec![HashMap::new()],
 
             extension_functions: HashMap::new(),
-            tsx_components: Vec::new(),
+            jsx_components: Vec::new(),
             duckx_components: Vec::new(),
-            tsx_component_dependencies: HashMap::new(),
+            jsx_component_dependencies: HashMap::new(),
             function_headers: HashMap::new(),
             function_definitions: Vec::new(),
             struct_definitions: Vec::new(),
@@ -409,11 +409,11 @@ impl TypeEnv<'_> {
     }
 
     pub fn has_component(&self, name: &str) -> bool {
-        self.tsx_components.iter().any(|x| x.name.as_str() == name)
+        self.jsx_components.iter().any(|x| x.name.as_str() == name)
     }
 
-    pub fn get_component_dependencies(&mut self, name: String) -> &mut TsxComponentDependencies {
-        self.tsx_component_dependencies.entry(name).or_default()
+    pub fn get_component_dependencies(&mut self, name: String) -> &mut JsxComponentDependencies {
+        self.jsx_component_dependencies.entry(name).or_default()
     }
 
     pub fn get_duckx_component(&self, name: &str) -> Option<&DuckxComponent> {
@@ -422,7 +422,7 @@ impl TypeEnv<'_> {
 
     pub fn get_full_component_dependencies(&mut self, name: &str) -> HashSet<String> {
         let mut out = self
-            .tsx_component_dependencies
+            .jsx_component_dependencies
             .entry(name.to_string())
             .or_default()
             .client_components
@@ -440,8 +440,8 @@ impl TypeEnv<'_> {
         out
     }
 
-    pub fn get_component<'a>(&'a self, name: &str) -> Option<&'a TsxComponent> {
-        self.tsx_components.iter().find(|x| x.name.as_str() == name)
+    pub fn get_component<'a>(&'a self, name: &str) -> Option<&'a JsxComponent> {
+        self.jsx_components.iter().find(|x| x.name.as_str() == name)
     }
 
     pub fn has_method_header(&self, name: &str) -> bool {
@@ -2139,7 +2139,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         });
 
     source_file
-        .tsx_components
+        .jsx_compontents
         .iter_mut()
         .for_each(|function_definition| {
             sort_fields_type_expr(&mut function_definition.props_type.0);
@@ -2363,20 +2363,20 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     });
 
     source_file
-        .tsx_components
+        .jsx_compontents
         .iter_mut()
-        .for_each(|tsx_component| {
-            resolve_all_aliases_type_expr(&mut tsx_component.props_type, type_env);
+        .for_each(|jsx_component| {
+            resolve_all_aliases_type_expr(&mut jsx_component.props_type, type_env);
             type_env.insert_identifier_type(
-                tsx_component.name.clone(),
+                jsx_component.name.clone(),
                 TypeExpr::Fun(
-                    vec![(Some("props".to_string()), tsx_component.props_type.clone())],
+                    vec![(Some("props".to_string()), jsx_component.props_type.clone())],
                     Box::new((
                         TypeExpr::Tuple(vec![
-                            (TypeExpr::String(None), tsx_component.typescript_source.1),
-                            (TypeExpr::String(None), tsx_component.typescript_source.1),
+                            (TypeExpr::String(None), jsx_component.javascript_source.1),
+                            (TypeExpr::String(None), jsx_component.javascript_source.1),
                         ]),
-                        tsx_component.typescript_source.1,
+                        jsx_component.javascript_source.1,
                     )),
                     true,
                 ),
@@ -2419,9 +2419,9 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             type_env.duckx_components.push(duckx_component.clone());
         });
 
-    for comp in &source_file.tsx_components {
-        type_env.tsx_components.push(comp.clone());
-        type_env.check_for_tailwind(&comp.typescript_source.0);
+    for comp in &source_file.jsx_compontents {
+        type_env.jsx_components.push(comp.clone());
+        type_env.check_for_tailwind(&comp.javascript_source.0);
     }
 
     println!(
@@ -2515,8 +2515,8 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             false,
         );
     }
-    for s in &mut source_file.tsx_components {
-        typeresolve_tsx_component(s, type_env);
+    for s in &mut source_file.jsx_compontents {
+        typeresolve_jsx_component(s, type_env);
     }
 
     for s in &mut source_file.duckx_components {
@@ -2528,7 +2528,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         typeresolve_test_case(test_case, type_env);
     }
 
-    type_env.tsx_components = source_file.tsx_components.clone();
+    type_env.jsx_components = source_file.jsx_compontents.clone();
     type_env.duckx_components = source_file.duckx_components.clone();
 
     for extensions_def in &mut source_file.extensions_defs {

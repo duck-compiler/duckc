@@ -12,7 +12,7 @@ module error;
 module http;
 module sync;
 
-component lol() tsx {
+component lol() jsx {
     return (<><p>yo</p></>);
 }
 
