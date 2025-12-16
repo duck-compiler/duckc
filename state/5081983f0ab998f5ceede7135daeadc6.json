@@ -1,8 +1,8 @@
 {
-    "id": "eee19c9eacf8b0e692691cbb8b5b5f48",
-    "file_path": "../../src/parse/lexer.rs",
-    "line_number": 1299,
-    "title": "divide token",
+    "id": "5081983f0ab998f5ceede7135daeadc6",
+    "file_path": "../../src/parse/source_file_parser.rs",
+    "line_number": 362,
+    "title": "mangle components in jsx",
     "tag": "todo",
     "module_tag": "parse",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Robin F\u00fcllgraf",
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
-    "source_line": "// todo: divide token",
+    "source_line": "// todo: mangle components in jsx",
     "status": "open",
-    "first_seen": "2025-07-10T02:06:00.308985",
+    "first_seen": "2025-12-16T19:40:22.126630",
     "history": []
 }
