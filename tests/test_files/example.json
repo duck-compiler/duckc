@@ -1,0 +1,10 @@
+{
+  "app_name": "duck-example",
+  "version": "1.0.0",
+  "plugins": ["andere", "coole"],
+  "author": [
+    {
+    "name": "Mr. G",
+    "phone": "10850"
+  }]
+}
