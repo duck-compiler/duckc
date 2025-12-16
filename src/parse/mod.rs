@@ -18,7 +18,7 @@ pub mod schema_def_parser;
 pub mod source_file_parser;
 pub mod struct_parser;
 pub mod test_parser;
-pub mod tsx_component_parser;
+pub mod jsx_component_parser;
 pub mod type_parser;
 pub mod use_statement_parser;
 pub mod value_parser;

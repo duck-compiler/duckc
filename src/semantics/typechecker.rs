@@ -858,7 +858,7 @@ impl TypeExpr {
                     .or_else(|| {
                         target_obj_type_expr.ref_typeof_field(field_name.to_string(), type_env)
                     })
-                    .expect(&format!("Invalid field access {target_obj_type_expr}"))
+                    .unwrap_or_else(|| panic!("Invalid field access {target_obj_type_expr}"))
             }
             ValueExpr::While { condition, body } => {
                 let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);

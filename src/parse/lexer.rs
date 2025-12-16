@@ -72,7 +72,7 @@ pub enum Token {
     Continue,
     As,
     InlineGo(String),
-    InlineTsx(String),
+    InlineJsx(String),
     InlineDuckx(Vec<Spanned<Token>>),
     Module,
     ScopeRes,
@@ -138,7 +138,7 @@ impl Display for Token {
             Token::Continue => "continue",
             Token::As => "as",
             Token::InlineGo(_) => "inline go",
-            Token::InlineTsx(_) => "inline tsx",
+            Token::InlineJsx(_) => "inline jsx",
             Token::InlineDuckx(_) => "inline duckx",
             Token::Module => "module",
             Token::Match => "match",
@@ -591,11 +591,10 @@ pub fn lex_single<'a>(
             });
 
         let token = inline_go_parser()
-            .or(inline_tsx_parser())
+            .or(inline_jsx_parser())
             .or(just("duckx")
                 .ignore_then(whitespace().at_least(1))
                 .ignore_then(just("{").rewind())
-                // todo: [TSX] create tsx text parser
                 .ignore_then(duckx_contents_in_curly_braces(
                     file_name,
                     file_contents,
@@ -691,14 +690,13 @@ fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'s
         .map(Token::IntLiteral)
 }
 
-fn inline_tsx_parser<'src>()
+fn inline_jsx_parser<'src>()
 -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone {
-    just("tsx")
+    just("jsx")
         .ignore_then(whitespace().at_least(1))
         .ignore_then(just("{").rewind())
-        // todo: [TSX] create tsx text parser
         .ignore_then(go_text_parser())
-        .map(|x| Token::InlineTsx(x[1..x.len() - 1].to_owned()))
+        .map(|x| Token::InlineJsx(x[1..x.len() - 1].to_owned()))
 }
 
 fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone {
@@ -943,18 +941,18 @@ mod tests {
             ),
             ("component", vec![Token::Component]),
             (
-                "tsx {console.log(\"Hallo, Welt\")}",
-                vec![Token::InlineTsx("console.log(\"Hallo, Welt\")".to_string())],
+                "jsx {console.log(\"Hallo, Welt\")}",
+                vec![Token::InlineJsx("console.log(\"Hallo, Welt\")".to_string())],
             ),
             (
-                "tsx {{console.log(\"Hallo, Welt\")}}",
-                vec![Token::InlineTsx(
+                "jsx {{console.log(\"Hallo, Welt\")}}",
+                vec![Token::InlineJsx(
                     "{console.log(\"Hallo, Welt\")}".to_string(),
                 )],
             ),
             (
-                "tsx {<MyComponent name=\"lol\"/>\n<h1>hallo</h1>}",
-                vec![Token::InlineTsx(
+                "jsx {<MyComponent name=\"lol\"/>\n<h1>hallo</h1>}",
+                vec![Token::InlineJsx(
                     "<MyComponent name=\"lol\"/>\n<h1>hallo</h1>".to_string(),
                 )],
             ),

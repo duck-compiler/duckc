@@ -98,7 +98,7 @@ fn main() {
 Duck is built for the web. You can define React components that include native JavaScript and reference them directly in your server-side templates.
 
 ```jsx
-component MyComponent(props: { name: String }) tsx {
+component MyComponent(props: { name: String }) jsx {
   const [name, setName] = useState(props.name);
   return <>
     <span>{name}</span>

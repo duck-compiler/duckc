@@ -61,8 +61,8 @@ impl SourceFile {
             init_code.push(IrInstruction::Return(Some(IrValue::Var(res_name))));
             instructions.push(IrInstruction::GlobalVarDecl {
                 name: global_var.name.clone(),
-                go_type: go_type,
-                init_code: init_code,
+                go_type,
+                init_code,
             });
         }
 
@@ -226,7 +226,7 @@ impl SourceFile {
             )],
         ));
 
-        for c in self.tsx_components {
+        for c in self.jsx_compontents {
             instructions.push(c.emit(type_env));
         }
 

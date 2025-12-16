@@ -462,9 +462,7 @@ impl SchemaDefinition {
 
         {};
 
-        let instr = IrInstruction::InlineGo(format!(
-            "{from_json_body}",
-        ));
+        let instr = IrInstruction::InlineGo(from_json_body.to_string());
         body_instructions.push(instr);
 
         IrInstruction::FunDef(

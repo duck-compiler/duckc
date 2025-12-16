@@ -1,7 +1,7 @@
 use crate::{
     TypeExpr,
     emit::{types::escape_string_for_go, value::IrInstruction},
-    parse::{tsx_component_parser::TsxComponent, type_parser::Duck},
+    parse::{jsx_component_parser::JsxComponent, type_parser::Duck},
     semantics::type_resolve::TypeEnv,
 };
 
@@ -126,11 +126,11 @@ fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
     )
 }
 
-impl TsxComponent {
+impl JsxComponent {
     fn emit_js(&self) -> String {
         format!(
             "function {}(props){{{}}}",
-            self.name, self.typescript_source.0
+            self.name, self.javascript_source.0
         )
     }
 
@@ -173,7 +173,7 @@ impl TsxComponent {
                     .join("\n")
             ),
             self.name,
-            escape_string_for_go(&self.typescript_source.0)
+            escape_string_for_go(&self.javascript_source.0)
         );
 
         IrInstruction::FunDef(

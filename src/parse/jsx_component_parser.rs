@@ -9,19 +9,19 @@ use crate::parse::{
 use super::lexer::Token;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct TsxComponent {
+pub struct JsxComponent {
     pub name: String,
     pub props_type: Spanned<TypeExpr>,
-    pub typescript_source: Spanned<String>,
+    pub javascript_source: Spanned<String>,
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct TsxComponentDependencies {
+pub struct JsxComponentDependencies {
     pub client_components: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
-pub enum TsxSourceUnit {
+pub enum JsxSourceUnit {
     Jsx,
     OpeningJsx,
     ClosingJsx,
@@ -61,15 +61,15 @@ pub fn do_edits(to_edit: &mut String, edits: &mut [(usize, Edit)]) {
     }
 }
 
-impl TsxComponent {
-    pub fn find_units(&self) -> Vec<(tree_sitter::Range, TsxSourceUnit)> {
+impl JsxComponent {
+    pub fn find_units(&self) -> Vec<(tree_sitter::Range, JsxSourceUnit)> {
         let mut parser = TSParser::new();
         parser
             .set_language(&tree_sitter_javascript::LANGUAGE.into())
             .expect("Couldn't set js grammar");
 
         let src = parser
-            .parse(self.typescript_source.0.as_bytes(), None)
+            .parse(self.javascript_source.0.as_bytes(), None)
             .unwrap();
         let root_node = src.root_node();
 
@@ -77,20 +77,20 @@ impl TsxComponent {
             node: &Node,
             text: &[u8],
             already_in_jsx: bool,
-            out: &mut Vec<(tree_sitter::Range, TsxSourceUnit)>,
+            out: &mut Vec<(tree_sitter::Range, JsxSourceUnit)>,
         ) {
             if node.grammar_name() == "identifier" {
-                out.push((node.range(), TsxSourceUnit::Ident));
+                out.push((node.range(), JsxSourceUnit::Ident));
             } else if node.grammar_name() == "jsx_opening_element"
                 && node.utf8_text(text).is_ok_and(|x| x == "<>")
             {
-                out.push((node.range(), TsxSourceUnit::OpeningJsx));
+                out.push((node.range(), JsxSourceUnit::OpeningJsx));
             } else if node.grammar_name() == "jsx_closing_element"
                 && node.utf8_text(text).is_ok_and(|x| x == "</>")
             {
-                out.push((node.range(), TsxSourceUnit::ClosingJsx));
+                out.push((node.range(), JsxSourceUnit::ClosingJsx));
             } else if node.grammar_name() == "jsx_expression" {
-                out.push((node.range(), TsxSourceUnit::Expression));
+                out.push((node.range(), JsxSourceUnit::Expression));
                 for i in 0..node.child_count() {
                     trav(node.child(i).as_ref().unwrap(), text, false, out);
                 }
@@ -99,7 +99,7 @@ impl TsxComponent {
 
             if node.grammar_name().starts_with("jsx_") {
                 if !already_in_jsx {
-                    out.push((node.range(), TsxSourceUnit::Jsx));
+                    out.push((node.range(), JsxSourceUnit::Jsx));
                 }
                 for i in 0..node.child_count() {
                     trav(node.child(i).as_ref().unwrap(), text, true, out);
@@ -114,7 +114,7 @@ impl TsxComponent {
         let mut out = Vec::new();
         trav(
             &root_node,
-            self.typescript_source.0.as_bytes(),
+            self.javascript_source.0.as_bytes(),
             false,
             &mut out,
         );
@@ -122,8 +122,8 @@ impl TsxComponent {
     }
 }
 
-pub fn tsx_component_parser<'src, I>()
--> impl Parser<'src, I, TsxComponent, extra::Err<Rich<'src, Token, SS>>> + Clone
+pub fn jsx_component_parser<'src, I>()
+-> impl Parser<'src, I, JsxComponent, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
 {
@@ -143,15 +143,15 @@ where
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
         )
         .then(
-            select_ref! { Token::InlineTsx(tsx_source) => tsx_source.clone() }
+            select_ref! { Token::InlineJsx(jsx_source) => jsx_source.clone() }
                 .map_with(|x, e| (x, e.span())),
         )
         .map(
-            |(((ident, ident_span), props_type), tsx_source)| TsxComponent {
+            |(((ident, ident_span), props_type), jsx_source)| JsxComponent {
                 name: ident.clone(),
                 props_type: props_type
                     .unwrap_or((TypeExpr::Duck(Duck { fields: Vec::new() }), ident_span)),
-                typescript_source: tsx_source,
+                javascript_source: jsx_source,
             },
         )
 }
@@ -169,11 +169,11 @@ mod tests {
     #[test]
     fn test_component_parser() {
         let src_and_expected_ast = vec![(
-            "component T() tsx {useState()}",
-            TsxComponent {
+            "component T() jsx {useState()}",
+            JsxComponent {
                 name: "T".to_string(),
                 props_type: TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span(),
-                typescript_source: ("useState()".to_string(), empty_range()),
+                javascript_source: ("useState()".to_string(), empty_range()),
             },
         )];
 
@@ -189,7 +189,7 @@ mod tests {
 
             println!("parsing component statement {src}");
             let component_parse_result =
-                tsx_component_parser().parse(make_input(empty_range(), tokens.as_slice()));
+                jsx_component_parser().parse(make_input(empty_range(), tokens.as_slice()));
             assert_eq!(component_parse_result.has_errors(), false);
             assert_eq!(component_parse_result.has_output(), true);
 
@@ -198,7 +198,7 @@ mod tests {
             };
 
             let mut ast = ast;
-            ast.typescript_source.1 = empty_range();
+            ast.javascript_source.1 = empty_range();
             type_expr_into_empty_range(&mut ast.props_type);
 
             assert_eq!(ast, expected_ast);
@@ -235,7 +235,7 @@ mod tests {
             println!("component parser try invalid {invalid_component_statement}");
 
             let component_parse_result =
-                tsx_component_parser().parse(make_input(empty_range(), tokens.as_slice()));
+                jsx_component_parser().parse(make_input(empty_range(), tokens.as_slice()));
 
             assert_eq!(component_parse_result.has_errors(), true);
             assert_eq!(component_parse_result.has_output(), false);
