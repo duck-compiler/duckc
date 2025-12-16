@@ -5,7 +5,7 @@ use crate::{
     },
     parse::{
         schema_def_parser::{SchemaDefinition, SchemaField},
-        type_parser::{Duck, TypeExpr},
+        type_parser::{TypeExpr},
         value_parser::{Assignment, ValueExpr, empty_range},
     },
     semantics::type_resolve::TypeEnv,
@@ -13,9 +13,9 @@ use crate::{
 
 /*
  * var result struct {
- *     username: string,
+ * username: string,
  * } = struct{}{
- *     username: string,
+ * username: string,
  * }
  */
 impl SchemaDefinition {
@@ -25,6 +25,14 @@ impl SchemaDefinition {
         } else {
             ""
         };
+
+        if let TypeExpr::Duck(_) = field.type_expr.0 {
+            return format!(
+                "F_{0} json.RawMessage `json:\"{0}{1}\"`",
+                field.name,
+                omit_empty
+            );
+        }
 
         return format!(
             "F_{0} *{1} `json:\"{0}{2}\"`",
@@ -50,7 +58,7 @@ impl SchemaDefinition {
                 .iter()
                 .map(|field_src| field_src.to_string())
                 .collect::<Vec<_>>()
-                .join(","),
+                .join("\n"),
         );
 
         let mut schema_struct_access_srcs = vec![];
@@ -92,15 +100,35 @@ impl SchemaDefinition {
 
             let null_action_src = join_ir(&null_action_emitted.0);
 
-            let src = format!(
-                "
-                if ref_struct.F_{field_name} == nil {{
-                    {null_action_src}
-                }}
+            let src = if let TypeExpr::Duck(_) = schema_field.type_expr.0 {
+                let duck_type_name = schema_field.type_expr.0.as_clean_go_type_name(type_env);
+                format!("
+                    var field_{field_name} {field_type_annotation}
+                    if len(ref_struct.F_{field_name}) == 0 {{
+                         {null_action_src}
+                    }}
 
-                var field_{field_name} {field_type_annotation} = *ref_struct.F_{field_name}
-                ",
-            );
+                    if len(ref_struct.F_{field_name}) > 0 {{
+                        var parsed_any any = {duck_type_name}_FromJson(string(ref_struct.F_{field_name}))
+                        switch v := parsed_any.(type) {{
+                            case Tag__err:
+                                return Tag__err{{}}
+                            case {field_type_annotation}:
+                                field_{field_name} = v
+                            default:
+                                return Tag__err{{}}
+                        }}
+                    }}
+                ")
+            } else {
+                format!("
+                    if ref_struct.F_{field_name} == nil {{
+                        {null_action_src}
+                    }}
+
+                    var field_{field_name} {field_type_annotation} = *ref_struct.F_{field_name}
+                ")
+            };
 
             schema_struct_access_srcs.push(src);
 
@@ -120,14 +148,12 @@ impl SchemaDefinition {
 
                 let condition_based_src = join_ir(&condition_based_value_emitted.0);
 
-                let src = format!(
-                    "
+                let src = format!("
                     {condition_src}
-                    if field_{field_name} != nil && {condition_var_src} {{
+                    if {condition_var_src} {{
                         {condition_based_src}
                     }}
-                ",
-                );
+                ");
 
                 schema_struct_access_srcs.push(src);
             }
@@ -231,7 +257,7 @@ impl SchemaDefinition {
                 .iter()
                 .map(|field_src| field_src.to_string())
                 .collect::<Vec<_>>()
-                .join(","),
+                .join("\n"),
         );
 
         let mut schema_struct_access_srcs = vec![];
@@ -273,15 +299,35 @@ impl SchemaDefinition {
 
             let null_action_src = join_ir(&null_action_emitted.0);
 
-            let src = format!(
-                "
-                if ref_struct.F_{field_name} == nil {{
-                    {null_action_src}
-                }}
+            let src = if let TypeExpr::Duck(_) = schema_field.type_expr.0 {
+                let duck_type_name = schema_field.type_expr.0.as_clean_go_type_name(type_env);
+                format!("
+                    var field_{field_name} {field_type_annotation}
+                    if len(ref_struct.F_{field_name}) == 0 {{
+                         {null_action_src}
+                    }}
 
-                var field_{field_name} {field_type_annotation} = *ref_struct.F_{field_name}
-                ",
-            );
+                    if len(ref_struct.F_{field_name}) > 0 {{
+                        var parsed_any any = {duck_type_name}_FromJson(string(ref_struct.F_{field_name}))
+                        switch v := parsed_any.(type) {{
+                            case Tag__err:
+                                return Tag__err{{}}
+                            case {field_type_annotation}:
+                                field_{field_name} = v
+                            default:
+                                return Tag__err{{}}
+                        }}
+                    }}
+                ")
+            } else {
+                format!("
+                    if ref_struct.F_{field_name} == nil {{
+                        {null_action_src}
+                    }}
+
+                    var field_{field_name} {field_type_annotation} = *ref_struct.F_{field_name}
+                ")
+            };
 
             schema_struct_access_srcs.push(src);
 
@@ -304,7 +350,7 @@ impl SchemaDefinition {
                 let src = format!(
                     "
                     {condition_src}
-                    if field_{field_name} != nil && {condition_var_src} {{
+                    if {condition_var_src} {{
                         {condition_based_src}
                     }}
                 ",
