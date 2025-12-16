@@ -3261,15 +3261,71 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                 typeresolve_value_expr((&mut target_obj.0, target_obj.1), type_env);
 
                 let self_type = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
+                let target_type = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
 
                 let TypeExpr::Struct {
                     name: struct_name,
                     type_params: struct_type_params,
-                } = TypeExpr::from_value_expr_dereferenced(target_obj, type_env)
+                } = target_type.clone()
                 else {
                     let msg = "Can only generic method call a struct";
                     failure_with_occurence(msg, span, [(msg, span)]);
                 };
+
+                let mut mut_struct_def = type_env
+                    .get_struct_def_with_type_params_mut(&struct_name, &struct_type_params, span)
+                    .clone();
+
+                for m in &mut mut_struct_def.methods {
+                    if !m.generics.is_empty() {
+                        continue;
+                    }
+
+                    if !type_env.mark_resolved(&mut_struct_def.name, &m.name) {
+                        continue;
+                    }
+
+                    type_env.push_identifier_types();
+
+                    for p in &mut m.params {
+                        type_env.insert_identifier_type(p.0.clone(), p.1.0.clone(), false, false);
+                    }
+
+                    type_env.insert_identifier_type(
+                        "self".to_string(),
+                        if mut_struct_def.mut_methods.contains(&m.name) {
+                            TypeExpr::RefMut(target_type.clone().into_empty_span().into())
+                        } else {
+                            TypeExpr::Ref(target_type.clone().into_empty_span().into())
+                        },
+                        true,
+                        false,
+                    );
+
+                    typeresolve_value_expr((&mut m.value_expr.0, m.value_expr.1), type_env);
+                    // if m.name == "for_each" {
+                    //     dbg!(&m.value_expr.0);
+                    // }
+
+                    type_env.pop_identifier_types();
+                }
+
+                {
+                    let new_struct_name = mut_struct_def.name.clone();
+
+                    type_env
+                        .struct_definitions
+                        .retain(|f| f.name.as_str() != new_struct_name.as_str());
+                    type_env
+                        .generic_structs_generated
+                        .retain(|f| f.name.as_str() != new_struct_name.as_str());
+                    if type_params.is_empty() {
+                        type_env.struct_definitions.push(mut_struct_def);
+                    } else {
+                        type_env.generic_structs_generated.push(mut_struct_def);
+                    }
+                }
+
 
                 let mut_struct_def = type_env.get_struct_def_with_type_params_mut(
                     &struct_name,
