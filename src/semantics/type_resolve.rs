@@ -1464,10 +1464,18 @@ fn replace_generics_in_value_expr(
                 if let Some(start_idx) = start_idx {
                     let end = to_replace.find(">>>");
                     if let Some(end_idx) = end {
-                        let name = &to_replace[start_idx + 3..end_idx];
+                        let mut name = &to_replace[start_idx + 3..end_idx];
+                        let mut concrete_type = false;
+                        if name.starts_with("@") {
+                            let replaced_name = name.replace("@", "");
+                            name = replaced_name.leak();
+
+                            concrete_type = true
+                        }
+
                         let replacement = set_params.get(name);
                         if let Some(replacement) = replacement {
-                            let type_anno = replacement.as_go_type_annotation(type_env);
+                            let type_anno = if concrete_type { replacement.as_clean_go_type_name(type_env) } else { replacement.as_go_type_annotation(type_env) };
                             to_replace.replace_range(start_idx..end_idx + 3, type_anno.as_str());
                         }
                         continue;
