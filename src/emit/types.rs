@@ -6,9 +6,7 @@ use crate::{
         value::{IrInstruction, IrValue, ToIr},
     },
     parse::{
-        Field,
-        struct_parser::StructDefinition,
-        type_parser::{Duck, TypeExpr},
+        Field, schema_def_parser::SchemaDefinition, struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}
     },
     semantics::{
         ident_mangler::MANGLE_SEP,
@@ -131,10 +129,12 @@ pub fn emit_type_definitions(
     for tuple_or_duck in &all_tuples_and_ducks {
         match tuple_or_duck {
             NeedsSearchResult::Duck { fields } => {
-                let type_name = TypeExpr::Duck(Duck {
+                let duck_type_expr = TypeExpr::Duck(Duck {
                     fields: fields.clone(),
-                })
-                .as_clean_go_type_name(type_env);
+                });
+
+                let type_name = duck_type_expr.as_clean_go_type_name(type_env);
+
                 result.push(IrInstruction::StructDef(
                     type_name.clone(),
                     fields
@@ -149,6 +149,11 @@ pub fn emit_type_definitions(
                         )
                         .collect::<Vec<_>>(),
                 ));
+
+
+                result.push(
+                    SchemaDefinition::emit_from_json_fn_from_duck(&duck_type_expr, type_env, to_ir)
+                );
 
                 for field in fields.iter() {
                     let param_name = &field.name;

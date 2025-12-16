@@ -1,3 +1,5 @@
+use go "encoding/json";
+
 type None = .none;
 type Opt<T> = T | None;
 
@@ -12,4 +14,10 @@ module sync;
 
 component lol() tsx {
     return (<><p>yo</p></>);
+}
+
+fn parse_json<T: {}>(input: String) -> T | .err {
+    go {
+        return <<<@T>>>_FromJson(input);
+    }
 }

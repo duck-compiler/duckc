@@ -1464,10 +1464,18 @@ fn replace_generics_in_value_expr(
                 if let Some(start_idx) = start_idx {
                     let end = to_replace.find(">>>");
                     if let Some(end_idx) = end {
-                        let name = &to_replace[start_idx + 3..end_idx];
+                        let mut name = &to_replace[start_idx + 3..end_idx];
+                        let mut concrete_type = false;
+                        if name.starts_with("@") {
+                            let replaced_name = name.replace("@", "");
+                            name = replaced_name.leak();
+
+                            concrete_type = true
+                        }
+
                         let replacement = set_params.get(name);
                         if let Some(replacement) = replacement {
-                            let type_anno = replacement.as_go_type_annotation(type_env);
+                            let type_anno = if concrete_type { replacement.as_clean_go_type_name(type_env) } else { replacement.as_go_type_annotation(type_env) };
                             to_replace.replace_range(start_idx..end_idx + 3, type_anno.as_str());
                         }
                         continue;
@@ -1941,7 +1949,6 @@ pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
         TypeExpr::KeyOf(type_expr) => {
             sort_fields_type_expr(&mut type_expr.0);
         }
-
         TypeExpr::RawTypeName(..) => {}
         TypeExpr::Duck(Duck { fields }) => {
             fields.sort_by_key(|x| x.name.clone());
@@ -2104,6 +2111,16 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     type_env.push_type_aliases();
 
     println!("{} sort fields", Tag::TypeResolve);
+
+    source_file
+        .schema_defs
+        .iter_mut()
+        .for_each(|schema_def| {
+            for field in &mut schema_def.fields {
+                sort_fields_type_expr(&mut field.type_expr.0);
+                dbg!(&schema_def.out_type);
+            }
+        });
 
     // Step 1: Sort fields
     source_file
@@ -2300,7 +2317,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             fields_with_type.push((schema_field.name.clone(), field_type_expr.clone()));
         }
 
-        let schema_fn_return_type = (
+        let mut schema_fn_return_type = (
             TypeExpr::Duck(Duck {
                 fields: vec![Field {
                     name: "from_json".to_string(),
@@ -2334,7 +2351,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             schema_def.span,
         );
 
-        let schema_fn_type = TypeExpr::Fun(vec![], Box::new(schema_fn_return_type.clone()), false);
+        let mut schema_fn_type = TypeExpr::Fun(vec![], Box::new(schema_fn_return_type.clone()), false);
+
+        sort_fields_type_expr(&mut schema_fn_return_type.0);
+        sort_fields_type_expr(&mut schema_fn_type);
 
         schema_def.out_type = Some(schema_fn_return_type);
         schema_def.schema_fn_type = Some((schema_fn_type.clone(), schema_def.span));
@@ -2428,7 +2448,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 .iter_mut()
                 .flat_map(|g| g.0.constraint.iter_mut())
             {
-                println!("replacing type params in {}", function_definition.name);
+                // println!("replacing type params in {}", function_definition.name);
                 resolve_all_aliases_type_expr(type_param, type_env);
             }
 

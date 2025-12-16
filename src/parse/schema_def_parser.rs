@@ -92,13 +92,14 @@ where
         .then_ignore(just(Token::ControlChar('{')))
         .then(fields_parser)
         .then_ignore(just(Token::ControlChar('}')))
-        .map_with(|((doc_comments, identifier), fields), ctx| {
+        .map_with(|((doc_comments, identifier), mut fields), ctx| {
             // todo: do a check if all fields if's value_exprs have a block for the value expr
             // value_expr = match value_expr {
             //     (ValueExpr::Duck(x), loc) if x.is_empty() => (ValueExpr::Block(vec![]), loc),
             //     x @ (ValueExpr::Block(_), _) => x,
             //     _ => panic!("Function must be block"),
 
+            fields.sort_by_key(|x| x.name.clone());
             SchemaDefinition {
                 name: identifier,
                 fields,
