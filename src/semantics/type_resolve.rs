@@ -2448,7 +2448,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 .iter_mut()
                 .flat_map(|g| g.0.constraint.iter_mut())
             {
-                println!("replacing type params in {}", function_definition.name);
+                // println!("replacing type params in {}", function_definition.name);
                 resolve_all_aliases_type_expr(type_param, type_env);
             }
 
