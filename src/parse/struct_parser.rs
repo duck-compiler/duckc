@@ -5,7 +5,7 @@ use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
 use crate::parse::{
-    Field, SS, Spanned,
+    Field, SS, Spanned, failure_with_occurence,
     function_parser::{FunctionDefintion, function_definition_parser},
     generics_parser::{Generic, generics_parser},
     type_parser::type_expression_parser,
@@ -20,6 +20,15 @@ pub struct NamedDuckDefinition {
     pub generics: Vec<Spanned<Generic>>,
 }
 
+#[derive(Copy, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum DerivableInterface {
+    Eq,
+    ToString,
+    Ord,
+    Clone,
+    Hash,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructDefinition {
     pub name: String,
@@ -28,6 +37,7 @@ pub struct StructDefinition {
     pub mut_methods: HashSet<String>,
     pub generics: Vec<Spanned<Generic>>,
     pub doc_comments: Vec<Spanned<String>>,
+    pub derived: HashSet<DerivableInterface>,
 }
 
 pub fn struct_definition_parser<'src, M, I>(
@@ -58,6 +68,26 @@ where
         .or_not()
         .map(|x| x.or_else(|| Some(vec![])).unwrap());
 
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    enum StructAttribute {
+        With { impls: Vec<Spanned<String>> },
+    }
+
+    let with_parser = (just(Token::With)
+        .ignore_then(
+            select_ref! { Token::Ident(i) => i.to_string() }
+                .map_with(|x, e| (x, e.span()))
+                .separated_by(just(Token::ControlChar(',')))
+                .collect::<Vec<_>>()
+                .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
+        )
+        .map(|x| StructAttribute::With { impls: x }))
+    .separated_by(just(Token::ControlChar(',')))
+    .at_least(1)
+    .collect::<Vec<_>>()
+    .delimited_by(just(Token::ControlChar('[')), just(Token::ControlChar(']')));
+
     let doc_comments_parser = select_ref! { Token::DocComment(comment) => comment.to_string() }
         .map_with(|comment, ctx| (comment, ctx.span()))
         .repeated()
@@ -65,6 +95,7 @@ where
         .or_not();
 
     doc_comments_parser
+        .then(with_parser.or_not())
         .then_ignore(just(Token::Struct))
         .then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
         .then(generics_parser().or_not())
@@ -80,7 +111,7 @@ where
         .then(impl_parser)
         .then_ignore(just(Token::ControlChar(';')))
         .map(
-            |((((doc_comments, identifier), generics), fields), methods)| {
+            |(((((doc_comments, attributes), identifier), generics), fields), methods)| {
                 let (mut_methods_names, methods, static_methods) = methods.into_iter().fold(
                     (HashSet::new(), Vec::new(), Vec::new()),
                     |(mut mut_method_names, mut methods, mut static_methods), (modifier, elem)| {
@@ -106,6 +137,33 @@ where
                 let mut is_name_available = |s: String| -> bool { names.insert(s) };
                 let fields: Vec<Field> = fields;
 
+                let mut derived = HashSet::new();
+
+                if let Some(attributes) = attributes {
+                    for attribute in attributes {
+                        #[allow(irrefutable_let_patterns)]
+                        if let StructAttribute::With { impls } = attribute {
+                            for (i, span) in impls {
+                                let a = match i.as_str() {
+                                    "Eq" => DerivableInterface::Eq,
+                                    "ToString" => DerivableInterface::ToString,
+                                    "Ord" => DerivableInterface::Ord,
+                                    "Clone" => DerivableInterface::Clone,
+                                    "Hash" => DerivableInterface::Hash,
+                                    _ => {
+                                        let msg = &format!("Invalid with declaration {i}");
+                                        failure_with_occurence(msg, span, [(msg, span)]);
+                                    }
+                                };
+                                if !derived.insert(a) {
+                                    let msg = &format!("Duplicate with declaration {i}");
+                                    failure_with_occurence(msg, span, [(msg, span)]);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 for name in fields
                     .iter()
                     .map(|f| &f.name)
@@ -125,6 +183,7 @@ where
                         mut_methods: mut_methods_names,
                         generics: generics.unwrap_or_default(),
                         doc_comments: doc_comments.unwrap_or_else(Vec::new),
+                        derived,
                     },
                     static_methods,
                 )
@@ -289,6 +348,7 @@ pub mod tests {
                 mut_methods: HashSet::new(),
                 generics: vec![],
                 doc_comments: vec![],
+                derived: Default::default(),
             },
         );
 
@@ -301,6 +361,7 @@ pub mod tests {
                 mut_methods: HashSet::new(),
                 generics: vec![],
                 doc_comments: vec![],
+                derived: Default::default(),
             },
         );
 
@@ -316,6 +377,7 @@ pub mod tests {
                 mut_methods: HashSet::new(),
                 generics: vec![],
                 doc_comments: vec![],
+                derived: Default::default(),
             },
         );
 
@@ -337,6 +399,24 @@ pub mod tests {
                     empty_range(),
                 )],
                 doc_comments: vec![],
+                derived: Default::default(),
+            },
+        );
+
+        assert_struct_definition(
+            "[with(Eq)] struct S = {};",
+            StructDefinition {
+                name: "S".to_string(),
+                derived: {
+                    let mut s = HashSet::new();
+                    s.insert(DerivableInterface::Eq);
+                    s
+                },
+                fields: vec![],
+                methods: vec![],
+                mut_methods: HashSet::new(),
+                generics: vec![],
+                doc_comments: vec![],
             },
         );
 
@@ -344,6 +424,7 @@ pub mod tests {
             "struct Map<K, V> = { entries: Entry<K, V>[] };",
             StructDefinition {
                 name: "Map".to_string(),
+                derived: Default::default(),
                 fields: vec![Field::new(
                     "entries".to_string(),
                     TypeExpr::Array(Box::new(
@@ -387,6 +468,7 @@ pub mod tests {
             "/// hello\nstruct Map<K, V> = { entries: Entry<K, V>[] };",
             StructDefinition {
                 name: "Map".to_string(),
+                derived: Default::default(),
                 fields: vec![Field::new(
                     "entries".to_string(),
                     TypeExpr::Array(Box::new(

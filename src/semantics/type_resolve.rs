@@ -15,13 +15,13 @@ use crate::{
         extensions_def_parser::ExtensionsDef,
         failure_with_occurence,
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
+        jsx_component_parser::{
+            Edit, JsxComponent, JsxComponentDependencies, JsxSourceUnit, do_edits,
+        },
         schema_def_parser::SchemaDefinition,
         source_file_parser::SourceFile,
         struct_parser::{NamedDuckDefinition, StructDefinition},
         test_parser::TestCase,
-        jsx_component_parser::{
-            Edit, JsxComponent, JsxComponentDependencies, JsxSourceUnit, do_edits,
-        },
         type_parser::{Duck, TypeDefinition, TypeExpr},
         value_parser::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
@@ -196,6 +196,7 @@ pub enum NeedsSearchResult {
     Duck { fields: Vec<Field> },
     Tuple { fields: Vec<Spanned<TypeExpr>> },
     Tag { name: String },
+    Array { type_expr: Spanned<TypeExpr> },
 }
 
 #[derive(Clone, Debug)]
@@ -723,6 +724,9 @@ impl TypeEnv<'_> {
             NeedsSearchResult::Tag { name } => {
                 TypeExpr::Tag(name.clone()).as_clean_go_type_name(self)
             }
+            NeedsSearchResult::Array { type_expr: t } => {
+                TypeExpr::Array(t.clone().into()).as_clean_go_type_name(self)
+            }
         });
 
         result.dedup_by_key(|e| match e {
@@ -735,6 +739,9 @@ impl TypeEnv<'_> {
             }
             NeedsSearchResult::Tag { name } => {
                 TypeExpr::Tag(name.clone()).as_clean_go_type_name(self)
+            }
+            NeedsSearchResult::Array { type_expr: t } => {
+                TypeExpr::Array(t.clone().into()).as_clean_go_type_name(self)
             }
         });
 
@@ -786,6 +793,11 @@ fn build_tuples_and_ducks_type_expr_trav_fn(
         TypeExpr::Struct { name, type_params } => {
             env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
         }
+        TypeExpr::Array(t) => {
+            out.borrow_mut().push(NeedsSearchResult::Array {
+                type_expr: t.as_ref().clone(),
+            });
+        }
         _ => {}
     }
 }
@@ -809,6 +821,13 @@ fn build_tuples_and_ducks_value_expr_trav_fn(
                 panic!()
             };
             out.borrow_mut().push(NeedsSearchResult::Tuple { fields });
+        }
+        ValueExpr::Array(..) => {
+            let TypeExpr::Array(t) = TypeExpr::from_value_expr(v, env) else {
+                panic!()
+            };
+            out.borrow_mut()
+                .push(NeedsSearchResult::Array { type_expr: *t });
         }
         _ => {}
     }
@@ -1479,7 +1498,11 @@ fn replace_generics_in_value_expr(
 
                         let replacement = set_params.get(name);
                         if let Some(replacement) = replacement {
-                            let type_anno = if concrete_type { replacement.as_clean_go_type_name(type_env) } else { replacement.as_go_type_annotation(type_env) };
+                            let type_anno = if concrete_type {
+                                replacement.as_clean_go_type_name(type_env)
+                            } else {
+                                replacement.as_go_type_annotation(type_env)
+                            };
                             to_replace.replace_range(start_idx..end_idx + 3, type_anno.as_str());
                         }
                         continue;
@@ -2116,15 +2139,12 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
 
     println!("{} sort fields", Tag::TypeResolve);
 
-    source_file
-        .schema_defs
-        .iter_mut()
-        .for_each(|schema_def| {
-            for field in &mut schema_def.fields {
-                sort_fields_type_expr(&mut field.type_expr.0);
-                dbg!(&schema_def.out_type);
-            }
-        });
+    source_file.schema_defs.iter_mut().for_each(|schema_def| {
+        for field in &mut schema_def.fields {
+            sort_fields_type_expr(&mut field.type_expr.0);
+            dbg!(&schema_def.out_type);
+        }
+    });
 
     // Step 1: Sort fields
     source_file
@@ -2355,7 +2375,8 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             schema_def.span,
         );
 
-        let mut schema_fn_type = TypeExpr::Fun(vec![], Box::new(schema_fn_return_type.clone()), false);
+        let mut schema_fn_type =
+            TypeExpr::Fun(vec![], Box::new(schema_fn_return_type.clone()), false);
 
         sort_fields_type_expr(&mut schema_fn_return_type.0);
         sort_fields_type_expr(&mut schema_fn_type);
@@ -3329,7 +3350,6 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                         type_env.generic_structs_generated.push(mut_struct_def);
                     }
                 }
-
 
                 let mut_struct_def = type_env.get_struct_def_with_type_params_mut(
                     &struct_name,

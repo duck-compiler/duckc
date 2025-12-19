@@ -73,6 +73,76 @@ pub enum TypeExpr {
 }
 
 impl TypeExpr {
+    pub fn call_eq(&self, param1: &str, param2: &str, type_env: &mut TypeEnv) -> String {
+        let param1 = &format!("({param1})");
+        let param2 = &format!("({param2})");
+        match self {
+            TypeExpr::Int(..)
+            | TypeExpr::Float
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::String(..) => format!("{param1} == {param2}"),
+            TypeExpr::Tuple(..) => format!("{param1}.eq(&{param2})"),
+            TypeExpr::Array(..) => format!(
+                "{}_Eq({param1}, {param2})",
+                self.as_clean_go_type_name(type_env)
+            ),
+            // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
+            TypeExpr::Struct { .. } => format!("{param1}.eq(&{param2})"),
+            TypeExpr::Tag(..) => String::from("true"),
+            TypeExpr::Ref(inner) | TypeExpr::RefMut(inner) => {
+                let mut derefs = 1;
+                let mut inner = inner.as_ref().clone();
+                while let TypeExpr::Ref(new_inner) | TypeExpr::RefMut(new_inner) = inner.0 {
+                    derefs += 1;
+                    inner = *new_inner;
+                }
+
+                let derefs_str = (0..derefs).fold(String::with_capacity(derefs), |mut acc, _| {
+                    acc.push('*');
+                    acc
+                });
+
+                inner.0.call_eq(
+                    &format!("{derefs_str}{param1}"),
+                    &format!("{derefs_str}{param2}"),
+                    type_env,
+                )
+            }
+            _ => panic!("cant get derived method on {self:?}"),
+        }
+    }
+
+    pub fn implements_eq(&self, type_env: &mut TypeEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_eq(type_env),
+            TypeExpr::Array(t) => t.0.implements_eq(type_env),
+            TypeExpr::Duck(Duck { fields }) => {
+                fields.iter().all(|f| f.type_expr.0.implements_eq(type_env))
+            }
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_eq(type_env)),
+            TypeExpr::Struct { name, type_params } => {
+                let def =
+                    type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::Eq)
+                    || (def.methods.iter().any(|f| {
+                        f.name.as_str() == "eq"
+                            && f.params.len() == 1
+                            && &f.params[0].1.0 == self
+                            && matches!(f.return_type.0, TypeExpr::Bool(..))
+                    }) && !def.mut_methods.contains("eq"))
+            }
+            TypeExpr::Int(..)
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Float
+            | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_trivially_copyable(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::String(..)

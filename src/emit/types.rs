@@ -6,7 +6,10 @@ use crate::{
         value::{IrInstruction, IrValue, ToIr},
     },
     parse::{
-        Field, schema_def_parser::SchemaDefinition, struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}
+        Field,
+        schema_def_parser::SchemaDefinition,
+        struct_parser::StructDefinition,
+        type_parser::{Duck, TypeExpr},
     },
     semantics::{
         ident_mangler::MANGLE_SEP,
@@ -128,6 +131,44 @@ pub fn emit_type_definitions(
 
     for tuple_or_duck in &all_tuples_and_ducks {
         match tuple_or_duck {
+            NeedsSearchResult::Array { type_expr } => {
+                let array_type = TypeExpr::Array(type_expr.clone().into());
+
+                if array_type.implements_eq(type_env) {
+                    let array_type_name = array_type.as_clean_go_type_name(type_env);
+                    let array_type_ano = array_type.as_go_type_annotation(type_env);
+                    let fun_name = format!("{array_type_name}_Eq");
+
+                    let go_code = r#"
+                        if len(self) != len(other) {
+                            return false
+                        }
+
+                        for i := range self {
+                            a := self[i]
+                            b := other[i]
+
+                            if !($%$%$%) {
+                                return false
+                            }
+                        }
+
+                        return true
+                    "#
+                    .replace("$%$%$%", &type_expr.0.call_eq("a", "b", type_env));
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![
+                            ("self".to_string(), array_type_ano.clone()),
+                            ("other".to_string(), array_type_ano.clone()),
+                        ],
+                        Some("bool".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+            }
             NeedsSearchResult::Duck { fields } => {
                 let duck_type_expr = TypeExpr::Duck(Duck {
                     fields: fields.clone(),
@@ -150,10 +191,11 @@ pub fn emit_type_definitions(
                         .collect::<Vec<_>>(),
                 ));
 
-
-                result.push(
-                    SchemaDefinition::emit_from_json_fn_from_duck(&duck_type_expr, type_env, to_ir)
-                );
+                result.push(SchemaDefinition::emit_from_json_fn_from_duck(
+                    &duck_type_expr,
+                    type_env,
+                    to_ir,
+                ));
 
                 for field in fields.iter() {
                     let param_name = &field.name;
@@ -223,15 +265,42 @@ pub fn emit_type_definitions(
                 ));
             }
             NeedsSearchResult::Tuple { fields } => {
-                let type_name = TypeExpr::Tuple(fields.clone()).as_clean_go_type_name(type_env);
+                let tuple_type = TypeExpr::Tuple(fields.clone());
+                let type_name = tuple_type.as_clean_go_type_name(type_env);
                 result.push(IrInstruction::StructDef(
-                    type_name,
+                    type_name.clone(),
                     fields
                         .iter()
                         .enumerate()
                         .map(|(i, x)| (format!("field_{i}"), x.0.as_go_type_annotation(type_env)))
                         .collect::<Vec<_>>(),
                 ));
+                if tuple_type.implements_eq(type_env) {
+                    let mut comparisons = Vec::new();
+
+                    for (i, f) in fields.iter().enumerate() {
+                        let field_name = format!("field_{i}");
+                        comparisons.push(f.0.call_eq(
+                            &format!("self.{field_name}"),
+                            &format!("other.{field_name}"),
+                            type_env,
+                        ));
+                    }
+
+                    if comparisons.is_empty() {
+                        comparisons.push(String::from("true"));
+                    }
+
+                    result.push(dbg!(IrInstruction::FunDef(
+                        "eq".to_string(),
+                        Some(("self".to_string(), format!("*{type_name}"))),
+                        vec![("other".to_string(), format!("*{type_name}"))],
+                        Some(String::from("bool".to_string())),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(
+                            comparisons.join(" && "),
+                        )))],
+                    )));
+                }
             }
         }
     }
@@ -266,6 +335,7 @@ pub fn emit_type_definitions(
             mut_methods: _,
             generics: _,
             doc_comments: _,
+            derived,
         } = s;
 
         let mut instructions: Vec<IrInstruction> = fields
@@ -413,6 +483,50 @@ pub fn emit_type_definitions(
             }
 
             instructions.push(body);
+        }
+
+        for derived_interface in derived.iter() {
+            match *derived_interface {
+                crate::parse::struct_parser::DerivableInterface::Eq => {
+                    let receiver = fixed_struct_name.clone();
+
+                    let mut comparisons = Vec::new();
+
+                    for f in fields.iter() {
+                        comparisons.push(f.type_expr.0.call_eq(
+                            &format!("self.{}", f.name),
+                            &format!("(*other).{}", f.name),
+                            type_env,
+                        ));
+                    }
+
+                    if comparisons.is_empty() {
+                        comparisons.push("true".to_string());
+                    }
+
+                    instructions.push(IrInstruction::FunDef(
+                        "eq".to_string(),
+                        Some(("self".to_string(), format!("*{receiver}"))),
+                        vec![("other".to_string(), format!("**{receiver}"))],
+                        Some("bool".to_string()),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(
+                            comparisons.join(" && "),
+                        )))],
+                    ));
+                }
+                crate::parse::struct_parser::DerivableInterface::ToString => {
+                    unimplemented!("tostring")
+                }
+                crate::parse::struct_parser::DerivableInterface::Clone => {
+                    unimplemented!("clone")
+                }
+                crate::parse::struct_parser::DerivableInterface::Hash => {
+                    unimplemented!("hash")
+                }
+                crate::parse::struct_parser::DerivableInterface::Ord => {
+                    unimplemented!("ord")
+                }
+            }
         }
 
         for generic_method in type_env.get_generic_methods(struct_name.clone()).clone() {

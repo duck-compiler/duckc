@@ -2453,57 +2453,43 @@ impl ValueExpr {
             ValueExpr::Equals(v1, v2) => {
                 let mut ir = Vec::new();
 
-                let (v1_instr, v1_res) = v1.0.direct_or_with_instr(type_env, env, span);
+                let (v1_instr, v1_res) = v1.0.emit(type_env, env, span);
                 ir.extend(v1_instr);
                 if v1_res.is_none() {
                     return (ir, None);
                 }
-                let (v2_instr, v2_res) = v2.0.direct_or_with_instr(type_env, env, span);
+                let (v2_instr, v2_res) = v2.0.emit(type_env, env, span);
                 ir.extend(v2_instr);
                 if v2_res.is_none() {
                     return (ir, None);
                 }
 
+                let Some(IrValue::Var(v1_var) | IrValue::Imm(v1_var)) = v1_res else {
+                    panic!()
+                };
+                let Some(IrValue::Var(v2_var) | IrValue::Imm(v2_var)) = v2_res else {
+                    panic!()
+                };
+
+                let t1 = TypeExpr::from_value_expr(v1, type_env);
+
                 let var = env.new_var();
                 ir.extend([
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
-                    IrInstruction::Equals(
+                    IrInstruction::VarAssignment(
                         var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(v1, type_env).unconst(),
+                        IrValue::Imm(t1.call_eq(&v1_var, &v2_var, type_env)),
                     ),
                 ]);
 
                 (ir, as_rvar(var))
             }
             ValueExpr::NotEquals(lhs, rhs) => {
-                let mut ir = Vec::new();
-
-                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env, span);
-                ir.extend(v1_instr);
-                if v1_res.is_none() {
-                    return (ir, None);
-                }
-
-                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env, span);
-                ir.extend(v2_instr);
-                if v2_res.is_none() {
-                    return (ir, None);
-                }
-
-                let var = env.new_var();
-                ir.extend([
-                    IrInstruction::VarDecl(var.clone(), "bool".into()),
-                    IrInstruction::NotEquals(
-                        var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env).unconst(),
-                    ),
-                ]);
-
-                (ir, as_rvar(var))
+                let in_equals = ValueExpr::BoolNegate(
+                    (ValueExpr::Equals(lhs.clone(), rhs.clone()), span).into(),
+                );
+                let (equals_ir, equals_res) = in_equals.emit(type_env, env, span);
+                (equals_ir, equals_res)
             }
             ValueExpr::LessThan(lhs, rhs) => {
                 let mut ir = Vec::new();

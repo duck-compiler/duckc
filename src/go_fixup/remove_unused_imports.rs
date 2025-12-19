@@ -23,6 +23,7 @@ struct Declaration {
 }
 
 pub fn cleanup_go_source(go_source: &str, remove_exported: bool) -> String {
+    // return go_source.to_string();
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_go::LANGUAGE.into())
