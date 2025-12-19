@@ -71,10 +71,10 @@ where
     #[non_exhaustive]
     #[derive(Debug, Clone, PartialEq)]
     enum StructAttribute {
-        With { impls: Vec<Spanned<String>> },
+        Auto { impls: Vec<Spanned<String>> },
     }
 
-    let with_parser = (just(Token::With)
+    let with_parser = (just(Token::Ident("auto".to_string()))
         .ignore_then(
             select_ref! { Token::Ident(i) => i.to_string() }
                 .map_with(|x, e| (x, e.span()))
@@ -82,7 +82,7 @@ where
                 .collect::<Vec<_>>()
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
         )
-        .map(|x| StructAttribute::With { impls: x }))
+        .map(|x| StructAttribute::Auto { impls: x }))
     .separated_by(just(Token::ControlChar(',')))
     .at_least(1)
     .collect::<Vec<_>>()
@@ -142,7 +142,7 @@ where
                 if let Some(attributes) = attributes {
                     for attribute in attributes {
                         #[allow(irrefutable_let_patterns)]
-                        if let StructAttribute::With { impls } = attribute {
+                        if let StructAttribute::Auto { impls } = attribute {
                             for (i, span) in impls {
                                 let a = match i.as_str() {
                                     "Eq" => DerivableInterface::Eq,
@@ -404,7 +404,7 @@ pub mod tests {
         );
 
         assert_struct_definition(
-            "[with(Eq)] struct S = {};",
+            "[auto(Eq)] struct S = {};",
             StructDefinition {
                 name: "S".to_string(),
                 derived: {
