@@ -1049,6 +1049,9 @@ impl TypeExpr {
         if name.as_str() == "hash" && self.implements_hash(type_env) {
             return true;
         }
+        if name.as_str() == "ord" && self.implements_ord(type_env) {
+            return true;
+        }
         match self {
             Self::Struct {
                 name: r#struct,
@@ -1187,6 +1190,14 @@ impl TypeExpr {
             return Some(TypeExpr::Fun(
                 vec![],
                 Box::new((TypeExpr::Int(None), empty_range())),
+                false,
+            ));
+        }
+
+        if self.implements_ord(type_env) && field_name.as_str() == "ord" {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new(TypeExpr::ord_result().into_empty_span()),
                 false,
             ));
         }

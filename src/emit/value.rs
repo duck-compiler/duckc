@@ -397,9 +397,11 @@ fn walk_access_raw(
 
                     let clean_go_type_name = target_field_type.as_clean_go_type_name(type_env);
                     let mut skip = false;
-                    if field_name.as_str() == "to_string" {
+                    if field_name.as_str() == "to_string"
+                        && target_field_type.implements_to_string(type_env)
+                    {
                         match target_field_type.clone() {
-                            TypeExpr::Array(t) if t.0.implements_to_string(type_env) => {
+                            TypeExpr::Array(..) => {
                                 flag = Some((
                                     format!("{clean_go_type_name}_ToString("),
                                     stars_count,
@@ -424,7 +426,11 @@ fn walk_access_raw(
                                 skip = true;
                             }
                             TypeExpr::Tag(t) => {
-                                flag = Some((format!(r#"fmt.Sprintf("{t}""#), stars_count, false));
+                                flag = Some((
+                                    format!(r#"(func(_ any) string {{ return ".{t}" }})("#),
+                                    stars_count,
+                                    false,
+                                ));
                                 skip = true;
                             }
                             TypeExpr::Float => {
@@ -433,9 +439,11 @@ fn walk_access_raw(
                             }
                             _ => {}
                         }
-                    } else if field_name.as_str() == "clone" {
+                    } else if field_name.as_str() == "clone"
+                        && target_field_type.implements_clone(type_env)
+                    {
                         match target_field_type.clone() {
-                            TypeExpr::Array(t) if t.0.implements_clone(type_env) => {
+                            TypeExpr::Array(..) => {
                                 flag = Some((
                                     format!("{clean_go_type_name}_Clone("),
                                     stars_count,
@@ -469,9 +477,11 @@ fn walk_access_raw(
                             }
                             _ => {}
                         }
-                    } else if field_name.as_str() == "hash" {
+                    } else if field_name.as_str() == "hash"
+                        && target_field_type.implements_hash(type_env)
+                    {
                         match target_field_type.clone() {
-                            TypeExpr::Array(t) if t.0.implements_hash(type_env) => {
+                            TypeExpr::Array(..) => {
                                 flag = Some((
                                     format!("{clean_go_type_name}_Hash("),
                                     stars_count,
@@ -501,6 +511,40 @@ fn walk_access_raw(
                             }
                             TypeExpr::Float => {
                                 flag = Some((format!(r#"Float_Hash("#), stars_count, false));
+                                skip = true;
+                            }
+                            _ => {}
+                        }
+                    } else if field_name.as_str() == "ord"
+                        && target_field_type.implements_ord(type_env)
+                    {
+                        match target_field_type.clone() {
+                            TypeExpr::Array(..) => {
+                                flag = Some((
+                                    format!("{clean_go_type_name}_Ord("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::String(..) => {
+                                flag = Some((format!(r#"String_Ord("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Int(..) => {
+                                flag = Some((format!(r#"Int_Ord("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Bool(..) => {
+                                flag = Some((format!(r#"Bool_Ord("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Char => {
+                                flag = Some((format!(r#"Char_Ord("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Float => {
+                                flag = Some((format!(r#"Float_Ord("#), stars_count, false));
                                 skip = true;
                             }
                             _ => {}
@@ -599,13 +643,16 @@ fn walk_access_raw(
                 }
 
                 if let Some((f, stars_count, is_wrapped)) = flag.as_ref() {
-                    let param_res = param_res.join(", ");
+                    let mut param_res = param_res.join(", ");
                     if *is_wrapped {
                         derefs.push(FrontPart::ExtCall(f.clone(), *stars_count));
                         s.push_front(format!(")({param_res})"));
                     } else {
                         derefs.push(FrontPart::ExtCall2(f.clone(), *stars_count));
-                        s.push_front(format!(")"));
+                        if !param_res.is_empty() {
+                            param_res.insert_str(0, ", ");
+                        }
+                        s.push_front(format!("{param_res})"));
                     }
                 } else {
                     s.push_front(format!("({})", param_res.join(", ")));
@@ -715,6 +762,10 @@ fn walk_access_raw(
                             && t.iter().all(|t| t.0.implements_hash(type_env))
                         {
                             s.push_front("hash".to_string());
+                        } else if field_name.as_str() == "ord"
+                            && t.iter().all(|t| t.0.implements_ord(type_env))
+                        {
+                            s.push_front("ord".to_string());
                         } else {
                             s.push_front(format!("field_{field_name}"));
                         }

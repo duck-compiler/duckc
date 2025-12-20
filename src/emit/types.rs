@@ -127,7 +127,20 @@ pub fn emit_type_definitions(
     let mut result = Vec::new();
     let mut emitted_types = HashSet::new();
 
-    let all_tuples_and_ducks = type_env.find_ducks_and_tuples();
+    let mut all_tuples_and_ducks = type_env.find_ducks_and_tuples();
+
+    let tags_to_push = ["greater", "smaller", "equal"];
+
+    for tag in tags_to_push {
+        if !all_tuples_and_ducks.iter().any(|t| match t {
+            NeedsSearchResult::Tag { name } => name.as_str() == tag,
+            _ => false,
+        }) {
+            all_tuples_and_ducks.push(NeedsSearchResult::Tag {
+                name: tag.to_string(),
+            });
+        }
+    }
 
     for tuple_or_duck in &all_tuples_and_ducks {
         match tuple_or_duck {
@@ -178,6 +191,7 @@ pub fn emit_type_definitions(
 
                         for i := range self {
                             a := self[i]
+                            _ = a
 
                             if i != 0 {
                                 res = res + ", "
@@ -248,6 +262,42 @@ pub fn emit_type_definitions(
                         None,
                         vec![("self".to_string(), array_type_ano.clone())],
                         Some("int".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if array_type.implements_ord(type_env) {
+                    let fun_name = format!("{array_type_name}_Ord");
+
+                    let go_code = r#"
+                        other := *other_param
+                        for i := range self {
+                            a := self[i]
+                            b := other[i]
+                            inter_res := ($%$%$%)
+
+                            var mm any
+                            mm = inter_res
+                            switch mm.(type) {
+                            case Tag__greater:
+                                return Tag__greater{}
+                            case Tag__smaller:
+                                return Tag__smaller{}
+                            }
+                        }
+
+                        return Tag__equal{}
+                    "#
+                    .replace("$%$%$%", &type_expr.0.call_ord("a", "b", type_env));
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![
+                            ("self".to_string(), array_type_ano.clone()),
+                            ("other_param".to_string(), format!("*{array_type_ano}")),
+                        ],
+                        Some("any".to_string()),
                         vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }
@@ -441,8 +491,7 @@ pub fn emit_type_definitions(
                         var res int
                         res = 1
                         "#,
-                    )
-                    .replace("$$$TUPLE_TYPE", &type_name);
+                    );
 
                     for (i, field) in fields.iter().enumerate() {
                         let hash_call = field.0.call_hash(&format!("self.field_{}", i), type_env);
@@ -456,6 +505,42 @@ pub fn emit_type_definitions(
                         Some(("self".to_string(), type_anno.clone())),
                         vec![],
                         Some("int".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if tuple_type.implements_ord(type_env) {
+                    let mut go_code = String::new();
+
+                    go_code.push_str("var r any\nr = Tag__equal{}\n");
+
+                    for (i, field) in fields.iter().enumerate() {
+                        go_code.push('\n');
+                        let ord_call = field.0.call_ord(
+                            &format!("self.field_{}", i),
+                            &format!("other.field_{}", i),
+                            type_env,
+                        );
+                        go_code.push_str(&format!(
+                            r#"
+                            r = {ord_call}
+                            switch r.(type) {{
+                            case Tag__greater:
+                            return Tag__greater{{}}
+                            case Tag__smaller:
+                            return Tag__smaller{{}}
+                            }}
+                            "#
+                        ));
+                    }
+
+                    go_code.push_str("\nreturn r");
+
+                    result.push(IrInstruction::FunDef(
+                        "ord".to_string(),
+                        Some(("self".to_string(), type_anno.clone())),
+                        vec![("other".to_string(), format!("*{type_anno}"))],
+                        Some("any".to_string()),
                         vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }
@@ -755,7 +840,40 @@ pub fn emit_type_definitions(
                     ));
                 }
                 crate::parse::struct_parser::DerivableInterface::Ord => {
-                    unimplemented!("ord")
+                    let receiver = fixed_struct_name.clone();
+                    let mut go_code = String::new();
+
+                    go_code.push_str("var r any\nr = Tag__equal{}\n");
+
+                    for field in fields.iter() {
+                        go_code.push('\n');
+                        let ord_call = field.type_expr.0.call_ord(
+                            &format!("self.{}", field.name),
+                            &format!("(*other).{}", field.name),
+                            type_env,
+                        );
+                        go_code.push_str(&format!(
+                            r#"
+                            r = {ord_call}
+                            switch r.(type) {{
+                            case Tag__greater:
+                            return Tag__greater{{}}
+                            case Tag__smaller:
+                            return Tag__smaller{{}}
+                            }}
+                            "#
+                        ));
+                    }
+
+                    go_code.push_str("\nreturn r");
+
+                    result.push(IrInstruction::FunDef(
+                        "ord".to_string(),
+                        Some(("self".to_string(), format!("*{receiver}"))),
+                        vec![("other".to_string(), format!("**{receiver}"))],
+                        Some("any".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
                 }
             }
         }
@@ -831,12 +949,36 @@ pub fn emit_type_definitions(
     ));
 
     result.push(IrInstruction::FunDef(
+        "Int_Ord".to_string(),
+        None,
+        vec![
+            ("self".to_string(), "int".to_string()),
+            ("other".to_string(), "*int".to_string()),
+        ],
+        Some("any".to_string()),
+        vec![IrInstruction::InlineGo("if self < *other { return Tag__smaller{} } else if self > *other { return Tag__greater{} } else { return Tag__equal{} }".to_string())],
+    ));
+
+    result.push(IrInstruction::FunDef(
         "Bool_Hash".to_string(),
         None,
         vec![("self".to_string(), "bool".to_string())],
         Some("int".to_string()),
         vec![IrInstruction::InlineGo(
             "if self {\nreturn 1\n} else {\nreturn 2\n}".to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Bool_Ord".to_string(),
+        None,
+        vec![
+            ("self".to_string(), "bool".to_string()),
+            ("other".to_string(), "*bool".to_string()),
+        ],
+        Some("any".to_string()),
+        vec![IrInstruction::InlineGo(
+            "if !self && *other { return Tag__smaller{} } else if self && !*other { return Tag__greater{} } else { return Tag__equal{} }".to_string(),
         )],
     ));
 
@@ -856,6 +998,41 @@ pub fn emit_type_definitions(
     ));
 
     result.push(IrInstruction::FunDef(
+        "String_Ord".to_string(),
+        None,
+        vec![
+            ("self".to_string(), "string".to_string()),
+            ("other_param".to_string(), "*string".to_string()),
+        ],
+        Some("any".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                other := *other_param
+                if len(self) > len(other) {
+                    return Tag__smaller{}
+                } else if len(self) < len(other) {
+                    return Tag__greater{}
+                } else {
+                    runes_self := []rune(self)
+                    runes_other := []rune(self)
+
+                    for i := range runes_self {
+                        if runes_self[i] < runes_other[i] {
+                            return Tag__smaller{}
+                        } else if runes_self[i] > runes_other[i] {
+                            return Tag__greater{}
+                        }
+                    }
+
+                    return Tag__equal{}
+                }
+
+                    "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
         "Float_Hash".to_string(),
         None,
         vec![("self".to_string(), "float32".to_string())],
@@ -863,6 +1040,30 @@ pub fn emit_type_definitions(
         vec![IrInstruction::InlineGo(
             r#"
                             return int(self)
+                        "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Float_Ord".to_string(),
+        None,
+        vec![
+            ("self".to_string(), "float32".to_string()),
+            ("other".to_string(), "*float32".to_string()),
+        ],
+        Some("any".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                x := self
+                y := *other
+                if x > y {
+                    return Tag__greater{}
+                } else if x < y {
+                    return Tag__smaller{}
+                } else {
+                    return Tag__equal{}
+                }
                         "#
             .to_string(),
         )],
@@ -878,6 +1079,31 @@ pub fn emit_type_definitions(
 
                         return int(self)
 
+                    "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Char_Ord".to_string(),
+        None,
+        vec![
+            ("self".to_string(), "rune".to_string()),
+            ("other".to_string(), "*rune".to_string()),
+        ],
+        Some("any".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                        x := self
+                        y := *other
+
+                        if x > y {
+                            return Tag__greater{}
+                        } else if x < y {
+                            return Tag__smaller{}
+                        } else {
+                            return Tag__equal{}
+                        }
                     "#
             .to_string(),
         )],

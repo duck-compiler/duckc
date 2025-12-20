@@ -73,6 +73,53 @@ pub enum TypeExpr {
 }
 
 impl TypeExpr {
+    pub fn ord_result() -> Self {
+        TypeExpr::Or(vec![
+            TypeExpr::Tag("greater".to_string()).into_empty_span(),
+            TypeExpr::Tag("smaller".to_string()).into_empty_span(),
+            TypeExpr::Tag("equal".to_string()).into_empty_span(),
+        ])
+    }
+
+    pub fn call_ord(&self, param1: &str, param2: &str, type_env: &mut TypeEnv) -> String {
+        let param1 = &format!("({param1})");
+        let param2 = &format!("({param2})");
+        match self {
+            TypeExpr::Int(..) => format!("Int_Ord({param1}, &{param2})"),
+            TypeExpr::Float => format!("Float_Ord({param1}, &{param2})"),
+            TypeExpr::Bool(..) => format!("Bool_Ord({param1}, &{param2})"),
+            TypeExpr::Char => format!("Char_Ord({param1}, &{param2})"),
+            TypeExpr::String(..) => format!("String_Ord({param1}, &{param2})"),
+            TypeExpr::Tuple(..) => format!("{param1}.ord(&{param2})"),
+            TypeExpr::Array(..) => format!(
+                "{}_Ord({param1}, &{param2})",
+                self.as_clean_go_type_name(type_env)
+            ),
+            // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
+            TypeExpr::Struct { .. } => format!("{param1}.ord(&{param2})"),
+            TypeExpr::Ref(inner) | TypeExpr::RefMut(inner) => {
+                let mut derefs = 1;
+                let mut inner = inner.as_ref().clone();
+                while let TypeExpr::Ref(new_inner) | TypeExpr::RefMut(new_inner) = inner.0 {
+                    derefs += 1;
+                    inner = *new_inner;
+                }
+
+                let derefs_str = (0..derefs).fold(String::with_capacity(derefs), |mut acc, _| {
+                    acc.push('*');
+                    acc
+                });
+
+                inner.0.call_eq(
+                    &format!("{derefs_str}{param1}"),
+                    &format!("{derefs_str}{param2}"),
+                    type_env,
+                )
+            }
+            _ => panic!("cannot call eq method on {self:?}"),
+        }
+    }
+
     pub fn call_eq(&self, param1: &str, param2: &str, type_env: &mut TypeEnv) -> String {
         let param1 = &format!("({param1})");
         let param2 = &format!("({param2})");
@@ -128,7 +175,6 @@ impl TypeExpr {
             }
             // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
             TypeExpr::Struct { .. } => format!("{param1}.hash()"),
-            TypeExpr::Tag(t) => t.clone(),
             TypeExpr::Ref(inner) | TypeExpr::RefMut(inner) => {
                 let mut derefs = 1;
                 let mut inner = inner.as_ref().clone();
@@ -201,7 +247,7 @@ impl TypeExpr {
             ),
             // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
             TypeExpr::Struct { .. } => format!("{param1}.to_string()"),
-            TypeExpr::Tag(t) => t.clone(),
+            TypeExpr::Tag(t) => format!(r#"fmt.Sprintf(".{t}")"#),
             TypeExpr::Ref(inner) | TypeExpr::RefMut(inner) => {
                 let mut derefs = 1;
                 let mut inner = inner.as_ref().clone();
@@ -264,7 +310,7 @@ impl TypeExpr {
                 let def =
                     type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
                 def.derived
-                    .contains(&crate::parse::struct_parser::DerivableInterface::Clone)
+                    .contains(&crate::parse::struct_parser::DerivableInterface::Hash)
                     || (def.methods.iter().any(|f| {
                         f.name.as_str() == "hash"
                             && f.params.is_empty()
@@ -275,8 +321,7 @@ impl TypeExpr {
             | TypeExpr::String(..)
             | TypeExpr::Bool(..)
             | TypeExpr::Char
-            | TypeExpr::Float
-            | TypeExpr::Tag(..) => true,
+            | TypeExpr::Float => true,
             _ => false,
         }
     }
@@ -306,6 +351,35 @@ impl TypeExpr {
             | TypeExpr::Char
             | TypeExpr::Float
             | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn implements_ord(&self, type_env: &mut TypeEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_ord(type_env),
+            TypeExpr::Array(t) => t.0.implements_ord(type_env),
+            TypeExpr::Duck(Duck { fields }) => fields
+                .iter()
+                .all(|f| f.type_expr.0.implements_ord(type_env)),
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_ord(type_env)),
+            TypeExpr::Struct { name, type_params } => {
+                let def =
+                    type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::Ord)
+                    || (def.methods.iter().any(|f| {
+                        f.name.as_str() == "ord"
+                            && f.params.len() == 1
+                            && &f.params[0].1.0 == self
+                            && f.return_type.0.clone().into_empty_span().0 == TypeExpr::ord_result()
+                    }) && !def.mut_methods.contains("ord"))
+            }
+            TypeExpr::Int(..)
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Float => true,
             _ => false,
         }
     }
