@@ -1040,6 +1040,9 @@ impl TypeExpr {
     }
 
     fn has_method_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
+        if (name.as_str() == "to_string" && self.implements_to_string(type_env)) {
+            return true;
+        }
         match self {
             Self::Struct {
                 name: r#struct,
@@ -1158,6 +1161,14 @@ impl TypeExpr {
     }
 
     fn typeof_field(&self, field_name: String, type_env: &mut TypeEnv) -> Option<TypeExpr> {
+        if self.implements_to_string(type_env) && field_name.as_str() == "to_string" {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((TypeExpr::String(None), empty_range())),
+                false,
+            ));
+        }
+
         Some(match self {
             Self::Tuple(fields) => fields[field_name.parse::<usize>().unwrap()].0.clone(),
             Self::Struct {

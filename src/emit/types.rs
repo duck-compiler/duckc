@@ -134,9 +134,10 @@ pub fn emit_type_definitions(
             NeedsSearchResult::Array { type_expr } => {
                 let array_type = TypeExpr::Array(type_expr.clone().into());
 
+                let array_type_name = array_type.as_clean_go_type_name(type_env);
+                let array_type_ano = array_type.as_go_type_annotation(type_env);
+
                 if array_type.implements_eq(type_env) {
-                    let array_type_name = array_type.as_clean_go_type_name(type_env);
-                    let array_type_ano = array_type.as_go_type_annotation(type_env);
                     let fun_name = format!("{array_type_name}_Eq");
 
                     let go_code = r#"
@@ -165,6 +166,36 @@ pub fn emit_type_definitions(
                             ("other".to_string(), array_type_ano.clone()),
                         ],
                         Some("bool".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if array_type.implements_to_string(type_env) {
+                    let fun_name = format!("{array_type_name}_ToString");
+
+                    let go_code = r#"
+                        res := ""
+
+                        for i := range self {
+                            a := self[i]
+
+                            if i != 0 {
+                                res = res + ", "
+                            }
+
+                            a_x := ($%$%$%)
+                            res = res + a_x
+                        }
+
+                        return fmt.Sprintf("[%s]", res)
+                    "#
+                    .replace("$%$%$%", &type_expr.0.call_to_string("a", type_env));
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![("self".to_string(), array_type_ano.clone())],
+                        Some("string".to_string()),
                         vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }
@@ -291,7 +322,7 @@ pub fn emit_type_definitions(
                         comparisons.push(String::from("true"));
                     }
 
-                    result.push(dbg!(IrInstruction::FunDef(
+                    result.push(IrInstruction::FunDef(
                         "eq".to_string(),
                         Some(("self".to_string(), format!("*{type_name}"))),
                         vec![("other".to_string(), format!("*{type_name}"))],
@@ -299,7 +330,36 @@ pub fn emit_type_definitions(
                         vec![IrInstruction::Return(Some(IrValue::Imm(
                             comparisons.join(" && "),
                         )))],
-                    )));
+                    ));
+                }
+
+                if tuple_type.implements_to_string(type_env) {
+                    let mut go_code = String::from(
+                        r#"
+                        res := ""
+                    "#,
+                    );
+
+                    for (i, field) in fields.iter().enumerate() {
+                        if i != 0 {
+                            go_code.push_str("\nres = res + \", \"");
+                        }
+
+                        let to_string_call = field
+                            .0
+                            .call_to_string(&format!("self.field_{}", i), type_env);
+                        go_code.push_str(&format!("\nres = res + ({to_string_call})"))
+                    }
+
+                    go_code.push_str("\nreturn fmt.Sprintf(\"(%s)\", res)");
+
+                    result.push(IrInstruction::FunDef(
+                        "to_string".to_string(),
+                        Some(("self".to_string(), type_name.clone())),
+                        vec![],
+                        Some(String::from("string".to_string())),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
                 }
             }
         }
@@ -515,7 +575,33 @@ pub fn emit_type_definitions(
                     ));
                 }
                 crate::parse::struct_parser::DerivableInterface::ToString => {
-                    unimplemented!("tostring")
+                    let receiver = fixed_struct_name.clone();
+
+                    let mut string_parts = Vec::new();
+
+                    for f in fields.iter() {
+                        string_parts.push(format!(
+                            "\"{}: \" + {}",
+                            f.name,
+                            f.type_expr
+                                .0
+                                .call_to_string(&format!("self.{}", f.name), type_env),
+                        ));
+                    }
+
+                    if string_parts.is_empty() {
+                        string_parts.push("\"\"".to_string());
+                    }
+
+                    instructions.push(IrInstruction::FunDef(
+                        "to_string".to_string(),
+                        Some(("self".to_string(), format!("*{receiver}"))),
+                        vec![],
+                        Some("string".to_string()),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(
+                            format!(r#"fmt.Sprintf("{}{{%s}}", {})"#, struct_name, string_parts.join(" + \" \" + ")),
+                        )))],
+                    ));
                 }
                 crate::parse::struct_parser::DerivableInterface::Clone => {
                     unimplemented!("clone")

@@ -255,6 +255,7 @@ pub fn can_do_mut_stuff_through(v: &Spanned<ValueExpr>, type_env: &mut TypeEnv) 
 enum FrontPart {
     Deref(usize),
     ExtCall(String, usize),
+    ExtCall2(String, usize),
 }
 
 fn walk_access_raw(
@@ -394,56 +395,98 @@ fn walk_access_raw(
                     let (target_field_type, stars_count) =
                         TypeExpr::from_value_expr_dereferenced_with_count(target_obj, type_env);
 
-                    let extension_fn_name = target_field_type
-                        .build_extension_access_function_name(field_name, type_env);
-                    let extension_fn = type_env.extension_functions.get(&extension_fn_name);
-
-                    if extension_fn.is_some() {
-                        flag = Some((extension_fn_name, stars_count));
+                    let clean_go_type_name = target_field_type.as_clean_go_type_name(type_env);
+                    let mut skip = false;
+                    if field_name.as_str() == "to_string" {
+                        match target_field_type.clone() {
+                            TypeExpr::Array(t) if t.0.implements_to_string(type_env) => {
+                                flag = Some((
+                                    format!("{clean_go_type_name}_ToString("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::String(..) => {
+                                flag = Some((format!(r#"fmt.Sprintf("%s", "#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Int(..) => {
+                                flag = Some((format!(r#"fmt.Sprintf("%d", "#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Bool(..) => {
+                                flag = Some((format!(r#"fmt.Sprintf("%t", "#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Char => {
+                                flag = Some((format!(r#"fmt.Sprintf("%c", "#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Tag(t) => {
+                                flag = Some((format!(r#"fmt.Sprintf("{t}""#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Float => {
+                                flag = Some((format!(r#"fmt.Sprintf("%f", "#), stars_count, false));
+                                skip = true;
+                            }
+                            _ => {}
+                        }
                     }
 
-                    match target_field_type {
-                        TypeExpr::Struct {
-                            name: struct_name,
-                            type_params: struct_type_params,
-                        } => {
-                            let struct_def = type_env.get_struct_def_with_type_params_mut(
-                                struct_name.as_str(),
-                                &struct_type_params,
-                                empty_range(),
-                            );
-                            if struct_def.mut_methods.contains(field_name)
-                                && !can_do_mut_stuff_through(target_obj, type_env)
-                            {
-                                failure_with_occurence(
-                                    "This needs to allow mutable access",
-                                    target.1,
-                                    [(
-                                        "This needs to allow mutable access".to_string(),
-                                        target_obj.1,
-                                    )],
-                                );
-                            }
+                    if !skip {
+                        let extension_fn_name = target_field_type
+                            .build_extension_access_function_name(field_name, type_env);
+                        let extension_fn = type_env.extension_functions.get(&extension_fn_name);
+
+                        if extension_fn.is_some() {
+                            flag = Some((extension_fn_name, stars_count, true));
                         }
-                        TypeExpr::Duck(duck) => {
-                            if let Some(duck_field) = duck
-                                .fields
-                                .iter()
-                                .find(|field| field.name.as_str() == field_name.as_str())
-                                && let TypeExpr::Fun(_, _, true) = duck_field.type_expr.0
-                                && !can_do_mut_stuff_through(target_obj, type_env)
-                            {
-                                failure_with_occurence(
-                                    "This needs to allow mutable access",
-                                    target.1,
-                                    [(
-                                        "This needs to allow mutable access".to_string(),
-                                        target_obj.1,
-                                    )],
+
+                        match target_field_type {
+                            TypeExpr::Struct {
+                                name: struct_name,
+                                type_params: struct_type_params,
+                            } => {
+                                let struct_def = type_env.get_struct_def_with_type_params_mut(
+                                    struct_name.as_str(),
+                                    &struct_type_params,
+                                    empty_range(),
                                 );
+                                if struct_def.mut_methods.contains(field_name)
+                                    && !can_do_mut_stuff_through(target_obj, type_env)
+                                {
+                                    failure_with_occurence(
+                                        "This needs to allow mutable access",
+                                        target.1,
+                                        [(
+                                            "This needs to allow mutable access".to_string(),
+                                            target_obj.1,
+                                        )],
+                                    );
+                                }
                             }
+                            TypeExpr::Duck(duck) => {
+                                if let Some(duck_field) = duck
+                                    .fields
+                                    .iter()
+                                    .find(|field| field.name.as_str() == field_name.as_str())
+                                    && let TypeExpr::Fun(_, _, true) = duck_field.type_expr.0
+                                    && !can_do_mut_stuff_through(target_obj, type_env)
+                                {
+                                    failure_with_occurence(
+                                        "This needs to allow mutable access",
+                                        target.1,
+                                        [(
+                                            "This needs to allow mutable access".to_string(),
+                                            target_obj.1,
+                                        )],
+                                    );
+                                }
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
 
@@ -483,10 +526,15 @@ fn walk_access_raw(
                     }
                 }
 
-                if let Some((f, stars_count)) = flag.as_ref() {
-                    derefs.push(FrontPart::ExtCall(f.clone(), *stars_count));
+                if let Some((f, stars_count, is_wrapped)) = flag.as_ref() {
                     let param_res = param_res.join(", ");
-                    s.push_front(format!(")({param_res})",));
+                    if *is_wrapped {
+                        derefs.push(FrontPart::ExtCall(f.clone(), *stars_count));
+                        s.push_front(format!(")({param_res})"));
+                    } else {
+                        derefs.push(FrontPart::ExtCall2(f.clone(), *stars_count));
+                        s.push_front(format!(")"));
+                    }
                 } else {
                     s.push_front(format!("({})", param_res.join(", ")));
                 }
@@ -582,7 +630,15 @@ fn walk_access_raw(
                 let type_expr = TypeExpr::from_value_expr_dereferenced(&target_obj, type_env);
 
                 match type_expr {
-                    TypeExpr::Tuple(..) => s.push_front(format!("field_{field_name}")),
+                    TypeExpr::Tuple(t) => {
+                        if field_name.as_str() == "to_string"
+                            && t.iter().all(|t| t.0.implements_to_string(type_env))
+                        {
+                            s.push_front("to_string".to_string());
+                        } else {
+                            s.push_front(format!("field_{field_name}"));
+                        }
+                    }
                     TypeExpr::Duck(Duck { fields }) => {
                         let found_field = fields
                             .iter()
@@ -711,6 +767,12 @@ fn walk_access_raw(
                 }
                 s[0].insert_str(0, e);
                 s[0].insert(e.len(), '(');
+            }
+            FrontPart::ExtCall2(e, stars_count) => {
+                for _ in 0..*stars_count {
+                    s[0].insert(0, '*');
+                }
+                s[0].insert_str(0, e);
             }
         }
     }
@@ -2677,7 +2739,7 @@ impl ValueExpr {
                     false,
                 );
                 if let Some(t_res) = r {
-                    return (i, Some(IrValue::Imm(t_res)));
+                    return (i, Some(IrValue::Imm(dbg!(t_res))));
                 } else {
                     return (i, None);
                 }
