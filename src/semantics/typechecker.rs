@@ -15,6 +15,7 @@ use crate::parse::{
 };
 use crate::semantics::ident_mangler::{MANGLE_SEP, mangle};
 use crate::semantics::type_resolve::{TypeEnv, is_const_var};
+use crate::tags::Tag;
 
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
@@ -1074,7 +1075,16 @@ impl TypeExpr {
 
     fn has_field_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
         match self {
-            Self::Tuple(fields) => fields.len() > name.parse::<usize>().unwrap(),
+            Self::Tuple(fields) => {
+                if let Ok(tuple_access_idx) = name.parse::<usize>() {
+                    fields.len() > tuple_access_idx
+                } else {
+                    if fields.len() == 0 {
+                        println!("{} it could be that the function you're trying to call is missing it's return, maybe that's why it's an empty tuple", Tag::Note)
+                    }
+                    false
+                }
+            },
             Self::Struct {
                 name: struct_name,
                 type_params,
