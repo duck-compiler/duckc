@@ -1046,6 +1046,9 @@ impl TypeExpr {
         if name.as_str() == "clone" && self.implements_clone(type_env) {
             return true;
         }
+        if name.as_str() == "hash" && self.implements_hash(type_env) {
+            return true;
+        }
         match self {
             Self::Struct {
                 name: r#struct,
@@ -1058,7 +1061,7 @@ impl TypeExpr {
                     mut_methods: _,
                     generics: _,
                     doc_comments: _,
-                    derived,
+                    derived: _,
                 } = type_env
                     .get_struct_def_with_type_params_mut(
                         r#struct.as_str(),
@@ -1103,7 +1106,7 @@ impl TypeExpr {
                     mut_methods: _,
                     generics: _,
                     doc_comments: _,
-                    derived,
+                    derived: _,
                 } = type_env.get_struct_def_with_type_params_mut(
                     struct_name,
                     type_params,
@@ -1180,6 +1183,14 @@ impl TypeExpr {
             ));
         }
 
+        if self.implements_hash(type_env) && field_name.as_str() == "hash" {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((TypeExpr::Int(None), empty_range())),
+                false,
+            ));
+        }
+
         Some(match self {
             Self::Tuple(fields) => fields[field_name.parse::<usize>().unwrap()].0.clone(),
             Self::Struct {
@@ -1193,7 +1204,7 @@ impl TypeExpr {
                     mut_methods: _,
                     generics: _,
                     doc_comments: _,
-                    derived,
+                    derived: _,
                 } = type_env
                     .get_struct_def_with_type_params_mut(
                         r#struct.as_str(),

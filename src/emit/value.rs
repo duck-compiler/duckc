@@ -433,9 +433,7 @@ fn walk_access_raw(
                             }
                             _ => {}
                         }
-                    }
-
-                    if field_name.as_str() == "clone" {
+                    } else if field_name.as_str() == "clone" {
                         match target_field_type.clone() {
                             TypeExpr::Array(t) if t.0.implements_clone(type_env) => {
                                 flag = Some((
@@ -467,6 +465,42 @@ fn walk_access_raw(
                             }
                             TypeExpr::Float => {
                                 flag = Some((format!(r#"fmt.Sprintf("%f", "#), stars_count, false));
+                                skip = true;
+                            }
+                            _ => {}
+                        }
+                    } else if field_name.as_str() == "hash" {
+                        match target_field_type.clone() {
+                            TypeExpr::Array(t) if t.0.implements_hash(type_env) => {
+                                flag = Some((
+                                    format!("{clean_go_type_name}_Hash("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::String(..) => {
+                                flag = Some((format!(r#"String_Hash("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Int(..) => {
+                                flag = Some((format!(r#"Int_Hash("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Bool(..) => {
+                                flag = Some((format!(r#"Bool_Hash("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Char => {
+                                flag = Some((format!(r#"Char_Hash("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Tag(t) => {
+                                flag = Some((format!(r#"String_Hash("{t}""#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Float => {
+                                flag = Some((format!(r#"Float_Hash("#), stars_count, false));
                                 skip = true;
                             }
                             _ => {}
@@ -677,6 +711,10 @@ fn walk_access_raw(
                             && t.iter().all(|t| t.0.implements_clone(type_env))
                         {
                             s.push_front("clone".to_string());
+                        } else if field_name.as_str() == "hash"
+                            && t.iter().all(|t| t.0.implements_hash(type_env))
+                        {
+                            s.push_front("hash".to_string());
                         } else {
                             s.push_front(format!("field_{field_name}"));
                         }

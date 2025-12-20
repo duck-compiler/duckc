@@ -225,6 +225,32 @@ pub fn emit_type_definitions(
                         vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }
+
+                if array_type.implements_hash(type_env) {
+                    let fun_name = format!("{array_type_name}_Hash");
+
+                    let go_code = r#"
+                        var res int
+                        res = 1
+
+                        for i := range self {
+                            a := self[i]
+                            a_x := ($%$%$%)
+                            res = (31 * res) + a_x
+                        }
+
+                        return res
+                    "#
+                    .replace("$%$%$%", &type_expr.0.call_hash("a", type_env));
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![("self".to_string(), array_type_ano.clone())],
+                        Some("int".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
             }
             NeedsSearchResult::Duck { fields } => {
                 let duck_type_expr = TypeExpr::Duck(Duck {
@@ -405,6 +431,31 @@ pub fn emit_type_definitions(
                         Some(("self".to_string(), type_anno.clone())),
                         vec![],
                         Some(type_anno.clone()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if tuple_type.implements_hash(type_env) {
+                    let mut go_code = String::from(
+                        r#"
+                        var res int
+                        res = 1
+                        "#,
+                    )
+                    .replace("$$$TUPLE_TYPE", &type_name);
+
+                    for (i, field) in fields.iter().enumerate() {
+                        let hash_call = field.0.call_hash(&format!("self.field_{}", i), type_env);
+                        go_code.push_str(&format!("\nres = (31 * res) + ({hash_call})"))
+                    }
+
+                    go_code.push_str("\nreturn res");
+
+                    result.push(IrInstruction::FunDef(
+                        "hash".to_string(),
+                        Some(("self".to_string(), type_anno.clone())),
+                        vec![],
+                        Some("int".to_string()),
                         vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }
@@ -677,7 +728,31 @@ pub fn emit_type_definitions(
                     ));
                 }
                 crate::parse::struct_parser::DerivableInterface::Hash => {
-                    unimplemented!("hash")
+                    let receiver = fixed_struct_name.clone();
+                    let mut go_code = String::from(
+                        r#"
+                        var res int
+                        res = 1
+                        "#,
+                    );
+
+                    for field in fields.iter() {
+                        let hash_call = field
+                            .type_expr
+                            .0
+                            .call_hash(&format!("self.{}", field.name), type_env);
+                        go_code.push_str(&format!("\nres = (31 * res) + ({hash_call})"))
+                    }
+
+                    go_code.push_str("\nreturn res");
+
+                    result.push(IrInstruction::FunDef(
+                        "hash".to_string(),
+                        Some(("self".to_string(), format!("*{receiver}"))),
+                        vec![],
+                        Some("int".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
                 }
                 crate::parse::struct_parser::DerivableInterface::Ord => {
                     unimplemented!("ord")
@@ -746,6 +821,67 @@ pub fn emit_type_definitions(
             interface_fields,
         ));
     }
+
+    result.push(IrInstruction::FunDef(
+        "Int_Hash".to_string(),
+        None,
+        vec![("self".to_string(), "int".to_string())],
+        Some("int".to_string()),
+        vec![IrInstruction::InlineGo("return self".to_string())],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Bool_Hash".to_string(),
+        None,
+        vec![("self".to_string(), "bool".to_string())],
+        Some("int".to_string()),
+        vec![IrInstruction::InlineGo(
+            "if self {\nreturn 1\n} else {\nreturn 2\n}".to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "String_Hash".to_string(),
+        None,
+        vec![("self".to_string(), "string".to_string())],
+        Some("int".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                    var h maphash.Hash
+                    h.WriteString(self)
+                    return int(h.Sum64())
+                    "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Float_Hash".to_string(),
+        None,
+        vec![("self".to_string(), "float32".to_string())],
+        Some("int".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                            return int(self)
+                        "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Char_Hash".to_string(),
+        None,
+        vec![("self".to_string(), "rune".to_string())],
+        Some("int".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+
+                        return int(self)
+
+                    "#
+            .to_string(),
+        )],
+    ));
 
     result
 }
