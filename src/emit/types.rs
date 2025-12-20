@@ -199,6 +199,32 @@ pub fn emit_type_definitions(
                         vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }
+
+                if array_type.implements_clone(type_env) {
+                    let fun_name = format!("{array_type_name}_Clone");
+
+                    let go_code = r#"
+                        res := make($$$ARRAY_TYPE, len(self))
+
+                        for i := range self {
+                            a := self[i]
+                            a_x := ($%$%$%)
+                            res[i] = a_x
+                        }
+
+                        return res
+                    "#
+                    .replace("$$$ARRAY_TYPE", &array_type_ano)
+                    .replace("$%$%$%", &type_expr.0.call_clone("a", type_env));
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![("self".to_string(), array_type_ano.clone())],
+                        Some(array_type_ano.clone()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
             }
             NeedsSearchResult::Duck { fields } => {
                 let duck_type_expr = TypeExpr::Duck(Duck {
@@ -298,6 +324,7 @@ pub fn emit_type_definitions(
             NeedsSearchResult::Tuple { fields } => {
                 let tuple_type = TypeExpr::Tuple(fields.clone());
                 let type_name = tuple_type.as_clean_go_type_name(type_env);
+                let type_anno = tuple_type.as_go_type_annotation(type_env);
                 result.push(IrInstruction::StructDef(
                     type_name.clone(),
                     fields
@@ -358,6 +385,26 @@ pub fn emit_type_definitions(
                         Some(("self".to_string(), type_name.clone())),
                         vec![],
                         Some(String::from("string".to_string())),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if tuple_type.implements_clone(type_env) {
+                    let mut go_code = String::from("res := *new($$$TUPLE_TYPE)")
+                        .replace("$$$TUPLE_TYPE", &type_name);
+
+                    for (i, field) in fields.iter().enumerate() {
+                        let clone_call = field.0.call_clone(&format!("self.field_{}", i), type_env);
+                        go_code.push_str(&format!("\nres.field_{i} = ({clone_call})"))
+                    }
+
+                    go_code.push_str("\nreturn res");
+
+                    result.push(IrInstruction::FunDef(
+                        "clone".to_string(),
+                        Some(("self".to_string(), type_anno.clone())),
+                        vec![],
+                        Some(type_anno.clone()),
                         vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }
@@ -598,13 +645,36 @@ pub fn emit_type_definitions(
                         Some(("self".to_string(), format!("*{receiver}"))),
                         vec![],
                         Some("string".to_string()),
-                        vec![IrInstruction::Return(Some(IrValue::Imm(
-                            format!(r#"fmt.Sprintf("{}{{%s}}", {})"#, struct_name, string_parts.join(" + \" \" + ")),
-                        )))],
+                        vec![IrInstruction::Return(Some(IrValue::Imm(format!(
+                            r#"fmt.Sprintf("{}{{%s}}", {})"#,
+                            struct_name,
+                            string_parts.join(" + \" \" + ")
+                        ))))],
                     ));
                 }
                 crate::parse::struct_parser::DerivableInterface::Clone => {
-                    unimplemented!("clone")
+                    let receiver = fixed_struct_name.clone();
+
+                    let mut clone_string = format!("&{receiver}{{\n");
+
+                    for f in fields.iter() {
+                        clone_string.push_str(&format!(
+                            "{}: {},\n",
+                            f.name,
+                            f.type_expr
+                                .0
+                                .call_clone(&format!("self.{}", f.name), type_env),
+                        ));
+                    }
+                    clone_string.push_str("}\n");
+
+                    instructions.push(IrInstruction::FunDef(
+                        "clone".to_string(),
+                        Some(("self".to_string(), format!("*{receiver}"))),
+                        vec![],
+                        Some(format!("*{receiver}")),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(clone_string)))],
+                    ));
                 }
                 crate::parse::struct_parser::DerivableInterface::Hash => {
                     unimplemented!("hash")

@@ -1040,7 +1040,10 @@ impl TypeExpr {
     }
 
     fn has_method_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
-        if (name.as_str() == "to_string" && self.implements_to_string(type_env)) {
+        if name.as_str() == "to_string" && self.implements_to_string(type_env) {
+            return true;
+        }
+        if name.as_str() == "clone" && self.implements_clone(type_env) {
             return true;
         }
         match self {
@@ -1165,6 +1168,14 @@ impl TypeExpr {
             return Some(TypeExpr::Fun(
                 vec![],
                 Box::new((TypeExpr::String(None), empty_range())),
+                false,
+            ));
+        }
+
+        if self.implements_clone(type_env) && field_name.as_str() == "clone" {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((self.clone(), empty_range())),
                 false,
             ));
         }

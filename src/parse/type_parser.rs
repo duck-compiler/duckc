@@ -113,6 +113,43 @@ impl TypeExpr {
         }
     }
 
+    pub fn call_clone(&self, param1: &str, type_env: &mut TypeEnv) -> String {
+        let param1 = &format!("({param1})");
+        match self {
+            TypeExpr::Int(..)
+            | TypeExpr::Float
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::String(..) => param1.to_string(),
+            TypeExpr::Tuple(..) => format!("{param1}.clone()"),
+            TypeExpr::Array(..) => format!(
+                "{}_Clone({param1})",
+                self.as_clean_go_type_name(type_env)
+            ),
+            // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
+            TypeExpr::Struct { .. } => format!("{param1}.clone()"),
+            TypeExpr::Tag(t) => t.clone(),
+            TypeExpr::Ref(inner) | TypeExpr::RefMut(inner) => {
+                let mut derefs = 1;
+                let mut inner = inner.as_ref().clone();
+                while let TypeExpr::Ref(new_inner) | TypeExpr::RefMut(new_inner) = inner.0 {
+                    derefs += 1;
+                    inner = *new_inner;
+                }
+
+                let derefs_str = (0..derefs).fold(String::with_capacity(derefs), |mut acc, _| {
+                    acc.push('*');
+                    acc
+                });
+
+                inner
+                    .0
+                    .call_to_string(&format!("{derefs_str}{param1}"), type_env)
+            }
+            _ => panic!("cant call to_string method on {self:?}"),
+        }
+    }
+
     pub fn call_to_string(&self, param1: &str, type_env: &mut TypeEnv) -> String {
         let param1 = &format!("({param1})");
         match self {
@@ -142,10 +179,9 @@ impl TypeExpr {
                     acc
                 });
 
-                inner.0.call_to_string(
-                    &format!("{derefs_str}{param1}"),
-                    type_env,
-                )
+                inner
+                    .0
+                    .call_to_string(&format!("{derefs_str}{param1}"), type_env)
             }
             _ => panic!("cant call to_string method on {self:?}"),
         }
@@ -169,6 +205,35 @@ impl TypeExpr {
                             && f.params.is_empty()
                             && matches!(f.return_type.0, TypeExpr::String(..))
                     }) && !def.mut_methods.contains("to_string"))
+            }
+            TypeExpr::Int(..)
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Float
+            | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn implements_clone(&self, type_env: &mut TypeEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_clone(type_env),
+            TypeExpr::Array(t) => t.0.implements_clone(type_env),
+            TypeExpr::Duck(Duck { fields }) => {
+                fields.iter().all(|f| f.type_expr.0.implements_clone(type_env))
+            }
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_clone(type_env)),
+            TypeExpr::Struct { name, type_params } => {
+                let def =
+                    type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::Clone)
+                    || (def.methods.iter().any(|f| {
+                        f.name.as_str() == "clone()"
+                            && f.params.is_empty()
+                            && &f.return_type.0 == self
+                    }) && !def.mut_methods.contains("clone"))
             }
             TypeExpr::Int(..)
             | TypeExpr::String(..)

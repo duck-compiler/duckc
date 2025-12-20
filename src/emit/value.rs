@@ -435,6 +435,44 @@ fn walk_access_raw(
                         }
                     }
 
+                    if field_name.as_str() == "clone" {
+                        match target_field_type.clone() {
+                            TypeExpr::Array(t) if t.0.implements_clone(type_env) => {
+                                flag = Some((
+                                    format!("{clean_go_type_name}_Clone("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::String(..) => {
+                                flag = Some((format!(r#"fmt.Sprintf("%s", "#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Int(..) => {
+                                flag = Some((format!(r#"fmt.Sprintf("%d", "#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Bool(..) => {
+                                flag = Some((format!(r#"fmt.Sprintf("%t", "#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Char => {
+                                flag = Some((format!(r#"fmt.Sprintf("%c", "#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Tag(t) => {
+                                flag = Some((format!(r#"fmt.Sprintf("{t}""#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Float => {
+                                flag = Some((format!(r#"fmt.Sprintf("%f", "#), stars_count, false));
+                                skip = true;
+                            }
+                            _ => {}
+                        }
+                    }
+
                     if !skip {
                         let extension_fn_name = target_field_type
                             .build_extension_access_function_name(field_name, type_env);
@@ -635,6 +673,10 @@ fn walk_access_raw(
                             && t.iter().all(|t| t.0.implements_to_string(type_env))
                         {
                             s.push_front("to_string".to_string());
+                        } else if field_name.as_str() == "clone"
+                            && t.iter().all(|t| t.0.implements_clone(type_env))
+                        {
+                            s.push_front("clone".to_string());
                         } else {
                             s.push_front(format!("field_{field_name}"));
                         }
