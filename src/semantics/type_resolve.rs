@@ -339,7 +339,11 @@ impl TypeEnv<'_> {
                 .struct_definitions
                 .iter_mut()
                 .find(|d| d.name == name)
-                .unwrap();
+                .unwrap_or_else(|| {
+                    failure_with_occurence(format!("Unknown Struct"), span, [
+                        (format!("Struct {name} does not exist"), span),
+                    ]);
+                });
         }
 
         let cloned_def = self
@@ -395,7 +399,7 @@ impl TypeEnv<'_> {
                 .unwrap()
         } else {
             failure_with_occurence(
-                format!("This struct does not exist {name}"),
+                format!("Unkown Struct"),
                 span,
                 [(format!("Struct {name} does not exist"), span)],
             );
