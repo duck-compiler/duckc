@@ -44,6 +44,17 @@ fn main() {
     std::io::println("cyan".cyan());
     std::io::println("gray".gray());
     std::io::println("white".white());
+    std::io::println("orange rgb".rgb(242, 107, 10));
+
+    std::io::println("on red".on_red());
+    std::io::println("on green".on_green());
+    std::io::println("on yellow".on_yellow());
+    std::io::println("on blue".on_blue());
+    std::io::println("on magenta".on_magenta());
+    std::io::println("on cyan".on_cyan());
+    std::io::println("on gray".on_gray());
+    std::io::println("on white".on_white());
+    std::io::println("on orange rgb".on_rgb(242, 107, 10));
 
     "HOLLO".to_bytes();
     std::io::println("all string api tests have passed")
