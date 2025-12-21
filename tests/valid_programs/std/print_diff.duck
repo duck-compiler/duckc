@@ -1,0 +1,30 @@
+use std::string::{print_diff, str_arr_len};
+use std::{assert};
+use std::io::{println};
+
+fn main() {
+    println(f"{"\"line1\" against \"line1\"".on_blue()} (should have no additions / deleteions)");
+    print_diff("line1", "line1");
+
+    println(f"{"\"line1\" against \"line1-line2\"".on_blue()} (should have one {"+ line2".green()})");
+    print_diff("line1", "line1\nline2");
+
+    println(f"{"\"line1-line2\" against \"line1\"".on_blue()} (should have one {"- line2".red()})");
+    print_diff("line1\nline2", "line1");
+
+    println("Comparing A-B-C with A-X-C:".on_blue());
+    print_diff("A\nB\nC", "A\nX\nC");
+
+    let lines = "one\ntwo\nthree".split_lines();
+    (lines->str_arr_len() == 3)->
+        assert("split_lines should return 3 lines");
+
+    (lines[0] == "one")->
+        assert("First line should be 'one'");
+
+    println("\"\" against \"Something\"".on_blue());
+    print_diff("", "Something");
+
+    println("\"Something\" against \"\"".on_blue());
+    print_diff("Something", "");
+}
