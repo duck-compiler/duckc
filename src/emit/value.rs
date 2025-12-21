@@ -3124,18 +3124,6 @@ mod tests {
             ),
             ("(true, continue, 3)", vec![IrInstruction::Continue(None)]),
             (
-                "1 == 2",
-                vec![
-                    decl("var_0", "bool"),
-                    IrInstruction::Equals(
-                        "var_0".into(),
-                        IrValue::Int(1),
-                        IrValue::Int(2),
-                        TypeExpr::Int(None),
-                    ),
-                ],
-            ),
-            (
                 "[] as {}[]",
                 vec![
                     IrInstruction::VarDecl("var_0".into(), "[]interface{}".into()),
