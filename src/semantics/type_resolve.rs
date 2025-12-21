@@ -822,7 +822,7 @@ fn build_tuples_and_ducks_value_expr_trav_fn(
             };
             out.borrow_mut().push(NeedsSearchResult::Tuple { fields });
         }
-        ValueExpr::Array(..) => {
+        ValueExpr::Array(exprs) if !exprs.is_empty() => {
             let TypeExpr::Array(t) = TypeExpr::from_value_expr(v, env) else {
                 panic!()
             };

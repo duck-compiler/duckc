@@ -1,0 +1,4 @@
+{
+    "stdout": "eq\n[1, 2]\nTHE ARRAYS ARE EQUAL\n[(1, true, [([([300])])]), (100, false, [([([4000])])])]\n[2, 2]\n()\n(1, 2, 3)\n(1, (true, false, [1, 2, 3, 4], ((()))), 3)\n(test_tup, ((())))\nS{o: Other{x: 5 z: [2, 30]}}\nabc\n2\n3.400000\ntrue\nX\n(1, 2)\narray cloning\n[1, 2, 3]\n[1, 2, 3]\n[1, 2, 3]\n[1, 2, 100000]\none should have 100000\nstruct auto trait deep cloning\nS{o: Other{x: 10 z: [20]}}\nS{o: Other{x: 10 z: [20]}}\nS{o: Other{x: 10 z: [20]}}\nS{o: Other{x: 10 z: [200]}}\none should have 200\nhashing\nS{o: Other{x: 100 z: [-10]}} = 4113\nS{o: Other{x: 100 z: [-11]}} = 4112\nabc .tag_as_string\nis equal\nmanually implemented to string was called\n(ManualToString)\n",
+    "stderr": ""
+}

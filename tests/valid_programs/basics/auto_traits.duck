@@ -1,0 +1,111 @@
+use std::io::{println};
+
+[auto(Eq, ToString, Clone, Hash, Ord)]
+struct Other = {
+    x: Int,
+
+    z: Int[],
+};
+
+[auto(Eq, ToString, Clone, Hash, Ord)]
+struct S = {
+    o: Other,
+};
+
+struct ManualToString = {} impl {
+    fn to_string() -> String {
+        println("manually implemented to string was called");
+        return "ManualToString";
+    }
+};
+
+fn give_me_a_tup() -> (String, (((),),)) {
+    ("test_tup", ((((),),)))
+}
+
+fn give_me_arr() -> Int[] {
+    [1, 2]
+}
+
+fn main() {
+    const tup = (1, 2, 3, (10, 20));
+    let abc = tup == (1,2,3,(10,30));
+    abc = &[[(1, 2)]] == &[[(1, 2)]];
+    abc = &&&&S { o: Other { x: 10, z: [1], } } == &&&&S { o: Other { x: 10, z: [2] } };
+    abc = &&&3 == &&&3;
+    if (abc) {
+        std::io::println("eq");
+    } else {
+        std::io::println("not eq");
+    }
+    [1, 2].to_string()->std::io::println();
+    const a = [(1, true, [([([300],)],)]), (100, false, [([([4000],)],)])];
+    const b = [(1, true, [([([300],)],)]), (100, false, [([([4000],)],)])];
+    if (a == b) {
+        std::io::println("THE ARRAYS ARE EQUAL");
+    } else {
+        std::io::println("THE ARRAYS ARE NOT EQUAL");
+    }
+    [(1, true, [([([300],)],)]), (100, false, [([([4000],)],)])].to_string()->std::io::println();
+    S { o: Other { x: 10, z: [2, 2] } }.o.z.to_string()->std::io::println();
+    ().to_string()->std::io::println();
+    (1, 2, 3).to_string()->std::io::println();
+    (1, (true, false, [1, 2, 3, 4], (((),),)), 3).to_string()->std::io::println();
+    give_me_a_tup().to_string()->std::io::println();
+    S { o: Other { x: 5, z: [2, 30]} }.to_string()->std::io::println();
+    "abc".to_string().to_string().to_string()->std::io::println();
+    2.to_string().to_string().to_string()->std::io::println();
+    3.4.to_string().to_string().to_string()->std::io::println();
+    true.to_string().to_string().to_string()->std::io::println();
+    'X'.to_string().to_string().to_string()->std::io::println();
+    // TODO: (&&(&true).to_string().to_string()).to_string()->std::io::println();
+    (1, 2).clone().to_string()->std::io::println();
+
+    let my_arr = [1, 2, 3];
+    let cloned_my_arr = my_arr.clone();
+
+    std::io::println("array cloning");
+
+    my_arr.to_string()->std::io::println();
+    cloned_my_arr.to_string()->std::io::println();
+
+    cloned_my_arr[2] = 100000;
+
+    my_arr.to_string()->std::io::println();
+    cloned_my_arr.to_string()->std::io::println();
+    std::io::println("one should have 100000");
+
+    std::io::println("struct auto trait deep cloning");
+    let my_s = S { o: Other { x: 10, z: [20] } };
+    let my_s_cloned = my_s.clone();
+
+    my_s.to_string()->std::io::println();
+    my_s_cloned.to_string()->std::io::println();
+
+    my_s_cloned.o.z[0] = 200;
+
+    my_s.to_string()->std::io::println();
+    my_s_cloned.to_string()->std::io::println();
+
+    std::io::println("one should have 200");
+
+    std::io::println("hashing");
+    let s = S { o: Other { x: 100, z: [-10] } };
+    let s2 = S { o: Other { x: 100, z: [-11] } };
+    std::io::println(f"{s.to_string()} = {s.hash().to_string()}");
+    std::io::println(f"{s2.to_string()} = {s2.hash().to_string()}");
+    // std::io::println(f"\"abc\" = {"abc".hash().to_string()}");
+    std::io::println(f"abc {.tag_as_string.to_string()}");
+
+    match [1, 2, 3].ord(&[1, 2, 3]) {
+        .greater => println("is greater"),
+        .smaller => println("is smaller"),
+        .equal => println("is equal"),
+    };
+
+    if (1 <= 0) {
+        println("1 is less than 2");
+    };
+
+    (ManualToString{},).to_string()->println();
+}

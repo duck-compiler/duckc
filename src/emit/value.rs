@@ -84,6 +84,13 @@ pub enum IrInstruction {
     // Top-Level Statements
     GoPackage(String),
     GoImports(Vec<(Option<String>, String)>),
+    GenericFun(
+        String,                // Name
+        Vec<(String, String)>, // Generics
+        Vec<(String, String)>, // Params
+        Option<String>,        // Return Type
+        Vec<IrInstruction>,    // Body
+    ),
     FunDef(
         String,                   // Name
         Option<(String, String)>, // Receiver
@@ -452,27 +459,27 @@ fn walk_access_raw(
                                 skip = true;
                             }
                             TypeExpr::String(..) => {
-                                flag = Some((format!(r#"fmt.Sprintf("%s", "#), stars_count, false));
+                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Int(..) => {
-                                flag = Some((format!(r#"fmt.Sprintf("%d", "#), stars_count, false));
+                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Bool(..) => {
-                                flag = Some((format!(r#"fmt.Sprintf("%t", "#), stars_count, false));
+                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Char => {
-                                flag = Some((format!(r#"fmt.Sprintf("%c", "#), stars_count, false));
+                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
                                 skip = true;
                             }
-                            TypeExpr::Tag(t) => {
-                                flag = Some((format!(r#"fmt.Sprintf("{t}""#), stars_count, false));
+                            TypeExpr::Tag(..) => {
+                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Float => {
-                                flag = Some((format!(r#"fmt.Sprintf("%f", "#), stars_count, false));
+                                flag = Some((format!(r#"IDENTITY("%f", "#), stars_count, false));
                                 skip = true;
                             }
                             _ => {}
@@ -2687,27 +2694,40 @@ impl ValueExpr {
             ValueExpr::LessThan(lhs, rhs) => {
                 let mut ir = Vec::new();
 
-                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env, span);
+                let (v1_instr, v1_res) = lhs.0.emit(type_env, env, span);
                 ir.extend(v1_instr);
                 if v1_res.is_none() {
                     return (ir, None);
                 }
 
-                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env, span);
+                let (v2_instr, v2_res) = rhs.0.emit(type_env, env, span);
                 ir.extend(v2_instr);
                 if v2_res.is_none() {
                     return (ir, None);
                 }
 
+                let Some(IrValue::Var(v1_var) | IrValue::Imm(v1_var)) = v1_res else {
+                    panic!()
+                };
+                let Some(IrValue::Var(v2_var) | IrValue::Imm(v2_var)) = v2_res else {
+                    panic!()
+                };
+
+                let ord_call =
+                    TypeExpr::from_value_expr(lhs, type_env).call_ord(&v1_var, &v2_var, type_env);
+
                 let var = env.new_var();
                 ir.extend([
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
-                    IrInstruction::LessThan(
-                        var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env).unconst(),
-                    ),
+                    IrInstruction::InlineGo(format!(
+                        r#"switch {ord_call}.(type) {{
+                            case Tag__smaller:
+                            {var} = true
+                            default:
+                            {var} = false
+                            }}
+                            "#
+                    )),
                 ]);
 
                 (ir, as_rvar(var))
@@ -2715,27 +2735,42 @@ impl ValueExpr {
             ValueExpr::LessThanOrEquals(lhs, rhs) => {
                 let mut ir = Vec::new();
 
-                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env, span);
+                let (v1_instr, v1_res) = lhs.0.emit(type_env, env, span);
                 ir.extend(v1_instr);
                 if v1_res.is_none() {
                     return (ir, None);
                 }
 
-                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env, span);
+                let (v2_instr, v2_res) = rhs.0.emit(type_env, env, span);
                 ir.extend(v2_instr);
                 if v2_res.is_none() {
                     return (ir, None);
                 }
 
+                let Some(IrValue::Var(v1_var) | IrValue::Imm(v1_var)) = v1_res else {
+                    panic!()
+                };
+                let Some(IrValue::Var(v2_var) | IrValue::Imm(v2_var)) = v2_res else {
+                    panic!()
+                };
+
+                let ord_call =
+                    TypeExpr::from_value_expr(lhs, type_env).call_ord(&v1_var, &v2_var, type_env);
+
                 let var = env.new_var();
                 ir.extend([
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
-                    IrInstruction::LessThanOrEquals(
-                        var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env).unconst(),
-                    ),
+                    IrInstruction::InlineGo(format!(
+                        r#"switch {ord_call}.(type) {{
+                            case Tag__smaller:
+                            {var} = true
+                            case Tag__equal:
+                            {var} = true
+                            default:
+                            {var} = false
+                            }}
+                            "#
+                    )),
                 ]);
 
                 (ir, as_rvar(var))
@@ -2743,27 +2778,40 @@ impl ValueExpr {
             ValueExpr::GreaterThan(lhs, rhs) => {
                 let mut ir = Vec::new();
 
-                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env, span);
+                let (v1_instr, v1_res) = lhs.0.emit(type_env, env, span);
                 ir.extend(v1_instr);
                 if v1_res.is_none() {
                     return (ir, None);
                 }
 
-                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env, span);
+                let (v2_instr, v2_res) = rhs.0.emit(type_env, env, span);
                 ir.extend(v2_instr);
                 if v2_res.is_none() {
                     return (ir, None);
                 }
 
+                let Some(IrValue::Var(v1_var) | IrValue::Imm(v1_var)) = v1_res else {
+                    panic!()
+                };
+                let Some(IrValue::Var(v2_var) | IrValue::Imm(v2_var)) = v2_res else {
+                    panic!()
+                };
+
+                let ord_call =
+                    TypeExpr::from_value_expr(lhs, type_env).call_ord(&v1_var, &v2_var, type_env);
+
                 let var = env.new_var();
                 ir.extend([
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
-                    IrInstruction::GreaterThan(
-                        var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env).unconst(),
-                    ),
+                    IrInstruction::InlineGo(format!(
+                        r#"switch {ord_call}.(type) {{
+                            case Tag__greater:
+                            {var} = true
+                            default:
+                            {var} = false
+                            }}
+                            "#
+                    )),
                 ]);
 
                 (ir, as_rvar(var))
@@ -2771,27 +2819,42 @@ impl ValueExpr {
             ValueExpr::GreaterThanOrEquals(lhs, rhs) => {
                 let mut ir = Vec::new();
 
-                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env, span);
+                let (v1_instr, v1_res) = lhs.0.emit(type_env, env, span);
                 ir.extend(v1_instr);
                 if v1_res.is_none() {
                     return (ir, None);
                 }
 
-                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env, span);
+                let (v2_instr, v2_res) = rhs.0.emit(type_env, env, span);
                 ir.extend(v2_instr);
                 if v2_res.is_none() {
                     return (ir, None);
                 }
 
+                let Some(IrValue::Var(v1_var) | IrValue::Imm(v1_var)) = v1_res else {
+                    panic!()
+                };
+                let Some(IrValue::Var(v2_var) | IrValue::Imm(v2_var)) = v2_res else {
+                    panic!()
+                };
+
+                let ord_call =
+                    TypeExpr::from_value_expr(lhs, type_env).call_ord(&v1_var, &v2_var, type_env);
+
                 let var = env.new_var();
                 ir.extend([
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
-                    IrInstruction::GreaterThanOrEquals(
-                        var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env).unconst(),
-                    ),
+                    IrInstruction::InlineGo(format!(
+                        r#"switch {ord_call}.(type) {{
+                            case Tag__greater:
+                            {var} = true
+                            case Tag__equal:
+                            {var} = true
+                            default:
+                            {var} = false
+                            }}
+                            "#
+                    )),
                 ]);
 
                 (ir, as_rvar(var))
@@ -2870,7 +2933,7 @@ impl ValueExpr {
                     false,
                 );
                 if let Some(t_res) = r {
-                    return (i, Some(IrValue::Imm(dbg!(t_res))));
+                    return (i, Some(IrValue::Imm(t_res)));
                 } else {
                     return (i, None);
                 }

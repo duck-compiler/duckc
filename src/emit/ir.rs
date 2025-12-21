@@ -295,6 +295,38 @@ impl IrInstruction {
                         .join("\n")
                 )
             }
+            IrInstruction::GenericFun(name, generics, params, return_type, body) => {
+                format!(
+                    "func {name}[{}]({}) {} {{\n{}\n}}",
+                    generics
+                        .iter()
+                        .map(|(n, ty)| format!("{n} {ty}"))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    params
+                        .iter()
+                        .map(|(n, ty)| format!("{n} {ty}"))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    return_type
+                        .as_ref()
+                        .map(|return_type| if name == "main" {
+                            String::new()
+                        } else {
+                            return_type.clone()
+                        })
+                        .unwrap_or(String::new()),
+                    format!(
+                        "{}\n{}",
+                        params
+                            .iter()
+                            .map(|(name, _)| format!("_ = {name}"))
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                        join_ir(body)
+                    ),
+                )
+            }
             IrInstruction::FunDef(name, receiver, params, return_type, body) => {
                 format!(
                     "func {} {name}({}) {} {{\n{}\n}}",
@@ -548,6 +580,21 @@ pub fn fix_idents_in_ir(v: &mut IrInstruction, imports: &HashSet<String>) {
         }
 
         IrInstruction::GoImports(..) => {}
+
+        IrInstruction::GenericFun(name, generics, params, _ret, body) => {
+            *name = fix_ident_for_go(name, imports);
+            for param in generics {
+                param.0 = fix_ident_for_go(&param.0, imports);
+            }
+
+            for param in params {
+                param.0 = fix_ident_for_go(&param.0, imports);
+            }
+
+            for body in body {
+                fix_idents_in_ir(body, imports);
+            }
+        }
 
         IrInstruction::FunDef(name, receiver, params, _ret, body) => {
             *name = fix_ident_for_go(name, imports);

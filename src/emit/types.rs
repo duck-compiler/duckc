@@ -271,6 +271,13 @@ pub fn emit_type_definitions(
 
                     let go_code = r#"
                         other := *other_param
+
+                        if len(self) < len(other) {
+                            return Tag__smaller{}
+                        } else if len(self) > len(other) {
+                            return Tag__greater{}
+                        }
+
                         for i := range self {
                             a := self[i]
                             b := other[i]
@@ -1008,9 +1015,9 @@ pub fn emit_type_definitions(
         vec![IrInstruction::InlineGo(
             r#"
                 other := *other_param
-                if len(self) > len(other) {
+                if len(self) < len(other) {
                     return Tag__smaller{}
-                } else if len(self) < len(other) {
+                } else if len(self) > len(other) {
                     return Tag__greater{}
                 } else {
                     runes_self := []rune(self)
@@ -1082,6 +1089,14 @@ pub fn emit_type_definitions(
                     "#
             .to_string(),
         )],
+    ));
+
+    result.push(IrInstruction::GenericFun(
+        "IDENTITY".to_string(),
+        vec![("T".to_string(), "any".to_string())],
+        vec![("x".to_string(), "T".to_string())],
+        Some("T".to_string()),
+        vec![IrInstruction::InlineGo("return x".to_string())],
     ));
 
     result.push(IrInstruction::FunDef(

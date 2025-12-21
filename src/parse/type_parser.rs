@@ -137,6 +137,30 @@ impl TypeExpr {
             // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
             TypeExpr::Struct { .. } => format!("{param1}.eq(&{param2})"),
             TypeExpr::Tag(..) => String::from("true"),
+            TypeExpr::Or(t) => {
+                let mut go_code = format!(r#"
+                    var p1 any = {param1}
+                    var p2 any = {param2}
+
+                "#);
+
+                for t in t {
+                    let conc_type = t.0.as_go_type_annotation(type_env);
+                    go_code.push('\n');
+                    go_code.push_str(&format!(r#"
+                        switch p1.(type) {{
+                        case {conc_type}:
+                            switch p2.(type) {{
+                                case {conc_type}:
+                                return true
+                            }}
+                        }}
+                    "#));
+                }
+
+                go_code.push_str("\nreturn false");
+                format!("func() bool {{ {go_code} }}()")
+            }
             TypeExpr::Ref(inner) | TypeExpr::RefMut(inner) => {
                 let mut derefs = 1;
                 let mut inner = inner.as_ref().clone();
@@ -219,14 +243,39 @@ impl TypeExpr {
                     inner = *new_inner;
                 }
 
-                let derefs_str = (0..derefs).fold(String::with_capacity(derefs), |mut acc, _| {
-                    acc.push('*');
-                    acc
-                });
+                let (derefs_str, _ref_str) = (0..derefs).fold(
+                    (String::with_capacity(derefs), String::with_capacity(derefs)),
+                    |(mut acc1, mut acc2), _| {
+                        acc1.push('*');
+                        acc2.push('&');
+                        (acc1, acc2)
+                    },
+                );
 
-                inner
+                let inner_call = inner
                     .0
-                    .call_to_string(&format!("{derefs_str}{param1}"), type_env)
+                    .call_clone(&format!("{derefs_str}{param1}"), type_env);
+
+                let mut out_go = String::new();
+                out_go.push_str(&format!("final_res := {inner_call}"));
+
+                for _ in 0..derefs {
+                    out_go.push('\n');
+                    out_go.push('{');
+                    out_go.push('\n');
+                    out_go.push_str("final_res := &final_res");
+                }
+                out_go.push('\n');
+                out_go.push_str("return final_res");
+                out_go.push('\n');
+                for _ in 0..derefs {
+                    out_go.push('}');
+                    out_go.push('\n');
+                }
+
+                let self_type_anno = self.as_go_type_annotation(type_env);
+
+                format!("func() {self_type_anno} {{ {out_go} }}()")
             }
             _ => panic!("cant call to_string method on {self:?}"),
         }
@@ -273,9 +322,12 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_to_string(type_env),
             TypeExpr::Array(t) => t.0.implements_to_string(type_env),
-            TypeExpr::Duck(Duck { fields }) => fields
-                .iter()
-                .all(|f| f.type_expr.0.implements_to_string(type_env)),
+            TypeExpr::Duck(Duck { fields }) => {
+                false
+                    && fields
+                        .iter()
+                        .all(|f| f.type_expr.0.implements_to_string(type_env))
+            }
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_to_string(type_env)),
             TypeExpr::Struct { name, type_params } => {
                 let def =
@@ -302,9 +354,12 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_hash(type_env),
             TypeExpr::Array(t) => t.0.implements_hash(type_env),
-            TypeExpr::Duck(Duck { fields }) => fields
-                .iter()
-                .all(|f| f.type_expr.0.implements_hash(type_env)),
+            TypeExpr::Duck(Duck { fields }) => {
+                false
+                    && fields
+                        .iter()
+                        .all(|f| f.type_expr.0.implements_hash(type_env))
+            }
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_hash(type_env)),
             TypeExpr::Struct { name, type_params } => {
                 let def =
@@ -330,9 +385,12 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_clone(type_env),
             TypeExpr::Array(t) => t.0.implements_clone(type_env),
-            TypeExpr::Duck(Duck { fields }) => fields
-                .iter()
-                .all(|f| f.type_expr.0.implements_clone(type_env)),
+            TypeExpr::Duck(Duck { fields }) => {
+                false
+                    && fields
+                        .iter()
+                        .all(|f| f.type_expr.0.implements_clone(type_env))
+            }
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_clone(type_env)),
             TypeExpr::Struct { name, type_params } => {
                 let def =
@@ -340,7 +398,7 @@ impl TypeExpr {
                 def.derived
                     .contains(&crate::parse::struct_parser::DerivableInterface::Clone)
                     || (def.methods.iter().any(|f| {
-                        f.name.as_str() == "clone()"
+                        f.name.as_str() == "clone"
                             && f.params.is_empty()
                             && &f.return_type.0 == self
                     }) && !def.mut_methods.contains("clone"))
@@ -359,9 +417,12 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_ord(type_env),
             TypeExpr::Array(t) => t.0.implements_ord(type_env),
-            TypeExpr::Duck(Duck { fields }) => fields
-                .iter()
-                .all(|f| f.type_expr.0.implements_ord(type_env)),
+            TypeExpr::Duck(Duck { fields }) => {
+                false
+                    && fields
+                        .iter()
+                        .all(|f| f.type_expr.0.implements_ord(type_env))
+            }
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_ord(type_env)),
             TypeExpr::Struct { name, type_params } => {
                 let def =
@@ -371,7 +432,8 @@ impl TypeExpr {
                     || (def.methods.iter().any(|f| {
                         f.name.as_str() == "ord"
                             && f.params.len() == 1
-                            && &f.params[0].1.0 == self
+                            && f.params[0].1.0.clone().into_empty_span().0
+                                == TypeExpr::Ref(self.clone().into_empty_span().into())
                             && f.return_type.0.clone().into_empty_span().0 == TypeExpr::ord_result()
                     }) && !def.mut_methods.contains("ord"))
             }
@@ -389,9 +451,9 @@ impl TypeExpr {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_eq(type_env),
             TypeExpr::Array(t) => t.0.implements_eq(type_env),
             TypeExpr::Duck(Duck { fields }) => {
-                fields.iter().all(|f| f.type_expr.0.implements_eq(type_env))
+                false && fields.iter().all(|f| f.type_expr.0.implements_eq(type_env))
             }
-            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_eq(type_env)),
+            TypeExpr::Tuple(t) | TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_eq(type_env)),
             TypeExpr::Struct { name, type_params } => {
                 let def =
                     type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
@@ -400,7 +462,8 @@ impl TypeExpr {
                     || (def.methods.iter().any(|f| {
                         f.name.as_str() == "eq"
                             && f.params.len() == 1
-                            && &f.params[0].1.0 == self
+                            && f.params[0].1.0.clone().into_empty_span().0
+                                == TypeExpr::Ref(self.clone().into_empty_span().into())
                             && matches!(f.return_type.0, TypeExpr::Bool(..))
                     }) && !def.mut_methods.contains("eq"))
             }
