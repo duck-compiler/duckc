@@ -693,6 +693,8 @@ impl IrValue {
                 "'{}'",
                 c.to_string()
                     .replace("\\", "\\\\")
+                    .replace("\\\\o", "\\")
+                    .replace("\0", "\\x00")
                     .replace("\t", "\\t")
                     .replace("\n", "\\n")
                     .replace("\'", "\\'")
@@ -700,6 +702,8 @@ impl IrValue {
             IrValue::String(s, _is_const) => format!(
                 "\"{}\"",
                 s.replace("\\", "\\\\")
+                    .replace("\0", "\\x00")
+                    .replace("\\\\o", "\\")
                     .replace("\n", "\\n")
                     .replace("\"", "\\\"")
                     .replace("\t", "\\\t")
