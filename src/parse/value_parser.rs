@@ -655,7 +655,7 @@ where
                                 ValueExpr::If {
                                     condition: Box::new(cond),
                                     then: Box::new(then),
-                                    r#else: Some(acc.unwrap()),
+                                    r#else: acc,
                                 },
                                 span,
                             )))
