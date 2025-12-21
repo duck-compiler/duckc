@@ -1,0 +1,66 @@
+use ::col::{ArrayList};
+use go "os/exec";
+
+struct Cmd = {
+    program: String,
+    cmd_args: ::col::ArrayList<String>,
+} impl {
+    static fn new(
+        program: String
+    ) -> Cmd {
+        return Cmd {
+            program: program,
+            cmd_args: std::col::ArrayList::new<String>(),
+        }
+    }
+
+    static fn exec(
+        command: String,
+    ) -> String | .err {
+        const splitted: String[] = go {
+            $$$res$$$ = strings.Split(command, " ")
+        };
+
+        const args: String[] = go {
+            $$$res$$$ = splitted[1:]
+        };
+
+        return Cmd::new(splitted[0])
+           .args(args)
+           .run();
+    }
+
+    mut fn arg(arg: String) -> &Cmd {
+        self.cmd_args.push(arg);
+        return self;
+    }
+
+    mut fn args(_args: String[]) -> &Cmd {
+        for arg in _args {
+            self.cmd_args.push(arg);
+        }
+        return self;
+    }
+
+    fn run() -> String | .err {
+        go {
+            out, err := exec.Command((*self).program, (*self).cmd_args.elems...).Output()
+            if err != nil {
+                return Tag__err { }
+            }
+
+            return string(out)
+        }
+    }
+
+    fn run_and_forget() -> .err | .none {
+        go {
+            err := exec.Command((*self).program, (*self).cmd_args.elems...).Run()
+            if err != nil {
+                return Tag__err { }
+            }
+
+            return Tag__none { }
+        }
+    }
+};
