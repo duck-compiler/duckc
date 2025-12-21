@@ -6,7 +6,7 @@ use crate::parse::{Context, SS, Spanned, value_parser::empty_range};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum RawFmtStringContents {
-    Char(char),
+    Char(&'static str),
     Tokens(Vec<Spanned<Token>>),
 }
 
@@ -457,6 +457,9 @@ pub fn duckx_contents_in_curly_braces<'a>(
     })
 }
 
+pub fn oct_digit<'a>() -> impl Parser<'a, &'a str, char, extra::Err<Rich<'a, char>>> + Clone {
+    one_of("01234567")
+}
 pub fn lex_single<'a>(
     file_name: &'static str,
     file_contents: &'static str,
@@ -545,18 +548,25 @@ pub fn lex_single<'a>(
             .ignore_then(just('"'))
             .ignore_then(
                 choice((
-                    just("\\{").to(RawFmtStringContents::Char('{')),
+                    just("\\{").to(RawFmtStringContents::Char("{")),
                     just("{")
                         .rewind()
                         .ignore_then(tokens_in_curly_braces(lexer.clone()))
                         .map(|e| RawFmtStringContents::Tokens(e[1..e.len() - 1].to_vec())),
                     none_of("\\\"")
+                        .map(|c: char| c.to_string().leak() as &'static str)
                         .or(choice((
-                            just("\\\\").to('\\'),
-                            just("\\{").to('{'),
-                            just("\\n").to('\n'),
-                            just("\\t").to('\t'),
-                            just("\\\"").to('"'),
+                            just("\\0").to("\0"),
+                            just("\\o")
+                                .ignore_then(oct_digit())
+                                .then(oct_digit())
+                                .then(oct_digit())
+                                .map(|((a, b), c)| format!("\\o{a}{b}{c}").leak() as &'static str),
+                            just("\\\\").to("\\"),
+                            just("\\{").to("{"),
+                            just("\\n").to("\n"),
+                            just("\\t").to("\t"),
+                            just("\\\"").to("\""),
                         )))
                         .map(RawFmtStringContents::Char),
                 ))
@@ -577,7 +587,7 @@ pub fn lex_single<'a>(
                             }
                             xx.push(FmtStringContents::Tokens(t));
                         }
-                        RawFmtStringContents::Char(c) => s.push(c),
+                        RawFmtStringContents::Char(c) => s.push_str(c),
                     }
                 }
 
@@ -698,6 +708,7 @@ fn inline_jsx_parser<'src>()
 fn char_lexer<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone {
     just("'")
         .ignore_then(none_of("\\\n\t'").or(choice((
+            just("\\0").to('\0'),
             just("\\\\").to('\\'),
             just("\\n").to('\n'),
             just("\\t").to('\t'),
@@ -711,6 +722,7 @@ fn string_lexer<'a>() -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, cha
     just('"')
         .ignore_then(
             choice((
+                just("\\0").to('\0'),
                 just("\\\\").to('\\'),
                 just("\\n").to('\n'),
                 just("\\t").to('\t'),
@@ -1197,6 +1209,7 @@ mod tests {
                     Token::ControlChar('}'),
                 ],
             ),
+            ("\"\\0\"", vec![Token::StringLiteral("\0".to_string())]),
             (
                 "if (true) {} else if {} else if {} else {}",
                 vec![

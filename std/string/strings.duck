@@ -164,51 +164,35 @@ extend String with impl {
     }
 
     fn red() -> String {
-        return go {
-            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[31m", self, "\033[0m")
-        } as String
+        f"\o033[31m{self}\o033[0m"
     }
 
     fn green() -> String {
-        return go {
-            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[32m", self, "\033[0m")
-        } as String
+        f"\o033[32m{self}\o033[0m"
     }
 
     fn yellow() -> String {
-        return go {
-            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[33m", self, "\033[0m")
-        } as String
+        f"\o033[33m{self}\o033[0m"
     }
 
     fn blue() -> String {
-        return go {
-            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[34m", self, "\033[0m")
-        } as String
+        f"\o033[34m{self}\o033[0m"
     }
 
     fn magenta() -> String {
-        return go {
-            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[35m", self, "\033[0m")
-        } as String
+        f"\o033[35m{self}\o033[0m"
     }
 
     fn cyan() -> String {
-        return go {
-            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[36m", self, "\033[0m")
-        } as String
+        f"\o033[36m{self}\o033[0m"
     }
 
     fn gray() -> String {
-        return go {
-            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[37m", self, "\033[0m")
-        } as String
+        f"\o033[37m{self}\o033[0m"
     }
 
     fn white() -> String {
-        return go {
-            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[97m", self, "\033[0m")
-        } as String
+        f"\o033[97m{self}\o033[0m"
     }
 }
 
