@@ -163,6 +163,18 @@ extend String with impl {
         return bytes;
     }
 
+    fn bold() -> String {
+        f"\o033[1m{self}\o033[0m"
+    }
+
+    fn italic() -> String {
+        f"\o033[3m{self}\o033[0m"
+    }
+
+    fn underline() -> String {
+        f"\o033[4m{self}\o033[0m"
+    }
+
     fn red() -> String {
         f"\o033[31m{self}\o033[0m"
     }
@@ -193,6 +205,46 @@ extend String with impl {
 
     fn white() -> String {
         f"\o033[97m{self}\o033[0m"
+    }
+
+    fn on_red() -> String {
+        f"\o033[41m{self}\o033[0m"
+    }
+
+    fn on_green() -> String {
+        f"\o033[42m{self}\o033[0m"
+    }
+
+    fn on_yellow() -> String {
+        f"\o033[43m{self}\o033[0m"
+    }
+
+    fn on_blue() -> String {
+        f"\o033[44m{self}\o033[0m"
+    }
+
+    fn on_magenta() -> String {
+        f"\o033[45m{self}\o033[0m"
+    }
+
+    fn on_cyan() -> String {
+        f"\o033[46m{self}\o033[0m"
+    }
+
+    fn on_gray() -> String {
+        f"\o033[47m{self}\o033[0m"
+    }
+
+    fn on_white() -> String {
+        f"\o033[107m{self}\o033[0m"
+    }
+
+    fn rgb(r: Int, g: Int, b: Int) -> String {
+        f"\o033[38;2;{r.to_string()};{g.to_string()};{b.to_string()}m{self}\o033[0m"
+    }
+
+    fn on_rgb(r: Int, g: Int, b: Int) -> String {
+        f"\o033[48;2;{r.to_string()};{g.to_string()};{b.to_string()}m{self}\o033[0m"
     }
 }
 
