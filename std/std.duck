@@ -11,6 +11,7 @@ module col;
 module error;
 module http;
 module sync;
+module cmd;
 
 component lol() jsx {
     return (<><p>yo</p></>);
