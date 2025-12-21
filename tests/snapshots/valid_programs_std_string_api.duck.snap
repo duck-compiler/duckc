@@ -1,4 +1,4 @@
 {
-    "stdout": "all string api tests have passed\n",
+    "stdout": "\u001b[31mred\u001b[0m\n\u001b[32mgreen\u001b[0m\n\u001b[33myellow\u001b[0m\n\u001b[34mblue\u001b[0m\n\u001b[35mmagenta\u001b[0m\n\u001b[36mcyan\u001b[0m\n\u001b[37mgray\u001b[0m\n\u001b[97mwhite\u001b[0m\nall string api tests have passed\n",
     "stderr": ""
 }
