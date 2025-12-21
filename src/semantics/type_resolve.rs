@@ -3323,7 +3323,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                     type_env
                         .generic_structs_generated
                         .retain(|f| f.name.as_str() != new_struct_name.as_str());
-                    if type_params.is_empty() {
+                    if struct_type_params.is_empty() {
                         type_env.struct_definitions.push(mut_struct_def);
                     } else {
                         type_env.generic_structs_generated.push(mut_struct_def);
