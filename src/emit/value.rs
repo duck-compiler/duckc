@@ -84,6 +84,13 @@ pub enum IrInstruction {
     // Top-Level Statements
     GoPackage(String),
     GoImports(Vec<(Option<String>, String)>),
+    GenericFun(
+        String,                // Name
+        Vec<(String, String)>, // Generics
+        Vec<(String, String)>, // Params
+        Option<String>,        // Return Type
+        Vec<IrInstruction>,    // Body
+    ),
     FunDef(
         String,                   // Name
         Option<(String, String)>, // Receiver
@@ -255,6 +262,7 @@ pub fn can_do_mut_stuff_through(v: &Spanned<ValueExpr>, type_env: &mut TypeEnv) 
 enum FrontPart {
     Deref(usize),
     ExtCall(String, usize),
+    ExtCall2(String, usize),
 }
 
 fn walk_access_raw(
@@ -394,56 +402,214 @@ fn walk_access_raw(
                     let (target_field_type, stars_count) =
                         TypeExpr::from_value_expr_dereferenced_with_count(target_obj, type_env);
 
-                    let extension_fn_name = target_field_type
-                        .build_extension_access_function_name(field_name, type_env);
-                    let extension_fn = type_env.extension_functions.get(&extension_fn_name);
-
-                    if extension_fn.is_some() {
-                        flag = Some((extension_fn_name, stars_count));
+                    let clean_go_type_name = target_field_type.as_clean_go_type_name(type_env);
+                    let mut skip = false;
+                    if field_name.as_str() == "to_string"
+                        && target_field_type.implements_to_string(type_env)
+                    {
+                        match target_field_type.clone() {
+                            TypeExpr::Array(..) => {
+                                flag = Some((
+                                    format!("{clean_go_type_name}_ToString("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::String(..) => {
+                                flag = Some((format!(r#"fmt.Sprintf("%s", "#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Int(..) => {
+                                flag = Some((format!(r#"fmt.Sprintf("%d", "#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Bool(..) => {
+                                flag = Some((format!(r#"fmt.Sprintf("%t", "#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Char => {
+                                flag = Some((format!(r#"fmt.Sprintf("%c", "#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Tag(t) => {
+                                flag = Some((
+                                    format!(r#"(func(_ any) string {{ return ".{t}" }})("#),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::Float => {
+                                flag = Some((format!(r#"fmt.Sprintf("%f", "#), stars_count, false));
+                                skip = true;
+                            }
+                            _ => {}
+                        }
+                    } else if field_name.as_str() == "clone"
+                        && target_field_type.implements_clone(type_env)
+                    {
+                        match target_field_type.clone() {
+                            TypeExpr::Array(..) => {
+                                flag = Some((
+                                    format!("{clean_go_type_name}_Clone("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::String(..) => {
+                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Int(..) => {
+                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Bool(..) => {
+                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Char => {
+                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Tag(..) => {
+                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Float => {
+                                flag = Some((format!(r#"IDENTITY("%f", "#), stars_count, false));
+                                skip = true;
+                            }
+                            _ => {}
+                        }
+                    } else if field_name.as_str() == "hash"
+                        && target_field_type.implements_hash(type_env)
+                    {
+                        match target_field_type.clone() {
+                            TypeExpr::Array(..) => {
+                                flag = Some((
+                                    format!("{clean_go_type_name}_Hash("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::String(..) => {
+                                flag = Some((format!(r#"String_Hash("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Int(..) => {
+                                flag = Some((format!(r#"Int_Hash("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Bool(..) => {
+                                flag = Some((format!(r#"Bool_Hash("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Char => {
+                                flag = Some((format!(r#"Char_Hash("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Tag(t) => {
+                                flag = Some((format!(r#"String_Hash("{t}""#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Float => {
+                                flag = Some((format!(r#"Float_Hash("#), stars_count, false));
+                                skip = true;
+                            }
+                            _ => {}
+                        }
+                    } else if field_name.as_str() == "ord"
+                        && target_field_type.implements_ord(type_env)
+                    {
+                        match target_field_type.clone() {
+                            TypeExpr::Array(..) => {
+                                flag = Some((
+                                    format!("{clean_go_type_name}_Ord("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::String(..) => {
+                                flag = Some((format!(r#"String_Ord("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Int(..) => {
+                                flag = Some((format!(r#"Int_Ord("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Bool(..) => {
+                                flag = Some((format!(r#"Bool_Ord("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Char => {
+                                flag = Some((format!(r#"Char_Ord("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Float => {
+                                flag = Some((format!(r#"Float_Ord("#), stars_count, false));
+                                skip = true;
+                            }
+                            _ => {}
+                        }
                     }
 
-                    match target_field_type {
-                        TypeExpr::Struct {
-                            name: struct_name,
-                            type_params: struct_type_params,
-                        } => {
-                            let struct_def = type_env.get_struct_def_with_type_params_mut(
-                                struct_name.as_str(),
-                                &struct_type_params,
-                                empty_range(),
-                            );
-                            if struct_def.mut_methods.contains(field_name)
-                                && !can_do_mut_stuff_through(target_obj, type_env)
-                            {
-                                failure_with_occurence(
-                                    "This needs to allow mutable access",
-                                    target.1,
-                                    [(
-                                        "This needs to allow mutable access".to_string(),
-                                        target_obj.1,
-                                    )],
-                                );
-                            }
+                    if !skip {
+                        let extension_fn_name = target_field_type
+                            .build_extension_access_function_name(field_name, type_env);
+                        let extension_fn = type_env.extension_functions.get(&extension_fn_name);
+
+                        if extension_fn.is_some() {
+                            flag = Some((extension_fn_name, stars_count, true));
                         }
-                        TypeExpr::Duck(duck) => {
-                            if let Some(duck_field) = duck
-                                .fields
-                                .iter()
-                                .find(|field| field.name.as_str() == field_name.as_str())
-                                && let TypeExpr::Fun(_, _, true) = duck_field.type_expr.0
-                                && !can_do_mut_stuff_through(target_obj, type_env)
-                            {
-                                failure_with_occurence(
-                                    "This needs to allow mutable access",
-                                    target.1,
-                                    [(
-                                        "This needs to allow mutable access".to_string(),
-                                        target_obj.1,
-                                    )],
+
+                        match target_field_type {
+                            TypeExpr::Struct {
+                                name: struct_name,
+                                type_params: struct_type_params,
+                            } => {
+                                let struct_def = type_env.get_struct_def_with_type_params_mut(
+                                    struct_name.as_str(),
+                                    &struct_type_params,
+                                    empty_range(),
                                 );
+                                if struct_def.mut_methods.contains(field_name)
+                                    && !can_do_mut_stuff_through(target_obj, type_env)
+                                {
+                                    failure_with_occurence(
+                                        "This needs to allow mutable access",
+                                        target.1,
+                                        [(
+                                            "This needs to allow mutable access".to_string(),
+                                            target_obj.1,
+                                        )],
+                                    );
+                                }
                             }
+                            TypeExpr::Duck(duck) => {
+                                if let Some(duck_field) = duck
+                                    .fields
+                                    .iter()
+                                    .find(|field| field.name.as_str() == field_name.as_str())
+                                    && let TypeExpr::Fun(_, _, true) = duck_field.type_expr.0
+                                    && !can_do_mut_stuff_through(target_obj, type_env)
+                                {
+                                    failure_with_occurence(
+                                        "This needs to allow mutable access",
+                                        target.1,
+                                        [(
+                                            "This needs to allow mutable access".to_string(),
+                                            target_obj.1,
+                                        )],
+                                    );
+                                }
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
 
@@ -483,10 +649,18 @@ fn walk_access_raw(
                     }
                 }
 
-                if let Some((f, stars_count)) = flag.as_ref() {
-                    derefs.push(FrontPart::ExtCall(f.clone(), *stars_count));
-                    let param_res = param_res.join(", ");
-                    s.push_front(format!(")({param_res})",));
+                if let Some((f, stars_count, is_wrapped)) = flag.as_ref() {
+                    let mut param_res = param_res.join(", ");
+                    if *is_wrapped {
+                        derefs.push(FrontPart::ExtCall(f.clone(), *stars_count));
+                        s.push_front(format!(")({param_res})"));
+                    } else {
+                        derefs.push(FrontPart::ExtCall2(f.clone(), *stars_count));
+                        if !param_res.is_empty() {
+                            param_res.insert_str(0, ", ");
+                        }
+                        s.push_front(format!("{param_res})"));
+                    }
                 } else {
                     s.push_front(format!("({})", param_res.join(", ")));
                 }
@@ -582,7 +756,27 @@ fn walk_access_raw(
                 let type_expr = TypeExpr::from_value_expr_dereferenced(&target_obj, type_env);
 
                 match type_expr {
-                    TypeExpr::Tuple(..) => s.push_front(format!("field_{field_name}")),
+                    TypeExpr::Tuple(t) => {
+                        if field_name.as_str() == "to_string"
+                            && t.iter().all(|t| t.0.implements_to_string(type_env))
+                        {
+                            s.push_front("to_string".to_string());
+                        } else if field_name.as_str() == "clone"
+                            && t.iter().all(|t| t.0.implements_clone(type_env))
+                        {
+                            s.push_front("clone".to_string());
+                        } else if field_name.as_str() == "hash"
+                            && t.iter().all(|t| t.0.implements_hash(type_env))
+                        {
+                            s.push_front("hash".to_string());
+                        } else if field_name.as_str() == "ord"
+                            && t.iter().all(|t| t.0.implements_ord(type_env))
+                        {
+                            s.push_front("ord".to_string());
+                        } else {
+                            s.push_front(format!("field_{field_name}"));
+                        }
+                    }
                     TypeExpr::Duck(Duck { fields }) => {
                         let found_field = fields
                             .iter()
@@ -711,6 +905,12 @@ fn walk_access_raw(
                 }
                 s[0].insert_str(0, e);
                 s[0].insert(e.len(), '(');
+            }
+            FrontPart::ExtCall2(e, stars_count) => {
+                for _ in 0..*stars_count {
+                    s[0].insert(0, '*');
+                }
+                s[0].insert_str(0, e);
             }
         }
     }
@@ -2453,82 +2653,81 @@ impl ValueExpr {
             ValueExpr::Equals(v1, v2) => {
                 let mut ir = Vec::new();
 
-                let (v1_instr, v1_res) = v1.0.direct_or_with_instr(type_env, env, span);
+                let (v1_instr, v1_res) = v1.0.emit(type_env, env, span);
                 ir.extend(v1_instr);
                 if v1_res.is_none() {
                     return (ir, None);
                 }
-                let (v2_instr, v2_res) = v2.0.direct_or_with_instr(type_env, env, span);
+                let (v2_instr, v2_res) = v2.0.emit(type_env, env, span);
                 ir.extend(v2_instr);
                 if v2_res.is_none() {
                     return (ir, None);
                 }
 
+                let Some(IrValue::Var(v1_var) | IrValue::Imm(v1_var)) = v1_res else {
+                    panic!()
+                };
+                let Some(IrValue::Var(v2_var) | IrValue::Imm(v2_var)) = v2_res else {
+                    panic!()
+                };
+
+                let t1 = TypeExpr::from_value_expr(v1, type_env);
+
                 let var = env.new_var();
                 ir.extend([
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
-                    IrInstruction::Equals(
+                    IrInstruction::VarAssignment(
                         var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(v1, type_env).unconst(),
+                        IrValue::Imm(t1.call_eq(&v1_var, &v2_var, type_env)),
                     ),
                 ]);
 
                 (ir, as_rvar(var))
             }
             ValueExpr::NotEquals(lhs, rhs) => {
-                let mut ir = Vec::new();
-
-                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env, span);
-                ir.extend(v1_instr);
-                if v1_res.is_none() {
-                    return (ir, None);
-                }
-
-                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env, span);
-                ir.extend(v2_instr);
-                if v2_res.is_none() {
-                    return (ir, None);
-                }
-
-                let var = env.new_var();
-                ir.extend([
-                    IrInstruction::VarDecl(var.clone(), "bool".into()),
-                    IrInstruction::NotEquals(
-                        var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env).unconst(),
-                    ),
-                ]);
-
-                (ir, as_rvar(var))
+                let in_equals = ValueExpr::BoolNegate(
+                    (ValueExpr::Equals(lhs.clone(), rhs.clone()), span).into(),
+                );
+                let (equals_ir, equals_res) = in_equals.emit(type_env, env, span);
+                (equals_ir, equals_res)
             }
             ValueExpr::LessThan(lhs, rhs) => {
                 let mut ir = Vec::new();
 
-                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env, span);
+                let (v1_instr, v1_res) = lhs.0.emit(type_env, env, span);
                 ir.extend(v1_instr);
                 if v1_res.is_none() {
                     return (ir, None);
                 }
 
-                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env, span);
+                let (v2_instr, v2_res) = rhs.0.emit(type_env, env, span);
                 ir.extend(v2_instr);
                 if v2_res.is_none() {
                     return (ir, None);
                 }
 
+                let Some(IrValue::Var(v1_var) | IrValue::Imm(v1_var)) = v1_res else {
+                    panic!()
+                };
+                let Some(IrValue::Var(v2_var) | IrValue::Imm(v2_var)) = v2_res else {
+                    panic!()
+                };
+
+                let ord_call =
+                    TypeExpr::from_value_expr(lhs, type_env).call_ord(&v1_var, &v2_var, type_env);
+
                 let var = env.new_var();
                 ir.extend([
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
-                    IrInstruction::LessThan(
-                        var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env).unconst(),
-                    ),
+                    IrInstruction::InlineGo(format!(
+                        r#"switch {ord_call}.(type) {{
+                            case Tag__smaller:
+                            {var} = true
+                            default:
+                            {var} = false
+                            }}
+                            "#
+                    )),
                 ]);
 
                 (ir, as_rvar(var))
@@ -2536,27 +2735,42 @@ impl ValueExpr {
             ValueExpr::LessThanOrEquals(lhs, rhs) => {
                 let mut ir = Vec::new();
 
-                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env, span);
+                let (v1_instr, v1_res) = lhs.0.emit(type_env, env, span);
                 ir.extend(v1_instr);
                 if v1_res.is_none() {
                     return (ir, None);
                 }
 
-                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env, span);
+                let (v2_instr, v2_res) = rhs.0.emit(type_env, env, span);
                 ir.extend(v2_instr);
                 if v2_res.is_none() {
                     return (ir, None);
                 }
 
+                let Some(IrValue::Var(v1_var) | IrValue::Imm(v1_var)) = v1_res else {
+                    panic!()
+                };
+                let Some(IrValue::Var(v2_var) | IrValue::Imm(v2_var)) = v2_res else {
+                    panic!()
+                };
+
+                let ord_call =
+                    TypeExpr::from_value_expr(lhs, type_env).call_ord(&v1_var, &v2_var, type_env);
+
                 let var = env.new_var();
                 ir.extend([
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
-                    IrInstruction::LessThanOrEquals(
-                        var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env).unconst(),
-                    ),
+                    IrInstruction::InlineGo(format!(
+                        r#"switch {ord_call}.(type) {{
+                            case Tag__smaller:
+                            {var} = true
+                            case Tag__equal:
+                            {var} = true
+                            default:
+                            {var} = false
+                            }}
+                            "#
+                    )),
                 ]);
 
                 (ir, as_rvar(var))
@@ -2564,27 +2778,40 @@ impl ValueExpr {
             ValueExpr::GreaterThan(lhs, rhs) => {
                 let mut ir = Vec::new();
 
-                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env, span);
+                let (v1_instr, v1_res) = lhs.0.emit(type_env, env, span);
                 ir.extend(v1_instr);
                 if v1_res.is_none() {
                     return (ir, None);
                 }
 
-                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env, span);
+                let (v2_instr, v2_res) = rhs.0.emit(type_env, env, span);
                 ir.extend(v2_instr);
                 if v2_res.is_none() {
                     return (ir, None);
                 }
 
+                let Some(IrValue::Var(v1_var) | IrValue::Imm(v1_var)) = v1_res else {
+                    panic!()
+                };
+                let Some(IrValue::Var(v2_var) | IrValue::Imm(v2_var)) = v2_res else {
+                    panic!()
+                };
+
+                let ord_call =
+                    TypeExpr::from_value_expr(lhs, type_env).call_ord(&v1_var, &v2_var, type_env);
+
                 let var = env.new_var();
                 ir.extend([
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
-                    IrInstruction::GreaterThan(
-                        var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env).unconst(),
-                    ),
+                    IrInstruction::InlineGo(format!(
+                        r#"switch {ord_call}.(type) {{
+                            case Tag__greater:
+                            {var} = true
+                            default:
+                            {var} = false
+                            }}
+                            "#
+                    )),
                 ]);
 
                 (ir, as_rvar(var))
@@ -2592,27 +2819,42 @@ impl ValueExpr {
             ValueExpr::GreaterThanOrEquals(lhs, rhs) => {
                 let mut ir = Vec::new();
 
-                let (v1_instr, v1_res) = lhs.0.direct_or_with_instr(type_env, env, span);
+                let (v1_instr, v1_res) = lhs.0.emit(type_env, env, span);
                 ir.extend(v1_instr);
                 if v1_res.is_none() {
                     return (ir, None);
                 }
 
-                let (v2_instr, v2_res) = rhs.0.direct_or_with_instr(type_env, env, span);
+                let (v2_instr, v2_res) = rhs.0.emit(type_env, env, span);
                 ir.extend(v2_instr);
                 if v2_res.is_none() {
                     return (ir, None);
                 }
 
+                let Some(IrValue::Var(v1_var) | IrValue::Imm(v1_var)) = v1_res else {
+                    panic!()
+                };
+                let Some(IrValue::Var(v2_var) | IrValue::Imm(v2_var)) = v2_res else {
+                    panic!()
+                };
+
+                let ord_call =
+                    TypeExpr::from_value_expr(lhs, type_env).call_ord(&v1_var, &v2_var, type_env);
+
                 let var = env.new_var();
                 ir.extend([
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
-                    IrInstruction::GreaterThanOrEquals(
-                        var.clone(),
-                        v1_res.unwrap(),
-                        v2_res.unwrap(),
-                        TypeExpr::from_value_expr(lhs, type_env).unconst(),
-                    ),
+                    IrInstruction::InlineGo(format!(
+                        r#"switch {ord_call}.(type) {{
+                            case Tag__greater:
+                            {var} = true
+                            case Tag__equal:
+                            {var} = true
+                            default:
+                            {var} = false
+                            }}
+                            "#
+                    )),
                 ]);
 
                 (ir, as_rvar(var))
@@ -2881,18 +3123,6 @@ mod tests {
                 ],
             ),
             ("(true, continue, 3)", vec![IrInstruction::Continue(None)]),
-            (
-                "1 == 2",
-                vec![
-                    decl("var_0", "bool"),
-                    IrInstruction::Equals(
-                        "var_0".into(),
-                        IrValue::Int(1),
-                        IrValue::Int(2),
-                        TypeExpr::Int(None),
-                    ),
-                ],
-            ),
             (
                 "[] as {}[]",
                 vec![

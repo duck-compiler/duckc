@@ -3287,6 +3287,13 @@ mod tests {
                 ),
             ),
             (
+                "[] as Int[]",
+                ValueExpr::As(
+                    ValueExpr::Array(vec![]).into_empty_span().into(),
+                    TypeExpr::Array(TypeExpr::Int(None).into_empty_span().into()).into_empty_span(),
+                ),
+            ),
+            (
                 "(2 + 3) * 4",
                 mul(add(int(2), int(3)).into_empty_span().into(), int(4)),
             ),

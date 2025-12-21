@@ -1228,6 +1228,7 @@ mod tests {
                         mut_methods: HashSet::new(),
                         generics: vec![],
                         doc_comments: vec![],
+                        derived: Default::default(),
                     }],
                     ..Default::default()
                 },

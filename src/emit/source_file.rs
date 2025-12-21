@@ -20,6 +20,7 @@ impl SourceFile {
         let mut to_ir = ToIr::default();
 
         let mut go_imports = vec![];
+        go_imports.push((None, "hash/maphash".to_string()));
 
         let mut imports = HashSet::new();
 

@@ -6,7 +6,10 @@ use crate::{
         value::{IrInstruction, IrValue, ToIr},
     },
     parse::{
-        Field, schema_def_parser::SchemaDefinition, struct_parser::StructDefinition, type_parser::{Duck, TypeExpr}
+        Field,
+        schema_def_parser::SchemaDefinition,
+        struct_parser::StructDefinition,
+        type_parser::{Duck, TypeExpr},
     },
     semantics::{
         ident_mangler::MANGLE_SEP,
@@ -124,10 +127,188 @@ pub fn emit_type_definitions(
     let mut result = Vec::new();
     let mut emitted_types = HashSet::new();
 
-    let all_tuples_and_ducks = type_env.find_ducks_and_tuples();
+    let mut all_tuples_and_ducks = type_env.find_ducks_and_tuples();
+
+    let tags_to_push = ["greater", "smaller", "equal"];
+
+    for tag in tags_to_push {
+        if !all_tuples_and_ducks.iter().any(|t| match t {
+            NeedsSearchResult::Tag { name } => name.as_str() == tag,
+            _ => false,
+        }) {
+            all_tuples_and_ducks.push(NeedsSearchResult::Tag {
+                name: tag.to_string(),
+            });
+        }
+    }
 
     for tuple_or_duck in &all_tuples_and_ducks {
         match tuple_or_duck {
+            NeedsSearchResult::Array { type_expr } => {
+                let array_type = TypeExpr::Array(type_expr.clone().into());
+
+                let array_type_name = array_type.as_clean_go_type_name(type_env);
+                let array_type_ano = array_type.as_go_type_annotation(type_env);
+
+                if array_type.implements_eq(type_env) {
+                    let fun_name = format!("{array_type_name}_Eq");
+
+                    let go_code = r#"
+                        if len(self) != len(other) {
+                            return false
+                        }
+
+                        for i := range self {
+                            a := self[i]
+                            b := other[i]
+
+                            if !($%$%$%) {
+                                return false
+                            }
+                        }
+
+                        return true
+                    "#
+                    .replace("$%$%$%", &type_expr.0.call_eq("a", "b", type_env));
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![
+                            ("self".to_string(), array_type_ano.clone()),
+                            ("other".to_string(), array_type_ano.clone()),
+                        ],
+                        Some("bool".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if array_type.implements_to_string(type_env) {
+                    let fun_name = format!("{array_type_name}_ToString");
+
+                    let go_code = r#"
+                        res := ""
+
+                        for i := range self {
+                            a := self[i]
+                            _ = a
+
+                            if i != 0 {
+                                res = res + ", "
+                            }
+
+                            a_x := ($%$%$%)
+                            res = res + a_x
+                        }
+
+                        return fmt.Sprintf("[%s]", res)
+                    "#
+                    .replace("$%$%$%", &type_expr.0.call_to_string("a", type_env));
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![("self".to_string(), array_type_ano.clone())],
+                        Some("string".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if array_type.implements_clone(type_env) {
+                    let fun_name = format!("{array_type_name}_Clone");
+
+                    let go_code = r#"
+                        res := make($$$ARRAY_TYPE, len(self))
+
+                        for i := range self {
+                            a := self[i]
+                            a_x := ($%$%$%)
+                            res[i] = a_x
+                        }
+
+                        return res
+                    "#
+                    .replace("$$$ARRAY_TYPE", &array_type_ano)
+                    .replace("$%$%$%", &type_expr.0.call_clone("a", type_env));
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![("self".to_string(), array_type_ano.clone())],
+                        Some(array_type_ano.clone()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if array_type.implements_hash(type_env) {
+                    let fun_name = format!("{array_type_name}_Hash");
+
+                    let go_code = r#"
+                        var res int
+                        res = 1
+
+                        for i := range self {
+                            a := self[i]
+                            a_x := ($%$%$%)
+                            res = (31 * res) + a_x
+                        }
+
+                        return res
+                    "#
+                    .replace("$%$%$%", &type_expr.0.call_hash("a", type_env));
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![("self".to_string(), array_type_ano.clone())],
+                        Some("int".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if array_type.implements_ord(type_env) {
+                    let fun_name = format!("{array_type_name}_Ord");
+
+                    let go_code = r#"
+                        other := *other_param
+
+                        if len(self) < len(other) {
+                            return Tag__smaller{}
+                        } else if len(self) > len(other) {
+                            return Tag__greater{}
+                        }
+
+                        for i := range self {
+                            a := self[i]
+                            b := other[i]
+                            inter_res := ($%$%$%)
+
+                            var mm any
+                            mm = inter_res
+                            switch mm.(type) {
+                            case Tag__greater:
+                                return Tag__greater{}
+                            case Tag__smaller:
+                                return Tag__smaller{}
+                            }
+                        }
+
+                        return Tag__equal{}
+                    "#
+                    .replace("$%$%$%", &type_expr.0.call_ord("a", "b", type_env));
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![
+                            ("self".to_string(), array_type_ano.clone()),
+                            ("other_param".to_string(), format!("*{array_type_ano}")),
+                        ],
+                        Some("any".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+            }
             NeedsSearchResult::Duck { fields } => {
                 let duck_type_expr = TypeExpr::Duck(Duck {
                     fields: fields.clone(),
@@ -150,10 +331,11 @@ pub fn emit_type_definitions(
                         .collect::<Vec<_>>(),
                 ));
 
-
-                result.push(
-                    SchemaDefinition::emit_from_json_fn_from_duck(&duck_type_expr, type_env, to_ir)
-                );
+                result.push(SchemaDefinition::emit_from_json_fn_from_duck(
+                    &duck_type_expr,
+                    type_env,
+                    to_ir,
+                ));
 
                 for field in fields.iter() {
                     let param_name = &field.name;
@@ -223,15 +405,152 @@ pub fn emit_type_definitions(
                 ));
             }
             NeedsSearchResult::Tuple { fields } => {
-                let type_name = TypeExpr::Tuple(fields.clone()).as_clean_go_type_name(type_env);
+                let tuple_type = TypeExpr::Tuple(fields.clone());
+                let type_name = tuple_type.as_clean_go_type_name(type_env);
+                let type_anno = tuple_type.as_go_type_annotation(type_env);
                 result.push(IrInstruction::StructDef(
-                    type_name,
+                    type_name.clone(),
                     fields
                         .iter()
                         .enumerate()
                         .map(|(i, x)| (format!("field_{i}"), x.0.as_go_type_annotation(type_env)))
                         .collect::<Vec<_>>(),
                 ));
+                if tuple_type.implements_eq(type_env) {
+                    let mut comparisons = Vec::new();
+
+                    for (i, f) in fields.iter().enumerate() {
+                        let field_name = format!("field_{i}");
+                        comparisons.push(f.0.call_eq(
+                            &format!("self.{field_name}"),
+                            &format!("other.{field_name}"),
+                            type_env,
+                        ));
+                    }
+
+                    if comparisons.is_empty() {
+                        comparisons.push(String::from("true"));
+                    }
+
+                    result.push(IrInstruction::FunDef(
+                        "eq".to_string(),
+                        Some(("self".to_string(), format!("*{type_name}"))),
+                        vec![("other".to_string(), format!("*{type_name}"))],
+                        Some(String::from("bool".to_string())),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(
+                            comparisons.join(" && "),
+                        )))],
+                    ));
+                }
+
+                if tuple_type.implements_to_string(type_env) {
+                    let mut go_code = String::from(
+                        r#"
+                        res := ""
+                    "#,
+                    );
+
+                    for (i, field) in fields.iter().enumerate() {
+                        if i != 0 {
+                            go_code.push_str("\nres = res + \", \"");
+                        }
+
+                        let to_string_call = field
+                            .0
+                            .call_to_string(&format!("self.field_{}", i), type_env);
+                        go_code.push_str(&format!("\nres = res + ({to_string_call})"))
+                    }
+
+                    go_code.push_str("\nreturn fmt.Sprintf(\"(%s)\", res)");
+
+                    result.push(IrInstruction::FunDef(
+                        "to_string".to_string(),
+                        Some(("self".to_string(), type_name.clone())),
+                        vec![],
+                        Some(String::from("string".to_string())),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if tuple_type.implements_clone(type_env) {
+                    let mut go_code = String::from("res := *new($$$TUPLE_TYPE)")
+                        .replace("$$$TUPLE_TYPE", &type_name);
+
+                    for (i, field) in fields.iter().enumerate() {
+                        let clone_call = field.0.call_clone(&format!("self.field_{}", i), type_env);
+                        go_code.push_str(&format!("\nres.field_{i} = ({clone_call})"))
+                    }
+
+                    go_code.push_str("\nreturn res");
+
+                    result.push(IrInstruction::FunDef(
+                        "clone".to_string(),
+                        Some(("self".to_string(), type_anno.clone())),
+                        vec![],
+                        Some(type_anno.clone()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if tuple_type.implements_hash(type_env) {
+                    let mut go_code = String::from(
+                        r#"
+                        var res int
+                        res = 1
+                        "#,
+                    );
+
+                    for (i, field) in fields.iter().enumerate() {
+                        let hash_call = field.0.call_hash(&format!("self.field_{}", i), type_env);
+                        go_code.push_str(&format!("\nres = (31 * res) + ({hash_call})"))
+                    }
+
+                    go_code.push_str("\nreturn res");
+
+                    result.push(IrInstruction::FunDef(
+                        "hash".to_string(),
+                        Some(("self".to_string(), type_anno.clone())),
+                        vec![],
+                        Some("int".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if tuple_type.implements_ord(type_env) {
+                    let mut go_code = String::new();
+
+                    go_code.push_str("var r any\nr = Tag__equal{}\n");
+
+                    for (i, field) in fields.iter().enumerate() {
+                        go_code.push('\n');
+                        let ord_call = field.0.call_ord(
+                            &format!("self.field_{}", i),
+                            &format!("other.field_{}", i),
+                            type_env,
+                        );
+                        go_code.push_str(&format!(
+                            r#"
+                            r = {ord_call}
+                            switch r.(type) {{
+                            case Tag__greater:
+                            return Tag__greater{{}}
+                            case Tag__smaller:
+                            return Tag__smaller{{}}
+                            }}
+                            "#
+                        ));
+                    }
+
+                    go_code.push_str("\nreturn r");
+
+                    result.push(IrInstruction::FunDef(
+                        "ord".to_string(),
+                        Some(("self".to_string(), type_anno.clone())),
+                        vec![("other".to_string(), format!("*{type_anno}"))],
+                        Some("any".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
             }
         }
     }
@@ -266,6 +585,7 @@ pub fn emit_type_definitions(
             mut_methods: _,
             generics: _,
             doc_comments: _,
+            derived,
         } = s;
 
         let mut instructions: Vec<IrInstruction> = fields
@@ -415,6 +735,156 @@ pub fn emit_type_definitions(
             instructions.push(body);
         }
 
+        for derived_interface in derived.iter() {
+            match *derived_interface {
+                crate::parse::struct_parser::DerivableInterface::Eq => {
+                    let receiver = fixed_struct_name.clone();
+
+                    let mut comparisons = Vec::new();
+
+                    for f in fields.iter() {
+                        comparisons.push(f.type_expr.0.call_eq(
+                            &format!("self.{}", f.name),
+                            &format!("(*other).{}", f.name),
+                            type_env,
+                        ));
+                    }
+
+                    if comparisons.is_empty() {
+                        comparisons.push("true".to_string());
+                    }
+
+                    instructions.push(IrInstruction::FunDef(
+                        "eq".to_string(),
+                        Some(("self".to_string(), format!("*{receiver}"))),
+                        vec![("other".to_string(), format!("**{receiver}"))],
+                        Some("bool".to_string()),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(
+                            comparisons.join(" && "),
+                        )))],
+                    ));
+                }
+                crate::parse::struct_parser::DerivableInterface::ToString => {
+                    let receiver = fixed_struct_name.clone();
+
+                    let mut string_parts = Vec::new();
+
+                    for f in fields.iter() {
+                        string_parts.push(format!(
+                            "\"{}: \" + {}",
+                            f.name,
+                            f.type_expr
+                                .0
+                                .call_to_string(&format!("self.{}", f.name), type_env),
+                        ));
+                    }
+
+                    if string_parts.is_empty() {
+                        string_parts.push("\"\"".to_string());
+                    }
+
+                    instructions.push(IrInstruction::FunDef(
+                        "to_string".to_string(),
+                        Some(("self".to_string(), format!("*{receiver}"))),
+                        vec![],
+                        Some("string".to_string()),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(format!(
+                            r#"fmt.Sprintf("{}{{%s}}", {})"#,
+                            struct_name,
+                            string_parts.join(" + \" \" + ")
+                        ))))],
+                    ));
+                }
+                crate::parse::struct_parser::DerivableInterface::Clone => {
+                    let receiver = fixed_struct_name.clone();
+
+                    let mut clone_string = format!("&{receiver}{{\n");
+
+                    for f in fields.iter() {
+                        clone_string.push_str(&format!(
+                            "{}: {},\n",
+                            f.name,
+                            f.type_expr
+                                .0
+                                .call_clone(&format!("self.{}", f.name), type_env),
+                        ));
+                    }
+                    clone_string.push_str("}\n");
+
+                    instructions.push(IrInstruction::FunDef(
+                        "clone".to_string(),
+                        Some(("self".to_string(), format!("*{receiver}"))),
+                        vec![],
+                        Some(format!("*{receiver}")),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(clone_string)))],
+                    ));
+                }
+                crate::parse::struct_parser::DerivableInterface::Hash => {
+                    let receiver = fixed_struct_name.clone();
+                    let mut go_code = String::from(
+                        r#"
+                        var res int
+                        res = 1
+                        "#,
+                    );
+
+                    for field in fields.iter() {
+                        let hash_call = field
+                            .type_expr
+                            .0
+                            .call_hash(&format!("self.{}", field.name), type_env);
+                        go_code.push_str(&format!("\nres = (31 * res) + ({hash_call})"))
+                    }
+
+                    go_code.push_str("\nreturn res");
+
+                    result.push(IrInstruction::FunDef(
+                        "hash".to_string(),
+                        Some(("self".to_string(), format!("*{receiver}"))),
+                        vec![],
+                        Some("int".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+                crate::parse::struct_parser::DerivableInterface::Ord => {
+                    let receiver = fixed_struct_name.clone();
+                    let mut go_code = String::new();
+
+                    go_code.push_str("var r any\nr = Tag__equal{}\n");
+
+                    for field in fields.iter() {
+                        go_code.push('\n');
+                        let ord_call = field.type_expr.0.call_ord(
+                            &format!("self.{}", field.name),
+                            &format!("(*other).{}", field.name),
+                            type_env,
+                        );
+                        go_code.push_str(&format!(
+                            r#"
+                            r = {ord_call}
+                            switch r.(type) {{
+                            case Tag__greater:
+                            return Tag__greater{{}}
+                            case Tag__smaller:
+                            return Tag__smaller{{}}
+                            }}
+                            "#
+                        ));
+                    }
+
+                    go_code.push_str("\nreturn r");
+
+                    result.push(IrInstruction::FunDef(
+                        "ord".to_string(),
+                        Some(("self".to_string(), format!("*{receiver}"))),
+                        vec![("other".to_string(), format!("**{receiver}"))],
+                        Some("any".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+            }
+        }
+
         for generic_method in type_env.get_generic_methods(struct_name.clone()).clone() {
             let mut body = generic_method.emit(
                 Some((
@@ -476,6 +946,183 @@ pub fn emit_type_definitions(
             interface_fields,
         ));
     }
+
+    result.push(IrInstruction::FunDef(
+        "Int_Hash".to_string(),
+        None,
+        vec![("self".to_string(), "int".to_string())],
+        Some("int".to_string()),
+        vec![IrInstruction::InlineGo("return self".to_string())],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Int_Ord".to_string(),
+        None,
+        vec![
+            ("self".to_string(), "int".to_string()),
+            ("other".to_string(), "*int".to_string()),
+        ],
+        Some("any".to_string()),
+        vec![IrInstruction::InlineGo("if self < *other { return Tag__smaller{} } else if self > *other { return Tag__greater{} } else { return Tag__equal{} }".to_string())],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Bool_Hash".to_string(),
+        None,
+        vec![("self".to_string(), "bool".to_string())],
+        Some("int".to_string()),
+        vec![IrInstruction::InlineGo(
+            "if self {\nreturn 1\n} else {\nreturn 2\n}".to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Bool_Ord".to_string(),
+        None,
+        vec![
+            ("self".to_string(), "bool".to_string()),
+            ("other".to_string(), "*bool".to_string()),
+        ],
+        Some("any".to_string()),
+        vec![IrInstruction::InlineGo(
+            "if !self && *other { return Tag__smaller{} } else if self && !*other { return Tag__greater{} } else { return Tag__equal{} }".to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "String_Hash".to_string(),
+        None,
+        vec![("self".to_string(), "string".to_string())],
+        Some("int".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                    var h maphash.Hash
+                    h.WriteString(self)
+                    return int(h.Sum64())
+                    "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "String_Ord".to_string(),
+        None,
+        vec![
+            ("self".to_string(), "string".to_string()),
+            ("other_param".to_string(), "*string".to_string()),
+        ],
+        Some("any".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                other := *other_param
+                if len(self) < len(other) {
+                    return Tag__smaller{}
+                } else if len(self) > len(other) {
+                    return Tag__greater{}
+                } else {
+                    runes_self := []rune(self)
+                    runes_other := []rune(self)
+
+                    for i := range runes_self {
+                        if runes_self[i] < runes_other[i] {
+                            return Tag__smaller{}
+                        } else if runes_self[i] > runes_other[i] {
+                            return Tag__greater{}
+                        }
+                    }
+
+                    return Tag__equal{}
+                }
+
+                    "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Float_Hash".to_string(),
+        None,
+        vec![("self".to_string(), "float32".to_string())],
+        Some("int".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                            return int(self)
+                        "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Float_Ord".to_string(),
+        None,
+        vec![
+            ("self".to_string(), "float32".to_string()),
+            ("other".to_string(), "*float32".to_string()),
+        ],
+        Some("any".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                x := self
+                y := *other
+                if x > y {
+                    return Tag__greater{}
+                } else if x < y {
+                    return Tag__smaller{}
+                } else {
+                    return Tag__equal{}
+                }
+                        "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Char_Hash".to_string(),
+        None,
+        vec![("self".to_string(), "rune".to_string())],
+        Some("int".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+
+                        return int(self)
+
+                    "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::GenericFun(
+        "IDENTITY".to_string(),
+        vec![("T".to_string(), "any".to_string())],
+        vec![("x".to_string(), "T".to_string())],
+        Some("T".to_string()),
+        vec![IrInstruction::InlineGo("return x".to_string())],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Char_Ord".to_string(),
+        None,
+        vec![
+            ("self".to_string(), "rune".to_string()),
+            ("other".to_string(), "*rune".to_string()),
+        ],
+        Some("any".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                        x := self
+                        y := *other
+
+                        if x > y {
+                            return Tag__greater{}
+                        } else if x < y {
+                            return Tag__smaller{}
+                        } else {
+                            return Tag__equal{}
+                        }
+                    "#
+            .to_string(),
+        )],
+    ));
 
     result
 }

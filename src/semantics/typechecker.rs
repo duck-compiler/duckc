@@ -1040,6 +1040,18 @@ impl TypeExpr {
     }
 
     fn has_method_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
+        if name.as_str() == "to_string" && self.implements_to_string(type_env) {
+            return true;
+        }
+        if name.as_str() == "clone" && self.implements_clone(type_env) {
+            return true;
+        }
+        if name.as_str() == "hash" && self.implements_hash(type_env) {
+            return true;
+        }
+        if name.as_str() == "ord" && self.implements_ord(type_env) {
+            return true;
+        }
         match self {
             Self::Struct {
                 name: r#struct,
@@ -1052,6 +1064,7 @@ impl TypeExpr {
                     mut_methods: _,
                     generics: _,
                     doc_comments: _,
+                    derived: _,
                 } = type_env
                     .get_struct_def_with_type_params_mut(
                         r#struct.as_str(),
@@ -1096,6 +1109,7 @@ impl TypeExpr {
                     mut_methods: _,
                     generics: _,
                     doc_comments: _,
+                    derived: _,
                 } = type_env.get_struct_def_with_type_params_mut(
                     struct_name,
                     type_params,
@@ -1156,6 +1170,38 @@ impl TypeExpr {
     }
 
     fn typeof_field(&self, field_name: String, type_env: &mut TypeEnv) -> Option<TypeExpr> {
+        if self.implements_to_string(type_env) && field_name.as_str() == "to_string" {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((TypeExpr::String(None), empty_range())),
+                false,
+            ));
+        }
+
+        if self.implements_clone(type_env) && field_name.as_str() == "clone" {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((self.clone(), empty_range())),
+                false,
+            ));
+        }
+
+        if self.implements_hash(type_env) && field_name.as_str() == "hash" {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((TypeExpr::Int(None), empty_range())),
+                false,
+            ));
+        }
+
+        if self.implements_ord(type_env) && field_name.as_str() == "ord" {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new(TypeExpr::ord_result().into_empty_span()),
+                false,
+            ));
+        }
+
         Some(match self {
             Self::Tuple(fields) => fields[field_name.parse::<usize>().unwrap()].0.clone(),
             Self::Struct {
@@ -1169,6 +1215,7 @@ impl TypeExpr {
                     mut_methods: _,
                     generics: _,
                     doc_comments: _,
+                    derived: _,
                 } = type_env
                     .get_struct_def_with_type_params_mut(
                         r#struct.as_str(),

@@ -514,8 +514,6 @@ pub fn lex_single<'a>(
         let not_equals = just("!=").to(Token::NotEquals);
         let less_than_or_equals = just("<=").to(Token::LessThanOrEquals);
         let greater_than_or_equals = just(">=").to(Token::GreaterThanOrEquals);
-        let and = just("and").to(Token::And);
-        let or = just("or").to(Token::Or);
 
         let scope_res = just("::").to(Token::ScopeRes);
         let thin_arrow = just("->").to(Token::ThinArrow);
@@ -615,8 +613,6 @@ pub fn lex_single<'a>(
             .or(not_equals)
             .or(less_than_or_equals)
             .or(greater_than_or_equals)
-            .or(and)
-            .or(or)
             .or(keyword_or_ident)
             .or(num)
             .or(ctrl)
