@@ -1,7 +1,7 @@
 {
     "id": "5081983f0ab998f5ceede7135daeadc6",
     "file_path": "../../src/parse/source_file_parser.rs",
-    "line_number": 362,
+    "line_number": 355,
     "title": "mangle components in jsx",
     "tag": "todo",
     "module_tag": "parse",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Maurice Schmidt",
-        "email": "mvmogo@gmail.com"
+        "name": "Robin F\u00fcllgraf",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "// todo: mangle components in jsx",
     "status": "open",

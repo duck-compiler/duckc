@@ -1,7 +1,7 @@
 {
     "id": "036f9af09249885c01979f9b1e07dbb0",
     "file_path": "../../src/parse/source_file_parser.rs",
-    "line_number": 748,
+    "line_number": 741,
     "title": "type params",
     "tag": "todo",
     "module_tag": "parse",
@@ -9,8 +9,8 @@
     "issue_ref": null,
     "description": "",
     "blame": {
-        "name": "Maurice Schmidt",
-        "email": "mvmogo@gmail.com"
+        "name": "Robin F\u00fcllgraf",
+        "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
     "source_line": "// TODO: type params",
     "status": "open",
