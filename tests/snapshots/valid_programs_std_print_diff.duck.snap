@@ -1,0 +1,4 @@
+{
+    "stdout": "\u001b[44m\"line1\" against \"line1\"\u001b[0m (should have no additions / deleteions)\n\u001b[37m  line1\u001b[0m\n\u001b[44m\"line1\" against \"line1-line2\"\u001b[0m (should have one \u001b[32m+ line2\u001b[0m)\n\u001b[37m  line1\u001b[0m\n\u001b[32m+ line2\u001b[0m\n\u001b[44m\"line1-line2\" against \"line1\"\u001b[0m (should have one \u001b[31m- line2\u001b[0m)\n\u001b[37m  line1\u001b[0m\n\u001b[31m- line2\u001b[0m\n\u001b[44mComparing A-B-C with A-X-C:\u001b[0m\n\u001b[37m  A\u001b[0m\n\u001b[31m- B\u001b[0m\n\u001b[32m+ X\u001b[0m\n\u001b[37m  C\u001b[0m\n\u001b[44m\"\" against \"Something\"\u001b[0m\n\u001b[31m- \u001b[0m\n\u001b[32m+ Something\u001b[0m\n\u001b[44m\"Something\" against \"\"\u001b[0m\n\u001b[31m- Something\u001b[0m\n\u001b[32m+ \u001b[0m\n",
+    "stderr": ""
+}

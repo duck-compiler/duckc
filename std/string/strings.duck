@@ -4,6 +4,14 @@ use go "unicode/utf8";
 
 /// these are the main string utilities of the duck std library
 extend String with impl {
+    fn split_lines() -> String[] {
+        let lines: String[] = go {
+            $$$res$$$ = strings.Split(self, "\n")
+        };
+
+        return lines;
+    }
+
     /// returns the length of the string self
     fn len() -> Int {
         let len_var: Int = 0;

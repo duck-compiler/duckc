@@ -6,6 +6,26 @@ fn println(str: String) {
     }
 }
 
+/// reads a line from the stdin
+fn readln(prompt: String | ..) -> String | .err {
+    match prompt {
+        String @str => go {
+            fmt.Print(str);
+        },
+        else => ()
+    };
+
+    go {
+        reader := bufio.NewReader(os.Stdin)
+        text, err := reader.ReadString('\n')
+        if err != nil {
+            return Tag__err { }
+        }
+
+        return text
+    }
+}
+
 fn debug(x: {}) {
     go {
         fmt.Println(x)

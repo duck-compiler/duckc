@@ -1,0 +1,60 @@
+fn str_arr_len(arr: String[]) -> Int {
+    return go {
+        $$$res$$$ = len(arr)
+    } as Int
+}
+
+fn print_diff(lstr: String, rstr: String) {
+    const llines = lstr.split_lines();
+    const rlines = rstr.split_lines();
+
+    const n = llines->str_arr_len();
+    const m = rlines->str_arr_len();
+
+    let size = (n + 1) * (m + 1);
+
+    let matrix: Int[] = go {
+        $$$res$$$ = make([]int, (n + 1) * (m + 1))
+    };
+
+    let i = 1;
+    while (i <= n) {
+        let j = 1;
+        while (j <= m) {
+            if (llines[i - 1] == rlines[j - 1]) {
+                matrix[i * (m + 1) + j] = matrix[(i - 1) * (m + 1) + (j - 1)] + 1;
+            } else {
+                const one = matrix[(i - 1) * (m + 1) + j];
+                const two = matrix[i * (m + 1) + (j - 1)];
+                matrix[i * (m + 1) + j] = if (one > two) {
+                    one
+                } else {
+                    two
+                };
+            }
+
+            j = j + 1;
+        }
+
+        i = i + 1;
+    }
+
+    __print_backtrack(matrix, llines, rlines, n, m);
+}
+
+fn __print_backtrack(matrix: Int[], llines: String[], rlines: String[], i: Int, j: Int) {
+    let m_width = rlines->str_arr_len() + 1;
+
+    if (i > 0 and j > 0 and llines[i - 1] == rlines[j - 1]) {
+        __print_backtrack(matrix, llines, rlines, i - 1, j - 1);
+        std::io::println(f"  {llines[i - 1]}".gray());
+    } else if (j > 0 and (i == 0 or matrix[i * m_width + (j - 1)] >= matrix[(i - 1) * m_width + j])) {
+        __print_backtrack(matrix, llines, rlines, i, j - 1);
+        std::io::println(f"+ {rlines[j - 1]}".green());
+    } else if (i > 0 and (j == 0 or matrix[i * m_width + (j - 1)] < matrix[(i - 1) * m_width + j])) {
+        __print_backtrack(matrix, llines, rlines, i - 1, j);
+        std::io::println(f"- {llines[i - 1]}".red());
+    }
+
+    return
+}
