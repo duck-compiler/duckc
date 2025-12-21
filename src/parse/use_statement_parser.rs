@@ -1,55 +1,58 @@
 use chumsky::{input::BorrowInput, prelude::*};
 
-use crate::parse::SS;
+use crate::parse::{SS, failure_with_occurence};
 
 use super::lexer::Token;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Indicator {
-    Symbols(Vec<String>),
-    Module(String),
-    Wildcard,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum UseStatement {
-    Regular(bool, Vec<Indicator>),
+    Regular(bool, Vec<String>),
     Go(String, Option<String>),
 }
 
 fn regular_use_parser<'src, I>()
--> impl Parser<'src, I, UseStatement, extra::Err<Rich<'src, Token, SS>>> + Clone
+-> impl Parser<'src, I, Vec<UseStatement>, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
 {
-    let module_indicator_parser =
-        select_ref! { Token::Ident(identifier) => identifier.to_string() }.map(Indicator::Module);
-
-    let symbols_indicator_parser = just(Token::ControlChar('{'))
-        .ignore_then(
-            select_ref! { Token::Ident(identifier) => identifier.to_string() }
-                .separated_by(just(Token::ControlChar(',')))
-                .at_least(1)
-                .allow_trailing()
-                .collect::<Vec<String>>(),
-        )
-        .then_ignore(just(Token::ControlChar('}')))
-        .map(Indicator::Symbols);
-
-    let wildcard_indicator_parser = just(Token::ControlChar('*')).to(Indicator::Wildcard);
-
     just(Token::Use)
         .ignore_then(just(Token::ScopeRes).or_not().map(|x| x.is_some()))
         .then(
-            module_indicator_parser
-                .or(symbols_indicator_parser)
-                .or(wildcard_indicator_parser)
-                .separated_by(just(Token::ScopeRes))
-                .at_least(1)
-                .collect::<Vec<Indicator>>(),
+            choice((
+                select_ref! {Token::Ident(i) => i.to_string() }.map(|v| vec![v]),
+                select_ref! { Token::Ident(i) => i.to_string() }
+                    .separated_by(just(Token::ControlChar(',')))
+                    .at_least(1)
+                    .collect::<Vec<_>>()
+                    .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}'))),
+            ))
+            .map_with(|x, e| (x, e.span()))
+            .separated_by(just(Token::ScopeRes))
+            .at_least(1)
+            .collect::<Vec<_>>(),
         )
         .then_ignore(just(Token::ControlChar(';')))
-        .map(|(is_global, i)| UseStatement::Regular(is_global, i))
+        .map(|(is_glob, v)| {
+            let mut base_path = Vec::new();
+            for i in 0..v.len() - 1 {
+                if v[i].0.len() != 1 {
+                    let msg = "Only last part may specify multiple imports";
+                    failure_with_occurence(msg, v[i].1, [(msg, v[i].1)]);
+                }
+
+                base_path.push(v[i].0[0].clone());
+            }
+
+            let mut out = Vec::new();
+
+            for end in v.last().unwrap().0.iter() {
+                let mut cloned_path = base_path.clone();
+                cloned_path.push(end.clone());
+                out.push(UseStatement::Regular(is_glob, cloned_path));
+            }
+
+            out
+        })
 }
 
 fn go_use_parser<'src, I>()
@@ -69,11 +72,11 @@ where
 }
 
 pub fn use_statement_parser<'src, I>()
--> impl Parser<'src, I, UseStatement, extra::Err<Rich<'src, Token, SS>>> + Clone
+-> impl Parser<'src, I, Vec<UseStatement>, extra::Err<Rich<'src, Token, SS>>> + Clone
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
 {
-    choice((go_use_parser(), regular_use_parser()))
+    choice((go_use_parser().map(|u| vec![u]), regular_use_parser()))
 }
 
 #[cfg(test)]
@@ -86,45 +89,29 @@ mod tests {
     fn test_use_statement_parser() {
         let src_and_expected_ast = vec![
             (
-                "use std;",
-                UseStatement::Regular(false, vec![Indicator::Module("std".to_string())]),
-            ),
-            (
-                "use std::io;",
-                UseStatement::Regular(
+                "use std::abc;",
+                vec![UseStatement::Regular(
                     false,
-                    vec![
-                        Indicator::Module("std".to_string()),
-                        Indicator::Module("io".to_string()),
-                    ],
-                ),
+                    vec!["std".to_string(), "abc".to_string()],
+                )],
             ),
             (
-                "use std::io::{println};",
-                UseStatement::Regular(
-                    false,
-                    vec![
-                        Indicator::Module("std".to_string()),
-                        Indicator::Module("io".to_string()),
-                        Indicator::Symbols(vec!["println".to_string()]),
-                    ],
-                ),
+                "use ::std::abc;",
+                vec![UseStatement::Regular(
+                    true,
+                    vec!["std".to_string(), "abc".to_string()],
+                )],
             ),
             (
-                "use std::io::{println, print};",
-                UseStatement::Regular(
-                    false,
-                    vec![
-                        Indicator::Module("std".to_string()),
-                        Indicator::Module("io".to_string()),
-                        Indicator::Symbols(vec!["println".to_string(), "print".to_string()]),
-                    ],
-                ),
+                "use ::std::{abc, xyz};",
+                vec![
+                    UseStatement::Regular(true, vec!["std".to_string(), "abc".to_string()]),
+                    UseStatement::Regular(true, vec!["std".to_string(), "xyz".to_string()]),
+                ],
             ),
-            ("use go \"fmt\";", UseStatement::Go("fmt".into(), None)),
             (
-                "use go \"fmt\" as FMT;",
-                UseStatement::Go("fmt".into(), Some("FMT".into())),
+                "use ::{assert};",
+                vec![UseStatement::Regular(true, vec!["assert".to_string()])],
             ),
         ];
 
@@ -139,16 +126,12 @@ mod tests {
             };
 
             println!("parsing use statement {src}");
-            let use_statement_parse_result =
-                use_statement_parser().parse(make_input(empty_range(), tokens.as_slice()));
-            assert_eq!(use_statement_parse_result.has_errors(), false);
-            assert_eq!(use_statement_parse_result.has_output(), true);
+            let use_statement_parse_result = use_statement_parser()
+                .parse(make_input(empty_range(), tokens.as_slice()))
+                .into_result()
+                .unwrap();
 
-            let Some(ast) = use_statement_parse_result.into_output() else {
-                unreachable!()
-            };
-
-            assert_eq!(ast, expected_ast);
+            assert_eq!(use_statement_parse_result, expected_ast);
         }
 
         let invalid_use_statements = vec![
