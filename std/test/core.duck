@@ -1,4 +1,0 @@
-type X = "";
-
-fn assert(expr: Bool) -> ! {
-}
