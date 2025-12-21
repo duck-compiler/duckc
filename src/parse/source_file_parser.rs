@@ -10,14 +10,14 @@ use crate::{
         duckx_component_parser::{DuckxComponent, duckx_component_parser},
         extensions_def_parser::{ExtensionsDef, extensions_def_parser},
         function_parser::{FunctionDefintion, LambdaFunctionExpr, function_definition_parser},
+        jsx_component_parser::{JsxComponent, jsx_component_parser},
         lexer::{Token, lex_parser},
         make_input, parse_failure,
         schema_def_parser::{self, SchemaDefinition},
         struct_parser::{StructDefinition, struct_definition_parser},
         test_parser::{TestCase, test_parser},
-        jsx_component_parser::{JsxComponent, jsx_component_parser},
         type_parser::{Duck, TypeDefinition, TypeExpr, type_definition_parser},
-        use_statement_parser::{Indicator, UseStatement, use_statement_parser},
+        use_statement_parser::{UseStatement, use_statement_parser},
         value_parser::{ValFmtStringContents, ValHtmlStringContents, ValueExpr},
     },
     semantics::ident_mangler::{
@@ -58,7 +58,7 @@ pub enum SourceUnit {
     Component(JsxComponent),
     Template(DuckxComponent),
     Struct((StructDefinition, Vec<FunctionDefintion>)),
-    Use(UseStatement),
+    Use(Vec<UseStatement>),
     Module(String, SourceFile),
     Test(Spanned<TestCase>),
     GlobalVariableDecl(GlobalVariableDeclaration),
@@ -90,20 +90,13 @@ impl SourceFile {
                     }
                     for use_statement in &s.use_statements {
                         if let UseStatement::Regular(glob, segments) = use_statement {
-                            let pre = segments
+                            let pre = segments[..segments.len() - 1]
                                 .iter()
-                                .take_while(|x| matches!(x, Indicator::Module(_)))
-                                .map(|x| {
-                                    let Indicator::Module(x) = x else { panic!() };
-                                    x.to_string()
-                                })
+                                .cloned()
                                 .collect::<Vec<_>>();
-
-                            let last = segments.last();
-                            if let Some(Indicator::Symbols(symbols)) = last {
-                                for symbol in symbols {
-                                    imports.insert(symbol.clone(), (*glob, pre.clone()));
-                                }
+                            let last = segments.last().cloned();
+                            if let Some(symbol) = last {
+                                imports.insert(symbol.clone(), (*glob, pre.clone()));
                             }
                         }
                     }
@@ -1040,7 +1033,7 @@ where
                         }
                         struct_definitions.push(def);
                     }
-                    Use(def) => use_statements.push(def),
+                    Use(def) => use_statements.extend(def),
                     Module(name, def) => sub_modules.push((name, def)),
                     Component(jsx_component) => jsx_components.push(jsx_component),
                     Template(duckx_component) => template_components.push(duckx_component),
@@ -1076,14 +1069,14 @@ mod tests {
     use crate::parse::{
         Field,
         function_parser::FunctionDefintion,
+        jsx_component_parser::JsxComponent,
         lexer::lex_parser,
         make_input,
         schema_def_parser::{IfBranch, SchemaDefinition, SchemaField},
         source_file_parser::{SourceFile, source_file_parser},
         struct_parser::StructDefinition,
-        jsx_component_parser::JsxComponent,
         type_parser::{Duck, TypeDefinition, TypeExpr},
-        use_statement_parser::{Indicator, UseStatement},
+        use_statement_parser::UseStatement,
         value_parser::{
             IntoBlock, ValueExpr, empty_range, source_file_into_empty_range,
             type_expr_into_empty_range, value_expr_into_empty_range,
@@ -1191,10 +1184,7 @@ mod tests {
             (
                 "use x;",
                 SourceFile {
-                    use_statements: vec![UseStatement::Regular(
-                        false,
-                        vec![Indicator::Module("x".into())],
-                    )],
+                    use_statements: vec![UseStatement::Regular(false, vec!["x".into()])],
                     ..Default::default()
                 },
             ),
@@ -1274,14 +1264,14 @@ mod tests {
                                 SourceFile {
                                     use_statements: vec![UseStatement::Regular(
                                         false,
-                                        vec![Indicator::Module("lol".into())],
+                                        vec!["lol".into()],
                                     )],
                                     ..Default::default()
                                 },
                             )],
                             use_statements: vec![UseStatement::Regular(
                                 false,
-                                vec![Indicator::Module("test_mod".into())],
+                                vec!["test_mod".into()],
                             )],
                             function_definitions: vec![FunctionDefintion {
                                 name: "abc".into(),
@@ -1309,10 +1299,7 @@ mod tests {
                             ..Default::default()
                         },
                     ],
-                    use_statements: vec![UseStatement::Regular(
-                        false,
-                        vec![Indicator::Module("x".into())],
-                    )],
+                    use_statements: vec![UseStatement::Regular(false, vec!["x".into()])],
                     type_definitions: vec![TypeDefinition {
                         name: "X".into(),
                         type_expression: TypeExpr::Duck(Duck {
