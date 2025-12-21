@@ -1,0 +1,19 @@
+use std::cmd::{Cmd};
+use std::{assert};
+
+fn main() {
+    let str: String | .none = match Cmd::exec("ls -la") {
+        String @output => output,
+        .err => .none,
+    };
+
+    match str {
+        String @output => {
+            assert(output.contains(".dargo"), "ls -la output doesn't contain .dargo");
+        },
+        .none => {
+            assert(false, "couldn't execute ls -la");
+        }
+    };
+
+}

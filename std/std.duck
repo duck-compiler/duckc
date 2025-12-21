@@ -11,6 +11,7 @@ module col;
 module error;
 module http;
 module sync;
+module cmd;
 
 component lol() jsx {
     return (<><p>yo</p></>);
@@ -19,5 +20,14 @@ component lol() jsx {
 fn parse_json<T: {}>(input: String) -> T | .err {
     go {
         return <<<@T>>>_FromJson(input);
+    }
+}
+
+fn assert(expr: Bool, fail_msg: String | ..) {
+    if (!expr) {
+        std::error::panic(f"{"assert failed".red()}{match fail_msg {
+            .. => "",
+            String @msg => f" {msg}",
+        }}");
     }
 }
