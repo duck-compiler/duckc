@@ -36,6 +36,15 @@ fn main() {
     ("5".to_int() == 5)->
         assert("'5'.to_int() is not 5");
 
+    std::io::println("red".red());
+    std::io::println("green".green());
+    std::io::println("yellow".yellow());
+    std::io::println("blue".blue());
+    std::io::println("magenta".magenta());
+    std::io::println("cyan".cyan());
+    std::io::println("gray".gray());
+    std::io::println("white".white());
+
     "HOLLO".to_bytes();
     std::io::println("all string api tests have passed")
 }
