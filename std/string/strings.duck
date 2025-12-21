@@ -162,6 +162,54 @@ extend String with impl {
         }
         return bytes;
     }
+
+    fn red() -> String {
+        return go {
+            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[31m", self, "\033[0m")
+        } as String
+    }
+
+    fn green() -> String {
+        return go {
+            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[32m", self, "\033[0m")
+        } as String
+    }
+
+    fn yellow() -> String {
+        return go {
+            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[33m", self, "\033[0m")
+        } as String
+    }
+
+    fn blue() -> String {
+        return go {
+            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[34m", self, "\033[0m")
+        } as String
+    }
+
+    fn magenta() -> String {
+        return go {
+            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[35m", self, "\033[0m")
+        } as String
+    }
+
+    fn cyan() -> String {
+        return go {
+            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[36m", self, "\033[0m")
+        } as String
+    }
+
+    fn gray() -> String {
+        return go {
+            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[37m", self, "\033[0m")
+        } as String
+    }
+
+    fn white() -> String {
+        return go {
+            $$$res$$$ = fmt.Sprintf("%s%s%s", "\033[97m", self, "\033[0m")
+        } as String
+    }
 }
 
 fn to_upper(s: String) -> String {
