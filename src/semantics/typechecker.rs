@@ -28,7 +28,11 @@ impl TypeExpr {
                 .iter()
                 .all(|x| x.type_expr.0.is_component_compatible()),
             TypeExpr::Array(ty) => ty.0.is_component_compatible(),
-            TypeExpr::String(..) | TypeExpr::Bool(..) | TypeExpr::Float | TypeExpr::Int(..) => true,
+            TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Float
+            | TypeExpr::Int
+            | TypeExpr::UInt => true,
             _ => false,
         }
     }
@@ -68,6 +72,7 @@ impl TypeExpr {
 
         return match value_expr {
             ValueExpr::RawStruct { .. } => panic!("raw struct should not be here"),
+            ValueExpr::Negate(v) => TypeExpr::from_value_expr(v.as_ref(), type_env),
             ValueExpr::Async(e) => {
                 let inner = TypeExpr::from_value_expr(e, type_env);
 
@@ -269,7 +274,13 @@ impl TypeExpr {
                 lambda_expr.is_mut,
             ),
             ValueExpr::InlineGo(_, ty) => ty.as_ref().cloned().unwrap_or(TypeExpr::unit()).0,
-            ValueExpr::Int(value) => TypeExpr::Int(Some(*value)),
+            ValueExpr::Int(_, num_type) => {
+                num_type
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or((TypeExpr::Int, *complete_span))
+                    .0
+            }
             ValueExpr::Bool(value) => TypeExpr::Bool(Some(*value)),
             ValueExpr::Char(..) => TypeExpr::Char,
             ValueExpr::Float(..) => TypeExpr::Float,
@@ -1016,7 +1027,7 @@ impl TypeExpr {
     pub fn unconst(&self) -> TypeExpr {
         match self {
             Self::String(..) => Self::String(None),
-            Self::Int(..) => Self::Int(None),
+            Self::Int => Self::Int,
             Self::Bool(..) => Self::Bool(None),
             s => s.clone(),
         }
@@ -1192,7 +1203,7 @@ impl TypeExpr {
         if self.implements_hash(type_env) && field_name.as_str() == "hash" {
             return Some(TypeExpr::Fun(
                 vec![],
-                Box::new((TypeExpr::Int(None), empty_range())),
+                Box::new((TypeExpr::Int, empty_range())),
                 false,
             ));
         }
@@ -1319,7 +1330,9 @@ impl TypeExpr {
     }
 
     pub fn is_number(&self) -> bool {
-        return *self == TypeExpr::Float || matches!(*self, TypeExpr::Int(..)) || matches!(*self, TypeExpr::UInt);
+        return *self == TypeExpr::Float
+            || matches!(*self, TypeExpr::Int)
+            || matches!(*self, TypeExpr::UInt);
     }
 
     pub fn is_tuple(&self) -> bool {
@@ -1363,13 +1376,13 @@ impl TypeExpr {
     }
 
     pub fn is_int(&self) -> bool {
-        return matches!(self, TypeExpr::Int(..));
+        return matches!(self, TypeExpr::Int);
     }
 
     pub fn holds_const_value(&self) -> bool {
         // todo(@Mvmo) Implement other literal types
         // floats, chars.... missing
-        return matches!(*self, TypeExpr::Int(..))
+        return matches!(*self, TypeExpr::Int)
             || matches!(*self, TypeExpr::String(..))
             || matches!(*self, TypeExpr::Bool(..));
     }
@@ -1382,7 +1395,7 @@ impl TypeExpr {
         return match *self {
             TypeExpr::Float
             | TypeExpr::Char
-            | TypeExpr::Int(..)
+            | TypeExpr::Int
             | TypeExpr::String(..)
             | TypeExpr::Bool(..) => true,
             _ => false,
@@ -1942,7 +1955,7 @@ pub fn check_type_compatability_full(
                 );
             }
         }
-        TypeExpr::Int(..) => {
+        TypeExpr::Int => {
             if !given_type.0.is_number() {
                 fail_requirement(
                     "this expects an int.".to_string(),
@@ -2081,29 +2094,29 @@ mod test {
             ),
             ("0.5", TypeExpr::Float),
             ("0.1 + 0.4", TypeExpr::Float),
-            ("0 + 0.4", TypeExpr::Int(None)),
+            ("0 + 0.4", TypeExpr::Int),
             ("0.4 + 0", TypeExpr::Float),
             (
                 "(0, 2)",
                 TypeExpr::Tuple(vec![
-                    TypeExpr::Int(Some(0)).into_empty_span(),
-                    TypeExpr::Int(Some(2)).into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
                 ]),
             ),
             (
                 "(0, 2 + 2)",
                 TypeExpr::Tuple(vec![
-                    TypeExpr::Int(Some(0)).into_empty_span(),
-                    TypeExpr::Int(None).into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
                 ]),
             ),
             (
                 "(0, (2 + 2, 5))",
                 TypeExpr::Tuple(vec![
-                    TypeExpr::Int(Some(0)).into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
                     TypeExpr::Tuple(vec![
-                        TypeExpr::Int(None).into_empty_span(),
-                        TypeExpr::Int(Some(5)).into_empty_span(),
+                        TypeExpr::Int.into_empty_span(),
+                        TypeExpr::Int.into_empty_span(),
                     ])
                     .into_empty_span(),
                 ]),
@@ -2111,17 +2124,17 @@ mod test {
             (
                 "(0, (\"Hallo, Welt\", 5))",
                 TypeExpr::Tuple(vec![
-                    TypeExpr::Int(Some(0)).into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
                     TypeExpr::Tuple(vec![
                         TypeExpr::String(Some("Hallo, Welt".to_string())).into_empty_span(),
-                        TypeExpr::Int(Some(5)).into_empty_span(),
+                        TypeExpr::Int.into_empty_span(),
                     ])
                     .into_empty_span(),
                 ]),
             ),
-            ("{ let x: Int = 5; 5 }", TypeExpr::Int(Some(5))),
-            ("{ let x: Int = 5; x }", TypeExpr::Int(None)),
-            ("{ let x: Int = 5; x * x }", TypeExpr::Int(None)),
+            ("{ let x: Int = 5; 5 }", TypeExpr::Int),
+            ("{ let x: Int = 5; x }", TypeExpr::Int),
+            ("{ let x: Int = 5; x * x }", TypeExpr::Int),
         ];
 
         for (src, expected_type_expr) in src_and_expected_type_vec {
@@ -2175,50 +2188,44 @@ mod test {
         let mut type_env = TypeEnv::default();
 
         let success_cases = vec![
-            (TypeExpr::Int(None), TypeExpr::Int(None)),
+            (TypeExpr::Int, TypeExpr::Int),
             (TypeExpr::String(None), TypeExpr::String(None)),
-            (TypeExpr::Int(None), TypeExpr::Float),
-            (TypeExpr::Float, TypeExpr::Int(None)),
+            (TypeExpr::Int, TypeExpr::Float),
+            (TypeExpr::Float, TypeExpr::Int),
             (
                 TypeExpr::Tuple(vec![
-                    empty_spanned(TypeExpr::Int(None)),
+                    empty_spanned(TypeExpr::Int),
                     empty_spanned(TypeExpr::String(None)),
                 ]),
                 TypeExpr::Tuple(vec![
-                    empty_spanned(TypeExpr::Int(None)),
+                    empty_spanned(TypeExpr::Int),
                     empty_spanned(TypeExpr::String(None)),
                 ]),
             ),
             (
                 TypeExpr::Duck(Duck {
-                    fields: vec![Field::new(
-                        "x".to_string(),
-                        empty_spanned(TypeExpr::Int(None)),
-                    )],
+                    fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::Int))],
                 }),
                 TypeExpr::Duck(Duck {
-                    fields: vec![Field::new(
-                        "x".to_string(),
-                        empty_spanned(TypeExpr::Int(None)),
-                    )],
+                    fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::Int))],
                 }),
             ),
             (
                 TypeExpr::Or(vec![
-                    empty_spanned(TypeExpr::Int(None)),
+                    empty_spanned(TypeExpr::Int),
                     empty_spanned(TypeExpr::String(None)),
                 ]),
-                TypeExpr::Int(None),
+                TypeExpr::Int,
             ),
             (
                 TypeExpr::Or(vec![
-                    empty_spanned(TypeExpr::Int(None)),
+                    empty_spanned(TypeExpr::Int),
                     empty_spanned(TypeExpr::String(None)),
                     empty_spanned(TypeExpr::Bool(None)),
                 ]),
                 TypeExpr::Or(vec![
                     empty_spanned(TypeExpr::String(None)),
-                    empty_spanned(TypeExpr::Int(None)),
+                    empty_spanned(TypeExpr::Int),
                 ]),
             ),
         ];
@@ -2233,7 +2240,7 @@ mod test {
     fn test_incompatible_primitives() {
         let mut type_env = TypeEnv::default();
         check_type_compatability(
-            &empty_spanned(TypeExpr::Int(None)),
+            &empty_spanned(TypeExpr::Int),
             &empty_spanned(TypeExpr::String(None)),
             &mut type_env,
         );
@@ -2245,7 +2252,7 @@ mod test {
         let mut type_env = TypeEnv::default();
         check_type_compatability(
             &empty_spanned(TypeExpr::String(None)),
-            &empty_spanned(TypeExpr::Int(None)),
+            &empty_spanned(TypeExpr::Int),
             &mut type_env,
         );
     }
@@ -2266,7 +2273,7 @@ mod test {
     fn test_incompatible_tuples_different_types() {
         let mut type_env = TypeEnv::default();
 
-        let one = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int(None))]);
+        let one = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::Int)]);
         let two = TypeExpr::Tuple(vec![empty_spanned(TypeExpr::String(None))]);
 
         check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
@@ -2278,13 +2285,13 @@ mod test {
         let mut type_env = TypeEnv::default();
 
         let one = TypeExpr::Tuple(vec![
-            empty_spanned(TypeExpr::Int(None)),
-            empty_spanned(TypeExpr::Int(None)),
-            empty_spanned(TypeExpr::Int(None)),
+            empty_spanned(TypeExpr::Int),
+            empty_spanned(TypeExpr::Int),
+            empty_spanned(TypeExpr::Int),
         ]);
         let two = TypeExpr::Tuple(vec![
-            empty_spanned(TypeExpr::Int(None)),
-            empty_spanned(TypeExpr::Int(None)),
+            empty_spanned(TypeExpr::Int),
+            empty_spanned(TypeExpr::Int),
         ]);
 
         check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
@@ -2296,17 +2303,11 @@ mod test {
         let mut type_env = TypeEnv::default();
 
         let one = TypeExpr::Duck(Duck {
-            fields: vec![Field::new(
-                "x".to_string(),
-                empty_spanned(TypeExpr::Int(None)),
-            )],
+            fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::Int))],
         });
 
         let two = TypeExpr::Duck(Duck {
-            fields: vec![Field::new(
-                "y".to_string(),
-                empty_spanned(TypeExpr::Int(None)),
-            )],
+            fields: vec![Field::new("y".to_string(), empty_spanned(TypeExpr::Int))],
         });
 
         check_type_compatability(&empty_spanned(one), &empty_spanned(two), &mut type_env);
@@ -2318,10 +2319,7 @@ mod test {
         let mut type_env = TypeEnv::default();
 
         let one = TypeExpr::Duck(Duck {
-            fields: vec![Field::new(
-                "x".to_string(),
-                empty_spanned(TypeExpr::Int(None)),
-            )],
+            fields: vec![Field::new("x".to_string(), empty_spanned(TypeExpr::Int))],
         });
 
         let two = TypeExpr::Duck(Duck {
@@ -2340,7 +2338,7 @@ mod test {
         let mut type_env = TypeEnv::default();
 
         let variant = TypeExpr::Or(vec![
-            empty_spanned(TypeExpr::Int(None)),
+            empty_spanned(TypeExpr::Int),
             empty_spanned(TypeExpr::String(None)),
         ]);
         let a_bool = TypeExpr::Bool(None);
@@ -2358,11 +2356,11 @@ mod test {
         let mut type_env = TypeEnv::default();
 
         let super_variant = TypeExpr::Or(vec![
-            empty_spanned(TypeExpr::Int(None)),
+            empty_spanned(TypeExpr::Int),
             empty_spanned(TypeExpr::String(None)),
         ]);
         let sub_variant = TypeExpr::Or(vec![
-            empty_spanned(TypeExpr::Int(None)),
+            empty_spanned(TypeExpr::Int),
             empty_spanned(TypeExpr::Bool(None)),
         ]);
 

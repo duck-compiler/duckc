@@ -408,6 +408,7 @@ impl IrInstruction {
 
 pub fn fix_idents_in_ir_value(v: &mut IrValue, imports: &HashSet<String>) {
     match v {
+        IrValue::Negate(v) => fix_idents_in_ir_value(v, imports),
         IrValue::Array(_ty, sub_values) => {
             for sub in sub_values {
                 fix_idents_in_ir_value(sub, imports);
@@ -480,7 +481,11 @@ pub fn fix_idents_in_ir_value(v: &mut IrValue, imports: &HashSet<String>) {
 
 pub fn fix_idents_in_ir(v: &mut IrInstruction, imports: &HashSet<String>) {
     match v {
-        IrInstruction::GlobalVarDecl { name, go_type: _, init_code } => {
+        IrInstruction::GlobalVarDecl {
+            name,
+            go_type: _,
+            init_code,
+        } => {
             *name = fix_ident_for_go(name, imports);
             for instr in init_code {
                 fix_idents_in_ir(instr, imports);
@@ -672,6 +677,7 @@ pub fn join_ir(v: &[IrInstruction]) -> String {
 impl IrValue {
     pub fn emit_as_go(&self) -> String {
         match self {
+            IrValue::Negate(target) => format!("-{}", target.emit_as_go()),
             IrValue::Deref(target) => format!("*{}", target.emit_as_go()),
             IrValue::Pointer(target) => format!("&{}", target.emit_as_go()),
             IrValue::Imm(str) => str.to_string(),

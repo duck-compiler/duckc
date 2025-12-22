@@ -21,7 +21,7 @@ pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str
     match primitive_type_expr {
         TypeExpr::Float => "float32",
         TypeExpr::Char => "rune",
-        TypeExpr::Int(..) => "int",
+        TypeExpr::Int => "int",
         TypeExpr::Bool(..) => "bool",
         TypeExpr::String(..) => "string",
         _ => panic!("That's not a primitive"),
@@ -54,7 +54,7 @@ pub fn string_to_byte_string(input_str: &str) -> String {
 pub fn primitive_conc_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
     match primitive_type_expr {
         TypeExpr::String(..) => "string",
-        TypeExpr::Int(..) => "int",
+        TypeExpr::Int => "int",
         TypeExpr::Float => "float32",
         TypeExpr::Bool(..) => "bool",
         TypeExpr::Char => "rune",
@@ -65,7 +65,7 @@ pub fn primitive_conc_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
 pub fn primitive_type_name(primitive_type_expr: &TypeExpr) -> &'static str {
     match primitive_type_expr {
         TypeExpr::String(..) => "string",
-        TypeExpr::Int(..) => "int",
+        TypeExpr::Int => "int",
         TypeExpr::Float => "float32",
         TypeExpr::Bool(..) => "bool",
         TypeExpr::Char => "rune",
@@ -1163,7 +1163,7 @@ impl TypeExpr {
             TypeExpr::Any => "interface{}".to_string(),
             TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
             TypeExpr::Bool(..) => "bool".to_string(),
-            TypeExpr::Int(..) => "int".to_string(),
+            TypeExpr::Int => "int".to_string(),
             TypeExpr::Float => "float32".to_string(),
             TypeExpr::UInt => "uint".to_string(),
             TypeExpr::Char => "rune".to_string(),
@@ -1240,7 +1240,7 @@ impl TypeExpr {
             TypeExpr::Array(t) => format!("Array_{}", t.0.type_id(type_env)),
             TypeExpr::Any => "Any".to_string(),
             TypeExpr::Bool(..) => "bool".to_string(),
-            TypeExpr::Int(..) => "int".to_string(),
+            TypeExpr::Int => "int".to_string(),
             TypeExpr::UInt => "uint".to_string(),
             TypeExpr::Float => "float32".to_string(),
             TypeExpr::Char => "rune".to_string(),
@@ -1345,7 +1345,7 @@ impl TypeExpr {
             TypeExpr::Array(t) => format!("Array_{}", t.0.as_clean_go_type_name(type_env)),
             TypeExpr::Any => "Any".to_string(),
             TypeExpr::Bool(..) => "bool".to_string(),
-            TypeExpr::Int(..) => "int".to_string(),
+            TypeExpr::Int => "int".to_string(),
             TypeExpr::UInt => "uint".to_string(),
             TypeExpr::Float => "float32".to_string(),
             TypeExpr::Char => "rune".to_string(),

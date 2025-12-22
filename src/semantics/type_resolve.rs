@@ -860,7 +860,7 @@ where
         TypeExpr::Bool(..)
         | TypeExpr::Tag(..)
         | TypeExpr::TypeOf(..)
-        | TypeExpr::Int(..)
+        | TypeExpr::Int
         | TypeExpr::UInt
         | TypeExpr::String(..)
         | TypeExpr::Float
@@ -901,6 +901,9 @@ where
     f_vv(v, env);
 
     match &mut v.0 {
+        ValueExpr::Negate(v) => {
+            trav_value_expr(f_t.clone(), f_vv.clone(), v, env);
+        }
         ValueExpr::RawStruct {
             is_global: _,
             name: _,
@@ -1339,7 +1342,7 @@ fn replace_generics_in_value_expr(
                 }
             }
         }
-        ValueExpr::BoolNegate(e) | ValueExpr::Return(Some(e)) => {
+        ValueExpr::Negate(e) | ValueExpr::BoolNegate(e) | ValueExpr::Return(Some(e)) => {
             replace_generics_in_value_expr(&mut e.0, set_params, type_env)
         }
         ValueExpr::Array(exprs) => {
@@ -1645,7 +1648,7 @@ fn replace_generics_in_type_expr(
         TypeExpr::Any
         | TypeExpr::Char
         | TypeExpr::Bool(..)
-        | TypeExpr::Int(..)
+        | TypeExpr::Int
         | TypeExpr::Float
         | TypeExpr::String(..)
         | TypeExpr::Tag(..) => {}
@@ -1862,7 +1865,7 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
                 sort_fields_value_expr(&mut expr.0);
             }
         }
-        ValueExpr::BoolNegate(e) => sort_fields_value_expr(&mut e.0),
+        ValueExpr::Negate(e) | ValueExpr::BoolNegate(e) => sort_fields_value_expr(&mut e.0),
         ValueExpr::Duck(init) => {
             for i in init {
                 sort_fields_value_expr(&mut i.1.0);
@@ -2009,7 +2012,7 @@ pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
         | TypeExpr::Char
         | TypeExpr::Float
         | TypeExpr::Go(_)
-        | TypeExpr::Int(_)
+        | TypeExpr::Int
         | TypeExpr::String(_)
         | TypeExpr::TypeName(..)
         | TypeExpr::NamedDuck { .. }
@@ -2718,6 +2721,11 @@ fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: 
                 *ty = Some(req.clone());
             }
         }
+        ValueExpr::Int(_, ty) => {
+            if matches!(req.0, TypeExpr::Int) || matches!(req.0, TypeExpr::UInt) {
+                *ty = Some(req.clone());
+            }
+        }
         ValueExpr::Ref(target) | ValueExpr::RefMut(target) => {
             if let TypeExpr::Ref(next_ty) | TypeExpr::RefMut(next_ty) = &req.0 {
                 infer_against(target, next_ty, type_env);
@@ -2791,6 +2799,19 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     let value_expr = value_expr.0;
     let owned = value_expr.clone();
     match value_expr {
+        ValueExpr::Negate(v) => {
+            typeresolve_value_expr((&mut v.0, v.1), type_env);
+
+            let ty = TypeExpr::from_value_expr(v, type_env);
+
+            match ty {
+                TypeExpr::Int | TypeExpr::UInt | TypeExpr::Float => {}
+                _ => {
+                    let msg = "Can only negate numbers (Int, UInt, Float)";
+                    failure_with_occurence(msg, v.1, [(msg, v.1)]);
+                }
+            }
+        }
         ValueExpr::RawStruct { .. } => panic!("raw struct should not be here {value_expr:?}"),
         ValueExpr::Async(inner) => {
             if !matches!(inner.0, ValueExpr::FunctionCall { .. }) {
@@ -2880,6 +2901,10 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         }
         ValueExpr::As(v, t) => {
             if let ValueExpr::InlineGo(_, ty) = &mut v.0 {
+                *ty = Some(t.clone());
+            }
+
+            if let ValueExpr::Int(_, ty) = &mut v.0 {
                 *ty = Some(t.clone());
             }
 
@@ -3104,8 +3129,19 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         ValueExpr::String(str, _) => {
             type_env.check_for_tailwind(str);
         }
-        ValueExpr::Int(..)
-        | ValueExpr::Bool(..)
+        ValueExpr::Int(_, t) => {
+            if let Some(t) = t.as_ref().as_ref()
+                && !matches!(t.0, TypeExpr::Int | TypeExpr::UInt)
+            {
+                let msg = "Int literal can only coerce to number type";
+                failure_with_occurence(msg, t.1, [(msg, t.1), (msg, *span)]);
+            }
+
+            if t.is_none() {
+                *t = Some((TypeExpr::Int, *span));
+            }
+        }
+        ValueExpr::Bool(..)
         | ValueExpr::Tag(..)
         | ValueExpr::Char(..)
         | ValueExpr::Float(..)

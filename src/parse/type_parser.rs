@@ -54,7 +54,7 @@ pub enum TypeExpr {
     TypeName(bool, String, Vec<Spanned<TypeParam>>),
     Tag(String),
     String(Option<String>),
-    Int(Option<i64>),
+    Int,
     UInt,
     Bool(Option<bool>),
     Char,
@@ -86,7 +86,7 @@ impl TypeExpr {
         let param1 = &format!("({param1})");
         let param2 = &format!("({param2})");
         match self {
-            TypeExpr::Int(..) => format!("Int_Ord({param1}, &{param2})"),
+            TypeExpr::Int => format!("Int_Ord({param1}, &{param2})"),
             TypeExpr::UInt => format!("UInt_Ord({param1}, &{param2})"),
             TypeExpr::Float => format!("Float_Ord({param1}, &{param2})"),
             TypeExpr::Bool(..) => format!("Bool_Ord({param1}, &{param2})"),
@@ -126,7 +126,7 @@ impl TypeExpr {
         let param1 = &format!("({param1})");
         let param2 = &format!("({param2})");
         match self {
-            TypeExpr::Int(..)
+            TypeExpr::Int
             | TypeExpr::Float
             | TypeExpr::Bool(..)
             | TypeExpr::Char
@@ -195,7 +195,7 @@ impl TypeExpr {
         let param1 = &format!("({param1})");
 
         match self {
-            TypeExpr::Int(..) => format!("Int_Hash({param1})"),
+            TypeExpr::Int => format!("Int_Hash({param1})"),
             TypeExpr::UInt => format!("UInt_Hash({param1})"),
             TypeExpr::Float => format!("Float_Hash({param1})"),
             TypeExpr::Bool(..) => format!("Bool_Hash({param1})"),
@@ -231,7 +231,7 @@ impl TypeExpr {
     pub fn call_clone(&self, param1: &str, type_env: &mut TypeEnv) -> String {
         let param1 = &format!("({param1})");
         match self {
-            TypeExpr::Int(..)
+            TypeExpr::Int
             | TypeExpr::UInt
             | TypeExpr::Float
             | TypeExpr::Bool(..)
@@ -294,7 +294,7 @@ impl TypeExpr {
         let param1 = &format!("({param1})");
         match self {
             TypeExpr::String(..) => param1.to_string(),
-            TypeExpr::Int(..) => format!("strconv.Itoa({param1})"),
+            TypeExpr::Int => format!("strconv.Itoa({param1})"),
             TypeExpr::UInt => format!("fmt.Sprintf(\"%d\", {param1})"),
             TypeExpr::Float => format!("fmt.Sprintf(\"%f\", {param1})"),
             TypeExpr::Bool(..) => format!("fmt.Sprintf(\"%t\", {param1})"),
@@ -376,7 +376,7 @@ impl TypeExpr {
                             && matches!(f.return_type.0, TypeExpr::String(..))
                     }) && !def.mut_methods.contains("to_string"))
             }
-            TypeExpr::Int(..)
+            TypeExpr::Int
             | TypeExpr::String(..)
             | TypeExpr::Bool(..)
             | TypeExpr::Char
@@ -406,10 +406,10 @@ impl TypeExpr {
                     || (def.methods.iter().any(|f| {
                         f.name.as_str() == "hash"
                             && f.params.is_empty()
-                            && f.return_type.0 == TypeExpr::Int(None)
+                            && f.return_type.0 == TypeExpr::Int
                     }) && !def.mut_methods.contains("hash"))
             }
-            TypeExpr::Int(..)
+            TypeExpr::Int
             | TypeExpr::String(..)
             | TypeExpr::Bool(..)
             | TypeExpr::Char
@@ -441,7 +441,7 @@ impl TypeExpr {
                             && &f.return_type.0 == self
                     }) && !def.mut_methods.contains("clone"))
             }
-            TypeExpr::Int(..)
+            TypeExpr::Int
             | TypeExpr::String(..)
             | TypeExpr::Bool(..)
             | TypeExpr::Char
@@ -476,7 +476,7 @@ impl TypeExpr {
                             && f.return_type.0.clone().into_empty_span().0 == TypeExpr::ord_result()
                     }) && !def.mut_methods.contains("ord"))
             }
-            TypeExpr::Int(..)
+            TypeExpr::Int
             | TypeExpr::String(..)
             | TypeExpr::Bool(..)
             | TypeExpr::Char
@@ -507,7 +507,7 @@ impl TypeExpr {
                             && matches!(f.return_type.0, TypeExpr::Bool(..))
                     }) && !def.mut_methods.contains("eq"))
             }
-            TypeExpr::Int(..)
+            TypeExpr::Int
             | TypeExpr::String(..)
             | TypeExpr::Bool(..)
             | TypeExpr::Char
@@ -521,7 +521,7 @@ impl TypeExpr {
     pub fn is_trivially_copyable(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::String(..)
-            | TypeExpr::Int(..)
+            | TypeExpr::Int
             | TypeExpr::Float
             | TypeExpr::Bool(..)
             | TypeExpr::Go(..)
@@ -560,7 +560,7 @@ impl TypeExpr {
 
     pub fn primitives() -> Vec<TypeExpr> {
         return vec![
-            TypeExpr::Int(None),
+            TypeExpr::Int,
             TypeExpr::Float,
             TypeExpr::Bool(None),
             TypeExpr::String(None),
@@ -625,9 +625,6 @@ where
 
             let bool_literal =
                 select_ref! { Token::BoolLiteral(b) => *b }.map(|b| TypeExpr::Bool(Some(b)));
-
-            let int_literal =
-                select_ref! { Token::IntLiteral(int) => *int }.map(|int| TypeExpr::Int(Some(int)));
 
             let tag_identifier = choice((
                 select_ref! { Token::Ident(ident) => ident.to_string() },
@@ -712,7 +709,7 @@ where
                 )
                 .map(
                     |((is_global, identifier), type_params)| match identifier[0].as_str() {
-                        "Int" => TypeExpr::Int(None),
+                        "Int" => TypeExpr::Int,
                         "UInt" => TypeExpr::UInt,
                         "Float" => TypeExpr::Float,
                         "Bool" => TypeExpr::Bool(None),
@@ -733,7 +730,6 @@ where
                 .or(choice((
                     just(Token::ControlChar('!')).to(TypeExpr::Never),
                     string_literal,
-                    int_literal,
                     bool_literal,
                     tag,
                     typeof_expr,
@@ -863,9 +859,6 @@ where
             let bool_literal =
                 select_ref! { Token::BoolLiteral(b) => *b }.map(|b| TypeExpr::Bool(Some(b)));
 
-            let int_literal =
-                select_ref! { Token::IntLiteral(int) => *int }.map(|int| TypeExpr::Int(int.into())); // TODO: unwrap!
-
             let tag_identifier = choice((
                 select_ref! { Token::Ident(ident) => ident.to_string() },
                 just(Token::ControlChar('.')).map(|_| "DOT".to_string()),
@@ -923,7 +916,7 @@ where
                 )
                 .map(
                     |((is_global, identifier), type_params)| match identifier[0].as_str() {
-                        "Int" => TypeExpr::Int(None),
+                        "Int" => TypeExpr::Int,
                         "UInt" => TypeExpr::UInt,
                         "Float" => TypeExpr::Float,
                         "Bool" => TypeExpr::Bool(None),
@@ -943,7 +936,6 @@ where
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                 .or(choice((
                     just(Token::ControlChar('!')).to(TypeExpr::Never),
-                    int_literal,
                     bool_literal,
                     string_literal,
                     tag,
@@ -1182,15 +1174,7 @@ impl Display for TypeExpr {
                     String::from("")
                 }
             ),
-            TypeExpr::Int(i) => write!(
-                f,
-                "Int{}",
-                if let Some(int) = i {
-                    format!(" {int}")
-                } else {
-                    String::from("")
-                }
-            ),
+            TypeExpr::Int => write!(f, "Int",),
             TypeExpr::UInt => write!(f, "UInt"),
             TypeExpr::Bool(b) => write!(
                 f,
@@ -1384,18 +1368,6 @@ pub mod tests {
             ]),
         );
 
-        assert_type_expression("1", TypeExpr::Int(Some(1)));
-
-        assert_type_expression("555", TypeExpr::Int(Some(555)));
-
-        assert_type_expression(
-            "555 | 1000",
-            TypeExpr::Or(vec![
-                TypeExpr::Int(Some(555)).into_empty_span(),
-                TypeExpr::Int(Some(1000)).into_empty_span(),
-            ]),
-        );
-
         assert_type_expression("\"str\"", TypeExpr::String(Some("str".to_string())));
 
         assert_type_expression(
@@ -1416,7 +1388,7 @@ pub mod tests {
             TypeExpr::Fun(
                 vec![(
                     "x".to_string().into(),
-                    TypeExpr::Int(None).into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
                 )],
                 Box::new(TypeExpr::Bool(None).into_empty_span()),
                 false,
@@ -1443,7 +1415,7 @@ pub mod tests {
             TypeExpr::Or(vec![
                 TypeExpr::String(None).into_empty_span(),
                 TypeExpr::Bool(None).into_empty_span(),
-                TypeExpr::Int(None).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
             ]),
         );
 
@@ -1471,7 +1443,7 @@ pub mod tests {
                 false,
                 vec!["Result".to_string()],
                 vec![
-                    TypeExpr::Int(None).into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
                     TypeExpr::String(None).into_empty_span(),
                 ],
             ),
@@ -1484,7 +1456,7 @@ pub mod tests {
                 vec!["Map".to_string()],
                 vec![
                     TypeExpr::String(None).into_empty_span(),
-                    TypeExpr::Int(None).into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
                 ],
             ),
         );
@@ -1514,7 +1486,7 @@ pub mod tests {
                     TypeExpr::RawTypeName(
                         false,
                         vec!["Option".to_string()],
-                        vec![TypeExpr::Int(None).into_empty_span()],
+                        vec![TypeExpr::Int.into_empty_span()],
                     )
                     .into_empty_span(),
                 ],
@@ -1531,7 +1503,7 @@ pub mod tests {
                         false,
                         vec!["Result".to_string()],
                         vec![
-                            TypeExpr::Int(None).into_empty_span(),
+                            TypeExpr::Int.into_empty_span(),
                             TypeExpr::String(None).into_empty_span(),
                         ],
                     )
@@ -1552,7 +1524,7 @@ pub mod tests {
                     TypeExpr::RawTypeName(
                         false,
                         vec!["Vec".to_string()],
-                        vec![TypeExpr::Int(None).into_empty_span()],
+                        vec![TypeExpr::Int.into_empty_span()],
                     )
                     .into_empty_span(),
                 ],
@@ -1575,7 +1547,7 @@ pub mod tests {
         assert_type_expression(
             "(Int, Result<String, Error>)",
             TypeExpr::Tuple(vec![
-                TypeExpr::Int(None).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
                 TypeExpr::RawTypeName(
                     false,
                     vec!["Result".to_string()],
@@ -1595,7 +1567,7 @@ pub mod tests {
                 TypeExpr::RawTypeName(
                     false,
                     vec!["Option".to_string()],
-                    vec![TypeExpr::Int(None).into_empty_span()],
+                    vec![TypeExpr::Int.into_empty_span()],
                 )
                 .into_empty_span(),
                 TypeExpr::RawTypeName(
@@ -1615,7 +1587,7 @@ pub mod tests {
                     TypeExpr::RawTypeName(
                         false,
                         vec!["Promise".to_string()],
-                        vec![TypeExpr::Int(None).into_empty_span()],
+                        vec![TypeExpr::Int.into_empty_span()],
                     )
                     .into_empty_span(),
                 )],
@@ -1638,7 +1610,7 @@ pub mod tests {
                 vec!["Box".to_string()],
                 vec![
                     TypeExpr::Tuple(vec![
-                        TypeExpr::Int(None).into_empty_span(),
+                        TypeExpr::Int.into_empty_span(),
                         TypeExpr::String(None).into_empty_span(),
                     ])
                     .into_empty_span(),
@@ -1658,7 +1630,7 @@ pub mod tests {
                                 "data".to_string(),
                                 TypeExpr::String(None).into_empty_span(),
                             ),
-                            Field::new("id".to_string(), TypeExpr::Int(None).into_empty_span()),
+                            Field::new("id".to_string(), TypeExpr::Int.into_empty_span()),
                         ],
                     })
                     .into_empty_span(),
@@ -1692,7 +1664,7 @@ pub mod tests {
                             "x".to_string().into(),
                             TypeExpr::String(None).into_empty_span(),
                         )],
-                        Box::new(TypeExpr::Int(None).into_empty_span()),
+                        Box::new(TypeExpr::Int.into_empty_span()),
                         false,
                     )
                     .into_empty_span(),
@@ -1705,9 +1677,7 @@ pub mod tests {
             TypeExpr::RawTypeName(
                 false,
                 vec!["Collection".to_string()],
-                vec![
-                    TypeExpr::Array(TypeExpr::Int(None).into_empty_span().into()).into_empty_span(),
-                ],
+                vec![TypeExpr::Array(TypeExpr::Int.into_empty_span().into()).into_empty_span()],
             ),
         );
 
@@ -1732,7 +1702,7 @@ pub mod tests {
                     )
                     .into_empty_span(),
                     TypeExpr::Tuple(vec![
-                        TypeExpr::Int(None).into_empty_span(),
+                        TypeExpr::Int.into_empty_span(),
                         TypeExpr::String(None).into_empty_span(),
                     ])
                     .into_empty_span(),
@@ -1754,7 +1724,7 @@ pub mod tests {
                                 false,
                                 vec!["Result".to_string()],
                                 vec![
-                                    TypeExpr::Int(None).into_empty_span(),
+                                    TypeExpr::Int.into_empty_span(),
                                     TypeExpr::RawTypeName(false, vec!["E".to_string()], vec![])
                                         .into_empty_span(),
                                 ],
@@ -1815,7 +1785,7 @@ pub mod tests {
                 false,
                 vec!["Result".to_string()],
                 vec![
-                    TypeExpr::Int(None).into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
                     TypeExpr::String(None).into_empty_span(),
                 ],
             ),
@@ -1828,7 +1798,7 @@ pub mod tests {
                 vec!["Box".to_string()],
                 vec![
                     TypeExpr::Or(vec![
-                        TypeExpr::Int(None).into_empty_span(),
+                        TypeExpr::Int.into_empty_span(),
                         TypeExpr::String(None).into_empty_span(),
                         TypeExpr::Bool(None).into_empty_span(),
                     ])
@@ -1844,7 +1814,7 @@ pub mod tests {
                 vec!["Map".to_string()],
                 vec![
                     TypeExpr::String(None).into_empty_span(),
-                    TypeExpr::Int(None).into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
                 ],
             ),
         );
@@ -1870,7 +1840,7 @@ pub mod tests {
                     "data".to_string().into(),
                     TypeExpr::Duck(Duck {
                         fields: vec![
-                            Field::new("age".to_string(), TypeExpr::Int(None).into_empty_span()),
+                            Field::new("age".to_string(), TypeExpr::Int.into_empty_span()),
                             Field::new(
                                 "name".to_string(),
                                 TypeExpr::String(None).into_empty_span(),
@@ -1893,7 +1863,7 @@ pub mod tests {
                 vec![],
                 Box::new(
                     TypeExpr::Tuple(vec![
-                        TypeExpr::Int(None).into_empty_span(),
+                        TypeExpr::Int.into_empty_span(),
                         TypeExpr::String(None).into_empty_span(),
                     ])
                     .into_empty_span(),
@@ -1904,13 +1874,13 @@ pub mod tests {
 
         assert_type_expression(
             "Int[]",
-            TypeExpr::Array(TypeExpr::Int(None).into_empty_span().into()),
+            TypeExpr::Array(TypeExpr::Int.into_empty_span().into()),
         );
 
         assert_type_expression(
             "Int[][]",
             TypeExpr::Array(
-                TypeExpr::Array(TypeExpr::Int(None).into_empty_span().into())
+                TypeExpr::Array(TypeExpr::Int.into_empty_span().into())
                     .into_empty_span()
                     .into(),
             ),
@@ -1919,7 +1889,7 @@ pub mod tests {
             "Int[][][]",
             TypeExpr::Array(
                 TypeExpr::Array(
-                    TypeExpr::Array(TypeExpr::Int(None).into_empty_span().into())
+                    TypeExpr::Array(TypeExpr::Int.into_empty_span().into())
                         .into_empty_span()
                         .into(),
                 )
@@ -1931,7 +1901,7 @@ pub mod tests {
         assert_type_expression(
             "(Int,)[]",
             TypeExpr::Array(
-                TypeExpr::Tuple(vec![TypeExpr::Int(None).into_empty_span()])
+                TypeExpr::Tuple(vec![TypeExpr::Int.into_empty_span()])
                     .into_empty_span()
                     .into(),
             ),
@@ -1942,7 +1912,7 @@ pub mod tests {
             TypeExpr::Or(vec![
                 TypeExpr::Array(TypeExpr::String(None).into_empty_span().into()).into_empty_span(),
                 TypeExpr::Array(
-                    TypeExpr::Array(TypeExpr::Int(None).into_empty_span().into())
+                    TypeExpr::Array(TypeExpr::Int.into_empty_span().into())
                         .into_empty_span()
                         .into(),
                 )
@@ -1956,7 +1926,7 @@ pub mod tests {
                 TypeExpr::Or(vec![
                     TypeExpr::Array(TypeExpr::String(None).into_empty_span().into())
                         .into_empty_span(),
-                    TypeExpr::Array(TypeExpr::Int(None).into_empty_span().into()).into_empty_span(),
+                    TypeExpr::Array(TypeExpr::Int.into_empty_span().into()).into_empty_span(),
                 ])
                 .into_empty_span()
                 .into(),
@@ -1966,10 +1936,7 @@ pub mod tests {
         assert_type_expression(
             "fn(x: Int) -> go \"fmt.Stringer\"",
             TypeExpr::Fun(
-                vec![(
-                    "x".to_string().into(),
-                    TypeExpr::Int(None).into_empty_span(),
-                )],
+                vec![("x".to_string().into(), TypeExpr::Int.into_empty_span())],
                 Box::new(TypeExpr::Go("fmt.Stringer".to_string()).into_empty_span()),
                 false,
             ),
@@ -1981,7 +1948,7 @@ pub mod tests {
                 vec![],
                 Box::new(
                     TypeExpr::Tuple(vec![
-                        TypeExpr::Int(None).into_empty_span(),
+                        TypeExpr::Int.into_empty_span(),
                         TypeExpr::Duck(Duck {
                             fields: vec![Field::new(
                                 "val".to_string(),
@@ -2020,7 +1987,7 @@ pub mod tests {
             TypeExpr::Duck(Duck {
                 fields: vec![
                     Field::new("active".to_string(), TypeExpr::Bool(None).into_empty_span()),
-                    Field::new("age".to_string(), TypeExpr::Int(None).into_empty_span()),
+                    Field::new("age".to_string(), TypeExpr::Int.into_empty_span()),
                 ],
             }),
         );
@@ -2054,26 +2021,26 @@ pub mod tests {
         assert_type_expression("()", TypeExpr::Tuple(vec![]));
         assert_type_expression(
             "(Int,)",
-            TypeExpr::Tuple(vec![TypeExpr::Int(None).into_empty_span()]),
+            TypeExpr::Tuple(vec![TypeExpr::Int.into_empty_span()]),
         );
         assert_type_expression(
             "(Int, String)",
             TypeExpr::Tuple(vec![
-                TypeExpr::Int(None).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
                 TypeExpr::String(None).into_empty_span(),
             ]),
         );
         assert_type_expression(
             "(Int, String,)",
             TypeExpr::Tuple(vec![
-                TypeExpr::Int(None).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
                 TypeExpr::String(None).into_empty_span(),
             ]),
         );
         assert_type_expression(
             "(Int, (Float, Bool))",
             TypeExpr::Tuple(vec![
-                TypeExpr::Int(None).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
                 TypeExpr::Tuple(vec![
                     TypeExpr::Float.into_empty_span(),
                     TypeExpr::Bool(None).into_empty_span(),
@@ -2084,7 +2051,7 @@ pub mod tests {
         assert_type_expression(
             "(Int, String, (Float, {x: String}),)",
             TypeExpr::Tuple(vec![
-                TypeExpr::Int(None).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
                 TypeExpr::String(None).into_empty_span(),
                 TypeExpr::Tuple(vec![
                     TypeExpr::Float.into_empty_span(),
@@ -2138,7 +2105,7 @@ pub mod tests {
         );
 
         assert_type_expression("String", TypeExpr::String(None));
-        assert_type_expression("Int", TypeExpr::Int(None));
+        assert_type_expression("Int", TypeExpr::Int);
         assert_type_expression("Bool", TypeExpr::Bool(None));
         assert_type_expression("Char", TypeExpr::Char);
         assert_type_expression("Float", TypeExpr::Float);
@@ -2146,7 +2113,7 @@ pub mod tests {
         assert_type_expression(
             "Int | String",
             TypeExpr::Or(vec![
-                TypeExpr::Int(None).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
                 TypeExpr::String(None).into_empty_span(),
             ]),
         );
@@ -2162,7 +2129,7 @@ pub mod tests {
         assert_type_expression(
             "Int | (String | Bool,)",
             TypeExpr::Or(vec![
-                TypeExpr::Int(None).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
                 TypeExpr::Tuple(vec![
                     TypeExpr::Or(vec![
                         TypeExpr::String(None).into_empty_span(),
@@ -2196,7 +2163,7 @@ pub mod tests {
 
         assert_type_expression(
             "&Int",
-            TypeExpr::Ref(TypeExpr::Int(None).into_empty_span().into()),
+            TypeExpr::Ref(TypeExpr::Int.into_empty_span().into()),
         );
 
         assert_type_expression(
@@ -2213,7 +2180,7 @@ pub mod tests {
             TypeExpr::Ref(
                 TypeExpr::Or(vec![
                     TypeExpr::String(None).into_empty_span(),
-                    TypeExpr::Int(None).into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
                 ])
                 .into_empty_span()
                 .into(),
@@ -2224,13 +2191,13 @@ pub mod tests {
             "&String | Int",
             TypeExpr::Or(vec![
                 TypeExpr::Ref(TypeExpr::String(None).into_empty_span().into()).into_empty_span(),
-                TypeExpr::Int(None).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
             ]),
         );
 
         assert_type_expression(
             "&mut Int",
-            TypeExpr::RefMut(TypeExpr::Int(None).into_empty_span().into()),
+            TypeExpr::RefMut(TypeExpr::Int.into_empty_span().into()),
         );
 
         assert_type_expression(
@@ -2247,7 +2214,7 @@ pub mod tests {
             TypeExpr::RefMut(
                 TypeExpr::Or(vec![
                     TypeExpr::String(None).into_empty_span(),
-                    TypeExpr::Int(None).into_empty_span(),
+                    TypeExpr::Int.into_empty_span(),
                 ])
                 .into_empty_span()
                 .into(),
@@ -2258,7 +2225,7 @@ pub mod tests {
             "&mut String | Int",
             TypeExpr::Or(vec![
                 TypeExpr::RefMut(TypeExpr::String(None).into_empty_span().into()).into_empty_span(),
-                TypeExpr::Int(None).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
             ]),
         );
 
@@ -2271,7 +2238,7 @@ pub mod tests {
                         .into(),
                 )
                 .into_empty_span(),
-                TypeExpr::Int(None).into_empty_span(),
+                TypeExpr::Int.into_empty_span(),
             ]),
         );
 

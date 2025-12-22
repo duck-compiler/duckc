@@ -81,6 +81,7 @@ impl FunctionDefintion {
         to_ir: &mut ToIr,
         target_type: &TypeExpr,
     ) -> IrInstruction {
+        dbg!(&self.name);
         let (emitted_body, _result_var) = self.value_expr.0.emit(type_env, to_ir, self.span);
 
         let mut final_params = vec![("self".to_string(), (target_type.clone(), empty_range()))];

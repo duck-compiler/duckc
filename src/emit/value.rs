@@ -122,7 +122,7 @@ pub struct Case {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrValue {
-    Int(i64),
+    Int(u64),
     Float(f64),
     String(String, bool),
     Bool(bool),
@@ -143,6 +143,7 @@ pub enum IrValue {
     ArrayAccess(Box<IrValue>, Box<IrValue>),
     Imm(String),
     Pointer(Box<IrValue>),
+    Negate(Box<IrValue>),
     Deref(Box<IrValue>),
     Nil,
 }
@@ -420,7 +421,7 @@ fn walk_access_raw(
                                 flag = Some((format!(r#"fmt.Sprintf("%s", "#), stars_count, false));
                                 skip = true;
                             }
-                            TypeExpr::Int(..) => {
+                            TypeExpr::Int => {
                                 flag = Some((format!(r#"fmt.Sprintf("%d", "#), stars_count, false));
                                 skip = true;
                             }
@@ -494,7 +495,7 @@ fn walk_access_raw(
                                 flag = Some((format!(r#"IDENTITY("#), stars_count, false));
                                 skip = true;
                             }
-                            TypeExpr::Int(..) => {
+                            TypeExpr::Int => {
                                 flag = Some((format!(r#"IDENTITY("#), stars_count, false));
                                 skip = true;
                             }
@@ -536,7 +537,7 @@ fn walk_access_raw(
                                 flag = Some((format!(r#"String_Hash("#), stars_count, false));
                                 skip = true;
                             }
-                            TypeExpr::Int(..) => {
+                            TypeExpr::Int => {
                                 flag = Some((format!(r#"Int_Hash("#), stars_count, false));
                                 skip = true;
                             }
@@ -578,7 +579,7 @@ fn walk_access_raw(
                                 flag = Some((format!(r#"String_Ord("#), stars_count, false));
                                 skip = true;
                             }
-                            TypeExpr::Int(..) => {
+                            TypeExpr::Int => {
                                 flag = Some((format!(r#"Int_Ord("#), stars_count, false));
                                 skip = true;
                             }
@@ -1022,7 +1023,7 @@ impl ValueExpr {
         match self {
             ValueExpr::Bool(b) => Some(IrValue::Bool(*b)),
             ValueExpr::Char(c) => Some(IrValue::Char(*c)),
-            ValueExpr::Int(i) => Some(IrValue::Int(*i)),
+            ValueExpr::Int(i, _ty) => Some(IrValue::Int(*i)),
             ValueExpr::Float(f) => Some(IrValue::Float(*f)),
             ValueExpr::String(s, is_const) => Some(IrValue::String(s.clone(), *is_const)),
             ValueExpr::Lambda(b) => {
@@ -1080,6 +1081,25 @@ impl ValueExpr {
         span: SS,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
+            ValueExpr::Negate(t) => {
+                let (mut inner_instr, inner_res) = t.0.emit(type_env, env, t.1);
+
+                let Some(r) = inner_res else {
+                    return (inner_instr, None);
+                };
+
+                let var_name = env.new_var();
+                let inner_t = TypeExpr::from_value_expr(&(self.clone(), span), type_env);
+                inner_instr.extend([
+                    IrInstruction::VarDecl(
+                        var_name.clone(),
+                        inner_t.as_clean_go_type_name(type_env),
+                    ),
+                    IrInstruction::VarAssignment(var_name.clone(), IrValue::Negate(r.into())),
+                ]);
+
+                (inner_instr, as_rvar(var_name))
+            }
             ValueExpr::RawStruct { .. } => {
                 panic!("Compiler Bug: Raw struct should be replaced {self:?}")
             }
@@ -1799,7 +1819,7 @@ impl ValueExpr {
                                         return (instr, None);
                                     }
                                 }
-                                TypeExpr::Int(..) => {
+                                TypeExpr::Int => {
                                     let (e_instr, e_res_var) = e.0.emit(type_env, env, e.1);
                                     instr.extend(e_instr);
                                     if let Some(e_res_var) = e_res_var {
@@ -3104,7 +3124,7 @@ mod tests {
                         "var_0".into(),
                         IrValue::Int(1),
                         IrValue::Int(1),
-                        TypeExpr::Int(None),
+                        TypeExpr::Int,
                     ),
                 ],
             ),
@@ -3116,7 +3136,7 @@ mod tests {
                         "var_0".into(),
                         IrValue::Int(1),
                         IrValue::Int(1),
-                        TypeExpr::Int(None),
+                        TypeExpr::Int,
                     ),
                 ],
             ),
@@ -3245,7 +3265,7 @@ mod tests {
                         "var_0".into(),
                         IrValue::Int(1),
                         IrValue::Int(1),
-                        TypeExpr::Int(None),
+                        TypeExpr::Int,
                     ),
                     decl("var_1", "int"),
                     IrInstruction::InlineGo(

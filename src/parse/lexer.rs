@@ -50,7 +50,7 @@ pub enum Token {
     ControlChar(char),
     StringLiteral(String),
     FormatStringLiteral(Vec<FmtStringContents>),
-    IntLiteral(i64),
+    IntLiteral(u64),
     BoolLiteral(bool),
     CharLiteral(char),
     HtmlString(Vec<HtmlStringContents>),
@@ -713,12 +713,10 @@ fn inline_go_parser<'src>()
 
 fn num_literal<'src>() -> impl Parser<'src, &'src str, Token, extra::Err<Rich<'src, char>>> + Clone
 {
-    just('-')
-        .or_not()
-        .then(text::int(10))
+    text::int(10)
         .to_slice()
         .try_map(|s: &str, span| {
-            s.parse::<i64>()
+            s.parse::<u64>()
                 .map_err(|_| Rich::custom(span, "Invalid integer"))
         })
         .map(Token::IntLiteral)
@@ -965,7 +963,8 @@ mod tests {
                         (Token::ControlChar('{'), empty_range()),
                         (Token::ControlChar('{'), empty_range()),
                         (Token::ControlChar('{'), empty_range()),
-                        (Token::IntLiteral(-1), empty_range()),
+                        (Token::ControlChar('-'), empty_range()),
+                        (Token::IntLiteral(1), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
@@ -1125,7 +1124,8 @@ mod tests {
                 vec![Token::FormatStringLiteral(vec![FmtStringContents::Tokens(
                     vec![
                         (Token::ControlChar('{'), empty_range()),
-                        (Token::IntLiteral(-1), empty_range()),
+                        (Token::ControlChar('-'), empty_range()),
+                        (Token::IntLiteral(1), empty_range()),
                         (Token::ControlChar('}'), empty_range()),
                     ],
                 )])],
@@ -1215,9 +1215,12 @@ mod tests {
                 ))],
             ),
             ("1", vec![Token::IntLiteral(1)]),
-            ("-1", vec![Token::IntLiteral(-1)]),
+            ("-1", vec![Token::ControlChar('-'), Token::IntLiteral(1)]),
             ("2003", vec![Token::IntLiteral(2003)]),
-            ("-2003", vec![Token::IntLiteral(-2003)]),
+            (
+                "-2003",
+                vec![Token::ControlChar('-'), Token::IntLiteral(2003)],
+            ),
             ("true", vec![Token::BoolLiteral(true)]),
             ("false", vec![Token::BoolLiteral(false)]),
             ("go { {} }", vec![Token::InlineGo(String::from(" {} "))]),
@@ -1335,7 +1338,8 @@ mod tests {
                     Token::Let,
                     Token::Ident("π".to_string()),
                     Token::ControlChar('='),
-                    Token::IntLiteral(-3),
+                    Token::ControlChar('-'),
+                    Token::IntLiteral(3),
                     Token::ControlChar(';'),
                 ],
             ),
@@ -1352,9 +1356,11 @@ mod tests {
                 // todo: divide token
                 "-5 / -2",
                 vec![
-                    Token::IntLiteral(-5),
+                    Token::ControlChar('-'),
+                    Token::IntLiteral(5),
                     Token::ControlChar('/'),
-                    Token::IntLiteral(-2),
+                    Token::ControlChar('-'),
+                    Token::IntLiteral(2),
                 ],
             ),
             (
@@ -1388,9 +1394,11 @@ mod tests {
                     Token::ControlChar('('),
                     Token::BoolLiteral(true),
                     Token::ControlChar(')'),
-                    Token::IntLiteral(-1),
+                    Token::ControlChar('-'),
+                    Token::IntLiteral(1),
                     Token::Else,
-                    Token::IntLiteral(-0),
+                    Token::ControlChar('-'),
+                    Token::IntLiteral(0),
                     Token::ControlChar(';'),
                     Token::ControlChar('}'),
                 ],
@@ -1407,7 +1415,8 @@ mod tests {
             (
                 "-1.0// a float-like thing",
                 vec![
-                    Token::IntLiteral(-1),
+                    Token::ControlChar('-'),
+                    Token::IntLiteral(1),
                     Token::ControlChar('.'),
                     Token::IntLiteral(0),
                     Token::Comment("a float-like thing".to_string()),
