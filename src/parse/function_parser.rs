@@ -2,7 +2,7 @@ use chumsky::{input::BorrowInput, prelude::*};
 
 use crate::{
     parse::{
-        SS, Spanned,
+        SS, Spanned, failure_with_occurence,
         generics_parser::{Generic, generics_parser},
         value_parser::empty_range,
     },
@@ -12,7 +12,7 @@ use crate::{
 use super::{
     lexer::Token,
     type_parser::{TypeExpr, type_expression_parser},
-    value_parser::{ValueExpr, value_expr_parser},
+    value_parser::{ValueExpr, block_expr_parser, value_expr_parser},
 };
 
 pub type Param = (String, Spanned<TypeExpr>);
@@ -121,13 +121,19 @@ where
         .then(params_parser)
         .then_ignore(just(Token::ControlChar(')')))
         .then(return_type_parser.or_not())
-        .then(value_expr_parser(make_input))
+        .then(block_expr_parser(
+            make_input.clone(),
+            value_expr_parser(make_input.clone()),
+        ))
         .map_with(
             |(((((doc_comments, identifier), generics), params), return_type), mut value_expr),
              ctx| {
                 value_expr = match value_expr {
                     x @ (ValueExpr::Block(_), _) => x,
-                    _ => panic!("Function must be block"),
+                    _ => {
+                        let msg = "Function must be a block expression";
+                        failure_with_occurence(msg, value_expr.1, [(msg, value_expr.1)]);
+                    }
                 };
 
                 FunctionDefintion {

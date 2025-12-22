@@ -36,7 +36,7 @@ struct Cmd = {
     }
 
     mut fn args(_args: String[]) -> &Cmd {
-        for arg in _args {
+        for (arg in _args) {
             self.cmd_args.push(arg);
         }
         return self;

@@ -5,12 +5,12 @@ struct S = {
 fn main() {
     const s = &mut S { f: [2, 3], };
 
-    for i in &mut s.f {
+    for (i in &mut s.f) {
         std::io::println(std::string::from_int(*i));
         *i = *i * 10;
     }
 
-    for i in &s.f {
+    for (i in &s.f) {
         std::io::println(std::string::from_int(*i));
     }
 }

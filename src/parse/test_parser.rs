@@ -3,7 +3,7 @@ use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 
 use crate::parse::value_parser::value_expr_parser;
-use crate::parse::{SS, Spanned, value_parser::ValueExpr};
+use crate::parse::{SS, Spanned, failure_with_occurence, value_parser::ValueExpr};
 
 use super::lexer::Token;
 
@@ -26,7 +26,10 @@ where
         .map_with(|(name, mut body), ctx| {
             body = match body {
                 x @ (ValueExpr::Block(_), _) => x,
-                _ => panic!("Function must be block"),
+                _ => {
+                    let msg = "Test body needs to be a block";
+                    failure_with_occurence(msg, body.1, [(msg, body.1)]);
+                }
             };
 
             (TestCase { name, body }, ctx.span())

@@ -25,11 +25,11 @@ fn main() {
 
     arr[0] = 100;
 
-    for num in arr {
+    for (num in arr) {
         num->std::string::from_int()->std::io::println();
     }
 
-    for num in arr2 {
+    for (num in arr2) {
         num->std::string::from_int()->std::io::println();
     }
 }

@@ -25,7 +25,6 @@ use crate::{
         type_parser::{Duck, TypeDefinition, TypeExpr},
         value_parser::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
-            empty_range,
         },
     },
     semantics::{
@@ -341,9 +340,11 @@ impl TypeEnv<'_> {
                 .iter_mut()
                 .find(|d| d.name == name)
                 .unwrap_or_else(|| {
-                    failure_with_occurence(format!("Unknown Struct"), span, [
-                        (format!("Struct {name} does not exist"), span),
-                    ]);
+                    failure_with_occurence(
+                        format!("Unknown Struct"),
+                        span,
+                        [(format!("Struct {name} does not exist"), span)],
+                    );
                 });
         }
 
@@ -791,7 +792,7 @@ fn build_tuples_and_ducks_type_expr_trav_fn(
                 .push(NeedsSearchResult::Tag { name: name.clone() });
         }
         TypeExpr::Struct { name, type_params } => {
-            env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
+            env.get_struct_def_with_type_params_mut(name, type_params, t.1);
         }
         TypeExpr::Array(t) => {
             out.borrow_mut().push(NeedsSearchResult::Array {
@@ -2789,7 +2790,13 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     match value_expr {
         ValueExpr::RawStruct { .. } => panic!("raw struct should not be here {value_expr:?}"),
         ValueExpr::Async(inner) => {
+            if !matches!(inner.0, ValueExpr::FunctionCall { .. }) {
+                let msg = "Can only async call a function call".to_string();
+                failure_with_occurence(msg.clone(), *span, [(msg.clone(), inner.1)]);
+            }
+
             typeresolve_value_expr((&mut inner.0, inner.1), type_env);
+
             let inner_type = TypeExpr::from_value_expr(inner.as_ref(), type_env);
 
             let channel_type = TypeExpr::from_value_expr(&(owned, *span), type_env);
@@ -2860,11 +2867,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     type_env,
                 );
             }
-
-            if !matches!(inner.0, ValueExpr::FunctionCall { .. }) {
-                let msg = "Can only async call a function call".to_string();
-                failure_with_occurence(msg.clone(), *span, [(msg.clone(), inner.1)]);
-            }
         }
         ValueExpr::Defer(inner) => {
             typeresolve_value_expr((&mut inner.0, inner.1), type_env);
@@ -2894,7 +2896,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             loop {
                 match current {
                     TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
-                        ref_type = if matches!(t.0, TypeExpr::Ref(..)) {
+                        ref_type = if ref_type == 1 || matches!(t.0, TypeExpr::Ref(..)) {
                             1
                         } else {
                             2
@@ -3012,7 +3014,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
             if let TypeExpr::Struct { name, type_params } = &target_type {
                 let mut def = type_env
-                    .get_struct_def_with_type_params_mut(name, type_params, empty_range())
+                    .get_struct_def_with_type_params_mut(name, type_params, *span)
                     .clone();
 
                 if type_env.total_structs_resolved.insert(def.name.clone()) {

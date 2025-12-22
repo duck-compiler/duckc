@@ -1,18 +1,20 @@
 use crate::{
     TypeExpr,
     emit::{types::escape_string_for_go, value::IrInstruction},
-    parse::{jsx_component_parser::JsxComponent, type_parser::Duck},
+    parse::{
+        Spanned, failure_with_occurence, jsx_component_parser::JsxComponent, type_parser::Duck,
+    },
     semantics::type_resolve::TypeEnv,
 };
 
-fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
+fn emit_duck_to_js_obj(ty: &Spanned<TypeExpr>, start_path: Vec<String>) -> String {
     fn rec(
-        ty: &TypeExpr,
+        ty: &Spanned<TypeExpr>,
         out_string: &mut String,
         out_params: &mut Vec<String>,
         current_path: Vec<String>,
     ) {
-        match ty {
+        match &ty.0 {
             TypeExpr::String(..) => {
                 out_string.push_str("\"%s\"");
                 out_params.push(format!("html.EscapeString({})", current_path.join(".")));
@@ -36,7 +38,7 @@ fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
                     out_string.push(':');
                     let mut current_path = current_path.clone();
                     current_path.push(format!("Get{}()", f.name));
-                    rec(&f.type_expr.0, out_string, out_params, current_path);
+                    rec(&f.type_expr, out_string, out_params, current_path);
                     if i != fields.len() - 1 {
                         out_string.push(',');
                     }
@@ -107,13 +109,19 @@ fn emit_duck_to_js_obj(ty: &TypeExpr, start_path: Vec<String>) -> String {
                         );
                         go_code
                     }
-                    _ => panic!("not compatible with js"),
+                    _ => {
+                        let msg = "This type is not compatbile with JavaScript";
+                        failure_with_occurence(msg, t.1, [(msg, t.1)]);
+                    }
                 });
                 out_string.push_str("%s");
 
                 out_string.push(']');
             }
-            _ => panic!("not compatible with js {ty:?}"),
+            _ => {
+                let msg = "This type is not compatbile with JavaScript";
+                failure_with_occurence(msg, ty.1, [(msg, ty.1)]);
+            }
         }
     }
     let mut s = String::new();
@@ -157,7 +165,7 @@ impl JsxComponent {
         //     .chain([final_go_str].into_iter())
         //     .collect();
 
-        let emitted_props = emit_duck_to_js_obj(&self.props_type.0, vec!["props".to_string()]);
+        let emitted_props = emit_duck_to_js_obj(&self.props_type, vec!["props".to_string()]);
 
         let props = format!("fmt.Sprintf(\"const props = {{...%s,...props2}}\", {emitted_props})");
         let all = format!(

@@ -23,7 +23,7 @@ impl IrInstruction {
                 let fun_call @ (IrInstruction::FunCall(None, ..) | IrInstruction::InlineGo(..)) =
                     d.as_ref()
                 else {
-                    panic!("can only defer a func call without result {d:?}")
+                    panic!("Compiler Bug: can only defer a func call without result {d:?}")
                 };
                 format!("defer {}", fun_call.emit_as_go())
             }
