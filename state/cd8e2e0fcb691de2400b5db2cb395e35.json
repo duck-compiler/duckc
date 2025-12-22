@@ -1,7 +1,7 @@
 {
     "id": "cd8e2e0fcb691de2400b5db2cb395e35",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 671,
+    "line_number": 672,
     "title": "check we should probably not clone here",
     "tag": "todo",
     "module_tag": "semantics",
