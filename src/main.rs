@@ -407,7 +407,12 @@ fn parse_src_file(
                     typename_reset_global_value_expr(&mut field.1.0);
                 }
             }
-            ValueExpr::RawStruct { is_global, name: _, fields, type_params } => {
+            ValueExpr::RawStruct {
+                is_global,
+                name: _,
+                fields,
+                type_params,
+            } => {
                 *is_global = false;
                 for field in fields {
                     typename_reset_global_value_expr(&mut field.1.0);
@@ -460,7 +465,7 @@ fn parse_src_file(
     let mut result = src_file.unwrap().flatten(&vec![], true);
 
     #[allow(clippy::nonminimal_bool)]
-    if !false {
+    if true {
         // <- use this if you want to test without std
         for s in &std_src_file.function_definitions {
             result.function_definitions.push(s.clone());
@@ -488,6 +493,9 @@ fn parse_src_file(
         }
         for extension_def in std_src_file.extensions_defs {
             result.extensions_defs.push(extension_def.clone());
+        }
+        for global_def in std_src_file.global_var_decls {
+            result.global_var_decls.push(global_def.clone());
         }
     }
 

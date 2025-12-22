@@ -1,0 +1,16 @@
+use std::io::println;
+
+fn main() {
+    println(f"{
+
+
+
+
+        match 1 {
+            Int @i => i.to_string(),
+            else => "no int?"
+        }
+
+
+    }");
+}
