@@ -2790,6 +2790,9 @@ fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: 
                 infer_against(r#else, req, type_env);
             }
         }
+        ValueExpr::Negate(inner) => {
+            infer_against(inner, req, type_env);
+        }
         _ => {}
     }
 }
@@ -2805,7 +2808,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             let ty = TypeExpr::from_value_expr(v, type_env);
 
             match ty {
-                TypeExpr::Int | TypeExpr::UInt | TypeExpr::Float => {}
+                TypeExpr::Int | TypeExpr::Float => {}
+                TypeExpr::UInt => {
+                    let msg = "Cannot negate unsigned ints since they have no negative";
+                    failure_with_occurence(msg, v.1, [(msg, v.1)]);
+                }
                 _ => {
                     let msg = "Can only negate numbers (Int, UInt, Float)";
                     failure_with_occurence(msg, v.1, [(msg, v.1)]);
