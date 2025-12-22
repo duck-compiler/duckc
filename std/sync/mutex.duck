@@ -1,6 +1,6 @@
 use go "sync";
 
-struct Mutex<T> = {
+struct Mutex<T> {
     inner: go "sync.Mutex",
     value: T,
 } impl {
@@ -38,4 +38,4 @@ struct Mutex<T> = {
 
         return lock_result;
     }
-};
+}

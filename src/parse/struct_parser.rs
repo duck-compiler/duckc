@@ -100,8 +100,6 @@ where
         .then_ignore(just(Token::Struct))
         .then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
         .then(generics_parser().or_not())
-        //TODO(@Apfelfrosch): Remove this from std and then remove this line
-        .then_ignore(just(Token::ControlChar('=')).or_not())
         .then_ignore(just(Token::ControlChar('{')))
         .then(
             field_parser
@@ -112,8 +110,6 @@ where
         )
         .then_ignore(just(Token::ControlChar('}')))
         .then(impl_parser)
-        //TODO(@Apfelfrosch): Remove this from std and then remove this line
-        .then_ignore(just(Token::ControlChar(';')).or_not())
         .map(
             |(((((doc_comments, attributes), identifier), generics), fields), methods)| {
                 let mut names_with_spans = HashMap::new();
@@ -372,7 +368,7 @@ pub mod tests {
     #[test]
     fn test_struct_definition_parser() {
         assert_struct_definition(
-            "struct Point = { x: Int, y: Int };",
+            "struct Point { x: Int, y: Int }",
             StructDefinition {
                 name: "Point".to_string(),
                 fields: vec![
@@ -388,7 +384,7 @@ pub mod tests {
         );
 
         assert_struct_definition(
-            "struct Empty = {};",
+            "struct Empty {}",
             StructDefinition {
                 name: "Empty".to_string(),
                 fields: vec![],
@@ -401,7 +397,7 @@ pub mod tests {
         );
 
         assert_struct_definition(
-            "struct User = { id: Int, name: String, };",
+            "struct User { id: Int, name: String, }",
             StructDefinition {
                 name: "User".to_string(),
                 fields: vec![
@@ -417,7 +413,7 @@ pub mod tests {
         );
 
         assert_struct_definition(
-            "struct Option<T> = { value: T };",
+            "struct Option<T> { value: T }",
             StructDefinition {
                 name: "Option".to_string(),
                 fields: vec![Field::new(
@@ -439,7 +435,7 @@ pub mod tests {
         );
 
         assert_struct_definition(
-            "[auto(Eq)] struct S = {};",
+            "[auto(Eq)] struct S {}",
             StructDefinition {
                 name: "S".to_string(),
                 derived: {
@@ -456,7 +452,7 @@ pub mod tests {
         );
 
         assert_struct_definition(
-            "struct Map<K, V> = { entries: Entry<K, V>[] };",
+            "struct Map<K, V> { entries: Entry<K, V>[] }",
             StructDefinition {
                 name: "Map".to_string(),
                 derived: Default::default(),
@@ -500,7 +496,7 @@ pub mod tests {
         );
 
         assert_struct_definition(
-            "/// hello\nstruct Map<K, V> = { entries: Entry<K, V>[] };",
+            "/// hello\nstruct Map<K, V> { entries: Entry<K, V>[] }",
             StructDefinition {
                 name: "Map".to_string(),
                 derived: Default::default(),

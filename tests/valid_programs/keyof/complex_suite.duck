@@ -41,10 +41,10 @@ type ComplexType = {
     tags: String[],
 };
 
-struct TestStruct = {
+struct TestStruct {
     field1: String,
     field2: Int,
-};
+}
 
 type NestedType = {
     outer: String,

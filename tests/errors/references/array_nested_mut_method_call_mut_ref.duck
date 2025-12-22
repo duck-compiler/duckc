@@ -1,4 +1,4 @@
-struct S = {} impl { mut fn m() {} };
+struct S {} impl { mut fn m() {} }
 
 fn main() {
     const arr = [&[&mut S {}]];

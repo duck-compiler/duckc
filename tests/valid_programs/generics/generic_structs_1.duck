@@ -1,6 +1,6 @@
 use std::io::{println};
 
-struct M<T> = {
+struct M<T> {
     name: T,
 } impl {
     fn y() {
@@ -62,7 +62,7 @@ struct M<T> = {
     fn gimme() -> T {
         return (fn() -> T { return self.name; })();
     }
-};
+}
 
 fn print_with_go(x: {}) {
     go {

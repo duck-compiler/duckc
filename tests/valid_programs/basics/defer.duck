@@ -1,4 +1,4 @@
-struct NeedsClose = {} impl { fn close() { std::io::println("i am being closed. (defer 0)"); } };
+struct NeedsClose {} impl { fn close() { std::io::println("i am being closed. (defer 0)"); } }
 
 fn main() {
     const needs_close = NeedsClose {};

@@ -1,4 +1,4 @@
-struct Person = {
+struct Person {
     name: String,
     r: &mut Int,
     r2: &Int,
@@ -25,9 +25,9 @@ struct Person = {
     fn b() -> &&S {
         return &&S { x: -99 };
     }
-};
+}
 
-struct S = {
+struct S {
     x: Int,
 } impl {
     fn abc() -> S {
@@ -44,7 +44,7 @@ struct S = {
     }
 
     mut fn s_mut_fn() -> &mut S { return self; }
-};
+}
 
 fn get_s() -> &&S { return &&S{x: 10000}; }
 

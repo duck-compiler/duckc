@@ -1,6 +1,6 @@
 use std::io::{debug, println};
 
-struct Option<T> = {
+struct Option<T> {
     inner: T | .empty,
 } impl {
     fn filter(f: fn(x: T) -> Bool) -> Option<T> {
@@ -51,7 +51,7 @@ struct Option<T> = {
             .empty => std::error::panic(s),
         }
     }
-};
+}
 
 fn empty_Option<T>() -> Option<T> {
     return Option<T> { inner: .empty };

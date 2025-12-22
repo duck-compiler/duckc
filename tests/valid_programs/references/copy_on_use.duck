@@ -1,10 +1,10 @@
-struct AStruct = {
+struct AStruct {
     some_str: String,
 } impl {
     fn print() {
         std::io::println(f"{self.some_str}");
     }
-};
+}
 
 fn main() {
     const instance_1 = AStruct {

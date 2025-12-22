@@ -1206,7 +1206,7 @@ mod tests {
                 },
             ),
             (
-                "struct X = {x: String};",
+                "struct X {x: String}",
                 SourceFile {
                     struct_definitions: vec![StructDefinition {
                         name: "X".into(),

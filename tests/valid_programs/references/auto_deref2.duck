@@ -1,10 +1,10 @@
-struct Person = {
+struct Person {
     name: String,
-};
+}
 
-struct PersonBox = {
+struct PersonBox {
     obj: &mut Person,
-};
+}
 
 fn main() {
     let person_1 = Person { name: "Bob" };

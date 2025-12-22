@@ -355,6 +355,7 @@ where
         |value_expr_parser: Recursive<
             dyn Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + 'src,
         >| {
+            let block_expression = block_expr_parser(make_input.clone(), value_expr_parser.clone());
             let scope_res_ident = just(Token::ScopeRes)
                 .or_not()
                 .then(
@@ -391,7 +392,7 @@ where
                             .ignore_then(params_parser)
                             .then_ignore(just(Token::ControlChar(')')))
                             .then(return_type_parser.or_not())
-                            .then(value_expr_parser.clone()),
+                            .then(block_expression.clone()),
                     )
                     .map(|(is_mut, ((params, return_type), value_expr))| {
                         ValueExpr::Lambda(
@@ -562,8 +563,6 @@ where
                 )
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
-
-            let block_expression = block_expr_parser(make_input.clone(), value_expr_parser.clone());
 
             let for_parser = just(Token::For)
                 .ignore_then(
@@ -2083,7 +2082,7 @@ mod tests {
                 },
             ),
             (
-                "(fn() fn() {1})()()",
+                "(fn() {fn() {1}})()()",
                 ValueExpr::FunctionCall {
                     target: ValueExpr::FunctionCall {
                         target: ValueExpr::Lambda(
@@ -2091,18 +2090,22 @@ mod tests {
                                 is_mut: false,
                                 params: vec![],
                                 return_type: None,
-                                value_expr: ValueExpr::Lambda(
-                                    LambdaFunctionExpr {
-                                        is_mut: false,
-                                        params: vec![],
-                                        return_type: None,
-                                        value_expr: ValueExpr::Block(vec![
-                                            ValueExpr::Int(1).into_empty_span(),
-                                        ])
-                                        .into_empty_span(),
-                                    }
+                                value_expr: ValueExpr::Block(vec![
+                                    ValueExpr::Lambda(
+                                        LambdaFunctionExpr {
+                                            is_mut: false,
+                                            params: vec![],
+                                            return_type: None,
+                                            value_expr: ValueExpr::Block(vec![
+                                                ValueExpr::Int(1).into_empty_span(),
+                                            ])
+                                            .into_empty_span(),
+                                        }
+                                        .into(),
+                                    )
+                                    .into_empty_span()
                                     .into(),
-                                )
+                                ])
                                 .into_empty_span()
                                 .into(),
                             }
@@ -2674,37 +2677,37 @@ mod tests {
                 ),
             ),
             (
-                "fn() 1",
+                "fn() {1}",
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
                         is_mut: false,
                         params: vec![],
                         return_type: None,
-                        value_expr: ValueExpr::Int(1).into_empty_span(),
+                        value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
                     }
                     .into(),
                 ),
             ),
             (
-                "fn() -> Int 1",
+                "fn() -> Int {1}",
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
                         is_mut: false,
                         params: vec![],
                         return_type: Some(TypeExpr::Int(None).into_empty_span()),
-                        value_expr: ValueExpr::Int(1).into_empty_span(),
+                        value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
                     }
                     .into(),
                 ),
             ),
             (
-                "fn(x: String) -> Int 1",
+                "fn(x: String) -> Int {1}",
                 ValueExpr::Lambda(
                     LambdaFunctionExpr {
                         is_mut: false,
                         params: vec![("x".into(), Some(TypeExpr::String(None).into_empty_span()))],
                         return_type: Some(TypeExpr::Int(None).into_empty_span()),
-                        value_expr: ValueExpr::Int(1).into_empty_span(),
+                        value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
                     }
                     .into(),
                 ),

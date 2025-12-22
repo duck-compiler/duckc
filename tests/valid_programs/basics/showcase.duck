@@ -1,13 +1,13 @@
 use std::io::{println};
 
-struct Person = {
+struct Person {
     name: String,
     age: Int,
 } impl {
     fn print_me() {
         println(f"Hello my name is {self.name} and I am {std::string::from_int(self.age)} years old");
     }
-};
+}
 
 fn other_function() {
     println("hello from other_function");

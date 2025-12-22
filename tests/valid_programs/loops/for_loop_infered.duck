@@ -1,12 +1,12 @@
-struct b = {} impl {
+struct b {} impl {
     fn a() -> Int[] {
        return [1, 2, 30];
     }
-};
+}
 
-struct ContainsArray = {
+struct ContainsArray {
     a: Int[],
-};
+}
 
 fn take_array_ref(a: &Int[]) {
     for (i in b {}.a()) {

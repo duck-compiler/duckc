@@ -1,11 +1,11 @@
-struct Counter = {
+struct Counter {
     count: Int,
 } impl {
     mut fn increment() -> Int {
         self.count = self.count + 1;
         return self.count;
     }
-};
+}
 
 fn main() {
     (&mut Counter { count: 100}).increment();

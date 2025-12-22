@@ -1,6 +1,6 @@
 use go "time";
 
-struct Channel<T> = {
+struct Channel<T> {
     inner: go "chan {T}"
 } impl {
     static fn new<T>() -> Channel<T> {
@@ -46,4 +46,4 @@ struct Channel<T> = {
             }
         } as !
     }
-};
+}

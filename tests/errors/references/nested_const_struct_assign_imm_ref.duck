@@ -1,12 +1,12 @@
-struct A = {
+struct A {
     s: String,
 } impl {
-};
+}
 
-struct B = {
+struct B {
     a: &A,
 } impl {
-};
+}
 
 fn main() {
     const b = B { a: &A { s: "text" } };

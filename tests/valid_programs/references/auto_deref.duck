@@ -1,6 +1,6 @@
-struct Person = {
+struct Person {
     name: String,
-};
+}
 
 fn main() {
     let person_1 = Person { name: "Bob" };

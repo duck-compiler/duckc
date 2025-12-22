@@ -1,6 +1,6 @@
 use ::{Opt};
 
-struct ArrayList<T> = {
+struct ArrayList<T> {
     elems: T[]
 } impl {
     static fn new<T>() -> ArrayList<T> {
@@ -151,5 +151,4 @@ struct ArrayList<T> = {
         }
         return result;
     }
-
-};
+}

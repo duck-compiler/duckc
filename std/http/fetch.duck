@@ -15,7 +15,7 @@ fn http_header_to_string(header: HttpHeader) -> String {
     };
 }
 
-struct Fetch = {
+struct Fetch {
     method: FetchMethod,
     url: String,
     body: ::Opt<String>,
@@ -102,7 +102,7 @@ struct Fetch = {
             return string(body)
         } as !
     }
-};
+}
 
 fn fetch(method: FetchMethod, url: String) -> Fetch {
     const headers_map: go "map[string]string" =

@@ -1,23 +1,23 @@
 use std::io::{println};
 
 [auto(Eq, ToString, Clone, Hash, Ord)]
-struct Other = {
+struct Other {
     x: Int,
 
     z: Int[],
-};
+}
 
 [auto(Eq, ToString, Clone, Hash, Ord)]
-struct S = {
+struct S {
     o: Other,
-};
+}
 
-struct ManualToString = {} impl {
+struct ManualToString {} impl {
     fn to_string() -> String {
         println("manually implemented to string was called");
         return "ManualToString";
     }
-};
+}
 
 fn give_me_a_tup() -> (String, (((),),)) {
     ("test_tup", ((((),),)))

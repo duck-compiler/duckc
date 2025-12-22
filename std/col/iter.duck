@@ -1,6 +1,6 @@
 use ::col::{ArrayList};
 
-struct Iter<T> = {
+struct Iter<T> {
     next_fn: mut fn() -> T | .no_next_elem,
 } impl {
     static fn from<T>(next_fn: mut fn() -> T | .no_next_elem) -> Iter<T> {
@@ -114,4 +114,4 @@ struct Iter<T> = {
 
         return arr;
     }
-};
+}
