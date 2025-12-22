@@ -617,7 +617,7 @@ where
                 .boxed();
 
             let int = select_ref! { Token::IntLiteral(i) => *i }
-                .map_with(|x, e| ValueExpr::Int(x, None))
+                .map(|x| ValueExpr::Int(x, None))
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
