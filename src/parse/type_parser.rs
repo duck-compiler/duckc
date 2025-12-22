@@ -55,6 +55,7 @@ pub enum TypeExpr {
     Tag(String),
     String(Option<String>),
     Int(Option<i64>),
+    UInt,
     Bool(Option<bool>),
     Char,
     Float,
@@ -86,6 +87,7 @@ impl TypeExpr {
         let param2 = &format!("({param2})");
         match self {
             TypeExpr::Int(..) => format!("Int_Ord({param1}, &{param2})"),
+            TypeExpr::UInt => format!("UInt_Ord({param1}, &{param2})"),
             TypeExpr::Float => format!("Float_Ord({param1}, &{param2})"),
             TypeExpr::Bool(..) => format!("Bool_Ord({param1}, &{param2})"),
             TypeExpr::Char => format!("Char_Ord({param1}, &{param2})"),
@@ -128,6 +130,7 @@ impl TypeExpr {
             | TypeExpr::Float
             | TypeExpr::Bool(..)
             | TypeExpr::Char
+            | TypeExpr::UInt
             | TypeExpr::String(..) => format!("{param1} == {param2}"),
             TypeExpr::Tuple(..) => format!("{param1}.eq(&{param2})"),
             TypeExpr::Array(..) => format!(
@@ -138,16 +141,19 @@ impl TypeExpr {
             TypeExpr::Struct { .. } => format!("{param1}.eq(&{param2})"),
             TypeExpr::Tag(..) => String::from("true"),
             TypeExpr::Or(t) => {
-                let mut go_code = format!(r#"
+                let mut go_code = format!(
+                    r#"
                     var p1 any = {param1}
                     var p2 any = {param2}
 
-                "#);
+                "#
+                );
 
                 for t in t {
                     let conc_type = t.0.as_go_type_annotation(type_env);
                     go_code.push('\n');
-                    go_code.push_str(&format!(r#"
+                    go_code.push_str(&format!(
+                        r#"
                         switch p1.(type) {{
                         case {conc_type}:
                             switch p2.(type) {{
@@ -155,7 +161,8 @@ impl TypeExpr {
                                 return true
                             }}
                         }}
-                    "#));
+                    "#
+                    ));
                 }
 
                 go_code.push_str("\nreturn false");
@@ -189,6 +196,7 @@ impl TypeExpr {
 
         match self {
             TypeExpr::Int(..) => format!("Int_Hash({param1})"),
+            TypeExpr::UInt => format!("UInt_Hash({param1})"),
             TypeExpr::Float => format!("Float_Hash({param1})"),
             TypeExpr::Bool(..) => format!("Bool_Hash({param1})"),
             TypeExpr::String(..) => format!("String_Hash({param1})"),
@@ -224,6 +232,7 @@ impl TypeExpr {
         let param1 = &format!("({param1})");
         match self {
             TypeExpr::Int(..)
+            | TypeExpr::UInt
             | TypeExpr::Float
             | TypeExpr::Bool(..)
             | TypeExpr::Char
@@ -286,6 +295,7 @@ impl TypeExpr {
         match self {
             TypeExpr::String(..) => param1.to_string(),
             TypeExpr::Int(..) => format!("strconv.Itoa({param1})"),
+            TypeExpr::UInt => format!("fmt.Sprintf(\"%d\", {param1})"),
             TypeExpr::Float => format!("fmt.Sprintf(\"%f\", {param1})"),
             TypeExpr::Bool(..) => format!("fmt.Sprintf(\"%t\", {param1})"),
             TypeExpr::Char => format!("fmt.Sprintf(\"%c\", {param1})"),
@@ -297,6 +307,31 @@ impl TypeExpr {
             // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
             TypeExpr::Struct { .. } => format!("{param1}.to_string()"),
             TypeExpr::Tag(t) => format!(r#"fmt.Sprintf(".{t}")"#),
+            TypeExpr::Or(t) => {
+                let mut go_code = format!(
+                    r#"
+                    var p1 any = {param1}
+
+                "#
+                );
+
+                for t in t {
+                    let conc_type = t.0.as_go_type_annotation(type_env);
+                    go_code.push('\n');
+                    go_code.push_str(&format!(
+                        r#"
+                        switch p1.(type) {{
+                        case {conc_type}:
+                            return {}
+                        }}
+                    "#,
+                        t.0.call_to_string("p1", type_env)
+                    ));
+                }
+
+                go_code.push_str("\nreturn \"\"");
+                format!("func() string {{ {go_code} }}()")
+            }
             TypeExpr::Ref(inner) | TypeExpr::RefMut(inner) => {
                 let mut derefs = 1;
                 let mut inner = inner.as_ref().clone();
@@ -329,6 +364,7 @@ impl TypeExpr {
                         .all(|f| f.type_expr.0.implements_to_string(type_env))
             }
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_to_string(type_env)),
+            TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_to_string(type_env)),
             TypeExpr::Struct { name, type_params } => {
                 let def =
                     type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
@@ -345,6 +381,7 @@ impl TypeExpr {
             | TypeExpr::Bool(..)
             | TypeExpr::Char
             | TypeExpr::Float
+            | TypeExpr::UInt
             | TypeExpr::Tag(..) => true,
             _ => false,
         }
@@ -376,6 +413,7 @@ impl TypeExpr {
             | TypeExpr::String(..)
             | TypeExpr::Bool(..)
             | TypeExpr::Char
+            | TypeExpr::UInt
             | TypeExpr::Float => true,
             _ => false,
         }
@@ -408,6 +446,7 @@ impl TypeExpr {
             | TypeExpr::Bool(..)
             | TypeExpr::Char
             | TypeExpr::Float
+            | TypeExpr::UInt
             | TypeExpr::Tag(..) => true,
             _ => false,
         }
@@ -441,6 +480,7 @@ impl TypeExpr {
             | TypeExpr::String(..)
             | TypeExpr::Bool(..)
             | TypeExpr::Char
+            | TypeExpr::UInt
             | TypeExpr::Float => true,
             _ => false,
         }
@@ -472,6 +512,7 @@ impl TypeExpr {
             | TypeExpr::Bool(..)
             | TypeExpr::Char
             | TypeExpr::Float
+            | TypeExpr::UInt
             | TypeExpr::Tag(..) => true,
             _ => false,
         }
@@ -487,6 +528,7 @@ impl TypeExpr {
             | TypeExpr::Fun(..)
             | TypeExpr::Tag(..)
             | TypeExpr::Html
+            | TypeExpr::UInt
             | TypeExpr::Never
             | TypeExpr::Char => true,
             TypeExpr::Tuple(fields) | TypeExpr::Or(fields) => fields
@@ -671,6 +713,7 @@ where
                 .map(
                     |((is_global, identifier), type_params)| match identifier[0].as_str() {
                         "Int" => TypeExpr::Int(None),
+                        "UInt" => TypeExpr::UInt,
                         "Float" => TypeExpr::Float,
                         "Bool" => TypeExpr::Bool(None),
                         "String" => TypeExpr::String(None),
@@ -881,6 +924,7 @@ where
                 .map(
                     |((is_global, identifier), type_params)| match identifier[0].as_str() {
                         "Int" => TypeExpr::Int(None),
+                        "UInt" => TypeExpr::UInt,
                         "Float" => TypeExpr::Float,
                         "Bool" => TypeExpr::Bool(None),
                         "String" => TypeExpr::String(None),
@@ -1147,6 +1191,7 @@ impl Display for TypeExpr {
                     String::from("")
                 }
             ),
+            TypeExpr::UInt => write!(f, "UInt"),
             TypeExpr::Bool(b) => write!(
                 f,
                 "Bool{}",

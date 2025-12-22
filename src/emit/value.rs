@@ -424,6 +424,38 @@ fn walk_access_raw(
                                 flag = Some((format!(r#"fmt.Sprintf("%d", "#), stars_count, false));
                                 skip = true;
                             }
+                            TypeExpr::UInt => {
+                                flag = Some((format!(r#"fmt.Sprintf("%d", "#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Or(t) => {
+                                let mut go_code = format!(
+                                    r#"
+                                    var p1 any = param1
+
+                                "#
+                                );
+
+                                for t in t {
+                                    let conc_type = t.0.as_go_type_annotation(type_env);
+                                    go_code.push('\n');
+                                    go_code.push_str(&format!(
+                                        r#"
+                                        switch p1.(type) {{
+                                        case {conc_type}:
+                                            return {}
+                                        }}
+                                    "#,
+                                        t.0.call_to_string("p1", type_env)
+                                    ));
+                                }
+
+                                go_code.push_str("\nreturn \"\"");
+                                let c = format!("func(param1 any) string {{ {go_code} }}(");
+
+                                flag = Some((c, stars_count, false));
+                                skip = true;
+                            }
                             TypeExpr::Bool(..) => {
                                 flag = Some((format!(r#"fmt.Sprintf("%t", "#), stars_count, false));
                                 skip = true;
@@ -466,6 +498,10 @@ fn walk_access_raw(
                                 flag = Some((format!(r#"IDENTITY("#), stars_count, false));
                                 skip = true;
                             }
+                            TypeExpr::UInt => {
+                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
+                                skip = true;
+                            }
                             TypeExpr::Bool(..) => {
                                 flag = Some((format!(r#"IDENTITY("#), stars_count, false));
                                 skip = true;
@@ -504,6 +540,10 @@ fn walk_access_raw(
                                 flag = Some((format!(r#"Int_Hash("#), stars_count, false));
                                 skip = true;
                             }
+                            TypeExpr::UInt => {
+                                flag = Some((format!(r#"UInt_Hash("#), stars_count, false));
+                                skip = true;
+                            }
                             TypeExpr::Bool(..) => {
                                 flag = Some((format!(r#"Bool_Hash("#), stars_count, false));
                                 skip = true;
@@ -540,6 +580,10 @@ fn walk_access_raw(
                             }
                             TypeExpr::Int(..) => {
                                 flag = Some((format!(r#"Int_Ord("#), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::UInt => {
+                                flag = Some((format!(r#"UInt_Ord("#), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Bool(..) => {

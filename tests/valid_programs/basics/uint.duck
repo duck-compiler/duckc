@@ -1,0 +1,10 @@
+use std::io::println;
+
+fn main() {
+    const x: UInt = 100;
+    const z: UInt = 102;
+    x.to_string()->println();
+    x.hash().to_string()->println();
+    x.ord(&z).to_string()->println();
+    x.clone().to_string()->println();
+}
