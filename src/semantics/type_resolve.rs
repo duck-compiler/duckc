@@ -861,6 +861,7 @@ where
         | TypeExpr::Tag(..)
         | TypeExpr::TypeOf(..)
         | TypeExpr::Int(..)
+        | TypeExpr::UInt
         | TypeExpr::String(..)
         | TypeExpr::Float
         | TypeExpr::Char
@@ -1543,6 +1544,7 @@ fn replace_generics_in_type_expr(
     type_env: &mut TypeEnv<'_>,
 ) {
     match expr {
+        TypeExpr::UInt => {}
         TypeExpr::Statement | TypeExpr::Never => {}
         TypeExpr::TemplParam(name) => {
             if let Some(replacement) = set_params.get(name).cloned() {
@@ -1969,6 +1971,7 @@ pub fn is_const_var(v: &ValueExpr) -> bool {
 
 pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
+        TypeExpr::UInt => {}
         TypeExpr::Statement | TypeExpr::Never => {}
         TypeExpr::Ref(t) | TypeExpr::RefMut(t) => sort_fields_type_expr(&mut t.0),
         TypeExpr::Html => {}
@@ -2933,7 +2936,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             if let ValueExpr::Variable(_, _, _, _, needs_copy) = &mut v.0 {
                 *needs_copy = false;
             }
-            typeresolve_value_expr((&mut v.0, v.1), type_env)
+            typeresolve_value_expr((&mut v.0, v.1), type_env);
         }
 
         ValueExpr::HtmlString(contents) => {

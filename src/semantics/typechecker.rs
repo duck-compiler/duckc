@@ -1093,11 +1093,14 @@ impl TypeExpr {
                     fields.len() > tuple_access_idx
                 } else {
                     if fields.len() == 0 {
-                        println!("{} it could be that the function you're trying to call is missing it's return, maybe that's why it's an empty tuple", Tag::Note)
+                        println!(
+                            "{} it could be that the function you're trying to call is missing it's return, maybe that's why it's an empty tuple",
+                            Tag::Note
+                        )
                     }
                     false
                 }
-            },
+            }
             Self::Struct {
                 name: struct_name,
                 type_params,
@@ -1196,7 +1199,10 @@ impl TypeExpr {
 
         if self.implements_ord(type_env) && field_name.as_str() == "ord" {
             return Some(TypeExpr::Fun(
-                vec![],
+                vec![(
+                    "other".to_string().into(),
+                    TypeExpr::Ref(self.clone().into_empty_span().into()).into_empty_span(),
+                )],
                 Box::new(TypeExpr::ord_result().into_empty_span()),
                 false,
             ));
@@ -1313,7 +1319,7 @@ impl TypeExpr {
     }
 
     pub fn is_number(&self) -> bool {
-        return *self == TypeExpr::Float || matches!(*self, TypeExpr::Int(..));
+        return *self == TypeExpr::Float || matches!(*self, TypeExpr::Int(..)) || matches!(*self, TypeExpr::UInt);
     }
 
     pub fn is_tuple(&self) -> bool {
@@ -1566,6 +1572,17 @@ pub fn check_type_compatability_full(
     }
 
     match &required_type.0 {
+        TypeExpr::UInt => {
+            if !given_type.0.is_number() {
+                fail_requirement(
+                    "this expects a uint.".to_string(),
+                    format!(
+                        "this is not a uint. it's a {}",
+                        format!("{}", given_type.0).bright_yellow()
+                    ),
+                )
+            }
+        }
         TypeExpr::Statement => panic!("Compiler Bug: statement should never be required"),
         TypeExpr::TemplParam(..) | TypeExpr::Never => return,
         TypeExpr::NamedDuck { name, type_params } => {

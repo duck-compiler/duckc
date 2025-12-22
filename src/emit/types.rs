@@ -956,11 +956,30 @@ pub fn emit_type_definitions(
     ));
 
     result.push(IrInstruction::FunDef(
+        "UInt_Hash".to_string(),
+        None,
+        vec![("self".to_string(), "uint".to_string())],
+        Some("uint".to_string()),
+        vec![IrInstruction::InlineGo("return self".to_string())],
+    ));
+
+    result.push(IrInstruction::FunDef(
         "Int_Ord".to_string(),
         None,
         vec![
             ("self".to_string(), "int".to_string()),
             ("other".to_string(), "*int".to_string()),
+        ],
+        Some("any".to_string()),
+        vec![IrInstruction::InlineGo("if self < *other { return Tag__smaller{} } else if self > *other { return Tag__greater{} } else { return Tag__equal{} }".to_string())],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "UInt_Ord".to_string(),
+        None,
+        vec![
+            ("self".to_string(), "uint".to_string()),
+            ("other".to_string(), "*uint".to_string()),
         ],
         Some("any".to_string()),
         vec![IrInstruction::InlineGo("if self < *other { return Tag__smaller{} } else if self > *other { return Tag__greater{} } else { return Tag__equal{} }".to_string())],
@@ -1146,6 +1165,7 @@ impl TypeExpr {
             TypeExpr::Bool(..) => "bool".to_string(),
             TypeExpr::Int(..) => "int".to_string(),
             TypeExpr::Float => "float32".to_string(),
+            TypeExpr::UInt => "uint".to_string(),
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String(..) => "string".to_string(),
             TypeExpr::Go(identifier) => identifier.clone(),
@@ -1221,6 +1241,7 @@ impl TypeExpr {
             TypeExpr::Any => "Any".to_string(),
             TypeExpr::Bool(..) => "bool".to_string(),
             TypeExpr::Int(..) => "int".to_string(),
+            TypeExpr::UInt => "uint".to_string(),
             TypeExpr::Float => "float32".to_string(),
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
@@ -1325,6 +1346,7 @@ impl TypeExpr {
             TypeExpr::Any => "Any".to_string(),
             TypeExpr::Bool(..) => "bool".to_string(),
             TypeExpr::Int(..) => "int".to_string(),
+            TypeExpr::UInt => "uint".to_string(),
             TypeExpr::Float => "float32".to_string(),
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String(..) => "string".to_string(),
