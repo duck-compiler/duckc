@@ -33,7 +33,7 @@ fn main() {
     int8 { chan: 300 }.uintptr("A", "B", string { string: "C" });
     std::string::from_int(int)->println();
 
-    for var in &mut [1, 2, 3, 4] {
+    for (var in &mut [1, 2, 3, 4]) {
         *var = *var * 10;
         std::string::from_int(*var)->println();
     }

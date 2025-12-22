@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use chumsky::Parser;
 use chumsky::input::BorrowInput;
@@ -59,7 +59,8 @@ where
             (just(Token::Mut)
                 .or(just(Token::Static))
                 .or_not()
-                .then(function_definition_parser(make_input)))
+                .then(function_definition_parser(make_input))
+                .map_with(|x, e| (x, e.span())))
             .repeated()
             .at_least(0)
             .collect::<Vec<_>>(),
@@ -99,22 +100,60 @@ where
         .then_ignore(just(Token::Struct))
         .then(select_ref! { Token::Ident(identifier) => identifier.to_string() })
         .then(generics_parser().or_not())
-        .then_ignore(just(Token::ControlChar('=')))
+        //TODO(@Apfelfrosch): Remove this from std and then remove this line
+        .then_ignore(just(Token::ControlChar('=')).or_not())
         .then_ignore(just(Token::ControlChar('{')))
         .then(
             field_parser
+                .map_with(|x, e| (x, e.span()))
                 .separated_by(just(Token::ControlChar(',')))
                 .allow_trailing()
-                .collect(),
+                .collect::<Vec<_>>(),
         )
         .then_ignore(just(Token::ControlChar('}')))
         .then(impl_parser)
-        .then_ignore(just(Token::ControlChar(';')))
+        //TODO(@Apfelfrosch): Remove this from std and then remove this line
+        .then_ignore(just(Token::ControlChar(';')).or_not())
         .map(
             |(((((doc_comments, attributes), identifier), generics), fields), methods)| {
+                let mut names_with_spans = HashMap::new();
+
+                for f in &fields {
+                    if let Some(decl_span) = names_with_spans.get(&f.0.name) {
+                        let msg = format!("{} declared multiple times", f.0.name);
+
+                        let declared_here_again_msg = format!("You declared {} here", f.0.name);
+                        let other_msg = format!("But you already declared {} here", f.0.name);
+
+                        failure_with_occurence(
+                            msg.clone(),
+                            f.1,
+                            [(declared_here_again_msg, f.1), (other_msg, *decl_span)],
+                        );
+                    }
+                    names_with_spans.insert(f.0.name.clone(), f.1);
+                }
+
+                for m in &methods {
+                    if let Some(decl_span) = names_with_spans.get(&m.0.1.name) {
+                        let msg = format!("{} declared multiple times", m.0.1.name);
+
+                        let declared_here_again_msg = format!("You declared {} here", m.0.1.name);
+                        let other_msg = format!("But you already declared {} here", m.0.1.name);
+
+                        failure_with_occurence(
+                            msg.clone(),
+                            m.1,
+                            [(declared_here_again_msg, m.1), (other_msg, *decl_span)],
+                        );
+                    }
+                    names_with_spans.insert(m.0.1.name.clone(), m.1);
+                }
+
                 let (mut_methods_names, methods, static_methods) = methods.into_iter().fold(
                     (HashSet::new(), Vec::new(), Vec::new()),
-                    |(mut mut_method_names, mut methods, mut static_methods), (modifier, elem)| {
+                    |(mut mut_method_names, mut methods, mut static_methods),
+                     ((modifier, elem), _)| {
                         if modifier.as_ref().is_some_and(|v| matches!(v, Token::Mut)) {
                             mut_method_names.insert(elem.name.clone());
                         }
@@ -132,12 +171,8 @@ where
                     },
                 );
 
-                let mut names = HashSet::new();
-
-                let mut is_name_available = |s: String| -> bool { names.insert(s) };
-                let fields: Vec<Field> = fields;
-
-                let mut derived = HashSet::new();
+                let fields: Vec<Field> = fields.into_iter().map(|(f, _)| f).collect();
+                let mut derived = HashMap::new();
 
                 if let Some(attributes) = attributes {
                     for attribute in attributes {
@@ -155,25 +190,25 @@ where
                                         failure_with_occurence(msg, span, [(msg, span)]);
                                     }
                                 };
-                                if !derived.insert(a) {
-                                    let msg = &format!("Duplicate with declaration {i}");
-                                    failure_with_occurence(msg, span, [(msg, span)]);
+                                if let Some(decl_span) = derived.get(&a) {
+                                    let msg = format!("{i} already declared");
+                                    let other_msg = format!("{i} already declared here");
+                                    failure_with_occurence(
+                                        msg.clone(),
+                                        span,
+                                        [(msg, span), (other_msg, *decl_span)],
+                                    );
                                 }
+                                derived.insert(a, span);
                             }
                         }
                     }
                 }
 
-                for name in fields
-                    .iter()
-                    .map(|f| &f.name)
-                    .chain(methods.iter().map(|m| &m.name))
-                    .chain(static_methods.iter().map(|m| &m.name))
-                {
-                    if !is_name_available(name.clone()) {
-                        panic!("Error: {name} already declared in {identifier}");
-                    }
-                }
+                let derived = derived.into_iter().fold(HashSet::new(), |mut acc, (e, _)| {
+                    acc.insert(e);
+                    acc
+                });
 
                 (
                     StructDefinition {

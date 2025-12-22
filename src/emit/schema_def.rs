@@ -252,7 +252,7 @@ impl SchemaDefinition {
     }
 
     pub fn emit_from_json_fn_from_duck(duck_type_expr: &TypeExpr, type_env: &mut TypeEnv, to_ir: &mut ToIr) -> IrInstruction {
-        let TypeExpr::Duck(duck) = &duck_type_expr else { panic!("should only be called with TypeExpr::Duck") };
+        let TypeExpr::Duck(duck) = &duck_type_expr else { panic!("Compiler Bug: should only be called with TypeExpr::Duck") };
         let sd = SchemaDefinition {
             name: duck_type_expr.as_go_type_annotation(type_env),
             fields: duck.fields.iter().map(|field| SchemaField {

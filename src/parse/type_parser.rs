@@ -116,7 +116,7 @@ impl TypeExpr {
                     type_env,
                 )
             }
-            _ => panic!("cannot call eq method on {self:?}"),
+            _ => panic!("Compiler Bug: cannot call ord method on {self:?}"),
         }
     }
 
@@ -180,7 +180,7 @@ impl TypeExpr {
                     type_env,
                 )
             }
-            _ => panic!("cannot call eq method on {self:?}"),
+            _ => panic!("Compilre Bug: cannot call eq method on {self:?}"),
         }
     }
 
@@ -216,7 +216,7 @@ impl TypeExpr {
                     .0
                     .call_to_string(&format!("{derefs_str}{param1}"), type_env)
             }
-            _ => panic!("cant call hash method on {self:?}"),
+            _ => panic!("Compiler Bug: cannot call hash method on {self:?}"),
         }
     }
 
@@ -277,7 +277,7 @@ impl TypeExpr {
 
                 format!("func() {self_type_anno} {{ {out_go} }}()")
             }
-            _ => panic!("cant call to_string method on {self:?}"),
+            _ => panic!("Compiler Bug: cannot call clone method on {self:?}"),
         }
     }
 
@@ -314,7 +314,7 @@ impl TypeExpr {
                     .0
                     .call_to_string(&format!("{derefs_str}{param1}"), type_env)
             }
-            _ => panic!("cant call to_string method on {self:?}"),
+            _ => panic!("Compiler Bug: cannot call to_string method on {self:?}"),
         }
     }
 

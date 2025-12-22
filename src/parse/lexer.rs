@@ -269,6 +269,7 @@ pub fn special_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a,
 
 pub fn duckx_parse_html_string<'a>(
     duckx_lexer: impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> + Clone + 'a,
+    _context: Context,
 ) -> impl Parser<'a, &'a str, Token, extra::Err<Rich<'a, char>>> + Clone {
     recursive(|e| {
         opening_tag()
@@ -358,14 +359,24 @@ pub fn duckx_contents_in_curly_braces<'a>(
     lexer: impl Parser<'a, &'a str, Spanned<Token>, extra::Err<Rich<'a, char>>> + Clone + 'a,
 ) -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Rich<'a, char>>> + Clone {
     recursive(|duckx_lexer| {
-        just("{")
+        let context = Context {
+            file_name,
+            file_contents,
+        };
+        lexer
+            .clone()
+            .filter(|c: &Spanned<Token>| matches!(c.0, Token::ControlChar('{')))
             .then(
                 choice((
                     just("{").rewind().ignore_then(duckx_lexer.clone()),
-                    special_tag().map(|x| {
+                    special_tag().map_with(move |x, e| {
                         vec![(
                             Token::HtmlString(vec![HtmlStringContents::String(x.to_string())]),
-                            empty_range(),
+                            SS {
+                                start: e.span().start,
+                                end: e.span().end,
+                                context,
+                            },
                         )]
                     }),
                     opening_self_closing()
@@ -382,7 +393,7 @@ pub fn duckx_contents_in_curly_braces<'a>(
                             .repeated()
                             .collect::<Vec<_>>(),
                         )
-                        .map(|(x1, x2)| {
+                        .map_with(move |(x1, x2), e| {
                             let mut new_out = Vec::new();
                             new_out.push(HtmlStringContents::String(x1));
                             for c in x2 {
@@ -423,28 +434,26 @@ pub fn duckx_contents_in_curly_braces<'a>(
                                 final_out.push(HtmlStringContents::String(s_buf));
                             }
 
-                            vec![(Token::HtmlString(final_out), empty_range())]
-                            // vec![(
-                            //     Token::HtmlString(vec![HtmlStringContents::String(dbg!(format!(
-                            //         "{x1}{x2}/>"
-                            //     )))]),
-                            //     empty_range(),
-                            // )]
+                            vec![(
+                                Token::HtmlString(final_out),
+                                SS {
+                                    start: e.span().start,
+                                    end: e.span().end,
+                                    context,
+                                },
+                            )]
                         })
                         .then_ignore(just("/>")),
                     opening_tag()
                         .rewind()
-                        .ignore_then(duckx_parse_html_string(duckx_lexer.clone()))
+                        .ignore_then(duckx_parse_html_string(duckx_lexer.clone(), context))
                         .map_with(move |x, e| {
                             vec![(
                                 x,
                                 SS {
                                     start: e.span().start,
                                     end: e.span().end,
-                                    context: Context {
-                                        file_name,
-                                        file_contents,
-                                    },
+                                    context,
                                 },
                             )]
                         }),
@@ -458,11 +467,19 @@ pub fn duckx_contents_in_curly_braces<'a>(
                 .repeated()
                 .collect::<Vec<_>>(),
             )
-            .then(just("}"))
-            .map(|((_, x), _)| {
+            .then(just("}").map_with(|_, e| e.span()))
+            .map(move |((a, x), b_span)| {
                 let mut v = x.into_iter().flatten().collect::<Vec<_>>();
-                v.insert(0, (Token::ControlChar('{'), empty_range()));
-                v.push((Token::ControlChar('}'), empty_range()));
+                v.insert(0, a);
+                let b = (
+                    Token::ControlChar('}'),
+                    SS {
+                        start: b_span.start,
+                        end: b_span.end,
+                        context,
+                    },
+                );
+                v.push(b);
                 v
             })
     })

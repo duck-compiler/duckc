@@ -1,4 +1,5 @@
 use crate::{
+    Tag,
     parse::{
         Context, SS, Spanned, failure_with_occurence,
         function_parser::LambdaFunctionExpr,
@@ -6,6 +7,7 @@ use crate::{
         source_file_parser::SourceFile,
         type_parser::type_expression_parser,
     },
+    parse_failure,
     semantics::type_resolve::TypeEnv,
 };
 
@@ -297,6 +299,50 @@ impl ValueExpr {
     }
 }
 
+pub fn block_expr_parser<'src, I, M>(
+    _make_input: M,
+    value_expr_parser: impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>>
+    + Clone
+    + 'src,
+) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone + 'src
+where
+    I: BorrowInput<'src, Token = Token, Span = SS>,
+    M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
+{
+    let block_expression = value_expr_parser
+        .clone()
+        .then(just(Token::ControlChar(';')).or_not())
+        .repeated()
+        .collect::<Vec<_>>()
+        .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
+        .map_with(|mut exprs, e| {
+            if exprs.len() >= 2 {
+                for (expr, has_semi) in &exprs[..exprs.len() - 1] {
+                    if expr.0.needs_semicolon() && has_semi.is_none() {
+                        failure_with_occurence(
+                            "This expression needs a semicolon",
+                            expr.1,
+                            [(
+                                "This expression needs a semicolon at the end".to_string(),
+                                expr.1,
+                            )],
+                        );
+                    }
+                }
+            }
+
+            if !exprs.is_empty() && exprs.last().unwrap().1.is_some() {
+                exprs.push(((empty_tuple(), exprs.last().unwrap().0.1), None));
+            }
+
+            (
+                ValueExpr::Block(exprs.into_iter().map(|(expr, _)| expr).collect()),
+                e.span(),
+            )
+        });
+    block_expression
+}
+
 pub fn value_expr_parser<'src, I, M>(
     make_input: M,
 ) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone + 'src
@@ -517,42 +563,19 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
+            let block_expression = block_expr_parser(make_input.clone(), value_expr_parser.clone());
+
             let for_parser = just(Token::For)
                 .ignore_then(
                     just(Token::Mut)
                         .or_not()
-                        .then(select_ref! { Token::Ident(ident) => ident.to_owned() }),
+                        .then(select_ref! { Token::Ident(ident) => ident.to_owned() })
+                        .then_ignore(just(Token::In))
+                        .then(value_expr_parser.clone())
+                        .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
                 )
-                .then_ignore(just(Token::In))
-                .then(choice((
-                    value_expr_parser.clone().then(
-                        just(Token::ControlChar('{'))
-                            .rewind()
-                            .ignore_then(value_expr_parser.clone()),
-                    ),
-                    struct_expression.clone().map(|(s, span)| {
-                        let ValueExpr::RawStruct {
-                            is_global,
-                            name,
-                            fields,
-                            type_params,
-                        } = s
-                        else {
-                            panic!("not a struct? {s:?}")
-                        };
-
-                        if fields.is_empty() && type_params.is_empty() {
-                            (
-                                (ValueExpr::RawVariable(is_global, name), span),
-                                (ValueExpr::Block(vec![]), span),
-                            )
-                        } else {
-                            let msg = "Wrap this struct expression inside parantheses";
-                            failure_with_occurence(msg, span, [(msg, span)]);
-                        }
-                    }),
-                )))
-                .map(|((is_mut, ident), (target, block))| ValueExpr::For {
+                .then(block_expression.clone())
+                .map(|(((is_mut, ident), target), block)| ValueExpr::For {
                     ident: (ident, is_mut.is_none(), None),
                     target: Box::new(target),
                     block: Box::new(block),
@@ -574,43 +597,11 @@ where
                 .map_with(|x, e| (x, e.span()))
                 .boxed();
 
-            let block_expression = value_expr_parser
-                .clone()
-                .then(just(Token::ControlChar(';')).or_not())
-                .repeated()
-                .collect::<Vec<_>>()
-                .delimited_by(just(Token::ControlChar('{')), just(Token::ControlChar('}')))
-                .map_with(|mut exprs, e| {
-                    if exprs.len() >= 2 {
-                        for (expr, has_semi) in &exprs[..exprs.len() - 1] {
-                            if expr.0.needs_semicolon() && has_semi.is_none() {
-                                failure_with_occurence(
-                                    "This expression needs a semicolon",
-                                    expr.1,
-                                    [(
-                                        "This expression needs a semicolon at the end".to_string(),
-                                        expr.1,
-                                    )],
-                                );
-                            }
-                        }
-                    }
-
-                    if !exprs.is_empty() && exprs.last().unwrap().1.is_some() {
-                        exprs.push(((empty_tuple(), exprs.last().unwrap().0.1), None));
-                    }
-
-                    (
-                        ValueExpr::Block(exprs.into_iter().map(|(expr, _)| expr).collect()),
-                        e.span(),
-                    )
-                })
-                .boxed();
-
             let if_condition = value_expr_parser
                 .clone()
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                 .boxed();
+
             let if_body = block_expression.clone();
             let if_with_condition_and_body = just(Token::If)
                 .ignore_then(if_condition.clone())
@@ -713,12 +704,42 @@ where
                                         res.push(ValFmtStringContents::String(s.to_owned()))
                                     }
                                     FmtStringContents::Tokens(s) => {
+                                        let span = SS {
+                                            start: s[0].1.start,
+                                            end: s.last().unwrap().1.end,
+                                            context: s[0].1.context,
+                                        };
                                         if !s.is_empty() {
-                                            let expr = value_expr_parser
-                                                .parse(make_input(empty_range(), s.as_slice()))
-                                                .into_result()
-                                                .unwrap_or_else(|_| panic!("invalid code {s:?}"));
-                                            res.push(ValFmtStringContents::Expr(expr));
+                                            let (expr, expr_errors) = value_expr_parser
+                                                .parse(make_input(span, s.as_slice()))
+                                                .into_output_errors();
+
+                                            expr_errors.into_iter().for_each(|e| {
+                                                parse_failure(
+                                                    span.context.file_name,
+                                                    &Rich::<&str, SS>::custom(
+                                                        SS {
+                                                            start: e.span().start,
+                                                            end: e.span().end,
+                                                            context: Context {
+                                                                file_name: span.context.file_name,
+                                                                file_contents: span
+                                                                    .context
+                                                                    .file_contents,
+                                                            },
+                                                        },
+                                                        format!(
+                                                            "{}{} {}",
+                                                            Tag::Parser,
+                                                            Tag::Err,
+                                                            e.reason()
+                                                        ),
+                                                    ),
+                                                    span.context.file_contents,
+                                                );
+                                            });
+
+                                            res.push(ValFmtStringContents::Expr(expr.unwrap()));
                                         }
                                     }
                                 }

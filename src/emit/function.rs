@@ -32,7 +32,7 @@ impl FunctionDefintion {
     ) -> IrInstruction {
         let ValueExpr::Return(Some(what)) = &self.value_expr.0 else {
             panic!(
-                "every function needs to return something {} {:?}",
+                "Compiler Bug: every function needs to return something {} {:?}",
                 self.name, self.value_expr.0
             )
         };
