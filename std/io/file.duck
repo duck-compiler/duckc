@@ -2,7 +2,7 @@ use go "io";
 use go "bufio";
 use ::col::{Iter};
 
-struct File = {
+struct File {
     file_ref: &go "os.File",
 } impl {
     static fn new(path: String) -> File | .err {
@@ -86,5 +86,4 @@ struct File = {
 
         Iter::from<String>(next_fn)
     }
-
-};
+}

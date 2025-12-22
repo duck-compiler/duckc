@@ -1,6 +1,6 @@
-struct S = {
+struct S {
     val: Int,
-} impl {};
+} impl {}
 
 fn main() {
     const s = S { val: 10 };

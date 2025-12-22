@@ -1,6 +1,6 @@
-struct S = {
+struct S {
     x: (String[],),
-};
+}
 
 fn main() {
     let x: { x: String } = { x: f"a string" };

@@ -1,6 +1,6 @@
-struct S = {
+struct S {
     f: Int[],
-};
+}
 
 fn main() {
     const s = &mut S { f: [2, 3], };

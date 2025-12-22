@@ -2,13 +2,13 @@ type O = { x: String };
 type X<A> = B<Int, A>;
 type B<Z, ZZ> = C<O, ZZ, Float, Z>;
 
-struct Other<UUU> = {s: UUU} impl {
+struct Other<UUU> { s: UUU } impl {
     fn lol() -> Other<UUU> {
         return { let x: Other<UUU> = Other<UUU>{s: self.s}; x.s->std::io::println(); x};
     }
-};
+}
 
-struct C<T, E, U, I> = {
+struct C<T, E, U, I> {
     f: E,
 } impl {
     fn get_f() -> Other<E> {
@@ -18,7 +18,7 @@ struct C<T, E, U, I> = {
     fn get_x<X2>(x: X2) -> X2 {
         return x;
     }
-};
+}
 
 fn extract(s: Other<String>) -> String {
     return s.s;

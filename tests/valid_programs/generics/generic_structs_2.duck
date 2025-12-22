@@ -2,7 +2,7 @@ use std::io::{println};
 
 use go "strconv";
 
-struct M<T> = {
+struct M<T> {
     val: T,
     converter: fn(v: T) -> String,
 } impl {
@@ -10,7 +10,7 @@ struct M<T> = {
         println(self.converter(self.val));
         self.val->self.converter()->println();
     }
-};
+}
 
 fn int_to_string(x: Int) -> String {
     go {

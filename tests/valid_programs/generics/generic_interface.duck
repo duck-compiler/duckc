@@ -1,4 +1,4 @@
-struct Y = {
+struct Y {
     name: String,
 } impl {
     fn clone() -> Y {
@@ -6,7 +6,7 @@ struct Y = {
             name: self.name,
         }
     }
-};
+}
 
 type Cloneable<T> = { clone: fn() -> T };
 

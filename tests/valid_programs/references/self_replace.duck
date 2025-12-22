@@ -1,4 +1,4 @@
-struct S = {
+struct S {
     v: Int
 } impl {
     mut fn abc() {
@@ -9,7 +9,7 @@ struct S = {
         *self = S { v: 123 };
         return self;
     }
-};
+}
 
 fn main() {
     let s = S { v: 10 };

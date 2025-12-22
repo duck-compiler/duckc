@@ -1,8 +1,8 @@
-struct List<T> = {
+struct List<T> {
     elems: T[],
 } impl {
     fn m<U>(f: fn(v: T) -> U) {}
-};
+}
 
 fn main() {
     let list: List<String> = List<String> { elems: [] as String[] };

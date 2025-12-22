@@ -1,7 +1,7 @@
 use std::io::{println};
 use go "fmt";
 
-struct Xyz = {
+struct Xyz {
     number_as_string: String
 } impl {
     fn give_number() -> String {
@@ -13,9 +13,9 @@ struct Xyz = {
         std::io::println(concatenated);
         return concatenated;
     }
-};
+}
 
-struct Lol = {
+struct Lol {
     kek: String,
     xyz: Xyz,
 } impl {
@@ -87,7 +87,7 @@ struct Lol = {
         std::io::println(s);
         return s;
     }
-};
+}
 
 type StructInDuck = { s: Lol };
 

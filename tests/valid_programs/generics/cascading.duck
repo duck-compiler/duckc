@@ -1,9 +1,9 @@
-struct ABC<T> = {
+struct ABC<T> {
 } impl {
     fn lol() -> ABC<ABC<T>>  {
         ABC<ABC<T>>{}
     }
-};
+}
 
 fn main() {
     ABC<String> {}.lol();

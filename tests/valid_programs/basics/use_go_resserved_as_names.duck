@@ -1,10 +1,10 @@
 use std::io::{println};
 
-struct string = {
+struct string {
     string: String,
-};
+}
 
-struct int8 = {
+struct int8 {
     chan: Int,
 } impl {
     fn select() {
@@ -18,7 +18,7 @@ struct int8 = {
     fn uintptr(select: String, string: String, uint32: string) {
         println(f"select: {select}, string {{string}}, uint32: {{{uint32}.string}}");
     }
-};
+}
 
 fn map(int: {map: int8}) {
     println(f"hello from map {int.map.chan->std::string::from_int()}");

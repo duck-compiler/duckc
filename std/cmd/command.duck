@@ -1,7 +1,7 @@
 use ::col::{ArrayList};
 use go "os/exec";
 
-struct Cmd = {
+struct Cmd {
     program: String,
     cmd_args: ::col::ArrayList<String>,
 } impl {
@@ -63,4 +63,4 @@ struct Cmd = {
             return Tag__none { }
         }
     }
-};
+}

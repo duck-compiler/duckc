@@ -1,6 +1,6 @@
 use go "fmt";
 
-struct List<T> = {
+struct List<T> {
     elems: T[],
 } impl {
     mut fn push(e: T) {
@@ -25,9 +25,9 @@ struct List<T> = {
         };
     }
 
-};
+}
 
-struct X<E> = {
+struct X<E> {
     a: E,
 } impl {
     fn give_me_a_list() -> List<E> {
@@ -35,7 +35,7 @@ struct X<E> = {
         res.map<E>(fn(v: E) -> E { return v; });
         return res;
     }
-};
+}
 
 fn print_with_go(x: {}) {
     go {

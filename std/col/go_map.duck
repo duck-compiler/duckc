@@ -1,4 +1,4 @@
-struct GoMap<K, V> = {
+struct GoMap<K, V> {
     inner: go "map[{K}]*{V}",
 } impl {
     static fn new<K, V>() -> GoMap<K, V> {
@@ -61,5 +61,4 @@ struct GoMap<K, V> = {
             }
         } as ::Opt<V>
     }
-
-};
+}

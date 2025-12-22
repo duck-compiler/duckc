@@ -1,4 +1,4 @@
-struct S<T> = {
+struct S<T> {
     inner: T,
 } impl {
     static fn new<T>(val: T) -> S<T> {
@@ -6,7 +6,7 @@ struct S<T> = {
             inner: val,
         }
     }
-};
+}
 
 fn main() {
     const s = S::new<Int>(10000);

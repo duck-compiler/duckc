@@ -2,12 +2,12 @@ use std::io::{println};
 
 use go "strconv";
 
-struct M<T> = {
+struct M<T> {
     val: T,
 } impl {
     fn y() {
     }
-};
+}
 
 fn int_to_string(x: Int) -> String {
     go {

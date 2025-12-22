@@ -1,6 +1,6 @@
 use go "fmt";
 
-struct Pair<A, B> = {
+struct Pair<A, B> {
     a: A,
     b: B,
 } impl {
@@ -27,7 +27,7 @@ struct Pair<A, B> = {
             b: second.b,
         };
     }
-};
+}
 
 fn print_with_go(x: {}) {
     go {

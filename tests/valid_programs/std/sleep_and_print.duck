@@ -25,9 +25,9 @@ fn ff() -> String | { x: Int } {
     return "X";
 }
 
-struct MyStruct = {
+struct MyStruct {
     y: Int
-};
+}
 
 fn main() {
     "before sleep"->println();
