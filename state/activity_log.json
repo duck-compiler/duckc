@@ -1,5 +1,15 @@
 [
     {
+        "type": "closed",
+        "timestamp": "2025-12-22T19:13:10.128166",
+        "issue_id": "7b4f73986349d1fe8a8e6f0c0c847d92",
+        "issue_title": "Remove this from std and then remove this line",
+        "author_info": {
+            "name": "Robin F\u00fcllgraf",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
         "type": "created",
         "timestamp": "2025-12-22T18:24:57.394235",
         "issue_id": "7b4f73986349d1fe8a8e6f0c0c847d92",
