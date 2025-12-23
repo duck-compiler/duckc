@@ -565,7 +565,8 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             append_global_prefix_value_expr(&mut target.0, mangle_env);
             append_global_prefix_value_expr(&mut block.0, mangle_env);
         }
-        ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
+
+        ValueExpr::Negate(v) | ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
             append_global_prefix_value_expr(&mut v.0, mangle_env)
         }
         ValueExpr::HtmlString(contents) => {
@@ -1150,7 +1151,7 @@ mod tests {
                                 },
                                 Field {
                                     name: "y".to_string(),
-                                    type_expr: TypeExpr::Int(None).into_empty_span(),
+                                    type_expr: TypeExpr::Int.into_empty_span(),
                                 },
                             ],
                         })
@@ -1416,7 +1417,10 @@ mod tests {
                                 FunctionDefintion {
                                     name: "some_xyz_func".into(),
                                     value_expr: ValueExpr::Return(Some(
-                                        ValueExpr::Int(1).into_empty_span().into_block().into(),
+                                        ValueExpr::Int(1, None)
+                                            .into_empty_span()
+                                            .into_block()
+                                            .into(),
                                     ))
                                     .into_empty_span(),
                                     ..Default::default()
@@ -1447,7 +1451,7 @@ mod tests {
                                     },
                                     FunctionDefintion {
                                         name: "some_xyz_func".into(),
-                                        value_expr: ValueExpr::Int(1)
+                                        value_expr: ValueExpr::Int(1, None)
                                             .into_empty_span_and_block_and_return(),
                                         ..Default::default()
                                     },
@@ -1510,7 +1514,7 @@ mod tests {
                                     },
                                     FunctionDefintion {
                                         name: "some_xyz_func".into(),
-                                        value_expr: ValueExpr::Int(1)
+                                        value_expr: ValueExpr::Int(1, None)
                                             .into_empty_span_and_block_and_return(),
                                         ..Default::default()
                                     },

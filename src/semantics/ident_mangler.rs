@@ -379,7 +379,7 @@ pub fn mangle_value_expr(
                 type_params: type_params.clone(),
             };
         }
-        ValueExpr::Async(d) | ValueExpr::Defer(d) => {
+        ValueExpr::Negate(d) | ValueExpr::Async(d) | ValueExpr::Defer(d) => {
             mangle_value_expr(&mut d.0, global_prefix, prefix, mangle_env)
         }
         ValueExpr::As(v, t) => {

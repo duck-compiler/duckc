@@ -349,7 +349,7 @@ pub mod tests {
                                     },
                                     Field {
                                         name: "b".to_string(),
-                                        type_expr: (TypeExpr::Int(None), empty_range()),
+                                        type_expr: (TypeExpr::Int, empty_range()),
                                     },
                                 ],
                             }),

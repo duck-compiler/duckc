@@ -19,7 +19,7 @@ fn emit_duck_to_js_obj(ty: &Spanned<TypeExpr>, start_path: Vec<String>) -> Strin
                 out_string.push_str("\"%s\"");
                 out_params.push(format!("html.EscapeString({})", current_path.join(".")));
             }
-            TypeExpr::Int(..) => {
+            TypeExpr::Int => {
                 out_string.push_str("%v");
                 out_params.push(current_path.join(".").to_string());
             }
@@ -79,7 +79,7 @@ fn emit_duck_to_js_obj(ty: &Spanned<TypeExpr>, start_path: Vec<String>) -> Strin
                         );
                         go_code
                     }
-                    TypeExpr::Int(..) => {
+                    TypeExpr::Int => {
                         let go_code = format!(
                             r#"
                             strings.Join(func (s []int) []string {{
