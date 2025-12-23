@@ -15,7 +15,6 @@ use crate::parse::{
 };
 use crate::semantics::ident_mangler::{MANGLE_SEP, mangle};
 use crate::semantics::type_resolve::{TypeEnv, is_const_var};
-use crate::tags::Tag;
 
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
@@ -1063,6 +1062,12 @@ impl TypeExpr {
         if name.as_str() == "ord" && self.implements_ord(type_env) {
             return true;
         }
+        if name.as_str() == "iter" && self.implements_into_iter(type_env) {
+            return true;
+        }
+        if name.as_str() == "iter_mut" && self.implements_into_iter_mut(type_env) {
+            return true;
+        }
         match self {
             Self::Struct {
                 name: r#struct,
@@ -1104,10 +1109,11 @@ impl TypeExpr {
                     fields.len() > tuple_access_idx
                 } else {
                     if fields.len() == 0 {
-                        println!(
-                            "{} it could be that the function you're trying to call is missing it's return, maybe that's why it's an empty tuple",
-                            Tag::Note
-                        )
+                        // i disabled this because it messed up auto_traits.duck test
+                        // println!(
+                        //     "{} it could be that the function you're trying to call is missing it's return, maybe that's why it's an empty tuple",
+                        //     Tag::Note
+                        // )
                     }
                     false
                 }
@@ -1184,6 +1190,50 @@ impl TypeExpr {
     }
 
     fn typeof_field(&self, field_name: String, type_env: &mut TypeEnv) -> Option<TypeExpr> {
+        if self.implements_into_iter(type_env) && field_name.as_str() == "iter" {
+            match self {
+                TypeExpr::Array(inner) => {
+                    return Some(TypeExpr::Fun(
+                        vec![],
+                        Box::new((
+                            TypeExpr::Struct {
+                                name: mangle(&["std", "col", "Iter"]),
+                                type_params: vec![(
+                                    TypeExpr::Ref(inner.as_ref().clone().into()),
+                                    inner.1,
+                                )],
+                            },
+                            empty_range(),
+                        )),
+                        false,
+                    ));
+                }
+                _ => {}
+            }
+        }
+
+        if self.implements_into_iter_mut(type_env) && field_name.as_str() == "iter_mut" {
+            match self {
+                TypeExpr::Array(inner) => {
+                    return Some(TypeExpr::Fun(
+                        vec![],
+                        Box::new((
+                            TypeExpr::Struct {
+                                name: mangle(&["std", "col", "Iter"]),
+                                type_params: vec![(
+                                    TypeExpr::RefMut(inner.as_ref().clone().into()),
+                                    inner.1,
+                                )],
+                            },
+                            empty_range(),
+                        )),
+                        false,
+                    ));
+                }
+                _ => {}
+            }
+        }
+
         if self.implements_to_string(type_env) && field_name.as_str() == "to_string" {
             return Some(TypeExpr::Fun(
                 vec![],
@@ -1452,7 +1502,13 @@ fn types_are_compatible(one: &TypeExpr, two: &TypeExpr, type_env: &mut TypeEnv) 
         }
     }
 
-    one == two
+    let mut o = one.clone().into_empty_span();
+    let mut t = two.clone().into_empty_span();
+
+    type_expr_into_empty_range(&mut o);
+    type_expr_into_empty_range(&mut t);
+
+    o == t
 }
 
 fn is_non_variant_type_in_variant(

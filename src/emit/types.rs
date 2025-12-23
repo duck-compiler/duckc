@@ -12,7 +12,7 @@ use crate::{
         type_parser::{Duck, TypeExpr},
     },
     semantics::{
-        ident_mangler::MANGLE_SEP,
+        ident_mangler::{MANGLE_SEP, mangle},
         type_resolve::{NeedsSearchResult, TypeEnv},
     },
 };
@@ -149,6 +149,98 @@ pub fn emit_type_definitions(
 
                 let array_type_name = array_type.as_clean_go_type_name(type_env);
                 let array_type_ano = array_type.as_go_type_annotation(type_env);
+
+                if array_type.implements_into_iter(type_env) {
+                    let fun_name = format!("{array_type_name}_Iter");
+                    let iter_struct_name = &format!(
+                        "Struct_{}",
+                        mangle(&[
+                            "std",
+                            "col",
+                            "Iter",
+                            &TypeExpr::Ref(type_expr.clone().into())
+                                .as_clean_go_type_name(type_env),
+                        ])
+                    );
+                    let iter_from_fn_name = mangle(&[
+                        "std",
+                        "col",
+                        "Iter",
+                        "from",
+                        &TypeExpr::Ref(type_expr.clone().into()).as_clean_go_type_name(type_env),
+                    ]);
+
+                    let go_code = format!(
+                        r#"
+                        idx := 0
+                        f := func() any {{
+                            if idx >= len(self) {{
+                                return Tag__no_next_elem{{}}
+                            }}
+
+                            elem_to_ret := &self[idx]
+                            idx = idx + 1
+                            return elem_to_ret
+                        }}
+
+                        return {iter_from_fn_name}(f)
+                    "#
+                    );
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![("self".to_string(), array_type_ano.clone())],
+                        Some(format!("*{iter_struct_name}")),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ))
+                }
+
+                if array_type.implements_into_iter_mut(type_env) {
+                    let fun_name = format!("{array_type_name}_IterMut");
+                    let iter_struct_name = &format!(
+                        "Struct_{}",
+                        mangle(&[
+                            "std",
+                            "col",
+                            "Iter",
+                            &TypeExpr::RefMut(type_expr.clone().into())
+                                .as_clean_go_type_name(type_env),
+                        ])
+                    );
+                    let iter_from_fn_name = mangle(&[
+                        "std",
+                        "col",
+                        "Iter",
+                        "from",
+                        &TypeExpr::RefMut(type_expr.clone().into()).as_clean_go_type_name(type_env),
+                    ]);
+
+                    let go_code = format!(
+                        r#"
+                        idx := 0
+                        f := func() any {{
+                            if idx >= len(self) {{
+                                return Tag__no_next_elem{{}}
+                            }}
+
+                            elem_to_ret := &self[idx]
+                            idx = idx + 1
+                            return elem_to_ret
+                        }}
+
+                        return {iter_from_fn_name}(f)
+                    "#
+                    );
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![("self".to_string(), array_type_ano.clone())],
+                        Some(format!("*{iter_struct_name}")),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ))
+                }
 
                 if array_type.implements_eq(type_env) {
                     let fun_name = format!("{array_type_name}_Eq");

@@ -1,10 +1,10 @@
 fn take_array_ref(a: &&&&&Int[]) {
-    for (i in a) {
+    for (i in a.iter()) {
     }
 }
 
 fn take_array_mut(a: &mut &&& &mut Int[]) {
-    for (i in a) {
+    for (i in a.iter()) {
     }
 }
 

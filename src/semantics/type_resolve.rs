@@ -28,7 +28,7 @@ use crate::{
         },
     },
     semantics::{
-        ident_mangler::{MANGLE_SEP, mangle},
+        ident_mangler::{MANGLE_SEP, mangle, unmangle},
         typechecker::{check_type_compatability, check_type_compatability_full},
     },
     tags::Tag,
@@ -2924,36 +2924,114 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             typeresolve_value_expr((&mut target.0, target.1), type_env);
             let mut target_type = TypeExpr::from_value_expr(target, type_env);
 
-            let mut current = &mut target_type;
-            let mut ref_type = 0;
-            loop {
-                match current {
-                    TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
-                        ref_type = if ref_type == 1 || matches!(t.0, TypeExpr::Ref(..)) {
-                            1
-                        } else {
-                            2
-                        };
-                        current = &mut t.0;
-                    }
-                    other => {
-                        if let TypeExpr::Array(content_type) = other {
-                            if ref_type > 0 {
-                                target_type = if ref_type == 1 {
-                                    TypeExpr::Ref(content_type.clone())
-                                } else {
-                                    TypeExpr::RefMut(content_type.clone())
-                                };
-                            } else {
-                                *other = content_type.0.clone();
-                            }
-                            break;
-                        } else {
-                            let msg = "Can only use for on array".to_string();
-                            failure_with_occurence(msg.clone(), target.1, [(msg.clone(), target.1)])
-                        }
-                    }
+            let current = &mut target_type;
+            let ref_type = 0;
+
+            let fail = || {
+                let msg = "Can only use for on std::col::Iterator".to_string();
+                failure_with_occurence(msg.clone(), target.1, [(msg.clone(), target.1)])
+            };
+            if let TypeExpr::Struct { name, type_params } = current.clone() {
+                let unmangled = unmangle(name.as_str());
+
+                if unmangled.as_slice() != &["std", "col", "Iter"] || type_params.len() != 1 {
+                    fail();
                 }
+
+                let new_iter_call = mangle(&["std", "col", "Iter", "from"]);
+
+                let mut new_iter_call_expr = ValueExpr::FunctionCall {
+                    target: ValueExpr::Variable(
+                        true,
+                        new_iter_call,
+                        Some(TypeExpr::Fun(
+                            vec![(
+                                None,
+                                TypeExpr::Fun(
+                                    vec![],
+                                    TypeExpr::Or(vec![
+                                        type_params[0].clone(),
+                                        TypeExpr::Tag("no_next_elem".to_string()).into_empty_span(),
+                                    ])
+                                    .into_empty_span()
+                                    .into(),
+                                    true,
+                                )
+                                .into_empty_span(),
+                            )],
+                            (current.clone(), target.1).into(),
+                            true,
+                        )),
+                        Some(true),
+                        false,
+                    )
+                    .into_empty_span()
+                    .into(),
+                    params: vec![
+                        ValueExpr::Lambda(
+                            LambdaFunctionExpr {
+                                is_mut: true,
+                                params: vec![],
+                                return_type: Some(
+                                    TypeExpr::Or(vec![
+                                        type_params[0].clone(),
+                                        TypeExpr::Tag("no_next_elem".to_string()).into_empty_span(),
+                                    ])
+                                    .into_empty_span()
+                                    .into(),
+                                ),
+                                value_expr: ValueExpr::Return(Some(
+                                    ValueExpr::Tag("no_next_elem".to_string())
+                                        .into_empty_span()
+                                        .into(),
+                                ))
+                                .into_empty_span()
+                                .into(),
+                            }
+                            .into(),
+                        )
+                        .into_empty_span(),
+                    ],
+                    type_params: vec![type_params[0].clone()],
+                };
+
+                typeresolve_value_expr((&mut new_iter_call_expr, target.1), type_env);
+
+                let mut iter_def = type_env
+                    .get_struct_def_with_type_params_mut(&name, &type_params, target.1)
+                    .clone();
+
+                // this loop ensures that all channel methods are emitted
+                for m in iter_def.methods.iter_mut() {
+                    if !m.generics.is_empty() {
+                        continue;
+                    }
+
+                    typeresolve_value_expr(
+                        (
+                            &mut ValueExpr::FieldAccess {
+                                target_obj: new_iter_call_expr.clone().into_empty_span().into(),
+                                field_name: m.name.clone(),
+                            },
+                            *span,
+                        ),
+                        type_env,
+                    );
+                }
+
+                let content_type = type_params[0].clone();
+
+                if ref_type > 0 {
+                    target_type = if ref_type == 1 {
+                        TypeExpr::Ref(content_type.clone().into())
+                    } else {
+                        TypeExpr::RefMut(content_type.clone().into())
+                    };
+                } else {
+                    *current = content_type.0.clone();
+                }
+            } else {
+                fail();
             }
 
             type_env.push_identifier_types();

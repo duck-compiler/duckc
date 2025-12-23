@@ -1,0 +1,29 @@
+use std::io::println;
+use std::col::Iter;
+
+fn main() {
+    println("");
+
+    for (a in [1, 2, 3].iter()) {
+        a.to_string()->println();
+    }
+
+    println("");
+
+    for (a in [1, 2, 3].iter().filter(fn(a) { *a != 2 })) {
+        a.to_string()->println();
+    }
+
+    println("");
+
+    let array = [1, 2, 3];
+
+    for (a in array.iter_mut()) {
+        *a = *a * 1000;
+    }
+
+    for (a in array.iter_mut()) {
+        a.to_string()->println();
+    }
+
+}

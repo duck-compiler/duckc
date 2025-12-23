@@ -28,11 +28,11 @@ fn main() {
     };
 
     std::io::println(config.app_name);
-    for (plugin in config.plugins) {
-        std::io::println(plugin);
+    for (plugin in config.plugins.iter()) {
+        std::io::println(*plugin);
     }
 
-    for (author in config.author) {
+    for (author in config.author.iter()) {
         std::io::println(author.name);
     }
 }

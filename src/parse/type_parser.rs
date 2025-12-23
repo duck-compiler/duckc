@@ -10,7 +10,7 @@ use crate::{
         generics_parser::{Generic, generics_parser},
         value_parser::{TypeParam, empty_range},
     },
-    semantics::type_resolve::TypeEnv,
+    semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
 };
 
 use super::lexer::Token;
@@ -222,7 +222,7 @@ impl TypeExpr {
 
                 inner
                     .0
-                    .call_to_string(&format!("{derefs_str}{param1}"), type_env)
+                    .call_hash(&format!("{derefs_str}{param1}"), type_env)
             }
             _ => panic!("Compiler Bug: cannot call hash method on {self:?}"),
         }
@@ -482,6 +482,90 @@ impl TypeExpr {
             | TypeExpr::Char
             | TypeExpr::UInt
             | TypeExpr::Float => true,
+            _ => false,
+        }
+    }
+
+    pub fn call_iter(&self, type_env: &mut TypeEnv, param1: &str) -> String {
+        match self {
+            TypeExpr::Array(..) => {
+                format!("{}_Iter({param1})", self.as_clean_go_type_name(type_env))
+            }
+            TypeExpr::Struct { .. } => {
+                format!("{param1}.iter()")
+            }
+            _ => panic!("cannot call iter() on {self:?}"),
+        }
+    }
+
+    pub fn implements_into_iter_mut(&self, type_env: &mut TypeEnv) -> bool {
+        match self {
+            TypeExpr::Struct { name, type_params } => {
+                let def =
+                    type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
+                def.methods.iter().any(|f| {
+                    f.name.as_str() == "iter_mut" && {
+                        if let TypeExpr::Struct { name, type_params } = &f.return_type.0 {
+                            if name.as_str() == &mangle(&["std", "col", "Iter"]) {
+                                if type_params.len() == 1 {
+                                    if type_params[0].0.clone().into_empty_span().0
+                                        == TypeExpr::RefMut(self.clone().into_empty_span().into())
+                                            .into_empty_span()
+                                            .0
+                                    {
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                }) && def.mut_methods.contains("iter_mut")
+            }
+            TypeExpr::Array(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn implements_into_iter(&self, type_env: &mut TypeEnv) -> bool {
+        match self {
+            TypeExpr::Struct { name, type_params } => {
+                let def =
+                    type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
+                def.methods.iter().any(|f| {
+                    f.name.as_str() == "iter" && {
+                        if let TypeExpr::Struct { name, type_params } = &f.return_type.0 {
+                            if name.as_str() == &mangle(&["std", "col", "Iter"]) {
+                                if type_params.len() == 1 {
+                                    if type_params[0].0.clone().into_empty_span().0
+                                        == TypeExpr::Ref(self.clone().into_empty_span().into())
+                                            .into_empty_span()
+                                            .0
+                                    {
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                }) && !def.mut_methods.contains("iter")
+            }
+            TypeExpr::Array(..) => true,
             _ => false,
         }
     }
@@ -1386,10 +1470,7 @@ pub mod tests {
         assert_type_expression(
             "fn(x: Int) -> Bool",
             TypeExpr::Fun(
-                vec![(
-                    "x".to_string().into(),
-                    TypeExpr::Int.into_empty_span(),
-                )],
+                vec![("x".to_string().into(), TypeExpr::Int.into_empty_span())],
                 Box::new(TypeExpr::Bool(None).into_empty_span()),
                 false,
             ),
