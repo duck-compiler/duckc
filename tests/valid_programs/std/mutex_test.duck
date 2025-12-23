@@ -24,9 +24,9 @@ fn main() {
     })();
     test_channel.recv_block()->std::string::from_int()->println();
     println(f"Trying to read from channel (should be none) { match test_channel.try_recv() { .none => "none", else => "something is there" }}");
-    println(f"Trying to read from channel with timeout 500ms (should be none) { match test_channel.recv_timeout({ millis: 500 }) { .none => "none", else => "something is there" }}");
+    println(f"Trying to read from channel with timeout 500ms (should be none) { match test_channel.recv_timeout(std::time::Duration::milliseconds(500)) { .none => "none", else => "something is there" }}");
     async (fn() {
-        std::task::sleep({ seconds: 1 });
+        std::task::sleep(std::time::Duration::seconds(1));
         const lock_result = m.try_lock(fn(v){});
         if (lock_result) {
             println("locking worked");
@@ -37,7 +37,7 @@ fn main() {
 
     m.lock(fn(v) {
         println(*v);
-        std::task::sleep({ seconds: 2 });
+        std::task::sleep(std::time::Duration::seconds(2));
         *v = "changed";
     });
 

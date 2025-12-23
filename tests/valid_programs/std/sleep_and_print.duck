@@ -31,8 +31,7 @@ struct MyStruct {
 
 fn main() {
     "before sleep"->println();
-    let dura: std::time::Duration = { seconds: 1 };
-    sleep(dura);
+    sleep(Duration::seconds(1));
     "after sleep"->println();
 
     let x: MyStruct = MyStruct { y: 10 };

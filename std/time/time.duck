@@ -1,0 +1,381 @@
+use go "time";
+
+struct Time {
+    raw_time: go "time.Time",
+} impl {
+    static fn from_unix(sec: Int, nsec: Int) -> Time {
+        return Time {
+            raw_time: go {
+                $$$res$$$ = time.Unix(int64(sec), int64(nsec))
+            }
+        }
+    }
+
+    static fn from_unix_milli(msec: Int) -> Time {
+        return Time {
+            raw_time: go {
+                $$$res$$$ = time.UnixMilli(int64(msec))
+            }
+        }
+    }
+
+    static fn from_unix_micro(usec: Int) -> Time {
+        return Time {
+            raw_time: go {
+                $$$res$$$ = time.UnixMicro(int64(usec))
+            }
+        }
+    }
+
+    static fn from_date(date: {
+        year: Int,
+        month: Int,
+        day: Int,
+        hour: Int,
+        min: Int,
+        sec: Int,
+        nsec: Int,
+        location: Location,
+    }) -> Time {
+        return Time {
+            raw_time: go {
+                $$$res$$$ = time.Date(
+                	date.Getyear(),
+                 	time.Month(date.Getmonth()),
+                  	date.Getday(),
+                   	date.Gethour(),
+                    date.Getmin(),
+                    date.Getsec(),
+                    date.Getnsec(),
+                    date.Getlocation().Getraw_location(),
+                )
+            }
+        }
+    }
+
+    static fn now() -> Time {
+        let raw_now: go "time.Time" = go {
+            $$$res$$$ = time.Now()
+        };
+
+        return Time { raw_time: raw_now };
+    }
+
+    fn is_dst() -> Bool {
+        return go {
+            $$$res$$$ = (*self).raw_time.IsDST()
+        } as Bool;
+    }
+
+    fn is_daylight_savings_time() -> Bool {
+        return self.is_dst()
+    }
+
+    fn is_zero() -> Bool {
+        return go {
+            $$$res$$$ = (*self).raw_time.IsZero()
+        } as Bool;
+    }
+
+    fn is_after(other: Time) -> Bool {
+        return go {
+            $$$res$$$ = (*self).raw_time.After(other.raw_time)
+        } as Bool;
+    }
+
+    fn is_before(other: Time) -> Bool {
+        return go {
+            $$$res$$$ = (*self).raw_time.Before(other.raw_time)
+        } as Bool;
+    }
+
+    fn compare(other: Time) -> .before | .same | .after {
+        const int_repr: Int = go {
+            $$$res$$$ = (*self).raw_time.Compare(other.raw_time)
+        } as Int;
+
+        if (int_repr == -1) {
+            return .before;
+        } else if (int_repr == 0) {
+            return .same;
+        } else if (int_repr == 1) {
+            return .after;
+        }
+
+        std::error::panic("should never happen");
+    }
+
+    fn eq(other: &Time) -> Bool {
+        return go {
+            $$$res$$$ = (*self).raw_time.Equal((*other).raw_time)
+        } as Bool;
+    }
+
+    fn ord(other: &Time) -> .smaller | .equal | .greater {
+        const int_repr: Int = go {
+            $$$res$$$ = (*self).raw_time.Compare((*other).raw_time)
+        } as Int;
+
+        if (int_repr == -1) {
+            return .smaller;
+        } else if (int_repr == 0) {
+            return .equal;
+        } else if (int_repr == 1) {
+            return .greater;
+        }
+
+        std::error::panic("should never happen");
+    }
+
+    fn date_ints() -> { year: Int, month: Int, day: Int } {
+        let year: Int = 0;
+        let month: Int = 0;
+        let day: Int = 0;
+
+        go {
+            year, nmonth, day := (*self).raw_time.Date()
+            month = int(nmonth)
+        }
+
+        return {
+            year: year,
+            month: month,
+            day: day,
+        };
+    }
+
+    fn date() -> { year: Int, month: Month, day: Int } {
+        let ints = self.date_ints();
+        return {
+            year: ints.year,
+            month: from_month_index(ints.month),
+            day: ints.day,
+        }
+    }
+
+    fn year() -> Int {
+        return go {
+            $$$res$$$ = (*self).raw_time.Year()
+        } as Int;
+    }
+
+    fn month() -> Month {
+        from_month_index(self.month_int())
+    }
+
+    fn month_int() -> Int {
+        return go {
+            $$$res$$$ = int((*self).raw_time.Month())
+        } as Int;
+    }
+
+    fn day() -> Int {
+        return go {
+            $$$res$$$ = (*self).raw_time.Day()
+        } as Int;
+    }
+
+    fn weekday() -> Weekday {
+        from_weekday_index(self.weekday_int())
+    }
+
+    fn weekday_int() -> Int {
+        return go {
+            $$$res$$$ = int((*self).raw_time.Weekday())
+        } as Int;
+    }
+
+    fn iso_week() -> { year: Int, week: Int } {
+        let year: Int = 0;
+        let week: Int = 0;
+
+        go {
+            year, week = (*self).raw_time.ISOWeek()
+        };
+
+        return {
+            year: year,
+            week: week,
+        };
+    }
+
+    fn clock() -> { hour: Int, minute: Int, second: Int } {
+        let hour: Int = 0;
+        let min: Int = 0;
+        let sec: Int = 0;
+
+        go {
+            hour, min, sec = (*self).raw_time.Clock()
+        }
+
+        return {
+            hour: hour,
+            minute: min,
+            second: sec,
+        }
+    }
+
+    fn hour() -> Int {
+        return go {
+            $$$res$$$ = (*self).raw_time.Hour()
+        } as Int;
+    }
+
+    fn minute() -> Int {
+        return go {
+            $$$res$$$ = (*self).raw_time.Minute()
+        } as Int;
+    }
+
+    fn second() -> Int {
+        return go {
+            $$$res$$$ = (*self).raw_time.Second()
+        } as Int;
+    }
+
+    fn nanosecond() -> Int {
+        return go {
+            $$$res$$$ = (*self).raw_time.Second()
+        } as Int;
+    }
+
+    fn year_day() -> Int {
+        return go {
+            $$$res$$$ = (*self).raw_time.YearDay()
+        } as Int;
+    }
+
+    fn add(duration: Duration) -> Time {
+        return Time {
+            raw_time: go {
+                $$$res$$$ = (*self).raw_time.Add(duration.raw_duration)
+            }
+        }
+    }
+
+    fn sub(other: Time) -> Duration {
+        return Duration {
+            raw_duration: go {
+                $$$res$$$ = (*self).raw_time.Sub(other.raw_time)
+            }
+        }
+    }
+
+    fn add_date(date: { years: Int, months: Int, days: Int }) -> Time {
+        return Time {
+            raw_time: go {
+                $$$res$$$ = (*self).raw_time.AddDate(date.Getyears(), date.Getmonths(), date.Getdays())
+            }
+        }
+    }
+
+    fn in_utc() -> Time {
+        return Time {
+            raw_time: go {
+                $$$res$$$ = (*self).raw_time.UTC()
+            }
+        }
+    }
+
+    fn in_local() -> Time {
+        return Time {
+            raw_time: go {
+                $$$res$$$ = (*self).raw_time.Local()
+            }
+        }
+    }
+
+    fn in_location(location: Location) -> Time {
+        return Time {
+            raw_time: go {
+                $$$res$$$ = (*self).raw_time.In(location.raw_location)
+            }
+        }
+    }
+
+    fn location() -> Location {
+        return Location {
+            raw_location: go {
+                $$$res$$$ = (*self).raw_time.Location()
+            }
+        }
+    }
+
+    fn zone() -> { name: String, offset: Int } {
+        let name: String = "";
+        let offset: Int = 0;
+
+        go {
+            name, offset = (*self).raw_time.Zone()
+        };
+
+        return {
+            name: name,
+            offset: offset,
+        }
+    }
+
+    fn zone_bounds() -> { start: Time, end: Time } {
+        let start: go "time.Time" | .none = .none;
+        let end: go "time.Time" | .none = .none;
+
+        go {
+            start, end = (*self).raw_time.ZoneBounds()
+        }
+
+        let raw_start: go "time.Time" = match start {
+            go "time.Time" @s => s,
+            else => std::error::panic("start time was not given by go"),
+        };
+
+        let raw_end: go "time.Time" = match end {
+            go "time.Time" @e => e,
+            else => std::error::panic("end time was not given by go"),
+        };
+
+        return {
+            start: Time { raw_time: raw_start },
+            end: Time { raw_time: raw_end },
+        }
+    }
+
+    fn unix() -> Int {
+        return go {
+            $$$res$$$ = int((*self).raw_time.Unix())
+        } as Int
+    }
+
+    fn unix_milli() -> Int {
+        return go {
+            $$$res$$$ = int((*self).raw_time.UnixMilli())
+        } as Int
+    }
+
+    fn unix_micro() -> Int {
+        return go {
+            $$$res$$$ = int((*self).raw_time.UnixMicro())
+        } as Int
+    }
+
+    fn unix_nano() -> Int {
+        return go {
+            $$$res$$$ = int((*self).raw_time.UnixNano())
+        } as Int
+    }
+
+    fn truncate(by: Duration) -> Time {
+        return Time {
+            raw_time: go {
+                $$$res$$$ = (*self).raw_time.Truncate(by.raw_duration)
+            }
+        }
+    }
+
+    fn round(by: Duration) -> Time {
+        return Time {
+            raw_time: go {
+                $$$res$$$ = (*self).raw_time.Round(by.raw_duration)
+            }
+        }
+    }
+}

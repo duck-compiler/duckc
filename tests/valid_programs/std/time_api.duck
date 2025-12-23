@@ -1,0 +1,105 @@
+use std::{assert};
+use std::io::{println};
+use std::time::{Time, Duration, Location};
+
+fn main() {
+    let before = Time::now();
+    let now = Time::now();
+
+    std::assert(now.is_after(before), "now is not after before");
+    std::assert(!before.is_after(now), "before is after now");
+    std::assert(before.is_before(now), "before is not before now");
+    std::assert(!now.is_before(before), "now is after before");
+
+    std::assert(now.compare(before) == .after, "now compare to before is not after");
+    std::assert(before.compare(now) == .before, "before compare to now is not before");
+    std::assert(now.compare(now) == .same, "now compare to now is not same");
+    std::assert(now > before, "now is not greater than before");
+    std::assert(before < now, "now is smaller than before");
+    std::assert(now == now, "now is not now");
+
+    std::assert(now.date_ints().year == before.date_ints().year, "year is not same from date_ints");
+    std::assert(now.date().month == before.date().month, "month is not same from date");
+    std::assert(now.year() == before.year(), "now.year() is not same as before.year()");
+    std::assert(now.date().year == before.year(), "now.date().year is not same as before.year()");
+    std::assert(now.year() == before.date_ints().year, "now.year() is not same as before.date_ints().year()");
+    std::assert(now.month() == before.date().month, "now.month() is not same as before.date().month");
+    std::assert(now.iso_week().year == before.iso_week().year, "now.iso_week().year is not same as before.iso_week().year");
+    std::assert(now.clock().hour == before.clock().hour, "now.clock().hour is not same as before.clock().hour");
+    std::assert(now.hour() == before.hour(), "now.hour() is not same as before.hour()");
+    std::assert(now.minute() == now.clock().minute, "now.minute() is not same as now.clock().minute");
+    std::assert(now.second() == now.clock().second, "now.second() is not same as now.clock().second");
+    std::assert(now.year_day() == before.year_day(), "now.year_day() is not same as before.year_day()");
+
+    std::assert(Duration::nanoseconds(10) == Duration::nanoseconds(10), "Duration::nanoseconds(10) is not equals to Duration::nanoseconds(10)");
+
+    let duration = Duration::nanoseconds(10);
+    let other = Duration::nanoseconds(10);
+
+    std::assert(duration.as_hours() == other.as_hours(), "duration.as_hours() == other.as_hours()");
+    std::assert(duration.as_minutes() == other.as_minutes(), "duration.as_minutes() == other.as_minutes()");
+    std::assert(duration.as_seconds() == other.as_seconds(), "duration.as_seconds() == other.as_seconds()");
+    std::assert(duration.as_seconds() == other.as_seconds(), "duration.as_seconds() == other.as_seconds()");
+    std::assert(duration.as_milliseconds() == other.as_milliseconds(), "duration.as_milliseconds() == other.as_milliseconds()");
+    std::assert(duration.as_microseconds() == other.as_microseconds(), "duration.as_microseconds() == other.as_microseconds()");
+    std::assert(duration.as_nanoseconds() == other.as_nanoseconds(), "duration.as_microseconds() == other.as_microseconds()");
+
+    std::assert(Duration::nanoseconds(10).truncate(Duration::nanoseconds(5)) == Duration::nanoseconds(10).truncate(Duration::nanoseconds(5)), "Duration::nanoseconds(10).truncate(Duration::nanoseconds(5)) == Duration::nanoseconds(10).truncate(Duration::nanoseconds(5))");
+    std::assert(Duration::nanoseconds(10).round(Duration::nanoseconds(5)) == Duration::nanoseconds(10).round(Duration::nanoseconds(5)), "Duration::nanoseconds(10).round(Duration::nanoseconds(5)) == Duration::nanoseconds(10).round(Duration::nanoseconds(5))");
+    std::assert(Duration::nanoseconds(10).abs() == Duration::nanoseconds(10).abs(), "Duration::nanoseconds(10).abs() == Duration::nanoseconds(10).abs()");
+
+    let t = Time::now();
+    std::assert(t.add(Duration::nanoseconds(10000)) > t, "now not greater after add");
+    std::assert(t.sub(t) == Duration::nanoseconds(0), "substract itself doesn't produce 0 duration");
+
+    let x = Duration::since(Time::now());
+
+    std::assert(t.add_date({ years: 10, months: 3, days: 10 }) > t, "add_date is smaller than before");
+    std::assert(t.in_utc().year() == t.year(), "t.in_utc().year() is not same as t.year()");
+    std::assert(t.in_local().year() == t.year(), "t.in_local().year() is not same as t.year()");
+    // std::assert(now.nanosecond() == now.clock().nanosecond, "now.nanosecond is not same as before.nanosecond");
+
+    Location::utc();
+    Location::local();
+
+    std::assert(Location::utc().to_string() == "UTC", f"utc is not utc it's {Location::utc().to_string()}");
+
+    std::assert(Location::load("l;kjafjkl;aj;kl") == .err, "random location is not error");
+    std::assert(Location::load("America/New_York") != .err, "new york is error");
+    std::assert(Location::fixed_zone("UTC-whatever", 2).to_string() == "UTC-whatever", "fixed zone to string != UTC-whatever");
+
+    let n = Time::now();
+    std::assert(n == n.in_location(Location::local()), "n not equals in local location");
+
+    std::assert(Time::now().zone().name == Time::now().zone().name, "time::now.zone().name != time::now.zone().name");
+    std::assert(Time::now().zone_bounds().start.day() == Time::now().zone_bounds().start.day(), "time::now.zone_bounds().start.day() != time::now.zone_bounds().start.day()");
+
+    std::assert(t.unix() == t.unix(), "t.unix != t.unix");
+    std::assert(t.unix_milli() == t.unix_milli(), "t.unix_milli != t.unix_milli");
+    std::assert(t.unix_micro() == t.unix_micro(), "t.unix_micro != t.unix_micro");
+    std::assert(t.unix_nano() == t.unix_nano(), "t.unix_nano != t.unix_nano");
+
+    std::assert(Time::from_unix(1, 1) == Time::from_unix(1, 1), "Time::from_unix(1, 1) != Time::from_unix(1, 1)");
+    std::assert(Time::from_unix_milli(1) == Time::from_unix_milli(1), "Time::from_unix_milli(1, 1) != Time::from_unix_milli(1, 1)");
+    std::assert(Time::from_unix_micro(1) == Time::from_unix_micro(1), "Time::from_unix_micro(1, 1) != Time::from_unix_micro(1, 1)");
+
+    std::assert(Time::now().is_daylight_savings_time() == Time::now().is_dst(), "Time::now().is_daylight_savings_time() != Time::now().is_dst()");
+    std::assert(Time::from_date({
+        year: 2020,
+        month: 9,
+        day: 10,
+        hour: 0,
+        min: 0,
+        sec: 0,
+        nsec: 0,
+        location: Location::local(),
+    }).year() == 2020, "manual from 2020 is not 2020");
+
+    std::assert(t.truncate(Duration::nanoseconds(10)).year() == t.year(), "t.truncate(10ns).year != t.year()");
+    std::assert(Duration::nanoseconds(10) == Duration::nanoseconds(10), "Duration::nanoseconds(10) != Duration::nanoseconds(10)");
+    std::assert(Duration::microseconds(10) == Duration::microseconds(10), "Duration::microseconds(10) != Duration::microseconds(10)");
+    std::assert(Duration::milliseconds(10) == Duration::milliseconds(10), "Duration::milliseconds(10) != Duration::milliseconds(10)");
+    std::assert(Duration::seconds(10) == Duration::seconds(10), "Duration::seconds(10) != Duration::seconds(10)");
+    std::assert(Duration::minutes(10) == Duration::minutes(10), "Duration::minute(10) != Duration::minute(10)");
+    std::assert(Duration::hours(10) == Duration::hours(10), "Duration::hour(10) != Duration::hour(10)");
+}

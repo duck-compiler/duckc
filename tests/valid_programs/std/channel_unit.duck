@@ -5,7 +5,7 @@ fn main() {
 
     let sending_task = async (fn(){
         std::io::println("Sleeping for 1s and then sending a ()");
-        std::task::sleep({seconds: 1});
+        std::task::sleep(std::time::Duration::seconds(1));
         chan.send(());
         std::io::println("Sent");
     })();
