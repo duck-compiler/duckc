@@ -1186,8 +1186,25 @@ impl ValueExpr {
             ValueExpr::As(v, t) => {
                 if let ValueExpr::Array(exprs) = &v.0 {
                     emit_array(exprs, &t.0, type_env, env, span)
+                } else if matches!(t.0, TypeExpr::Int | TypeExpr::UInt | TypeExpr::Float) {
+                    let new_type = t.0.as_go_type_annotation(type_env);
+                    let (mut res_instr, res) = v.0.emit(type_env, env, span);
+
+                    let Some(IrValue::Var(go_v) | IrValue::Imm(go_v)) = res else {
+                        return (res_instr, None);
+                    };
+
+                    let var_name = env.new_var();
+                    res_instr.extend([
+                        IrInstruction::VarDecl(var_name.clone(), new_type.clone()),
+                        IrInstruction::VarAssignment(
+                            var_name.clone(),
+                            IrValue::Var(format!("{new_type}({go_v})")),
+                        ),
+                    ]);
+                    (res_instr, as_rvar(var_name))
                 } else {
-                    v.0.direct_or_with_instr(type_env, env, v.1)
+                    v.0.emit(type_env, env, v.1)
                 }
             }
             ValueExpr::For {

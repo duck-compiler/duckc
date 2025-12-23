@@ -2909,9 +2909,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         ValueExpr::As(v, t) => {
             if let ValueExpr::InlineGo(_, ty) = &mut v.0 {
                 *ty = Some(t.clone());
-            }
-
-            if let ValueExpr::Int(_, ty) = &mut v.0 {
+            } else if let ValueExpr::Int(_, ty) = &mut v.0 {
                 *ty = Some(t.clone());
             }
 

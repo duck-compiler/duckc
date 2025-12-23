@@ -1,0 +1,14 @@
+use std::io::println;
+
+fn main() {
+    const z: UInt = 4.3 as UInt;
+    z.to_string()->println();
+    (5.4 as UInt).to_string()->println();
+
+    const zz: Int = 40.3 as Int;
+    zz.to_string()->println();
+    (50.4 as UInt).to_string()->println();
+
+    const zzz: Int = 1-1;
+    zzz.to_string()->println();
+}
