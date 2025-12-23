@@ -3796,7 +3796,7 @@ mod tests {
             }
 
             type DuckFloat interface {
-                as_dgo_float32() float32
+                as_dgo_float64() float64
             }
 
             type DuckRune interface {
@@ -3828,10 +3828,10 @@ mod tests {
             }
 
             type ConcDuckFloat struct {
-                value float32
+                value float64
             }
 
-            func (self ConcDuckFloat) as_dgo_float32() float32 {
+            func (self ConcDuckFloat) as_dgo_float64() float64 {
                 return self.value
             }
 
@@ -3852,7 +3852,7 @@ mod tests {
                 fmt.Println(s.as_dgo_string())
                 fmt.Println(i.as_dgo_int())
                 fmt.Println(b.as_dgo_bool())
-                fmt.Println(f.as_dgo_float32())
+                fmt.Println(f.as_dgo_float64())
                 fmt.Println(r.as_dgo_rune())
             }
         "#;
@@ -3875,7 +3875,7 @@ mod tests {
             }
 
             type DuckFloat interface {
-                as_dgo_float32() float32
+                as_dgo_float64() float64
             }
 
             type DuckRune interface {
@@ -3907,10 +3907,10 @@ mod tests {
             }
 
             type ConcDuckFloat struct {
-                value float32
+                value float64
             }
 
-            func (self ConcDuckFloat) as_dgo_float32() float32 {
+            func (self ConcDuckFloat) as_dgo_float64() float64 {
                 return self.value
             }
 
@@ -3931,7 +3931,7 @@ mod tests {
                 fmt.Println(s.as_dgo_string())
                 fmt.Println(i.as_dgo_int())
                 fmt.Println(b.as_dgo_bool())
-                fmt.Println(f.as_dgo_float32())
+                fmt.Println(f.as_dgo_float64())
                 fmt.Println(r.as_dgo_rune())
             }
         "#;
