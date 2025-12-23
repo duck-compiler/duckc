@@ -5,7 +5,6 @@ use std::time::{Time, Duration, Location};
 fn main() {
     let before = Time::now();
     let now = Time::now();
-    std::io::debug(before.raw_time);
 
     std::assert(now.is_after(before), "now is not after before");
     std::assert(!before.is_after(now), "before is after now");
