@@ -19,7 +19,7 @@ use crate::{
 
 pub fn primitive_native_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
     match primitive_type_expr {
-        TypeExpr::Float => "float32",
+        TypeExpr::Float => "float64",
         TypeExpr::Char => "rune",
         TypeExpr::Int => "int",
         TypeExpr::Bool(..) => "bool",
@@ -55,7 +55,7 @@ pub fn primitive_conc_type_name<'a>(primitive_type_expr: &TypeExpr) -> &'a str {
     match primitive_type_expr {
         TypeExpr::String(..) => "string",
         TypeExpr::Int => "int",
-        TypeExpr::Float => "float32",
+        TypeExpr::Float => "float64",
         TypeExpr::Bool(..) => "bool",
         TypeExpr::Char => "rune",
         _ => panic!("That's not a primitive"),
@@ -66,7 +66,7 @@ pub fn primitive_type_name(primitive_type_expr: &TypeExpr) -> &'static str {
     match primitive_type_expr {
         TypeExpr::String(..) => "string",
         TypeExpr::Int => "int",
-        TypeExpr::Float => "float32",
+        TypeExpr::Float => "float64",
         TypeExpr::Bool(..) => "bool",
         TypeExpr::Char => "rune",
         _ => panic!("That's not a primitive"),
@@ -1153,7 +1153,7 @@ pub fn emit_type_definitions(
     result.push(IrInstruction::FunDef(
         "Float_Hash".to_string(),
         None,
-        vec![("self".to_string(), "float32".to_string())],
+        vec![("self".to_string(), "float64".to_string())],
         Some("int".to_string()),
         vec![IrInstruction::InlineGo(
             r#"
@@ -1167,8 +1167,8 @@ pub fn emit_type_definitions(
         "Float_Ord".to_string(),
         None,
         vec![
-            ("self".to_string(), "float32".to_string()),
-            ("other".to_string(), "*float32".to_string()),
+            ("self".to_string(), "float64".to_string()),
+            ("other".to_string(), "*float64".to_string()),
         ],
         Some("any".to_string()),
         vec![IrInstruction::InlineGo(
@@ -1256,7 +1256,7 @@ impl TypeExpr {
             TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
             TypeExpr::Bool(..) => "bool".to_string(),
             TypeExpr::Int => "int".to_string(),
-            TypeExpr::Float => "float32".to_string(),
+            TypeExpr::Float => "float64".to_string(),
             TypeExpr::UInt => "uint".to_string(),
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String(..) => "string".to_string(),
@@ -1334,10 +1334,10 @@ impl TypeExpr {
             TypeExpr::Bool(..) => "bool".to_string(),
             TypeExpr::Int => "int".to_string(),
             TypeExpr::UInt => "uint".to_string(),
-            TypeExpr::Float => "float32".to_string(),
+            TypeExpr::Float => "float64".to_string(),
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::Tag(..) => self.as_clean_go_type_name(type_env),
-            TypeExpr::Go(identifier) => identifier.clone(),
+            TypeExpr::Go(identifier) => identifier.clone().replace(".", "_"),
             // todo: type params
             TypeExpr::TypeName(_, name, _type_params) => name.clone(),
             TypeExpr::Fun(params, return_type, _) => format!(
@@ -1439,11 +1439,11 @@ impl TypeExpr {
             TypeExpr::Bool(..) => "bool".to_string(),
             TypeExpr::Int => "int".to_string(),
             TypeExpr::UInt => "uint".to_string(),
-            TypeExpr::Float => "float32".to_string(),
+            TypeExpr::Float => "float64".to_string(),
             TypeExpr::Char => "rune".to_string(),
             TypeExpr::String(..) => "string".to_string(),
             TypeExpr::Tag(identifier) => format!("Tag__{identifier}"),
-            TypeExpr::Go(identifier) => identifier.clone(),
+            TypeExpr::Go(identifier) => identifier.clone().replace(".", "_"),
             // todo: type params
             TypeExpr::TypeName(_, name, type_params) => TypeExpr::Struct {
                 name: name.clone(),
