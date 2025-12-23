@@ -1,0 +1,50 @@
+use go "time";
+
+struct Location {
+    raw_location: &go "time.Location",
+} impl {
+    static fn utc() -> Location {
+        return Location {
+            raw_location: go {
+                $$$res$$$ = time.UTC
+            }
+        }
+    }
+
+    static fn local() -> Location {
+        return Location {
+            raw_location: go {
+                $$$res$$$ = time.Local
+            }
+        }
+    }
+
+    static fn fixed_zone(name: String, offset: Int) -> Location {
+        return Location {
+            raw_location: go {
+                $$$res$$$ = time.FixedZone(name, offset)
+            }
+        }
+    }
+
+    static fn load(name: String) -> Location | .err {
+        let raw_location: &go "time.Location" = go {
+            loc, err := time.LoadLocation(name);
+            if err != nil {
+            	return Tag__err {}
+            }
+
+            $$$res$$$ = loc;
+        };
+
+        return Location {
+            raw_location: raw_location,
+        }
+    }
+
+    fn to_string() -> String {
+        return go {
+            $$$res$$$ = (*self).raw_location.String()
+        } as String
+    }
+}
