@@ -3051,9 +3051,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         }
 
         ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
-            if let ValueExpr::Variable(_, _, _, _, needs_copy) = &mut v.0 {
-                *needs_copy = false;
-            }
+            unset_const_var_assign(v);
 
             typeresolve_value_expr((&mut v.0, v.1), type_env);
 
@@ -3099,10 +3097,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         ValueExpr::ArrayAccess(target, idx) => {
             let target = target.as_mut();
 
-            if let ValueExpr::Variable(_, _, _, _, needs_copy) = &mut target.0 {
-                *needs_copy = false;
-            }
-
             let idx = idx.as_mut();
             typeresolve_value_expr((&mut target.0, target.1), type_env);
             typeresolve_value_expr((&mut idx.0, idx.1), type_env);
@@ -3132,9 +3126,6 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             target_obj,
             field_name: _,
         } => {
-            if let ValueExpr::Variable(_, _, _, _, needs_copy) = &mut target_obj.0 {
-                *needs_copy = false;
-            }
             let target_obj = target_obj.as_mut();
             typeresolve_value_expr((&mut target_obj.0, target_obj.1), type_env);
 
@@ -3313,9 +3304,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
         unreachable!("only pass functioncalls to this function")
     };
 
-    if let ValueExpr::Variable(_, _, _, _, needs_copy) = &mut target.0 {
-        *needs_copy = false;
-    }
+    unset_const_func_call_assign(target);
 
     let header: FunHeader;
     if type_params.is_empty() {
@@ -3648,6 +3637,81 @@ fn typeresolve_var_decl(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
     );
 }
 
+fn unset_const_var_assign(v: &mut Spanned<ValueExpr>) {
+    match &mut v.0 {
+        ValueExpr::ArrayAccess(target, ..) => unset_const_var_assign(target),
+        ValueExpr::Deref(inner) => unset_const_var_assign(inner),
+        ValueExpr::FieldAccess {
+            target_obj,
+            field_name: _,
+        } => unset_const_var_assign(target_obj),
+        ValueExpr::Variable(_, _, _, _, needs_copy) => {
+            *needs_copy = false;
+        }
+        _ => {}
+    }
+}
+
+fn unset_const_func_call_assign(v: &mut Spanned<ValueExpr>) {
+    match &mut v.0 {
+        ValueExpr::ArrayAccess(target, ..) => unset_const_func_call_assign(target),
+        ValueExpr::Deref(inner) => unset_const_func_call_assign(inner),
+        ValueExpr::FieldAccess {
+            target_obj,
+            field_name: _,
+        } => unset_const_func_call_assign(target_obj),
+        ValueExpr::Variable(_, _, _, _, needs_copy) => {
+            *needs_copy = false;
+        }
+        ValueExpr::FunctionCall {
+            target,
+            params: _,
+            type_params: _,
+        } => unset_const_func_call_assign(target),
+        _ => {}
+    }
+}
+
+// fn unset_const(v: &mut Spanned<ValueExpr>) {
+//     match &mut v.0 {
+//         ValueExpr::Add(lhs, rhs)
+//         | ValueExpr::Sub(lhs, rhs)
+//         | ValueExpr::Mul(lhs, rhs)
+//         | ValueExpr::Div(lhs, rhs)
+//         | ValueExpr::Mod(lhs, rhs)
+//         | ValueExpr::Equals(lhs, rhs)
+//         | ValueExpr::NotEquals(lhs, rhs)
+//         | ValueExpr::GreaterThan(lhs, rhs)
+//         | ValueExpr::GreaterThanOrEquals(lhs, rhs)
+//         | ValueExpr::LessThan(lhs, rhs)
+//         | ValueExpr::LessThanOrEquals(lhs, rhs) => {
+//             unset_const(lhs);
+//             unset_const(rhs);
+//         }
+//         ValueExpr::While { condition, body } => {
+//             unset_const(condition);
+//             unset_const(body);
+//         }
+//         ValueExpr::If {
+//             condition,
+//             then,
+//             r#else: e,
+//         } => {
+//             unset_const(condition);
+//             unset_const(then);
+
+//             if let Some(e) = e.as_mut() {
+//                 unset_const(e);
+//             }
+//         }
+//         ValueExpr::Array(exprs) => {
+//             for e in exprs.iter_mut() {
+//                 unset_const(e);
+//             }
+//         }
+//     }
+// }
+
 fn typeresolve_var_assign(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
     let _span = value_expr.1;
     let ValueExpr::VarAssign(assignment) = value_expr.0 else {
@@ -3658,11 +3722,9 @@ fn typeresolve_var_assign(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         (&mut assignment.0.target.0, assignment.0.target.1),
         type_env,
     );
-    let target_type = TypeExpr::from_value_expr(&assignment.0.target, type_env);
 
-    if let ValueExpr::Variable(_, _, _, _, needs_copy) = &mut assignment.0.target.0 {
-        *needs_copy = false;
-    }
+    unset_const_var_assign(&mut assignment.0.target);
+    let target_type = TypeExpr::from_value_expr(&assignment.0.target, type_env);
 
     typeresolve_value_expr(
         (&mut assignment.0.value_expr.0, assignment.0.value_expr.1),
