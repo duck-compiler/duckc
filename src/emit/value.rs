@@ -2735,7 +2735,6 @@ impl ValueExpr {
             ValueExpr::Variable(_, x, var_type, _, needs_copy) => {
                 let x = fix_ident_for_go(x, type_env.all_go_imports);
                 if *needs_copy {
-                    // TODO(@Apfelfrosch): do deep copy for composite types
                     let var_type = var_type
                         .as_ref()
                         .unwrap_or_else(|| panic!("Var {x} doesnt have type"));
@@ -2744,39 +2743,15 @@ impl ValueExpr {
                     let res_var_name = env.new_var();
                     let anno = var_type.as_go_type_annotation(type_env);
 
-                    match var_type {
-                        TypeExpr::Struct { .. } => {
-                            let tmp_var_name = env.new_var();
-                            res_instr.extend([
-                                IrInstruction::VarDecl(tmp_var_name.clone(), anno[1..].to_string()),
-                                IrInstruction::VarAssignment(
-                                    tmp_var_name.clone(),
-                                    IrValue::Imm(format!("*{x}")),
-                                ),
-                            ]);
-                            res_instr.extend([
-                                IrInstruction::VarDecl(res_var_name.clone(), anno.clone()),
-                                IrInstruction::VarAssignment(
-                                    res_var_name.clone(),
-                                    IrValue::Imm(format!("&{tmp_var_name}")),
-                                ),
-                            ]);
-                            (res_instr, Some(IrValue::Var(res_var_name)))
-                        }
-                        TypeExpr::Array(..) => {
-                            let tmp_var_name = env.new_var();
-                            res_instr.extend([
-                                IrInstruction::VarDecl(tmp_var_name.clone(), anno.to_string()),
-                                IrInstruction::VarAssignment(
-                                    tmp_var_name.clone(),
-                                    IrValue::Imm(format!("make({anno}, len({x}))")),
-                                ),
-                                IrInstruction::InlineGo(format!("copy({tmp_var_name}, {x})")),
-                            ]);
-                            (res_instr, as_rvar(tmp_var_name))
-                        }
-                        _ => (vec![], as_rvar(x.to_owned())),
-                    }
+                    res_instr.extend([
+                        IrInstruction::VarDecl(res_var_name.clone(), anno.clone()),
+                        IrInstruction::VarAssignment(
+                            res_var_name.clone(),
+                            IrValue::Imm(var_type.call_copy(&x, type_env)),
+                        ),
+                    ]);
+
+                    (res_instr, as_rvar(res_var_name))
                 } else {
                     (vec![], as_rvar(x.to_owned()))
                 }

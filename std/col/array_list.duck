@@ -15,11 +15,11 @@ struct ArrayList<T> {
         }
     }
 
-    mut fn push(new_elem: T) -> ArrayList<T> {
+    mut fn push(new_elem: T) -> &mut ArrayList<T> {
         go {
             (*self).elems = append((*self).elems, new_elem)
         }
-        return *self;
+        return self;
     }
 
     mut fn pop() -> Opt<T> {
@@ -36,12 +36,12 @@ struct ArrayList<T> {
 
     fn get(
         index: Int
-    ) -> None | T | "error: index out of bounds" {
-        let index_out_of_bounds: "error: index out of bounds" = "error: index out of bounds";
-        let elem: T | "none" = "none";
+    ) -> T | .none {
+        const tag_none = .none;
+        let elem: T | .none = tag_none;
         go {
             if index < 0 || index >= (*self).len() {
-                return index_out_of_bounds;
+                return tag_none;
             }
 
             elem = (*self).elems[index]
@@ -49,18 +49,18 @@ struct ArrayList<T> {
         return elem;
     }
 
-    mut fn set(index: Int, value: T) -> ArrayList<T> {
+    mut fn set(index: Int, value: T) -> &mut ArrayList<T> {
         go {
             (*self).elems[index] = value
         }
-        return *self;
+        return self;
     }
 
-    mut fn remove(index: Int) -> ArrayList<T> {
+    mut fn remove(index: Int) -> &mut ArrayList<T> {
         go {
             (*self).elems = append((*self).elems[:index], (*self).elems[index+1:]...)
         }
-        return *self;
+        return self;
     }
 
     fn len() -> Int {
@@ -79,9 +79,9 @@ struct ArrayList<T> {
         return empty;
     }
 
-    mut fn clear() -> ArrayList<T> {
+    mut fn clear() -> &mut ArrayList<T> {
         self.elems = [] as T[];
-        return *self;
+        return self;
     }
 
     fn map<U>(f: fn(x: T) -> U) -> ArrayList<U> {
@@ -124,8 +124,8 @@ struct ArrayList<T> {
         }
     }
 
-    fn find(f: fn(x: T) -> Bool) -> T | "none" {
-        let result: T | "none" = "none";
+    fn find(f: fn(x: T) -> Bool) -> T | .none {
+        let result: T | .none = .none;
         go {
             for _, e := range (*self).elems {
                 if f(e) {
@@ -139,8 +139,8 @@ struct ArrayList<T> {
 
     fn find_index(
         predicate: fn(element: T) -> Bool
-    ) -> Int | "none" {
-        let result: Int | "none" = "none";
+    ) -> Int | .none {
+        let result: Int | .none = .none;
         go {
             for i, elem := range (*self).elems {
                 if predicate(elem) {

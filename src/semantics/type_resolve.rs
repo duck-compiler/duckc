@@ -3659,6 +3659,11 @@ fn typeresolve_var_assign(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         type_env,
     );
     let target_type = TypeExpr::from_value_expr(&assignment.0.target, type_env);
+
+    if let ValueExpr::Variable(_, _, _, _, needs_copy) = &mut assignment.0.target.0 {
+        *needs_copy = false;
+    }
+
     typeresolve_value_expr(
         (&mut assignment.0.value_expr.0, assignment.0.value_expr.1),
         type_env,

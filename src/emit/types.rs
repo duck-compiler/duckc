@@ -332,6 +332,33 @@ pub fn emit_type_definitions(
                     ));
                 }
 
+                {
+                    let fun_name = format!("{array_type_name}_Copy");
+
+                    let go_code = format!(
+                        r#"
+                        res := make({array_type_ano}, len(self))
+
+                        for i := range self {{
+                            a := self[i]
+                            a_x := {}
+                            res[i] = a_x
+                        }}
+
+                        return res
+                    "#,
+                        &type_expr.0.call_copy("a", type_env)
+                    );
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![("self".to_string(), array_type_ano.clone())],
+                        Some(array_type_ano.clone()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
                 if array_type.implements_hash(type_env) {
                     let fun_name = format!("{array_type_name}_Hash");
 
@@ -560,6 +587,25 @@ pub fn emit_type_definitions(
                         Some(("self".to_string(), type_name.clone())),
                         vec![],
                         Some(String::from("string".to_string())),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if tuple_type.implements_copy(type_env) {
+                    let mut go_code = format!("res := *new({type_name})");
+
+                    for (i, field) in fields.iter().enumerate() {
+                        let copy_call = field.0.call_copy(&format!("self.field_{}", i), type_env);
+                        go_code.push_str(&format!("\nres.field_{i} = ({copy_call})"))
+                    }
+
+                    go_code.push_str("\nreturn res");
+
+                    result.push(IrInstruction::FunDef(
+                        "copy".to_string(),
+                        Some(("self".to_string(), type_anno.clone())),
+                        vec![],
+                        Some(type_anno.clone()),
                         vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }
@@ -825,6 +871,30 @@ pub fn emit_type_definitions(
             }
 
             instructions.push(body);
+        }
+
+        // struct auto generated deep copy defnition
+        {
+            let receiver = fixed_struct_name.clone();
+
+            let mut copy_string = format!("&{receiver}{{\n");
+
+            for f in fields.iter() {
+                let fixed = fix_ident_for_go(&f.name, &type_env.all_go_imports);
+                copy_string.push_str(&format!(
+                    "{fixed}: {},\n",
+                    f.type_expr.0.call_copy(&format!("self.{fixed}"), type_env),
+                ));
+            }
+            copy_string.push_str("}\n");
+
+            instructions.push(IrInstruction::FunDef(
+                format!("{fixed_struct_name}_Copy").to_string(),
+                None,
+                vec![("self".to_string(), format!("*{receiver}"))],
+                Some(format!("*{receiver}")),
+                vec![IrInstruction::Return(Some(IrValue::Imm(copy_string)))],
+            ));
         }
 
         for derived_interface in derived.iter() {
