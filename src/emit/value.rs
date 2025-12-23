@@ -871,6 +871,8 @@ fn walk_access_raw(
                             || found_field.type_expr.0.is_duck()
                             || found_field.type_expr.0.is_struct()
                             || found_field.type_expr.0.is_fun()
+                            || found_field.type_expr.0.is_primitive()
+                            || matches!(found_field.type_expr.0, TypeExpr::Or(..))
                             || only_read
                         {
                             s.push_front(format!("Get{field_name}()"));
@@ -896,9 +898,12 @@ fn walk_access_raw(
                             .find(|x| x.name == field_name)
                             .expect("Field doesn't exist");
                         if found_field.type_expr.0.is_array()
+                            || found_field.type_expr.0.ref_is_array()
                             || found_field.type_expr.0.is_duck()
                             || found_field.type_expr.0.is_struct()
                             || found_field.type_expr.0.is_fun()
+                            || found_field.type_expr.0.is_primitive()
+                            || matches!(found_field.type_expr.0, TypeExpr::Or(..))
                             || only_read
                         {
                             s.push_front(format!("Get{field_name}()"));

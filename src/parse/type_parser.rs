@@ -244,6 +244,31 @@ impl TypeExpr {
             // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
             TypeExpr::Struct { .. } => format!("{param1}.clone()"),
             TypeExpr::Tag(t) => t.clone(),
+            TypeExpr::Or(t) => {
+                let mut go_code = format!(
+                    r#"
+                    var p1 any = {param1}
+
+                "#
+                );
+
+                for t in t {
+                    let conc_type = t.0.as_go_type_annotation(type_env);
+                    go_code.push('\n');
+                    go_code.push_str(&format!(
+                        r#"
+                        switch p1.(type) {{
+                        case {conc_type}:
+                            return {}
+                        }}
+                    "#,
+                        t.0.call_clone("p1", type_env)
+                    ));
+                }
+
+                go_code.push_str("\nreturn \"\"");
+                format!("func() any {{ {go_code} }}()")
+            }
             TypeExpr::Ref(inner) | TypeExpr::RefMut(inner) => {
                 let mut derefs = 1;
                 let mut inner = inner.as_ref().clone();
@@ -420,36 +445,42 @@ impl TypeExpr {
     }
 
     pub fn implements_clone(&self, type_env: &mut TypeEnv) -> bool {
-        match self {
-            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_clone(type_env),
-            TypeExpr::Array(t) => t.0.implements_clone(type_env),
-            TypeExpr::Duck(Duck { fields }) => {
-                false
-                    && fields
-                        .iter()
-                        .all(|f| f.type_expr.0.implements_clone(type_env))
+        // self.implements_copy(type_env)
+            match self {
+                TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_clone(type_env),
+                TypeExpr::Array(t) => t.0.implements_clone(type_env),
+                TypeExpr::Duck(Duck { fields }) => {
+                    false
+                        && fields
+                            .iter()
+                            .all(|f| f.type_expr.0.implements_clone(type_env))
+                }
+                TypeExpr::Tuple(t) | TypeExpr::Or(t) => {
+                    t.iter().all(|t| t.0.implements_clone(type_env))
+                }
+                TypeExpr::Struct { name, type_params } => {
+                    let def = type_env.get_struct_def_with_type_params_mut(
+                        name,
+                        type_params,
+                        empty_range(),
+                    );
+                    def.derived
+                        .contains(&crate::parse::struct_parser::DerivableInterface::Clone)
+                        || (def.methods.iter().any(|f| {
+                            f.name.as_str() == "clone"
+                                && f.params.is_empty()
+                                && &f.return_type.0 == self
+                        }) && !def.mut_methods.contains("clone"))
+                }
+                TypeExpr::Int
+                | TypeExpr::String(..)
+                | TypeExpr::Bool(..)
+                | TypeExpr::Char
+                | TypeExpr::Float
+                | TypeExpr::UInt
+                | TypeExpr::Tag(..) => true,
+                _ => false,
             }
-            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_clone(type_env)),
-            TypeExpr::Struct { name, type_params } => {
-                let def =
-                    type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
-                def.derived
-                    .contains(&crate::parse::struct_parser::DerivableInterface::Clone)
-                    || (def.methods.iter().any(|f| {
-                        f.name.as_str() == "clone"
-                            && f.params.is_empty()
-                            && &f.return_type.0 == self
-                    }) && !def.mut_methods.contains("clone"))
-            }
-            TypeExpr::Int
-            | TypeExpr::String(..)
-            | TypeExpr::Bool(..)
-            | TypeExpr::Char
-            | TypeExpr::Float
-            | TypeExpr::UInt
-            | TypeExpr::Tag(..) => true,
-            _ => false,
-        }
     }
 
     pub fn implements_ord(&self, type_env: &mut TypeEnv) -> bool {
@@ -602,24 +633,24 @@ impl TypeExpr {
         }
     }
 
-    pub fn is_trivially_copyable(&self, type_env: &mut TypeEnv) -> bool {
+    pub fn implements_copy(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::String(..)
             | TypeExpr::Int
             | TypeExpr::Float
             | TypeExpr::Bool(..)
             | TypeExpr::Go(..)
-            | TypeExpr::Fun(..)
             | TypeExpr::Tag(..)
             | TypeExpr::Html
             | TypeExpr::UInt
             | TypeExpr::Never
+            | TypeExpr::Fun(..)
             | TypeExpr::Char => true,
-            TypeExpr::Tuple(fields) | TypeExpr::Or(fields) => fields
-                .iter()
-                .all(|(t, _)| t.is_trivially_copyable(type_env)),
+            TypeExpr::Tuple(fields) | TypeExpr::Or(fields) => {
+                fields.iter().all(|(t, _)| t.implements_copy(type_env))
+            }
             TypeExpr::Duck(Duck { fields: _ }) => true,
-            TypeExpr::Array(t) => t.0.is_trivially_copyable(type_env),
+            TypeExpr::Array(t) => t.0.implements_copy(type_env),
             TypeExpr::Ref(..) => true,
             TypeExpr::RefMut(..) => true,
             TypeExpr::Struct { name, type_params } => {
@@ -628,7 +659,7 @@ impl TypeExpr {
                 def.fields
                     .clone()
                     .iter()
-                    .all(|f| f.type_expr.0.is_trivially_copyable(type_env))
+                    .all(|f| f.type_expr.0.implements_copy(type_env))
             }
             _ => false,
         }

@@ -115,8 +115,6 @@ fn main() {
     takes_mut_ref(&mut p);
 
     let d = { x: 10 };
-    let d2: &{x: Int } = &d;
-    let d3 = &d;
 
     let i = 10;
     let z = &mut &mut i;
