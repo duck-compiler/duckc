@@ -1,7 +1,7 @@
 {
     "id": "1a3c3687cab095dc5f1ae0f6e2b8db70",
     "file_path": "../../src/parse/type_parser.rs",
-    "line_number": 1650,
+    "line_number": 1731,
     "title": "discuss unnamed paramters in fn typeexpr",
     "tag": "todo",
     "module_tag": "parse",

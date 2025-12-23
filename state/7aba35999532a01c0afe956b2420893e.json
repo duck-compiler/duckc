@@ -1,7 +1,7 @@
 {
     "id": "7aba35999532a01c0afe956b2420893e",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 809,
+    "line_number": 808,
     "title": "FIND COMMON DECAYED TYPE",
     "tag": "todo",
     "module_tag": "semantics",
