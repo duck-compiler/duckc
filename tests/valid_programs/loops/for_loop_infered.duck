@@ -9,44 +9,44 @@ struct ContainsArray {
 }
 
 fn take_array_ref(a: &Int[]) {
-    for (i in b {}.a()) {
-        std::io::println(std::string::from_int(i));
+    for (i in b {}.a().iter()) {
+        std::io::println(std::string::from_int(*i));
     }
     std::io::println("fisch");
 }
 
 fn take_array_mut(a: &mut Int[]) {
-    for (i in a) {}
+    for (i in a.iter()) {}
 }
 
 fn take_array_mut2(a: &mut Int[]) {
-    for (i in a) {}
-    for (i in a) {}
-    for (i in a) {}
-    for (i in a) {}
+    for (i in a.iter()) {}
+    for (i in a.iter_mut()) {}
+    for (i in a.iter()) {}
+    for (i in a.iter_mut()) {}
     const x = 10;
     const x = 10;
-    for (i in a) {}
+    for (i in a.iter()) {}
     const x = 10;
-    for (i in a) {}
-    for (i in a) {}
+    for (i in a.iter()) {}
+    for (i in a.iter_mut()) {}
     const x = 10;
 }
 
 fn take_array_in_tuple(t: (&Int[],)) {
-    for (i in t.0) {
+    for (i in t.0.iter()) {
 
     }
 }
 
 fn take_array_in_duck(t: { x: &Int[] }) {
-    for (i in t.x) {
+    for (i in t.x.iter()) {
 
     }
 }
 
 fn take_array(a: Int[]) {
-    for (i in a) {
+    for (i in a.iter()) {
 
     }
 }

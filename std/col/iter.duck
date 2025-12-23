@@ -9,6 +9,13 @@ struct Iter<T> {
         }
     }
 
+    mut fn next() -> T | .no_next_elem {
+        return match self.next_fn() {
+            T @x => x,
+            .no_next_elem => .no_next_elem,
+        };
+    }
+
     mut fn for_each(f: fn(T)) {
         while (true) {
             let next = self.next_fn();

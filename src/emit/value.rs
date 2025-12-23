@@ -405,7 +405,46 @@ fn walk_access_raw(
 
                     let clean_go_type_name = target_field_type.as_clean_go_type_name(type_env);
                     let mut skip = false;
-                    if field_name.as_str() == "to_string"
+                    if field_name.as_str() == "iter_mut"
+                        && target_field_type.implements_into_iter_mut(type_env)
+                    {
+                        match target_field_type.clone() {
+                            TypeExpr::Array(..) => {
+                                if !can_do_mut_stuff_through(target_obj, type_env) {
+                                    failure_with_occurence(
+                                        "This needs to allow mutable access",
+                                        target.1,
+                                        [(
+                                            "This needs to allow mutable access".to_string(),
+                                            target_obj.1,
+                                        )],
+                                    );
+                                }
+
+                                flag = Some((
+                                    format!("{clean_go_type_name}_IterMut("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            _ => {}
+                        }
+                    } else if field_name.as_str() == "iter"
+                        && target_field_type.implements_into_iter(type_env)
+                    {
+                        match target_field_type.clone() {
+                            TypeExpr::Array(..) => {
+                                flag = Some((
+                                    format!("{clean_go_type_name}_Iter("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            _ => {}
+                        }
+                    } else if field_name.as_str() == "to_string"
                         && target_field_type.implements_to_string(type_env)
                     {
                         match target_field_type.clone() {
@@ -828,6 +867,7 @@ fn walk_access_raw(
                             .find(|x| x.name == field_name)
                             .expect("Field doesn't exist");
                         if found_field.type_expr.0.is_array()
+                            || found_field.type_expr.0.ref_is_array()
                             || found_field.type_expr.0.is_duck()
                             || found_field.type_expr.0.is_struct()
                             || found_field.type_expr.0.is_fun()
@@ -1213,62 +1253,67 @@ impl ValueExpr {
                 block,
             } => {
                 let ident_type = ident_type.as_ref().expect("needs type");
-                let (mut target_instr, target_res) =
-                    walk_access(target, type_env, env, span, true, false, false);
+                let ident_type_anno = ident_type.as_go_type_annotation(type_env);
+                let (mut target_instr, target_res) = target.0.emit(type_env, env, span);
 
-                let mut target_type = TypeExpr::from_value_expr(target, type_env);
+                let target_type = TypeExpr::from_value_expr(target, type_env);
 
-                let mut star_count: u32 = 0;
-
-                while let TypeExpr::Ref(t) | TypeExpr::RefMut(t) = target_type {
-                    star_count += 1;
-                    target_type = t.0;
-                }
+                let TypeExpr::Struct {
+                    name: _,
+                    type_params,
+                } = target_type
+                else {
+                    panic!("Compiler Bug: For only works with iter struct {target_type:?}")
+                };
 
                 if let Some(target_res_var_name) = target_res {
                     let label = env.new_label().clone();
                     let (body_res_instr, _) = block.0.emit(type_env, env, span);
                     env.labels.pop();
-                    target_instr.push(IrInstruction::ForRangeElem {
-                        ident: ident.to_owned(),
-                        range_target: if star_count == 0 {
-                            IrValue::Var(target_res_var_name.clone())
-                        } else {
-                            let mut s = String::new();
-                            for _ in 0..star_count {
-                                s.push('*');
-                            }
-                            IrValue::Imm(format!("{s}{target_res_var_name}"))
-                        },
-                        body: {
-                            let mut body_instr = vec![
-                                IrInstruction::VarDecl(
-                                    ident.to_owned(),
-                                    ident_type.as_go_type_annotation(type_env),
-                                ),
-                                IrInstruction::VarAssignment(
-                                    ident.to_owned(),
-                                    IrValue::Imm({
-                                        let mut s = target_res_var_name.clone();
-                                        for _ in 0..star_count {
-                                            s.insert(0, '*');
-                                        }
-                                        s.insert(0, '(');
-                                        s.push(')');
-                                        s.push_str("[DUCK_FOR_IDX]");
-                                        let star_count = star_count.min(1);
-                                        for _ in 0..star_count {
-                                            s.insert(0, '&');
-                                        }
-                                        s
-                                    }),
-                                ),
-                            ];
-                            body_instr.extend(body_res_instr);
-                            body_instr
-                        },
-                        label: label.clone(),
-                    });
+
+                    let iter_res_var = env.new_var();
+                    let case_tmp_var = env.new_var();
+
+                    let mut body = Vec::new();
+                    body.extend([
+                        IrInstruction::VarDecl(ident.clone(), ident_type_anno.clone()),
+                        IrInstruction::VarDecl(iter_res_var.clone(), "any".to_string()),
+                        IrInstruction::FunCall(
+                            Some(iter_res_var.clone()),
+                            IrValue::FieldAccess(
+                                Box::new(target_res_var_name.clone()),
+                                "next".to_string(),
+                            ),
+                            vec![],
+                        ),
+                        IrInstruction::SwitchType(
+                            IrValue::Var(iter_res_var.clone()),
+                            vec![
+                                Case {
+                                    type_name: type_params[0].0.as_go_type_annotation(type_env),
+                                    instrs: vec![IrInstruction::VarAssignment(
+                                        ident.clone(),
+                                        IrValue::Var(case_tmp_var.clone()),
+                                    )],
+                                    identifier_binding: Some(case_tmp_var.clone()),
+                                    condition: None,
+                                    conditional_branches: None,
+                                    span: empty_range(),
+                                },
+                                Case {
+                                    type_name: "Tag__no_next_elem".to_string(),
+                                    instrs: vec![IrInstruction::Break(Some(label.clone()))],
+                                    identifier_binding: None,
+                                    condition: None,
+                                    conditional_branches: None,
+                                    span: empty_range(),
+                                },
+                            ],
+                        ),
+                    ]);
+                    body.extend(body_res_instr);
+                    let as_loop = IrInstruction::Loop(body, label);
+                    target_instr.push(as_loop);
                     (target_instr, None)
                 } else {
                     (target_instr, None)
