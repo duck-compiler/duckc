@@ -1446,6 +1446,7 @@ impl TypeExpr {
             TypeExpr::Float
             | TypeExpr::Char
             | TypeExpr::Int
+            | TypeExpr::UInt
             | TypeExpr::String(..)
             | TypeExpr::Bool(..) => true,
             _ => false,
@@ -1722,7 +1723,51 @@ pub fn check_type_compatability_full(
         }
         TypeExpr::Ref(req_t) => {
             if let TypeExpr::Ref(given_t) | TypeExpr::RefMut(given_t) = &given_type.0 {
-                check_type_compatability(req_t, given_t, type_env);
+                let mut req_x = req_t.clone();
+                let mut given_x = given_t.clone();
+
+                loop {
+                    match req_x.0 {
+                        TypeExpr::Ref(inner_ty) => {
+                            req_x = inner_ty;
+                            if let TypeExpr::Ref(inner_given_ty)
+                            | TypeExpr::RefMut(inner_given_ty) = given_x.0
+                            {
+                                given_x = inner_given_ty;
+                            } else {
+                                if req_x.0.type_id(type_env) != given_x.0.type_id(type_env) {
+                                    fail_requirement(
+                                        "Referenced types need to match exactly".to_string(),
+                                        "So this needs to be exactly the same type".to_string(),
+                                    );
+                                }
+                            }
+                        }
+                        TypeExpr::RefMut(inner_ty) => {
+                            req_x = inner_ty;
+                            if let TypeExpr::RefMut(inner_given_ty) = given_x.0 {
+                                given_x = inner_given_ty;
+                            } else {
+                                if req_x.0.type_id(type_env) != given_x.0.type_id(type_env) {
+                                    fail_requirement(
+                                        "Referenced types need to match exactly".to_string(),
+                                        "So this needs to be exactly the same type".to_string(),
+                                    );
+                                }
+                            }
+                        }
+                        _ => {
+                            if req_x.0.type_id(type_env) == given_x.0.type_id(type_env) {
+                                break;
+                            } else {
+                                fail_requirement(
+                                    "Referenced types need to match exactly".to_string(),
+                                    "So this needs to be exactly the same type".to_string(),
+                                );
+                            }
+                        }
+                    }
+                }
             } else {
                 fail_requirement(
                     "This is an immutable reference".to_string(),
@@ -1732,7 +1777,51 @@ pub fn check_type_compatability_full(
         }
         TypeExpr::RefMut(req_t) => {
             if let TypeExpr::RefMut(given_t) = &given_type.0 {
-                check_type_compatability(req_t, given_t, type_env);
+                let mut req_x = req_t.clone();
+                let mut given_x = given_t.clone();
+
+                loop {
+                    match req_x.0 {
+                        TypeExpr::Ref(inner_ty) => {
+                            req_x = inner_ty;
+                            if let TypeExpr::Ref(inner_given_ty)
+                            | TypeExpr::RefMut(inner_given_ty) = given_x.0
+                            {
+                                given_x = inner_given_ty;
+                            } else {
+                                if req_x.0.type_id(type_env) != given_x.0.type_id(type_env) {
+                                    fail_requirement(
+                                        "Referenced types need to match exactly".to_string(),
+                                        "So this needs to be exactly the same type".to_string(),
+                                    );
+                                }
+                            }
+                        }
+                        TypeExpr::RefMut(inner_ty) => {
+                            req_x = inner_ty;
+                            if let TypeExpr::RefMut(inner_given_ty) = given_x.0 {
+                                given_x = inner_given_ty;
+                            } else {
+                                if req_x.0.type_id(type_env) != given_x.0.type_id(type_env) {
+                                    fail_requirement(
+                                        "Referenced types need to match exactly".to_string(),
+                                        "So this needs to be exactly the same type".to_string(),
+                                    );
+                                }
+                            }
+                        }
+                        _ => {
+                            if req_x.0.type_id(type_env) == given_x.0.type_id(type_env) {
+                                break;
+                            } else {
+                                fail_requirement(
+                                    "Referenced types need to match exactly".to_string(),
+                                    "So this needs to be exactly the same type".to_string(),
+                                );
+                            }
+                        }
+                    }
+                }
             } else {
                 fail_requirement(
                     "This is a mutable reference".to_string(),

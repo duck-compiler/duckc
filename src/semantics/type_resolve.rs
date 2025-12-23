@@ -3040,11 +3040,28 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             typeresolve_value_expr((&mut block.0, block.1), type_env);
             type_env.pop_identifier_types();
         }
-        ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
+
+        ValueExpr::Deref(v) => {
+            typeresolve_value_expr((&mut v.0, v.1), type_env);
+            let t = TypeExpr::from_value_expr(v, type_env);
+            if !t.implements_copy(type_env) {
+                let msg = "The value of this type needs to implement Copy since it is dereferenced, but it does not";
+                failure_with_occurence(msg, v.1, [(msg, v.1)]);
+            }
+        }
+
+        ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
             if let ValueExpr::Variable(_, _, _, _, needs_copy) = &mut v.0 {
                 *needs_copy = false;
             }
+
             typeresolve_value_expr((&mut v.0, v.1), type_env);
+
+            let t = TypeExpr::from_value_expr(v, type_env);
+            if t.is_duck() {
+                let msg = "Cannot take references to ducks";
+                failure_with_occurence(msg, v.1, [(msg, v.1)]);
+            }
         }
 
         ValueExpr::HtmlString(contents) => {
@@ -3768,7 +3785,7 @@ fn typeresolve_variable(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
 
     //resolve_all_aliases_type_expr(&mut type_expr, type_env, generics_to_ignore);
 
-    if *needs_copy && !type_expr.is_trivially_copyable(type_env) {
+    if *needs_copy && !type_expr.implements_copy(type_env) {
         failure_with_occurence(
             "This type is not trivially copyable",
             value_expr.1,
