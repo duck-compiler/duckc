@@ -1,0 +1,7 @@
+fn abc() {
+}
+
+fn main() {
+    const f1 = &mut abc();
+    const f2 = &abc();
+}
