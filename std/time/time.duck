@@ -235,7 +235,7 @@ struct Time {
 
     fn nanosecond() -> Int {
         return go {
-            $ = (*self).raw_time.Second()
+            $ = (*self).raw_time.Nanosecond()
         } as Int;
     }
 
