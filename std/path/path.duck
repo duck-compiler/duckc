@@ -1,0 +1,28 @@
+use go "path";
+
+type Path = String;
+
+fn clean(p: Path) -> Path {
+    return go {
+        $ = path.Clean(p)
+    } as String
+}
+
+fn split(p: Path) -> { dir: String, file: String } {
+    let dir: String;
+    let file: String;
+    go {
+        dir, file = path.Split(p)
+    };
+
+    return {
+        dir: dir,
+        file: file,
+    }
+}
+
+fn join(elem: String[]) -> Path {
+    return go {
+        $ = path.Join(elem...)
+    } as String
+}
