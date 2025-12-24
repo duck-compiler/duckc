@@ -389,31 +389,31 @@ jobs:
 
         Download the appropriate binary for your platform:
 
-        ```bash
+        \`\`\`bash
         # Linux/macOS
         chmod +x dargo-<platform>
         sudo mv dargo-<platform> /usr/local/bin/dargo
 
         # Windows
         # Move dargo-windows-x86_64.exe to a directory in your PATH and rename to dargo.exe
-        ```
+        \`\`\`
 
         ### Check installation
         To check if your installation has worked, run following command:
-        ```bash
+        \`\`\`bash
         duck help
-        ```
+        \`\`\`
 
         And check if you see a usage description.
 
         ### Hello World with dargo
         Now that you have dargo installed you can create a project, by running:
-        ```bash
+        \`\`\`bash
         mkdir my_project_directory
         cd my_project_directory
         dargo init
         dargo run
-        ```
+        \`\`\`
 
         And you should see Hello, World being printed in your terminal.
 
@@ -421,9 +421,9 @@ jobs:
 
         Verify the integrity of your download using the provided checksums:
 
-        ```bash
+        \`\`\`bash
         sha256sum -c dargo-<platform>.sha256
-        ```
+        \`\`\`
 
         ### FAQ
 
