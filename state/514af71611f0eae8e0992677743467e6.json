@@ -13,7 +13,8 @@
         "email": "mvmogo@gmail.com"
     },
     "source_line": "// todo: discuss if we just allow passing ints as floats",
-    "status": "open",
+    "status": "closed",
     "first_seen": "2025-08-24T22:43:39.039693",
-    "history": []
+    "history": [],
+    "closed_at": "2025-12-24T01:43:59.785836"
 }
