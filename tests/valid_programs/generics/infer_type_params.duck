@@ -1,0 +1,31 @@
+use std::col::{Iter, ArrayList};
+use std::sync::Mutex;
+use std::io::println;
+
+fn a<T, U>(x: T, y: U) {}
+
+fn b<T>(x: { x: T }, y: T) {}
+
+fn main() {
+    a(20, "abc");
+    b({ x: 100 }, 100);
+    b({ x: 100 as UInt }, 100 as UInt);
+
+    const mutex = Mutex::new(ArrayList::from_array(["yoo"]));
+
+    Iter::from(mut fn() -> () | .no_next_elem {})
+        .take(4)
+        .into_list()
+        .as_ref()
+        .to_string()->println();
+
+    mutex.lock(fn (r) {
+        r.push("First");
+        r.push("Second");
+    });
+
+    mutex.lock(fn (r) {
+        r.as_ref().to_string()->println();
+    });
+
+}
