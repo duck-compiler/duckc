@@ -1,6 +1,7 @@
 name: build-duck-nightly
 
 on:
+  push:
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
@@ -356,83 +357,87 @@ jobs:
         cd ..
 
     - name: create nightly release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: nightly-${{ needs.setup.outputs.version }}
-        name: Nightly Build ${{ needs.setup.outputs.version }}
-        body: |
-          ## Duck Nightly Build ${{ needs.setup.outputs.version }}
-          ⚠️ **Warning**: This is a nightly build and may contain unstable features or bugs.
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: nightly-${{ needs.setup.outputs.version }}
+        RELEASE_NAME: "Nightly Build ${{ needs.setup.outputs.version }}"
+        VERSION: ${{ needs.setup.outputs.version }}
+      run: |
+        # 1. Generate the release notes file
+        cat <<EOF > release_notes.md
+        ## Duck Nightly Build $VERSION
+        ⚠️ **Warning**: This is a nightly build and may contain unstable features or bugs.
 
-          ### Downloads
+        ### Downloads
 
-          **Linux:**
-          - [dargo-linux-x86_64](https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.setup.outputs.version }}/dargo-linux-x86_64) ([checksum](https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.setup.outputs.version }}/dargo-linux-x86_64.sha256))
-          - [dargo-linux-aarch64](https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.setup.outputs.version }}/dargo-linux-aarch64) ([checksum](https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.setup.outputs.version }}/dargo-linux-aarch64.sha256))
-          - [dargo-linux-armv7](https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.setup.outputs.version }}/dargo-linux-armv7) ([checksum](https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.setup.outputs.version }}/dargo-linux-armv7.sha256))
+        **Linux:**
+        - [dargo-linux-x86_64](https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/dargo-linux-x86_64) ([checksum](https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/dargo-linux-x86_64.sha256))
+        - [dargo-linux-aarch64](https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/dargo-linux-aarch64) ([checksum](https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/dargo-linux-aarch64.sha256))
+        - [dargo-linux-armv7](https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/dargo-linux-armv7) ([checksum](https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/dargo-linux-armv7.sha256))
 
-          **macOS:**
-          - [dargo-macos-x86_64](https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.setup.outputs.version }}/dargo-macos-x86_64) ([checksum](https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.setup.outputs.version }}/dargo-macos-x86_64.sha256))
-          - [dargo-macos-aarch64](https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.setup.outputs.version }}/dargo-macos-aarch64) ([checksum](https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.setup.outputs.version }}/dargo-macos-aarch64.sha256))
+        **macOS:**
+        - [dargo-macos-x86_64](https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/dargo-macos-x86_64) ([checksum](https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/dargo-macos-x86_64.sha256))
+        - [dargo-macos-aarch64](https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/dargo-macos-aarch64) ([checksum](https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/dargo-macos-aarch64.sha256))
 
-          **Windows:**
-          - [dargo-windows-x86_64.exe](https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.setup.outputs.version }}/dargo-windows-x86_64.exe) ([checksum](https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.setup.outputs.version }}/dargo-windows-x86_64.sha256))
+        **Windows:**
+        - [dargo-windows-x86_64.exe](https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/dargo-windows-x86_64.exe) ([checksum](https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/dargo-windows-x86_64.sha256))
 
-          **All platforms:**
-          - [dargo-${{ needs.setup.outputs.version }}-nightly.tar.gz](https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.setup.outputs.version }}/dargo-${{ needs.setup.outputs.version }}-nightly.tar.gz)
+        **All platforms:**
+        - [dargo-$VERSION-nightly.tar.gz](https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/dargo-$VERSION-nightly.tar.gz)
 
-          ### Installation
+        ### Installation
 
-          Download the appropriate binary for your platform:
+        Download the appropriate binary for your platform:
 
-          ```bash
-          # Linux/macOS
-          chmod +x dargo-<platform>
-          sudo mv dargo-<platform> /usr/local/bin/dargo
+        ```bash
+        # Linux/macOS
+        chmod +x dargo-<platform>
+        sudo mv dargo-<platform> /usr/local/bin/dargo
 
-          # Windows
-          Move dargo-windows-x86_64.exe to a directory in your PATH and rename to dargo.exe
-          ```
+        # Windows
+        # Move dargo-windows-x86_64.exe to a directory in your PATH and rename to dargo.exe
+        ```
 
-          ### Check installation
-          To check if your installation has worked, run following command:
-          ```bash
-          duck help
-          ```
+        ### Check installation
+        To check if your installation has worked, run following command:
+        ```bash
+        duck help
+        ```
 
-          And check if you see a usage description
+        And check if you see a usage description.
 
-          ### Hello World with dargo
-          Now that you have dargo installed you can create a project, by running:
-          ```bash
-          mkdir my_project_directory
-          cd my_project_directory
-          dargo init
-          dargo run
-          ```
+        ### Hello World with dargo
+        Now that you have dargo installed you can create a project, by running:
+        ```bash
+        mkdir my_project_directory
+        cd my_project_directory
+        dargo init
+        dargo run
+        ```
 
-          And you should see Hello, World being printed in your terminal.
+        And you should see Hello, World being printed in your terminal.
 
-          ### Verification
+        ### Verification
 
-          Verify the integrity of your download using the provided checksums:
+        Verify the integrity of your download using the provided checksums:
 
-          ```bash
-          sha256sum -c dargo-<platform>.sha256
-          ```
+        ```bash
+        sha256sum -c dargo-<platform>.sha256
+        ```
 
-          ### FAQ
+        ### FAQ
 
-          **What is dargo?**
-          Dargo is the build tool for duck applications. It contains everything you need for compiling your duck code.
-          You can find more information in the [dargo section](https://github.com/duck-compiler/duck-spielwiese/blob/main/docs/002-dargo.md) of our docs
+        **What is dargo?**
+        Dargo is the build tool for duck applications. It contains everything you need for compiling your duck code.
+        You can find more information in the [dargo section](https://github.com/duck-compiler/duck-spielwiese/blob/main/docs/002-dargo.md) of our docs.
 
-          **What is a nightly build**
-          We do nightly builds every night at 2 AM UTC based on the main branch of the compiler's repository.
-          It might contain features that won't get into a release build later on.
+        **What is a nightly build?**
+        We do nightly builds every night at 2 AM UTC based on the main branch of the compiler's repository.
+        EOF
 
-        files: |
-          nightly-assets/*
-          dargo-${{ needs.setup.outputs.version }}-nightly.tar.gz
-        draft: false
-        prerelease: true
+        gh release create "$RELEASE_TAG" \
+          --title "$RELEASE_NAME" \
+          --notes-file release_notes.md \
+          --prerelease \
+          nightly-assets/* \
+          dargo-"$VERSION"-nightly.tar.gz
