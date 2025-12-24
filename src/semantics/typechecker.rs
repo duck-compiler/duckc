@@ -65,912 +65,951 @@ impl TypeExpr {
     }
 
     #[track_caller]
-    pub fn from_value_expr(value_expr: &Spanned<ValueExpr>, type_env: &mut TypeEnv) -> Spanned<TypeExpr> {
+    pub fn from_value_expr(
+        value_expr: &Spanned<ValueExpr>,
+        type_env: &mut TypeEnv,
+    ) -> Spanned<TypeExpr> {
         let complete_span = &value_expr.1;
         let value_expr = &value_expr.0;
 
-        return (match value_expr {
-            ValueExpr::RawStruct { .. } => panic!("raw struct should not be here"),
-            ValueExpr::Negate(v) => TypeExpr::from_value_expr(v.as_ref(), type_env).0,
-            ValueExpr::Async(e) => {
-                let inner = TypeExpr::from_value_expr(e, type_env);
+        return (
+            match value_expr {
+                ValueExpr::RawStruct { .. } => panic!("raw struct should not be here"),
+                ValueExpr::Negate(v) => TypeExpr::from_value_expr(v.as_ref(), type_env).0,
+                ValueExpr::Async(e) => {
+                    let inner = TypeExpr::from_value_expr(e, type_env);
 
-                let ValueExpr::FunctionCall {
-                    target,
-                    params,
-                    type_params: _,
-                } = &e.0
-                else {
-                    panic!("can only async func call")
-                };
+                    let ValueExpr::FunctionCall {
+                        target,
+                        params,
+                        type_params: _,
+                    } = &e.0
+                    else {
+                        panic!("can only async func call")
+                    };
 
-                if [target.as_ref()]
-                    .into_iter()
-                    .chain(params.iter())
-                    .any(|v| TypeExpr::from_value_expr(v, type_env).0.is_never()) {
-                    TypeExpr::Never
-                } else {
-                    TypeExpr::Struct {
-                        name: mangle(&["std", "sync", "Channel"]),
-                        type_params: vec![(inner.0, *complete_span)],
+                    if [target.as_ref()]
+                        .into_iter()
+                        .chain(params.iter())
+                        .any(|v| TypeExpr::from_value_expr(v, type_env).0.is_never())
+                    {
+                        TypeExpr::Never
+                    } else {
+                        TypeExpr::Struct {
+                            name: mangle(&["std", "sync", "Channel"]),
+                            type_params: vec![(inner.0, *complete_span)],
+                        }
                     }
                 }
-            }
-            ValueExpr::Defer(call) => {
-                let ValueExpr::FunctionCall {
-                    target,
-                    params,
-                    type_params: _,
-                } = &call.0
-                else {
-                    panic!("can only defer func call")
-                };
-                if [target.as_ref()]
-                    .into_iter()
-                    .chain(params.iter())
-                    .any(|v| TypeExpr::from_value_expr(v, type_env).0.is_never())
-                {
-                    TypeExpr::Never
-                } else {
-                    TypeExpr::Statement
+                ValueExpr::Defer(call) => {
+                    let ValueExpr::FunctionCall {
+                        target,
+                        params,
+                        type_params: _,
+                    } = &call.0
+                    else {
+                        panic!("can only defer func call")
+                    };
+                    if [target.as_ref()]
+                        .into_iter()
+                        .chain(params.iter())
+                        .any(|v| TypeExpr::from_value_expr(v, type_env).0.is_never())
+                    {
+                        TypeExpr::Never
+                    } else {
+                        TypeExpr::Statement
+                    }
                 }
+                ValueExpr::As(v, t) => {
+                    if let ValueExpr::Array(exprs) = &v.0
+                        && exprs.is_empty()
+                    {
+                        t.0.clone()
+                    } else {
+                        let v_type = TypeExpr::from_value_expr(v.as_ref(), type_env);
 
-            }
-            ValueExpr::As(v, t) => {
-                if let ValueExpr::Array(exprs) = &v.0
-                    && exprs.is_empty()
-                {
-                    t.0.clone()
-                } else {
-                    let v_type = TypeExpr::from_value_expr(v.as_ref(), type_env);
-
+                        if v_type.0.is_never() {
+                            TypeExpr::Never
+                        } else {
+                            check_type_compatability(t, &(v_type.0, v.1), type_env);
+                            t.0.clone()
+                        }
+                    }
+                }
+                ValueExpr::For { .. } => TypeExpr::Statement,
+                ValueExpr::Ref(v) => {
+                    let v_type = TypeExpr::from_value_expr(v, type_env);
                     if v_type.0.is_never() {
                         TypeExpr::Never
                     } else {
-                        check_type_compatability(t, &(v_type.0, v.1), type_env);
-                        t.0.clone()
+                        TypeExpr::Ref((v_type.0, v.1).into())
                     }
                 }
-            }
-            ValueExpr::For { .. } => TypeExpr::Statement,
-            ValueExpr::Ref(v) => {
-                let v_type = TypeExpr::from_value_expr(v, type_env);
-                if v_type.0.is_never() {
-                    TypeExpr::Never
-                } else {
-                    TypeExpr::Ref((v_type.0, v.1).into())
+                ValueExpr::RefMut(v) => {
+                    let v_type = TypeExpr::from_value_expr(v, type_env);
+                    if v_type.0.is_never() {
+                        TypeExpr::Never
+                    } else {
+                        TypeExpr::RefMut((v_type.0, v.1).into())
+                    }
                 }
-            }
-            ValueExpr::RefMut(v) => {
-                let v_type = TypeExpr::from_value_expr(v, type_env);
-                if v_type.0.is_never() {
-                    TypeExpr::Never
-                } else {
-                    TypeExpr::RefMut((v_type.0, v.1).into())
-                }
-            }
-            ValueExpr::Deref(v) => {
-                let ty_expr = TypeExpr::from_value_expr(v, type_env);
+                ValueExpr::Deref(v) => {
+                    let ty_expr = TypeExpr::from_value_expr(v, type_env);
 
-                if ty_expr.0.is_never() {
-                    TypeExpr::Never
-                } else if !matches!(ty_expr.0, TypeExpr::Ref(..) | TypeExpr::RefMut(..)) {
-                    failure_with_occurence(
-                        "Can only dereference a reference",
-                        *complete_span,
-                        [("This is not a reference".to_string(), v.1)],
-                    );
-                } else {
-                    let (TypeExpr::Ref(t) | TypeExpr::RefMut(t)) = ty_expr.0 else {
-                        unreachable!()
-                    };
-                    t.0
+                    if ty_expr.0.is_never() {
+                        TypeExpr::Never
+                    } else if !matches!(ty_expr.0, TypeExpr::Ref(..) | TypeExpr::RefMut(..)) {
+                        failure_with_occurence(
+                            "Can only dereference a reference",
+                            *complete_span,
+                            [("This is not a reference".to_string(), v.1)],
+                        );
+                    } else {
+                        let (TypeExpr::Ref(t) | TypeExpr::RefMut(t)) = ty_expr.0 else {
+                            unreachable!()
+                        };
+                        t.0
+                    }
                 }
-            }
-            ValueExpr::HtmlString(..) => TypeExpr::Html, // TODO: CHECK FOR NEVER
-            ValueExpr::Tag(identifier) => TypeExpr::Tag(identifier.clone()),
-            ValueExpr::RawVariable(_x, p) => panic!("{}", p.join(" ").leak()),
-            ValueExpr::FormattedString(contents) => {
-                for c in contents {
-                    if let ValFmtStringContents::Expr(e) = c {
-                        let type_expr = TypeExpr::from_value_expr(e, type_env);
-                        if type_expr.0.is_never() {
-                            return (TypeExpr::Never, type_expr.1)
+                ValueExpr::HtmlString(..) => TypeExpr::Html, // TODO: CHECK FOR NEVER
+                ValueExpr::Tag(identifier) => TypeExpr::Tag(identifier.clone()),
+                ValueExpr::RawVariable(_x, p) => panic!("{}", p.join(" ").leak()),
+                ValueExpr::FormattedString(contents) => {
+                    for c in contents {
+                        if let ValFmtStringContents::Expr(e) = c {
+                            let type_expr = TypeExpr::from_value_expr(e, type_env);
+                            if type_expr.0.is_never() {
+                                return (TypeExpr::Never, type_expr.1);
+                            }
+                            require(
+                                type_expr.0.is_string(),
+                                format!("Needs to be string, is {type_expr:?}"),
+                            );
                         }
-                        require(type_expr.0.is_string(), format!("Needs to be string, is {type_expr:?}"));
+                    }
+                    TypeExpr::String(None)
+                }
+                ValueExpr::ArrayAccess(target, idx) => {
+                    let target_type = TypeExpr::from_value_expr_dereferenced(target, type_env);
+                    let idx_type = TypeExpr::from_value_expr(idx, type_env);
+
+                    if target_type.0.is_never() || idx_type.0.is_never() {
+                        TypeExpr::Never
+                    } else {
+                        require(
+                            target_type.0.is_array() || target_type.0.ref_is_array(),
+                            "Needs to be array".into(),
+                        );
+                        require(idx_type.0.is_int(), "Needs to be int".into());
+
+                        let TypeExpr::Array(array_type) = target_type.0 else {
+                            panic!("{target_type:?}")
+                        };
+
+                        array_type.0.clone()
                     }
                 }
-                TypeExpr::String(None)
-            }
-            ValueExpr::ArrayAccess(target, idx) => {
-                let target_type = TypeExpr::from_value_expr_dereferenced(target, type_env);
-                let idx_type = TypeExpr::from_value_expr(idx, type_env);
+                ValueExpr::Array(value_exprs) => {
+                    if value_exprs.is_empty() {
+                        let t = String::from("empty array must be wrapped in as expression");
+                        failure_with_occurence(
+                            t.clone(),
+                            *complete_span,
+                            [(t.clone(), *complete_span)],
+                        );
+                    }
 
-                if target_type.0.is_never() || idx_type.0.is_never() {
-                    TypeExpr::Never
-                } else {
-                    require(
-                        target_type.0.is_array() || target_type.0.ref_is_array(),
-                        "Needs to be array".into(),
-                    );
-                    require(idx_type.0.is_int(), "Needs to be int".into());
+                    let mut variants = Vec::new();
+                    for value_expr in value_exprs {
+                        let element_type = (
+                            TypeExpr::from_value_expr(value_expr, type_env),
+                            value_expr.1,
+                        );
 
-                    let TypeExpr::Array(array_type) = target_type.0 else {
-                        panic!("{target_type:?}")
-                    };
+                        if element_type.0.0.is_never() {
+                            return (TypeExpr::Never, complete_span.clone());
+                        }
 
-                    array_type.0.clone()
+                        variants.push(element_type.0);
+                    }
+
+                    variants.sort_by_key(|value_expr| value_expr.0.as_clean_go_type_name(type_env));
+                    variants
+                        .dedup_by_key(|value_expr| value_expr.0.as_clean_go_type_name(type_env));
+
+                    if variants.len() > 1 {
+                        let start = variants
+                            .first()
+                            .expect("we've just checked that variants is at least 2 items long");
+                        let end = variants
+                            .last()
+                            .expect("we've just checked that variants is at least 2 items long");
+
+                        let combined_span = SS {
+                            context: start.1.context,
+                            start: start.1.start,
+                            end: end.1.end,
+                        };
+
+                        return (
+                            TypeExpr::Array(Box::new((TypeExpr::Or(variants), combined_span))),
+                            combined_span,
+                        );
+                    }
+
+                    if variants.is_empty() {
+                        panic!(
+                            "Internal Compiler Error: variants shouldn't ever be empty, as this is a syntax error."
+                        );
+                    }
+
+                    let first_type = variants
+                        .first()
+                        .expect("we've checked that variants is exactly of len 1");
+
+                    TypeExpr::Array(Box::new(first_type.clone()))
                 }
-            }
-            ValueExpr::Array(value_exprs) => {
-                if value_exprs.is_empty() {
-                    let t = String::from("empty array must be wrapped in as expression");
-                    failure_with_occurence(
-                        t.clone(),
+                ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
+                    lambda_expr
+                        .params
+                        .iter()
+                        .map(|(name, type_expr)| {
+                            (Some(name.clone()), type_expr.as_ref().cloned().unwrap())
+                        })
+                        .collect(),
+                    Box::new(
+                        lambda_expr
+                            .return_type
+                            .clone()
+                            .unwrap_or(TypeExpr::unit_with_span(*complete_span)),
+                    ),
+                    lambda_expr.is_mut,
+                ),
+                ValueExpr::InlineGo(_, ty) => ty.as_ref().cloned().unwrap_or(TypeExpr::unit()).0,
+                ValueExpr::Int(_, t) => {
+                    t.as_ref().cloned().map(|(x, _)| x).unwrap_or(TypeExpr::Int)
+                }
+                ValueExpr::Bool(..) => TypeExpr::Bool(None),
+                ValueExpr::Char(..) => TypeExpr::Char,
+                ValueExpr::Float(..) => TypeExpr::Float,
+                ValueExpr::String(..) => TypeExpr::String(None),
+                ValueExpr::Break => TypeExpr::Never,
+                ValueExpr::Continue => TypeExpr::Never,
+                ValueExpr::Return(..) => TypeExpr::Never,
+                ValueExpr::VarAssign(assignment) => {
+                    let target_type = TypeExpr::from_value_expr(&assignment.0.target, type_env);
+                    let value_type = TypeExpr::from_value_expr(&assignment.0.value_expr, type_env);
+
+                    if target_type.0.is_never() || value_type.0.is_never() {
+                        TypeExpr::Never
+                    } else {
+                        TypeExpr::Statement
+                    }
+                }
+                ValueExpr::VarDecl(decl) => {
+                    let decl = decl.as_ref();
+                    if let Some(initializer) = decl.0.initializer.as_ref() {
+                        let init_type = TypeExpr::from_value_expr(initializer, type_env);
+                        if init_type.0.is_never() {
+                            return (TypeExpr::Never, complete_span.clone());
+                        }
+
+                        check_type_compatability(
+                            decl.0.type_expr.as_ref().expect(
+                                "compiler error: i expect the implicit types to be resolved by now",
+                            ),
+                            &(init_type.0, initializer.1),
+                            type_env,
+                        );
+                    }
+
+                    TypeExpr::Statement
+                }
+                ValueExpr::Struct {
+                    name,
+                    fields,
+                    type_params,
+                } => {
+                    let _struct_def = type_env.get_struct_def_with_type_params_mut(
+                        name.as_str(),
+                        type_params,
                         *complete_span,
-                        [(t.clone(), *complete_span)],
                     );
+
+                    for field in fields {
+                        let ty = TypeExpr::from_value_expr(&field.1, type_env);
+                        if ty.0.is_never() {
+                            return (TypeExpr::Never, field.1.1);
+                        }
+                    }
+
+                    TypeExpr::Struct {
+                        name: name.to_string(),
+                        type_params: type_params.clone(),
+                    }
                 }
+                ValueExpr::Tuple(fields) => {
+                    let mut is_never = false;
+                    let types = fields
+                        .iter()
+                        .map(|value_expr| {
+                            // todo: check if we really want to unconst tuple values
+                            // maybe we need a way to tell that it should be consted here. e.g.
+                            //  `(5,"hallo")`
+                            (
+                                match TypeExpr::from_value_expr(value_expr, type_env).0 {
+                                    TypeExpr::Never => {
+                                        is_never = true;
+                                        TypeExpr::Never
+                                    }
+                                    x => x,
+                                },
+                                value_expr.1,
+                            )
+                        })
+                        .collect::<Vec<Spanned<TypeExpr>>>();
 
-                let mut variants = Vec::new();
-                for value_expr in value_exprs {
-                    let element_type = (
-                        TypeExpr::from_value_expr(value_expr, type_env),
-                        value_expr.1,
-                    );
+                    if is_never {
+                        TypeExpr::Never
+                    } else {
+                        TypeExpr::Tuple(types)
+                    }
+                }
+                ValueExpr::Duck(fields) => {
+                    let mut f = Vec::new();
 
-                    if element_type.0.0.is_never() {
+                    for (name, (value_expr, span)) in fields {
+                        let spanned_type = (
+                            TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env),
+                            *span,
+                        );
+
+                        if spanned_type.0.0.is_never() {
+                            return (TypeExpr::Never, spanned_type.1);
+                        }
+
+                        f.push(Field {
+                            name: name.clone(),
+                            type_expr: spanned_type.0,
+                        });
+                    }
+
+                    TypeExpr::Duck(Duck { fields: f })
+                }
+                ValueExpr::Add(left, right) => {
+                    let left_type_expr: Spanned<TypeExpr> =
+                        TypeExpr::from_value_expr(left, type_env);
+                    if left_type_expr.0.is_never() {
                         return (TypeExpr::Never, complete_span.clone());
                     }
 
-                    variants.push(element_type.0);
-                }
+                    let right_type_expr: Spanned<TypeExpr> =
+                        TypeExpr::from_value_expr(right, type_env);
 
-                variants.sort_by_key(|value_expr| value_expr.0.as_clean_go_type_name(type_env));
-                variants.dedup_by_key(|value_expr| value_expr.0.as_clean_go_type_name(type_env));
+                    if right_type_expr.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
 
-                if variants.len() > 1 {
-                    let start = variants
-                        .first()
-                        .expect("we've just checked that variants is at least 2 items long");
-                    let end = variants
-                        .last()
-                        .expect("we've just checked that variants is at least 2 items long");
-
-                    let combined_span = SS {
-                        context: start.1.context,
-                        start: start.1.start,
-                        end: end.1.end,
-                    };
-
-                    return (TypeExpr::Array(Box::new((TypeExpr::Or(variants), combined_span))), combined_span);
-                }
-
-                if variants.is_empty() {
-                    panic!(
-                        "Internal Compiler Error: variants shouldn't ever be empty, as this is a syntax error."
+                    require(
+                        left_type_expr.0.is_number(),
+                        format!(
+                            "Addition '+' is only allowed for numbers. You've used {} + {}.",
+                            left_type_expr.0.as_go_type_annotation(type_env),
+                            right_type_expr.0.as_go_type_annotation(type_env)
+                        ),
                     );
+
+                    check_type_compatability(
+                        &(left_type_expr.0.clone(), left.as_ref().1),
+                        &(right_type_expr.0, right.as_ref().1),
+                        type_env,
+                    );
+
+                    left_type_expr.0.unconst()
                 }
+                ValueExpr::Sub(left, right) => {
+                    let left_type_expr: Spanned<TypeExpr> =
+                        TypeExpr::from_value_expr(left, type_env);
 
-                let first_type = variants
-                    .first()
-                    .expect("we've checked that variants is exactly of len 1");
+                    if left_type_expr.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
 
-                TypeExpr::Array(Box::new(first_type.clone()))
-            }
-            ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
-                lambda_expr
-                    .params
-                    .iter()
-                    .map(|(name, type_expr)| {
-                        (Some(name.clone()), type_expr.as_ref().cloned().unwrap())
-                    })
-                    .collect(),
-                Box::new(
-                    lambda_expr
-                        .return_type
-                        .clone()
-                        .unwrap_or(TypeExpr::unit_with_span(*complete_span)),
-                ),
-                lambda_expr.is_mut,
-            ),
-            ValueExpr::InlineGo(_, ty) => ty.as_ref().cloned().unwrap_or(TypeExpr::unit()).0,
-            ValueExpr::Int(_, t) => t.as_ref().cloned().map(|(x, _)| x).unwrap_or(TypeExpr::Int),
-            ValueExpr::Bool(..) => TypeExpr::Bool(None),
-            ValueExpr::Char(..) => TypeExpr::Char,
-            ValueExpr::Float(..) => TypeExpr::Float,
-            ValueExpr::String(..) => TypeExpr::String(None),
-            ValueExpr::Break => TypeExpr::Never,
-            ValueExpr::Continue => TypeExpr::Never,
-            ValueExpr::Return(..) => TypeExpr::Never,
-            ValueExpr::VarAssign(assignment) => {
-                let target_type = TypeExpr::from_value_expr(&assignment.0.target, type_env);
-                let value_type = TypeExpr::from_value_expr(&assignment.0.value_expr, type_env);
+                    let right_type_expr: Spanned<TypeExpr> =
+                        TypeExpr::from_value_expr(right, type_env);
 
-                if target_type.0.is_never() || value_type.0.is_never() {
-                    TypeExpr::Never
-                } else {
-                    TypeExpr::Statement
+                    if right_type_expr.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
+
+                    require(
+                        left_type_expr.0.is_number(),
+                        format!(
+                            "Subtraction '-' is only allowed for numbers. You've used {} - {}.",
+                            left_type_expr.0.as_go_type_annotation(type_env),
+                            right_type_expr.0.as_go_type_annotation(type_env)
+                        ),
+                    );
+
+                    check_type_compatability(
+                        &(left_type_expr.0.clone(), left.as_ref().1),
+                        &(right_type_expr.0, right.as_ref().1),
+                        type_env,
+                    );
+
+                    left_type_expr.0.unconst()
                 }
-            }
-            ValueExpr::VarDecl(decl) => {
-                let decl = decl.as_ref();
-                if let Some(initializer) = decl.0.initializer.as_ref() {
-                    let init_type = TypeExpr::from_value_expr(initializer, type_env);
-                    if init_type.0.is_never() {
+                ValueExpr::Mod(left, right) => {
+                    let left_type_expr = TypeExpr::from_value_expr(left, type_env);
+                    if left_type_expr.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
+
+                    let right_type_expr = TypeExpr::from_value_expr(right, type_env);
+                    if right_type_expr.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
+
+                    require(
+                        left_type_expr.0.is_number(),
+                        format!(
+                            "Modulo '-' is only allowed for numbers. You've used {} % {}.",
+                            left_type_expr.0.as_go_type_annotation(type_env),
+                            right_type_expr.0.as_go_type_annotation(type_env)
+                        ),
+                    );
+
+                    check_type_compatability(
+                        &(left_type_expr.0.clone(), left.as_ref().1),
+                        &(right_type_expr.0, right.as_ref().1),
+                        type_env,
+                    );
+
+                    left_type_expr.0.unconst()
+                }
+                ValueExpr::Div(left, right) => {
+                    let left_type_expr = TypeExpr::from_value_expr(left, type_env);
+                    if left_type_expr.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
+
+                    let right_type_expr = TypeExpr::from_value_expr(right, type_env);
+                    if right_type_expr.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
+
+                    require(
+                        left_type_expr.0.is_number(),
+                        format!(
+                            "Division '/' is only allowed for numbers. You've used {} / {}.",
+                            left_type_expr.0.as_go_type_annotation(type_env),
+                            right_type_expr.0.as_go_type_annotation(type_env)
+                        ),
+                    );
+
+                    check_type_compatability(
+                        &(left_type_expr.0.clone(), left.as_ref().1),
+                        &(right_type_expr.0, right.as_ref().1),
+                        type_env,
+                    );
+
+                    left_type_expr.0.unconst()
+                }
+                ValueExpr::Equals(lhs, rhs)
+                | ValueExpr::NotEquals(lhs, rhs)
+                | ValueExpr::LessThan(lhs, rhs)
+                | ValueExpr::LessThanOrEquals(lhs, rhs)
+                | ValueExpr::GreaterThan(lhs, rhs)
+                | ValueExpr::GreaterThanOrEquals(lhs, rhs)
+                | ValueExpr::And(lhs, rhs)
+                | ValueExpr::Or(lhs, rhs) => {
+                    let left_type_expr = TypeExpr::from_value_expr(lhs, type_env);
+                    if left_type_expr.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
+
+                    let right_type_expr = TypeExpr::from_value_expr(rhs, type_env);
+                    if right_type_expr.0.is_never() {
                         return (TypeExpr::Never, complete_span.clone());
                     }
 
                     check_type_compatability(
-                        decl.0.type_expr.as_ref().expect(
-                            "compiler error: i expect the implicit types to be resolved by now",
-                        ),
-                        &(init_type.0, initializer.1),
+                        &(left_type_expr.0.clone(), lhs.1),
+                        &(right_type_expr.0, rhs.1),
                         type_env,
                     );
+
+                    TypeExpr::Bool(None)
                 }
-
-                TypeExpr::Statement
-            }
-            ValueExpr::Struct {
-                name,
-                fields,
-                type_params,
-            } => {
-                let _struct_def = type_env.get_struct_def_with_type_params_mut(
-                    name.as_str(),
-                    type_params,
-                    *complete_span,
-                );
-
-                for field in fields {
-                    let ty = TypeExpr::from_value_expr(&field.1, type_env);
-                    if ty.0.is_never() {
-                        return (TypeExpr::Never, field.1.1);
-                    }
-                }
-
-                TypeExpr::Struct {
-                    name: name.to_string(),
-                    type_params: type_params.clone(),
-                }
-            }
-            ValueExpr::Tuple(fields) => {
-                let mut is_never = false;
-                let types = fields
-                    .iter()
-                    .map(|value_expr| {
-                        // todo: check if we really want to unconst tuple values
-                        // maybe we need a way to tell that it should be consted here. e.g.
-                        //  `(5,"hallo")`
-                        (
-                            match TypeExpr::from_value_expr(value_expr, type_env).0 {
-                                TypeExpr::Never => {
-                                    is_never = true;
-                                    TypeExpr::Never
-                                }
-                                x => x,
-                            },
-                            value_expr.1,
-                        )
-                    })
-                    .collect::<Vec<Spanned<TypeExpr>>>();
-
-                if is_never {
-                    TypeExpr::Never
-                } else {
-                    TypeExpr::Tuple(types)
-                }
-            }
-            ValueExpr::Duck(fields) => {
-                let mut f = Vec::new();
-
-                for (name, (value_expr, span)) in fields {
-                    let spanned_type = (
-                        TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env),
-                        *span,
-                    );
-
-                    if spanned_type.0.0.is_never() {
-                        return (TypeExpr::Never, spanned_type.1);
-                    }
-
-                    f.push(Field {
-                        name: name.clone(),
-                        type_expr: spanned_type.0,
-                    });
-                }
-
-                TypeExpr::Duck(Duck { fields: f })
-            }
-            ValueExpr::Add(left, right) => {
-                let left_type_expr: Spanned<TypeExpr> = TypeExpr::from_value_expr(left, type_env);
-                if left_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                let right_type_expr: Spanned<TypeExpr> = TypeExpr::from_value_expr(right, type_env);
-
-                if right_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                require(
-                    left_type_expr.0.is_number(),
-                    format!(
-                        "Addition '+' is only allowed for numbers. You've used {} + {}.",
-                        left_type_expr.0.as_go_type_annotation(type_env),
-                        right_type_expr.0.as_go_type_annotation(type_env)
-                    ),
-                );
-
-                check_type_compatability(
-                    &(left_type_expr.0.clone(), left.as_ref().1),
-                    &(right_type_expr.0, right.as_ref().1),
-                    type_env,
-                );
-
-                left_type_expr.0.unconst()
-            }
-            ValueExpr::Sub(left, right) => {
-                let left_type_expr: Spanned<TypeExpr> = TypeExpr::from_value_expr(left, type_env);
-
-                if left_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                let right_type_expr: Spanned<TypeExpr> = TypeExpr::from_value_expr(right, type_env);
-
-                if right_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                require(
-                    left_type_expr.0.is_number(),
-                    format!(
-                        "Subtraction '-' is only allowed for numbers. You've used {} - {}.",
-                        left_type_expr.0.as_go_type_annotation(type_env),
-                        right_type_expr.0.as_go_type_annotation(type_env)
-                    ),
-                );
-
-                check_type_compatability(
-                    &(left_type_expr.0.clone(), left.as_ref().1),
-                    &(right_type_expr.0, right.as_ref().1),
-                    type_env,
-                );
-
-                left_type_expr.0.unconst()
-            }
-            ValueExpr::Mod(left, right) => {
-                let left_type_expr = TypeExpr::from_value_expr(left, type_env);
-                if left_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                let right_type_expr = TypeExpr::from_value_expr(right, type_env);
-                if right_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                require(
-                    left_type_expr.0.is_number(),
-                    format!(
-                        "Modulo '-' is only allowed for numbers. You've used {} % {}.",
-                        left_type_expr.0.as_go_type_annotation(type_env),
-                        right_type_expr.0.as_go_type_annotation(type_env)
-                    ),
-                );
-
-                check_type_compatability(
-                    &(left_type_expr.0.clone(), left.as_ref().1),
-                    &(right_type_expr.0, right.as_ref().1),
-                    type_env,
-                );
-
-                left_type_expr.0.unconst()
-            }
-            ValueExpr::Div(left, right) => {
-                let left_type_expr = TypeExpr::from_value_expr(left, type_env);
-                if left_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                let right_type_expr = TypeExpr::from_value_expr(right, type_env);
-                if right_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                require(
-                    left_type_expr.0.is_number(),
-                    format!(
-                        "Division '/' is only allowed for numbers. You've used {} / {}.",
-                        left_type_expr.0.as_go_type_annotation(type_env),
-                        right_type_expr.0.as_go_type_annotation(type_env)
-                    ),
-                );
-
-                check_type_compatability(
-                    &(left_type_expr.0.clone(), left.as_ref().1),
-                    &(right_type_expr.0, right.as_ref().1),
-                    type_env,
-                );
-
-                left_type_expr.0.unconst()
-            }
-            ValueExpr::Equals(lhs, rhs)
-            | ValueExpr::NotEquals(lhs, rhs)
-            | ValueExpr::LessThan(lhs, rhs)
-            | ValueExpr::LessThanOrEquals(lhs, rhs)
-            | ValueExpr::GreaterThan(lhs, rhs)
-            | ValueExpr::GreaterThanOrEquals(lhs, rhs)
-            | ValueExpr::And(lhs, rhs)
-            | ValueExpr::Or(lhs, rhs) => {
-                let left_type_expr = TypeExpr::from_value_expr(lhs, type_env);
-                if left_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                let right_type_expr = TypeExpr::from_value_expr(rhs, type_env);
-                if right_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                check_type_compatability(
-                    &(left_type_expr.0.clone(), lhs.1),
-                    &(right_type_expr.0, rhs.1),
-                    type_env,
-                );
-
-                TypeExpr::Bool(None)
-            }
-            ValueExpr::Mul(left, right) => {
-                let left_type_expr = TypeExpr::from_value_expr(left, type_env);
-                if left_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                let right_type_expr = TypeExpr::from_value_expr(right, type_env);
-
-                if right_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                require(
-                    left_type_expr.0.is_number(),
-                    format!(
-                        "Multiplication '*' is only allowed for numbers. You've used {} + {}.",
-                        left_type_expr.0.as_go_type_annotation(type_env),
-                        right_type_expr.0.as_go_type_annotation(type_env)
-                    ),
-                );
-
-                check_type_compatability(
-                    &(left_type_expr.0.clone(), left.1),
-                    &(right_type_expr.0, right.1),
-                    type_env,
-                );
-
-                left_type_expr.0.unconst()
-            }
-            ValueExpr::FunctionCall {
-                target,
-                params,
-                type_params,
-            } => {
-                let target_type = TypeExpr::from_value_expr(target, type_env);
-                if target_type.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                let mut in_param_types = Vec::new();
-
-                for param in params {
-                    let param_type = (TypeExpr::from_value_expr(param, type_env), param.1);
-                    if param_type.0.0.is_never() {
+                ValueExpr::Mul(left, right) => {
+                    let left_type_expr = TypeExpr::from_value_expr(left, type_env);
+                    if left_type_expr.0.is_never() {
                         return (TypeExpr::Never, complete_span.clone());
                     }
-                    in_param_types.push(param_type);
+
+                    let right_type_expr = TypeExpr::from_value_expr(right, type_env);
+
+                    if right_type_expr.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
+
+                    require(
+                        left_type_expr.0.is_number(),
+                        format!(
+                            "Multiplication '*' is only allowed for numbers. You've used {} + {}.",
+                            left_type_expr.0.as_go_type_annotation(type_env),
+                            right_type_expr.0.as_go_type_annotation(type_env)
+                        ),
+                    );
+
+                    check_type_compatability(
+                        &(left_type_expr.0.clone(), left.1),
+                        &(right_type_expr.0, right.1),
+                        type_env,
+                    );
+
+                    left_type_expr.0.unconst()
                 }
+                ValueExpr::FunctionCall {
+                    target,
+                    params,
+                    type_params,
+                } => {
+                    let target_type = TypeExpr::from_value_expr(target, type_env);
+                    if target_type.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
 
-                // todo: type_params
+                    let mut in_param_types = Vec::new();
 
-                if !type_params.is_empty() {
-                    match &target.0 {
-                        ValueExpr::Variable(_, var_name, ..) => {
-                            let new_fn_name = [var_name.to_string()]
-                                .into_iter()
-                                .chain(
-                                    type_params
-                                        .iter()
-                                        .map(|(t, _)| t.as_clean_go_type_name(type_env)),
-                                )
-                                .collect::<Vec<_>>()
-                                .join(MANGLE_SEP);
-
-                            let fn_def = type_env
-                                .generic_fns_generated
-                                .iter()
-                                .find(|fn_def| fn_def.name.as_str() == new_fn_name.clone());
-
-                            let fn_def = fn_def.expect("this should exist");
-
-                            let params = fn_def.params.clone();
-                            for (index, param) in params.iter().enumerate() {
-                                let given_type =
-                                    in_param_types.get(index).expect("todo: len doesnt match");
-                                // TODO: check if we should clone the typeenv
-                                check_type_compatability_full(
-                                    &param.1.clone(),
-                                    &given_type.0,
-                                    &mut type_env.clone(),
-                                    false,
-                                );
-                            }
-
-                            return fn_def.return_type.clone();
+                    for param in params {
+                        let param_type = (TypeExpr::from_value_expr(param, type_env), param.1);
+                        if param_type.0.0.is_never() {
+                            return (TypeExpr::Never, complete_span.clone());
                         }
-                        ValueExpr::FieldAccess {
-                            target_obj,
-                            field_name,
-                        } => {
-                            let t = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
-                            let TypeExpr::Struct {
-                                name: struct_name,
-                                type_params: struct_type_params,
-                            } = t.0
-                            else {
-                                panic!("{t:?}")
-                            };
+                        in_param_types.push(param_type);
+                    }
 
-                            let replaced_generics = type_env
-                                .get_struct_def_with_type_params_mut(
-                                    &struct_name,
-                                    &struct_type_params,
-                                    *complete_span,
-                                )
-                                .name
-                                .clone();
+                    // todo: type_params
 
-                            let (_new_fn_name, global_generic_generation_id) = {
-                                let new_method_name = [field_name.clone()]
+                    if !type_params.is_empty() {
+                        match &target.0 {
+                            ValueExpr::Variable(_, var_name, ..) => {
+                                let new_fn_name = [var_name.to_string()]
                                     .into_iter()
                                     .chain(
                                         type_params
                                             .iter()
                                             .map(|(t, _)| t.as_clean_go_type_name(type_env)),
                                     )
-                                    .collect::<Vec<_>>();
+                                    .collect::<Vec<_>>()
+                                    .join(MANGLE_SEP);
 
-                                let mut gen_id = new_method_name.clone();
-                                gen_id.insert(0, replaced_generics.clone());
-                                (new_method_name.join(MANGLE_SEP), gen_id.join(MANGLE_SEP))
-                            };
+                                let fn_def = type_env
+                                    .generic_fns_generated
+                                    .iter()
+                                    .find(|fn_def| fn_def.name.as_str() == new_fn_name.clone());
 
-                            let header = type_env.get_method_header(&global_generic_generation_id);
+                                let fn_def = fn_def.expect("this should exist");
 
-                            let params = header.params;
-                            for (index, param) in params.iter().enumerate() {
-                                let given_type =
-                                    in_param_types.get(index).expect("todo: len doesnt match");
-                                check_type_compatability_full(param, &given_type.0, type_env, false);
+                                let params = fn_def.params.clone();
+                                for (index, param) in params.iter().enumerate() {
+                                    let given_type =
+                                        in_param_types.get(index).expect("todo: len doesnt match");
+                                    // TODO: check if we should clone the typeenv
+                                    check_type_compatability_full(
+                                        &param.1.clone(),
+                                        &given_type.0,
+                                        &mut type_env.clone(),
+                                        false,
+                                    );
+                                }
+
+                                return fn_def.return_type.clone();
                             }
+                            ValueExpr::FieldAccess {
+                                target_obj,
+                                field_name,
+                            } => {
+                                let t =
+                                    TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
+                                let TypeExpr::Struct {
+                                    name: struct_name,
+                                    type_params: struct_type_params,
+                                } = t.0
+                                else {
+                                    panic!("{t:?}")
+                                };
 
-                            return header.return_type.clone();
-                        }
-                        _ => {}
-                    };
-                }
+                                let replaced_generics = type_env
+                                    .get_struct_def_with_type_params_mut(
+                                        &struct_name,
+                                        &struct_type_params,
+                                        *complete_span,
+                                    )
+                                    .name
+                                    .clone();
 
-                let mut target_type = TypeExpr::from_value_expr(target.as_ref(), type_env);
-                if let TypeExpr::Fun(param_types, return_type, _) = &mut target_type.0 {
-                    param_types
-                        .iter_mut()
-                        .enumerate()
-                        .for_each(|(index, param_type)| {
-                            if matches!(param_type.1.0, TypeExpr::Any) {
-                                return;
+                                let (_new_fn_name, global_generic_generation_id) = {
+                                    let new_method_name = [field_name.clone()]
+                                        .into_iter()
+                                        .chain(
+                                            type_params
+                                                .iter()
+                                                .map(|(t, _)| t.as_clean_go_type_name(type_env)),
+                                        )
+                                        .collect::<Vec<_>>();
+
+                                    let mut gen_id = new_method_name.clone();
+                                    gen_id.insert(0, replaced_generics.clone());
+                                    (new_method_name.join(MANGLE_SEP), gen_id.join(MANGLE_SEP))
+                                };
+
+                                let header =
+                                    type_env.get_method_header(&global_generic_generation_id);
+
+                                let params = header.params;
+                                for (index, param) in params.iter().enumerate() {
+                                    let given_type =
+                                        in_param_types.get(index).expect("todo: len doesnt match");
+                                    check_type_compatability_full(
+                                        param,
+                                        &given_type.0,
+                                        type_env,
+                                        false,
+                                    );
+                                }
+
+                                return header.return_type.clone();
                             }
-
-                            if let Some(param_name) = &param_type.0
-                                && param_name == "self"
-                            {
-                                check_type_compatability_full(
-                                    &param_type.1,
-                                    &in_param_types.get(index).unwrap().0,
-                                    type_env,
-                                    is_const_var(&params[index].0),
-                                );
-                            } else {
-                                check_type_compatability_full(
-                                    &param_type.1,
-                                    &in_param_types.get(index).unwrap().0,
-                                    type_env,
-                                    is_const_var(&params[index].0),
-                                );
-                            }
-
-                            // variant any replace
-                            if let TypeExpr::Array(boxed) = &in_param_types.get(index).unwrap().0.0
-                                && let TypeExpr::Or(_) = boxed.as_ref().0
-                            {
-                                param_type.1.0 =
-                                    TypeExpr::Array(Box::new((TypeExpr::Any, empty_range())))
-                            }
-                        });
-
-                    return return_type.as_ref().clone();
-                }
-
-                failure(
-                    target.as_ref().1.context.file_name,
-                    "Tried to invoke a non-function value".to_string(),
-                    (
-                        "This is the value you tried to invoke as a function.".to_string(),
-                        target.as_ref().1,
-                    ),
-                    vec![
-                        (
-                            format!(
-                                "the thing you tried to invoke is of type {}",
-                                TypeExpr::from_value_expr(target.as_ref(), type_env).0
-                                    .as_clean_go_type_name(type_env)
-                            ),
-                            target.as_ref().1,
-                        ),
-                        (
-                            format!(
-                                "{} cannot be called as it's not of type function!",
-                                TypeExpr::from_value_expr(target.as_ref(), type_env).0
-                                    .as_clean_go_type_name(type_env)
-                            ),
-                            target.as_ref().1,
-                        ),
-                    ],
-                    target.as_ref().1.context.file_contents,
-                )
-            }
-            ValueExpr::Block(value_exprs) => {
-                let mut ty = TypeExpr::Tuple(vec![]);
-                value_exprs.iter().for_each(|value_expr| {
-                    if !ty.is_never() {
-                        ty = TypeExpr::from_value_expr(value_expr, type_env).0;
+                            _ => {}
+                        };
                     }
-                });
 
-                ty
-            }
-            ValueExpr::Variable(_, ident, type_expr, _, _) => {
-                let s = Location::caller();
+                    let mut target_type = TypeExpr::from_value_expr(target.as_ref(), type_env);
+                    if let TypeExpr::Fun(param_types, return_type, _) = &mut target_type.0 {
+                        param_types
+                            .iter_mut()
+                            .enumerate()
+                            .for_each(|(index, param_type)| {
+                                if matches!(param_type.1.0, TypeExpr::Any) {
+                                    return;
+                                }
 
-                type_expr
-                    .as_ref()
-                    .cloned()
-                    .or(type_env.get_identifier_type(ident))
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "{} - {s}",
-                            format!("Expected type but didn't get one {ident} {type_expr:?}")
-                                .leak(),
-                        )
-                    })
-                    .clone()
-            }
-            ValueExpr::BoolNegate(bool_expr) => {
-                let t = TypeExpr::from_value_expr(bool_expr, type_env);
-                if t.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
+                                if let Some(param_name) = &param_type.0
+                                    && param_name == "self"
+                                {
+                                    check_type_compatability_full(
+                                        &param_type.1,
+                                        &in_param_types.get(index).unwrap().0,
+                                        type_env,
+                                        is_const_var(&params[index].0),
+                                    );
+                                } else {
+                                    check_type_compatability_full(
+                                        &param_type.1,
+                                        &in_param_types.get(index).unwrap().0,
+                                        type_env,
+                                        is_const_var(&params[index].0),
+                                    );
+                                }
+
+                                // variant any replace
+                                if let TypeExpr::Array(boxed) =
+                                    &in_param_types.get(index).unwrap().0.0
+                                    && let TypeExpr::Or(_) = boxed.as_ref().0
+                                {
+                                    param_type.1.0 =
+                                        TypeExpr::Array(Box::new((TypeExpr::Any, empty_range())))
+                                }
+                            });
+
+                        return return_type.as_ref().clone();
+                    }
+
+                    failure(
+                        target.as_ref().1.context.file_name,
+                        "Tried to invoke a non-function value".to_string(),
+                        (
+                            "This is the value you tried to invoke as a function.".to_string(),
+                            target.as_ref().1,
+                        ),
+                        vec![
+                            (
+                                format!(
+                                    "the thing you tried to invoke is of type {}",
+                                    TypeExpr::from_value_expr(target.as_ref(), type_env)
+                                        .0
+                                        .as_clean_go_type_name(type_env)
+                                ),
+                                target.as_ref().1,
+                            ),
+                            (
+                                format!(
+                                    "{} cannot be called as it's not of type function!",
+                                    TypeExpr::from_value_expr(target.as_ref(), type_env)
+                                        .0
+                                        .as_clean_go_type_name(type_env)
+                                ),
+                                target.as_ref().1,
+                            ),
+                        ],
+                        target.as_ref().1.context.file_contents,
+                    )
                 }
+                ValueExpr::Block(value_exprs) => {
+                    let mut ty = TypeExpr::Tuple(vec![]);
+                    value_exprs.iter().for_each(|value_expr| {
+                        if !ty.is_never() {
+                            ty = TypeExpr::from_value_expr(value_expr, type_env).0;
+                        }
+                    });
 
-                check_type_compatability(
-                    &t,
-                    &TypeExpr::Bool(None).into_empty_span(),
-                    type_env,
-                );
-
-                TypeExpr::Bool(None)
-            }
-            ValueExpr::If {
-                condition,
-                then,
-                r#else,
-            } => {
-                let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
-
-                if condition_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
+                    ty
                 }
+                ValueExpr::Variable(_, ident, type_expr, _, _) => {
+                    let s = Location::caller();
 
-                check_type_compatability(
-                    &condition_type_expr,
-                    &TypeExpr::Bool(None).into_empty_span(),
-                    type_env,
-                );
-
-                let then_type_expr = TypeExpr::from_value_expr(then, type_env);
-                if let Some(r#else) = r#else {
-                    // TODO: FIND COMMON DECAYED TYPE
-                    let else_type_expr = TypeExpr::from_value_expr(r#else, type_env);
-
-                    if then_type_expr.0.is_never() && else_type_expr.0.is_never() {
+                    type_expr
+                        .as_ref()
+                        .cloned()
+                        .or(type_env.get_identifier_type(ident))
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "{} - {s}",
+                                format!("Expected type but didn't get one {ident} {type_expr:?}")
+                                    .leak(),
+                            )
+                        })
+                        .clone()
+                }
+                ValueExpr::BoolNegate(bool_expr) => {
+                    let t = TypeExpr::from_value_expr(bool_expr, type_env);
+                    if t.0.is_never() {
                         return (TypeExpr::Never, complete_span.clone());
                     }
 
-                    let mut both = vec![then_type_expr, else_type_expr];
-                    both.retain(|t| !t.0.is_never());
-                    both.dedup_by_key(|x| x.0.type_id(type_env));
-                    if both.len() > 1 {
-                        return (TypeExpr::Or(
-                            both.into_iter().map(|x| x.0.into_empty_span()).collect(),
-                        ), complete_span.clone());
+                    check_type_compatability(&t, &TypeExpr::Bool(None).into_empty_span(), type_env);
+
+                    TypeExpr::Bool(None)
+                }
+                ValueExpr::If {
+                    condition,
+                    then,
+                    r#else,
+                } => {
+                    let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
+
+                    if condition_type_expr.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
                     }
-                    return both[0].clone();
-                }
 
-                TypeExpr::Statement
-            }
-            ValueExpr::FieldAccess {
-                target_obj,
-                field_name,
-            } => {
-                let span = target_obj.as_ref().1;
-                let target_obj_type_expr =
-                    TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
+                    check_type_compatability(
+                        &condition_type_expr,
+                        &TypeExpr::Bool(None).into_empty_span(),
+                        type_env,
+                    );
 
-                if target_obj_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
+                    let then_type_expr = TypeExpr::from_value_expr(then, type_env);
+                    if let Some(r#else) = r#else {
+                        // TODO: FIND COMMON DECAYED TYPE
+                        let else_type_expr = TypeExpr::from_value_expr(r#else, type_env);
 
-                if !(target_obj_type_expr.0.has_field_by_name(field_name.clone(), type_env)
-                    || target_obj_type_expr.0.has_method_by_name(field_name.clone(), type_env)
-                    || target_obj_type_expr.0.ref_has_field_by_name(field_name.clone(), type_env)
-                    || target_obj_type_expr.0.ref_has_method_by_name(field_name.clone(), type_env)
-                    || target_obj_type_expr.0.has_extension_by_name(field_name.clone(), type_env))
-                {
-                    // dbg!(&field_name, &target_obj_type_expr);
-                    failure_with_occurence(
-                        "Invalid Field Access",
-                        {
-                            let mut span = span;
-                            span.end += 2;
-                            span
-                        },
-                        vec![(
-                            format!(
-                                "this is of type {} and it has no field '{}'",
-                                target_obj_type_expr.0
-                                    .as_clean_user_faced_type_name()
-                                    .bright_yellow(),
-                                field_name.bright_blue()
-                            ),
-                            span,
-                        )],
-                    )
-                }
-
-                let target_obj_type_expr = target_obj_type_expr.0;
-                target_obj_type_expr
-                    .typeof_field(field_name.to_string(), type_env)
-                    .or_else(|| {
-                        target_obj_type_expr.ref_typeof_field(field_name.to_string(), type_env)
-                    })
-                    .unwrap_or_else(|| panic!("Invalid field access {target_obj_type_expr}"))
-            }
-            ValueExpr::While { condition, body } => {
-                let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
-
-                if condition_type_expr.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                check_type_compatability(
-                    &(condition_type_expr.0, condition.1),
-                    &TypeExpr::Bool(None).into_empty_span(),
-                    type_env,
-                );
-
-                let _body_type_expr = TypeExpr::from_value_expr(body, type_env);
-
-                TypeExpr::Tuple(vec![])
-            }
-            // TODO: Match Expressions need to be type resolved just as the function defs
-            ValueExpr::Match {
-                value_expr,
-                arms,
-                else_arm,
-                span: _,
-            } => {
-                let v_expr_type = TypeExpr::from_value_expr(value_expr, type_env);
-                if v_expr_type.0.is_never() {
-                    return (TypeExpr::Never, complete_span.clone());
-                }
-
-                let mut arms = arms.clone();
-                if let Some(arm) = else_arm {
-                    arms.push(arm.as_ref().clone());
-                }
-
-                let mut arm_types = Vec::new();
-                for arm in &arms {
-                    let arm_type = TypeExpr::from_value_expr(&arm.value_expr, type_env);
-
-                    let mut cloned_arm_type = arm_type.clone().0.into_empty_span();
-                    type_expr_into_empty_range(&mut cloned_arm_type);
-
-                    if !arm_types.iter().any(|t: &Spanned<TypeExpr>| {
-                        let mut cl1 = t.clone();
-                        type_expr_into_empty_range(&mut cl1);
-                        cl1.0.unconst() == cloned_arm_type.0.unconst()
-                    }) {
-                        arm_types.push((arm_type.0.unconst(), arm.value_expr.1));
-                    }
-                }
-
-                // arm_types.retain(|f| !f.0.is_unit());
-
-                if else_arm.is_none() {
-                    let possible_types: Vec<Spanned<TypeExpr>> =
-                        match &TypeExpr::from_value_expr(value_expr, type_env).0 {
-                            TypeExpr::Or(types) => types.clone(),
-                            other => vec![(other.clone(), value_expr.1)],
-                        };
-
-                    let mut covered_types = Vec::new();
-                    for arm in &arms {
-                        let case_type = &arm.type_case.0;
-
-                        let mut cloned_arm_type = case_type.clone().into_empty_span();
-                        type_expr_into_empty_range(&mut cloned_arm_type);
-                        if !covered_types.iter().any(|t: &Spanned<TypeExpr>| {
-                            let mut cl1 = t.clone();
-                            type_expr_into_empty_range(&mut cl1);
-                            cl1.0 == cloned_arm_type.0
-                        }) {
-                            covered_types.push((case_type.clone(), arm.type_case.1));
+                        if then_type_expr.0.is_never() && else_type_expr.0.is_never() {
+                            return (TypeExpr::Never, complete_span.clone());
                         }
-                    }
 
-                    possible_types.iter().for_each(|possible_type| {
-                        let mut b = possible_type.clone();
-                        type_expr_into_empty_range(&mut b);
-                        let is_covered = &covered_types.iter().any(|x| {
-                            let mut a = x.clone();
-                            type_expr_into_empty_range(&mut a);
-                            a.0.unconst() == b.0.unconst()
-                        });
-                        if !is_covered {
-                            let missing_type = possible_type;
-                            failure_with_occurence(
-                                "Unexhaustive Match",
-                                *complete_span,
-                                vec![(
-                                    format!(
-                                        "possible type {} not covered",
-                                        format!("{}", missing_type.0).bright_yellow()
-                                    ),
-                                    *complete_span,
-                                )],
+                        let mut both = vec![then_type_expr, else_type_expr];
+                        both.retain(|t| !t.0.is_never());
+                        both.dedup_by_key(|x| x.0.type_id(type_env));
+                        if both.len() > 1 {
+                            return (
+                                TypeExpr::Or(
+                                    both.into_iter().map(|x| x.0.into_empty_span()).collect(),
+                                ),
+                                complete_span.clone(),
                             );
                         }
-                    });
+                        return both[0].clone();
+                    }
+
+                    TypeExpr::Statement
                 }
+                ValueExpr::FieldAccess {
+                    target_obj,
+                    field_name,
+                } => {
+                    let span = target_obj.as_ref().1;
+                    let target_obj_type_expr =
+                        TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
 
-                let was_empty_before = arm_types.is_empty();
-                arm_types.retain(|t| !t.0.is_never());
+                    if target_obj_type_expr.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
 
-                if arm_types.is_empty() && !was_empty_before {
-                    return (TypeExpr::Never, complete_span.clone());
+                    if !(target_obj_type_expr
+                        .0
+                        .has_field_by_name(field_name.clone(), type_env)
+                        || target_obj_type_expr
+                            .0
+                            .has_method_by_name(field_name.clone(), type_env)
+                        || target_obj_type_expr
+                            .0
+                            .ref_has_field_by_name(field_name.clone(), type_env)
+                        || target_obj_type_expr
+                            .0
+                            .ref_has_method_by_name(field_name.clone(), type_env)
+                        || target_obj_type_expr
+                            .0
+                            .has_extension_by_name(field_name.clone(), type_env))
+                    {
+                        // dbg!(&field_name, &target_obj_type_expr);
+                        failure_with_occurence(
+                            "Invalid Field Access",
+                            {
+                                let mut span = span;
+                                span.end += 2;
+                                span
+                            },
+                            vec![(
+                                format!(
+                                    "this is of type {} and it has no field '{}'",
+                                    target_obj_type_expr
+                                        .0
+                                        .as_clean_user_faced_type_name()
+                                        .bright_yellow(),
+                                    field_name.bright_blue()
+                                ),
+                                span,
+                            )],
+                        )
+                    }
+
+                    let target_obj_type_expr = target_obj_type_expr.0;
+                    target_obj_type_expr
+                        .typeof_field(field_name.to_string(), type_env)
+                        .or_else(|| {
+                            target_obj_type_expr.ref_typeof_field(field_name.to_string(), type_env)
+                        })
+                        .unwrap_or_else(|| panic!("Invalid field access {target_obj_type_expr}"))
                 }
+                ValueExpr::While { condition, body } => {
+                    let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
 
-                if arm_types.is_empty() {
+                    if condition_type_expr.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
+
+                    check_type_compatability(
+                        &(condition_type_expr.0, condition.1),
+                        &TypeExpr::Bool(None).into_empty_span(),
+                        type_env,
+                    );
+
+                    let _body_type_expr = TypeExpr::from_value_expr(body, type_env);
+
                     TypeExpr::Tuple(vec![])
-                } else if arm_types.len() == 1 {
-                    arm_types.first().cloned().unwrap().0
-                } else {
-                    TypeExpr::Or(arm_types)
                 }
-            }
-        }, complete_span.clone());
+                // TODO: Match Expressions need to be type resolved just as the function defs
+                ValueExpr::Match {
+                    value_expr,
+                    arms,
+                    else_arm,
+                    span: _,
+                } => {
+                    let v_expr_type = TypeExpr::from_value_expr(value_expr, type_env);
+                    if v_expr_type.0.is_never() {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
+
+                    let mut arms = arms.clone();
+                    if let Some(arm) = else_arm {
+                        arms.push(arm.as_ref().clone());
+                    }
+
+                    let mut arm_types = Vec::new();
+                    for arm in &arms {
+                        let arm_type = TypeExpr::from_value_expr(&arm.value_expr, type_env);
+
+                        let mut cloned_arm_type = arm_type.clone().0.into_empty_span();
+                        type_expr_into_empty_range(&mut cloned_arm_type);
+
+                        if !arm_types.iter().any(|t: &Spanned<TypeExpr>| {
+                            let mut cl1 = t.clone();
+                            type_expr_into_empty_range(&mut cl1);
+                            cl1.0.unconst() == cloned_arm_type.0.unconst()
+                        }) {
+                            arm_types.push((arm_type.0.unconst(), arm.value_expr.1));
+                        }
+                    }
+
+                    // arm_types.retain(|f| !f.0.is_unit());
+
+                    if else_arm.is_none() {
+                        let possible_types: Vec<Spanned<TypeExpr>> =
+                            match &TypeExpr::from_value_expr(value_expr, type_env).0 {
+                                TypeExpr::Or(types) => types.clone(),
+                                other => vec![(other.clone(), value_expr.1)],
+                            };
+
+                        let mut covered_types = Vec::new();
+                        for arm in &arms {
+                            let case_type = &arm.type_case.0;
+
+                            let mut cloned_arm_type = case_type.clone().into_empty_span();
+                            type_expr_into_empty_range(&mut cloned_arm_type);
+                            if !covered_types.iter().any(|t: &Spanned<TypeExpr>| {
+                                let mut cl1 = t.clone();
+                                type_expr_into_empty_range(&mut cl1);
+                                cl1.0 == cloned_arm_type.0
+                            }) {
+                                covered_types.push((case_type.clone(), arm.type_case.1));
+                            }
+                        }
+
+                        possible_types.iter().for_each(|possible_type| {
+                            let mut b = possible_type.clone();
+                            type_expr_into_empty_range(&mut b);
+                            let is_covered = &covered_types.iter().any(|x| {
+                                let mut a = x.clone();
+                                type_expr_into_empty_range(&mut a);
+                                a.0.unconst() == b.0.unconst()
+                            });
+                            if !is_covered {
+                                let missing_type = possible_type;
+                                failure_with_occurence(
+                                    "Unexhaustive Match",
+                                    *complete_span,
+                                    vec![(
+                                        format!(
+                                            "possible type {} not covered",
+                                            format!("{}", missing_type.0).bright_yellow()
+                                        ),
+                                        *complete_span,
+                                    )],
+                                );
+                            }
+                        });
+                    }
+
+                    let was_empty_before = arm_types.is_empty();
+                    arm_types.retain(|t| !t.0.is_never());
+
+                    if arm_types.is_empty() && !was_empty_before {
+                        return (TypeExpr::Never, complete_span.clone());
+                    }
+
+                    if arm_types.is_empty() {
+                        TypeExpr::Tuple(vec![])
+                    } else if arm_types.len() == 1 {
+                        arm_types.first().cloned().unwrap().0
+                    } else {
+                        TypeExpr::Or(arm_types)
+                    }
+                }
+            },
+            complete_span.clone(),
+        );
     }
 
     pub fn is_object_like(&self) -> bool {
@@ -1045,6 +1084,11 @@ impl TypeExpr {
             return true;
         }
         if name.as_str() == "ord" && self.implements_ord(type_env) {
+            return true;
+        }
+        if name.as_str() == "len"
+            && let TypeExpr::Array(..) = self
+        {
             return true;
         }
         if name.as_str() == "iter" && self.implements_into_iter(type_env) {
@@ -1188,6 +1232,16 @@ impl TypeExpr {
                     },
                     empty_range(),
                 )),
+                false,
+            ));
+        }
+
+        if field_name.as_str() == "len"
+            && let TypeExpr::Array(..) = self
+        {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((TypeExpr::Int, empty_range())),
                 false,
             ));
         }

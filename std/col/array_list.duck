@@ -151,4 +151,41 @@ struct ArrayList<T> {
         }
         return result;
     }
+
+    fn iter() -> ::col::Iter<&T> {
+        let idx = 0;
+        const f = mut fn() -> &T | .no_next_elem {
+            if (idx >= self.len()) {
+                return .no_next_elem;
+            }
+            const elem_to_ret = &self.elems[idx];
+            idx = idx + 1;
+            return elem_to_ret;
+        };
+
+        return ::col::Iter::from<&T>(f);
+    }
+
+    mut fn iter_mut() -> ::col::Iter<&mut T> {
+        let idx = 0;
+        const f = mut fn() -> &mut T | .no_next_elem {
+            if (idx >= self.len()) {
+                return .no_next_elem;
+            }
+            const elem_to_ret = &mut self.elems[idx];
+            idx = idx + 1;
+            return elem_to_ret;
+        };
+
+        return ::col::Iter::from<&mut T>(f);
+    }
+
+    fn as_ref() -> &T[] {
+        return &self.elems;
+    }
+
+    mut fn as_mut() -> &mut T[] {
+        return &mut self.elems;
+    }
+
 }

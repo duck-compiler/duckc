@@ -260,6 +260,7 @@ impl TypeExpr {
                         switch p1.(type) {{
                         case {conc_type}:
                             tmp := p1.({conc_type})
+                            _ = tmp
                             return {}
                         }}
                     "#,
@@ -344,6 +345,7 @@ impl TypeExpr {
                         switch p1.(type) {{
                         case {conc_type}:
                             tmp := p1.({conc_type})
+                            _ = tmp
                             return {}
                         }}
                     "#,
@@ -393,6 +395,7 @@ impl TypeExpr {
                         switch p1.(type) {{
                         case {conc_type}:
                             tmp := p1.({conc_type})
+                            _ = tmp
                             return {}
                         }}
                     "#,

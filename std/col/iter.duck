@@ -9,6 +9,44 @@ struct Iter<T> {
         }
     }
 
+    static fn range(start_inclusive: Int, end_exclusive: Int) -> Iter<Int> {
+        Iter::from<Int>(mut fn() {
+            if (start_inclusive >= end_exclusive) {
+                return .no_next_elem;
+            }
+
+            const to_yield = start_inclusive;
+            start_inclusive = start_inclusive + 1;
+            to_yield
+        })
+    }
+
+    static fn count_from(start: Int) -> Iter<Int> {
+        Iter::from<Int>(mut fn() {
+            const to_yield = start;
+            start = start + 1;
+            return to_yield;
+        })
+    }
+
+    mut fn rev() -> Iter<T> {
+        let stack = ::col::ArrayList::new<T>();
+
+        Iter::from<T>(mut fn () {
+            while (true) {
+                match self.next_fn() {
+                    T @t => stack.push(t),
+                    .no_next_elem => break,
+                }
+            }
+
+            match stack.pop() {
+                T @t => t,
+                .none => .no_next_elem,
+            }
+        })
+    }
+
     mut fn next() -> T | .no_next_elem {
         return match self.next_fn() {
             T @x => x,
@@ -35,6 +73,40 @@ struct Iter<T> {
         };
 
         Iter::from<U>(next_fn)
+    }
+
+    mut fn skip_while(predicate: fn(T) -> Bool) -> Iter<T> {
+        const next_fn = mut fn () -> T | .no_next_elem {
+            while (true) {
+                match self.next_fn() {
+                    T @t => if (predicate(t)) {
+                            continue;
+                        } else {
+                            return t;
+                        },
+                    .no_next_elem => return .no_next_elem,
+                };
+            }
+        };
+
+        Iter::from<T>(next_fn)
+    }
+
+    mut fn take_while(predicate: fn(T) -> Bool) -> Iter<T> {
+        const next_fn = mut fn () -> T | .no_next_elem {
+            while (true) {
+                match self.next_fn() {
+                    T @t => if (predicate(t)) {
+                            return t
+                        } else {
+                            return .no_next_elem
+                        },
+                    .no_next_elem => return .no_next_elem,
+                };
+            }
+        };
+
+        Iter::from<T>(next_fn)
     }
 
     mut fn filter(predicate: fn(T) -> Bool) -> Iter<T> {
@@ -110,6 +182,33 @@ struct Iter<T> {
         return Iter::from<(Int, T)>(next_fn);
     }
 
+    mut fn fold<U>(init: U, f: mut fn(acc: &mut U, elem: T) -> U) -> U {
+        while (true) {
+            const elem = match (self.next()) {
+                T @t => t,
+                .no_next_elem => break,
+            };
+
+            f(&mut init, elem);
+        }
+        return init;
+    }
+
+    mut fn reduce(f: mut fn(acc: &mut T, elem: T)) -> ::Opt<T> {
+        let first = match (self.next()) {
+            T @t => t,
+            .no_next_elem => return .none,
+        };
+        while (true) {
+            const elem = match (self.next()) {
+                T @t => t,
+                .no_next_elem => break,
+            };
+            f(&mut first, elem);
+        }
+        return first;
+    }
+
     mut fn into_list() -> ArrayList<T> {
         let arr = ArrayList::new<T>();
         while (true) {
@@ -120,5 +219,79 @@ struct Iter<T> {
         }
 
         return arr;
+    }
+
+    mut fn count() -> UInt {
+        let result = 0 as UInt;
+
+        while (true) {
+            match self.next_fn() {
+                T => {
+                    result = result + (1 as UInt);
+                },
+                .no_next_elem => break,
+            }
+
+        }
+
+        result
+    }
+
+    mut fn find(f: fn(e: T) -> Bool) -> ::Opt<T> {
+        while (true) {
+            match self.next_fn() {
+                T @t => {
+                    if (f(t)) {
+                        return t;
+                    }
+                },
+                .no_next_elem => break,
+            }
+        }
+        return .none;
+    }
+
+    mut fn any(f: fn(e: T) -> Bool) -> Bool {
+        while (true) {
+            match self.next_fn() {
+                T @t => {
+                    if (f(t)) {
+                        return true;
+                    }
+                },
+                .no_next_elem => break,
+            }
+        }
+        false
+    }
+
+    mut fn all(f: fn(e: T) -> Bool) -> Bool {
+        while (true) {
+            match self.next_fn() {
+                T @t => {
+                    if (!f(t)) {
+                        return false;
+                    }
+                },
+                .no_next_elem => break,
+            }
+        }
+        true
+    }
+
+    mut fn zip<U>(other: &mut Iter<U>) -> Iter<(T, U)> {
+        const new_fn = mut fn() -> (T, U) | .no_next_elem {
+            match self.next_fn() {
+                T @t => {
+                    match other.next_fn() {
+                        U @u => return (t, u),
+                        .no_next_elem => .no_next_elem,
+                    }
+                },
+                .no_next_elem => .no_next_elem,
+            }
+        };
+
+        Iter::from<(T, U)>(new_fn)
     }
 }

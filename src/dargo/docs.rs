@@ -153,9 +153,7 @@ pub fn generate(generate_args: DocsGenerateArgs) -> Result<DocsOutput, (String, 
                 Err(_) => break,
             }
         }
-        tailwind_result_send
-            .send(emit_env.to_css_stylesheet(true))
-            .expect("could not send css result");
+        let _ = tailwind_result_send.send(emit_env.to_css_stylesheet(true));
     });
 
     let mut fn_docs = vec![];
