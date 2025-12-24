@@ -1,0 +1,4 @@
+{
+    "stdout": "Yo\nI\nam\nin\nthe\nlist\nModified Yo\nModified I\nModified am\nModified in\nModified the\nModified list\n6\nModified Yo, other\nModified I, list\n\nModified I, list\nModified Yo, other\n\nModified list\nModified the\nModified in\nModified am\nModified I\nModified Yo\n",
+    "stderr": ""
+}

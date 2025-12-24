@@ -436,6 +436,11 @@ fn walk_access_raw(
                                 Some((format!("{clean_go_type_name}_Iter("), stars_count, false));
                             skip = true;
                         }
+                    } else if field_name.as_str() == "len" && target_field_type.0.is_array() {
+                        if let TypeExpr::Array(..) = target_field_type.clone().0 {
+                            flag = Some((format!("len("), stars_count, false));
+                            skip = true;
+                        }
                     } else if field_name.as_str() == "to_string"
                         && target_field_type.0.implements_to_string(type_env)
                     {
@@ -643,7 +648,8 @@ fn walk_access_raw(
 
                     if !skip {
                         let extension_fn_name = target_field_type
-                            .0.build_extension_access_function_name(field_name, type_env);
+                            .0
+                            .build_extension_access_function_name(field_name, type_env);
                         let extension_fn = type_env.extension_functions.get(&extension_fn_name);
 
                         if extension_fn.is_some() {
@@ -2193,7 +2199,8 @@ impl ValueExpr {
 
                 let res_type =
                     TypeExpr::from_value_expr(&(self.clone(), target.as_ref().1), type_env)
-                        .0.as_go_type_annotation(type_env);
+                        .0
+                        .as_go_type_annotation(type_env);
                 let res_var_name = env.new_var();
 
                 res_instr.push(IrInstruction::VarDecl(res_var_name.clone(), res_type));
@@ -2578,7 +2585,8 @@ impl ValueExpr {
                 let mut res = Vec::new();
                 let mut res_vars = Vec::new();
                 let name = TypeExpr::from_value_expr(&(self.clone(), span), type_env)
-                    .0.as_go_type_annotation(type_env);
+                    .0
+                    .as_go_type_annotation(type_env);
 
                 for (field_expr, _) in fields {
                     let (field_instr, field_res) =
@@ -2639,7 +2647,8 @@ impl ValueExpr {
                 let v_target = &mut v_target.clone();
                 let return_type = Some(
                     TypeExpr::from_value_expr(&self.clone().into_empty_span(), type_env)
-                        .0.into_empty_span(),
+                        .0
+                        .into_empty_span(),
                 );
 
                 if !type_params.is_empty()
@@ -2818,8 +2827,9 @@ impl ValueExpr {
                     panic!()
                 };
 
-                let ord_call =
-                    TypeExpr::from_value_expr(lhs, type_env).0.call_ord(&v1_var, &v2_var, type_env);
+                let ord_call = TypeExpr::from_value_expr(lhs, type_env)
+                    .0
+                    .call_ord(&v1_var, &v2_var, type_env);
 
                 let var = env.new_var();
                 ir.extend([
@@ -2859,8 +2869,9 @@ impl ValueExpr {
                     panic!()
                 };
 
-                let ord_call =
-                    TypeExpr::from_value_expr(lhs, type_env).0.call_ord(&v1_var, &v2_var, type_env);
+                let ord_call = TypeExpr::from_value_expr(lhs, type_env)
+                    .0
+                    .call_ord(&v1_var, &v2_var, type_env);
 
                 let var = env.new_var();
                 ir.extend([
@@ -2902,8 +2913,9 @@ impl ValueExpr {
                     panic!()
                 };
 
-                let ord_call =
-                    TypeExpr::from_value_expr(lhs, type_env).0.call_ord(&v1_var, &v2_var, type_env);
+                let ord_call = TypeExpr::from_value_expr(lhs, type_env)
+                    .0
+                    .call_ord(&v1_var, &v2_var, type_env);
 
                 let var = env.new_var();
                 ir.extend([
@@ -2943,8 +2955,9 @@ impl ValueExpr {
                     panic!()
                 };
 
-                let ord_call =
-                    TypeExpr::from_value_expr(lhs, type_env).0.call_ord(&v1_var, &v2_var, type_env);
+                let ord_call = TypeExpr::from_value_expr(lhs, type_env)
+                    .0
+                    .call_ord(&v1_var, &v2_var, type_env);
 
                 let var = env.new_var();
                 ir.extend([
@@ -3045,7 +3058,8 @@ impl ValueExpr {
             }
             ValueExpr::Duck(fields) => {
                 let name = TypeExpr::from_value_expr(&(self.clone(), span), type_env)
-                    .0.as_clean_go_type_name(type_env);
+                    .0
+                    .as_clean_go_type_name(type_env);
 
                 let mut res = Vec::new();
                 let mut res_vars = Vec::new();
@@ -3065,7 +3079,8 @@ impl ValueExpr {
                     IrInstruction::VarDecl(
                         res_var.clone(),
                         TypeExpr::from_value_expr(&(self.clone(), span), type_env)
-                            .0.as_go_type_annotation(type_env),
+                            .0
+                            .as_go_type_annotation(type_env),
                     ),
                     IrInstruction::VarAssignment(res_var.clone(), IrValue::Duck(name, res_vars)),
                 ]);
@@ -3074,10 +3089,12 @@ impl ValueExpr {
             }
             ValueExpr::Struct { fields, .. } => {
                 let name = TypeExpr::from_value_expr(&(self.clone(), span), type_env)
-                    .0.as_clean_go_type_name(type_env);
+                    .0
+                    .as_clean_go_type_name(type_env);
 
                 let type_anno = TypeExpr::from_value_expr(&(self.clone(), span), type_env)
-                    .0.as_go_type_annotation(type_env);
+                    .0
+                    .as_go_type_annotation(type_env);
 
                 let mut res = Vec::new();
                 let mut res_vars = Vec::new();
@@ -3102,7 +3119,8 @@ impl ValueExpr {
             }
             ValueExpr::Tag(..) => {
                 let type_name = TypeExpr::from_value_expr(&(self.clone(), span), type_env)
-                    .0.as_clean_go_type_name(type_env);
+                    .0
+                    .as_clean_go_type_name(type_env);
 
                 let mut res = Vec::new();
                 let res_var = env.new_var();
@@ -3123,7 +3141,10 @@ impl ValueExpr {
                     let ty = TypeExpr::from_value_expr(&(self.clone(), span), type_env);
                     let res_var = env.new_var();
                     let instr = vec![
-                        IrInstruction::VarDecl(res_var.clone(), ty.0.as_go_type_annotation(type_env)),
+                        IrInstruction::VarDecl(
+                            res_var.clone(),
+                            ty.0.as_go_type_annotation(type_env),
+                        ),
                         IrInstruction::VarAssignment(res_var.clone(), d),
                     ];
                     (instr, Some(IrValue::Var(res_var)))
