@@ -6,7 +6,7 @@ use go "unicode/utf8";
 extend String with impl {
     fn split_lines() -> String[] {
         let lines: String[] = go {
-            $$$res$$$ = strings.Split(self, "\n")
+            $ = strings.Split(self, "\n")
         };
 
         return lines;

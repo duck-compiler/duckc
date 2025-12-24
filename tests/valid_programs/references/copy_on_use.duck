@@ -1,3 +1,6 @@
+use std::io::println;
+
+[auto(Clone)]
 struct AStruct {
     some_str: String,
 } impl {
@@ -20,6 +23,8 @@ fn main() {
     instance_1.print();
     instance_2.print();
 
+    println("");
+
     let arr = [1, 2, 3];
     let arr2 = arr;
 
@@ -31,5 +36,53 @@ fn main() {
 
     for (num in arr2.iter()) {
         *num->std::string::from_int()->std::io::println();
+    }
+
+    {
+        println("");
+
+        let arr3 = [AStruct { some_str: "First Inst" }];
+        const inst1 = arr3[0];
+        const inst2 = arr3[0];
+
+        arr3[0].print();
+        inst1.print();
+        inst2.print();
+
+        arr3[0].some_str = "tree";
+
+        arr3[0].print();
+        inst1.print();
+        inst2.print();
+
+        println("");
+
+        println("");
+    }
+
+    {
+        let arr3 = [AStruct { some_str: "im a some_str" }];
+        const inst1 = &arr3[0];
+        const inst2 = &mut arr3[0];
+        const inst3 = inst1;
+        const inst4 = inst2.clone();
+
+        arr3[0].print();
+        inst1.print();
+        inst2.print();
+        inst3.print();
+        inst4.print();
+
+        println("");
+
+        arr3[0].some_str = "tree";
+
+        arr3[0].print();
+        inst1.print();
+        inst2.print();
+        inst3.print();
+        inst4.print();
+
+        println("");
     }
 }

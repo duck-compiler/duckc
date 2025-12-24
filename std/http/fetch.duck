@@ -46,7 +46,7 @@ struct Fetch {
         const headers_string: String =
         go {
             for k, v := range (*self).headers {
-            	$$$res$$$ = fmt.Sprintf("%s\n%s:\t%s", $$$res$$$, k, v)
+            	$ = fmt.Sprintf("%s\n%s:\t%s", $, k, v)
             }
         };
 
@@ -107,7 +107,7 @@ struct Fetch {
 fn fetch(method: FetchMethod, url: String) -> Fetch {
     const headers_map: go "map[string]string" =
     go {
-    $$$res$$$ = make(map[string]string)
+    $ = make(map[string]string)
     };
     return Fetch {
         method: method,

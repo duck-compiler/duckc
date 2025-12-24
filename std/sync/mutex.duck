@@ -25,10 +25,10 @@ struct Mutex<T> {
     fn try_lock(accessor: fn(v: &mut T)) -> Bool {
         const lock_result: Bool = go {
             if (*self).inner.TryLock() {
-            	$$$res$$$ = true;
+            	$ = true;
              	defer (*self).inner.Unlock()
             } else {
-            	$$$res$$$ = false;
+            	$ = false;
             }
         };
 

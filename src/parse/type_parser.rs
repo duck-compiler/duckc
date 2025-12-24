@@ -112,7 +112,7 @@ impl TypeExpr {
                     acc
                 });
 
-                inner.0.call_eq(
+                inner.0.call_ord(
                     &format!("{derefs_str}{param1}"),
                     &format!("{derefs_str}{param2}"),
                     type_env,
@@ -130,6 +130,7 @@ impl TypeExpr {
             | TypeExpr::Float
             | TypeExpr::Bool(..)
             | TypeExpr::Char
+            | TypeExpr::Tag(..)
             | TypeExpr::UInt
             | TypeExpr::String(..) => format!("{param1} == {param2}"),
             TypeExpr::Tuple(..) => format!("{param1}.eq(&{param2})"),
@@ -139,7 +140,6 @@ impl TypeExpr {
             ),
             // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
             TypeExpr::Struct { .. } => format!("{param1}.eq(&{param2})"),
-            TypeExpr::Tag(..) => String::from("true"),
             TypeExpr::Or(t) => {
                 let mut go_code = format!(
                     r#"
@@ -236,6 +236,7 @@ impl TypeExpr {
             | TypeExpr::Float
             | TypeExpr::Bool(..)
             | TypeExpr::Char
+            | TypeExpr::Tag(..)
             | TypeExpr::String(..) => param1.to_string(),
             TypeExpr::Tuple(..) => format!("{param1}.clone()"),
             TypeExpr::Array(..) => {
@@ -243,7 +244,6 @@ impl TypeExpr {
             }
             // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
             TypeExpr::Struct { .. } => format!("{param1}.clone()"),
-            TypeExpr::Tag(t) => t.clone(),
             TypeExpr::Or(t) => {
                 let mut go_code = format!(
                     r#"
@@ -259,14 +259,15 @@ impl TypeExpr {
                         r#"
                         switch p1.(type) {{
                         case {conc_type}:
+                            tmp := p1.({conc_type})
                             return {}
                         }}
                     "#,
-                        t.0.call_clone("p1", type_env)
+                        t.0.call_clone("tmp", type_env)
                     ));
                 }
 
-                go_code.push_str("\nreturn \"\"");
+                go_code.push_str("var ret_guard *any\nreturn *ret_guard");
                 format!("func() any {{ {go_code} }}()")
             }
             TypeExpr::Ref(inner) | TypeExpr::RefMut(inner) => {
@@ -315,6 +316,50 @@ impl TypeExpr {
         }
     }
 
+    pub fn call_copy(&self, param1: &str, type_env: &mut TypeEnv) -> String {
+        let param1 = &format!("({param1})");
+        match self {
+            TypeExpr::Struct { .. } => {
+                format!("{}_Copy({param1})", self.as_clean_go_type_name(type_env))
+            }
+            TypeExpr::Array(..) => {
+                format!("{}_Copy({param1})", self.as_clean_go_type_name(type_env))
+            }
+            TypeExpr::Tuple(..) => {
+                format!("{param1}.copy()")
+            }
+            TypeExpr::Or(t) => {
+                let mut go_code = format!(
+                    r#"
+                    var p1 any = {param1}
+
+                "#
+                );
+
+                for t in t {
+                    let conc_type = t.0.as_go_type_annotation(type_env);
+                    go_code.push('\n');
+                    go_code.push_str(&format!(
+                        r#"
+                        switch p1.(type) {{
+                        case {conc_type}:
+                            tmp := p1.({conc_type})
+                            return {}
+                        }}
+                    "#,
+                        t.0.call_copy("tmp", type_env)
+                    ));
+                }
+
+                go_code.push_str("var ret_guard *any\nreturn *ret_guard");
+                format!("func() any {{ {go_code} }}()")
+            }
+            _ => {
+                format!("IDENTITY({param1})")
+            }
+        }
+    }
+
     pub fn call_to_string(&self, param1: &str, type_env: &mut TypeEnv) -> String {
         let param1 = &format!("({param1})");
         match self {
@@ -331,7 +376,7 @@ impl TypeExpr {
             ),
             // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
             TypeExpr::Struct { .. } => format!("{param1}.to_string()"),
-            TypeExpr::Tag(t) => format!(r#"fmt.Sprintf(".{t}")"#),
+            TypeExpr::Tag(t) => format!(r#"fmt.Sprintf("{t}")"#),
             TypeExpr::Or(t) => {
                 let mut go_code = format!(
                     r#"
@@ -347,14 +392,15 @@ impl TypeExpr {
                         r#"
                         switch p1.(type) {{
                         case {conc_type}:
+                            tmp := p1.({conc_type})
                             return {}
                         }}
                     "#,
-                        t.0.call_to_string("p1", type_env)
+                        t.0.call_to_string("tmp", type_env)
                     ));
                 }
 
-                go_code.push_str("\nreturn \"\"");
+                go_code.push_str("var ret_guard *string\nreturn *ret_guard");
                 format!("func() string {{ {go_code} }}()")
             }
             TypeExpr::Ref(inner) | TypeExpr::RefMut(inner) => {
@@ -382,11 +428,11 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_to_string(type_env),
             TypeExpr::Array(t) => t.0.implements_to_string(type_env),
-            TypeExpr::Duck(Duck { fields }) => {
+            TypeExpr::Duck(Duck { fields: _ }) => {
                 false
-                    && fields
-                        .iter()
-                        .all(|f| f.type_expr.0.implements_to_string(type_env))
+                // && fields
+                //     .iter()
+                //     .all(|f| f.type_expr.0.implements_to_string(type_env))
             }
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_to_string(type_env)),
             TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_to_string(type_env)),
@@ -416,11 +462,11 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_hash(type_env),
             TypeExpr::Array(t) => t.0.implements_hash(type_env),
-            TypeExpr::Duck(Duck { fields }) => {
+            TypeExpr::Duck(Duck { fields: _ }) => {
                 false
-                    && fields
-                        .iter()
-                        .all(|f| f.type_expr.0.implements_hash(type_env))
+                // && fields
+                //     .iter()
+                //     .all(|f| f.type_expr.0.implements_hash(type_env))
             }
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_hash(type_env)),
             TypeExpr::Struct { name, type_params } => {
@@ -445,53 +491,50 @@ impl TypeExpr {
     }
 
     pub fn implements_clone(&self, type_env: &mut TypeEnv) -> bool {
-        // self.implements_copy(type_env)
-            match self {
-                TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_clone(type_env),
-                TypeExpr::Array(t) => t.0.implements_clone(type_env),
-                TypeExpr::Duck(Duck { fields }) => {
-                    false
-                        && fields
-                            .iter()
-                            .all(|f| f.type_expr.0.implements_clone(type_env))
-                }
-                TypeExpr::Tuple(t) | TypeExpr::Or(t) => {
-                    t.iter().all(|t| t.0.implements_clone(type_env))
-                }
-                TypeExpr::Struct { name, type_params } => {
-                    let def = type_env.get_struct_def_with_type_params_mut(
-                        name,
-                        type_params,
-                        empty_range(),
-                    );
-                    def.derived
-                        .contains(&crate::parse::struct_parser::DerivableInterface::Clone)
-                        || (def.methods.iter().any(|f| {
-                            f.name.as_str() == "clone"
-                                && f.params.is_empty()
-                                && &f.return_type.0 == self
-                        }) && !def.mut_methods.contains("clone"))
-                }
-                TypeExpr::Int
-                | TypeExpr::String(..)
-                | TypeExpr::Bool(..)
-                | TypeExpr::Char
-                | TypeExpr::Float
-                | TypeExpr::UInt
-                | TypeExpr::Tag(..) => true,
-                _ => false,
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_clone(type_env),
+            TypeExpr::Array(t) => t.0.implements_clone(type_env),
+            TypeExpr::Duck(Duck { fields: _ }) => {
+                false
+                // && fields
+                //     .iter()
+                //     .all(|f| f.type_expr.0.implements_clone(type_env))
             }
+            TypeExpr::Tuple(t) | TypeExpr::Or(t) => {
+                t.iter().all(|t| t.0.implements_clone(type_env))
+            }
+            TypeExpr::Struct { name, type_params } => {
+                let def =
+                    type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::Clone)
+                    || (def.methods.iter().any(|f| {
+                        f.name.as_str() == "clone"
+                            && f.params.is_empty()
+                            && &f.return_type.0 == self
+                    }) && !def.mut_methods.contains("clone"))
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Float
+            | TypeExpr::UInt
+            | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
     }
 
     pub fn implements_ord(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_ord(type_env),
             TypeExpr::Array(t) => t.0.implements_ord(type_env),
-            TypeExpr::Duck(Duck { fields }) => {
+            TypeExpr::Duck(Duck { fields: _ }) => {
                 false
-                    && fields
-                        .iter()
-                        .all(|f| f.type_expr.0.implements_ord(type_env))
+                // false
+                //     && fields
+                //         .iter()
+                //         .all(|f| f.type_expr.0.implements_ord(type_env))
             }
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_ord(type_env)),
             TypeExpr::Struct { name, type_params } => {
@@ -537,17 +580,12 @@ impl TypeExpr {
                 def.methods.iter().any(|f| {
                     f.name.as_str() == "iter_mut" && {
                         if let TypeExpr::Struct { name, type_params } = &f.return_type.0 {
-                            if name.as_str() == &mangle(&["std", "col", "Iter"]) {
+                            if name.as_str() == mangle(&["std", "col", "Iter"]) {
                                 if type_params.len() == 1 {
-                                    if type_params[0].0.clone().into_empty_span().0
+                                    type_params[0].0.clone().into_empty_span().0
                                         == TypeExpr::RefMut(self.clone().into_empty_span().into())
                                             .into_empty_span()
                                             .0
-                                    {
-                                        true
-                                    } else {
-                                        false
-                                    }
                                 } else {
                                     false
                                 }
@@ -573,17 +611,12 @@ impl TypeExpr {
                 def.methods.iter().any(|f| {
                     f.name.as_str() == "iter" && {
                         if let TypeExpr::Struct { name, type_params } = &f.return_type.0 {
-                            if name.as_str() == &mangle(&["std", "col", "Iter"]) {
+                            if name.as_str() == mangle(&["std", "col", "Iter"]) {
                                 if type_params.len() == 1 {
-                                    if type_params[0].0.clone().into_empty_span().0
+                                    type_params[0].0.clone().into_empty_span().0
                                         == TypeExpr::Ref(self.clone().into_empty_span().into())
                                             .into_empty_span()
                                             .0
-                                    {
-                                        true
-                                    } else {
-                                        false
-                                    }
                                 } else {
                                     false
                                 }
@@ -605,8 +638,9 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_eq(type_env),
             TypeExpr::Array(t) => t.0.implements_eq(type_env),
-            TypeExpr::Duck(Duck { fields }) => {
-                false && fields.iter().all(|f| f.type_expr.0.implements_eq(type_env))
+            TypeExpr::Duck(Duck { fields: _ }) => {
+                // false && fields.iter().all(|f| f.type_expr.0.implements_eq(type_env))
+                false
             }
             TypeExpr::Tuple(t) | TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_eq(type_env)),
             TypeExpr::Struct { name, type_params } => {
@@ -735,12 +769,6 @@ where
                 .ignore_then(go_type_identifier)
                 .map(TypeExpr::Go);
 
-            let string_literal = select_ref! { Token::StringLiteral(str) => str.clone() }
-                .map(|str| TypeExpr::String(Some(str)));
-
-            let bool_literal =
-                select_ref! { Token::BoolLiteral(b) => *b }.map(|b| TypeExpr::Bool(Some(b)));
-
             let tag_identifier = choice((
                 select_ref! { Token::Ident(ident) => ident.to_string() },
                 just(Token::ControlChar('.')).map(|_| "DOT".to_string()),
@@ -844,8 +872,6 @@ where
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                 .or(choice((
                     just(Token::ControlChar('!')).to(TypeExpr::Never),
-                    string_literal,
-                    bool_literal,
                     tag,
                     typeof_expr,
                     keyof_expr,
@@ -968,12 +994,6 @@ where
                     _ => TypeExpr::Any,
                 });
 
-            let string_literal = select_ref! { Token::StringLiteral(str) => str.clone() }
-                .map(|str| TypeExpr::String(Some(str.clone())));
-
-            let bool_literal =
-                select_ref! { Token::BoolLiteral(b) => *b }.map(|b| TypeExpr::Bool(Some(b)));
-
             let tag_identifier = choice((
                 select_ref! { Token::Ident(ident) => ident.to_string() },
                 just(Token::ControlChar('.')).map(|_| "DOT".to_string()),
@@ -1051,8 +1071,6 @@ where
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')')))
                 .or(choice((
                     just(Token::ControlChar('!')).to(TypeExpr::Never),
-                    bool_literal,
-                    string_literal,
                     tag,
                     typeof_expr,
                     keyof_expr,
@@ -1471,32 +1489,32 @@ pub mod tests {
             ),
         );
 
-        assert_type_expression("true", TypeExpr::Bool(Some(true)));
+        // assert_type_expression("true", TypeExpr::Bool(Some(true)));
 
-        assert_type_expression("false", TypeExpr::Bool(Some(false)));
+        // assert_type_expression("false", TypeExpr::Bool(Some(false)));
 
-        assert_type_expression(
-            "true | false",
-            TypeExpr::Or(vec![
-                TypeExpr::Bool(Some(true)).into_empty_span(),
-                TypeExpr::Bool(Some(false)).into_empty_span(),
-            ]),
-        );
+        // assert_type_expression(
+        //     "true | false",
+        //     TypeExpr::Or(vec![
+        //         TypeExpr::Bool(Some(true)).into_empty_span(),
+        //         TypeExpr::Bool(Some(false)).into_empty_span(),
+        //     ]),
+        // );
 
-        assert_type_expression("\"str\"", TypeExpr::String(Some("str".to_string())));
+        // assert_type_expression("\"str\"", TypeExpr::String(Some("str".to_string())));
 
-        assert_type_expression(
-            "\"other_str\"",
-            TypeExpr::String(Some("other_str".to_string())),
-        );
+        // assert_type_expression(
+        //     "\"other_str\"",
+        //     TypeExpr::String(Some("other_str".to_string())),
+        // );
 
-        assert_type_expression(
-            "\"str\" | \"other_str\"",
-            TypeExpr::Or(vec![
-                TypeExpr::String(Some("str".to_string())).into_empty_span(),
-                TypeExpr::String(Some("other_str".to_string())).into_empty_span(),
-            ]),
-        );
+        // assert_type_expression(
+        //     "\"str\" | \"other_str\"",
+        //     TypeExpr::Or(vec![
+        //         TypeExpr::String(Some("str".to_string())).into_empty_span(),
+        //         TypeExpr::String(Some("other_str".to_string())).into_empty_span(),
+        //     ]),
+        // );
 
         assert_type_expression(
             "fn(x: Int) -> Bool",
@@ -2253,25 +2271,25 @@ pub mod tests {
             ]),
         );
 
-        assert_type_expression(
-            "{ x: \"hallo\" } | { x: \"bye\" }",
-            TypeExpr::Or(vec![
-                TypeExpr::Duck(Duck {
-                    fields: vec![Field::new(
-                        "x".to_string(),
-                        TypeExpr::String(Some("hallo".to_string())).into_empty_span(),
-                    )],
-                })
-                .into_empty_span(),
-                TypeExpr::Duck(Duck {
-                    fields: vec![Field::new(
-                        "x".to_string(),
-                        TypeExpr::String(Some("bye".to_string())).into_empty_span(),
-                    )],
-                })
-                .into_empty_span(),
-            ]),
-        );
+        // assert_type_expression(
+        //     "{ x: \"hallo\" } | { x: \"bye\" }",
+        //     TypeExpr::Or(vec![
+        //         TypeExpr::Duck(Duck {
+        //             fields: vec![Field::new(
+        //                 "x".to_string(),
+        //                 TypeExpr::String(Some("hallo".to_string())).into_empty_span(),
+        //             )],
+        //         })
+        //         .into_empty_span(),
+        //         TypeExpr::Duck(Duck {
+        //             fields: vec![Field::new(
+        //                 "x".to_string(),
+        //                 TypeExpr::String(Some("bye".to_string())).into_empty_span(),
+        //             )],
+        //         })
+        //         .into_empty_span(),
+        //     ]),
+        // );
 
         assert_type_expression(
             "&Int",

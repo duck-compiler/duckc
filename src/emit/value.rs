@@ -408,41 +408,32 @@ fn walk_access_raw(
                     if field_name.as_str() == "iter_mut"
                         && target_field_type.implements_into_iter_mut(type_env)
                     {
-                        match target_field_type.clone() {
-                            TypeExpr::Array(..) => {
-                                if !can_do_mut_stuff_through(target_obj, type_env) {
-                                    failure_with_occurence(
-                                        "This needs to allow mutable access",
-                                        target.1,
-                                        [(
-                                            "This needs to allow mutable access".to_string(),
-                                            target_obj.1,
-                                        )],
-                                    );
-                                }
-
-                                flag = Some((
-                                    format!("{clean_go_type_name}_IterMut("),
-                                    stars_count,
-                                    false,
-                                ));
-                                skip = true;
+                        if let TypeExpr::Array(..) = target_field_type.clone() {
+                            if !can_do_mut_stuff_through(target_obj, type_env) {
+                                failure_with_occurence(
+                                    "This needs to allow mutable access",
+                                    target.1,
+                                    [(
+                                        "This needs to allow mutable access".to_string(),
+                                        target_obj.1,
+                                    )],
+                                );
                             }
-                            _ => {}
+
+                            flag = Some((
+                                format!("{clean_go_type_name}_IterMut("),
+                                stars_count,
+                                false,
+                            ));
+                            skip = true;
                         }
                     } else if field_name.as_str() == "iter"
                         && target_field_type.implements_into_iter(type_env)
                     {
-                        match target_field_type.clone() {
-                            TypeExpr::Array(..) => {
-                                flag = Some((
-                                    format!("{clean_go_type_name}_Iter("),
-                                    stars_count,
-                                    false,
-                                ));
-                                skip = true;
-                            }
-                            _ => {}
+                        if let TypeExpr::Array(..) = target_field_type.clone() {
+                            flag =
+                                Some((format!("{clean_go_type_name}_Iter("), stars_count, false));
+                            skip = true;
                         }
                     } else if field_name.as_str() == "to_string"
                         && target_field_type.implements_to_string(type_env)
@@ -457,24 +448,26 @@ fn walk_access_raw(
                                 skip = true;
                             }
                             TypeExpr::String(..) => {
-                                flag = Some((format!(r#"fmt.Sprintf("%s", "#), stars_count, false));
+                                flag =
+                                    Some((r#"fmt.Sprintf("%s", "#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Int => {
-                                flag = Some((format!(r#"fmt.Sprintf("%d", "#), stars_count, false));
+                                flag =
+                                    Some((r#"fmt.Sprintf("%d", "#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::UInt => {
-                                flag = Some((format!(r#"fmt.Sprintf("%d", "#), stars_count, false));
+                                flag =
+                                    Some((r#"fmt.Sprintf("%d", "#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Or(t) => {
-                                let mut go_code = format!(
-                                    r#"
+                                let mut go_code = r#"
                                     var p1 any = param1
 
                                 "#
-                                );
+                                .to_string();
 
                                 for t in t {
                                     let conc_type = t.0.as_go_type_annotation(type_env);
@@ -497,11 +490,13 @@ fn walk_access_raw(
                                 skip = true;
                             }
                             TypeExpr::Bool(..) => {
-                                flag = Some((format!(r#"fmt.Sprintf("%t", "#), stars_count, false));
+                                flag =
+                                    Some((r#"fmt.Sprintf("%t", "#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Char => {
-                                flag = Some((format!(r#"fmt.Sprintf("%c", "#), stars_count, false));
+                                flag =
+                                    Some((r#"fmt.Sprintf("%c", "#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Tag(t) => {
@@ -513,7 +508,8 @@ fn walk_access_raw(
                                 skip = true;
                             }
                             TypeExpr::Float => {
-                                flag = Some((format!(r#"fmt.Sprintf("%f", "#), stars_count, false));
+                                flag =
+                                    Some((r#"fmt.Sprintf("%f", "#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             _ => {}
@@ -531,31 +527,31 @@ fn walk_access_raw(
                                 skip = true;
                             }
                             TypeExpr::String(..) => {
-                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
+                                flag = Some((r#"IDENTITY("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Int => {
-                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
+                                flag = Some((r#"IDENTITY("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::UInt => {
-                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
+                                flag = Some((r#"IDENTITY("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Bool(..) => {
-                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
+                                flag = Some((r#"IDENTITY("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Char => {
-                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
+                                flag = Some((r#"IDENTITY("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Tag(..) => {
-                                flag = Some((format!(r#"IDENTITY("#), stars_count, false));
+                                flag = Some((r#"IDENTITY("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Float => {
-                                flag = Some((format!(r#"IDENTITY("%f", "#), stars_count, false));
+                                flag = Some((r#"IDENTITY("%f", "#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             _ => {}
@@ -573,23 +569,23 @@ fn walk_access_raw(
                                 skip = true;
                             }
                             TypeExpr::String(..) => {
-                                flag = Some((format!(r#"String_Hash("#), stars_count, false));
+                                flag = Some((r#"String_Hash("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Int => {
-                                flag = Some((format!(r#"Int_Hash("#), stars_count, false));
+                                flag = Some((r#"Int_Hash("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::UInt => {
-                                flag = Some((format!(r#"UInt_Hash("#), stars_count, false));
+                                flag = Some((r#"UInt_Hash("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Bool(..) => {
-                                flag = Some((format!(r#"Bool_Hash("#), stars_count, false));
+                                flag = Some((r#"Bool_Hash("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Char => {
-                                flag = Some((format!(r#"Char_Hash("#), stars_count, false));
+                                flag = Some((r#"Char_Hash("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Tag(t) => {
@@ -597,7 +593,7 @@ fn walk_access_raw(
                                 skip = true;
                             }
                             TypeExpr::Float => {
-                                flag = Some((format!(r#"Float_Hash("#), stars_count, false));
+                                flag = Some((r#"Float_Hash("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             _ => {}
@@ -615,27 +611,27 @@ fn walk_access_raw(
                                 skip = true;
                             }
                             TypeExpr::String(..) => {
-                                flag = Some((format!(r#"String_Ord("#), stars_count, false));
+                                flag = Some((r#"String_Ord("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Int => {
-                                flag = Some((format!(r#"Int_Ord("#), stars_count, false));
+                                flag = Some((r#"Int_Ord("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::UInt => {
-                                flag = Some((format!(r#"UInt_Ord("#), stars_count, false));
+                                flag = Some((r#"UInt_Ord("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Bool(..) => {
-                                flag = Some((format!(r#"Bool_Ord("#), stars_count, false));
+                                flag = Some((r#"Bool_Ord("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Char => {
-                                flag = Some((format!(r#"Char_Ord("#), stars_count, false));
+                                flag = Some((r#"Char_Ord("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::Float => {
-                                flag = Some((format!(r#"Float_Ord("#), stars_count, false));
+                                flag = Some((r#"Float_Ord("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             _ => {}
@@ -2255,7 +2251,7 @@ impl ValueExpr {
                 let result_var = env.new_var();
 
                 let mut res_instr = vec![IrInstruction::VarDecl(result_var.clone(), ty)];
-                let inline_go_text = s.replace("$$$res$$$", &result_var);
+                let inline_go_text = s.replace("$", &result_var);
                 res_instr.push(IrInstruction::InlineGo(inline_go_text));
 
                 (res_instr, Some(IrValue::Var(result_var)))
@@ -2735,7 +2731,6 @@ impl ValueExpr {
             ValueExpr::Variable(_, x, var_type, _, needs_copy) => {
                 let x = fix_ident_for_go(x, type_env.all_go_imports);
                 if *needs_copy {
-                    // TODO(@Apfelfrosch): do deep copy for composite types
                     let var_type = var_type
                         .as_ref()
                         .unwrap_or_else(|| panic!("Var {x} doesnt have type"));
@@ -2744,39 +2739,15 @@ impl ValueExpr {
                     let res_var_name = env.new_var();
                     let anno = var_type.as_go_type_annotation(type_env);
 
-                    match var_type {
-                        TypeExpr::Struct { .. } => {
-                            let tmp_var_name = env.new_var();
-                            res_instr.extend([
-                                IrInstruction::VarDecl(tmp_var_name.clone(), anno[1..].to_string()),
-                                IrInstruction::VarAssignment(
-                                    tmp_var_name.clone(),
-                                    IrValue::Imm(format!("*{x}")),
-                                ),
-                            ]);
-                            res_instr.extend([
-                                IrInstruction::VarDecl(res_var_name.clone(), anno.clone()),
-                                IrInstruction::VarAssignment(
-                                    res_var_name.clone(),
-                                    IrValue::Imm(format!("&{tmp_var_name}")),
-                                ),
-                            ]);
-                            (res_instr, Some(IrValue::Var(res_var_name)))
-                        }
-                        TypeExpr::Array(..) => {
-                            let tmp_var_name = env.new_var();
-                            res_instr.extend([
-                                IrInstruction::VarDecl(tmp_var_name.clone(), anno.to_string()),
-                                IrInstruction::VarAssignment(
-                                    tmp_var_name.clone(),
-                                    IrValue::Imm(format!("make({anno}, len({x}))")),
-                                ),
-                                IrInstruction::InlineGo(format!("copy({tmp_var_name}, {x})")),
-                            ]);
-                            (res_instr, as_rvar(tmp_var_name))
-                        }
-                        _ => (vec![], as_rvar(x.to_owned())),
-                    }
+                    res_instr.extend([
+                        IrInstruction::VarDecl(res_var_name.clone(), anno.clone()),
+                        IrInstruction::VarAssignment(
+                            res_var_name.clone(),
+                            IrValue::Imm(var_type.call_copy(&x, type_env)),
+                        ),
+                    ]);
+
+                    (res_instr, as_rvar(res_var_name))
                 } else {
                     (vec![], as_rvar(x.to_owned()))
                 }

@@ -1,6 +1,6 @@
 fn str_arr_len(arr: String[]) -> Int {
     return go {
-        $$$res$$$ = len(arr)
+        $ = len(arr)
     } as Int
 }
 
@@ -14,7 +14,7 @@ fn print_diff(lstr: String, rstr: String) {
     let size = (n + 1) * (m + 1);
 
     let matrix: Int[] = go {
-        $$$res$$$ = make([]int, (n + 1) * (m + 1))
+        $ = make([]int, (n + 1) * (m + 1))
     };
 
     let i = 1;

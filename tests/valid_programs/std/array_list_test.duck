@@ -7,6 +7,6 @@ fn main() {
     x.for_each(fn(x: String) -> () { println(x); });
     x.map<Int>(fn (val: String) -> Int { return std::string::to_int(val); })
         .for_each(fn(x: Int) -> () { x->std::string::from_int()->println(); });
-    x.map<"const">(fn (val: String) -> "const" { return "const"; })
-        .for_each(fn(x: "const") -> () { x->println(); });
+    x.map<String>(fn (val: String) -> String { return "const"; })
+        .for_each(fn(x: String) -> () { x->println(); });
 }

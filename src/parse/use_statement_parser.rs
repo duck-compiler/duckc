@@ -34,13 +34,13 @@ where
         .then_ignore(just(Token::ControlChar(';')))
         .map(|(is_glob, v)| {
             let mut base_path = Vec::new();
-            for i in 0..v.len() - 1 {
-                if v[i].0.len() != 1 {
+            for item in v.iter().take(v.len() - 1) {
+                if item.0.len() != 1 {
                     let msg = "Only last part may specify multiple imports";
-                    failure_with_occurence(msg, v[i].1, [(msg, v[i].1)]);
+                    failure_with_occurence(msg, item.1, [(msg, item.1)]);
                 }
 
-                base_path.push(v[i].0[0].clone());
+                base_path.push(item.0[0].clone());
             }
 
             let mut out = Vec::new();

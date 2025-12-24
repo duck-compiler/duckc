@@ -20,7 +20,7 @@ component lol() jsx {
 fn parse_json<T: {}>(input: String) -> T | .err {
     go {
         return <<<@T>>>_FromJson(input);
-    }
+    } as !
 }
 
 fn assert(expr: Bool, fail_msg: String | ..) {

@@ -311,7 +311,7 @@ where
     I: BorrowInput<'src, Token = Token, Span = SS>,
     M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
 {
-    let block_expression = value_expr_parser
+    value_expr_parser
         .clone()
         .then(just(Token::ControlChar(';')).or_not())
         .repeated()
@@ -341,8 +341,7 @@ where
                 ValueExpr::Block(exprs.into_iter().map(|(expr, _)| expr).collect()),
                 e.span(),
             )
-        });
-    block_expression
+        })
 }
 
 pub fn value_expr_parser<'src, I, M>(

@@ -1,4 +1,4 @@
 {
-    "stdout": "yo\nyo\nyo\nabc xDD\n100\n2\n3\n1\n2\n3\n",
+    "stdout": "yo\nyo\nyo\nabc xDD\n\n100\n2\n3\n1\n2\n3\n\nFirst Inst\nFirst Inst\nFirst Inst\ntree\nFirst Inst\nFirst Inst\n\n\nim a some_str\nim a some_str\nim a some_str\nim a some_str\nim a some_str\n\ntree\ntree\ntree\ntree\nim a some_str\n\n",
     "stderr": ""
 }

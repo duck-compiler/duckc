@@ -4,7 +4,7 @@ struct Channel<T> {
     inner: go "chan {T}"
 } impl {
     static fn new<T>() -> Channel<T> {
-        const go_chan: go "chan {T}" = go { $$$res$$$ = make(chan <<<T>>>) };
+        const go_chan: go "chan {T}" = go { $ = make(chan <<<T>>>) };
         Channel<T> {
             inner: go_chan,
         }

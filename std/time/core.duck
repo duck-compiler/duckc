@@ -5,7 +5,7 @@ type Month = .January
     | .May
     | .June
     | .July
-    | .Aug
+    | .August
     | .September
     | .October
     | .November
@@ -75,29 +75,19 @@ type Weekday = .Monday
 fn from_weekday_index(weekday: Int) -> Weekday {
     if (weekday == 0) {
         return .Sunday;
-    }
-
-    if (weekday == 1) {
+    } else if (weekday == 1) {
         return .Monday;
-    }
-
-    if (weekday == 2) {
+    } else if (weekday == 2) {
         return .Tuesday;
-    }
-
-    if (weekday == 3) {
+    } else if (weekday == 3) {
         return .Wednesday;
-    }
-
-    if (weekday == 4) {
+    } else if (weekday == 4) {
         return .Thursday;
-    }
-
-    if (weekday == 5) {
+    } else if (weekday == 5) {
         return .Friday;
-    }
-
-    if (weekday == 6) {
+    } else if (weekday == 6) {
         return .Saturday;
+    } else {
+        return from_weekday_index(weekday % 7);
     }
 }
