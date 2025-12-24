@@ -3421,6 +3421,108 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
     }
 }
 
+fn infer_type_params(
+    def: &Spanned<TypeExpr>,
+    value_type: &Spanned<TypeExpr>,
+    generic_params: &mut IndexMap<String, Option<Spanned<TypeExpr>>>,
+    type_env: &mut TypeEnv,
+) {
+    match &def.0 {
+        TypeExpr::Ref(def_inner) | TypeExpr::RefMut(def_inner) => {
+            let (TypeExpr::Ref(v_inner) | TypeExpr::RefMut(v_inner)) = &value_type.0 else {
+                return;
+            };
+            infer_type_params(def_inner, v_inner, generic_params, type_env);
+        }
+        TypeExpr::TemplParam(name) | TypeExpr::TypeName(_, name, _) => {
+            if let Some(infered_type) = generic_params.get_mut(name) {
+                if let Some(infered_type) = infered_type.as_ref() {
+                    if infered_type.0.clone().into_empty_span().0
+                        != value_type.0.clone().into_empty_span().0
+                    {
+                        let msg = format!("Conflicting values for template parameter {name}");
+                        failure_with_occurence(
+                            &msg,
+                            value_type.1,
+                            [(&msg, value_type.1), (&msg, infered_type.1)],
+                        );
+                    }
+                }
+                *infered_type = Some(value_type.clone());
+            }
+        }
+
+        TypeExpr::Or(def_fields) => {
+            let TypeExpr::Or(v_fields) = &value_type.0 else {
+                return;
+            };
+
+            for (def, v_t) in def_fields.iter().zip(v_fields.iter()) {
+                infer_type_params(def, v_t, generic_params, type_env);
+            }
+        }
+
+        TypeExpr::Duck(Duck { fields: def_fields }) => {
+            let TypeExpr::Duck(Duck { fields: v_fields }) = &value_type.0 else {
+                return;
+            };
+
+            for (def, v_t) in def_fields.iter().zip(v_fields.iter()) {
+                infer_type_params(&def.type_expr, &v_t.type_expr, generic_params, type_env);
+            }
+        }
+
+        TypeExpr::Array(def_fields) => {
+            let TypeExpr::Array(v_fields) = &value_type.0 else {
+                return;
+            };
+
+            infer_type_params(def_fields, v_fields, generic_params, type_env);
+        }
+
+        TypeExpr::Tuple(def_fields) => {
+            let TypeExpr::Tuple(v_fields) = &value_type.0 else {
+                return;
+            };
+
+            for (def, v_t) in def_fields.iter().zip(v_fields.iter()) {
+                infer_type_params(def, v_t, generic_params, type_env);
+            }
+        }
+
+        TypeExpr::Fun(def_params, def_ret, _) => {
+            let TypeExpr::Fun(v_params, v_ret, _) = &value_type.0 else {
+                return;
+            };
+
+            for ((_, def), (_, v_t)) in def_params.iter().zip(v_params.iter()) {
+                infer_type_params(def, v_t, generic_params, type_env);
+            }
+
+            infer_type_params(def_ret, v_ret, generic_params, type_env);
+        }
+
+        TypeExpr::Struct {
+            name: _def_name,
+            type_params: def_type_params,
+        } => {
+            let TypeExpr::Struct {
+                name: _v_name,
+                type_params: v_type_params,
+            } = &value_type.0
+            else {
+                return;
+            };
+
+            for (def, v_t) in def_type_params.iter().zip(v_type_params.iter()) {
+                infer_type_params(def, v_t, generic_params, type_env);
+            }
+        }
+
+        _ => {}
+    }
+}
+
 fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
     let span = value_expr.1;
     let ValueExpr::FunctionCall {
@@ -3436,8 +3538,138 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
 
     let header: FunHeader;
     if type_params.is_empty() {
-        typeresolve_value_expr((&mut target.0, target.1), type_env);
+        match &mut target.0 {
+            ValueExpr::Variable(_, name, _ty, _, _needs_copy) => {
+                if let Some(fn_def) = type_env
+                    .function_definitions
+                    .iter()
+                    .find(|x| name.as_str() == x.name.as_str())
+                    .cloned()
+                {
+                    if !fn_def.generics.is_empty() {
+                        let mut infered_generics = fn_def.generics.iter().cloned().fold(
+                            IndexMap::<String, Option<Spanned<TypeExpr>>>::new(),
+                            |mut acc, e| {
+                                acc.insert(e.0.name.clone(), None);
+                                acc
+                            },
+                        );
 
+                        for (p, t) in params.iter_mut().zip(fn_def.params.iter().map(|x| &x.1)) {
+                            typeresolve_value_expr((&mut p.0, p.1), type_env);
+                            infer_type_params(
+                                t,
+                                &TypeExpr::from_value_expr(p, type_env),
+                                &mut infered_generics,
+                                type_env,
+                            );
+                        }
+
+                        let mut new_type_params = Vec::new();
+
+                        for (name, infered) in infered_generics.into_iter() {
+                            if let Some(infered) = infered {
+                                new_type_params.push(infered);
+                            } else {
+                                let msg =
+                                    &format!("Could not infer type for template parameter {name}");
+                                let span = fn_def
+                                    .generics
+                                    .iter()
+                                    .find_map(|x| {
+                                        if x.0.name.as_str() == name.as_str() {
+                                            Some(x.1)
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .unwrap();
+                                failure_with_occurence(msg, span, [(msg, span)]);
+                            }
+                        }
+
+                        *type_params = new_type_params;
+                        typeresolve_function_call(value_expr, type_env);
+                        return;
+                    }
+                }
+            }
+            ValueExpr::FieldAccess {
+                target_obj,
+                field_name,
+            } => {
+                typeresolve_value_expr((&mut target_obj.0, target_obj.1), type_env);
+                let target_type = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
+
+                if let TypeExpr::Struct {
+                    name: struct_name,
+                    type_params: struct_type_params,
+                } = target_type.clone().0
+                {
+                    let mut_struct_def = type_env.get_struct_def_with_type_params_mut(
+                        &struct_name,
+                        &struct_type_params,
+                        span,
+                    );
+
+                    if let Some(fn_def) = mut_struct_def
+                        .methods
+                        .iter()
+                        .find(|m| m.name.as_str() == field_name.as_str())
+                        .cloned()
+                        && !fn_def.generics.is_empty()
+                    {
+                        let mut infered_generics = fn_def.generics.iter().cloned().fold(
+                            IndexMap::<String, Option<Spanned<TypeExpr>>>::new(),
+                            |mut acc, e| {
+                                acc.insert(e.0.name.clone(), None);
+                                acc
+                            },
+                        );
+
+                        for (p, t) in params.iter_mut().zip(fn_def.params.iter().map(|x| &x.1)) {
+                            typeresolve_value_expr((&mut p.0, p.1), type_env);
+                            infer_type_params(
+                                t,
+                                &TypeExpr::from_value_expr(p, type_env),
+                                &mut infered_generics,
+                                type_env,
+                            );
+                        }
+
+                        let mut new_type_params = Vec::new();
+
+                        for (name, infered) in infered_generics.into_iter() {
+                            if let Some(infered) = infered {
+                                new_type_params.push(infered);
+                            } else {
+                                let msg =
+                                    &format!("Could not infer type for template parameter {name}");
+                                let span = fn_def
+                                    .generics
+                                    .iter()
+                                    .find_map(|x| {
+                                        if x.0.name.as_str() == name.as_str() {
+                                            Some(x.1)
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .unwrap();
+                                failure_with_occurence(msg, span, [(msg, span)]);
+                            }
+                        }
+
+                        *type_params = new_type_params;
+                        typeresolve_function_call(value_expr, type_env);
+                        return;
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        typeresolve_value_expr((&mut target.0, target.1), type_env);
         let target_type = TypeExpr::from_value_expr(target, type_env);
 
         let TypeExpr::Fun(def_params, def_ret, _) = target_type.0 else {
@@ -3877,6 +4109,69 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
     };
 
     let og_def = type_env.get_struct_def(name);
+
+    if type_params.is_empty() && !og_def.generics.is_empty() {
+        let og_def = og_def.clone();
+        let og_gen = og_def.generics.clone();
+
+        let mut infered_generics = og_def.generics.iter().cloned().fold(
+            IndexMap::<String, Option<Spanned<TypeExpr>>>::new(),
+            |mut acc, e| {
+                acc.insert(e.0.name.clone(), None);
+                acc
+            },
+        );
+
+        for (p, t) in fields.iter_mut().map(|f| {
+            (
+                &mut f.1,
+                og_def
+                    .fields
+                    .iter()
+                    .find_map(|f2| {
+                        if f2.name.as_str() == f.0.as_str() {
+                            Some(&f2.type_expr)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap(),
+            )
+        }) {
+            typeresolve_value_expr((&mut p.0, p.1), type_env);
+            infer_type_params(
+                t,
+                &TypeExpr::from_value_expr(p, type_env),
+                &mut infered_generics,
+                type_env,
+            );
+        }
+
+        let mut new_type_params = Vec::new();
+
+        for (name, infered) in infered_generics.into_iter() {
+            if let Some(infered) = infered {
+                new_type_params.push(infered);
+            } else {
+                let msg = &format!("Could not infer type for template parameter {name}");
+                let span = og_gen
+                    .iter()
+                    .find_map(|x| {
+                        if x.0.name.as_str() == name.as_str() {
+                            Some(x.1)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap();
+                failure_with_occurence(msg, span, [(msg, span)]);
+            }
+        }
+
+        *type_params = new_type_params;
+        typeresolve_struct(value_expr, type_env);
+        return;
+    }
 
     if type_params.len() != og_def.generics.len() {
         let msg = "Wrong number of type parameters A";

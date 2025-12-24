@@ -1,0 +1,4 @@
+{
+    "stdout": "Struct_____int{x: 300}\nx = Struct_____int{x: 500}, z = 1000\nStruct_____int{x: 100}\n[(), (), (), ()]\n[((), a), ((), a), ((), a), ((), a)]\n[((), a), ((), a)]\n[yoo, First, Second]\n",
+    "stderr": ""
+}

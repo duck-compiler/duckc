@@ -1,0 +1,83 @@
+use std::col::{Iter, ArrayList};
+use std::sync::Mutex;
+use std::io::println;
+
+fn a<T, U>(x: T, y: U) {}
+
+fn b<T>(x: { x: T }, y: T) {}
+
+[auto(ToString, Clone)]
+struct Struct<T> {
+    x: T,
+}
+
+[auto(ToString, Clone)]
+struct Struct<T> {
+    x: T,
+}
+
+struct Struct2<T> {
+    x: Mutex<Struct<T>>,
+    z: T,
+} impl {
+    fn log() {
+        self.x.lock(fn(v) {
+            println(f"x = {v.to_string()}, z = {self.z.to_string()}");
+        })
+    }
+}
+
+fn main() {
+    const s = Struct {
+        x: 100
+    };
+
+    const mutex_s = Mutex::new(Struct { x: 300 });
+    mutex_s.lock(fn(v) {
+        v.to_string()->println();
+    });
+
+    const s2 = Struct2 {
+        x: Mutex::new(Struct { x: 500 }),
+        z: 1000,
+    };
+
+    s2.log();
+
+    s.to_string()->println();
+    a(20, "abc");
+    b({ x: 100 }, 100);
+    b({ x: 100 as UInt }, 100 as UInt);
+
+    const mutex = Mutex::new(ArrayList::from_array(["yoo"]));
+
+    Iter::from(mut fn() -> () | .no_next_elem {})
+        .take(4)
+        .into_list()
+        .as_ref()
+        .to_string()->println();
+
+    Iter::from(mut fn() -> () | .no_next_elem {})
+        .zip(Iter::from(mut fn() -> String | .no_next_elem { "a" }))
+        .take(4)
+        .into_list()
+        .as_ref()
+        .to_string()->println();
+
+    Iter::from(mut fn() -> () | .no_next_elem {})
+        .zip(Iter::from(mut fn() -> String | .no_next_elem { "a" }).take(2))
+        .take(4)
+        .into_list()
+        .as_ref()
+        .to_string()->println();
+
+    mutex.lock(fn (r) {
+        r.push("First");
+        r.push("Second");
+    });
+
+    mutex.lock(fn (r) {
+        r.as_ref().to_string()->println();
+    });
+
+}
