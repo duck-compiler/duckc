@@ -6,7 +6,7 @@ struct Duration {
     static fn since(gtime: Time) -> Duration {
         Duration {
             raw_duration: go {
-                $$$res$$$ = time.Since(gtime.raw_time)
+                $ = time.Since(gtime.raw_time)
             }
         }
     }
@@ -14,7 +14,7 @@ struct Duration {
     static fn until(gtime: Time) -> Duration {
         Duration {
             raw_duration: go {
-                $$$res$$$ = time.Until(gtime.raw_time)
+                $ = time.Until(gtime.raw_time)
             }
         }
     }
@@ -22,7 +22,7 @@ struct Duration {
     static fn nanoseconds(ns: Int) -> Duration {
         Duration {
             raw_duration: go {
-                $$$res$$$ = time.Duration(ns)
+                $ = time.Duration(ns)
             }
         }
     }
@@ -30,7 +30,7 @@ struct Duration {
     static fn microseconds(us: Int) -> Duration {
         Duration {
             raw_duration: go {
-                $$$res$$$ = time.Duration(us) * time.Microsecond
+                $ = time.Duration(us) * time.Microsecond
             }
         }
     }
@@ -38,7 +38,7 @@ struct Duration {
     static fn milliseconds(ms: Int) -> Duration {
         Duration {
             raw_duration: go {
-                $$$res$$$ = time.Duration(ms) * time.Millisecond
+                $ = time.Duration(ms) * time.Millisecond
             }
         }
     }
@@ -46,7 +46,7 @@ struct Duration {
     static fn seconds(s: Int) -> Duration {
         Duration {
             raw_duration: go {
-                $$$res$$$ = time.Duration(s) * time.Second
+                $ = time.Duration(s) * time.Second
             }
         }
     }
@@ -54,7 +54,7 @@ struct Duration {
     static fn minutes(m: Int) -> Duration {
         Duration {
             raw_duration: go {
-                $$$res$$$ = time.Duration(m) * time.Minute
+                $ = time.Duration(m) * time.Minute
             }
         }
     }
@@ -62,51 +62,51 @@ struct Duration {
     static fn hours(h: Int) -> Duration {
         Duration {
             raw_duration: go {
-                $$$res$$$ = time.Duration(h) * time.Hour
+                $ = time.Duration(h) * time.Hour
             }
         }
     }
 
     fn as_nanoseconds() -> Int {
         return go {
-            $$$res$$$ = int((*self).raw_duration.Nanoseconds())
+            $ = int((*self).raw_duration.Nanoseconds())
         } as Int;
     }
 
     fn as_microseconds() -> Int {
         return go {
-            $$$res$$$ = int((*self).raw_duration.Microseconds())
+            $ = int((*self).raw_duration.Microseconds())
         } as Int;
     }
 
     fn as_milliseconds() -> Int {
         return go {
-            $$$res$$$ = int((*self).raw_duration.Milliseconds())
+            $ = int((*self).raw_duration.Milliseconds())
         } as Int;
     }
 
     fn as_seconds() -> Float {
         return go {
-            $$$res$$$ = (*self).raw_duration.Seconds()
+            $ = (*self).raw_duration.Seconds()
         } as Float;
     }
 
     fn as_minutes() -> Float {
         return go {
-            $$$res$$$ = (*self).raw_duration.Minutes()
+            $ = (*self).raw_duration.Minutes()
         } as Float;
     }
 
     fn as_hours() -> Float {
         return go {
-            $$$res$$$ = (*self).raw_duration.Hours()
+            $ = (*self).raw_duration.Hours()
         } as Float;
     }
 
     fn truncate(multiple: Duration) -> Duration {
         return Duration {
             raw_duration: go {
-                $$$res$$$ = (*self).raw_duration.Truncate((*multiple).raw_duration);
+                $ = (*self).raw_duration.Truncate((*multiple).raw_duration);
             }
         }
     }
@@ -114,7 +114,7 @@ struct Duration {
     fn round(multiple: Duration) -> Duration {
         return Duration {
             raw_duration: go {
-                $$$res$$$ = (*self).raw_duration.Round((*multiple).raw_duration);
+                $ = (*self).raw_duration.Round((*multiple).raw_duration);
             }
         }
     }
@@ -122,20 +122,20 @@ struct Duration {
     fn abs() -> Duration {
         return Duration {
             raw_duration: go {
-                $$$res$$$ = (*self).raw_duration.Abs();
+                $ = (*self).raw_duration.Abs();
             }
         }
     }
 
     fn to_string() -> String {
         return go {
-            $$$res$$$ = (*self).raw_duration.String()
+            $ = (*self).raw_duration.String()
         } as String
     }
 
     fn eq(other: &Duration) -> Bool {
         return go {
-            $$$res$$$ = (*self).raw_duration == (*other).raw_duration
+            $ = (*self).raw_duration == (*other).raw_duration
         } as Bool;
     }
 }

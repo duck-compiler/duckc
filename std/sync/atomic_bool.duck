@@ -13,20 +13,20 @@ struct AtomicBool {
     /// Returns true if the swap succeeded
     fn compare_and_swap(compare_against: Bool, new_value: Bool) -> Bool {
         go {
-            $$$res$$$ = (*self).inner.CompareAndSwap(compare_against, new_value)
+            $ = (*self).inner.CompareAndSwap(compare_against, new_value)
         } as Bool
     }
 
     /// Returns old value
     fn set(new_value: Bool) -> Bool {
         go {
-            $$$res$$$ = (*self).inner.Swap(new_value)
+            $ = (*self).inner.Swap(new_value)
         } as Bool
     }
 
     fn get() -> Bool {
         go {
-            $$$res$$$ = (*self).inner.Load()
+            $ = (*self).inner.Load()
         } as Bool
     }
 }

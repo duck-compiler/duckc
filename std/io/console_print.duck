@@ -23,7 +23,7 @@ fn readln(prompt: String | ..) -> String | .err {
         }
 
         return text
-    }
+    } as !
 }
 
 fn debug(x: {}) {

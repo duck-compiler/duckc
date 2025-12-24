@@ -893,16 +893,40 @@ where
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum TravControlFlow {
+    Cancel,
+    Continue,
+}
+
 pub fn trav_value_expr<F1, F2>(f_t: F1, f_vv: F2, v: &mut Spanned<ValueExpr>, env: &mut TypeEnv)
 where
     F1: Fn(&mut Spanned<TypeExpr>, &mut TypeEnv) + Clone,
     F2: Fn(&mut Spanned<ValueExpr>, &mut TypeEnv) + Clone,
 {
+    trav_value_expr_with_cancel(f_t, f_vv, v, env, |_, _| TravControlFlow::Continue);
+}
+
+pub fn trav_value_expr_with_cancel<F1, F2, F3>(
+    f_t: F1,
+    f_vv: F2,
+    v: &mut Spanned<ValueExpr>,
+    env: &mut TypeEnv,
+    cancel: F3,
+) where
+    F1: Fn(&mut Spanned<TypeExpr>, &mut TypeEnv) + Clone,
+    F2: Fn(&mut Spanned<ValueExpr>, &mut TypeEnv) + Clone,
+    F3: Fn(&mut Spanned<ValueExpr>, &mut TypeEnv) -> TravControlFlow + Clone,
+{
     f_vv(v, env);
+
+    if cancel(v, env) == TravControlFlow::Cancel {
+        return;
+    }
 
     match &mut v.0 {
         ValueExpr::Negate(v) => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), v, env);
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), v, env, cancel.clone());
         }
         ValueExpr::RawStruct {
             is_global: _,
@@ -911,7 +935,13 @@ where
             type_params,
         } => {
             for field in fields {
-                trav_value_expr(f_t.clone(), f_vv.clone(), &mut field.1, env);
+                trav_value_expr_with_cancel(
+                    f_t.clone(),
+                    f_vv.clone(),
+                    &mut field.1,
+                    env,
+                    cancel.clone(),
+                );
             }
             for t in type_params {
                 trav_type_expr(f_t.clone(), t, env);
@@ -927,41 +957,47 @@ where
                 trav_type_expr(f_t.clone(), ret, env);
             }
 
-            trav_value_expr(f_t, f_vv, &mut l.value_expr, env);
+            trav_value_expr_with_cancel(f_t, f_vv, &mut l.value_expr, env, cancel.clone());
         }
         ValueExpr::Return(e) => {
             if let Some(e) = e {
-                trav_value_expr(f_t.clone(), f_vv.clone(), e, env);
+                trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), e, env, cancel.clone());
             }
         }
         ValueExpr::FieldAccess {
             target_obj,
             field_name: _,
         } => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), target_obj, env);
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), target_obj, env, cancel.clone());
         }
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {
-                    trav_value_expr(f_t.clone(), f_vv.clone(), e, env);
+                    trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), e, env, cancel.clone());
                 }
             }
         }
         ValueExpr::FormattedString(contents) => {
             for c in contents {
                 if let ValFmtStringContents::Expr(e) = c {
-                    trav_value_expr(f_t.clone(), f_vv.clone(), e, env);
+                    trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), e, env, cancel.clone());
                 }
             }
         }
         ValueExpr::Block(exprs) | ValueExpr::Tuple(exprs) => {
             for v in exprs {
-                trav_value_expr(f_t.clone(), f_vv.clone(), v, env);
+                trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), v, env, cancel.clone());
             }
         }
         ValueExpr::Duck(v) => {
             for v in v {
-                trav_value_expr(f_t.clone(), f_vv.clone(), &mut v.1, env);
+                trav_value_expr_with_cancel(
+                    f_t.clone(),
+                    f_vv.clone(),
+                    &mut v.1,
+                    env,
+                    cancel.clone(),
+                );
             }
         }
         ValueExpr::Struct {
@@ -973,7 +1009,13 @@ where
                 trav_type_expr(f_t.clone(), t, env);
             }
             for v in fields {
-                trav_value_expr(f_t.clone(), f_vv.clone(), &mut v.1, env);
+                trav_value_expr_with_cancel(
+                    f_t.clone(),
+                    f_vv.clone(),
+                    &mut v.1,
+                    env,
+                    cancel.clone(),
+                );
             }
         }
         ValueExpr::Add(lhs, rhs)
@@ -989,17 +1031,17 @@ where
         | ValueExpr::And(lhs, rhs)
         | ValueExpr::Or(lhs, rhs)
         | ValueExpr::LessThanOrEquals(lhs, rhs) => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), lhs, env);
-            trav_value_expr(f_t.clone(), f_vv.clone(), rhs, env);
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), lhs, env, cancel.clone());
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), rhs, env, cancel.clone());
         }
         ValueExpr::FunctionCall {
             target,
             params,
             type_params,
         } => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), target, env);
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), target, env, cancel.clone());
             for p in params {
-                trav_value_expr(f_t.clone(), f_vv.clone(), p, env);
+                trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), p, env, cancel.clone());
             }
             for t in type_params {
                 trav_type_expr(f_t.clone(), t, env);
@@ -1010,38 +1052,56 @@ where
             target,
             block,
         } => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), target, env);
-            trav_value_expr(f_t.clone(), f_vv.clone(), block, env);
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), target, env, cancel.clone());
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), block, env, cancel.clone());
         }
         ValueExpr::ArrayAccess(target, idx) => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), target, env);
-            trav_value_expr(f_t.clone(), f_vv.clone(), idx, env);
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), target, env, cancel.clone());
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), idx, env, cancel.clone());
         }
         ValueExpr::As(target, t) => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), target, env);
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), target, env, cancel.clone());
             trav_type_expr(f_t.clone(), t, env);
         }
         ValueExpr::Defer(v) => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), v, env);
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), v, env, cancel.clone());
         }
         ValueExpr::Async(v) => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), v, env);
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), v, env, cancel.clone());
         }
         ValueExpr::Array(exprs) => {
             for v in exprs {
-                trav_value_expr(f_t.clone(), f_vv.clone(), v, env);
+                trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), v, env, cancel.clone());
             }
         }
         ValueExpr::VarAssign(assign) => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), &mut assign.0.target, env);
-            trav_value_expr(f_t.clone(), f_vv.clone(), &mut assign.0.value_expr, env);
+            trav_value_expr_with_cancel(
+                f_t.clone(),
+                f_vv.clone(),
+                &mut assign.0.target,
+                env,
+                cancel.clone(),
+            );
+            trav_value_expr_with_cancel(
+                f_t.clone(),
+                f_vv.clone(),
+                &mut assign.0.value_expr,
+                env,
+                cancel.clone(),
+            );
         }
         ValueExpr::VarDecl(decl) => {
             if let Some(t) = decl.0.type_expr.as_mut() {
                 trav_type_expr(f_t.clone(), t, env);
             }
             if let Some(initializer) = decl.0.initializer.as_mut() {
-                trav_value_expr(f_t.clone(), f_vv.clone(), initializer, env);
+                trav_value_expr_with_cancel(
+                    f_t.clone(),
+                    f_vv.clone(),
+                    initializer,
+                    env,
+                    cancel.clone(),
+                );
             }
         }
         ValueExpr::If {
@@ -1049,15 +1109,15 @@ where
             then,
             r#else,
         } => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), condition, env);
-            trav_value_expr(f_t.clone(), f_vv.clone(), then, env);
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), condition, env, cancel.clone());
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), then, env, cancel.clone());
             if let Some(e) = r#else {
-                trav_value_expr(f_t.clone(), f_vv.clone(), e, env);
+                trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), e, env, cancel.clone());
             }
         }
         ValueExpr::While { condition, body } => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), condition, env);
-            trav_value_expr(f_t.clone(), f_vv.clone(), body, env);
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), condition, env, cancel.clone());
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), body, env, cancel.clone());
         }
         ValueExpr::Match {
             value_expr,
@@ -1065,16 +1125,28 @@ where
             else_arm,
             span: _,
         } => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), value_expr, env);
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), value_expr, env, cancel.clone());
             for arm in arms {
                 if let Some(c) = arm.condition.as_mut() {
-                    trav_value_expr(f_t.clone(), f_vv.clone(), c, env);
+                    trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), c, env, cancel.clone());
                 }
                 trav_type_expr(f_t.clone(), &mut arm.type_case, env);
-                trav_value_expr(f_t.clone(), f_vv.clone(), &mut arm.value_expr, env);
+                trav_value_expr_with_cancel(
+                    f_t.clone(),
+                    f_vv.clone(),
+                    &mut arm.value_expr,
+                    env,
+                    cancel.clone(),
+                );
             }
             if let Some(e) = else_arm.as_mut() {
-                trav_value_expr(f_t.clone(), f_vv.clone(), &mut e.value_expr, env);
+                trav_value_expr_with_cancel(
+                    f_t.clone(),
+                    f_vv.clone(),
+                    &mut e.value_expr,
+                    env,
+                    cancel.clone(),
+                );
             }
         }
         ValueExpr::Int(..)
@@ -1093,7 +1165,7 @@ where
         | ValueExpr::Deref(v)
         | ValueExpr::Ref(v)
         | ValueExpr::RefMut(v) => {
-            trav_value_expr(f_t.clone(), f_vv.clone(), v, env);
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), v, env, cancel.clone());
         }
     }
 }
@@ -2588,9 +2660,22 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 typeresolve_function_definition(function_defintion, type_env);
                 process_keyof_in_value_expr(&mut function_defintion.value_expr, type_env);
             }
+        });
 
-            if function_defintion.name.starts_with("gimme") {
-                // dbg!(&function_defintion);
+    let mut cl = type_env.clone();
+    source_file
+        .function_definitions
+        .iter_mut()
+        .chain(type_env.generic_fns_generated.iter_mut())
+        .chain(
+            type_env
+                .generic_methods_generated
+                .values_mut()
+                .flat_map(|v| v.iter_mut()),
+        )
+        .for_each(|fn_def| {
+            if fn_def.generics.is_empty() {
+                check_returns(&fn_def.return_type, &mut fn_def.value_expr, &mut cl);
             }
         });
 
@@ -2676,6 +2761,51 @@ fn typeresolve_function_definition(
     );
 
     type_env.pop_identifier_types();
+}
+
+pub fn check_returns(
+    against: &Spanned<TypeExpr>,
+    v: &mut Spanned<ValueExpr>,
+    type_env: &mut TypeEnv,
+) {
+    let returns = find_returns(v, type_env);
+
+    let mut types = returns
+        .into_iter()
+        .map(|v| (TypeExpr::from_value_expr(&v, type_env), v.1))
+        .collect::<Vec<_>>();
+
+    types.retain(|t| !matches!(t.0, TypeExpr::Never));
+
+    for t in types {
+        check_type_compatability(against, &t, type_env);
+    }
+}
+
+pub fn find_returns(v: &mut Spanned<ValueExpr>, env: &mut TypeEnv) -> Vec<Spanned<ValueExpr>> {
+    let out = Rc::new(RefCell::new(Vec::new()));
+    let out2 = out.clone();
+    trav_value_expr_with_cancel(
+        |_, _| {},
+        move |v, _| match &mut v.0 {
+            ValueExpr::Return(i) => {
+                if let Some(i) = i.as_ref().cloned() {
+                    out.borrow_mut().push(*i);
+                }
+            }
+            _ => {}
+        },
+        v,
+        env,
+        |v, _| {
+            if matches!(v.0, ValueExpr::Lambda(..)) {
+                TravControlFlow::Cancel
+            } else {
+                TravControlFlow::Continue
+            }
+        },
+    );
+    out2.borrow().to_vec()
 }
 
 pub fn translate_intersection_to_duck(interception_type: &TypeExpr) -> TypeExpr {
@@ -2911,6 +3041,13 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 *ty = Some(t.clone());
             } else if let ValueExpr::Int(_, ty) = &mut v.0 {
                 *ty = Some(t.clone());
+            } else if let ValueExpr::Float(float_value) = &mut v.0 {
+                match &t.0 {
+                    TypeExpr::Int | TypeExpr::UInt => {
+                        v.0 = ValueExpr::Int(*float_value as u64, Some(t.clone()));
+                    }
+                    _ => {}
+                }
             }
 
             typeresolve_value_expr((&mut v.0, v.1), type_env);

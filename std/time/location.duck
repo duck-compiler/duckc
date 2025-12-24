@@ -6,7 +6,7 @@ struct Location {
     static fn utc() -> Location {
         return Location {
             raw_location: go {
-                $$$res$$$ = time.UTC
+                $ = time.UTC
             }
         }
     }
@@ -14,7 +14,7 @@ struct Location {
     static fn local() -> Location {
         return Location {
             raw_location: go {
-                $$$res$$$ = time.Local
+                $ = time.Local
             }
         }
     }
@@ -22,7 +22,7 @@ struct Location {
     static fn fixed_zone(name: String, offset: Int) -> Location {
         return Location {
             raw_location: go {
-                $$$res$$$ = time.FixedZone(name, offset)
+                $ = time.FixedZone(name, offset)
             }
         }
     }
@@ -34,7 +34,7 @@ struct Location {
             	return Tag__err {}
             }
 
-            $$$res$$$ = loc;
+            $ = loc;
         };
 
         return Location {
@@ -44,7 +44,7 @@ struct Location {
 
     fn to_string() -> String {
         return go {
-            $$$res$$$ = (*self).raw_location.String()
+            $ = (*self).raw_location.String()
         } as String
     }
 }

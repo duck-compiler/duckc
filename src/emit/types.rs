@@ -252,7 +252,9 @@ pub fn emit_type_definitions(
 
                         for i := range self {
                             a := self[i]
+                            _ = a
                             b := other[i]
+                            _ = b
 
                             if !($%$%$%) {
                                 return false
@@ -314,6 +316,7 @@ pub fn emit_type_definitions(
 
                         for i := range self {
                             a := self[i]
+                            _ = a
                             a_x := ($%$%$%)
                             res[i] = a_x
                         }
@@ -341,6 +344,7 @@ pub fn emit_type_definitions(
 
                         for i := range self {{
                             a := self[i]
+                            _ = a
                             a_x := {}
                             res[i] = a_x
                         }}
@@ -368,6 +372,7 @@ pub fn emit_type_definitions(
 
                         for i := range self {
                             a := self[i]
+                            _ = a
                             a_x := ($%$%$%)
                             res = (31 * res) + a_x
                         }
@@ -399,7 +404,9 @@ pub fn emit_type_definitions(
 
                         for i := range self {
                             a := self[i]
+                            _ = a
                             b := other[i]
+                            _ = b
                             inter_res := ($%$%$%)
 
                             var mm any

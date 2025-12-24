@@ -2255,7 +2255,8 @@ impl ValueExpr {
                 let result_var = env.new_var();
 
                 let mut res_instr = vec![IrInstruction::VarDecl(result_var.clone(), ty)];
-                let inline_go_text = s.replace("$$$res$$$", &result_var);
+                let inline_go_text = s
+                    .replace("$", &result_var);
                 res_instr.push(IrInstruction::InlineGo(inline_go_text));
 
                 (res_instr, Some(IrValue::Var(result_var)))

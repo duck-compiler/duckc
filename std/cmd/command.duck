@@ -18,11 +18,11 @@ struct Cmd {
         command: String,
     ) -> String | .err {
         const splitted: String[] = go {
-            $$$res$$$ = strings.Split(command, " ")
+            $ = strings.Split(command, " ")
         };
 
         const args: String[] = go {
-            $$$res$$$ = splitted[1:]
+            $ = splitted[1:]
         };
 
         return Cmd::new(splitted[0])

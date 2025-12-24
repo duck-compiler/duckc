@@ -6,7 +6,7 @@ struct Time {
     static fn from_unix(sec: Int, nsec: Int) -> Time {
         return Time {
             raw_time: go {
-                $$$res$$$ = time.Unix(int64(sec), int64(nsec))
+                $ = time.Unix(int64(sec), int64(nsec))
             }
         }
     }
@@ -14,7 +14,7 @@ struct Time {
     static fn from_unix_milli(msec: Int) -> Time {
         return Time {
             raw_time: go {
-                $$$res$$$ = time.UnixMilli(int64(msec))
+                $ = time.UnixMilli(int64(msec))
             }
         }
     }
@@ -22,7 +22,7 @@ struct Time {
     static fn from_unix_micro(usec: Int) -> Time {
         return Time {
             raw_time: go {
-                $$$res$$$ = time.UnixMicro(int64(usec))
+                $ = time.UnixMicro(int64(usec))
             }
         }
     }
@@ -39,7 +39,7 @@ struct Time {
     }) -> Time {
         return Time {
             raw_time: go {
-                $$$res$$$ = time.Date(
+                $ = time.Date(
                 	date.Getyear(),
                  	time.Month(date.Getmonth()),
                   	date.Getday(),
@@ -55,7 +55,7 @@ struct Time {
 
     static fn now() -> Time {
         let raw_now: go "time.Time" = go {
-            $$$res$$$ = time.Now()
+            $ = time.Now()
         };
 
         return Time { raw_time: raw_now };
@@ -63,7 +63,7 @@ struct Time {
 
     fn is_dst() -> Bool {
         return go {
-            $$$res$$$ = (*self).raw_time.IsDST()
+            $ = (*self).raw_time.IsDST()
         } as Bool;
     }
 
@@ -73,25 +73,25 @@ struct Time {
 
     fn is_zero() -> Bool {
         return go {
-            $$$res$$$ = (*self).raw_time.IsZero()
+            $ = (*self).raw_time.IsZero()
         } as Bool;
     }
 
     fn is_after(other: Time) -> Bool {
         return go {
-            $$$res$$$ = (*self).raw_time.After(other.raw_time)
+            $ = (*self).raw_time.After(other.raw_time)
         } as Bool;
     }
 
     fn is_before(other: Time) -> Bool {
         return go {
-            $$$res$$$ = (*self).raw_time.Before(other.raw_time)
+            $ = (*self).raw_time.Before(other.raw_time)
         } as Bool;
     }
 
     fn compare(other: Time) -> .before | .same | .after {
         const int_repr: Int = go {
-            $$$res$$$ = (*self).raw_time.Compare(other.raw_time)
+            $ = (*self).raw_time.Compare(other.raw_time)
         } as Int;
 
         if (int_repr == -1) {
@@ -107,13 +107,13 @@ struct Time {
 
     fn eq(other: &Time) -> Bool {
         return go {
-            $$$res$$$ = (*self).raw_time.Equal((*other).raw_time)
+            $ = (*self).raw_time.Equal((*other).raw_time)
         } as Bool;
     }
 
     fn ord(other: &Time) -> .smaller | .equal | .greater {
         const int_repr: Int = go {
-            $$$res$$$ = (*self).raw_time.Compare((*other).raw_time)
+            $ = (*self).raw_time.Compare((*other).raw_time)
         } as Int;
 
         if (int_repr == -1) {
@@ -155,7 +155,7 @@ struct Time {
 
     fn year() -> Int {
         return go {
-            $$$res$$$ = (*self).raw_time.Year()
+            $ = (*self).raw_time.Year()
         } as Int;
     }
 
@@ -165,13 +165,13 @@ struct Time {
 
     fn month_int() -> Int {
         return go {
-            $$$res$$$ = int((*self).raw_time.Month())
+            $ = int((*self).raw_time.Month())
         } as Int;
     }
 
     fn day() -> Int {
         return go {
-            $$$res$$$ = (*self).raw_time.Day()
+            $ = (*self).raw_time.Day()
         } as Int;
     }
 
@@ -181,7 +181,7 @@ struct Time {
 
     fn weekday_int() -> Int {
         return go {
-            $$$res$$$ = int((*self).raw_time.Weekday())
+            $ = int((*self).raw_time.Weekday())
         } as Int;
     }
 
@@ -217,38 +217,38 @@ struct Time {
 
     fn hour() -> Int {
         return go {
-            $$$res$$$ = (*self).raw_time.Hour()
+            $ = (*self).raw_time.Hour()
         } as Int;
     }
 
     fn minute() -> Int {
         return go {
-            $$$res$$$ = (*self).raw_time.Minute()
+            $ = (*self).raw_time.Minute()
         } as Int;
     }
 
     fn second() -> Int {
         return go {
-            $$$res$$$ = (*self).raw_time.Second()
+            $ = (*self).raw_time.Second()
         } as Int;
     }
 
     fn nanosecond() -> Int {
         return go {
-            $$$res$$$ = (*self).raw_time.Second()
+            $ = (*self).raw_time.Second()
         } as Int;
     }
 
     fn year_day() -> Int {
         return go {
-            $$$res$$$ = (*self).raw_time.YearDay()
+            $ = (*self).raw_time.YearDay()
         } as Int;
     }
 
     fn add(duration: Duration) -> Time {
         return Time {
             raw_time: go {
-                $$$res$$$ = (*self).raw_time.Add(duration.raw_duration)
+                $ = (*self).raw_time.Add(duration.raw_duration)
             }
         }
     }
@@ -256,7 +256,7 @@ struct Time {
     fn sub(other: Time) -> Duration {
         return Duration {
             raw_duration: go {
-                $$$res$$$ = (*self).raw_time.Sub(other.raw_time)
+                $ = (*self).raw_time.Sub(other.raw_time)
             }
         }
     }
@@ -264,7 +264,7 @@ struct Time {
     fn add_date(date: { years: Int, months: Int, days: Int }) -> Time {
         return Time {
             raw_time: go {
-                $$$res$$$ = (*self).raw_time.AddDate(date.Getyears(), date.Getmonths(), date.Getdays())
+                $ = (*self).raw_time.AddDate(date.Getyears(), date.Getmonths(), date.Getdays())
             }
         }
     }
@@ -272,7 +272,7 @@ struct Time {
     fn in_utc() -> Time {
         return Time {
             raw_time: go {
-                $$$res$$$ = (*self).raw_time.UTC()
+                $ = (*self).raw_time.UTC()
             }
         }
     }
@@ -280,7 +280,7 @@ struct Time {
     fn in_local() -> Time {
         return Time {
             raw_time: go {
-                $$$res$$$ = (*self).raw_time.Local()
+                $ = (*self).raw_time.Local()
             }
         }
     }
@@ -288,7 +288,7 @@ struct Time {
     fn in_location(location: Location) -> Time {
         return Time {
             raw_time: go {
-                $$$res$$$ = (*self).raw_time.In(location.raw_location)
+                $ = (*self).raw_time.In(location.raw_location)
             }
         }
     }
@@ -296,7 +296,7 @@ struct Time {
     fn location() -> Location {
         return Location {
             raw_location: go {
-                $$$res$$$ = (*self).raw_time.Location()
+                $ = (*self).raw_time.Location()
             }
         }
     }
@@ -316,57 +316,47 @@ struct Time {
     }
 
     fn zone_bounds() -> { start: Time, end: Time } {
-        let start: go "time.Time" | .none = .none;
-        let end: go "time.Time" | .none = .none;
+        let start: go "time.Time";
+        let end: go "time.Time";
 
         go {
             start, end = (*self).raw_time.ZoneBounds()
         }
 
-        let raw_start: go "time.Time" = match start {
-            go "time.Time" @s => s,
-            else => std::error::panic("start time was not given by go"),
-        };
-
-        let raw_end: go "time.Time" = match end {
-            go "time.Time" @e => e,
-            else => std::error::panic("end time was not given by go"),
-        };
-
         return {
-            start: Time { raw_time: raw_start },
-            end: Time { raw_time: raw_end },
+            start: Time { raw_time: start },
+            end: Time { raw_time: end },
         }
     }
 
     fn unix() -> Int {
         return go {
-            $$$res$$$ = int((*self).raw_time.Unix())
+            $ = int((*self).raw_time.Unix())
         } as Int
     }
 
     fn unix_milli() -> Int {
         return go {
-            $$$res$$$ = int((*self).raw_time.UnixMilli())
+            $ = int((*self).raw_time.UnixMilli())
         } as Int
     }
 
     fn unix_micro() -> Int {
         return go {
-            $$$res$$$ = int((*self).raw_time.UnixMicro())
+            $ = int((*self).raw_time.UnixMicro())
         } as Int
     }
 
     fn unix_nano() -> Int {
         return go {
-            $$$res$$$ = int((*self).raw_time.UnixNano())
+            $ = int((*self).raw_time.UnixNano())
         } as Int
     }
 
     fn truncate(by: Duration) -> Time {
         return Time {
             raw_time: go {
-                $$$res$$$ = (*self).raw_time.Truncate(by.raw_duration)
+                $ = (*self).raw_time.Truncate(by.raw_duration)
             }
         }
     }
@@ -374,7 +364,7 @@ struct Time {
     fn round(by: Duration) -> Time {
         return Time {
             raw_time: go {
-                $$$res$$$ = (*self).raw_time.Round(by.raw_duration)
+                $ = (*self).raw_time.Round(by.raw_duration)
             }
         }
     }

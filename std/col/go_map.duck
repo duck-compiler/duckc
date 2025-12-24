@@ -3,7 +3,7 @@ struct GoMap<K, V> {
 } impl {
     static fn new<K, V>() -> GoMap<K, V> {
         const go_map: go "map[{K}]*{V}" = go {
-            $$$res$$$ = make(map[<<<K>>>]*<<<V>>>)
+            $ = make(map[<<<K>>>]*<<<V>>>)
         };
 
         return GoMap<K, V> {
@@ -14,7 +14,7 @@ struct GoMap<K, V> {
     fn contains_key(k: K) -> Bool {
         go {
             _, ok := (*self).inner[k]
-            $$$res$$$ = ok
+            $ = ok
         } as Bool
     }
 
@@ -29,9 +29,9 @@ struct GoMap<K, V> {
         go {
             val, ok := (*self).inner[*k]
             if ok {
-               $$$res$$$ = val
+               $ = val
             } else {
-                $$$res$$$ = tag_none
+                $ = tag_none
             }
        } as ::Opt<&V>
     }
@@ -41,9 +41,9 @@ struct GoMap<K, V> {
         go {
             val, ok := (*self).inner[*k]
             if ok {
-               $$$res$$$ = val
+               $ = val
             } else {
-                $$$res$$$ = tag_none
+                $ = tag_none
             }
        } as ::Opt<&mut V>
     }
@@ -55,9 +55,9 @@ struct GoMap<K, V> {
             val, ok := (*self).inner[key_deref]
             if ok {
                 delete((*self).inner, key_deref)
-                $$$res$$$ = val
+                $ = val
             } else {
-                $$$res$$$ = tag_none
+                $ = tag_none
             }
         } as ::Opt<V>
     }

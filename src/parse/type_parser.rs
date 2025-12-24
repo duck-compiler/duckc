@@ -130,6 +130,7 @@ impl TypeExpr {
             | TypeExpr::Float
             | TypeExpr::Bool(..)
             | TypeExpr::Char
+            | TypeExpr::Tag(..)
             | TypeExpr::UInt
             | TypeExpr::String(..) => format!("{param1} == {param2}"),
             TypeExpr::Tuple(..) => format!("{param1}.eq(&{param2})"),
@@ -139,7 +140,6 @@ impl TypeExpr {
             ),
             // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
             TypeExpr::Struct { .. } => format!("{param1}.eq(&{param2})"),
-            TypeExpr::Tag(..) => String::from("true"),
             TypeExpr::Or(t) => {
                 let mut go_code = format!(
                     r#"
@@ -236,6 +236,7 @@ impl TypeExpr {
             | TypeExpr::Float
             | TypeExpr::Bool(..)
             | TypeExpr::Char
+            | TypeExpr::Tag(..)
             | TypeExpr::String(..) => param1.to_string(),
             TypeExpr::Tuple(..) => format!("{param1}.clone()"),
             TypeExpr::Array(..) => {
@@ -243,7 +244,6 @@ impl TypeExpr {
             }
             // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
             TypeExpr::Struct { .. } => format!("{param1}.clone()"),
-            TypeExpr::Tag(t) => t.clone(),
             TypeExpr::Or(t) => {
                 let mut go_code = format!(
                     r#"
@@ -376,7 +376,7 @@ impl TypeExpr {
             ),
             // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
             TypeExpr::Struct { .. } => format!("{param1}.to_string()"),
-            TypeExpr::Tag(t) => format!(r#"fmt.Sprintf(".{t}")"#),
+            TypeExpr::Tag(t) => format!(r#"fmt.Sprintf("{t}")"#),
             TypeExpr::Or(t) => {
                 let mut go_code = format!(
                     r#"
