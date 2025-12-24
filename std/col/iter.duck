@@ -279,7 +279,7 @@ struct Iter<T> {
         true
     }
 
-    mut fn zip<U>(other: &mut Iter<U>) -> Iter<(T, U)> {
+    mut fn zip<U>(other: Iter<U>) -> Iter<(T, U)> {
         const new_fn = mut fn() -> (T, U) | .no_next_elem {
             match self.next_fn() {
                 T @t => {

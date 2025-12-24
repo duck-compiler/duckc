@@ -19,6 +19,20 @@ fn main() {
         .as_ref()
         .to_string()->println();
 
+    Iter::from(mut fn() -> () | .no_next_elem {})
+        .zip(Iter::from(mut fn() -> String | .no_next_elem { "a" }))
+        .take(4)
+        .into_list()
+        .as_ref()
+        .to_string()->println();
+
+    Iter::from(mut fn() -> () | .no_next_elem {})
+        .zip(Iter::from(mut fn() -> String | .no_next_elem { "a" }).take(2))
+        .take(4)
+        .into_list()
+        .as_ref()
+        .to_string()->println();
+
     mutex.lock(fn (r) {
         r.push("First");
         r.push("Second");

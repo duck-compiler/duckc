@@ -18,16 +18,14 @@ fn main() {
 
     list.iter().count().to_string()->println();
     let list2 = ArrayList::from_array<String>(["other", "list"]);
-    let list2_iter = list2.iter();
 
-    for (pair in list.iter().zip<&String>(&mut list2_iter)) {
+    for (pair in list.iter().zip<&String>(list2.iter())) {
         println(f"{*pair.0}, {*pair.1}");
     }
 
     println("");
 
-    list2_iter = list2.iter();
-    for (pair in list.iter().zip<&String>(&mut list2_iter).rev()) {
+    for (pair in list.iter().zip<&String>(list2.iter()).rev()) {
         println(f"{*pair.0}, {*pair.1}");
     }
 

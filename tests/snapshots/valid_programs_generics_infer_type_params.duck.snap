@@ -1,4 +1,4 @@
 {
-    "stdout": "[(), (), (), ()]\n[yoo, First, Second]\n",
+    "stdout": "[(), (), (), ()]\n[((), a), ((), a), ((), a), ((), a)]\n[((), a), ((), a)]\n[yoo, First, Second]\n",
     "stderr": ""
 }
