@@ -4110,6 +4110,69 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
 
     let og_def = type_env.get_struct_def(name);
 
+    if type_params.is_empty() && !og_def.generics.is_empty() {
+        let og_def = og_def.clone();
+        let og_gen = og_def.generics.clone();
+
+        let mut infered_generics = og_def.generics.iter().cloned().fold(
+            IndexMap::<String, Option<Spanned<TypeExpr>>>::new(),
+            |mut acc, e| {
+                acc.insert(e.0.name.clone(), None);
+                acc
+            },
+        );
+
+        for (p, t) in fields.iter_mut().map(|f| {
+            (
+                &mut f.1,
+                og_def
+                    .fields
+                    .iter()
+                    .find_map(|f2| {
+                        if f2.name.as_str() == f.0.as_str() {
+                            Some(&f2.type_expr)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap(),
+            )
+        }) {
+            typeresolve_value_expr((&mut p.0, p.1), type_env);
+            infer_type_params(
+                t,
+                &TypeExpr::from_value_expr(p, type_env),
+                &mut infered_generics,
+                type_env,
+            );
+        }
+
+        let mut new_type_params = Vec::new();
+
+        for (name, infered) in infered_generics.into_iter() {
+            if let Some(infered) = infered {
+                new_type_params.push(infered);
+            } else {
+                let msg = &format!("Could not infer type for template parameter {name}");
+                let span = og_gen
+                    .iter()
+                    .find_map(|x| {
+                        if x.0.name.as_str() == name.as_str() {
+                            Some(x.1)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap();
+                failure_with_occurence(msg, span, [(msg, span)]);
+            }
+        }
+
+        *type_params = new_type_params;
+        typeresolve_struct(value_expr, type_env);
+        return;
+    }
+
     if type_params.len() != og_def.generics.len() {
         let msg = "Wrong number of type parameters A";
         failure_with_occurence(msg, span, [(msg, span)])

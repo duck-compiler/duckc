@@ -4,6 +4,7 @@ fn main() {
     const chan = Channel::new<()>();
 
     let sending_task = async (fn(){
+        std::task::sleep(std::time::Duration::milliseconds(20));
         std::io::println("Sleeping for 1s and then sending a ()");
         std::task::sleep(std::time::Duration::seconds(1));
         chan.send(());
