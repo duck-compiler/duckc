@@ -26,3 +26,31 @@ fn join(elem: String[]) -> Path {
         $ = path.Join(elem...)
     } as String
 }
+
+fn file_extension(p: Path) -> String {
+    return go {
+        $ = path.Ext(p)
+    } as String
+}
+
+fn ext(p: Path) -> String {
+    return file_extension(p)
+}
+
+fn base(p: Path) -> Path {
+    return go {
+        $ = path.Base(p)
+    } as String
+}
+
+fn is_absolute(p: Path) -> Bool {
+    return go {
+        $ = path.IsAbs(p)
+    } as Bool
+}
+
+fn dir(p: Path) -> Path {
+    return go {
+        $ = path.Dir(p)
+    } as String
+}
