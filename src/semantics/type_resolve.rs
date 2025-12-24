@@ -3549,7 +3549,8 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                 let TypeExpr::Struct {
                     name: struct_name,
                     type_params: struct_type_params,
-                } = target_type.clone().0 else {
+                } = target_type.clone().0
+                else {
                     let msg = "Can only generic method call a struct";
                     failure_with_occurence(msg, span, [(msg, span)]);
                 };
@@ -3695,12 +3696,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                             return_type: cloned_fn_def.return_type.clone(),
                         },
                     );
-                    typeresolve_method_definition(
-                        &mut cloned_fn_def,
-                        self_type,
-                        is_mut,
-                        type_env,
-                    );
+                    typeresolve_method_definition(&mut cloned_fn_def, self_type, is_mut, type_env);
                     type_env
                         .get_generic_methods(replaced_struct_name)
                         .push(cloned_fn_def);
