@@ -1,0 +1,56 @@
+use go "path";
+
+type Path = String;
+
+fn clean(p: Path) -> Path {
+    return go {
+        $ = path.Clean(p)
+    } as String
+}
+
+fn split(p: Path) -> { dir: String, file: String } {
+    let dir: String;
+    let file: String;
+    go {
+        dir, file = path.Split(p)
+    };
+
+    return {
+        dir: dir,
+        file: file,
+    }
+}
+
+fn join(elem: String[]) -> Path {
+    return go {
+        $ = path.Join(elem...)
+    } as String
+}
+
+fn file_extension(p: Path) -> String {
+    return go {
+        $ = path.Ext(p)
+    } as String
+}
+
+fn ext(p: Path) -> String {
+    return file_extension(p)
+}
+
+fn base(p: Path) -> Path {
+    return go {
+        $ = path.Base(p)
+    } as String
+}
+
+fn is_absolute(p: Path) -> Bool {
+    return go {
+        $ = path.IsAbs(p)
+    } as Bool
+}
+
+fn dir(p: Path) -> Path {
+    return go {
+        $ = path.Dir(p)
+    } as String
+}

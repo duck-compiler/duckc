@@ -1,0 +1,11 @@
+fn main() {
+    std::assert(std::path::clean("./home/Hallo.txt") == "home/Hallo.txt", "path::clean");
+    std::assert(std::path::join(["home", "dir", "hallo.txt"]) == "home/dir/hallo.txt", "path::join");
+    std::assert(std::path::split("/home/split.txt").file == "split.txt", "path::split");
+
+    std::assert(std::path::file_extension("/path/to/file.txt") == ".txt", "std::path::base");
+    std::assert(std::path::ext("/path/to/file.txt") == ".txt", "std::path::base");
+    std::assert(std::path::base("/path/to/file.txt") == "file.txt", "std::path::base");
+    std::assert(std::path::is_absolute("/path/to/file.txt"), "std::path::is_absolute");
+    std::assert(std::path::dir("/path/to/file.txt") == "/path/to", "std::path::dir");
+}

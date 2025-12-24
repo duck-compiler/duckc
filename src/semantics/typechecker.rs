@@ -227,7 +227,7 @@ impl TypeExpr {
                         );
 
                         if element_type.0.0.is_never() {
-                            return (TypeExpr::Never, complete_span.clone());
+                            return (TypeExpr::Never, *complete_span);
                         }
 
                         variants.push(element_type.0);
@@ -311,7 +311,7 @@ impl TypeExpr {
                     if let Some(initializer) = decl.0.initializer.as_ref() {
                         let init_type = TypeExpr::from_value_expr(initializer, type_env);
                         if init_type.0.is_never() {
-                            return (TypeExpr::Never, complete_span.clone());
+                            return (TypeExpr::Never, *complete_span);
                         }
 
                         check_type_compatability(
@@ -400,14 +400,14 @@ impl TypeExpr {
                     let left_type_expr: Spanned<TypeExpr> =
                         TypeExpr::from_value_expr(left, type_env);
                     if left_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     let right_type_expr: Spanned<TypeExpr> =
                         TypeExpr::from_value_expr(right, type_env);
 
                     if right_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     require(
@@ -432,14 +432,14 @@ impl TypeExpr {
                         TypeExpr::from_value_expr(left, type_env);
 
                     if left_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     let right_type_expr: Spanned<TypeExpr> =
                         TypeExpr::from_value_expr(right, type_env);
 
                     if right_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     require(
@@ -462,12 +462,12 @@ impl TypeExpr {
                 ValueExpr::Mod(left, right) => {
                     let left_type_expr = TypeExpr::from_value_expr(left, type_env);
                     if left_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     let right_type_expr = TypeExpr::from_value_expr(right, type_env);
                     if right_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     require(
@@ -490,12 +490,12 @@ impl TypeExpr {
                 ValueExpr::Div(left, right) => {
                     let left_type_expr = TypeExpr::from_value_expr(left, type_env);
                     if left_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     let right_type_expr = TypeExpr::from_value_expr(right, type_env);
                     if right_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     require(
@@ -525,12 +525,12 @@ impl TypeExpr {
                 | ValueExpr::Or(lhs, rhs) => {
                     let left_type_expr = TypeExpr::from_value_expr(lhs, type_env);
                     if left_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     let right_type_expr = TypeExpr::from_value_expr(rhs, type_env);
                     if right_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     check_type_compatability(
@@ -544,13 +544,13 @@ impl TypeExpr {
                 ValueExpr::Mul(left, right) => {
                     let left_type_expr = TypeExpr::from_value_expr(left, type_env);
                     if left_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     let right_type_expr = TypeExpr::from_value_expr(right, type_env);
 
                     if right_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     require(
@@ -577,7 +577,7 @@ impl TypeExpr {
                 } => {
                     let target_type = TypeExpr::from_value_expr(target, type_env);
                     if target_type.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     let mut in_param_types = Vec::new();
@@ -585,7 +585,7 @@ impl TypeExpr {
                     for param in params {
                         let param_type = (TypeExpr::from_value_expr(param, type_env), param.1);
                         if param_type.0.0.is_never() {
-                            return (TypeExpr::Never, complete_span.clone());
+                            return (TypeExpr::Never, *complete_span);
                         }
                         in_param_types.push(param_type);
                     }
@@ -786,7 +786,7 @@ impl TypeExpr {
                 ValueExpr::BoolNegate(bool_expr) => {
                     let t = TypeExpr::from_value_expr(bool_expr, type_env);
                     if t.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     check_type_compatability(&t, &TypeExpr::Bool(None).into_empty_span(), type_env);
@@ -801,7 +801,7 @@ impl TypeExpr {
                     let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
 
                     if condition_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     check_type_compatability(
@@ -816,7 +816,7 @@ impl TypeExpr {
                         let else_type_expr = TypeExpr::from_value_expr(r#else, type_env);
 
                         if then_type_expr.0.is_never() && else_type_expr.0.is_never() {
-                            return (TypeExpr::Never, complete_span.clone());
+                            return (TypeExpr::Never, *complete_span);
                         }
 
                         let mut both = vec![then_type_expr, else_type_expr];
@@ -827,7 +827,7 @@ impl TypeExpr {
                                 TypeExpr::Or(
                                     both.into_iter().map(|x| x.0.into_empty_span()).collect(),
                                 ),
-                                complete_span.clone(),
+                                *complete_span,
                             );
                         }
                         return both[0].clone();
@@ -844,7 +844,7 @@ impl TypeExpr {
                         TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
 
                     if target_obj_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     if !(target_obj_type_expr
@@ -897,7 +897,7 @@ impl TypeExpr {
                     let condition_type_expr = TypeExpr::from_value_expr(condition, type_env);
 
                     if condition_type_expr.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     check_type_compatability(
@@ -919,7 +919,7 @@ impl TypeExpr {
                 } => {
                     let v_expr_type = TypeExpr::from_value_expr(value_expr, type_env);
                     if v_expr_type.0.is_never() {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     let mut arms = arms.clone();
@@ -996,7 +996,7 @@ impl TypeExpr {
                     arm_types.retain(|t| !t.0.is_never());
 
                     if arm_types.is_empty() && !was_empty_before {
-                        return (TypeExpr::Never, complete_span.clone());
+                        return (TypeExpr::Never, *complete_span);
                     }
 
                     if arm_types.is_empty() {
@@ -1008,7 +1008,7 @@ impl TypeExpr {
                     }
                 }
             },
-            complete_span.clone(),
+            *complete_span,
         );
     }
 

@@ -12,6 +12,7 @@ module error;
 module http;
 module sync;
 module cmd;
+module path;
 
 component lol() jsx {
     return (<><p>yo</p></>);
