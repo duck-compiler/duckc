@@ -438,7 +438,7 @@ fn walk_access_raw(
                         }
                     } else if field_name.as_str() == "len" && target_field_type.0.is_array() {
                         if let TypeExpr::Array(..) = target_field_type.clone().0 {
-                            flag = Some((format!("len("), stars_count, false));
+                            flag = Some(("len(".to_string(), stars_count, false));
                             skip = true;
                         }
                     } else if field_name.as_str() == "to_string"
