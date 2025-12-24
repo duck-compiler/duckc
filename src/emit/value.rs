@@ -477,10 +477,12 @@ fn walk_access_raw(
                                         r#"
                                         switch p1.(type) {{
                                         case {conc_type}:
+                                            tmp := p1.({conc_type})
+                                            _ = tmp
                                             return {}
                                         }}
                                     "#,
-                                        t.0.call_to_string("p1", type_env)
+                                        t.0.call_to_string("tmp", type_env)
                                     ));
                                 }
 

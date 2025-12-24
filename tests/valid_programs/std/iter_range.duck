@@ -1,0 +1,11 @@
+use std::col::Iter;
+
+fn main() {
+    for (i in Iter::range(0, 10)) {
+        i.to_string()->std::io::println();
+    }
+
+    for (i in Iter::count_from(100).take_while(fn(i) { i <= 105 })) {
+        i.to_string()->std::io::println();
+    }
+}
