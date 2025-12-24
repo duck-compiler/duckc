@@ -5,7 +5,7 @@ use crate::{
     },
     parse::{
         schema_def_parser::{SchemaDefinition, SchemaField},
-        type_parser::{TypeExpr},
+        type_parser::TypeExpr,
         value_parser::{Assignment, ValueExpr, empty_range},
     },
     semantics::type_resolve::TypeEnv,
@@ -25,8 +25,7 @@ impl SchemaDefinition {
         if is_duck || is_array_of_duck {
             return format!(
                 "F_{0} json.RawMessage `json:\"{0}{1}\"`",
-                field.name,
-                omit_empty
+                field.name, omit_empty
             );
         }
 
@@ -116,7 +115,7 @@ impl SchemaDefinition {
                             }}
                         }}
                     ")
-                },
+                }
                 TypeExpr::Array(inner) if matches!(inner.as_ref(), (TypeExpr::Duck(_), ..)) => {
                     let duck_type_expr = inner.as_ref();
                     let duck_type_name = duck_type_expr.0.as_clean_go_type_name(type_env);
@@ -148,15 +147,17 @@ impl SchemaDefinition {
                             }}
                         }}
                     ")
-                },
+                }
                 _ => {
-                    format!("
+                    format!(
+                        "
                         if ref_struct.F_{field_name} == nil {{
                             {null_action_src}
                         }}
 
                         var field_{field_name} {field_type_annotation} = *ref_struct.F_{field_name}
-                    ")
+                    "
+                    )
                 }
             };
 
@@ -165,7 +166,8 @@ impl SchemaDefinition {
             if let Some((branch, span)) = &schema_field.if_branch {
                 let emitted_condition = branch.condition.0.emit(type_env, to_ir, *span);
                 let condition_src = join_ir(&emitted_condition.0);
-                let condition_var_src = emitted_condition.1.expect("expect result var").emit_as_go();
+                let condition_var_src =
+                    emitted_condition.1.expect("expect result var").emit_as_go();
 
                 let condition_based_value_emitted = if let Some(value_expr) = &branch.value_expr {
                     ValueExpr::Return(Some(Box::new(value_expr.clone())))
@@ -176,12 +178,14 @@ impl SchemaDefinition {
 
                 let condition_based_src = join_ir(&condition_based_value_emitted.0);
 
-                let src = format!("
+                let src = format!(
+                    "
                     {condition_src}
                     if {condition_var_src} {{
                         {condition_based_src}
                     }}
-                ");
+                "
+                );
                 schema_struct_access_srcs.push(src);
             }
         }
@@ -251,21 +255,44 @@ impl SchemaDefinition {
         )
     }
 
-    pub fn emit_from_json_fn_from_duck(duck_type_expr: &TypeExpr, type_env: &mut TypeEnv, to_ir: &mut ToIr) -> IrInstruction {
-        let TypeExpr::Duck(duck) = &duck_type_expr else { panic!("Compiler Bug: should only be called with TypeExpr::Duck") };
+    pub fn emit_from_json_fn_from_duck(
+        duck_type_expr: &TypeExpr,
+        type_env: &mut TypeEnv,
+        to_ir: &mut ToIr,
+    ) -> IrInstruction {
+        let TypeExpr::Duck(duck) = &duck_type_expr else {
+            panic!("Compiler Bug: should only be called with TypeExpr::Duck")
+        };
         let sd = SchemaDefinition {
             name: duck_type_expr.as_go_type_annotation(type_env),
-            fields: duck.fields.iter().map(|field| SchemaField {
-                name: field.name.clone(),
-                type_expr: field.type_expr.clone(),
-                if_branch: None,
-                else_branch_value_expr: None,
-                span: empty_range()
-            }).collect::<Vec<_>>(),
+            fields: duck
+                .fields
+                .iter()
+                .map(|field| SchemaField {
+                    name: field.name.clone(),
+                    type_expr: field.type_expr.clone(),
+                    if_branch: None,
+                    else_branch_value_expr: None,
+                    span: empty_range(),
+                })
+                .collect::<Vec<_>>(),
             comments: vec![],
-            out_type: Some((TypeExpr::Or(vec![(TypeExpr::Duck(duck.clone()), empty_range()), (TypeExpr::Tag("err".to_string()), empty_range())]), empty_range())),
-            schema_fn_type: Some((TypeExpr::Fun(vec![], Box::new((TypeExpr::String(None), empty_range())), false), empty_range())),
-            span: empty_range()
+            out_type: Some((
+                TypeExpr::Or(vec![
+                    (TypeExpr::Duck(duck.clone()), empty_range()),
+                    (TypeExpr::Tag("err".to_string()), empty_range()),
+                ]),
+                empty_range(),
+            )),
+            schema_fn_type: Some((
+                TypeExpr::Fun(
+                    vec![],
+                    Box::new((TypeExpr::String(None), empty_range())),
+                    false,
+                ),
+                empty_range(),
+            )),
+            span: empty_range(),
         };
 
         let schema_fn_return_type = sd.out_type.as_ref().unwrap().0.clone();
@@ -346,7 +373,7 @@ impl SchemaDefinition {
                             }}
                         }}
                     ")
-                },
+                }
                 TypeExpr::Array(inner) if matches!(inner.as_ref(), (TypeExpr::Duck(_), ..)) => {
                     let duck_type_expr = inner.as_ref();
                     let duck_type_name = duck_type_expr.0.as_clean_go_type_name(type_env);
@@ -378,15 +405,17 @@ impl SchemaDefinition {
                             }}
                         }}
                     ")
-                },
+                }
                 _ => {
-                    format!("
+                    format!(
+                        "
                         if ref_struct.F_{field_name} == nil {{
                             {null_action_src}
                         }}
 
                         var field_{field_name} {field_type_annotation} = *ref_struct.F_{field_name}
-                    ")
+                    "
+                    )
                 }
             };
 
@@ -395,7 +424,8 @@ impl SchemaDefinition {
             if let Some((branch, span)) = &schema_field.if_branch {
                 let emitted_condition = branch.condition.0.emit(type_env, to_ir, *span);
                 let condition_src = join_ir(&emitted_condition.0);
-                let condition_var_src = emitted_condition.1.expect("expect result var").emit_as_go();
+                let condition_var_src =
+                    emitted_condition.1.expect("expect result var").emit_as_go();
 
                 let condition_based_value_emitted = if let Some(value_expr) = &branch.value_expr {
                     ValueExpr::Return(Some(Box::new(value_expr.clone())))
@@ -406,12 +436,14 @@ impl SchemaDefinition {
 
                 let condition_based_src = join_ir(&condition_based_value_emitted.0);
 
-                let src = format!("
+                let src = format!(
+                    "
                     {condition_src}
                     if {condition_var_src} {{
                         {condition_based_src}
                     }}
-                ");
+                "
+                );
                 schema_struct_access_srcs.push(src);
             }
         }
@@ -466,7 +498,10 @@ impl SchemaDefinition {
         body_instructions.push(instr);
 
         IrInstruction::FunDef(
-            format!("{}_FromJson", duck_type_expr.as_clean_go_type_name(type_env)),
+            format!(
+                "{}_FromJson",
+                duck_type_expr.as_clean_go_type_name(type_env)
+            ),
             None,
             vec![("str".into(), "string".into())],
             Some(schema_fn_return_type.as_go_return_type(type_env)),

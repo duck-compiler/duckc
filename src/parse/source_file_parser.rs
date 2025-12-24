@@ -90,10 +90,7 @@ impl SourceFile {
                     }
                     for use_statement in &s.use_statements {
                         if let UseStatement::Regular(glob, segments) = use_statement {
-                            let pre = segments[..segments.len() - 1]
-                                .iter()
-                                .cloned()
-                                .collect::<Vec<_>>();
+                            let pre = segments[..segments.len() - 1].to_vec();
                             let last = segments.last().cloned();
                             if let Some(symbol) = last {
                                 imports.insert(symbol.clone(), (*glob, pre.clone()));

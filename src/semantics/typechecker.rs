@@ -1096,7 +1096,7 @@ impl TypeExpr {
                 if let Ok(tuple_access_idx) = name.parse::<usize>() {
                     fields.len() > tuple_access_idx
                 } else {
-                    if fields.len() == 0 {
+                    if fields.is_empty() {
                         // i disabled this because it messed up auto_traits.duck test
                         // println!(
                         //     "{} it could be that the function you're trying to call is missing it's return, maybe that's why it's an empty tuple",
@@ -1178,48 +1178,41 @@ impl TypeExpr {
     }
 
     fn typeof_field(&self, field_name: String, type_env: &mut TypeEnv) -> Option<TypeExpr> {
-        if self.implements_into_iter(type_env) && field_name.as_str() == "iter" {
-            match self {
-                TypeExpr::Array(inner) => {
-                    return Some(TypeExpr::Fun(
-                        vec![],
-                        Box::new((
-                            TypeExpr::Struct {
-                                name: mangle(&["std", "col", "Iter"]),
-                                type_params: vec![(
-                                    TypeExpr::Ref(inner.as_ref().clone().into()),
-                                    inner.1,
-                                )],
-                            },
-                            empty_range(),
-                        )),
-                        false,
-                    ));
-                }
-                _ => {}
-            }
+        if self.implements_into_iter(type_env)
+            && field_name.as_str() == "iter"
+            && let TypeExpr::Array(inner) = self
+        {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((
+                    TypeExpr::Struct {
+                        name: mangle(&["std", "col", "Iter"]),
+                        type_params: vec![(TypeExpr::Ref(inner.as_ref().clone().into()), inner.1)],
+                    },
+                    empty_range(),
+                )),
+                false,
+            ));
         }
 
-        if self.implements_into_iter_mut(type_env) && field_name.as_str() == "iter_mut" {
-            match self {
-                TypeExpr::Array(inner) => {
-                    return Some(TypeExpr::Fun(
-                        vec![],
-                        Box::new((
-                            TypeExpr::Struct {
-                                name: mangle(&["std", "col", "Iter"]),
-                                type_params: vec![(
-                                    TypeExpr::RefMut(inner.as_ref().clone().into()),
-                                    inner.1,
-                                )],
-                            },
-                            empty_range(),
-                        )),
-                        false,
-                    ));
-                }
-                _ => {}
-            }
+        if self.implements_into_iter_mut(type_env)
+            && field_name.as_str() == "iter_mut"
+            && let TypeExpr::Array(inner) = self
+        {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((
+                    TypeExpr::Struct {
+                        name: mangle(&["std", "col", "Iter"]),
+                        type_params: vec![(
+                            TypeExpr::RefMut(inner.as_ref().clone().into()),
+                            inner.1,
+                        )],
+                    },
+                    empty_range(),
+                )),
+                false,
+            ));
         }
 
         if self.implements_to_string(type_env) && field_name.as_str() == "to_string" {
@@ -1693,26 +1686,22 @@ pub fn check_type_compatability_full(
                             | TypeExpr::RefMut(inner_given_ty) = given_x.0
                             {
                                 given_x = inner_given_ty;
-                            } else {
-                                if req_x.0.type_id(type_env) != given_x.0.type_id(type_env) {
-                                    fail_requirement(
-                                        "Referenced types need to match exactly".to_string(),
-                                        "So this needs to be exactly the same type".to_string(),
-                                    );
-                                }
+                            } else if req_x.0.type_id(type_env) != given_x.0.type_id(type_env) {
+                                fail_requirement(
+                                    "Referenced types need to match exactly".to_string(),
+                                    "So this needs to be exactly the same type".to_string(),
+                                );
                             }
                         }
                         TypeExpr::RefMut(inner_ty) => {
                             req_x = inner_ty;
                             if let TypeExpr::RefMut(inner_given_ty) = given_x.0 {
                                 given_x = inner_given_ty;
-                            } else {
-                                if req_x.0.type_id(type_env) != given_x.0.type_id(type_env) {
-                                    fail_requirement(
-                                        "Referenced types need to match exactly".to_string(),
-                                        "So this needs to be exactly the same type".to_string(),
-                                    );
-                                }
+                            } else if req_x.0.type_id(type_env) != given_x.0.type_id(type_env) {
+                                fail_requirement(
+                                    "Referenced types need to match exactly".to_string(),
+                                    "So this needs to be exactly the same type".to_string(),
+                                );
                             }
                         }
                         _ => {
@@ -1747,26 +1736,22 @@ pub fn check_type_compatability_full(
                             | TypeExpr::RefMut(inner_given_ty) = given_x.0
                             {
                                 given_x = inner_given_ty;
-                            } else {
-                                if req_x.0.type_id(type_env) != given_x.0.type_id(type_env) {
-                                    fail_requirement(
-                                        "Referenced types need to match exactly".to_string(),
-                                        "So this needs to be exactly the same type".to_string(),
-                                    );
-                                }
+                            } else if req_x.0.type_id(type_env) != given_x.0.type_id(type_env) {
+                                fail_requirement(
+                                    "Referenced types need to match exactly".to_string(),
+                                    "So this needs to be exactly the same type".to_string(),
+                                );
                             }
                         }
                         TypeExpr::RefMut(inner_ty) => {
                             req_x = inner_ty;
                             if let TypeExpr::RefMut(inner_given_ty) = given_x.0 {
                                 given_x = inner_given_ty;
-                            } else {
-                                if req_x.0.type_id(type_env) != given_x.0.type_id(type_env) {
-                                    fail_requirement(
-                                        "Referenced types need to match exactly".to_string(),
-                                        "So this needs to be exactly the same type".to_string(),
-                                    );
-                                }
+                            } else if req_x.0.type_id(type_env) != given_x.0.type_id(type_env) {
+                                fail_requirement(
+                                    "Referenced types need to match exactly".to_string(),
+                                    "So this needs to be exactly the same type".to_string(),
+                                );
                             }
                         }
                         _ => {

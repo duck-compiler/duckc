@@ -341,7 +341,7 @@ impl TypeEnv<'_> {
                 .find(|d| d.name == name)
                 .unwrap_or_else(|| {
                     failure_with_occurence(
-                        format!("Unknown Struct"),
+                        "Unknown Struct",
                         span,
                         [(format!("Struct {name} does not exist"), span)],
                     );
@@ -401,7 +401,7 @@ impl TypeEnv<'_> {
                 .unwrap()
         } else {
             failure_with_occurence(
-                format!("Unkown Struct"),
+                "Unkown Struct",
                 span,
                 [(format!("Struct {name} does not exist"), span)],
             );
@@ -2787,13 +2787,12 @@ pub fn find_returns(v: &mut Spanned<ValueExpr>, env: &mut TypeEnv) -> Vec<Spanne
     let out2 = out.clone();
     trav_value_expr_with_cancel(
         |_, _| {},
-        move |v, _| match &mut v.0 {
-            ValueExpr::Return(i) => {
-                if let Some(i) = i.as_ref().cloned() {
-                    out.borrow_mut().push(*i);
-                }
+        move |v, _| {
+            if let ValueExpr::Return(i) = &mut v.0
+                && let Some(i) = i.as_ref().cloned()
+            {
+                out.borrow_mut().push(*i);
             }
-            _ => {}
         },
         v,
         env,
@@ -3071,7 +3070,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             if let TypeExpr::Struct { name, type_params } = current.clone() {
                 let unmangled = unmangle(name.as_str());
 
-                if unmangled.as_slice() != &["std", "col", "Iter"] || type_params.len() != 1 {
+                if unmangled.as_slice() != ["std", "col", "Iter"] || type_params.len() != 1 {
                     fail();
                 }
 
@@ -3114,16 +3113,14 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                                         type_params[0].clone(),
                                         TypeExpr::Tag("no_next_elem".to_string()).into_empty_span(),
                                     ])
-                                    .into_empty_span()
-                                    .into(),
+                                    .into_empty_span(),
                                 ),
                                 value_expr: ValueExpr::Return(Some(
                                     ValueExpr::Tag("no_next_elem".to_string())
                                         .into_empty_span()
                                         .into(),
                                 ))
-                                .into_empty_span()
-                                .into(),
+                                .into_empty_span(),
                             }
                             .into(),
                         )

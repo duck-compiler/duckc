@@ -562,7 +562,7 @@ pub fn emit_type_definitions(
                         "eq".to_string(),
                         Some(("self".to_string(), format!("*{type_name}"))),
                         vec![("other".to_string(), format!("*{type_name}"))],
-                        Some(String::from("bool".to_string())),
+                        Some("bool".to_string()),
                         vec![IrInstruction::Return(Some(IrValue::Imm(
                             comparisons.join(" && "),
                         )))],
@@ -581,9 +581,8 @@ pub fn emit_type_definitions(
                             go_code.push_str("\nres = res + \", \"");
                         }
 
-                        let to_string_call = field
-                            .0
-                            .call_to_string(&format!("self.field_{}", i), type_env);
+                        let to_string_call =
+                            field.0.call_to_string(&format!("self.field_{i}"), type_env);
                         go_code.push_str(&format!("\nres = res + ({to_string_call})"))
                     }
 
@@ -593,7 +592,7 @@ pub fn emit_type_definitions(
                         "to_string".to_string(),
                         Some(("self".to_string(), type_name.clone())),
                         vec![],
-                        Some(String::from("string".to_string())),
+                        Some("string".to_string()),
                         vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }
@@ -602,7 +601,7 @@ pub fn emit_type_definitions(
                     let mut go_code = format!("res := *new({type_name})");
 
                     for (i, field) in fields.iter().enumerate() {
-                        let copy_call = field.0.call_copy(&format!("self.field_{}", i), type_env);
+                        let copy_call = field.0.call_copy(&format!("self.field_{i}"), type_env);
                         go_code.push_str(&format!("\nres.field_{i} = ({copy_call})"))
                     }
 
@@ -622,7 +621,7 @@ pub fn emit_type_definitions(
                         .replace("$$$TUPLE_TYPE", &type_name);
 
                     for (i, field) in fields.iter().enumerate() {
-                        let clone_call = field.0.call_clone(&format!("self.field_{}", i), type_env);
+                        let clone_call = field.0.call_clone(&format!("self.field_{i}"), type_env);
                         go_code.push_str(&format!("\nres.field_{i} = ({clone_call})"))
                     }
 
@@ -646,7 +645,7 @@ pub fn emit_type_definitions(
                     );
 
                     for (i, field) in fields.iter().enumerate() {
-                        let hash_call = field.0.call_hash(&format!("self.field_{}", i), type_env);
+                        let hash_call = field.0.call_hash(&format!("self.field_{i}"), type_env);
                         go_code.push_str(&format!("\nres = (31 * res) + ({hash_call})"))
                     }
 
@@ -669,8 +668,8 @@ pub fn emit_type_definitions(
                     for (i, field) in fields.iter().enumerate() {
                         go_code.push('\n');
                         let ord_call = field.0.call_ord(
-                            &format!("self.field_{}", i),
-                            &format!("other.field_{}", i),
+                            &format!("self.field_{i}"),
+                            &format!("other.field_{i}"),
                             type_env,
                         );
                         go_code.push_str(&format!(
@@ -887,7 +886,7 @@ pub fn emit_type_definitions(
             let mut copy_string = format!("&{receiver}{{\n");
 
             for f in fields.iter() {
-                let fixed = fix_ident_for_go(&f.name, &type_env.all_go_imports);
+                let fixed = fix_ident_for_go(&f.name, type_env.all_go_imports);
                 copy_string.push_str(&format!(
                     "{fixed}: {},\n",
                     f.type_expr.0.call_copy(&format!("self.{fixed}"), type_env),

@@ -428,11 +428,11 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_to_string(type_env),
             TypeExpr::Array(t) => t.0.implements_to_string(type_env),
-            TypeExpr::Duck(Duck { fields }) => {
+            TypeExpr::Duck(Duck { fields: _ }) => {
                 false
-                    && fields
-                        .iter()
-                        .all(|f| f.type_expr.0.implements_to_string(type_env))
+                // && fields
+                //     .iter()
+                //     .all(|f| f.type_expr.0.implements_to_string(type_env))
             }
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_to_string(type_env)),
             TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_to_string(type_env)),
@@ -462,11 +462,11 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_hash(type_env),
             TypeExpr::Array(t) => t.0.implements_hash(type_env),
-            TypeExpr::Duck(Duck { fields }) => {
+            TypeExpr::Duck(Duck { fields: _ }) => {
                 false
-                    && fields
-                        .iter()
-                        .all(|f| f.type_expr.0.implements_hash(type_env))
+                // && fields
+                //     .iter()
+                //     .all(|f| f.type_expr.0.implements_hash(type_env))
             }
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_hash(type_env)),
             TypeExpr::Struct { name, type_params } => {
@@ -494,11 +494,11 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_clone(type_env),
             TypeExpr::Array(t) => t.0.implements_clone(type_env),
-            TypeExpr::Duck(Duck { fields }) => {
+            TypeExpr::Duck(Duck { fields: _ }) => {
                 false
-                    && fields
-                        .iter()
-                        .all(|f| f.type_expr.0.implements_clone(type_env))
+                // && fields
+                //     .iter()
+                //     .all(|f| f.type_expr.0.implements_clone(type_env))
             }
             TypeExpr::Tuple(t) | TypeExpr::Or(t) => {
                 t.iter().all(|t| t.0.implements_clone(type_env))
@@ -529,11 +529,12 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_ord(type_env),
             TypeExpr::Array(t) => t.0.implements_ord(type_env),
-            TypeExpr::Duck(Duck { fields }) => {
+            TypeExpr::Duck(Duck { fields: _ }) => {
                 false
-                    && fields
-                        .iter()
-                        .all(|f| f.type_expr.0.implements_ord(type_env))
+                // false
+                //     && fields
+                //         .iter()
+                //         .all(|f| f.type_expr.0.implements_ord(type_env))
             }
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_ord(type_env)),
             TypeExpr::Struct { name, type_params } => {
@@ -579,17 +580,12 @@ impl TypeExpr {
                 def.methods.iter().any(|f| {
                     f.name.as_str() == "iter_mut" && {
                         if let TypeExpr::Struct { name, type_params } = &f.return_type.0 {
-                            if name.as_str() == &mangle(&["std", "col", "Iter"]) {
+                            if name.as_str() == mangle(&["std", "col", "Iter"]) {
                                 if type_params.len() == 1 {
-                                    if type_params[0].0.clone().into_empty_span().0
+                                    type_params[0].0.clone().into_empty_span().0
                                         == TypeExpr::RefMut(self.clone().into_empty_span().into())
                                             .into_empty_span()
                                             .0
-                                    {
-                                        true
-                                    } else {
-                                        false
-                                    }
                                 } else {
                                     false
                                 }
@@ -615,17 +611,12 @@ impl TypeExpr {
                 def.methods.iter().any(|f| {
                     f.name.as_str() == "iter" && {
                         if let TypeExpr::Struct { name, type_params } = &f.return_type.0 {
-                            if name.as_str() == &mangle(&["std", "col", "Iter"]) {
+                            if name.as_str() == mangle(&["std", "col", "Iter"]) {
                                 if type_params.len() == 1 {
-                                    if type_params[0].0.clone().into_empty_span().0
+                                    type_params[0].0.clone().into_empty_span().0
                                         == TypeExpr::Ref(self.clone().into_empty_span().into())
                                             .into_empty_span()
                                             .0
-                                    {
-                                        true
-                                    } else {
-                                        false
-                                    }
                                 } else {
                                     false
                                 }
@@ -647,8 +638,9 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_eq(type_env),
             TypeExpr::Array(t) => t.0.implements_eq(type_env),
-            TypeExpr::Duck(Duck { fields }) => {
-                false && fields.iter().all(|f| f.type_expr.0.implements_eq(type_env))
+            TypeExpr::Duck(Duck { fields: _ }) => {
+                // false && fields.iter().all(|f| f.type_expr.0.implements_eq(type_env))
+                false
             }
             TypeExpr::Tuple(t) | TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_eq(type_env)),
             TypeExpr::Struct { name, type_params } => {

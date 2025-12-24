@@ -13,9 +13,9 @@ use crate::{
 pub mod duckx_component;
 pub mod function;
 pub mod ir;
+pub mod jsx_component;
 pub mod schema_def;
 pub mod source_file;
-pub mod jsx_component;
 pub mod types;
 pub mod value;
 
