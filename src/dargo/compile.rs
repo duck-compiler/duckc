@@ -127,9 +127,8 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
                 Err(_) => break,
             }
         }
-        tailwind_result_send
-            .send(emit_env.to_css_stylesheet(true))
-            .expect("could not send css result");
+
+        let _ = tailwind_result_send.send(emit_env.to_css_stylesheet(true));
     });
     let mut type_env = typecheck(&mut src_file_ast, &tailwind_worker_send);
     let mut go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env, empty_range()));
