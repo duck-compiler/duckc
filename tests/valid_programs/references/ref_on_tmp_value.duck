@@ -1,7 +1,35 @@
+use std::io::println;
+
 fn abc() {
+}
+
+let glob_array: Int[] = [100, 200, 300];
+
+fn xyz() -> Int[] {
+    [1, 2, 3]
+}
+
+fn zzz() -> &mut Int[] {
+    &mut glob_array
 }
 
 fn main() {
     const f1 = &mut abc();
     const f2 = &abc();
+
+    const f3 = &&mut abc();
+    const f4 = &mut &abc();
+
+    const f5 = xyz()[0];
+    const f6 = &mut xyz()[0];
+
+    glob_array.to_string()->println();
+    const into_ref = &mut zzz()[0];
+    *into_ref = 999;
+    glob_array.to_string()->println();
+    zzz()[1] = 1111;
+    glob_array.to_string()->println();
+    *(&mut zzz()[2]) = 33333;
+    glob_array.to_string()->println();
+
 }
