@@ -1,5 +1,23 @@
 use std::io::println;
 
+struct S {
+    x: Int,
+} impl {
+    static fn new() -> S {
+        S {
+            x: -10,
+        }
+    }
+}
+
+fn take_s(s: &mut S) {
+    println(f"taking s with x = {s.x.to_string()}");
+}
+
+fn take_double_s(s: &mut &mut S) {
+    println(f"double taking s with x = {s.x.to_string()}");
+}
+
 fn abc() {
 }
 
@@ -36,4 +54,7 @@ fn main() {
     *(&mut zzz()[2]) = 33333;
     glob_array.to_string()->println();
 
+    take_s(&mut S { x: 100 });
+    take_s(&mut S::new());
+    take_double_s(&mut &mut S::new());
 }
