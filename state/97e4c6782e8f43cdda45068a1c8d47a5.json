@@ -1,8 +1,8 @@
 {
-    "id": "a9b77426019384d5443b8c48cd58c136",
-    "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 2061,
-    "title": "type_params",
+    "id": "97e4c6782e8f43cdda45068a1c8d47a5",
+    "file_path": "../../src/semantics/typechecker.rs",
+    "line_number": 1821,
+    "title": "STRUCT DISPLAY NAME",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Robin F\u00fcllgraf",
         "email": "146665916+Apfelfrosch@users.noreply.github.com"
     },
-    "source_line": "// todo: type_params",
+    "source_line": "// TODO: STRUCT DISPLAY NAME",
     "status": "open",
-    "first_seen": "2025-07-14T09:44:03.706713",
+    "first_seen": "2025-12-25T19:26:03.372105",
     "history": []
 }
