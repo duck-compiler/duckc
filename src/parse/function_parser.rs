@@ -31,12 +31,7 @@ pub struct FunctionDefintion {
 
 impl FunctionDefintion {
     pub fn to_header(&self) -> FunHeader {
-        let mut return_type = self.return_type.clone();
-
-        if let TypeExpr::And(_) = &mut return_type.0 {
-            use crate::semantics::type_resolve::translate_intersection_to_duck;
-            return_type.0 = translate_intersection_to_duck(&return_type.0);
-        }
+        let return_type = self.return_type.clone();
 
         FunHeader {
             params: self.params.iter().map(|x| x.1.clone()).collect(),
@@ -46,10 +41,7 @@ impl FunctionDefintion {
 
     pub fn type_expr(&self) -> Spanned<TypeExpr> {
         // todo: retrieve correct span for function defintions typeexpr
-        let mut return_type = self.return_type.clone();
-
-        use crate::semantics::type_resolve::translate_intersection_to_duck;
-        return_type.0 = translate_intersection_to_duck(&return_type.0);
+        let return_type = self.return_type.clone();
 
         return (
             TypeExpr::Fun(
@@ -58,7 +50,7 @@ impl FunctionDefintion {
                     .map(|(name, type_expr)| (Some(name.to_owned()), type_expr.to_owned()))
                     .collect::<Vec<_>>(),
                 return_type.into(),
-                true,
+                false,
             ),
             self.value_expr.1,
         );

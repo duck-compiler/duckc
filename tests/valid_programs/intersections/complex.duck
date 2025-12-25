@@ -13,12 +13,29 @@ fn create_complex_intersection() -> { username: String, age: Int } & { street: S
     };
 }
 
+fn create_nested_intersection() -> { username: String, age: { year: Int } & { day: Int } & {} & { month: Int } } & { street: String, city: String } {
+    return {
+        username: "john_doe",
+        age: {
+            year: 10,
+            day: 30,
+            month: 4,
+        },
+        street: "123 Main St",
+        city: "New York"
+    };
+}
+
 fn process_basic_intersection(point: { x: Int } & { y: Int }) {
     println("Processing basic intersection");
 }
 
 fn process_complex_intersection(user: { username: String, age: Int } & { street: String, city: String }) {
     println("Processing complex intersection");
+}
+
+fn process_nested_intersection(user: { username: String, age: { year: Int } & { day: Int } & {} & { month: Int } } & { street: String, city: String }) {
+    println("Processing nested intersection");
 }
 
 fn main() {
@@ -43,6 +60,8 @@ fn main() {
     // Test 5: Function parameter with complex intersection
     process_complex_intersection(complex_result);
     println("✓ Function parameter with complex intersection works");
+
+    process_nested_intersection(create_nested_intersection());
 
     // Test 6: Multiple intersection combinations
     let multi_intersection: { a: Int } & { b: String } & { c: Bool } = {
