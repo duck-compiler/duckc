@@ -1170,6 +1170,100 @@ pub fn trav_value_expr_with_cancel<F1, F2, F3>(
     }
 }
 
+fn trav_fn_replace_intersections() -> impl Fn(&mut Spanned<TypeExpr>, &mut TypeEnv) + Clone {
+    |node, env| {
+        let span = node.1;
+        match &node.0 {
+            TypeExpr::And(sub_types) => {
+                let mut found_fields = HashMap::<String, Spanned<TypeExpr>>::new();
+
+                fn do_it(
+                    sub_types: &[Spanned<TypeExpr>],
+                    found_fields: &mut HashMap<String, Spanned<TypeExpr>>,
+                    env: &mut TypeEnv
+                ) {
+                    for sub_type in sub_types.iter() {
+                        if matches!(sub_type.0, TypeExpr::Any) {
+                            continue;
+                        }
+
+                        if let TypeExpr::And(sub_types) = &sub_type.0 {
+                            do_it(sub_types, found_fields, env);
+                            continue;
+                        }
+
+                        if let TypeExpr::Duck(Duck { fields }) = &sub_type.0 {
+                            for field in fields.iter() {
+                                if let Some(already_seen) = found_fields.get(&field.name) {
+                                    if field.type_expr.0.type_id(env) != already_seen.0.type_id(env)
+                                    {
+                                        // TODO(@Apfelfrosch): Should these be combined into a union? I would say no
+                                        failure_with_occurence(
+                                            format!("Different definitions for {}", field.name),
+                                            field.type_expr.1,
+                                            [
+                                                (
+                                                    format!(
+                                                        "Definition 1 is here ({})",
+                                                        already_seen
+                                                            .0
+                                                            .as_clean_user_faced_type_name()
+                                                    ),
+                                                    already_seen.1,
+                                                ),
+                                                (
+                                                    format!(
+                                                        "Conflicting definition is here ({})",
+                                                        field
+                                                            .type_expr
+                                                            .0
+                                                            .as_clean_user_faced_type_name()
+                                                    ),
+                                                    field.type_expr.1,
+                                                ),
+                                            ],
+                                        )
+                                    }
+                                } else {
+                                    found_fields
+                                        .insert(field.name.clone(), field.type_expr.clone());
+                                }
+                            }
+                        } else {
+                            let msg = "Can only use intersection (&) with ducks";
+                            failure_with_occurence(msg, sub_type.1, [(msg, sub_type.1)]);
+                        }
+                    }
+                }
+
+                do_it(sub_types, &mut found_fields, env);
+
+                *node = (
+                    TypeExpr::Duck(Duck {
+                        fields: found_fields.into_iter().fold(Vec::new(), |mut acc, elem| {
+                            acc.push(Field {
+                                name: elem.0,
+                                type_expr: elem.1,
+                            });
+                            acc
+                        }),
+                    }),
+                    span,
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
+fn resolve_all_intersection_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv) {
+    trav_type_expr(trav_fn_replace_intersections(), expr, env);
+}
+
+fn resolve_all_intersection_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeEnv) {
+    trav_value_expr(trav_fn_replace_intersections(), |_, _| {}, expr, env);
+}
+
 fn resolve_all_aliases_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv) {
     let span = expr.1;
     trav_type_expr(
@@ -1197,6 +1291,7 @@ fn resolve_all_aliases_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv
         expr,
         env,
     );
+    resolve_all_intersection_type_expr(expr, env);
 }
 
 fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeEnv) {
@@ -1245,6 +1340,7 @@ fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeE
         expr,
         env,
     );
+    resolve_all_intersection_value_expr(expr, env);
 }
 
 fn process_keyof_in_value_expr(expr: &mut Spanned<ValueExpr>, type_env: &mut TypeEnv) {
@@ -2332,11 +2428,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     return;
                 }
             }
-
-            if let TypeExpr::And(_) = &mut type_def.type_expression.0 {
-                type_def.type_expression.0 =
-                    translate_intersection_to_duck(&type_def.type_expression.0);
-            }
             type_env.type_definitions.push(type_def.clone());
         });
 
@@ -2559,7 +2650,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 process_keyof_in_type_expr(&mut function_definition.return_type.0, type_env);
             }
 
-            let mut fn_type_expr = TypeExpr::Fun(
+            let fn_type_expr = TypeExpr::Fun(
                 function_definition
                     .params
                     .iter()
@@ -2569,22 +2660,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                     function_definition.return_type.0.clone(),
                     function_definition.return_type.1,
                 )),
-                true,
+                false,
             );
 
-            if let TypeExpr::Fun(_, return_type, _) = &mut fn_type_expr
-                && let TypeExpr::And(_) = &return_type.0
-            {
-                return_type.0 = translate_intersection_to_duck(&return_type.0);
-            }
-
-            if function_definition.name.starts_with("gimme") {
-                // dbg!(&function_definition);
-            }
             resolve_all_aliases_value_expr(&mut function_definition.value_expr, type_env);
-            if function_definition.name.starts_with("gimme") {
-                // dbg!(&function_definition.value_expr);
-            }
             type_env.pop_type_aliases();
 
             if function_definition.generics.is_empty() {
@@ -2690,11 +2769,6 @@ fn typeresolve_method_definition(
             type_env.insert_type_alias(generic.name.clone(), TypeExpr::Any);
         });
 
-    let (return_type, _span) = &mut function_definition.return_type;
-    if let TypeExpr::And(_) = &return_type {
-        *return_type = translate_intersection_to_duck(return_type);
-    }
-
     type_env.push_identifier_types();
 
     for p in function_definition.params.iter() {
@@ -2733,12 +2807,6 @@ fn typeresolve_function_definition(
         .for_each(|(generic, _)| {
             type_env.insert_type_alias(generic.name.clone(), TypeExpr::Any);
         });
-
-    let (return_type, _span) = &mut function_definition.return_type;
-
-    if let TypeExpr::And(_) = &return_type {
-        *return_type = translate_intersection_to_duck(return_type);
-    }
 
     type_env.push_identifier_types();
 
@@ -2799,42 +2867,6 @@ pub fn find_returns(v: &mut Spanned<ValueExpr>, env: &mut TypeEnv) -> Vec<Spanne
         },
     );
     out2.borrow().to_vec()
-}
-
-pub fn translate_intersection_to_duck(interception_type: &TypeExpr) -> TypeExpr {
-    match interception_type {
-        TypeExpr::And(variants) => {
-            let mut all_fields = Vec::new();
-
-            for variant in variants.iter() {
-                match &variant.0 {
-                    TypeExpr::Duck(duck) => {
-                        for field in &duck.fields {
-                            all_fields.push(field.clone());
-                        }
-                    }
-                    _ => {
-                        continue;
-                    }
-                }
-            }
-
-            let mut unique_fields = Vec::new();
-            let mut seen_names = HashSet::new();
-
-            for field in all_fields.into_iter().rev() {
-                if seen_names.insert(field.name.clone()) {
-                    unique_fields.push(field);
-                }
-            }
-
-            unique_fields.reverse();
-            TypeExpr::Duck(Duck {
-                fields: unique_fields,
-            })
-        }
-        _ => interception_type.clone(),
-    }
 }
 
 fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: &TypeEnv) {
@@ -3383,10 +3415,6 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
 
     typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
     arms.iter_mut().for_each(|arm| {
-        if let TypeExpr::And(_) = &arm.type_case.0 {
-            arm.type_case.0 = translate_intersection_to_duck(&arm.type_case.0);
-        }
-
         type_env.push_identifier_types();
         if let Some(identifier) = &arm.identifier_binding {
             type_env.insert_identifier_type(
@@ -3961,10 +3989,6 @@ fn typeresolve_var_decl(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
 
     // Resolve the type expression on the declaration
     if let Some(type_expr) = &mut declaration.type_expr {
-        if let TypeExpr::And(_) = &type_expr.0 {
-            type_expr.0 = translate_intersection_to_duck(&type_expr.0);
-        }
-
         resolve_all_aliases_type_expr(type_expr, type_env);
 
         if let Some(initializer) = declaration.initializer.as_mut() {

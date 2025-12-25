@@ -1,11 +1,11 @@
-fn create_counter() -> (fn() -> Int, fn()) {
+fn create_counter() -> (fn() -> Int, mut fn()) {
     let count: Int = 0;
 
     let get_count: fn() -> Int = fn() -> Int {
         return count;
     };
 
-    let increment: fn() = mut fn() {
+    let increment: mut fn() = mut fn() {
         count = count + 1;
     };
 
@@ -17,7 +17,7 @@ fn main() {
     std::io::println("Creating counter with captured variable");
     std::io::println("Expected sequence: 0, 1, 2");
 
-    let x: (fn() -> Int, fn()) = create_counter();
+    let x: (fn() -> Int, mut fn()) = create_counter();
     let get_count = x.0;
     let increment = x.1;
 

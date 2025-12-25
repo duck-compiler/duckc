@@ -1500,88 +1500,21 @@ fn require(condition: bool, fail_message: String) {
     }
 }
 
-fn types_are_compatible(one: &TypeExpr, two: &TypeExpr) -> bool {
-    let mut o = one.clone().into_empty_span();
-    let mut t = two.clone().into_empty_span();
-
-    type_expr_into_empty_range(&mut o);
-    type_expr_into_empty_range(&mut t);
-
-    o == t
-}
-
-fn is_non_variant_type_in_variant(
-    non_variant_type: &Spanned<TypeExpr>,
-    variant: &[Spanned<TypeExpr>],
-) -> bool {
-    variant
-        .iter()
-        .any(|(haystack_member, _)| types_are_compatible(haystack_member, &non_variant_type.0))
-}
-
-fn require_subset_of_variant_type(
-    variant_type: &Spanned<TypeExpr>,
-    other: &Spanned<TypeExpr>,
-    _type_env: &mut TypeEnv,
+pub fn assert_type_is_exactly_the_same(
+    required_type: &Spanned<TypeExpr>,
+    given_type: &Spanned<TypeExpr>,
+    type_env: &mut TypeEnv,
 ) {
-    let variant_members = match &variant_type.0 {
-        TypeExpr::Or(members) => members,
-        _ => {
-            panic!("is_subset_of_variant_type called with a non-variant type");
-        }
-    };
-
-    match &other.0 {
-        TypeExpr::Or(other_members) => {
-            for other_member in other_members {
-                if !is_non_variant_type_in_variant(other_member, variant_members) {
-                    failure(
-                        variant_type.1.context.file_name,
-                        "Incompatible Variant Types".to_string(),
-                        (
-                            format!(
-                                "The type `{}` is not compatible with the target variant.",
-                                other_member.0.as_clean_user_faced_type_name()
-                            ),
-                            other_member.1,
-                        ),
-                        vec![(
-                            format!(
-                                "The target variant only allows the following types: `{}`.",
-                                variant_type.0.as_clean_user_faced_type_name()
-                            ),
-                            variant_type.1,
-                        )],
-                        variant_type.1.context.file_contents,
-                    );
-                }
-            }
-        }
-        _ => {
-            if !is_non_variant_type_in_variant(other, variant_members) {
-                failure(
-                    other.1.context.file_name,
-                    "Incompatible Types".to_string(),
-                    (
-                        format!(
-                            "This expression is of type `{}`.",
-                            other.0.as_clean_user_faced_type_name()
-                        ),
-                        other.1,
-                    ),
-                    vec![(
-                        format!(
-                            "But it needs to be compatible with one of the types in the variant: `{}`.",
-                            variant_type.0.as_clean_user_faced_type_name()
-                        ),
-                        variant_type.1,
-                    )],
-                    other.1.context.file_contents,
-                );
-            }
-        }
+    let msg = "These types need to be the same";
+    if required_type.0.type_id(type_env) != given_type.0.type_id(type_env) {
+        failure_with_occurence(
+            msg,
+            given_type.1,
+            [(msg, required_type.1), (msg, given_type.1)],
+        );
     }
 }
+
 pub fn check_type_compatability(
     required_type: &Spanned<TypeExpr>,
     given_type: &Spanned<TypeExpr>,
@@ -1876,8 +1809,53 @@ pub fn check_type_compatability_full(
                 ),
             )
         }
-        TypeExpr::Struct { .. } => {
-            if !given_type.0.is_struct() {
+        TypeExpr::Struct {
+            name: req_name,
+            type_params: req_type_params,
+        } => {
+            if let TypeExpr::Struct {
+                name: given_name,
+                type_params: given_type_params,
+            } = &given_type.0
+            {
+                // TODO: STRUCT DISPLAY NAME
+                if req_name.as_str() != given_name.as_str() {
+                    fail_requirement(
+                        format!("the required struct is {}", req_name.bright_yellow(),),
+                        format!("you have given a {}", given_name.bright_yellow(),),
+                    );
+                }
+
+                for (idx, (req_param, given_param)) in req_type_params
+                    .iter()
+                    .zip(given_type_params.iter())
+                    .enumerate()
+                {
+                    if req_param.0.type_id(type_env) != given_param.0.type_id(type_env) {
+                        failure_with_occurence(
+                            "Type parameters do not match",
+                            given_param.1,
+                            [
+                                (
+                                    format!(
+                                        "type parameter no. {} is required to be a {}",
+                                        idx + 1,
+                                        req_param.0.as_clean_user_faced_type_name()
+                                    ),
+                                    req_param.1,
+                                ),
+                                (
+                                    format!(
+                                        "you have given a {}",
+                                        given_param.0.as_clean_user_faced_type_name()
+                                    ),
+                                    given_param.1,
+                                ),
+                            ],
+                        );
+                    }
+                }
+            } else {
                 fail_requirement(
                     format!(
                         "the required type {} is a struct",
@@ -1889,8 +1867,6 @@ pub fn check_type_compatability_full(
                     ),
                 )
             }
-
-            // todo: check against identity of struct in typechecking
         }
         TypeExpr::Duck(duck) => match &given_type.0 {
             TypeExpr::Duck(given_duck) => {
@@ -2083,11 +2059,34 @@ pub fn check_type_compatability_full(
                 )
             }
 
-            for (index, required_item_type) in required_item_types.iter().enumerate() {
-                let given_item_type = given_item_types.get(index)
-                    .expect("we've just checked that given_item_types is at least the sizeof required_item_types");
-
-                check_type_compatability(required_item_type, given_item_type, type_env);
+            for (idx, (req_param, given_param)) in required_item_types
+                .iter()
+                .zip(given_item_types.iter())
+                .enumerate()
+            {
+                if req_param.0.type_id(type_env) != given_param.0.type_id(type_env) {
+                    failure_with_occurence(
+                        "Incompatible Types",
+                        given_param.1,
+                        [
+                            (
+                                format!(
+                                    "item no. {} is required to be a {}",
+                                    idx + 1,
+                                    req_param.0.as_clean_user_faced_type_name()
+                                ),
+                                req_param.1,
+                            ),
+                            (
+                                format!(
+                                    "you have given a {}",
+                                    given_param.0.as_clean_user_faced_type_name()
+                                ),
+                                given_param.1,
+                            ),
+                        ],
+                    );
+                }
             }
         }
         TypeExpr::String(..) => {
@@ -2139,14 +2138,58 @@ pub fn check_type_compatability_full(
                 )
             }
         }
-        TypeExpr::Or(..) => {
-            require_subset_of_variant_type(required_type, &given_type, type_env);
+        TypeExpr::Or(contents) => {
+            let other_contents = if let TypeExpr::Or(other_contents) = &given_type.0 {
+                if other_contents.len() > contents.len() {
+                    fail_requirement(
+                        "This union is smaller than".to_string(),
+                        "this one".to_string(),
+                    );
+                }
+                other_contents
+            } else {
+                &vec![given_type.clone()]
+            };
+
+            for giv in other_contents.iter() {
+                let found = contents
+                    .iter()
+                    .any(|c| c.0.type_id(type_env) == giv.0.type_id(type_env));
+                if !found {
+                    let msg = format!(
+                        "This expression is of type `{}`",
+                        giv.0.as_clean_user_faced_type_name().blue(),
+                    );
+                    let msg = msg.as_str();
+
+                    failure_with_occurence(
+                        "Incompatible Types",
+                        giv.1,
+                        [
+                            (msg, giv.1),
+                            (
+                                format!(
+                                    "Must be one of these: {}",
+                                    contents
+                                        .iter()
+                                        .map(|c| c.0.as_clean_user_faced_type_name())
+                                        .collect::<Vec<_>>()
+                                        .join(", ")
+                                        .yellow()
+                                )
+                                .as_str(),
+                                required_type.1,
+                            ),
+                        ],
+                    );
+                }
+            }
         }
         TypeExpr::Fun(required_params, required_return_type, is_mut_required) => {
             if !given_type.0.is_fun() {
                 fail_requirement(
                     "this requires a function".to_string(),
-                    "this value isn't even a string.".to_string(),
+                    "this value isn't even a function.".to_string(),
                 )
             }
 
@@ -2154,10 +2197,10 @@ pub fn check_type_compatability_full(
                 unreachable!("we've already checked that it's a function")
             };
 
-            if *is_mut_required && !*is_mut_given {
+            if !*is_mut_required && *is_mut_given {
                 fail_requirement(
-                    "this requires a mut fn".to_string(),
-                    "this is not a mut fn".to_string(),
+                    "this requires a function that does not modify its environment".to_string(),
+                    "thus, this must not be a mut fn".to_string(),
                 );
             }
 
@@ -2174,15 +2217,57 @@ pub fn check_type_compatability_full(
                 )
             }
 
-            for (index, param) in required_params.iter().enumerate() {
-                let given_param = given_params
-                    .get(index)
-                    .expect("we've just checked that required and given params are equal size");
-
-                check_type_compatability(&param.1, &given_param.1, type_env);
+            for (idx, ((_, req_param), (_, given_param))) in
+                required_params.iter().zip(given_params.iter()).enumerate()
+            {
+                if req_param.0.type_id(type_env) != given_param.0.type_id(type_env) {
+                    failure_with_occurence(
+                        "Parameter types do not match",
+                        given_param.1,
+                        [
+                            (
+                                format!(
+                                    "parameter no. {} is required to be a {}",
+                                    idx + 1,
+                                    req_param.0.as_clean_user_faced_type_name()
+                                ),
+                                req_param.1,
+                            ),
+                            (
+                                format!(
+                                    "you have given a {}",
+                                    given_param.0.as_clean_user_faced_type_name()
+                                ),
+                                given_param.1,
+                            ),
+                        ],
+                    );
+                }
             }
-            check_type_compatability(required_return_type, given_return_type, type_env);
+            if required_return_type.0.type_id(type_env) != given_return_type.0.type_id(type_env) {
+                failure_with_occurence(
+                    "Return types do not match",
+                    given_return_type.1,
+                    [
+                        (
+                            format!(
+                                "Return type needs to be a {}",
+                                required_return_type.0.as_clean_user_faced_type_name()
+                            ),
+                            required_return_type.1,
+                        ),
+                        (
+                            format!(
+                                "You have given a {}",
+                                given_return_type.0.as_clean_user_faced_type_name(),
+                            ),
+                            given_return_type.1,
+                        ),
+                    ],
+                );
+            }
         }
+
         TypeExpr::Array(content_type) => {
             if !given_type.0.is_array() {
                 fail_requirement(
@@ -2195,13 +2280,34 @@ pub fn check_type_compatability_full(
                 unreachable!("we've checked that given_type is an array")
             };
 
-            check_type_compatability(content_type, &given_content_type, type_env);
-        }
-        TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) => {}
-        TypeExpr::And(required_variants) => {
-            for required_variant in required_variants {
-                check_type_compatability(required_variant, &given_type, type_env);
+            if content_type.0.type_id(type_env) != given_content_type.0.type_id(type_env) {
+                failure_with_occurence(
+                    "Array content types do not match",
+                    given_content_type.1,
+                    [
+                        (
+                            format!(
+                                "This requires an array of {}",
+                                content_type.0.as_clean_user_faced_type_name().yellow()
+                            ),
+                            content_type.1,
+                        ),
+                        (
+                            format!(
+                                "You have given an array of {}",
+                                given_content_type
+                                    .0
+                                    .as_clean_user_faced_type_name()
+                                    .yellow()
+                            ),
+                            given_content_type.1,
+                        ),
+                    ],
+                )
             }
+        }
+        TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) | TypeExpr::And(..) => {
+            panic!("{required_type:?} should not be here")
         }
     }
 }
@@ -2496,7 +2602,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "Incompatible Variant Types")]
+    #[should_panic(expected = "Incompatible Types")]
     fn test_variant_not_subset_of_variant() {
         let mut type_env = TypeEnv::default();
 
