@@ -23,6 +23,10 @@ fn main() {
     const f5 = xyz()[0];
     const f6 = &mut xyz()[0];
 
+    (&&(&&(3.to_string())).to_string()).to_string()->println();
+    (&&(&&(glob_array[0])).to_string()).to_string()->println();
+    *&*&*&*&(&&(&&(glob_array[0])).to_string()).to_string()->println();
+
     glob_array.to_string()->println();
     const into_ref = &mut zzz()[0];
     *into_ref = 999;
