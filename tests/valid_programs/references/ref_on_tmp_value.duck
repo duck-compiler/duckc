@@ -1,0 +1,60 @@
+use std::io::println;
+
+struct S {
+    x: Int,
+} impl {
+    static fn new() -> S {
+        S {
+            x: -10,
+        }
+    }
+}
+
+fn take_s(s: &mut S) {
+    println(f"taking s with x = {s.x.to_string()}");
+}
+
+fn take_double_s(s: &mut &mut S) {
+    println(f"double taking s with x = {s.x.to_string()}");
+}
+
+fn abc() {
+}
+
+let glob_array: Int[] = [100, 200, 300];
+
+fn xyz() -> Int[] {
+    [1, 2, 3]
+}
+
+fn zzz() -> &mut Int[] {
+    &mut glob_array
+}
+
+fn main() {
+    const f1 = &mut abc();
+    const f2 = &abc();
+
+    const f3 = &&mut abc();
+    const f4 = &mut &abc();
+
+    const f5 = xyz()[0];
+    const f6 = &mut xyz()[0];
+
+    (&&(&&(3.to_string())).to_string()).to_string()->println();
+    (&&(&&(glob_array[0])).to_string()).to_string()->println();
+    *&*&*&*&(&&(&&(glob_array[0])).to_string()).to_string()->println();
+
+    glob_array.to_string()->println();
+    const into_ref = &mut zzz()[0];
+    *into_ref = 999;
+    glob_array.to_string()->println();
+    zzz()[1] = 1111;
+    glob_array.to_string()->println();
+    *(&mut zzz()[2]) = 33333;
+    glob_array.to_string()->println();
+
+    take_s(&mut S { x: 100 });
+    take_s(&mut S::new());
+    take_double_s(&mut &mut S::new());
+}

@@ -1356,16 +1356,23 @@ impl ValueExpr {
 
                 #[allow(clippy::never_loop)]
                 loop {
-                    let (mut walk_instr, walk_res) =
-                        walk_access_raw(v, type_env, env, span, false, false, need_mut);
-
-                    if let ValueExpr::FieldAccess {
+                    let target_obj = if let ValueExpr::FieldAccess {
                         target_obj,
                         field_name: _,
                     }
                     | ValueExpr::ArrayAccess(target_obj, _) = &v.0
                     {
-                        let t = TypeExpr::from_value_expr_dereferenced(target_obj, type_env);
+                        Some(target_obj.as_ref().clone())
+                    } else if let ValueExpr::Variable(..) = &v.0 {
+                        Some(v.as_ref().clone())
+                    } else {
+                        None
+                    };
+
+                    if let Some(target_obj) = target_obj {
+                        let (mut walk_instr, walk_res) =
+                            walk_access_raw(v, type_env, env, span, false, false, need_mut);
+                        let t = TypeExpr::from_value_expr_dereferenced(&target_obj, type_env);
                         let is_accessing_duck = matches!(t.0, TypeExpr::Duck(..));
                         if let Some(mut walk_res) = walk_res {
                             let val_to_set: IrValue;
@@ -1397,21 +1404,22 @@ impl ValueExpr {
                         } else {
                             break (walk_instr, None);
                         }
-                    }
-
-                    if let Some(emit_res) = walk_res {
-                        let var_name = env.new_var();
-                        let ptr_var_decl = [
-                            IrInstruction::VarDecl(var_name.clone(), ptr_type),
-                            IrInstruction::VarAssignment(
-                                var_name.clone(),
-                                IrValue::Pointer(IrValue::Imm(emit_res.join(".")).into()),
-                            ),
-                        ];
-                        walk_instr.extend(ptr_var_decl);
-                        break (walk_instr, Some(IrValue::Var(var_name)));
                     } else {
-                        break (walk_instr, None);
+                        let (mut normal_emit_instr, normal_emit_res) = v.0.emit(type_env, env, span);
+                        if let Some(emit_res) = normal_emit_res {
+                            let var_name = env.new_var();
+                            let ptr_var_decl = [
+                                IrInstruction::VarDecl(var_name.clone(), ptr_type),
+                                IrInstruction::VarAssignment(
+                                    var_name.clone(),
+                                    IrValue::Pointer(emit_res.into()),
+                                ),
+                            ];
+                            normal_emit_instr.extend(ptr_var_decl);
+                            break (normal_emit_instr, Some(IrValue::Var(var_name)));
+                        } else {
+                            break (normal_emit_instr, None);
+                        }
                     }
                 }
             }
