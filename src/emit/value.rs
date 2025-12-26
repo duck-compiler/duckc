@@ -22,10 +22,21 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ToIr {
     pub var_counter: usize,
+    pub per_var_counter: Vec<HashMap<String, usize>>, // for shadowing
     pub labels: Vec<String>,
+}
+
+impl Default for ToIr {
+    fn default() -> Self {
+        ToIr {
+            var_counter: 0,
+            labels: vec![],
+            per_var_counter: vec![HashMap::new()],
+        }
+    }
 }
 
 /// Expression further down should use this
@@ -163,6 +174,43 @@ impl IrValue {
 }
 
 impl ToIr {
+    pub fn push_var_counters(&mut self) {
+        self.per_var_counter.push(Default::default());
+    }
+
+    pub fn pop_var_counters(&mut self) {
+        self.per_var_counter.pop();
+    }
+
+    pub fn push_with_var_counter(&mut self, s: &str) -> String {
+        let count = *self
+            .per_var_counter
+            .last_mut()
+            .unwrap()
+            .entry(s.to_string())
+            .and_modify(|f| *f = *f + 1)
+            .or_default();
+        if count > 0 {
+            format!("{s}_{count}")
+        } else {
+            s.to_string()
+        }
+    }
+
+    pub fn with_var_counter(&mut self, s: &str) -> String {
+        let count = *self
+            .per_var_counter
+            .last_mut()
+            .unwrap()
+            .entry(s.to_string())
+            .or_default();
+        if count > 0 {
+            format!("{s}_{count}")
+        } else {
+            s.to_string()
+        }
+    }
+
     pub fn top_label_cloned(&self) -> Option<String> {
         self.labels.last().cloned()
     }
@@ -306,7 +354,7 @@ fn walk_access_raw(
 
                     s.push_front(var_name);
                 } else {
-                    s.push_front(name.clone());
+                    s.push_front(env.with_var_counter(&name));
                 }
 
                 s[0] = fix_ident_for_go(&s[0], imports);
@@ -1405,7 +1453,8 @@ impl ValueExpr {
                             break (walk_instr, None);
                         }
                     } else {
-                        let (mut normal_emit_instr, normal_emit_res) = v.0.emit(type_env, env, span);
+                        let (mut normal_emit_instr, normal_emit_res) =
+                            v.0.emit(type_env, env, span);
                         if let Some(emit_res) = normal_emit_res {
                             let var_name = env.new_var();
                             let ptr_var_decl = [
@@ -2238,6 +2287,8 @@ impl ValueExpr {
                     .as_go_type_annotation(type_env);
 
                 let mut v = Vec::new();
+                let name = env.push_with_var_counter(name);
+
                 v.push(IrInstruction::VarDecl(name.clone(), type_expression));
 
                 if let Some(initializer) = initializer.as_ref() {
@@ -2549,6 +2600,7 @@ impl ValueExpr {
                 let mut res_instr = Vec::new();
                 let mut res_var = None;
 
+                env.push_var_counters();
                 for block_expr in block_exprs.iter() {
                     let ty = TypeExpr::from_value_expr(block_expr, type_env);
 
@@ -2563,6 +2615,7 @@ impl ValueExpr {
 
                     res_var = block_res;
                 }
+                env.pop_var_counters();
 
                 let mut final_instr = Vec::new();
                 let self_return_type = TypeExpr::from_value_expr(&(self.clone(), span), type_env);
@@ -2746,10 +2799,14 @@ impl ValueExpr {
             }
             ValueExpr::RawVariable(_, p) => (
                 vec![],
-                as_rvar(fix_ident_for_go(&mangle(p), type_env.all_go_imports)),
+                as_rvar(fix_ident_for_go(
+                    &env.with_var_counter(&mangle(p)),
+                    type_env.all_go_imports,
+                )),
             ),
             ValueExpr::Variable(_, x, var_type, _, needs_copy) => {
-                let x = fix_ident_for_go(x, type_env.all_go_imports);
+                let x = env.with_var_counter(x);
+                let x = fix_ident_for_go(&x, type_env.all_go_imports);
                 if *needs_copy {
                     let var_type = var_type
                         .as_ref()

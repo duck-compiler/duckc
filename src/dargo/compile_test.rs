@@ -191,6 +191,7 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
                             &mut type_env,
                             &mut crate::emit::value::ToIr {
                                 var_counter: 0,
+                                per_var_counter: vec![Default::default()],
                                 labels: Vec::new(),
                             },
                             test_case.body.1
