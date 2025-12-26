@@ -37,6 +37,18 @@ struct FilePath {
         };
     }
 
+    fn filename() -> String {
+        return go {
+            $ = filepath.Base((*self).path_ref)
+        } as String;
+    }
+
+    fn extension() -> String {
+        return go {
+            $ = filepath.Ext((*self).path_ref)
+        } as String;
+    }
+
     fn ensure_dir() -> &FilePath {
         if (self.failed()) {
             return self;
@@ -106,6 +118,32 @@ struct FilePath {
         self.path_ref = new_path;
 
         return self;
+    }
+
+    fn read() -> String | .err {
+        if (self.failed()) {
+            return .err;
+        }
+
+        return go {
+            bs, err := os.ReadFile((*self).path_ref)
+            if err != nil {
+            	return Tag__err {}
+            }
+
+            return string(bs)
+        } as String;
+    }
+
+    fn size() -> Int | .err {
+        return go {
+            s, err := os.Stat((*self).path_ref)
+            if err != nil {
+            	return Tag__err {}
+            }
+
+            return int(s.Size())
+        } as Int;
     }
 
     fn exists() -> Bool {
