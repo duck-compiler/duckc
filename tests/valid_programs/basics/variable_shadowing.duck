@@ -1,0 +1,27 @@
+use std::io::println;
+
+fn main() {
+    const z = 100;
+    println(z.to_string());
+    const z = "message";
+    println(z.to_string());
+    const z = .zu;
+    println(z.to_string());
+    let z = 200;
+    println(z.to_string());
+    z = z * 3;
+    println(z.to_string());
+    const z = &mut 300;
+    *z = 321;
+    println(z.to_string());
+    const z = &mut 600;
+    *z = 614;
+    println(z.to_string());
+    const z = 1000;
+    {
+        let z = 1000;
+        z = 2000;
+        println(z.to_string());
+    }
+    println(z.to_string());
+}
