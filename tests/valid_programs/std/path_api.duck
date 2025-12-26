@@ -8,4 +8,25 @@ fn main() {
     std::assert(std::path::base("/path/to/file.txt") == "file.txt", "std::path::base");
     std::assert(std::path::is_absolute("/path/to/file.txt"), "std::path::is_absolute");
     std::assert(std::path::dir("/path/to/file.txt") == "/path/to", "std::path::dir");
+
+    yoo();
+}
+
+fn yoo() {
+    std::assert(FilePath::new("whatever/home.txt").filename() == "home.txt", "filename is not home.txt");
+    std::assert(FilePath::new("whatever/home.txt").extension() == ".txt", "extension is not .txt");
+    std::assert(FilePath::new("whatever/home.txt").size() == .err, "unknown file exist");
+    std::assert(FilePath::new("whatever/home.txt").read() == .err, "couldn't read non existing file");
+
+    let f = FilePath::new("testyyy/file.txt")
+        .ensure_dir()
+        .write("hello");
+
+    std::assert(f.size() == 5, "file size is not fivbeee");
+    std::assert(f.read() != .err, "read should be an error");
+
+    f.expect("file written");
+    f.delete();
+
+    std::assert(!f.exists(), "just deleted the file");
 }
