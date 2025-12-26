@@ -21,10 +21,10 @@ struct File {
         }
     }
 
-    static fn open(path: String) -> File | .err {
+    static fn open(p: String) -> File | .err {
         let file_ref_or_err: &go "os.File";
         go {
-            file, err := os.Open(path);
+            file, err := os.Open(p);
             if err != nil {
                 return Tag__err{}
             }
