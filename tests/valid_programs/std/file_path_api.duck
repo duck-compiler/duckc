@@ -37,7 +37,7 @@ fn main() {
     bad_file.rename("/tmp/failed_rename.txt");
     match bad_file.last_error {
         String @msg => {
-            std::io::println(f"success caught error: {msg}".green());
+            std::io::println(f"success caught error".green());
         },
         .none => std::error::panic("errorrrr :("),
     }
