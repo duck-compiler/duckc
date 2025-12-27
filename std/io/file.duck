@@ -5,10 +5,10 @@ use ::col::{Iter};
 struct File {
     file_ref: &go "os.File",
 } impl {
-    static fn new(path: String) -> File | .err {
+    static fn new(p: String) -> File | .err {
         let file_ref_or_err: &go "os.File";
         go {
-            file, err := os.Create(path);
+            file, err := os.Create(p);
             if err != nil {
                 return Tag__err{}
             }
@@ -21,10 +21,10 @@ struct File {
         }
     }
 
-    static fn open(path: String) -> File | .err {
+    static fn open(p: String) -> File | .err {
         let file_ref_or_err: &go "os.File";
         go {
-            file, err := os.Open(path);
+            file, err := os.Open(p);
             if err != nil {
                 return Tag__err{}
             }
@@ -74,14 +74,14 @@ struct File {
         }
 
         let next_fn = mut fn() -> String | .no_next_elem {
-            go {
+            let line = go {
                 x := scanner.Scan()
                 if !x {
                     return Tag__no_next_elem {}
                 }
-                line := scanner.Text()
-                return line
-            } as !
+                $ = scanner.Text()
+            } as String;
+            return line;
         };
 
         Iter::from<String>(next_fn)

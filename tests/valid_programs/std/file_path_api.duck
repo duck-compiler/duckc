@@ -1,0 +1,76 @@
+use std::path::{FilePath};
+
+fn main() {
+    std::assert(std::path::clean("./home/Hallo.txt") == "home/Hallo.txt", "clean");
+    std::assert(std::path::join(["home", "dir", "hallo.txt"]) == "home/dir/hallo.txt", "path::join");
+
+    let file = FilePath::new("./test_data/app.log")
+        .ensure_dir()
+        .write("hellloooo");
+
+    std::assert(file.exists(), "file should exist after writing");
+    std::assert(file.path_ref == "test_data/app.log", "path should be cleaned");
+
+    file.rename("./test_data/active.log");
+    std::assert(file.path_ref == "./test_data/active.log", "path state should update after rename");
+    std::assert(file.exists(), "file should exist at new location");
+
+    let reader: &std::io::File = match std::io::File::open(file.path_ref) {
+        std::io::File @reader => &reader,
+        else => std::assert(false, "reader failed") as !,
+    };
+
+    defer reader.close();
+
+    let content: String = match reader.read_str() {
+        String @str => str,
+        else => std::assert(false, "read_str failed") as !,
+    };
+
+    std::assert(content == "hellloooo", "content mismatch in file");
+
+    let bad_file = FilePath::new("/sys/duck_test.txt")
+        .write("this will fail due to permissions");
+
+    std::assert(bad_file.failed(), "chain should have captured a permission error");
+
+    bad_file.rename("/tmp/failed_rename.txt");
+    match bad_file.last_error {
+        String @msg => {
+            std::io::println(f"success caught error".green());
+        },
+        .none => std::error::panic("errorrrr :("),
+    }
+
+    let root = FilePath::new("./test_data");
+    let logs = root.join("logs.txt");
+    let configs = root.join("config.json");
+
+    std::assert(logs.path_ref == "test_data/logs.txt", "branching logs failed");
+    std::assert(configs.path_ref == "test_data/config.json", "branching configs failed");
+    std::assert(root.path_ref == "test_data", "root was modified - branching failed");
+
+    file.delete();
+    std::io::println("all file tests have passed".green());
+
+    yoo()
+}
+
+fn yoo() {
+    std::assert(FilePath::new("whatever/home.txt").filename() == "home.txt", "filename is not home.txt");
+    std::assert(FilePath::new("whatever/home.txt").extension() == ".txt", "extension is not .txt");
+    std::assert(FilePath::new("whatever/home.txt").size() == .err, "unknown file exist");
+    std::assert(FilePath::new("whatever/home.txt").read() == .err, "couldn't read non existing file");
+
+    let f = FilePath::new("testyyy/file.txt")
+        .ensure_dir()
+        .write("hello");
+
+    std::assert(f.size() == 5, "file size is not fivbeee");
+    std::assert(f.read() != .err, "read should be an error");
+
+    f.expect("file written");
+    f.delete();
+
+    std::assert(!f.exists(), "just deleted the file");
+}

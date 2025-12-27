@@ -1,0 +1,170 @@
+use go "path/filepath";
+
+struct FilePath {
+    path_ref: String,
+    last_error: String | .none,
+} impl {
+    static fn new(p: String) -> FilePath {
+        return FilePath {
+            path_ref: go {
+                $ = filepath.Clean(p)
+            } as String,
+            last_error: .none,
+        };
+    }
+
+    fn failed() -> Bool {
+        return self.last_error != .none;
+    }
+
+    fn join(part: String) -> FilePath {
+        let new_path = go {
+            $ = filepath.Join((*self).path_ref, part)
+        } as String;
+
+        return FilePath {
+            path_ref: new_path,
+            last_error: self.last_error,
+        }
+    }
+
+    fn parent() -> FilePath {
+        let parent_path = go {
+            $ = filepath.Dir((*self).path_ref)
+        } as String;
+
+        return FilePath {
+            path_ref: parent_path,
+            last_error: self.last_error,
+        };
+    }
+
+    fn filename() -> String {
+        return go {
+            $ = filepath.Base((*self).path_ref)
+        } as String;
+    }
+
+    fn extension() -> String {
+        return go {
+            $ = filepath.Ext((*self).path_ref)
+        } as String;
+    }
+
+    fn ensure_dir() -> &FilePath {
+        if (self.failed()) {
+            return self;
+        }
+
+        go {
+            dir := filepath.Dir((*self).path_ref)
+            err := os.MkdirAll(dir, 0755)
+            if err != nil {
+               	(*self).last_error = err.Error()
+            }
+        }
+
+        return self;
+    }
+
+    /// writes to a .tmp file, then renames to target - prevennts file corruption if a crash occurs while writing
+    fn write(content: String) -> &mut FilePath {
+        if (self.failed()) {
+            return self;
+        }
+
+        let tmp_path = f"{self.path_ref}.tmp";
+        go {
+            err := os.WriteFile(tmp_path, []byte(content), 0644)
+            if err != nil {
+               	(*self).last_error = err.Error()
+               	return self
+            }
+
+            err = os.Rename(tmp_path, (*self).path_ref)
+            if err != nil {
+               	(*self).last_error = err.Error()
+               	return self
+            }
+        }
+
+        return self
+    }
+
+    mut fn delete() -> &mut FilePath {
+        if (self.failed()) {
+            return self;
+        }
+
+        go {
+            err := os.Remove((*self).path_ref)
+            if err != nil {
+                (*self).last_error = err.Error()
+            }
+        }
+
+        return self;
+    }
+
+    mut fn rename(new_path: String) -> &FilePath {
+        if (self.failed()) {
+            return self;
+        }
+
+        go {
+            if err := os.Rename((*self).path_ref, new_path); err != nil {
+               	(*self).last_error = err.Error()
+            }
+        }
+
+        self.path_ref = new_path;
+
+        return self;
+    }
+
+    fn read() -> String | .err {
+        if (self.failed()) {
+            return .err;
+        }
+
+        return go {
+            bs, err := os.ReadFile((*self).path_ref)
+            if err != nil {
+            	return Tag__err {}
+            }
+
+            return string(bs)
+        } as String;
+    }
+
+    fn size() -> Int | .err {
+        return go {
+            s, err := os.Stat((*self).path_ref)
+            if err != nil {
+            	return Tag__err {}
+            }
+
+            return int(s.Size())
+        } as Int;
+    }
+
+    fn exists() -> Bool {
+        if (self.failed()) {
+            return false;
+        }
+
+        return go {
+            _, err := os.Stat((*self).path_ref)
+            $ = !os.IsNotExist(err)
+        } as Bool;
+    }
+
+    fn expect(msg: String) -> String {
+        match self.last_error {
+            String @err => {
+                std::error::panic(f"{msg}: {err}")
+            },
+            .none => return self.path_ref,
+        }
+    }
+}
