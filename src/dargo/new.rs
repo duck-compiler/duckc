@@ -48,7 +48,7 @@ pub fn new_project(
     custom_dargo_toml_path: Option<PathBuf>,
     new_args: NewArgs,
 ) -> Result<(), (String, NewErrKind)> {
-    let mut project_name = if let Some(project_name) = new_args.project_name { project_name } else {
+    let project_name = if let Some(project_name) = new_args.project_name { project_name } else {
         println!("what do you want the project to be called?");
 
         let mut buffer = String::new();
