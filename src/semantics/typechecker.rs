@@ -862,6 +862,7 @@ impl TypeExpr {
                         let arm_type = TypeExpr::from_value_expr(&arm.value_expr, type_env);
 
                         let mut cloned_arm_type = arm_type.clone().0.into_empty_span();
+                        merge_all_or_type_expr(&mut cloned_arm_type, type_env);
                         type_expr_into_empty_range(&mut cloned_arm_type);
 
                         if !arm_types.iter().any(|t: &Spanned<TypeExpr>| {
@@ -931,10 +932,10 @@ impl TypeExpr {
 
                     if arm_types.is_empty() {
                         TypeExpr::Tuple(vec![])
-                    } else if arm_types.len() == 1 {
-                        arm_types.first().cloned().unwrap().0
                     } else {
-                        TypeExpr::Or(arm_types)
+                        let mut a = (TypeExpr::Or(arm_types), *complete_span);
+                        merge_all_or_type_expr(&mut a, type_env);
+                        a.0
                     }
                 }
             },

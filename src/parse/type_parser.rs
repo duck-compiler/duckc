@@ -362,6 +362,93 @@ impl TypeExpr {
         }
     }
 
+    pub fn call_from_json(&self, param1: &str, type_env: &mut TypeEnv) -> String {
+        let param1 = &format!("({param1})");
+        match self {
+            TypeExpr::String(..)
+            | TypeExpr::Int
+            | TypeExpr::UInt
+            | TypeExpr::Float
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Tuple(..)
+            | TypeExpr::Struct { .. }
+            | TypeExpr::Tag(..)
+            | TypeExpr::Duck(..)
+            | TypeExpr::Array(..) => {
+                format!(
+                    "{}_FromJson({param1})",
+                    self.as_clean_go_type_name(type_env)
+                )
+            }
+            // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
+            TypeExpr::Or(t) => {
+                let mut go_code = format!(
+                    r#"
+                    //var s string = {param1}
+
+                "#
+                );
+
+                for t in t {
+                    go_code.push('\n');
+                    go_code.push_str(&format!(
+                        r#"
+                        {{
+                            var b {}
+                            b, err := {}
+                            if err == nil {{
+                                return b, nil
+                            }}
+                        }}
+                    "#,
+                        t.0.as_go_type_annotation(type_env),
+                        t.0.call_from_json(param1, type_env)
+                    ));
+                }
+
+                go_code.push_str("\nreturn 0, errors.New(\"union parsing failed\")\n");
+                format!("func() (any, error) {{ {go_code} }}()")
+            }
+            TypeExpr::Ref(inner) | TypeExpr::RefMut(inner) => {
+                let mut derefs = 1;
+                let mut inner = inner.as_ref().clone();
+                while let TypeExpr::Ref(new_inner) | TypeExpr::RefMut(new_inner) = inner.0 {
+                    derefs += 1;
+                    inner = *new_inner;
+                }
+
+                let derefs_str = (0..derefs).fold(String::with_capacity(derefs), |mut acc, _| {
+                    acc.push('*');
+                    acc
+                });
+
+                let mut go_res = format!(
+                    "final_res := {}",
+                    inner
+                        .0
+                        .call_from_json(&format!("{derefs_str}{param1}"), type_env)
+                );
+
+                for _ in 0..derefs {
+                    go_res.push_str("\n{");
+                    go_res.push_str("final_res := &final_res");
+                }
+
+                go_res.push_str("return final_res");
+
+                for _ in 0..derefs {
+                    go_res.push_str("\n}");
+                }
+
+                let return_type =
+                    format!("{derefs_str}{}", inner.0.as_go_type_annotation(type_env));
+                format!("func() {return_type} {{\n{go_res}\n}}()")
+            }
+            _ => panic!("Compiler Bug: cannot call from_json method on {self:?}"),
+        }
+    }
+
     pub fn call_to_json(&self, param1: &str, type_env: &mut TypeEnv) -> String {
         let param1 = &format!("({param1})");
         match self {
@@ -372,7 +459,7 @@ impl TypeExpr {
             TypeExpr::Bool(..) => format!("fmt.Sprintf(\"%t\", {param1})"),
             TypeExpr::Char => format!("fmt.Sprintf(\"%c\", {param1})"),
             TypeExpr::Tuple(..) => format!("{param1}.to_json()"),
-            TypeExpr::Array(..) => {
+            TypeExpr::Array(..) | TypeExpr::Duck(..) => {
                 format!("{}_ToJson({param1})", self.as_clean_go_type_name(type_env))
             }
             // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
@@ -420,9 +507,9 @@ impl TypeExpr {
 
                 inner
                     .0
-                    .call_to_string(&format!("{derefs_str}{param1}"), type_env)
+                    .call_to_json(&format!("{derefs_str}{param1}"), type_env)
             }
-            _ => panic!("Compiler Bug: cannot call to_string method on {self:?}"),
+            _ => panic!("Compiler Bug: cannot call to_json method on {self:?}"),
         }
     }
 
@@ -436,7 +523,7 @@ impl TypeExpr {
             TypeExpr::Bool(..) => format!("fmt.Sprintf(\"%t\", {param1})"),
             TypeExpr::Char => format!("fmt.Sprintf(\"%c\", {param1})"),
             TypeExpr::Tuple(..) => format!("{param1}.to_string()"),
-            TypeExpr::Array(..) => format!(
+            TypeExpr::Array(..) | TypeExpr::Duck(..) => format!(
                 "{}_ToString({param1})",
                 self.as_clean_go_type_name(type_env)
             ),
@@ -491,6 +578,32 @@ impl TypeExpr {
         }
     }
 
+    pub fn implements_from_json(&self, type_env: &mut TypeEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_from_json(type_env),
+            TypeExpr::Array(t) => t.0.implements_from_json(type_env),
+            TypeExpr::Duck(Duck { fields }) => fields
+                .iter()
+                .all(|f| f.type_expr.0.implements_from_json(type_env)),
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_from_json(type_env)),
+            TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_from_json(type_env)),
+            TypeExpr::Struct { name, type_params } => {
+                let def =
+                    type_env.get_struct_def_with_type_params_mut(name, type_params, empty_range());
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::FromJson)
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Float
+            | TypeExpr::UInt
+            | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
     pub fn implements_to_json(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_to_json(type_env),
@@ -526,12 +639,9 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_to_string(type_env),
             TypeExpr::Array(t) => t.0.implements_to_string(type_env),
-            TypeExpr::Duck(Duck { fields: _ }) => {
-                false
-                // && fields
-                //     .iter()
-                //     .all(|f| f.type_expr.0.implements_to_string(type_env))
-            }
+            TypeExpr::Duck(Duck { fields }) => fields
+                .iter()
+                .all(|f| f.type_expr.0.implements_to_string(type_env)),
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_to_string(type_env)),
             TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_to_string(type_env)),
             TypeExpr::Struct { name, type_params } => {

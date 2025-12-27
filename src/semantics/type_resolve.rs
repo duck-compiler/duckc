@@ -15,6 +15,7 @@ use crate::{
         extensions_def_parser::ExtensionsDef,
         failure_with_occurence,
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
+        generics_parser::Generic,
         jsx_component_parser::{
             Edit, JsxComponent, JsxComponentDependencies, JsxSourceUnit, do_edits,
         },
@@ -24,7 +25,8 @@ use crate::{
         test_parser::TestCase,
         type_parser::{Duck, TypeDefinition, TypeExpr},
         value_parser::{
-            Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
+            Assignment, Declaration, IntoBlock, IntoReturn, MatchArm, ValFmtStringContents,
+            ValHtmlStringContents, ValueExpr, empty_range,
         },
     },
     semantics::{
@@ -169,7 +171,38 @@ impl Default for TypeEnv<'_> {
             duckx_components: Vec::new(),
             jsx_component_dependencies: HashMap::new(),
             function_headers: HashMap::new(),
-            function_definitions: Vec::new(),
+            function_definitions: {
+                let mut v = Vec::new();
+                v.push(FunctionDefintion {
+                    name: "parse_json".to_string(),
+                    return_type: TypeExpr::Or(vec![
+                        TypeExpr::TemplParam("T".to_string()).into_empty_span(),
+                        TypeExpr::Tag("err".to_string()).into_empty_span(),
+                    ])
+                    .into_empty_span(),
+                    params: vec![(
+                        "json_str".to_string(),
+                        TypeExpr::String(None).into_empty_span(),
+                    )],
+                    value_expr: ValueExpr::InlineGo(
+                        String::new(),
+                        Some(TypeExpr::Never.into_empty_span()),
+                    )
+                    .into_empty_span()
+                    .into_block()
+                    .into_return(),
+                    generics: vec![(
+                        Generic {
+                            name: "T".to_string(),
+                            constraint: None,
+                        },
+                        empty_range(),
+                    )],
+                    span: empty_range(),
+                    comments: vec![],
+                });
+                v
+            },
             struct_definitions: Vec::new(),
             schema_defs: Vec::new(),
             named_duck_definitions: Vec::new(),
@@ -2916,6 +2949,10 @@ pub fn check_returns(
 
     types.retain(|t| !matches!(t.0.0, TypeExpr::Never));
 
+    for t in &mut types {
+        merge_all_or_type_expr(&mut t.0, type_env);
+    }
+
     for t in types {
         check_type_compatability(against, &t.0, type_env);
     }
@@ -2976,6 +3013,19 @@ fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: 
         ValueExpr::Return(inner) => {
             infer_against(inner.as_mut().unwrap(), req, type_env);
         }
+        ValueExpr::Duck(fields) => {
+            if let TypeExpr::Duck(Duck { fields: req_fields }) = &req.0 {
+                for field in fields {
+                    if let Some(req_field) = req_fields
+                        .iter()
+                        .find(|t| t.name.as_str() == field.0.as_str())
+                    {
+                        infer_against(&mut field.1, &req_field.type_expr, type_env);
+                    }
+                }
+                v.0 = ValueExpr::As(v.clone().into(), req.clone());
+            }
+        }
         ValueExpr::InlineGo(_, ty) => {
             if ty.is_none() {
                 *ty = Some(req.clone());
@@ -3017,20 +3067,6 @@ fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: 
         ValueExpr::Tuple(exprs) => {
             if let TypeExpr::Tuple(fields) = &req.0 {
                 for (e, ty) in exprs.iter_mut().zip(fields.iter()) {
-                    infer_against(e, ty, type_env);
-                }
-            }
-        }
-        ValueExpr::Duck(exprs) => {
-            if let TypeExpr::Duck(def_fields) = &req.0 {
-                for (
-                    (_, e),
-                    Field {
-                        name: _,
-                        type_expr: ty,
-                    },
-                ) in exprs.iter_mut().zip(def_fields.fields.iter())
-                {
                     infer_against(e, ty, type_env);
                 }
             }
@@ -3557,13 +3593,49 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
         unreachable!("only pass match exprs to this function")
     };
 
+    for arm in arms.iter_mut() {
+        merge_all_or_type_expr(&mut arm.type_case, type_env);
+    }
+
+    let mut replacements = Vec::new();
+
+    for (i, arm) in arms.clone().into_iter().enumerate() {
+        let span = arm.type_case.1;
+        let o = arm.type_case.clone();
+        if let TypeExpr::Or(v) = arm.type_case.0 {
+            let mut s = Vec::new();
+            for v in v {
+                s.push(MatchArm {
+                    type_case: v,
+                    base: Some(o.clone()),
+                    condition: arm.condition.clone(),
+                    identifier_binding: arm.identifier_binding.clone(),
+                    span,
+                    value_expr: arm.value_expr.clone(),
+                })
+            }
+            replacements.push((i, s));
+        }
+    }
+
+    for (i, replacements) in replacements.into_iter().rev() {
+        arms.remove(i);
+        for x in replacements.into_iter().rev() {
+            arms.insert(i, x);
+        }
+    }
+
     typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
     arms.iter_mut().for_each(|arm| {
         type_env.push_identifier_types();
         if let Some(identifier) = &arm.identifier_binding {
             type_env.insert_identifier_type(
                 identifier.clone(),
-                arm.type_case.0.clone(),
+                if let Some(base_type) = arm.base.as_ref().cloned() {
+                    base_type.0
+                } else {
+                    arm.type_case.0.clone()
+                },
                 false,
                 false,
             );
@@ -3583,7 +3655,11 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
             }
             type_env.insert_identifier_type(
                 identifier.clone(),
-                arm.type_case.0.clone(),
+                if let Some(base) = arm.base.as_ref().cloned() {
+                    base.0
+                } else {
+                    arm.type_case.0.clone()
+                },
                 false,
                 false,
             );
@@ -3707,6 +3783,54 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
     };
 
     unset_const_func_call_assign(target);
+
+    if false
+        && type_params.len() == 1
+        && let ValueExpr::Variable(_, name, var_ty, c, needs_copy) = &mut target.0
+    {
+        if name.as_str() == "parse_json" {
+            let first_type_param = &type_params[0];
+
+            if !first_type_param.0.implements_from_json(type_env) {
+                let msg = &format!(
+                    "{} does not implement FromJson",
+                    first_type_param.0.as_clean_user_faced_type_name()
+                );
+                failure_with_occurence(msg, first_type_param.1, [(msg, first_type_param.1)]);
+            }
+
+            if params.len() != 1 {
+                let msg = "parse_json takes exactly one string as parameter";
+                failure_with_occurence(msg, span, [(msg, span)]);
+            }
+
+            for p in params.iter_mut() {
+                typeresolve_value_expr((&mut p.0, span), type_env);
+            }
+
+            let ty = TypeExpr::from_value_expr(&params[0], type_env);
+            if !matches!(ty.0, TypeExpr::String(..)) {
+                let msg = &format!(
+                    "parse_json takes exactly one string as parameter. You provided a {}",
+                    ty.0.as_clean_user_faced_type_name()
+                );
+                failure_with_occurence(msg, span, [(msg, span)]);
+            }
+            *var_ty = Some(TypeExpr::Fun(
+                vec![(None, (TypeExpr::String(None), span))],
+                TypeExpr::Or(vec![
+                    type_params[0].clone(),
+                    TypeExpr::Tag("err".to_string()).into_empty_span(),
+                ])
+                .into_empty_span()
+                .into(),
+                false,
+            ));
+            *c = Some(false);
+            *needs_copy = false;
+            return;
+        }
+    }
 
     let header: FunHeader;
     if type_params.is_empty() {
@@ -3895,6 +4019,23 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                     )
                     .collect::<Vec<_>>()
                     .join(MANGLE_SEP);
+
+                if cloned_fn_def.name.as_str() == "parse_json" && type_params.len() == 1 {
+                    let go_code = format!(
+                        r#"
+                        obj, err := ({})
+                        if err != nil {{
+                            return Tag__err{{}}
+                        }}
+
+                        return obj
+                        "#,
+                        type_params[0].0.call_from_json("json_str", type_env)
+                    );
+                    cloned_fn_def.value_expr =
+                        ValueExpr::InlineGo(go_code, Some(cloned_fn_def.return_type.clone()))
+                            .into_empty_span_and_block_and_return();
+                }
 
                 cloned_fn_def.name = new_fn_name.clone();
                 cloned_fn_def.generics.clear();

@@ -10,6 +10,8 @@ use crate::{
     semantics::type_resolve::TypeEnv,
 };
 
+const JSON_UTILITIES: &'static str = include_str!("json_util.go");
+
 impl SourceFile {
     pub fn emit(
         mut self,
@@ -21,6 +23,7 @@ impl SourceFile {
 
         let mut go_imports = vec![];
         go_imports.push((None, "hash/maphash".to_string()));
+        go_imports.push((None, "errors".to_string()));
 
         let mut imports = HashSet::new();
 
@@ -249,6 +252,7 @@ impl SourceFile {
         for i in &mut instructions {
             fix_idents_in_ir(i, imports);
         }
+        instructions.push(IrInstruction::InlineGo(JSON_UTILITIES.to_string()));
         instructions
     }
 }
