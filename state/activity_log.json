@@ -1,5 +1,15 @@
 [
     {
+        "type": "closed",
+        "timestamp": "2025-12-27T00:37:30.664502",
+        "issue_id": "7aba35999532a01c0afe956b2420893e",
+        "issue_title": "FIND COMMON DECAYED TYPE",
+        "author_info": {
+            "name": "Robin F\u00fcllgraf",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
         "type": "created",
         "timestamp": "2025-12-25T19:26:03.366334",
         "issue_id": "97e4c6782e8f43cdda45068a1c8d47a5",
@@ -984,16 +994,6 @@
         "timestamp": "2025-07-09T23:15:12.304401",
         "issue_id": "ab171c08521638216687559985056db6",
         "issue_title": "move checks from typeresolve to typecheck",
-        "author_info": {
-            "name": "Maurice Schmidt",
-            "email": "mvmogo@gmail.com"
-        }
-    },
-    {
-        "type": "created",
-        "timestamp": "2025-07-09T23:15:12.304401",
-        "issue_id": "eafb30b0c424a5220951f6aa028f8a3d",
-        "issue_title": "typeinference",
         "author_info": {
             "name": "Maurice Schmidt",
             "email": "mvmogo@gmail.com"
