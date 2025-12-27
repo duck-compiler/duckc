@@ -473,6 +473,37 @@ pub fn emit_type_definitions(
 
                 let type_name = duck_type_expr.as_clean_go_type_name(type_env);
 
+                if duck_type_expr.implements_to_json(type_env) {
+                    let receiver = duck_type_expr.as_go_type_annotation(type_env);
+
+                    let mut string_parts = Vec::new();
+
+                    for f in fields.iter() {
+                        string_parts.push(format!(
+                            r#" "\"{}\": " + ({})"#,
+                            f.name,
+                            f.type_expr
+                                .0
+                                .call_to_json(&format!("self.Get{}()", f.name), type_env),
+                        ));
+                    }
+
+                    if string_parts.is_empty() {
+                        string_parts.push("\"\"".to_string());
+                    }
+
+                    result.push(IrInstruction::FunDef(
+                        format!("{type_name}_ToJson"),
+                        None,
+                        vec![("self".to_string(), receiver.clone())],
+                        Some("string".to_string()),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(format!(
+                            r#"fmt.Sprintf("{{%s}}", {})"#,
+                            string_parts.join(" + \",\" + ")
+                        ))))],
+                    ));
+                }
+
                 result.push(IrInstruction::StructDef(
                     type_name.clone(),
                     fields

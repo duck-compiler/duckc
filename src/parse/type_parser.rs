@@ -372,10 +372,9 @@ impl TypeExpr {
             TypeExpr::Bool(..) => format!("fmt.Sprintf(\"%t\", {param1})"),
             TypeExpr::Char => format!("fmt.Sprintf(\"%c\", {param1})"),
             TypeExpr::Tuple(..) => format!("{param1}.to_json()"),
-            TypeExpr::Array(..) => format!(
-                "{}_ToJson({param1})",
-                self.as_clean_go_type_name(type_env)
-            ),
+            TypeExpr::Array(..) => {
+                format!("{}_ToJson({param1})", self.as_clean_go_type_name(type_env))
+            }
             // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
             TypeExpr::Struct { .. } => format!("{param1}.to_json()"),
             TypeExpr::Tag(t) => format!(r#"fmt.Sprintf("\"{t}\"")"#),
@@ -496,12 +495,9 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_to_json(type_env),
             TypeExpr::Array(t) => t.0.implements_to_json(type_env),
-            TypeExpr::Duck(Duck { fields: _ }) => {
-                false
-                // && fields
-                //     .iter()
-                //     .all(|f| f.type_expr.0.implements_to_json(type_env))
-            }
+            TypeExpr::Duck(Duck { fields }) => fields
+                .iter()
+                .all(|f| f.type_expr.0.implements_to_json(type_env)),
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_to_json(type_env)),
             TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_to_json(type_env)),
             TypeExpr::Struct { name, type_params } => {
