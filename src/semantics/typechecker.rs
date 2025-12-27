@@ -14,7 +14,7 @@ use crate::parse::{
     value_parser::{ValFmtStringContents, ValueExpr},
 };
 use crate::semantics::ident_mangler::{MANGLE_SEP, mangle};
-use crate::semantics::type_resolve::{TypeEnv, is_const_var};
+use crate::semantics::type_resolve::{TypeEnv, is_const_var, merge_all_or_type_expr};
 
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
@@ -121,19 +121,13 @@ impl TypeExpr {
                     }
                 }
                 ValueExpr::As(v, t) => {
-                    if let ValueExpr::Array(exprs) = &v.0
-                        && exprs.is_empty()
-                    {
-                        t.0.clone()
-                    } else {
-                        let v_type = TypeExpr::from_value_expr(v.as_ref(), type_env);
+                    let v_type = TypeExpr::from_value_expr(v.as_ref(), type_env);
 
-                        if v_type.0.is_never() {
-                            TypeExpr::Never
-                        } else {
-                            check_type_compatability(t, &(v_type.0, v.1), type_env);
-                            t.0.clone()
-                        }
+                    if v_type.0.is_never() {
+                        TypeExpr::Never
+                    } else {
+                        check_type_compatability(t, &(v_type.0, v.1), type_env);
+                        t.0.clone()
                     }
                 }
                 ValueExpr::For { .. } => TypeExpr::Statement,
@@ -209,66 +203,7 @@ impl TypeExpr {
                         array_type.0.clone()
                     }
                 }
-                ValueExpr::Array(value_exprs) => {
-                    if value_exprs.is_empty() {
-                        let t = String::from("empty array must be wrapped in as expression");
-                        failure_with_occurence(
-                            t.clone(),
-                            *complete_span,
-                            [(t.clone(), *complete_span)],
-                        );
-                    }
-
-                    let mut variants = Vec::new();
-                    for value_expr in value_exprs {
-                        let element_type = (
-                            TypeExpr::from_value_expr(value_expr, type_env),
-                            value_expr.1,
-                        );
-
-                        if element_type.0.0.is_never() {
-                            return (TypeExpr::Never, *complete_span);
-                        }
-
-                        variants.push(element_type.0);
-                    }
-
-                    variants.sort_by_key(|value_expr| value_expr.0.as_clean_go_type_name(type_env));
-                    variants
-                        .dedup_by_key(|value_expr| value_expr.0.as_clean_go_type_name(type_env));
-
-                    if variants.len() > 1 {
-                        let start = variants
-                            .first()
-                            .expect("we've just checked that variants is at least 2 items long");
-                        let end = variants
-                            .last()
-                            .expect("we've just checked that variants is at least 2 items long");
-
-                        let combined_span = SS {
-                            context: start.1.context,
-                            start: start.1.start,
-                            end: end.1.end,
-                        };
-
-                        return (
-                            TypeExpr::Array(Box::new((TypeExpr::Or(variants), combined_span))),
-                            combined_span,
-                        );
-                    }
-
-                    if variants.is_empty() {
-                        panic!(
-                            "Internal Compiler Error: variants shouldn't ever be empty, as this is a syntax error."
-                        );
-                    }
-
-                    let first_type = variants
-                        .first()
-                        .expect("we've checked that variants is exactly of len 1");
-
-                    TypeExpr::Array(Box::new(first_type.clone()))
-                }
+                ValueExpr::Array(_, ty) => TypeExpr::Array(ty.as_ref().cloned().unwrap().into()),
                 ValueExpr::Lambda(lambda_expr) => TypeExpr::Fun(
                     lambda_expr
                         .params
@@ -812,25 +747,20 @@ impl TypeExpr {
 
                     let then_type_expr = TypeExpr::from_value_expr(then, type_env);
                     if let Some(r#else) = r#else {
-                        // TODO: FIND COMMON DECAYED TYPE
                         let else_type_expr = TypeExpr::from_value_expr(r#else, type_env);
 
                         if then_type_expr.0.is_never() && else_type_expr.0.is_never() {
                             return (TypeExpr::Never, *complete_span);
                         }
 
-                        let mut both = vec![then_type_expr, else_type_expr];
-                        both.retain(|t| !t.0.is_never());
-                        both.dedup_by_key(|x| x.0.type_id(type_env));
-                        if both.len() > 1 {
-                            return (
-                                TypeExpr::Or(
-                                    both.into_iter().map(|x| x.0.into_empty_span()).collect(),
-                                ),
-                                *complete_span,
-                            );
-                        }
-                        return both[0].clone();
+                        let mut both = (
+                            TypeExpr::Or(vec![then_type_expr, else_type_expr]),
+                            *complete_span,
+                        );
+
+                        merge_all_or_type_expr(&mut both, type_env);
+
+                        return both;
                     }
 
                     TypeExpr::Statement

@@ -620,7 +620,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
                 }
             }
         }
-        ValueExpr::Array(exprs) => {
+        ValueExpr::Array(exprs, _ty) => {
             for expr in exprs {
                 append_global_prefix_value_expr(&mut expr.0, mangle_env);
             }

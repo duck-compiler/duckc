@@ -1394,7 +1394,7 @@ impl TypeExpr {
         return match self {
             TypeExpr::Statement => "Statement".to_string(),
             TypeExpr::Never => "Never".to_string(),
-            TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
+            TypeExpr::TemplParam(name) => panic!("templ param should not be here {name}"),
             TypeExpr::Ref(t) => format!("Ref_{}", t.0.type_id(type_env)),
             TypeExpr::RefMut(t) => format!("RefMut_{}", t.0.type_id(type_env)),
             TypeExpr::Html => "Html".to_string(),

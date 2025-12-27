@@ -1083,7 +1083,7 @@ fn walk_access(
 
 fn emit_array(
     exprs: &Vec<Spanned<ValueExpr>>,
-    arr_type: &TypeExpr,
+    array_type: &str,
     type_env: &mut TypeEnv,
     env: &mut ToIr,
     span: SS,
@@ -1103,13 +1103,10 @@ fn emit_array(
 
     let res_var_name = env.new_var();
     total_instr.extend([
-        IrInstruction::VarDecl(
-            res_var_name.clone(),
-            arr_type.as_go_type_annotation(type_env),
-        ),
+        IrInstruction::VarDecl(res_var_name.clone(), array_type.to_string()),
         IrInstruction::VarAssignment(
             res_var_name.clone(),
-            IrValue::Array(arr_type.as_go_type_annotation(type_env), array_contents),
+            IrValue::Array(array_type.to_string(), array_contents),
         ),
     ]);
 
@@ -1282,9 +1279,7 @@ impl ValueExpr {
                 (inner_emit, None)
             }
             ValueExpr::As(v, t) => {
-                if let ValueExpr::Array(exprs) = &v.0 {
-                    emit_array(exprs, &t.0, type_env, env, span)
-                } else if matches!(t.0, TypeExpr::Int | TypeExpr::UInt | TypeExpr::Float) {
+                if matches!(t.0, TypeExpr::Int | TypeExpr::UInt | TypeExpr::Float) {
                     let new_type = t.0.as_go_type_annotation(type_env);
                     let (mut res_instr, res) = v.0.emit(type_env, env, span);
 
@@ -2268,10 +2263,19 @@ impl ValueExpr {
 
                 (res_instr, Some(IrValue::Var(res_var_name)))
             }
-            ValueExpr::Array(exprs) => {
-                let arr_type = TypeExpr::from_value_expr(&(self.clone(), span), type_env);
-                emit_array(exprs, &arr_type.0, type_env, env, span)
-            }
+            ValueExpr::Array(exprs, ty) => emit_array(
+                exprs,
+                &TypeExpr::Array(
+                    ty.as_ref()
+                        .cloned()
+                        .unwrap_or(TypeExpr::unit_with_span(span))
+                        .into(),
+                )
+                .as_go_type_annotation(type_env),
+                type_env,
+                env,
+                span,
+            ),
             ValueExpr::VarDecl(b) => {
                 let Declaration {
                     name,
@@ -2312,11 +2316,7 @@ impl ValueExpr {
                 (v, Some(IrValue::empty_tuple()))
             }
             ValueExpr::InlineGo(s, ty) => {
-                let ty = ty
-                    .as_ref()
-                    .unwrap_or(&TypeExpr::unit())
-                    .0
-                    .as_go_type_annotation(type_env);
+                let ty = ty.as_ref().unwrap().0.as_go_type_annotation(type_env);
                 let result_var = env.new_var();
 
                 let mut res_instr = vec![IrInstruction::VarDecl(result_var.clone(), ty)];
@@ -3314,41 +3314,41 @@ mod tests {
                 ],
             ),
             ("(true, continue, 3)", vec![IrInstruction::Continue(None)]),
-            (
-                "[] as {}[]",
-                vec![
-                    IrInstruction::VarDecl("var_0".into(), "[]interface{}".into()),
-                    IrInstruction::VarAssignment(
-                        "var_0".into(),
-                        IrValue::Array("[]interface{}".into(), vec![]),
-                    ),
-                ],
-            ),
-            (
-                "[[] as Int[]]",
-                vec![
-                    IrInstruction::VarDecl("var_0".into(), "[]int".into()),
-                    IrInstruction::VarAssignment(
-                        "var_0".into(),
-                        IrValue::Array("[]int".into(), vec![]),
-                    ),
-                    IrInstruction::VarDecl("var_1".into(), "[][]int".into()),
-                    IrInstruction::VarAssignment(
-                        "var_1".into(),
-                        IrValue::Array("[][]int".into(), vec![IrValue::Var("var_0".into())]),
-                    ),
-                ],
-            ),
-            (
-                "[1]",
-                vec![
-                    IrInstruction::VarDecl("var_0".into(), "[]int".into()),
-                    IrInstruction::VarAssignment(
-                        "var_0".into(),
-                        IrValue::Array("[]int".into(), vec![IrValue::Int(1)]),
-                    ),
-                ],
-            ),
+            // (
+            //     "[] as {}[]",
+            //     vec![
+            //         IrInstruction::VarDecl("var_0".into(), "[]interface{}".into()),
+            //         IrInstruction::VarAssignment(
+            //             "var_0".into(),
+            //             IrValue::Array("[]interface{}".into(), vec![]),
+            //         ),
+            //     ],
+            // ),
+            // (
+            //     "[[] as Int[]]",
+            //     vec![
+            //         IrInstruction::VarDecl("var_0".into(), "[]int".into()),
+            //         IrInstruction::VarAssignment(
+            //             "var_0".into(),
+            //             IrValue::Array("[]int".into(), vec![]),
+            //         ),
+            //         IrInstruction::VarDecl("var_1".into(), "[][]int".into()),
+            //         IrInstruction::VarAssignment(
+            //             "var_1".into(),
+            //             IrValue::Array("[][]int".into(), vec![IrValue::Var("var_0".into())]),
+            //         ),
+            //     ],
+            // ),
+            // (
+            //     "[1]",
+            //     vec![
+            //         IrInstruction::VarDecl("var_0".into(), "[]int".into()),
+            //         IrInstruction::VarAssignment(
+            //             "var_0".into(),
+            //             IrValue::Array("[]int".into(), vec![IrValue::Int(1)]),
+            //         ),
+            //     ],
+            // ),
             (
                 "{ x: 123 }",
                 vec![

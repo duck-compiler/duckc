@@ -451,7 +451,7 @@ pub fn mangle_value_expr(
                 }
             }
         }
-        ValueExpr::Array(exprs) => {
+        ValueExpr::Array(exprs, _ty) => {
             for expr in exprs {
                 mangle_value_expr(&mut expr.0, global_prefix, prefix, mangle_env);
             }
