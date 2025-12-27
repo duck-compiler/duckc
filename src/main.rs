@@ -528,7 +528,7 @@ fn write_in_duck_dotdir(file_name: &str, content: &str) -> PathBuf {
     target_file
 }
 
-fn duck_with_message(msg: &str) {
+pub fn duck_with_message(msg: &str) {
     println!(
         "{}\n{}{}{}  {msg}\n{}",
         " _,".bright_yellow().bold(),
