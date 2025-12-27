@@ -31,8 +31,8 @@ struct Cmd {
         }
     }
 
-    mut fn dir(path: String) -> &mut Cmd {
-        self.cwd = path;
+    mut fn dir(p: String) -> &mut Cmd {
+        self.cwd = p;
         return self;
     }
 
