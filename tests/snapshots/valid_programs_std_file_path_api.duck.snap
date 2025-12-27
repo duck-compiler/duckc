@@ -1,4 +1,4 @@
 {
-    "stdout": "\u001b[32msuccess caught error: open /sys/duck_test.txt.tmp: no such file or directory\u001b[0m\n\u001b[32mall file tests have passed\u001b[0m\n",
+    "stdout": "\u001b[32msuccess caught error\u001b[0m\n\u001b[32mall file tests have passed\u001b[0m\n",
     "stderr": ""
 }

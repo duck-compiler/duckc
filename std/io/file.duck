@@ -5,10 +5,10 @@ use ::col::{Iter};
 struct File {
     file_ref: &go "os.File",
 } impl {
-    static fn new(path: String) -> File | .err {
+    static fn new(p: String) -> File | .err {
         let file_ref_or_err: &go "os.File";
         go {
-            file, err := os.Create(path);
+            file, err := os.Create(p);
             if err != nil {
                 return Tag__err{}
             }
