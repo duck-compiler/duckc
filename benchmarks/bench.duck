@@ -1,0 +1,56 @@
+use std::io::{println, debug, File};
+use std::path::{FilePath};
+use std::cmd::{Cmd, Process};
+use std::time::{Duration};
+
+const RESULTS_PATH: FilePath = FilePath::new("./results/");
+
+fn start_command_and_oha_against(
+    bench_name: String,
+    cmd: &mut Cmd,
+    port: Int,
+) -> .err | .none {
+    let proc = match cmd.spawn() {
+        Process @proc => proc,
+        else => return .err,
+    };
+
+    std::task::sleep(Duration::seconds(5));
+
+    let json_output: String = match Cmd::exec(f"oha http://localhost:{port.to_string()} -n 500000 --output-format json") {
+        String @str => str,
+        else => {
+            println("error :(");
+            return .err;
+        },
+    };
+
+    RESULTS_PATH.join(f"{bench_name.replace(" ", "-")}.json")
+        .ensure_dir()
+        .write(json_output);
+
+    proc.kill();
+    std::task::sleep(Duration::seconds(1));
+
+    return .none;
+}
+
+fn main() {
+    let dargo_http_hello_world = Cmd::new("dargo")
+        .arg("run")
+        .dir("./http_hello_world/");
+
+    let bun_fastify_http_hello_world = Cmd::new("bun")
+        .arg("run")
+        .arg("src/fastify.js")
+        .dir("./http_hello_world/");
+
+    let bun_express_js_http_hello_world = Cmd::new("bun")
+        .arg("run")
+        .arg("src/express.js")
+        .dir("./http_hello_world/");
+
+    start_command_and_oha_against("duck http - hello world", dargo_http_hello_world, 3000);
+    start_command_and_oha_against("bun fastify - hello world", bun_fastify_http_hello_world, 3001);
+    start_command_and_oha_against("bun express.js - hello world", bun_express_js_http_hello_world, 3002);
+}

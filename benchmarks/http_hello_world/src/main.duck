@@ -1,0 +1,8 @@
+use std::http;
+use std::io::{println};
+
+fn main() {
+    std::http::serve_string("/", "hello, world");
+    println("listening on port 8080");
+    let http_server = std::http::listen(3000);
+}
