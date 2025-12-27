@@ -1,0 +1,31 @@
+use std::io::println;
+use std::col::Iter;
+
+struct AL<T> {
+    e: T[][],
+} impl {
+    static fn new<T>() -> AL<T> {
+        AL {
+            e: [[]]
+        }
+    }
+
+    static fn new2<T>(x: T) -> AL<T> {
+        AL {
+            e: [[x]],
+        }
+    }
+}
+
+fn main() {
+    const z = "abc";
+    const z = "xyz";
+    println(z.to_string());
+    let i = Iter::from<String | Int>(fn() -> String | Int | .no_next_elem {
+        12
+    });
+
+    let z: AL<String> = AL {e: []};
+    const z = AL::new2(100);
+
+}

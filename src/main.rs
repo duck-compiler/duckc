@@ -343,7 +343,7 @@ fn parse_src_file(
             ValueExpr::FieldAccess { target_obj, .. } => {
                 typename_reset_global_value_expr(&mut target_obj.0);
             }
-            ValueExpr::Array(exprs) => {
+            ValueExpr::Array(exprs, _ty) => {
                 for expr in exprs {
                     typename_reset_global_value_expr(&mut expr.0);
                 }
