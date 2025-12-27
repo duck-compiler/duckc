@@ -493,6 +493,14 @@ fn walk_access_raw(
                     && target_field_type.0.implements_to_json(type_env)
                     {
                         match target_field_type.clone().0 {
+                            TypeExpr::Duck(..) => {
+                                flag = Some((
+                                    format!("{clean_go_type_name}_ToJson("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
                             TypeExpr::Array(..) => {
                                 flag = Some((
                                     format!("{clean_go_type_name}_ToJson("),
