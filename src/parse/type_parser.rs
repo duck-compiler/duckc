@@ -910,7 +910,22 @@ where
                 (res.0, e.span())
             });
 
-            ref_parser
+            let and_parser = ref_parser
+                .separated_by(just(Token::ControlChar('&')))
+                .at_least(1)
+                .collect::<Vec<Spanned<TypeExpr>>>()
+                .map_with(|elements, e| {
+                    if elements.len() == 1 {
+                        elements.into_iter().next().unwrap()
+                    } else {
+                        let mut elems = Vec::new();
+                        let expr = (TypeExpr::And(elements), e.span());
+                        merge_and(&expr, &mut elems);
+                        (TypeExpr::And(elems), e.span())
+                    }
+                });
+
+            let union_expr = and_parser
                 .separated_by(just(Token::ControlChar('|')))
                 .at_least(1)
                 .collect::<Vec<Spanned<TypeExpr>>>()
@@ -923,7 +938,9 @@ where
                         merge_or(&expr, &mut elems);
                         (TypeExpr::Or(elems), e.span())
                     }
-                })
+                });
+
+            union_expr
         },
     )
 }
@@ -1123,7 +1140,22 @@ where
                 (res.0, e.span())
             });
 
-            let union_expr = ref_parser
+            let and_parser = ref_parser
+                .separated_by(just(Token::ControlChar('&')))
+                .at_least(1)
+                .collect::<Vec<Spanned<TypeExpr>>>()
+                .map_with(|elements, e| {
+                    if elements.len() == 1 {
+                        elements.into_iter().next().unwrap()
+                    } else {
+                        let mut elems = Vec::new();
+                        let expr = (TypeExpr::And(elements), e.span());
+                        merge_and(&expr, &mut elems);
+                        (TypeExpr::And(elems), e.span())
+                    }
+                });
+
+            let union_expr = and_parser
                 .separated_by(just(Token::ControlChar('|')))
                 .at_least(1)
                 .collect::<Vec<Spanned<TypeExpr>>>()
@@ -1139,19 +1171,6 @@ where
                 });
 
             union_expr
-                .separated_by(just(Token::ControlChar('&')))
-                .at_least(1)
-                .collect::<Vec<Spanned<TypeExpr>>>()
-                .map_with(|elements, e| {
-                    if elements.len() == 1 {
-                        elements.into_iter().next().unwrap()
-                    } else {
-                        let mut elems = Vec::new();
-                        let expr = (TypeExpr::And(elements), e.span());
-                        merge_and(&expr, &mut elems);
-                        (TypeExpr::And(elems), e.span())
-                    }
-                })
         },
     )
 }
@@ -2318,6 +2337,36 @@ pub mod tests {
                 .into_empty_span()
                 .into(),
             ),
+        );
+
+        assert_type_expression(
+            "{x: Int} & {y: String} | {z: Int}",
+            TypeExpr::Or(vec![
+                TypeExpr::And(vec![
+                    TypeExpr::Duck(Duck {
+                        fields: vec![Field {
+                            name: "x".to_string(),
+                            type_expr: TypeExpr::Int.into_empty_span(),
+                        }],
+                    })
+                    .into_empty_span(),
+                    TypeExpr::Duck(Duck {
+                        fields: vec![Field {
+                            name: "y".to_string(),
+                            type_expr: TypeExpr::String(None).into_empty_span(),
+                        }],
+                    })
+                    .into_empty_span(),
+                ])
+                .into_empty_span(),
+                TypeExpr::Duck(Duck {
+                    fields: vec![Field {
+                        name: "z".to_string(),
+                        type_expr: TypeExpr::Int.into_empty_span(),
+                    }],
+                })
+                .into_empty_span(),
+            ]),
         );
 
         assert_type_expression(

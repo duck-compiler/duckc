@@ -6,3 +6,10 @@ fn panic(m: {}) -> ! {
         os.Exit(1)
     } as !
 }
+
+fn unreachable(s: String) -> ! {
+    std::io::println(f"logic error [unreachable reached]: {s}");
+    go {
+        os.Exit(1)
+    } as !
+}

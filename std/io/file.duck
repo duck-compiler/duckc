@@ -81,7 +81,7 @@ struct File {
                 }
                 line := scanner.Text()
                 return line
-            };
+            } as !
         };
 
         Iter::from<String>(next_fn)

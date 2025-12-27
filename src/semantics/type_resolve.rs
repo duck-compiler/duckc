@@ -823,12 +823,10 @@ fn build_tuples_and_ducks_value_expr_trav_fn(
             };
             out.borrow_mut().push(NeedsSearchResult::Tuple { fields });
         }
-        ValueExpr::Array(exprs) if !exprs.is_empty() => {
-            let TypeExpr::Array(t) = TypeExpr::from_value_expr(v, env).0 else {
-                panic!()
-            };
-            out.borrow_mut()
-                .push(NeedsSearchResult::Array { type_expr: *t });
+        ValueExpr::Array(.., ty) => {
+            out.borrow_mut().push(NeedsSearchResult::Array {
+                type_expr: ty.as_ref().cloned().unwrap(),
+            });
         }
         _ => {}
     }
@@ -1069,7 +1067,7 @@ pub fn trav_value_expr_with_cancel<F1, F2, F3>(
         ValueExpr::Async(v) => {
             trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), v, env, cancel.clone());
         }
-        ValueExpr::Array(exprs) => {
+        ValueExpr::Array(exprs, _ty) => {
             for v in exprs {
                 trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), v, env, cancel.clone());
             }
@@ -1170,6 +1168,72 @@ pub fn trav_value_expr_with_cancel<F1, F2, F3>(
     }
 }
 
+pub fn merge_all_or_type_expr(v: &mut Spanned<TypeExpr>, env: &mut TypeEnv) {
+    trav_type_expr(trav_fn_merge_or(), v, env);
+}
+
+pub fn merge_all_or_value_expr(v: &mut Spanned<ValueExpr>, env: &mut TypeEnv) {
+    trav_value_expr(trav_fn_merge_or(), |_, _| {}, v, env);
+}
+
+fn trav_fn_merge_or() -> impl Fn(&mut Spanned<TypeExpr>, &mut TypeEnv) + Clone {
+    |node, env| match &node.0 {
+        TypeExpr::Or(..) => {
+            let mut out = Vec::new();
+            let mut seen = HashSet::new();
+
+            fn do_it(
+                current: &mut Spanned<TypeExpr>,
+                out: &mut Vec<Spanned<TypeExpr>>,
+                seen: &mut HashSet<String>,
+                env: &mut TypeEnv,
+            ) -> bool {
+                if let TypeExpr::Or(or_contents) = &mut current.0 {
+                    for x in or_contents {
+                        if do_it(x, out, seen, env) {
+                            return true;
+                        }
+                    }
+                } else {
+                    let contains_templ_param = Cell::new(false);
+                    trav_type_expr(
+                        |v, _| {
+                            if matches!(
+                                v.0,
+                                TypeExpr::TypeName(..)
+                                    | TypeExpr::RawTypeName(..)
+                                    | TypeExpr::TemplParam(..)
+                            ) {
+                                contains_templ_param.set(true);
+                            }
+                        },
+                        current,
+                        env,
+                    );
+                    if contains_templ_param.get() {
+                        return true;
+                    }
+                    let ty_id = current.0.type_id(env);
+                    if seen.insert(ty_id) {
+                        out.push(current.clone());
+                    }
+                }
+
+                false
+            }
+
+            if !do_it(node, &mut out, &mut seen, env) {
+                if out.len() >= 2 {
+                    node.0 = TypeExpr::Or(out);
+                } else {
+                    node.0 = out.into_iter().next().unwrap().0;
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 fn trav_fn_replace_intersections() -> impl Fn(&mut Spanned<TypeExpr>, &mut TypeEnv) + Clone {
     |node, env| {
         let span = node.1;
@@ -1180,7 +1244,7 @@ fn trav_fn_replace_intersections() -> impl Fn(&mut Spanned<TypeExpr>, &mut TypeE
                 fn do_it(
                     sub_types: &[Spanned<TypeExpr>],
                     found_fields: &mut HashMap<String, Spanned<TypeExpr>>,
-                    env: &mut TypeEnv
+                    env: &mut TypeEnv,
                 ) {
                     for sub_type in sub_types.iter() {
                         if matches!(sub_type.0, TypeExpr::Any) {
@@ -1292,6 +1356,7 @@ fn resolve_all_aliases_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv
         env,
     );
     resolve_all_intersection_type_expr(expr, env);
+    merge_all_or_type_expr(expr, env);
 }
 
 fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeEnv) {
@@ -1341,6 +1406,7 @@ fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeE
         env,
     );
     resolve_all_intersection_value_expr(expr, env);
+    merge_all_or_value_expr(expr, env);
 }
 
 fn process_keyof_in_value_expr(expr: &mut Spanned<ValueExpr>, type_env: &mut TypeEnv) {
@@ -1426,16 +1492,19 @@ fn replace_generics_in_struct_definition(
 ) {
     for f in def.fields.iter_mut() {
         replace_generics_in_type_expr(&mut f.type_expr.0, generics, type_env);
+        resolve_all_aliases_type_expr(&mut f.type_expr, type_env);
     }
 
     for m in def.methods.iter_mut() {
-        for t in [&mut m.return_type.0]
+        for t in [&mut m.return_type]
             .into_iter()
-            .chain(m.params.iter_mut().map(|x| &mut x.1.0))
+            .chain(m.params.iter_mut().map(|x| &mut x.1))
         {
-            replace_generics_in_type_expr(t, generics, type_env);
+            replace_generics_in_type_expr(&mut t.0, generics, type_env);
+            resolve_all_aliases_type_expr(t, type_env);
         }
         replace_generics_in_value_expr(&mut m.value_expr.0, generics, type_env);
+        resolve_all_aliases_value_expr(&mut m.value_expr, type_env);
     }
 }
 
@@ -1451,8 +1520,10 @@ fn replace_generics_in_function_definition(
         .chain([&mut t.return_type].into_iter())
     {
         replace_generics_in_type_expr(&mut t.0, set_params, type_env);
+        resolve_all_aliases_type_expr(t, type_env);
     }
     replace_generics_in_value_expr(&mut t.value_expr.0, set_params, type_env);
+    resolve_all_aliases_value_expr(&mut t.value_expr, type_env);
 }
 
 fn replace_generics_in_value_expr(
@@ -1513,7 +1584,7 @@ fn replace_generics_in_value_expr(
         ValueExpr::Negate(e) | ValueExpr::BoolNegate(e) | ValueExpr::Return(Some(e)) => {
             replace_generics_in_value_expr(&mut e.0, set_params, type_env)
         }
-        ValueExpr::Array(exprs) => {
+        ValueExpr::Array(exprs, _ty) => {
             for e in exprs {
                 replace_generics_in_value_expr(&mut e.0, set_params, type_env);
             }
@@ -1971,7 +2042,7 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
                 }
             }
         }
-        ValueExpr::Array(exprs) => {
+        ValueExpr::Array(exprs, _ty) => {
             for expr in exprs {
                 sort_fields_value_expr(&mut expr.0);
             }
@@ -2814,6 +2885,12 @@ fn typeresolve_function_definition(
         type_env.insert_identifier_type(p.0.clone(), p.1.0.clone(), false, false);
     }
 
+    infer_against_returns(
+        &mut function_definition.value_expr,
+        &function_definition.return_type,
+        type_env,
+    );
+
     typeresolve_value_expr(
         (
             &mut function_definition.value_expr.0,
@@ -2844,12 +2921,37 @@ pub fn check_returns(
     }
 }
 
-pub fn find_returns(v: &mut Spanned<ValueExpr>, env: &mut TypeEnv) -> Vec<Spanned<ValueExpr>> {
-    let out = Rc::new(RefCell::new(Vec::new()));
-    let out2 = out.clone();
+pub fn infer_against_returns<'a>(
+    v: &mut Spanned<ValueExpr>,
+    target_type: &Spanned<TypeExpr>,
+    env: &mut TypeEnv,
+) {
     trav_value_expr_with_cancel(
         |_, _| {},
-        move |v, _| {
+        |v, env| {
+            if let ValueExpr::Return(i) = &mut v.0
+                && let Some(i) = i.as_mut()
+            {
+                infer_against(i, target_type, env);
+            }
+        },
+        v,
+        env,
+        |v, _| {
+            if matches!(v.0, ValueExpr::Lambda(..)) {
+                TravControlFlow::Cancel
+            } else {
+                TravControlFlow::Continue
+            }
+        },
+    );
+}
+
+pub fn find_returns(v: &mut Spanned<ValueExpr>, env: &mut TypeEnv) -> Vec<Spanned<ValueExpr>> {
+    let out = RefCell::new(Vec::new());
+    trav_value_expr_with_cancel(
+        |_, _| {},
+        |v, _| {
             if let ValueExpr::Return(i) = &mut v.0
                 && let Some(i) = i.as_ref().cloned()
             {
@@ -2866,14 +2968,32 @@ pub fn find_returns(v: &mut Spanned<ValueExpr>, env: &mut TypeEnv) -> Vec<Spanne
             }
         },
     );
-    out2.borrow().to_vec()
+    out.take()
 }
 
 fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: &TypeEnv) {
     match &mut v.0 {
+        ValueExpr::Return(inner) => {
+            infer_against(inner.as_mut().unwrap(), req, type_env);
+        }
         ValueExpr::InlineGo(_, ty) => {
             if ty.is_none() {
                 *ty = Some(req.clone());
+            }
+        }
+        ValueExpr::Struct {
+            name,
+            fields: _,
+            type_params,
+        } => {
+            if let TypeExpr::Struct {
+                name: req_name,
+                type_params: req_type_params,
+            } = &req.0
+            {
+                if name.as_str() == req_name.as_str() && type_params.is_empty() {
+                    *type_params = req_type_params.to_vec();
+                }
             }
         }
         ValueExpr::Int(_, ty) => {
@@ -2886,10 +3006,12 @@ fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: 
                 infer_against(target, next_ty, type_env);
             }
         }
-        ValueExpr::Array(..) => {
-            if let TypeExpr::Array(..) = &req.0 {
-                let cloned = v.clone();
-                v.0 = ValueExpr::As(Box::new(cloned), req.clone());
+        ValueExpr::Array(exprs, v_t) => {
+            if let TypeExpr::Array(req_t) = &req.0 {
+                *v_t = Some(req_t.as_ref().clone());
+                for expr in exprs {
+                    infer_against(expr, req_t, type_env);
+                }
             }
         }
         ValueExpr::Tuple(exprs) => {
@@ -3073,6 +3195,10 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     }
                     _ => {}
                 }
+            } else if let ValueExpr::Array(_, ty) = &mut v.0
+                && let TypeExpr::Array(ct) = &t.0
+            {
+                *ty = Some(ct.as_ref().clone());
             }
 
             typeresolve_value_expr((&mut v.0, v.1), type_env);
@@ -3261,12 +3387,30 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             typeresolve_value_expr((&mut target.0, target.1), type_env);
             typeresolve_value_expr((&mut idx.0, idx.1), type_env);
         }
-        ValueExpr::Array(exprs) => {
-            if exprs.is_empty() {
-                return;
-            }
+        ValueExpr::Array(exprs, given_type) => {
+            let mut found_types = Vec::new();
             for expr in exprs {
+                if let Some(given_type) = given_type.as_ref() {
+                    infer_against(expr, given_type, type_env);
+                }
+
                 typeresolve_value_expr((&mut expr.0, expr.1), type_env);
+                let ty = TypeExpr::from_value_expr(expr, type_env);
+
+                if let Some(given_type) = given_type.as_ref() {
+                    check_type_compatability(&given_type, &ty, type_env);
+                }
+                found_types.push(ty);
+            }
+
+            if given_type.is_none() {
+                if found_types.is_empty() {
+                    let msg = "empty array must be wrapped in as expression";
+                    failure_with_occurence(msg, *span, [(msg, *span)]);
+                }
+                let mut as_or = (TypeExpr::Or(found_types), *span);
+                merge_all_or_type_expr(&mut as_or, type_env);
+                *given_type = Some(as_or);
             }
         }
         ValueExpr::InlineGo(_, ty) => {
@@ -4105,6 +4249,8 @@ fn typeresolve_var_assign(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     unset_const_var_assign(&mut assignment.0.target);
     let target_type = TypeExpr::from_value_expr(&assignment.0.target, type_env);
 
+    infer_against(&mut assignment.0.value_expr, &target_type, type_env);
+
     typeresolve_value_expr(
         (&mut assignment.0.value_expr.0, assignment.0.value_expr.1),
         type_env,
@@ -4358,6 +4504,10 @@ fn typeresolve_lambda(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
         *return_type = Some((TypeExpr::Tuple(vec![]), value_expr.1));
     }
 
+    infer_against_returns(value_expr, return_type.as_ref().unwrap(), type_env);
+
     typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
     type_env.pop_identifier_types();
+
+    check_returns(return_type.as_ref().unwrap(), value_expr, type_env);
 }
