@@ -1,9 +1,26 @@
 use ::col::{ArrayList};
 use go "os/exec";
+use go "os";
+
+struct Process {
+    inner: &go "os.Process"
+} impl {
+    fn kill() -> .err | .none {
+        go {
+            err := (*self).inner.Kill()
+            if err != nil {
+            	return Tag__err {}
+            }
+
+            return Tag__none {}
+        } as !
+    }
+}
 
 struct Cmd {
     program: String,
     cmd_args: ::col::ArrayList<String>,
+    cwd: String | .none,
 } impl {
     static fn new(
         program: String
@@ -12,6 +29,11 @@ struct Cmd {
             program: program,
             cmd_args: std::col::ArrayList::new<String>(),
         }
+    }
+
+    mut fn dir(path: String) -> &mut Cmd {
+        self.cwd = path;
+        return self;
     }
 
     static fn exec(
@@ -30,37 +52,71 @@ struct Cmd {
            .run();
     }
 
-    mut fn arg(arg: String) -> &Cmd {
+    mut fn arg(arg: String) -> &mut Cmd {
         self.cmd_args.push(arg);
         return self;
     }
 
-    mut fn args(_args: String[]) -> &Cmd {
+    mut fn args(_args: String[]) -> &mut Cmd {
         for (arg in _args.iter()) {
             self.cmd_args.push(*arg);
         }
         return self;
     }
 
+    fn spawn() -> Process | .err {
+        let process: &go "os.Process" = go {
+            cmd := exec.Command((*self).program, (*self).cmd_args.elems...)
+            if dir, ok := (*self).cwd.(string); ok {
+            	cmd.Dir = dir
+            }
+
+            cmd.Stdout = os.Stdout
+            cmd.Stderr = os.Stderr
+
+            err := cmd.Start()
+            if err != nil {
+            	return Tag__err {}
+            }
+
+            $ = cmd.Process
+        };
+
+        return Process { inner: process }
+    }
+
     fn run() -> String | .err {
         go {
-            out, err := exec.Command((*self).program, (*self).cmd_args.elems...).Output()
+            cmd := exec.Command((*self).program, (*self).cmd_args.elems...)
+
+            if dir, ok := (*self).cwd.(string); ok {
+            	cmd.Dir = dir
+            }
+
+            out, err := cmd.CombinedOutput()
             if err != nil {
                 return Tag__err { }
             }
 
+            fmt.Println("here is the output %s", string(out))
             return string(out)
         }
     }
 
     fn run_and_forget() -> .err | .none {
         go {
-            err := exec.Command((*self).program, (*self).cmd_args.elems...).Run()
+            cmd := exec.Command((*self).program, (*self).cmd_args.elems...)
+
+            if dir, ok := (*self).cwd.(string); ok {
+               	cmd.Dir = dir
+            }
+
+            err := cmd.Run()
             if err != nil {
                 return Tag__err { }
             }
 
-            return Tag__none { }
+            return Tag__none {}
         }
     }
 }
