@@ -79,7 +79,7 @@ struct File {
                 if !x {
                     return Tag__no_next_elem {}
                 }
-                $ := scanner.Text()
+                $ = scanner.Text()
             } as String;
             return line;
         };
