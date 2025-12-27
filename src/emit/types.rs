@@ -277,6 +277,37 @@ pub fn emit_type_definitions(
                     ));
                 }
 
+                if array_type.implements_to_json(type_env) {
+                    let fun_name = format!("{array_type_name}_ToJson");
+
+                    let go_code = r#"
+                        res := ""
+
+                        for i := range self {
+                            a := self[i]
+                            _ = a
+
+                            if i != 0 {
+                                res = res + ", "
+                            }
+
+                            a_x := ($%$%$%)
+                            res = res + a_x
+                        }
+
+                        return fmt.Sprintf("[%s]", res)
+                    "#
+                    .replace("$%$%$%", &type_expr.0.call_to_json("a", type_env));
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![("self".to_string(), array_type_ano.clone())],
+                        Some("string".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
                 if array_type.implements_to_string(type_env) {
                     let fun_name = format!("{array_type_name}_ToString");
 
@@ -566,6 +597,34 @@ pub fn emit_type_definitions(
                         vec![IrInstruction::Return(Some(IrValue::Imm(
                             comparisons.join(" && "),
                         )))],
+                    ));
+                }
+
+                if tuple_type.implements_to_json(type_env) {
+                    let mut go_code = String::from(
+                        r#"
+                        res := ""
+                    "#,
+                    );
+
+                    for (i, field) in fields.iter().enumerate() {
+                        if i != 0 {
+                            go_code.push_str("\nres = res + \", \"");
+                        }
+
+                        let to_json_call =
+                            field.0.call_to_json(&format!("self.field_{i}"), type_env);
+                        go_code.push_str(&format!("\nres = res + ({to_json_call})"))
+                    }
+
+                    go_code.push_str("\nreturn fmt.Sprintf(\"[%s]\", res)");
+
+                    result.push(IrInstruction::FunDef(
+                        "to_json".to_string(),
+                        Some(("self".to_string(), type_name.clone())),
+                        vec![],
+                        Some("string".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }
 
@@ -905,6 +964,36 @@ pub fn emit_type_definitions(
 
         for derived_interface in derived.iter() {
             match *derived_interface {
+                crate::parse::struct_parser::DerivableInterface::ToJson => {
+                    let receiver = fixed_struct_name.clone();
+
+                    let mut string_parts = Vec::new();
+
+                    for f in fields.iter() {
+                        string_parts.push(format!(
+                            r#" "\"{}\": " + ({})"#,
+                            f.name,
+                            f.type_expr
+                                .0
+                                .call_to_json(&format!("self.{}", f.name), type_env),
+                        ));
+                    }
+
+                    if string_parts.is_empty() {
+                        string_parts.push("\"\"".to_string());
+                    }
+
+                    instructions.push(IrInstruction::FunDef(
+                        "to_json".to_string(),
+                        Some(("self".to_string(), format!("*{receiver}"))),
+                        vec![],
+                        Some("string".to_string()),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(format!(
+                            r#"fmt.Sprintf("{{%s}}", {})"#,
+                            string_parts.join(" + \",\" + ")
+                        ))))],
+                    ));
+                }
                 crate::parse::struct_parser::DerivableInterface::Eq => {
                     let receiver = fixed_struct_name.clone();
 

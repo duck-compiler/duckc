@@ -26,6 +26,7 @@ pub enum DerivableInterface {
     ToString,
     Ord,
     Clone,
+    ToJson,
     Hash,
 }
 
@@ -181,6 +182,7 @@ where
                                     "Ord" => DerivableInterface::Ord,
                                     "Clone" => DerivableInterface::Clone,
                                     "Hash" => DerivableInterface::Hash,
+                                    "ToJson" => DerivableInterface::ToJson,
                                     _ => {
                                         let msg = &format!("Invalid with declaration {i}");
                                         failure_with_occurence(msg, span, [(msg, span)]);

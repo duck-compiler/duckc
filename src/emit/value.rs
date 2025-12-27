@@ -489,6 +489,87 @@ fn walk_access_raw(
                             flag = Some(("len(".to_string(), stars_count, false));
                             skip = true;
                         }
+                    } else if field_name.as_str() == "to_json"
+                    && target_field_type.0.implements_to_json(type_env)
+                    {
+                        match target_field_type.clone().0 {
+                            TypeExpr::Array(..) => {
+                                flag = Some((
+                                    format!("{clean_go_type_name}_ToJson("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::String(..) => {
+                                flag =
+                                    Some((r#"fmt.Sprintf("\"%s\"", "#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Int => {
+                                flag =
+                                    Some((r#"fmt.Sprintf("%d", "#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::UInt => {
+                                flag =
+                                    Some((r#"fmt.Sprintf("%d", "#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Or(t) => {
+                                let mut go_code = r#"
+                                    var p1 any = param1
+
+                                "#
+                                .to_string();
+
+                                for t in t {
+                                    let conc_type = t.0.as_go_type_annotation(type_env);
+                                    go_code.push('\n');
+                                    go_code.push_str(&format!(
+                                        r#"
+                                        switch p1.(type) {{
+                                        case {conc_type}:
+                                            tmp := p1.({conc_type})
+                                            _ = tmp
+                                            return {}
+                                        }}
+                                    "#,
+                                        t.0.call_to_json("tmp", type_env)
+                                    ));
+                                }
+
+                                go_code.push_str("\nreturn \"\"");
+                                let c = format!("func(param1 any) string {{ {go_code} }}(");
+
+                                flag = Some((c, stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Bool(..) => {
+                                flag =
+                                    Some((r#"fmt.Sprintf("%t", "#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Char => {
+                                flag =
+                                    Some((r#"fmt.Sprintf("%c", "#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Tag(t) => {
+                                flag = Some((
+                                    format!(r#"(func(_ any) string {{ return "\".{t}\"" }})("#),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::Float => {
+                                flag =
+                                    Some((r#"fmt.Sprintf("%f", "#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            _ => {}
+                        }
                     } else if field_name.as_str() == "to_string"
                         && target_field_type.0.implements_to_string(type_env)
                     {
@@ -898,6 +979,10 @@ fn walk_access_raw(
                             && t.iter().all(|t| t.0.implements_to_string(type_env))
                         {
                             s.push_front("to_string".to_string());
+                        } else if field_name.as_str() == "to_json"
+                            && t.iter().all(|t| t.0.implements_to_json(type_env))
+                        {
+                            s.push_front("to_json".to_string());
                         } else if field_name.as_str() == "clone"
                             && t.iter().all(|t| t.0.implements_clone(type_env))
                         {

@@ -1010,6 +1010,9 @@ impl TypeExpr {
         if name.as_str() == "clone" && self.implements_clone(type_env) {
             return true;
         }
+        if name.as_str() == "to_json" && self.implements_to_json(type_env) {
+            return true;
+        }
         if name.as_str() == "hash" && self.implements_hash(type_env) {
             return true;
         }
@@ -1197,6 +1200,14 @@ impl TypeExpr {
         }
 
         if self.implements_to_string(type_env) && field_name.as_str() == "to_string" {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((TypeExpr::String(None), empty_range())),
+                false,
+            ));
+        }
+
+        if self.implements_to_json(type_env) && field_name.as_str() == "to_json" {
             return Some(TypeExpr::Fun(
                 vec![],
                 Box::new((TypeExpr::String(None), empty_range())),
