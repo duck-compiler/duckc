@@ -1,3 +1,5 @@
+use go "path/filepath";
+
 struct FilePath {
     path_ref: String,
     last_error: String | .none,

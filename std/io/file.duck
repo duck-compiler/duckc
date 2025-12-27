@@ -74,14 +74,14 @@ struct File {
         }
 
         let next_fn = mut fn() -> String | .no_next_elem {
-            go {
+            let line = go {
                 x := scanner.Scan()
                 if !x {
                     return Tag__no_next_elem {}
                 }
-                line := scanner.Text()
-                return line
-            } as !
+                $ := scanner.Text()
+            } as String;
+            return line;
         };
 
         Iter::from<String>(next_fn)
