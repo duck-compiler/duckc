@@ -98,7 +98,6 @@ struct Cmd {
                 return Tag__err { }
             }
 
-            fmt.Println("here is the output %s", string(out))
             return string(out)
         }
     }
