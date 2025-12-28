@@ -1,0 +1,73 @@
+use std::io::println;
+use std::http::{render, serve_string, listen};
+
+type TodoItem = {
+    id: Int,
+    name: String,
+};
+
+template Head(props: { title: String }) duckx {
+    return (<>
+        <head>
+            <title>{props.title}</title>
+            <meta charset="utf-8"/>
+            <style>
+            </style>
+        </head>
+    </>);
+}
+
+component TodoEditor(props: { item: TodoItem }) jsx {
+    const del = async (id) => {
+      await fetch("/api/delete", {
+        method: "POST",
+        body: JSON.stringify({id: id}),
+      });
+    };
+
+    return (
+      <>
+        <div>
+          <button onClick={() => del({props.item.id})}>Delete</button>
+        </div>
+      </>
+    );
+}
+
+template TodoList(props: { user_name: String, initial_items: TodoItem[] }) duckx {
+    let z = *(props.initial_items.iter().map<Html>(fn(e) -> Html { duckx { <TodoEditor item={*e}/> } }).into_list().as_ref());
+    return (<>
+            <!DOCTYPE html>
+            <html>
+                <Head title={"DuckLang todo"}/>
+                <body>
+                    {z}
+                </body>
+            </html>
+        </>
+    );
+}
+
+template LoginPage(props: { user_name: String, initial_items: TodoItem[] }) duckx {
+    return (<>
+        <!DOCTYPE html>
+        <html>
+            <Head title={"DuckLang todo - Login"}/>
+            <body>
+                <p>Login</p>
+                <form action="login" method="POST">
+                    <label for="username">Username</label>
+                    <input id="username" type="text"/>
+                    <label for="password">Password</label>
+                    <input id="password" type="password"/>
+                    <button type="submit">Login</button>
+                </form>
+            </body>
+        </html>
+    </>)
+}
+
+fn main() {
+    serve_string("/", render(TodoList({user_name: "Duck", initial_items: [{id: 1, name: "item 1 name"}]})));
+    listen(8080);
+}

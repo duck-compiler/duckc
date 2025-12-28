@@ -262,9 +262,7 @@ pub fn opening_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a,
 }
 
 pub fn special_tag<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a, char>>> + Clone {
-    just("<!DOCTYPE HTML>")
-        .map(|x| x.to_string())
-        .or(just("<!doctype html>").map(|x| x.to_string()))
+    opening_tag().filter(|s: &String| s.to_ascii_lowercase().starts_with("<!doctype"))
 }
 
 pub fn duckx_parse_html_string<'a>(
@@ -457,6 +455,7 @@ pub fn duckx_contents_in_curly_braces<'a>(
                                 },
                             )]
                         }),
+                    any().filter(|c: &char| c.is_whitespace()).to(Vec::new()),
                     any()
                         .and_is(choice((just("{"), just("}"))).not())
                         // .filter(|c| *c != '{' && *c != '}')

@@ -1,0 +1,12 @@
+use std::io::println;
+
+fn main() {
+    let z: String | Int | .err = "a";
+    match z {
+        .err => println("err"),
+        String | Int @s => match s {
+            String => println("is string"),
+            Int => println("is int"),
+        }
+    }
+}

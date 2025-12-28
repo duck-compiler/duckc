@@ -7,7 +7,6 @@ use crate::{
     },
     parse::{
         Field,
-        schema_def_parser::SchemaDefinition,
         struct_parser::StructDefinition,
         type_parser::{Duck, TypeExpr},
     },
@@ -277,6 +276,74 @@ pub fn emit_type_definitions(
                     ));
                 }
 
+                if array_type.implements_from_json(type_env) {
+                    let fun_name = format!("{array_type_name}_FromJson");
+
+                    let go_code = format!(
+                        r#"
+                        res := make({}, 1)
+                        parts, _, err := scan_json_array_parts(json_str)
+                        if err != nil {{
+                            return res, err
+                        }}
+                        res = make({}, len(parts))
+
+                        for i := range res {{
+                            tmp, err := {}
+                            if err != nil {{
+                                return res, err
+                            }}
+                            _ = tmp
+                            res[i] = tmp
+                        }}
+
+                        return res, nil
+                    "#,
+                        array_type_ano,
+                        array_type_ano,
+                        type_expr.0.call_from_json("parts[i]", type_env)
+                    );
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![("json_str".to_string(), "string".to_string())],
+                        Some(format!("({}, error)", array_type_ano.clone())),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if array_type.implements_to_json(type_env) {
+                    let fun_name = format!("{array_type_name}_ToJson");
+
+                    let go_code = r#"
+                        res := ""
+
+                        for i := range self {
+                            a := self[i]
+                            _ = a
+
+                            if i != 0 {
+                                res = res + ", "
+                            }
+
+                            a_x := ($%$%$%)
+                            res = res + a_x
+                        }
+
+                        return fmt.Sprintf("[%s]", res)
+                    "#
+                    .replace("$%$%$%", &type_expr.0.call_to_json("a", type_env));
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![("self".to_string(), array_type_ano.clone())],
+                        Some("string".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
                 if array_type.implements_to_string(type_env) {
                     let fun_name = format!("{array_type_name}_ToString");
 
@@ -442,6 +509,124 @@ pub fn emit_type_definitions(
 
                 let type_name = duck_type_expr.as_clean_go_type_name(type_env);
 
+                if duck_type_expr.implements_to_string(type_env) {
+                    let receiver = duck_type_expr.as_go_type_annotation(type_env);
+
+                    let mut string_parts = Vec::new();
+
+                    for f in fields.iter() {
+                        string_parts.push(format!(
+                            r#" "{}: " + ({})"#,
+                            f.name,
+                            f.type_expr
+                                .0
+                                .call_to_string(&format!("self.Get{}()", f.name), type_env),
+                        ));
+                    }
+
+                    if string_parts.is_empty() {
+                        string_parts.push("\"\"".to_string());
+                    }
+
+                    result.push(IrInstruction::FunDef(
+                        format!("{type_name}_ToString"),
+                        None,
+                        vec![("self".to_string(), receiver.clone())],
+                        Some("string".to_string()),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(format!(
+                            r#"fmt.Sprintf("{{%s}}", {})"#,
+                            string_parts.join(" + \",\" + ")
+                        ))))],
+                    ));
+                }
+
+                if duck_type_expr.implements_to_json(type_env) {
+                    let receiver = duck_type_expr.as_go_type_annotation(type_env);
+
+                    let mut string_parts = Vec::new();
+
+                    for f in fields.iter() {
+                        string_parts.push(format!(
+                            r#" "\"{}\": " + ({})"#,
+                            f.name,
+                            f.type_expr
+                                .0
+                                .call_to_json(&format!("self.Get{}()", f.name), type_env),
+                        ));
+                    }
+
+                    if string_parts.is_empty() {
+                        string_parts.push("\"\"".to_string());
+                    }
+
+                    result.push(IrInstruction::FunDef(
+                        format!("{type_name}_ToJson"),
+                        None,
+                        vec![("self".to_string(), receiver.clone())],
+                        Some("string".to_string()),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(format!(
+                            r#"fmt.Sprintf("{{%s}}", {})"#,
+                            string_parts.join(" + \",\" + ")
+                        ))))],
+                    ));
+                }
+
+                if duck_type_expr.implements_from_json(type_env) {
+                    let mut go_code = format!(
+                        r#"
+                            var res {}
+                            obj, _, err := scan_json_struct_parts(json_str)
+                            if err != nil {{
+                                return res, err
+                            }}
+
+
+                        "#,
+                        duck_type_expr.as_go_type_annotation(type_env)
+                    );
+
+                    let mut all = Vec::new();
+
+                    for field in fields {
+                        let call = field
+                            .type_expr
+                            .0
+                            .call_from_json(&format!("obj[\"{}\"]", field.name), type_env);
+                        let var_name = format!("field_expr_{}", field.name);
+                        go_code.push_str(&format!(
+                            r#"
+                            {var_name}, err := {call}
+                            _ = {var_name}
+                            if err != nil {{
+                            return res, err
+                            }}
+                            "#
+                        ));
+                        all.push((field.name.clone(), var_name));
+                    }
+
+                    go_code.push_str(&format!(
+                        "return &{type_name}{{\n{}\n}}, nil",
+                        all.iter()
+                            .map(|(field_name, expr_var_name)| format!(
+                                "{field_name}: {expr_var_name},\n"
+                            ))
+                            .collect::<Vec<_>>()
+                            .join("")
+                    ));
+
+                    result.push(IrInstruction::FunDef(
+                        format!("{type_name}_FromJson"),
+                        None,
+                        vec![("json_str".to_string(), "string".to_string())],
+                        Some(format!(
+                            "({}, error)",
+                            duck_type_expr.as_go_type_annotation(type_env)
+                        )),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
                 result.push(IrInstruction::StructDef(
                     type_name.clone(),
                     fields
@@ -455,12 +640,6 @@ pub fn emit_type_definitions(
                             },
                         )
                         .collect::<Vec<_>>(),
-                ));
-
-                result.push(SchemaDefinition::emit_from_json_fn_from_duck(
-                    &duck_type_expr,
-                    type_env,
-                    to_ir,
                 ));
 
                 for field in fields.iter() {
@@ -525,10 +704,39 @@ pub fn emit_type_definitions(
                 }
             }
             NeedsSearchResult::Tag { name } => {
-                result.push(IrInstruction::StructDef(
-                    TypeExpr::Tag(name.clone()).as_clean_go_type_name(type_env),
-                    vec![],
-                ));
+                let self_type = TypeExpr::Tag(name.clone());
+                let type_name = self_type.as_clean_go_type_name(type_env);
+
+                result.push(IrInstruction::StructDef(type_name.clone(), vec![]));
+
+                {
+                    let go_code = format!(
+                        r#"
+                            r := {type_name}{{}}
+                            var s string
+                            e := errors.New("from json {name} failed")
+
+                            json_err := json.Unmarshal([]byte(json_str), &s)
+                            if json_err != nil {{
+                                return r, json_err
+                            }}
+
+                            if s != "{name}" {{
+                                return r, e
+                            }}
+
+                            return r, nil
+                        "#
+                    );
+
+                    result.push(IrInstruction::FunDef(
+                        format!("{type_name}_FromJson"),
+                        None,
+                        vec![("json_str".to_string(), "string".to_string())],
+                        Some(format!("({type_name}, error)")),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
             }
             NeedsSearchResult::Tuple { fields } => {
                 let tuple_type = TypeExpr::Tuple(fields.clone());
@@ -566,6 +774,76 @@ pub fn emit_type_definitions(
                         vec![IrInstruction::Return(Some(IrValue::Imm(
                             comparisons.join(" && "),
                         )))],
+                    ));
+                }
+
+                if tuple_type.implements_from_json(type_env) {
+                    let fun_name = format!("{type_name}_FromJson");
+                    let needed_len = fields.len();
+
+                    let mut go_code = format!(
+                        r#"
+                            var res {type_name}
+                            parts, _, err := scan_json_array_parts(json_str)
+                            if err != nil {{
+                                return res, err
+                            }}
+
+                            if len(parts) < {needed_len} {{
+                                return res, errors.New("Not long enough")
+                            }}
+                        "#,
+                    );
+
+                    for (i, f) in fields.iter().enumerate() {
+                        go_code.push_str(&format!(
+                            r#"
+                            value_{i}, err := {}
+                            if err != nil {{
+                                return res, err
+                            }}
+                            res.field_{i} = value_{i}
+                            "#,
+                            f.0.call_from_json(&format!("parts[{i}]"), type_env)
+                        ));
+                    }
+
+                    go_code.push_str("\nreturn res, nil");
+
+                    result.push(IrInstruction::FunDef(
+                        fun_name,
+                        None,
+                        vec![("json_str".to_string(), "string".to_string())],
+                        Some(format!("({}, error)", type_name)),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                if tuple_type.implements_to_json(type_env) {
+                    let mut go_code = String::from(
+                        r#"
+                        res := ""
+                    "#,
+                    );
+
+                    for (i, field) in fields.iter().enumerate() {
+                        if i != 0 {
+                            go_code.push_str("\nres = res + \", \"");
+                        }
+
+                        let to_json_call =
+                            field.0.call_to_json(&format!("self.field_{i}"), type_env);
+                        go_code.push_str(&format!("\nres = res + ({to_json_call})"))
+                    }
+
+                    go_code.push_str("\nreturn fmt.Sprintf(\"[%s]\", res)");
+
+                    result.push(IrInstruction::FunDef(
+                        "to_json".to_string(),
+                        Some(("self".to_string(), type_name.clone())),
+                        vec![],
+                        Some("string".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }
 
@@ -905,6 +1183,89 @@ pub fn emit_type_definitions(
 
         for derived_interface in derived.iter() {
             match *derived_interface {
+                crate::parse::struct_parser::DerivableInterface::FromJson => {
+                    let receiver = fixed_struct_name.clone();
+                    let mut go_code = format!(
+                        r#"
+                                var res *{receiver}
+                                obj, _, err := scan_json_struct_parts(json_str)
+                                if err != nil {{
+                                    return res, err
+                                }}
+
+
+                            "#,
+                    );
+
+                    let mut all = Vec::new();
+
+                    for field in fields.iter() {
+                        let call = field
+                            .type_expr
+                            .0
+                            .call_from_json(&format!("obj[\"{}\"]", field.name), type_env);
+                        let var_name = format!("field_expr_{}", field.name);
+                        go_code.push_str(&format!(
+                            r#"
+                                {var_name}, err := {call}
+                                _ = {var_name}
+                                if err != nil {{
+                                return res, err
+                                }}
+                                "#
+                        ));
+                        all.push((field.name.clone(), var_name));
+                    }
+
+                    go_code.push_str(&format!(
+                        "return &{receiver}{{\n{}\n}}, nil",
+                        all.iter()
+                            .map(|(field_name, expr_var_name)| format!(
+                                "{field_name}: {expr_var_name},\n"
+                            ))
+                            .collect::<Vec<_>>()
+                            .join("")
+                    ));
+
+                    result.push(IrInstruction::FunDef(
+                        format!("{receiver}_FromJson"),
+                        None,
+                        vec![("json_str".to_string(), "string".to_string())],
+                        Some(format!("(*{}, error)", receiver)),
+                        vec![IrInstruction::InlineGo(go_code)],
+                    ));
+                }
+
+                crate::parse::struct_parser::DerivableInterface::ToJson => {
+                    let receiver = fixed_struct_name.clone();
+
+                    let mut string_parts = Vec::new();
+
+                    for f in fields.iter() {
+                        string_parts.push(format!(
+                            r#" "\"{}\": " + ({})"#,
+                            f.name,
+                            f.type_expr
+                                .0
+                                .call_to_json(&format!("self.{}", f.name), type_env),
+                        ));
+                    }
+
+                    if string_parts.is_empty() {
+                        string_parts.push("\"\"".to_string());
+                    }
+
+                    instructions.push(IrInstruction::FunDef(
+                        "to_json".to_string(),
+                        Some(("self".to_string(), format!("*{receiver}"))),
+                        vec![],
+                        Some("string".to_string()),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(format!(
+                            r#"fmt.Sprintf("{{%s}}", {})"#,
+                            string_parts.join(" + \",\" + ")
+                        ))))],
+                    ));
+                }
                 crate::parse::struct_parser::DerivableInterface::Eq => {
                     let receiver = fixed_struct_name.clone();
 
@@ -1124,11 +1485,47 @@ pub fn emit_type_definitions(
     ));
 
     result.push(IrInstruction::FunDef(
+        "int_FromJson".to_string(),
+        None,
+        vec![("json_str".to_string(), "string".to_string())],
+        Some("(int, error)".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                var b int
+                err := json.Unmarshal([]byte(json_str), &b)
+                if err != nil {
+                    return 0, err
+                }
+                return b, nil
+            "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
         "UInt_Hash".to_string(),
         None,
         vec![("self".to_string(), "uint".to_string())],
         Some("uint".to_string()),
         vec![IrInstruction::InlineGo("return self".to_string())],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "uint_FromJson".to_string(),
+        None,
+        vec![("json_str".to_string(), "string".to_string())],
+        Some("(uint, error)".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                var b uint
+                err := json.Unmarshal([]byte(json_str), &b)
+                if err != nil {
+                    return 0, err
+                }
+                return b, nil
+            "#
+            .to_string(),
+        )],
     ));
 
     result.push(IrInstruction::FunDef(
@@ -1164,6 +1561,24 @@ pub fn emit_type_definitions(
     ));
 
     result.push(IrInstruction::FunDef(
+        "bool_FromJson".to_string(),
+        None,
+        vec![("json_str".to_string(), "string".to_string())],
+        Some("(bool, error)".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                var b bool
+                err := json.Unmarshal([]byte(json_str), &b)
+                if err != nil {
+                    return b, err
+                }
+                return b, nil
+            "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
         "Bool_Ord".to_string(),
         None,
         vec![
@@ -1187,6 +1602,24 @@ pub fn emit_type_definitions(
                     h.WriteString(self)
                     return int(h.Sum64())
                     "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "string_FromJson".to_string(),
+        None,
+        vec![("json_str".to_string(), "string".to_string())],
+        Some("(string, error)".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                var b string
+                err := json.Unmarshal([]byte(json_str), &b)
+                if err != nil {
+                    return b, err
+                }
+                return b, nil
+            "#
             .to_string(),
         )],
     ));
@@ -1240,6 +1673,24 @@ pub fn emit_type_definitions(
     ));
 
     result.push(IrInstruction::FunDef(
+        "float64_FromJson".to_string(),
+        None,
+        vec![("json_str".to_string(), "string".to_string())],
+        Some("(float64, error)".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                var b float64
+                err := json.Unmarshal([]byte(json_str), &b)
+                if err != nil {
+                    return b, err
+                }
+                return b, nil
+            "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
         "Float_Ord".to_string(),
         None,
         vec![
@@ -1274,6 +1725,24 @@ pub fn emit_type_definitions(
                         return int(self)
 
                     "#
+            .to_string(),
+        )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "rune_FromJson".to_string(),
+        None,
+        vec![("json_str".to_string(), "string".to_string())],
+        Some("(rune, error)".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                var b rune
+                err := json.Unmarshal([]byte(json_str), &b)
+                if err != nil {
+                    return b, err
+                }
+                return b, nil
+            "#
             .to_string(),
         )],
     ));

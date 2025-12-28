@@ -1,0 +1,100 @@
+use std::io::println;
+
+[auto(ToJson, FromJson, ToString)]
+struct GameData {
+    data: String,
+}
+
+[auto(ToJson, FromJson, ToString)]
+struct Game {
+    id: Int,
+    name: String,
+    released: (Int, Int, Int),
+    stats: (GameData,)[]
+}
+
+type NiceTest = { x: String, y: Int };
+
+fn to_json_and_return<T>(v: T) -> (T, String) {
+    return (v, v.to_json());
+}
+
+fn to_json_and_return_and_from_json<T>(v: T) -> (T, String, T) {
+    const j = v.to_json();
+    match parse_json<T>(j) {
+        .err => {
+            std::error::panic(f"error for {v.to_string()}")
+        },
+        T @t => (v, j, t),
+    }
+}
+
+fn main() {
+    "abc".to_json()->println();
+    ["abc"].to_json()->println();
+    ["abc", "yo"].to_json()->println();
+    ("abc", "yo", true, 123, [2]).to_json()->println();
+    Game {
+        id: 100,
+        name: "Nice game",
+        released: (1000, 2000, 300),
+        stats: [(GameData { data: "i am data" },)]
+    }.to_json()->println();
+    [Game {
+        id: 100,
+        name: "Nice game",
+        released: (1000, 2000, 300),
+        stats: [(GameData { data: "i am data" },)]
+    },
+    Game {
+            id: 101,
+            name: "Nice game",
+            released: (1000, 2000, 300),
+            stats: [(GameData { data: "i am data" },)]
+        }
+    ].to_json()->println();
+
+    const og_game_data = {x: 100, z: [GameData { data: "yooo" }]};
+    const game_data_json = og_game_data.to_json();
+    game_data_json->println();
+
+    const as_json = {x: "test string", y: 100}->(fn(p: NiceTest) -> String { p.to_json() })()->(fn(s: String) -> String { println(s); s})();
+    const deserialized = match parse_json<Int[][]>("[[1, 2, 3], [100]]") {
+        .err => { println("error?"); return; },
+        Int[][] @s => s,
+    };
+    deserialized.to_string()->println();
+
+    const deserialized2 = match parse_json<{x: {x: Bool}}>("{\"x\": { \"x\": true}}") {
+        .err => { println("error?"); return; },
+        {x: {x: Bool }} @s => s,
+    };
+
+    deserialized2.x.x.to_string()->println();
+
+    const restored_game_data = match parse_json<{x: Int, z: GameData[]}>(game_data_json) {
+        .err => { println("error game data"); return; },
+        {x: Int, z: GameData[]} @g => g,
+    };
+
+    println(f"\nOriginal: {og_game_data.to_string()}\nJSON: {game_data_json}\nRestored: {restored_game_data.to_string()}\n");
+
+    to_json_and_return(()).to_string()->println();
+    to_json_and_return_and_from_json(()).to_string()->println();
+    to_json_and_return_and_from_json((123,)).to_string()->println();
+    to_json_and_return_and_from_json((123,(),)).to_string()->println();
+    to_json_and_return_and_from_json((123,(),true)).to_string()->println();
+    to_json_and_return_and_from_json((123,(),true, ((((),),),))).to_string()->println();
+    to_json_and_return_and_from_json({x: 100, z: (), y: [(), ()], y2: ([GameData { data: "hello" }],)}).to_string()->println();
+    to_json_and_return_and_from_json(1.3).to_string()->println();
+    to_json_and_return_and_from_json(20 as UInt).to_string()->println();
+
+    to_json_and_return_and_from_json<String | Int>(10).to_string()->println();
+    to_json_and_return_and_from_json<String | Int>("string in union").to_string()->println();
+    to_json_and_return_and_from_json<{ x: String } | { y: Int }>({x: "duck in union"}).to_string()->println();
+    to_json_and_return_and_from_json<{ x: String } | { y: Int }>({y: 100}).to_string()->println();
+    to_json_and_return_and_from_json<{ header: .v1 | .v2, data: String | { a: Float, b: String } }>({header: .v1, data: {a: 1.3, b: "yoo"}}).to_string()->println();
+    to_json_and_return_and_from_json<{ header: .v1 | .v2, data: String | { a: Float, b: String } }>({header: .v1, data: {a: 1.3, b: "yoo"}}).to_string()->println();
+    to_json_and_return_and_from_json<{ header: .v1 | .v2, data: String | { a: Float, b: String } }>({header: .v1, data: "str data"}).to_string()->println();
+    to_json_and_return_and_from_json<{ header: .v1 | .v2, data: String | { a: Float, b: String } }>({header: .v2, data: "str data and v2 header"}).to_string()->println();
+}

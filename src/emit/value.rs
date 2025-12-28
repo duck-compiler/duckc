@@ -22,6 +22,46 @@ use crate::{
     },
 };
 
+fn emit_duck(
+    d: &Spanned<ValueExpr>,
+    t: Option<&Spanned<TypeExpr>>,
+    ir: &mut ToIr,
+    type_env: &mut TypeEnv,
+) -> (Vec<IrInstruction>, Option<IrValue>) {
+    let t = if let Some(t) = t.cloned() {
+        t
+    } else {
+        TypeExpr::from_value_expr(d, type_env)
+    };
+
+    let ValueExpr::Duck(fields) = &d.0 else {
+        panic!("Compiler Bug: Only call this method by with a duck type ");
+    };
+
+    let mut res = Vec::new();
+    let mut res_vars = Vec::new();
+    for (field_name, (field_expr, _)) in fields {
+        let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, ir, d.1);
+        res.extend(field_instr);
+        if let Some(field_res) = field_res {
+            res_vars.push((field_name.clone(), field_res));
+        } else {
+            return (res, None);
+        }
+    }
+
+    let res_var = ir.new_var();
+    res.extend([
+        IrInstruction::VarDecl(res_var.clone(), t.0.as_go_type_annotation(type_env)),
+        IrInstruction::VarAssignment(
+            res_var.clone(),
+            IrValue::Duck(t.0.as_clean_go_type_name(type_env), res_vars),
+        ),
+    ]);
+
+    (res, as_rvar(res_var))
+}
+
 #[derive(Debug, Clone)]
 pub struct ToIr {
     pub var_counter: usize,
@@ -489,11 +529,103 @@ fn walk_access_raw(
                             flag = Some(("len(".to_string(), stars_count, false));
                             skip = true;
                         }
+                    } else if field_name.as_str() == "to_json"
+                        && target_field_type.0.implements_to_json(type_env)
+                    {
+                        match target_field_type.clone().0 {
+                            TypeExpr::Duck(..) => {
+                                flag = Some((
+                                    format!("{clean_go_type_name}_ToJson("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::Array(..) => {
+                                flag = Some((
+                                    format!("{clean_go_type_name}_ToJson("),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::String(..) => {
+                                flag = Some((
+                                    r#"fmt.Sprintf("\"%s\"", "#.to_string(),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::Int => {
+                                flag =
+                                    Some((r#"fmt.Sprintf("%d", "#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::UInt => {
+                                flag =
+                                    Some((r#"fmt.Sprintf("%d", "#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Or(t) => {
+                                let mut go_code = r#"
+                                    var p1 any = param1
+
+                                "#
+                                .to_string();
+
+                                for t in t {
+                                    let conc_type = t.0.as_go_type_annotation(type_env);
+                                    go_code.push('\n');
+                                    go_code.push_str(&format!(
+                                        r#"
+                                        switch p1.(type) {{
+                                        case {conc_type}:
+                                            tmp := p1.({conc_type})
+                                            _ = tmp
+                                            return {}
+                                        }}
+                                    "#,
+                                        t.0.call_to_json("tmp", type_env)
+                                    ));
+                                }
+
+                                go_code.push_str("\nreturn \"\"");
+                                let c = format!("func(param1 any) string {{ {go_code} }}(");
+
+                                flag = Some((c, stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Bool(..) => {
+                                flag =
+                                    Some((r#"fmt.Sprintf("%t", "#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Char => {
+                                flag =
+                                    Some((r#"fmt.Sprintf("%c", "#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Tag(t) => {
+                                flag = Some((
+                                    format!(r#"(func(_ any) string {{ return "\".{t}\"" }})("#),
+                                    stars_count,
+                                    false,
+                                ));
+                                skip = true;
+                            }
+                            TypeExpr::Float => {
+                                flag =
+                                    Some((r#"fmt.Sprintf("%f", "#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            _ => {}
+                        }
                     } else if field_name.as_str() == "to_string"
                         && target_field_type.0.implements_to_string(type_env)
                     {
                         match target_field_type.clone().0 {
-                            TypeExpr::Array(..) => {
+                            TypeExpr::Array(..) | TypeExpr::Duck(..) => {
                                 flag = Some((
                                     format!("{clean_go_type_name}_ToString("),
                                     stars_count,
@@ -898,6 +1030,10 @@ fn walk_access_raw(
                             && t.iter().all(|t| t.0.implements_to_string(type_env))
                         {
                             s.push_front("to_string".to_string());
+                        } else if field_name.as_str() == "to_json"
+                            && t.iter().all(|t| t.0.implements_to_json(type_env))
+                        {
+                            s.push_front("to_json".to_string());
                         } else if field_name.as_str() == "clone"
                             && t.iter().all(|t| t.0.implements_clone(type_env))
                         {
@@ -1296,8 +1432,24 @@ impl ValueExpr {
                         ),
                     ]);
                     (res_instr, as_rvar(var_name))
+                } else if matches!(v.0, ValueExpr::Duck(..)) {
+                    emit_duck(v, Some(t), env, type_env)
                 } else {
-                    v.0.emit(type_env, env, v.1)
+                    let (mut res_instr, res_var) = v.0.emit(type_env, env, v.1);
+
+                    if let Some(IrValue::Var(res_var) | IrValue::Imm(res_var)) = res_var {
+                        let var_name = env.new_var();
+                        res_instr.extend([
+                            IrInstruction::VarDecl(
+                                var_name.clone(),
+                                t.0.as_go_type_annotation(type_env),
+                            ),
+                            IrInstruction::VarAssignment(var_name.clone(), IrValue::Imm(res_var)),
+                        ]);
+                        (res_instr, as_rvar(var_name))
+                    } else {
+                        (res_instr, None)
+                    }
                 }
             }
             ValueExpr::For {
@@ -1943,7 +2095,7 @@ impl ValueExpr {
                                         return (instr, None);
                                     }
                                 }
-                                TypeExpr::Int => {
+                                TypeExpr::Int | TypeExpr::UInt => {
                                     let (e_instr, e_res_var) = e.0.emit(type_env, env, e.1);
                                     instr.extend(e_instr);
                                     if let Some(e_res_var) = e_res_var {
@@ -3121,37 +3273,7 @@ impl ValueExpr {
                     return (i, None);
                 }
             }
-            ValueExpr::Duck(fields) => {
-                let name = TypeExpr::from_value_expr(&(self.clone(), span), type_env)
-                    .0
-                    .as_clean_go_type_name(type_env);
-
-                let mut res = Vec::new();
-                let mut res_vars = Vec::new();
-                for (field_name, (field_expr, _)) in fields {
-                    let (field_instr, field_res) =
-                        field_expr.direct_or_with_instr(type_env, env, span);
-                    res.extend(field_instr);
-                    if let Some(field_res) = field_res {
-                        res_vars.push((field_name.clone(), field_res));
-                    } else {
-                        return (res, None);
-                    }
-                }
-
-                let res_var = env.new_var();
-                res.extend([
-                    IrInstruction::VarDecl(
-                        res_var.clone(),
-                        TypeExpr::from_value_expr(&(self.clone(), span), type_env)
-                            .0
-                            .as_go_type_annotation(type_env),
-                    ),
-                    IrInstruction::VarAssignment(res_var.clone(), IrValue::Duck(name, res_vars)),
-                ]);
-
-                (res, as_rvar(res_var))
-            }
+            ValueExpr::Duck(..) => emit_duck(&(self.clone(), span), None, env, type_env),
             ValueExpr::Struct { fields, .. } => {
                 let name = TypeExpr::from_value_expr(&(self.clone(), span), type_env)
                     .0
