@@ -1,5 +1,15 @@
 [
     {
+        "type": "created",
+        "timestamp": "2025-12-28T00:26:09.881129",
+        "issue_id": "e18934d01edf88269debb344175a2cc5",
+        "issue_title": "this is currently a silent error - if there's one",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
         "type": "closed",
         "timestamp": "2025-12-27T00:37:30.664502",
         "issue_id": "7aba35999532a01c0afe956b2420893e",
@@ -984,16 +994,6 @@
         "timestamp": "2025-07-09T23:15:12.304401",
         "issue_id": "1bc39227f7b86613ca803ab82b8f6b34",
         "issue_title": "Match Expressions need to be type resolved just as the function defs",
-        "author_info": {
-            "name": "Maurice Schmidt",
-            "email": "mvmogo@gmail.com"
-        }
-    },
-    {
-        "type": "created",
-        "timestamp": "2025-07-09T23:15:12.304401",
-        "issue_id": "ab171c08521638216687559985056db6",
-        "issue_title": "move checks from typeresolve to typecheck",
         "author_info": {
             "name": "Maurice Schmidt",
             "email": "mvmogo@gmail.com"
