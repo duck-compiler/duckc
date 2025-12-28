@@ -643,7 +643,7 @@ impl TypeExpr {
                                 } else {
                                     check_type_compatability_full(
                                         &param_type.1,
-                                        &in_param_types.get(index).unwrap().0,
+                                        &in_param_types.get(index).expect("no param type").0,
                                         type_env,
                                         is_const_var(&params[index].0),
                                     );

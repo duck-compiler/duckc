@@ -124,19 +124,16 @@ where
                 .or_not()
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
         )
-        .then(value_expr_parser(make_input))
+        .then(value_expr_parser(make_input.clone()))
         .map(
             |(((ident, ident_span), props_type), src_tokens)| DuckxComponent {
                 name: ident.clone(),
                 props_type: props_type
                     .unwrap_or((TypeExpr::Duck(Duck { fields: Vec::new() }), ident_span)),
-                value_expr: if let ValueExpr::Duck(fields) = &src_tokens.0
-                    && fields.is_empty()
-                {
-                    (ValueExpr::Block(vec![]), src_tokens.1)
-                } else {
-                    src_tokens
-                },
+                value_expr: (
+                    ValueExpr::Return(Some(Box::new(src_tokens.clone()))),
+                    src_tokens.1,
+                ),
             },
         )
 }

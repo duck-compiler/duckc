@@ -344,6 +344,12 @@ impl SourceFile {
             for component in &s.jsx_compontents {
                 // todo: mangle components in jsx
                 let mut component = component.clone();
+
+                let mut p = Vec::new();
+                p.extend_from_slice(prefix);
+                p.push(component.name.clone());
+
+                component.name = mangle(&p);
                 mangle_jsx_component(&mut component, global_prefix, prefix, &mut mangle_env);
                 result.jsx_compontents.push(component.clone());
             }
@@ -351,6 +357,13 @@ impl SourceFile {
             for c in &s.duckx_components {
                 // todo: mangle components in jsx
                 let mut c = c.clone();
+
+                let mut p = Vec::new();
+                p.extend_from_slice(prefix);
+                p.push(c.name.clone());
+
+                c.name = mangle(&p);
+
                 mangle_duckx_component(&mut c, global_prefix, prefix, &mut mangle_env);
                 result.duckx_components.push(c.clone());
             }
@@ -893,10 +906,14 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
                     acc.function_definitions
                         .extend(parsed_src.function_definitions);
                     acc.type_definitions.extend(parsed_src.type_definitions);
-                    acc.sub_modules.extend(parsed_src.sub_modules);
-                    acc.struct_definitions.extend(parsed_src.struct_definitions);
-                    acc.test_cases.extend(parsed_src.test_cases);
                     acc.extensions_defs.extend(parsed_src.extensions_defs);
+                    acc.struct_definitions.extend(parsed_src.struct_definitions);
+                    acc.sub_modules.extend(parsed_src.sub_modules);
+                    acc.test_cases.extend(parsed_src.test_cases);
+                    acc.jsx_compontents.extend(parsed_src.jsx_compontents);
+                    acc.duckx_components.extend(parsed_src.duckx_components);
+                    acc.global_var_decls.extend(parsed_src.global_var_decls);
+                    acc.schema_defs.extend(parsed_src.schema_defs);
                 }
                 acc.use_statements.extend(parsed_src.use_statements);
                 acc

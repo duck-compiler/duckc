@@ -113,7 +113,6 @@ fn typeresolve_jsx_component(c: &mut JsxComponent, type_env: &mut TypeEnv) {
 
                 if let Some(found_comp) = type_env.get_component(ident) {
                     let found_name = found_comp.name.clone();
-                    println!("{} -> {}", c.name, found_name);
                     type_env
                         .get_component_dependencies(c.name.clone())
                         .client_components
@@ -644,6 +643,15 @@ impl TypeEnv<'_> {
         let mut result = Vec::new();
 
         let cloned_resolve = self.resolved_methods.clone();
+
+        for duckx_comp in &mut self.duckx_components.clone() {
+            self.find_ducks_and_tuples_type_expr(&mut duckx_comp.props_type, &mut result);
+            self.find_tuples_and_ducks_value_expr(&mut duckx_comp.value_expr, &mut result);
+        }
+
+        for jsx_comp in &mut self.jsx_components.clone() {
+            self.find_ducks_and_tuples_type_expr(&mut jsx_comp.props_type, &mut result);
+        }
 
         for fun_def in self
             .function_definitions

@@ -8,7 +8,7 @@ type RenderedJsx = (
     String,
 );
 
-type JsxComponent<P> = fn (props: P) -> RenderedJsx;
+type JsxComponent<P> = mut fn (props: P) -> RenderedJsx;
 
 fn with_react(
     rendered_jsx: RenderedJsx
@@ -37,7 +37,7 @@ fn with_react(
 fn serve_component<P>(
     route: String,
     jsx_component: JsxComponent<P>,
-    prop_supplier: fn () -> P,
+    prop_supplier: mut fn () -> P,
 ) {
     let x = with_react;
     go {

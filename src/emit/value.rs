@@ -2095,7 +2095,7 @@ impl ValueExpr {
                                         return (instr, None);
                                     }
                                 }
-                                TypeExpr::Int => {
+                                TypeExpr::Int | TypeExpr::UInt => {
                                     let (e_instr, e_res_var) = e.0.emit(type_env, env, e.1);
                                     instr.extend(e_instr);
                                     if let Some(e_res_var) = e_res_var {

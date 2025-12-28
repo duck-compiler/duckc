@@ -793,16 +793,12 @@ where
                 let value_expr_parser = value_expr_parser.clone();
                 let make_input = make_input.clone();
                 move |x| {
-                    // let mut res = Vec::new();
-                    // x.insert(0, (Token::ControlChar('{'), empty_range()));
-                    // x.push((Token::ControlChar('}'), empty_range()));
-
                     let cl = x.clone();
 
                     value_expr_parser
                         .parse(make_input(empty_range(), x.leak()))
                         .into_result()
-                        .unwrap_or_else(|_| panic!("invavlid code {cl:?}"))
+                        .unwrap_or_else(|e| panic!("invavlid code {cl:?} {e:?}"))
                 }
             });
             // .map_with(|x, e| (x, e.span()));

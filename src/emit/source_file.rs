@@ -169,8 +169,11 @@ impl SourceFile {
 	case int:
 		s := target.(int)
 		return fmt.Sprintf("%d", s)
-	case float32:
-		s := target.(float32)
+    case uint:
+        s := target.(uint)
+        return fmt.Sprintf("%d", s)
+	case float64:
+		s := target.(float64)
 		return fmt.Sprintf("%f", s)
 	case bool:
 		s := target.(bool)
