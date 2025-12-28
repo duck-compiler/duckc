@@ -455,6 +455,7 @@ pub fn duckx_contents_in_curly_braces<'a>(
                                 },
                             )]
                         }),
+                    any().filter(|c: &char| c.is_whitespace()).to(Vec::new()),
                     any()
                         .and_is(choice((just("{"), just("}"))).not())
                         // .filter(|c| *c != '{' && *c != '}')

@@ -92,6 +92,7 @@ fn typeresolve_test_case(test_case: &mut TestCase, type_env: &mut TypeEnv) {
 fn typeresolve_jsx_component(c: &mut JsxComponent, type_env: &mut TypeEnv) {
     let units = c.find_units();
     let mut edits = Vec::new();
+
     for (range, unit) in units.iter() {
         match unit {
             JsxSourceUnit::Jsx => {

@@ -1,0 +1,3 @@
+component give_me_something(props: { x: Int }) jsx {
+    return <p>ich bin aus dem test mod {props.x}</p>;
+}

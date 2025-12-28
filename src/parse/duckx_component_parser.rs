@@ -143,7 +143,9 @@ mod tests {
     use crate::parse::{
         lexer::lex_parser,
         make_input,
-        value_parser::{empty_range, type_expr_into_empty_range, value_expr_into_empty_range},
+        value_parser::{
+            IntoReturn, empty_range, type_expr_into_empty_range, value_expr_into_empty_range,
+        },
     };
 
     use super::*;
@@ -155,7 +157,7 @@ mod tests {
             DuckxComponent {
                 name: "T".to_string(),
                 props_type: TypeExpr::Duck(Duck { fields: Vec::new() }).into_empty_span(),
-                value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+                value_expr: ValueExpr::Block(vec![]).into_empty_span().into_return(),
             },
         )];
 

@@ -39,12 +39,8 @@ pub enum Edit {
 pub fn do_edits(to_edit: &mut String, edits: &mut [(usize, Edit)]) {
     edits.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
 
-    let mut shift: isize = 0;
-
-    for (pos, edit) in edits.iter() {
-        let pos = *pos as isize;
-        let pos = pos + shift;
-
+    for (pos, edit) in edits.iter().rev() {
+        let pos = *pos;
         match edit {
             Edit::Insert(s) => to_edit.insert_str(pos as usize, s.as_str()),
             Edit::Delete(amount) => {
@@ -52,11 +48,6 @@ pub fn do_edits(to_edit: &mut String, edits: &mut [(usize, Edit)]) {
                     .drain((pos as usize)..((pos as usize) + *amount))
                     .for_each(drop);
             }
-        }
-
-        match edit {
-            Edit::Insert(s) => shift += s.len() as isize,
-            Edit::Delete(amount) => shift -= *amount as isize,
         }
     }
 }
