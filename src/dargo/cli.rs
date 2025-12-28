@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use crate::{
     dargo::{
-        self, compile::CompileErrKind, docs::DocsErrKind, init::InitErrKind, run::RunErrKind,
+        self, compile::CompileErrKind, docs::DocsErrKind, init::InitErrKind, run::RunErrKind, new::NewErrKind,
         test::TestErrKind,
     },
     tags::Tag,
@@ -28,6 +28,7 @@ pub enum Commands {
     Build(BuildArgs),
     Compile(CompileArgs),
     Init(InitArgs),
+    New(NewArgs),
     Clean,
     Run(RunArgs),
     Test(TestArgs),
@@ -88,9 +89,20 @@ pub struct InitArgs {
     // arch: Option<String>
 }
 
+#[derive(clap::Args, Debug)]
+pub struct NewArgs {
+    pub project_name: Option<String>,
+    // Examples:
+    // #[arg(long, short = 'o')]
+    // optimize: bool,
+    // #[arg(long, value_parser = ["x86", "arm"])]
+    // arch: Option<String>
+}
+
 #[derive(Debug)]
 pub enum CliErrKind {
     Init(InitErrKind),
+    New(NewErrKind),
     Compile(CompileErrKind),
     Build(BuildErrKind),
     Clean(CleanErrKind),
@@ -151,6 +163,14 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
                 (
                     format!("{}{}{}", Tag::Dargo, Tag::Docs, err.0,),
                     CliErrKind::Docs(err.1),
+                )
+            })?;
+        }
+        Commands::New(new_args) => {
+            dargo::new::new_project(None, new_args).map_err(|err| {
+                (
+                    format!("{}{}", Tag::Dargo, err.0,),
+                    CliErrKind::New(err.1),
                 )
             })?;
         }
