@@ -1,7 +1,7 @@
 {
     "id": "bfc367d037f788ff52728e40b76ffb74",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 2277,
+    "line_number": 2287,
     "title": "(\"4 + 4\", TypeExpr::Int(Some(\"4\"))),",
     "tag": "todo",
     "module_tag": "semantics",
