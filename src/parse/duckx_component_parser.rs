@@ -109,9 +109,6 @@ where
     I: BorrowInput<'src, Token = Token, Span = SS>,
     M: Fn(SS, &'src [Spanned<Token>]) -> I + Clone + 'static,
 {
-    // component Name {
-    //   %javascript source
-    // }
     just(Token::Template)
         .ignore_then(
             select_ref! { Token::Ident(identifier) => identifier.clone() }

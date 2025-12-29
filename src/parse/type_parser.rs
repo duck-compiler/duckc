@@ -453,11 +453,11 @@ impl TypeExpr {
         let param1 = &format!("({param1})");
         match self {
             TypeExpr::String(..) => format!("fmt.Sprintf(\"\\\"%s\\\"\", {param1})"),
+            TypeExpr::Char => format!("fmt.Sprintf(\"\\\"%c\\\"\", {param1})"),
             TypeExpr::Int => format!("strconv.Itoa({param1})"),
             TypeExpr::UInt => format!("fmt.Sprintf(\"%d\", {param1})"),
             TypeExpr::Float => format!("fmt.Sprintf(\"%f\", {param1})"),
             TypeExpr::Bool(..) => format!("fmt.Sprintf(\"%t\", {param1})"),
-            TypeExpr::Char => format!("fmt.Sprintf(\"%c\", {param1})"),
             TypeExpr::Tuple(..) => format!("{param1}.to_json()"),
             TypeExpr::Array(..) | TypeExpr::Duck(..) => {
                 format!("{}_ToJson({param1})", self.as_clean_go_type_name(type_env))

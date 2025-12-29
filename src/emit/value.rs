@@ -1796,7 +1796,7 @@ impl ValueExpr {
                                         }
 
                                         let mut html_str = String::new();
-                                        let mut printf_vars = Vec::new();
+                                        let mut printf_params = Vec::new();
 
                                         for part in o {
                                             match part {
@@ -1808,11 +1808,21 @@ impl ValueExpr {
                                                         e.0.emit(type_env, env, e.1);
                                                     instr.extend(e_instr);
                                                     if let Some(e_res) = e_res {
-                                                        let IrValue::Var(e_res) = e_res else {
+                                                        let (IrValue::Var(e_res)
+                                                        | IrValue::Imm(e_res)) = e_res
+                                                        else {
                                                             panic!("no var {e_res:?}")
                                                         };
+                                                        let expr_ty =
+                                                            TypeExpr::from_value_expr(&e, type_env);
+
                                                         html_str.push_str("${%s}");
-                                                        printf_vars.push(e_res);
+                                                        printf_params.push(format!(
+                                                            "({})",
+                                                            &expr_ty
+                                                                .0
+                                                                .call_to_json(&e_res, type_env)
+                                                        ));
                                                     } else {
                                                         return (instr, None);
                                                     }
@@ -1831,34 +1841,28 @@ impl ValueExpr {
                                             format!(
                                                 "fmt.Sprintf(\"{}\", {})",
                                                 escape_string_for_go(&html_str),
-                                                printf_vars
+                                                printf_params
                                                     .iter()
-                                                    .map(|x| format!(
-                                                        "emit_go_to_js({})",
-                                                        escape_string_for_go(x)
-                                                    ))
+                                                    .cloned()
                                                     .collect::<Vec<_>>()
                                                     .join(", "),
                                             ),
                                             id,
                                         ));
 
-                                        let ValHtmlStringContents::String(s) = &mut contents[i]
-                                        else {
-                                            panic!()
-                                        };
-
-                                        s.insert_str(j, &html_to_return);
-
                                         contents.drain(start..i2);
+                                        contents.insert(
+                                            if skip { i } else { start },
+                                            ValHtmlStringContents::String(html_to_return),
+                                        );
+
                                         if i > 1 {
                                             i -= 1;
                                         }
 
                                         continue 'outer;
-                                    } else if true
-                                        && let Some(duckx_component) =
-                                            type_env.get_duckx_component(found).cloned()
+                                    } else if let Some(duckx_component) =
+                                        type_env.get_duckx_component(found).cloned()
                                     {
                                         let mut o = Vec::new();
                                         let full_str = slice[..end_index].to_string();
@@ -1914,7 +1918,9 @@ impl ValueExpr {
                                                         e.0.emit(type_env, env, e.1);
                                                     instr.extend(e_instr);
                                                     if let Some(e_res) = e_res {
-                                                        let IrValue::Var(e_res) = e_res else {
+                                                        let (IrValue::Var(e_res)
+                                                        | IrValue::Imm(e_res)) = e_res
+                                                        else {
                                                             panic!("not a var? {e_res:?}")
                                                         };
                                                         props_init.insert(

@@ -35,7 +35,7 @@ component TodoEditor(props: { item: TodoItem }) jsx {
 }
 
 template TodoList(props: { user_name: String, initial_items: TodoItem[] }) duckx {
-    let z = *(props.initial_items.iter().map<Html>(fn(e) -> Html { duckx { <TodoEditor item={*e}/> } }).into_list().as_ref());
+    const = *(props.initial_items.iter().map<Html>(fn(e) -> Html { duckx { <TodoEditor item={*e}/> } }).into_list().as_ref());
     return (<>
             <!DOCTYPE html>
             <html>

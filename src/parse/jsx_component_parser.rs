@@ -33,7 +33,6 @@ pub enum JsxSourceUnit {
 pub enum Edit {
     Insert(String),
     Delete(usize),
-    // Replace(String),
 }
 
 pub fn do_edits(to_edit: &mut String, edits: &mut [(usize, Edit)]) {
@@ -42,12 +41,8 @@ pub fn do_edits(to_edit: &mut String, edits: &mut [(usize, Edit)]) {
     for (pos, edit) in edits.iter().rev() {
         let pos = *pos;
         match edit {
-            Edit::Insert(s) => to_edit.insert_str(pos as usize, s.as_str()),
-            Edit::Delete(amount) => {
-                to_edit
-                    .drain((pos as usize)..((pos as usize) + *amount))
-                    .for_each(drop);
-            }
+            Edit::Insert(s) => to_edit.insert_str(pos, s.as_str()),
+            Edit::Delete(amount) => to_edit.drain(pos..(pos + *amount)).for_each(drop),
         }
     }
 }

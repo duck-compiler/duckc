@@ -1344,18 +1344,18 @@ fn trav_fn_replace_intersections() -> impl Fn(&mut Spanned<TypeExpr>, &mut TypeE
 
                 do_it(sub_types, &mut found_fields, env);
 
-                *node = (
-                    TypeExpr::Duck(Duck {
-                        fields: found_fields.into_iter().fold(Vec::new(), |mut acc, elem| {
-                            acc.push(Field {
-                                name: elem.0,
-                                type_expr: elem.1,
-                            });
-                            acc
-                        }),
-                    }),
-                    span,
-                );
+                let fields = found_fields.into_iter().fold(Vec::new(), |mut acc, elem| {
+                    acc.push(Field {
+                        name: elem.0,
+                        type_expr: elem.1,
+                    });
+                    acc
+                });
+                let mut res_duck_type = TypeExpr::Duck(Duck { fields });
+
+                sort_fields_type_expr(&mut res_duck_type);
+
+                *node = (res_duck_type, span);
             }
             _ => {}
         }
@@ -2430,7 +2430,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     source_file.schema_defs.iter_mut().for_each(|schema_def| {
         for field in &mut schema_def.fields {
             sort_fields_type_expr(&mut field.type_expr.0);
-            dbg!(&schema_def.out_type);
         }
     });
 

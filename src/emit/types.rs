@@ -1293,6 +1293,37 @@ pub fn emit_type_definitions(
                         )))],
                     ));
                 }
+                crate::parse::struct_parser::DerivableInterface::EmitJs => {
+                    let receiver = fixed_struct_name.clone();
+
+                    let mut string_parts = Vec::new();
+
+                    for f in fields.iter() {
+                        string_parts.push(format!(
+                            "\"{}: \" + {}",
+                            f.name,
+                            f.type_expr
+                                .0
+                                .call_to_string(&format!("self.{}", f.name), type_env),
+                        ));
+                    }
+
+                    if string_parts.is_empty() {
+                        string_parts.push("\"\"".to_string());
+                    }
+
+                    instructions.push(IrInstruction::FunDef(
+                        "to_string".to_string(),
+                        Some(("self".to_string(), format!("*{receiver}"))),
+                        vec![],
+                        Some("string".to_string()),
+                        vec![IrInstruction::Return(Some(IrValue::Imm(format!(
+                            r#"fmt.Sprintf("{}{{%s}}", {})"#,
+                            struct_name,
+                            string_parts.join(" + \" \" + ")
+                        ))))],
+                    ));
+                }
                 crate::parse::struct_parser::DerivableInterface::ToString => {
                     let receiver = fixed_struct_name.clone();
 

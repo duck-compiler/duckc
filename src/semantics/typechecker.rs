@@ -1810,165 +1810,175 @@ pub fn check_type_compatability_full(
                 )
             }
         }
-        TypeExpr::Duck(duck) => match &given_type.0 {
-            TypeExpr::Duck(given_duck) => {
-                let required_duck = duck;
-
-                for required_field in required_duck.fields.iter() {
-                    let companion_field = given_duck
-                        .fields
-                        .iter()
-                        .find(|field| field.name == required_field.name);
-
-                    if companion_field.is_none() {
-                        fail_requirement(
-                            format!(
-                                "this type states that it has requires a field {} of type {}",
-                                required_field.name.bright_purple(),
-                                format!("{}", required_field.type_expr.0).bright_yellow(),
-                            ),
-                            format!(
-                                "the given type doesn't have a field {}",
-                                required_field.name.bright_purple(),
-                            ),
-                        )
-                    }
-
-                    let companion_field = companion_field.unwrap();
-
-                    check_type_compatability(
-                        &required_field.type_expr,
-                        &companion_field.type_expr,
-                        type_env,
-                    );
-                }
-            }
-            TypeExpr::NamedDuck {
-                name: _,
-                type_params: _,
-            } => {
-                assert_eq!(
-                    required_type.0.type_id(type_env),
-                    given_type.0.type_id(type_env)
-                );
+        TypeExpr::Duck(duck) => {
+            if duck.fields.is_empty() {
                 return;
             }
-            TypeExpr::Struct {
-                name: struct_name,
-                type_params,
-            } => {
-                let struct_def = type_env
-                    .get_struct_def_with_type_params_mut(struct_name, type_params, required_type.1)
-                    .clone();
 
-                for required_field in duck.fields.iter() {
-                    if let TypeExpr::Fun(_, _, is_mut) = required_field.type_expr.0 {
-                        let companion_method = struct_def
-                            .methods
+            match &given_type.0 {
+                TypeExpr::Duck(given_duck) => {
+                    let required_duck = duck;
+
+                    for required_field in required_duck.fields.iter() {
+                        let companion_field = given_duck
+                            .fields
                             .iter()
-                            .find(|method| method.name == required_field.name);
+                            .find(|field| field.name == required_field.name);
 
-                        if companion_method.is_none() {
+                        if companion_field.is_none() {
                             fail_requirement(
                                 format!(
-                                    "this type states that it requires a field {} of type {}",
+                                    "this type states that it has requires a field {} of type {}",
                                     required_field.name.bright_purple(),
                                     format!("{}", required_field.type_expr.0).bright_yellow(),
                                 ),
                                 format!(
-                                    "the given type doesn't have a field or method with name {}",
+                                    "the given type doesn't have a field {}",
                                     required_field.name.bright_purple(),
                                 ),
-                            );
+                            )
                         }
 
-                        if is_mut {
-                            if !struct_def.mut_methods.contains(&required_field.name) {
-                                fail_requirement(
-                                    format!(
-                                        "this type states that it requires a mutable method named {}",
-                                        required_field.name.bright_purple(),
-                                    ),
-                                    format!(
-                                        "the given type doesn't have a mutable method named {}",
-                                        required_field.name.bright_purple(),
-                                    ),
-                                );
-                            }
-                            if given_const_var
-                                && !{
-                                    let mut is_mut_ref = false;
+                        let companion_field = companion_field.unwrap();
 
-                                    let mut current = given_type.0.clone();
-                                    while let TypeExpr::RefMut(next) = current {
-                                        is_mut_ref = true;
-
-                                        if let TypeExpr::Ref(..) = next.0 {
-                                            is_mut_ref = false;
-                                            break;
-                                        }
-
-                                        current = next.0;
-                                    }
-
-                                    is_mut_ref
-                                }
-                            {
-                                fail_requirement(
-                                    "this needs mutable access".to_string(),
-                                    "this is a const var".to_string(),
-                                );
-                            }
-                        }
-
-                        let companion_method = companion_method.unwrap();
                         check_type_compatability(
                             &required_field.type_expr,
-                            &companion_method.type_expr(),
+                            &companion_field.type_expr,
                             type_env,
                         );
-                        return;
                     }
-
-                    let companion_field = struct_def
-                        .fields
-                        .iter()
-                        .find(|field| field.name == required_field.name);
-
-                    if companion_field.is_none() {
-                        fail_requirement(
-                            format!(
-                                "this type states that it has requires a field {} of type {}",
-                                required_field.name.bright_purple(),
-                                format!("{}", required_field.type_expr.0).bright_yellow(),
-                            ),
-                            format!(
-                                "the given type doesn't have a field {}",
-                                required_field.name.bright_purple(),
-                            ),
-                        )
-                    }
-
-                    let companion_field = companion_field.unwrap();
-
-                    check_type_compatability(
-                        &required_field.type_expr,
-                        &companion_field.type_expr,
-                        type_env,
-                    );
                 }
+                TypeExpr::NamedDuck {
+                    name: _,
+                    type_params: _,
+                } => {
+                    assert_eq!(
+                        required_type.0.type_id(type_env),
+                        given_type.0.type_id(type_env)
+                    );
+                    return;
+                }
+                TypeExpr::Struct {
+                    name: struct_name,
+                    type_params,
+                } => {
+                    let struct_def = type_env
+                        .get_struct_def_with_type_params_mut(
+                            struct_name,
+                            type_params,
+                            required_type.1,
+                        )
+                        .clone();
+
+                    for required_field in duck.fields.iter() {
+                        if let TypeExpr::Fun(_, _, is_mut) = required_field.type_expr.0 {
+                            let companion_method = struct_def
+                                .methods
+                                .iter()
+                                .find(|method| method.name == required_field.name);
+
+                            if companion_method.is_none() {
+                                fail_requirement(
+                                    format!(
+                                        "this type states that it requires a field {} of type {}",
+                                        required_field.name.bright_purple(),
+                                        format!("{}", required_field.type_expr.0).bright_yellow(),
+                                    ),
+                                    format!(
+                                        "the given type doesn't have a field or method with name {}",
+                                        required_field.name.bright_purple(),
+                                    ),
+                                );
+                            }
+
+                            if is_mut {
+                                if !struct_def.mut_methods.contains(&required_field.name) {
+                                    fail_requirement(
+                                        format!(
+                                            "this type states that it requires a mutable method named {}",
+                                            required_field.name.bright_purple(),
+                                        ),
+                                        format!(
+                                            "the given type doesn't have a mutable method named {}",
+                                            required_field.name.bright_purple(),
+                                        ),
+                                    );
+                                }
+                                if given_const_var
+                                    && !{
+                                        let mut is_mut_ref = false;
+
+                                        let mut current = given_type.0.clone();
+                                        while let TypeExpr::RefMut(next) = current {
+                                            is_mut_ref = true;
+
+                                            if let TypeExpr::Ref(..) = next.0 {
+                                                is_mut_ref = false;
+                                                break;
+                                            }
+
+                                            current = next.0;
+                                        }
+
+                                        is_mut_ref
+                                    }
+                                {
+                                    fail_requirement(
+                                        "this needs mutable access".to_string(),
+                                        "this is a const var".to_string(),
+                                    );
+                                }
+                            }
+
+                            let companion_method = companion_method.unwrap();
+                            check_type_compatability(
+                                &required_field.type_expr,
+                                &companion_method.type_expr(),
+                                type_env,
+                            );
+                            return;
+                        }
+
+                        let companion_field = struct_def
+                            .fields
+                            .iter()
+                            .find(|field| field.name == required_field.name);
+
+                        if companion_field.is_none() {
+                            fail_requirement(
+                                format!(
+                                    "this type states that it has requires a field {} of type {}",
+                                    required_field.name.bright_purple(),
+                                    format!("{}", required_field.type_expr.0).bright_yellow(),
+                                ),
+                                format!(
+                                    "the given type doesn't have a field {}",
+                                    required_field.name.bright_purple(),
+                                ),
+                            )
+                        }
+
+                        let companion_field = companion_field.unwrap();
+
+                        check_type_compatability(
+                            &required_field.type_expr,
+                            &companion_field.type_expr,
+                            type_env,
+                        );
+                    }
+                }
+                _ => fail_requirement(
+                    format!(
+                        "the required type {} is a duck",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                    format!(
+                        "because of the fact, that the required type {} is a duck. The value you need to pass must be a duck aswell, but it isn't.",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                ),
             }
-            _ => fail_requirement(
-                format!(
-                    "the required type {} is a duck",
-                    format!("{}", required_type.0).bright_yellow(),
-                ),
-                format!(
-                    "because of the fact, that the required type {} is a duck. The value you need to pass must be a duck aswell, but it isn't.",
-                    format!("{}", required_type.0).bright_yellow(),
-                ),
-            ),
-        },
+        }
         TypeExpr::Tuple(item_types) => {
             if item_types.is_empty() && matches!(given_type.0, TypeExpr::Statement) {
                 return;
