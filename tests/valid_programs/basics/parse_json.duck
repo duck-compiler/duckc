@@ -14,6 +14,8 @@ struct Game {
 }
 
 type NiceTest = { x: String, y: Int };
+type InterTest = { x: Int } & { y: Int } & { z: { z1: Bool } };
+type InterTest2 = {z: {z1: {z11: {z111: Float, z112: .abc } } } } & NiceTest;
 
 fn to_json_and_return<T>(v: T) -> (T, String) {
     return (v, v.to_json());
@@ -97,4 +99,7 @@ fn main() {
     to_json_and_return_and_from_json<{ header: .v1 | .v2, data: String | { a: Float, b: String } }>({header: .v1, data: {a: 1.3, b: "yoo"}}).to_string()->println();
     to_json_and_return_and_from_json<{ header: .v1 | .v2, data: String | { a: Float, b: String } }>({header: .v1, data: "str data"}).to_string()->println();
     to_json_and_return_and_from_json<{ header: .v1 | .v2, data: String | { a: Float, b: String } }>({header: .v2, data: "str data and v2 header"}).to_string()->println();
+    to_json_and_return_and_from_json<NiceTest>({x: "i am x", y: 123456}).to_string()->println();
+    to_json_and_return_and_from_json<InterTest>({x: 2001, y: 2002, z: { z1: true }}).to_string()->println();
+    to_json_and_return_and_from_json<InterTest2>({x: "x value", y: 932, z: {z1: {z11: {z111: 1.7, z112: .abc}}}}).to_string()->println();
 }

@@ -28,6 +28,7 @@ struct Cmd {
         return Cmd {
             program: program,
             cmd_args: std::col::ArrayList::new<String>(),
+            cwd: .none,
         }
     }
 

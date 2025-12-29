@@ -1344,18 +1344,18 @@ fn trav_fn_replace_intersections() -> impl Fn(&mut Spanned<TypeExpr>, &mut TypeE
 
                 do_it(sub_types, &mut found_fields, env);
 
-                *node = (
-                    TypeExpr::Duck(Duck {
-                        fields: found_fields.into_iter().fold(Vec::new(), |mut acc, elem| {
-                            acc.push(Field {
-                                name: elem.0,
-                                type_expr: elem.1,
-                            });
-                            acc
-                        }),
-                    }),
-                    span,
-                );
+                let fields = found_fields.into_iter().fold(Vec::new(), |mut acc, elem| {
+                    acc.push(Field {
+                        name: elem.0,
+                        type_expr: elem.1,
+                    });
+                    acc
+                });
+                let mut res_duck_type = TypeExpr::Duck(Duck { fields });
+
+                sort_fields_type_expr(&mut res_duck_type);
+
+                *node = (res_duck_type, span);
             }
             _ => {}
         }
@@ -2430,7 +2430,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     source_file.schema_defs.iter_mut().for_each(|schema_def| {
         for field in &mut schema_def.fields {
             sort_fields_type_expr(&mut field.type_expr.0);
-            dbg!(&schema_def.out_type);
         }
     });
 
@@ -3382,7 +3381,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         }
 
         ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
-            unset_const_var_assign(v);
+            unset_copy_var_assign(v);
 
             typeresolve_value_expr((&mut v.0, v.1), type_env);
 
@@ -3793,54 +3792,6 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
 
     unset_const_func_call_assign(target);
 
-    if false
-        && type_params.len() == 1
-        && let ValueExpr::Variable(_, name, var_ty, c, needs_copy) = &mut target.0
-    {
-        if name.as_str() == "parse_json" {
-            let first_type_param = &type_params[0];
-
-            if !first_type_param.0.implements_from_json(type_env) {
-                let msg = &format!(
-                    "{} does not implement FromJson",
-                    first_type_param.0.as_clean_user_faced_type_name()
-                );
-                failure_with_occurence(msg, first_type_param.1, [(msg, first_type_param.1)]);
-            }
-
-            if params.len() != 1 {
-                let msg = "parse_json takes exactly one string as parameter";
-                failure_with_occurence(msg, span, [(msg, span)]);
-            }
-
-            for p in params.iter_mut() {
-                typeresolve_value_expr((&mut p.0, span), type_env);
-            }
-
-            let ty = TypeExpr::from_value_expr(&params[0], type_env);
-            if !matches!(ty.0, TypeExpr::String(..)) {
-                let msg = &format!(
-                    "parse_json takes exactly one string as parameter. You provided a {}",
-                    ty.0.as_clean_user_faced_type_name()
-                );
-                failure_with_occurence(msg, span, [(msg, span)]);
-            }
-            *var_ty = Some(TypeExpr::Fun(
-                vec![(None, (TypeExpr::String(None), span))],
-                TypeExpr::Or(vec![
-                    type_params[0].clone(),
-                    TypeExpr::Tag("err".to_string()).into_empty_span(),
-                ])
-                .into_empty_span()
-                .into(),
-                false,
-            ));
-            *c = Some(false);
-            *needs_copy = false;
-            return;
-        }
-    }
-
     let header: FunHeader;
     if type_params.is_empty() {
         match &mut target.0 {
@@ -3990,6 +3941,10 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
             return_type: def_ret.as_ref().clone(),
         };
     } else {
+        for t in type_params.iter_mut() {
+            resolve_all_aliases_type_expr(t, type_env);
+        }
+
         match &mut target.0 {
             ValueExpr::Variable(_, name, ty, _, _needs_copy) => {
                 let fn_def = type_env
@@ -4310,14 +4265,14 @@ fn typeresolve_var_decl(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
     );
 }
 
-fn unset_const_var_assign(v: &mut Spanned<ValueExpr>) {
+fn unset_copy_var_assign(v: &mut Spanned<ValueExpr>) {
     match &mut v.0 {
-        ValueExpr::ArrayAccess(target, ..) => unset_const_var_assign(target),
-        ValueExpr::Deref(inner) => unset_const_var_assign(inner),
+        ValueExpr::ArrayAccess(target, ..) => unset_copy_var_assign(target),
+        ValueExpr::Deref(inner) => unset_copy_var_assign(inner),
         ValueExpr::FieldAccess {
             target_obj,
             field_name: _,
-        } => unset_const_var_assign(target_obj),
+        } => unset_copy_var_assign(target_obj),
         ValueExpr::Variable(_, _, _, _, needs_copy) => {
             *needs_copy = false;
         }
@@ -4396,7 +4351,7 @@ fn typeresolve_var_assign(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         type_env,
     );
 
-    unset_const_var_assign(&mut assignment.0.target);
+    unset_copy_var_assign(&mut assignment.0.target);
     let target_type = TypeExpr::from_value_expr(&assignment.0.target, type_env);
 
     infer_against(&mut assignment.0.value_expr, &target_type, type_env);
@@ -4429,6 +4384,52 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
     };
 
     let og_def = type_env.get_struct_def(name);
+
+    if fields.len() != og_def.fields.len() {
+        let msg = "Amount of fields doesn't match.";
+        failure_with_occurence(
+            msg,
+            span,
+            [(
+                format!(
+                    "{} has {} fields. You provided {} fields",
+                    og_def.name,
+                    og_def.fields.len(),
+                    fields.len(),
+                ),
+                span,
+            )],
+        );
+    }
+
+    for f in fields.iter() {
+        if og_def
+            .fields
+            .iter()
+            .find(|og_field| og_field.name.as_str() == f.0)
+            .is_none()
+        {
+            let msg = format!("Invalid field {}", f.0);
+            failure_with_occurence(
+                msg,
+                span,
+                [(
+                    format!(
+                        "{} doesn't have a field named {}. It has fields {}",
+                        og_def.name,
+                        f.0,
+                        og_def
+                            .fields
+                            .iter()
+                            .map(|f| f.name.clone())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    ),
+                    span,
+                )],
+            );
+        }
+    }
 
     if type_params.is_empty() && !og_def.generics.is_empty() {
         let og_def = og_def.clone();
@@ -4498,17 +4499,30 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
         failure_with_occurence(msg, span, [(msg, span)])
     }
 
+    for t in type_params.iter_mut() {
+        resolve_all_aliases_type_expr(t, type_env);
+    }
+
     let def = type_env
         .get_struct_def_with_type_params_mut(name.as_str(), type_params.as_slice(), span)
         .clone();
 
-    fields
-        .iter_mut()
-        .zip(def.fields.iter())
-        .for_each(|((_field_name, value_expr), def_field)| {
-            infer_against(value_expr, &def_field.type_expr, type_env);
-            typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
-        });
+    for f in fields.iter_mut() {
+        let og_field = def
+            .fields
+            .iter()
+            .find(|og_field| og_field.name.as_str() == f.0.as_str())
+            .cloned()
+            .unwrap()
+            .type_expr;
+        infer_against(&mut f.1, &og_field, type_env);
+        typeresolve_value_expr((&mut f.1.0, f.1.1), type_env);
+        check_type_compatability(
+            &og_field,
+            &TypeExpr::from_value_expr(&f.1, type_env),
+            type_env,
+        );
+    }
 }
 
 fn typeresolve_block(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {

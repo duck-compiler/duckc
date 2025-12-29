@@ -29,6 +29,7 @@ pub enum DerivableInterface {
     ToJson,
     Hash,
     FromJson,
+    EmitJs,
 }
 
 #[derive(Debug, Clone, PartialEq)]
