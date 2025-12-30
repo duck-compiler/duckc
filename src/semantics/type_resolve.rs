@@ -1,9 +1,7 @@
 use std::{
-    cell::{Cell, RefCell},
-    collections::{HashMap, HashSet},
-    rc::Rc,
-    sync::mpsc::Sender,
+    cell::{Cell, RefCell}, collections::{HashMap, HashSet}, rc::Rc, sync::mpsc::Sender
 };
+use colored::Colorize;
 
 use chumsky::container::Container;
 use indexmap::IndexMap;
@@ -4387,17 +4385,57 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
 
     if fields.len() != og_def.fields.len() {
         let msg = "Amount of fields doesn't match.";
+
+        let mut hints = vec![
+            format!(
+                "{} has {} fields. You provided {} fields",
+                og_def.name,
+                og_def.fields.len(),
+                fields.len(),
+            ),
+        ];
+
+        let fields_that_are_too_much = fields.iter()
+            .map(|field| field.0.clone())
+            .filter(|field| {
+                !og_def.fields
+                    .iter()
+                    .map(|og_field| &og_field.name)
+                    .any(|field_name| *field_name == *field)
+            })
+            .collect::<Vec<String>>();
+
+        let missing_fields = og_def.fields
+            .iter()
+            .map(|field| field.name.clone())
+            .filter(|field| !fields.iter().any(|given_field| given_field.0 == *field))
+            .collect::<Vec<String>>();
+
+        if fields_that_are_too_much.len() >= 1 {
+            hints.push(
+                format!(
+                    "The field(s) {} do not exist on type {}",
+                    fields_that_are_too_much.join(", ").yellow(),
+                    og_def.name.yellow(),
+                )
+            );
+        }
+
+        if missing_fields.len() >= 1 {
+            hints.push(
+                format!(
+                    "The field(s) {} are/is missing",
+                    missing_fields.join(", ").to_string().yellow(),
+                ),
+            );
+        }
+
         failure_with_occurence(
             msg,
             span,
-            [(
-                format!(
-                    "{} has {} fields. You provided {} fields",
-                    og_def.name,
-                    og_def.fields.len(),
-                    fields.len(),
-                ),
-                span,
+            vec![(
+                hints.join(". "),
+                span
             )],
         );
     }
