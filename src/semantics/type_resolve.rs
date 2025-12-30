@@ -3608,7 +3608,7 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
         value_expr,
         arms,
         else_arm,
-        span: _,
+        span,
     } = value_expr.0
     else {
         unreachable!("only pass match exprs to this function")
@@ -3676,21 +3676,25 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
         vec![match_var_type]
     };
 
-    for c in arms {
-        let type_id = c.type_case.0.type_id(type_env);
-        all.retain(|f| f.0.type_id(type_env) != type_id);
+    for c in arms.iter() {
+        if c.condition.is_none() {
+            let type_id = c.type_case.0.type_id(type_env);
+            all.retain(|f| f.0.type_id(type_env) != type_id);
+        }
     }
 
     let else_type = if all.is_empty() {
         (TypeExpr::Any, value_expr.1)
     } else {
-        let mut tmp = (TypeExpr::Or(all), value_expr.1);
+        let mut tmp = (TypeExpr::Or(all.clone()), value_expr.1);
         merge_all_or_type_expr(&mut tmp, type_env);
         tmp
     };
 
     if let Some(arm) = else_arm {
-        arm.type_case = else_type.clone();
+        if !arm.type_case.0.is_never() {
+            arm.type_case = else_type.clone();
+        }
         type_env.push_identifier_types();
         if let Some(identifier) = &arm.identifier_binding {
             type_env.insert_identifier_type(identifier.clone(), else_type.0, false, false);
@@ -3700,6 +3704,45 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
         }
         typeresolve_value_expr((&mut arm.value_expr.0, arm.value_expr.1), type_env);
         type_env.pop_identifier_types();
+    } else if !all.is_empty() {
+        for c in arms.iter() {
+            if c.type_case.0.type_id(type_env) == all[0].0.type_id(type_env)
+                && c.condition.is_some()
+            {
+                failure_with_occurence(
+                    "Unexhaustive Match",
+                    *span,
+                    vec![
+                        (
+                            format!(
+                                "possible type {} not covered",
+                                format!("{}", all[0].0).bright_yellow()
+                            ),
+                            *span,
+                        ),
+                        (
+                            format!(
+                                "This only covers {} partially and you're not providing an else",
+                                format!("{}", all[0].0).bright_yellow()
+                            ),
+                            c.span,
+                        ),
+                    ],
+                );
+            }
+        }
+
+        failure_with_occurence(
+            "Unexhaustive Match",
+            *span,
+            vec![(
+                format!(
+                    "possible type {} not covered",
+                    format!("{}", all[0].0).bright_yellow()
+                ),
+                *span,
+            )],
+        );
     }
 }
 

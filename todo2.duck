@@ -1,0 +1,53 @@
+use std::io::{println};
+use std::path::{FilePath};
+use std::web::{HttpServer, Req, Res};
+use std::error::{panic};
+use std::time::{Time};
+
+type Todo = {
+    done: Bool,
+    title: String,
+    description: String,
+};
+
+type Storage = {
+    todos: Todo[],
+};
+
+template TodoApp(props: { storage: Storage }) duckx {
+    return (
+        <>
+        <!doctype html>
+        <html>
+            <head>
+                <title>Todo App written in Duck</title>
+            </head>
+            <body>
+                <div>
+                    Hello, World!
+                    {props.storage.todos.to_string()}
+                </div>
+            </body>
+        </html>
+        </>
+    )
+}
+
+fn main() {
+    const storage: Storage = match FilePath::new("./.todo/storage.json/")
+        .ensure_dir()
+        .read() {
+        String @str => {
+            let parse_result = parse_json<Storage>(str);
+            match parse_result {
+                Storage @storage => storage,
+                else => panic("couldn't parse storage file") as !,
+            }
+        },
+        else @v => { todos: [] as Todo[] },
+    };
+
+    HttpServer::new(.verbose)
+        .serve_template("/", TodoApp({ storage: storage }))
+        .listen(":8080");
+}

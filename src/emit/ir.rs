@@ -249,7 +249,7 @@ impl IrInstruction {
             IrInstruction::VarAssignment(name, v) => format!("{name} = {}", v.emit_as_go()),
             IrInstruction::If(cond, then, els) => {
                 format!(
-                    "if ({}) {{\n{}\n}} {}",
+                    "if {} {{\n{}\n}} {}",
                     cond.emit_as_go(),
                     then.iter()
                         .map(IrInstruction::emit_as_go)
