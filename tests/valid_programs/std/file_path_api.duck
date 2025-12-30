@@ -17,14 +17,14 @@ fn main() {
 
     let reader: &std::io::File = match std::io::File::open(file.path_ref) {
         std::io::File @reader => &reader,
-        else => std::assert(false, "reader failed") as !,
+        else => std::error::panic("reader failed"),
     };
 
     defer reader.close();
 
     let content: String = match reader.read_str() {
         String @str => str,
-        else => std::assert(false, "read_str failed") as !,
+        else => std::error::panic("read_str failed"),
     };
 
     std::assert(content == "hellloooo", "content mismatch in file");

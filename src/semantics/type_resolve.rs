@@ -1,7 +1,10 @@
-use std::{
-    cell::{Cell, RefCell}, collections::{HashMap, HashSet}, rc::Rc, sync::mpsc::Sender
-};
 use colored::Colorize;
+use std::{
+    cell::{Cell, RefCell},
+    collections::{HashMap, HashSet},
+    rc::Rc,
+    sync::mpsc::Sender,
+};
 
 use chumsky::container::Container;
 use indexmap::IndexMap;
@@ -3414,8 +3417,8 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                                 "The identifier {} is not found in the current scope",
                                 ident.red(),
                             ),
-                            *span
-                        )]
+                            *span,
+                        )],
                     );
                 });
             resolve_all_aliases_type_expr(&mut type_expr.clone().into_empty_span(), type_env);
@@ -3605,7 +3608,7 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
         value_expr,
         arms,
         else_arm,
-        span: _,
+        span,
     } = value_expr.0
     else {
         unreachable!("only pass match exprs to this function")
@@ -3665,25 +3668,81 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
         type_env.pop_identifier_types();
     });
 
+    let match_var_type = TypeExpr::from_value_expr(value_expr, type_env);
+
+    let mut all = if let TypeExpr::Or(contents) = match_var_type.0 {
+        contents
+    } else {
+        vec![match_var_type]
+    };
+
+    for c in arms.iter() {
+        if c.condition.is_none() {
+            let type_id = c.type_case.0.type_id(type_env);
+            all.retain(|f| f.0.type_id(type_env) != type_id);
+        }
+    }
+
+    let else_type = if all.is_empty() {
+        (TypeExpr::Any, value_expr.1)
+    } else {
+        let mut tmp = (TypeExpr::Or(all.clone()), value_expr.1);
+        merge_all_or_type_expr(&mut tmp, type_env);
+        tmp
+    };
+
     if let Some(arm) = else_arm {
+        if !arm.type_case.0.is_never() {
+            arm.type_case = else_type.clone();
+        }
         type_env.push_identifier_types();
         if let Some(identifier) = &arm.identifier_binding {
+            type_env.insert_identifier_type(identifier.clone(), else_type.0, false, false);
             if let Some(condition) = &mut arm.condition {
                 typeresolve_value_expr((&mut condition.0, condition.1), type_env);
             }
-            type_env.insert_identifier_type(
-                identifier.clone(),
-                if let Some(base) = arm.base.as_ref().cloned() {
-                    base.0
-                } else {
-                    arm.type_case.0.clone()
-                },
-                false,
-                false,
-            );
         }
         typeresolve_value_expr((&mut arm.value_expr.0, arm.value_expr.1), type_env);
         type_env.pop_identifier_types();
+    } else if !all.is_empty() {
+        for c in arms.iter() {
+            if c.type_case.0.type_id(type_env) == all[0].0.type_id(type_env)
+                && c.condition.is_some()
+            {
+                failure_with_occurence(
+                    "Unexhaustive Match",
+                    *span,
+                    vec![
+                        (
+                            format!(
+                                "possible type {} not covered",
+                                format!("{}", all[0].0).bright_yellow()
+                            ),
+                            *span,
+                        ),
+                        (
+                            format!(
+                                "This only covers {} partially and you're not providing an else",
+                                format!("{}", all[0].0).bright_yellow()
+                            ),
+                            c.span,
+                        ),
+                    ],
+                );
+            }
+        }
+
+        failure_with_occurence(
+            "Unexhaustive Match",
+            *span,
+            vec![(
+                format!(
+                    "possible type {} not covered",
+                    format!("{}", all[0].0).bright_yellow()
+                ),
+                *span,
+            )],
+        );
     }
 }
 
@@ -4398,58 +4457,48 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
     if fields.len() != og_def.fields.len() {
         let msg = "Amount of fields doesn't match.";
 
-        let mut hints = vec![
-            format!(
-                "{} has {} fields. You provided {} fields",
-                og_def.name,
-                og_def.fields.len(),
-                fields.len(),
-            ),
-        ];
+        let mut hints = vec![format!(
+            "{} has {} fields. You provided {} fields",
+            og_def.name,
+            og_def.fields.len(),
+            fields.len(),
+        )];
 
-        let fields_that_are_too_much = fields.iter()
+        let fields_that_are_too_much = fields
+            .iter()
             .map(|field| field.0.clone())
             .filter(|field| {
-                !og_def.fields
+                !og_def
+                    .fields
                     .iter()
                     .map(|og_field| &og_field.name)
                     .any(|field_name| *field_name == *field)
             })
             .collect::<Vec<String>>();
 
-        let missing_fields = og_def.fields
+        let missing_fields = og_def
+            .fields
             .iter()
             .map(|field| field.name.clone())
             .filter(|field| !fields.iter().any(|given_field| given_field.0 == *field))
             .collect::<Vec<String>>();
 
         if fields_that_are_too_much.len() >= 1 {
-            hints.push(
-                format!(
-                    "The field(s) {} do not exist on type {}",
-                    fields_that_are_too_much.join(", ").yellow(),
-                    og_def.name.yellow(),
-                )
-            );
+            hints.push(format!(
+                "The field(s) {} do not exist on type {}",
+                fields_that_are_too_much.join(", ").yellow(),
+                og_def.name.yellow(),
+            ));
         }
 
         if missing_fields.len() >= 1 {
-            hints.push(
-                format!(
-                    "The field(s) {} are/is missing",
-                    missing_fields.join(", ").to_string().yellow(),
-                ),
-            );
+            hints.push(format!(
+                "The field(s) {} are/is missing",
+                missing_fields.join(", ").to_string().yellow(),
+            ));
         }
 
-        failure_with_occurence(
-            msg,
-            span,
-            vec![(
-                hints.join(". "),
-                span
-            )],
-        );
+        failure_with_occurence(msg, span, vec![(hints.join(". "), span)]);
     }
 
     for f in fields.iter() {
@@ -4641,16 +4690,12 @@ fn typeresolve_if_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Type
 
 fn typeresolve_variable(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
     let ValueExpr::Variable(_, identifier, type_expr_opt, const_opt, needs_copy) = value_expr.0
-        else {
-            unreachable!("only pass structs to this function")
-        };
-    // if let Some(type_expr) = type_expr_opt {
-    //     resolve_all_aliases_type_expr(type_expr, type_env);
-    //     return;
-    // }
+    else {
+        unreachable!("only pass structs to this function")
+    };
     let (type_expr, is_const, _) = type_env
         .get_identifier_type_and_const(identifier)
-        .unwrap_or_else(||
+        .unwrap_or_else(|| {
             failure_with_occurence(
                 "Unknown identifier".to_string(),
                 value_expr.1,
@@ -4659,10 +4704,10 @@ fn typeresolve_variable(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
                         "The identifier {} is not found in the current scope",
                         identifier.yellow(),
                     ),
-                    value_expr.1
-                )]
+                    value_expr.1,
+                )],
             )
-        );
+        });
 
     //resolve_all_aliases_type_expr(&mut type_expr, type_env, generics_to_ignore);
 

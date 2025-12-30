@@ -1,0 +1,21 @@
+use std::io::println;
+
+[auto(ToString)]
+struct A {
+    x: String,
+    y: Char,
+    z: Float,
+}
+
+type X = Int | Char | String | Float;
+type Y = X | A;
+
+fn main() {
+    const v: Y = A { x: "aaaaaa", y: 'F', z: 23123.4 };
+    match v {
+        X @x => println(x.to_string()),
+        else @b => match b {
+            A @a => println(f"inner: {a.to_string()}"),
+        },
+    }
+}

@@ -472,7 +472,7 @@ fn main() {
 
     let post_response: String = match std::web::fetch(.POST, "http://localhost:8080/post").send() {
         String @str => str,
-        else => std::assert(false, "could send post") as !,
+        else => std::error::panic("could send post"),
     };
 
     let parsed_response = post_response->parse_json<{ x: String }>();
@@ -482,7 +482,7 @@ fn main() {
         { x: String } @parsed => {
             std::assert(parsed.x == "hello", "response.x is not hello");
         },
-        .err => std::assert(false, "something is completely fck"),
+        .err => std::error::panic("something is completely fck"),
     };
 
     std::assert(std::web::fetch(.GET, "http://localhost:8080/post").send() == "Method Not Allowed", "get against post worked :(");

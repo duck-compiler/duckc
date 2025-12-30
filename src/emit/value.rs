@@ -2270,110 +2270,6 @@ impl ValueExpr {
                     result_type_annotation,
                 ));
 
-                let mut cases = Vec::new();
-                for arm in arms {
-                    let type_name = arm.type_case.0.as_go_type_annotation(type_env);
-
-                    let (mut arm_instrs, arm_res) =
-                        arm.value_expr.0.direct_or_with_instr(type_env, env, *span);
-                    if let Some(res) = arm_res {
-                        arm_instrs.push(IrInstruction::VarAssignment(result_var_name.clone(), res));
-                    }
-
-                    cases.push(Case {
-                        type_name,
-                        instrs: arm_instrs,
-                        identifier_binding: arm.identifier_binding.clone(),
-                        condition: arm.condition.clone(),
-                        conditional_branches: None,
-                        span: arm.span,
-                    });
-                }
-
-                if let Some(arm) = else_arm {
-                    let _type_name = arm.type_case.0.as_clean_go_type_name(type_env);
-
-                    let (mut arm_instrs, arm_res) =
-                        arm.value_expr.0.direct_or_with_instr(type_env, env, *span);
-                    if let Some(res) = arm_res {
-                        arm_instrs.push(IrInstruction::VarAssignment(result_var_name.clone(), res));
-                    }
-
-                    cases.push(Case {
-                        type_name: "__else".to_string(),
-                        instrs: arm_instrs,
-                        identifier_binding: arm.identifier_binding.clone(),
-                        condition: arm.condition.clone(),
-                        conditional_branches: None,
-                        span: arm.span,
-                    });
-                }
-
-                let mut merged_cases = vec![];
-                for case in cases.clone().iter_mut() {
-                    if merged_cases
-                        .iter()
-                        .any(|other_case: &Case| other_case.type_name == case.type_name)
-                    {
-                        continue;
-                    }
-
-                    let matching_cases = cases
-                        .iter()
-                        .filter(|ocase| **ocase != *case && ocase.type_name == case.type_name)
-                        .collect::<Vec<_>>();
-
-                    if case.condition.is_none() && matching_cases.is_empty() && else_arm.is_none() {
-                        merged_cases.push(case.clone());
-                        continue;
-                    }
-
-                    let the_one = cases.iter().find(|hopefully_the_one| {
-                        hopefully_the_one.type_name == case.type_name
-                            && hopefully_the_one.condition.is_none()
-                    });
-
-                    if the_one.is_none() && else_arm.is_none() {
-                        failure_with_occurence(
-                            "Unexhaustive Match",
-                            *span,
-                            vec![
-                                (
-                                    format!(
-                                        "this only partially covers {} and you're not having an else branch",
-                                        case.type_name
-                                    ),
-                                    case.span,
-                                ),
-                                (
-                                    "not all possibilites are covered by this match".to_string(),
-                                    *span,
-                                ),
-                            ],
-                        );
-                    }
-
-                    let mut the_one = the_one.unwrap_or(case).clone();
-                    let conditional_branches = cases
-                        .iter()
-                        .filter(|case| {
-                            case.condition.is_some() && case.type_name == the_one.type_name
-                        })
-                        .map(|case| {
-                            let cond = case.condition.as_ref().unwrap().clone();
-                            (cond.0.emit(type_env, env, case.span), case.clone())
-                        })
-                        .collect::<Vec<_>>();
-
-                    if !conditional_branches.is_empty() {
-                        the_one.conditional_branches = Some(conditional_branches);
-                    }
-
-                    merged_cases.push(the_one);
-                }
-
-                let cases = merged_cases;
-
                 let match_var = env.new_var();
                 let (IrValue::Var(match_pre_var) | IrValue::Imm(match_pre_var)) = match_on_value
                 else {
@@ -2384,7 +2280,96 @@ impl ValueExpr {
                     "\nvar {match_var} any\n_ = {match_var}\n{match_var} = {match_pre_var}"
                 )));
 
-                instructions.push(IrInstruction::SwitchType(IrValue::Var(match_var), cases));
+                // let mut ifs = Vec::new();
+
+                let end_label = env.new_var();
+
+                for a in arms {
+                    let type_anno = a.type_case.0.as_go_type_annotation(type_env);
+                    let cast_var = env.new_var();
+
+                    let first_cond = format!("{cast_var}, ok := {match_var}.({type_anno}); ok");
+
+                    let (mut body_instr, body_res_var) =
+                        a.value_expr.0.emit(type_env, env, a.value_expr.1);
+
+                    if let Some(r) = body_res_var {
+                        body_instr.push(IrInstruction::VarAssignment(result_var_name.clone(), r));
+                    }
+                    body_instr.push(IrInstruction::InlineGo(format!("goto {end_label}\n")));
+
+                    let mut if_body = vec![IrInstruction::InlineGo(format!("_ = {cast_var}\n"))];
+                    if let Some(ident) = a.identifier_binding.as_ref() {
+                        if_body.push(IrInstruction::VarDecl(
+                            ident.clone(),
+                            a.base
+                                .as_ref()
+                                .unwrap_or(&a.type_case)
+                                .0
+                                .as_go_type_annotation(type_env),
+                        ));
+                        if_body.push(IrInstruction::VarAssignment(
+                            ident.clone(),
+                            IrValue::Var(cast_var.clone()),
+                        ));
+                    }
+
+                    let mut second_cond = IrValue::Bool(true);
+
+                    if let Some(cond) = a.condition.as_ref() {
+                        let (cond_instr, cond_res) = cond.0.emit(type_env, env, cond.1);
+                        if_body.extend(cond_instr);
+                        if let Some(cond_res) = cond_res {
+                            second_cond = cond_res;
+                        }
+                    }
+
+                    if_body.push(IrInstruction::If(second_cond, body_instr, None));
+                    instructions.push(IrInstruction::If(IrValue::Imm(first_cond), if_body, None));
+                }
+
+                if let Some(else_arm) = else_arm.as_ref() {
+                    let mut block_instr = vec![];
+
+                    if let Some(ident) = else_arm.identifier_binding.as_ref() {
+                        let anno = else_arm.type_case.0.as_go_type_annotation(type_env);
+                        block_instr.extend([
+                            IrInstruction::VarDecl(ident.clone(), anno.clone()),
+                            IrInstruction::VarAssignment(
+                                ident.clone(),
+                                IrValue::Imm(format!("{match_var}.({anno})\n")),
+                            ),
+                        ]);
+                    }
+
+                    let (mut else_arm_instr, else_arm_res) =
+                        else_arm
+                            .value_expr
+                            .0
+                            .emit(type_env, env, else_arm.value_expr.1);
+
+                    // let t = TypeExpr::from_value_expr(&else_arm.value_expr, type_env);
+
+                    if let Some(else_arm_res) = else_arm_res {
+                        else_arm_instr.push(IrInstruction::VarAssignment(
+                            result_var_name.clone(),
+                            else_arm_res,
+                        ));
+                    }
+
+                    block_instr.extend(else_arm_instr);
+                    instructions.push(IrInstruction::Block(block_instr));
+                }
+
+                instructions.push(IrInstruction::InlineGo(format!(
+                    r#"
+
+                    {end_label}:
+                    if false {{}}
+
+                    "#
+                )));
+
                 (instructions, as_rvar(result_var_name))
             }
             ValueExpr::ArrayAccess(target, idx) => {
@@ -3354,7 +3339,7 @@ mod tests {
     use chumsky::Parser;
 
     use crate::{
-        emit::value::{Case, IrInstruction, IrValue, ToIr},
+        emit::value::{IrInstruction, IrValue, ToIr},
         parse::{
             lexer::lex_parser,
             make_input,
@@ -3442,41 +3427,6 @@ mod tests {
                 ],
             ),
             ("(true, continue, 3)", vec![IrInstruction::Continue(None)]),
-            // (
-            //     "[] as {}[]",
-            //     vec![
-            //         IrInstruction::VarDecl("var_0".into(), "[]interface{}".into()),
-            //         IrInstruction::VarAssignment(
-            //             "var_0".into(),
-            //             IrValue::Array("[]interface{}".into(), vec![]),
-            //         ),
-            //     ],
-            // ),
-            // (
-            //     "[[] as Int[]]",
-            //     vec![
-            //         IrInstruction::VarDecl("var_0".into(), "[]int".into()),
-            //         IrInstruction::VarAssignment(
-            //             "var_0".into(),
-            //             IrValue::Array("[]int".into(), vec![]),
-            //         ),
-            //         IrInstruction::VarDecl("var_1".into(), "[][]int".into()),
-            //         IrInstruction::VarAssignment(
-            //             "var_1".into(),
-            //             IrValue::Array("[][]int".into(), vec![IrValue::Var("var_0".into())]),
-            //         ),
-            //     ],
-            // ),
-            // (
-            //     "[1]",
-            //     vec![
-            //         IrInstruction::VarDecl("var_0".into(), "[]int".into()),
-            //         IrInstruction::VarAssignment(
-            //             "var_0".into(),
-            //             IrValue::Array("[]int".into(), vec![IrValue::Int(1)]),
-            //         ),
-            //     ],
-            // ),
             (
                 "{ x: 123 }",
                 vec![
@@ -3484,61 +3434,6 @@ mod tests {
                     IrInstruction::VarAssignment(
                         "var_0".into(),
                         IrValue::Duck("Duck_x_int".into(), vec![("x".into(), IrValue::Int(123))]),
-                    ),
-                ],
-            ),
-            (
-                "match 1 { Int @x => 2 }",
-                vec![
-                    decl("var_0", "int"),
-                    IrInstruction::VarAssignment("var_0".to_string(), IrValue::Int(1)),
-                    decl("var_1", "int"),
-                    IrInstruction::InlineGo(
-                        "\nvar var_2 any\n_ = var_2\nvar_2 = var_0".to_string(),
-                    ),
-                    IrInstruction::SwitchType(
-                        IrValue::Var("var_2".to_string()),
-                        vec![Case {
-                            type_name: "int".to_string(),
-                            instrs: vec![IrInstruction::VarAssignment(
-                                "var_1".to_string(),
-                                IrValue::Int(2),
-                            )],
-                            identifier_binding: Some("x".to_string()),
-                            condition: None,
-                            conditional_branches: None,
-                            span: empty_range(),
-                        }],
-                    ),
-                ],
-            ),
-            (
-                "match 1 + 1 { Int @x => 100 }",
-                vec![
-                    decl("var_0", "int"),
-                    IrInstruction::Add(
-                        "var_0".into(),
-                        IrValue::Int(1),
-                        IrValue::Int(1),
-                        TypeExpr::Int,
-                    ),
-                    decl("var_1", "int"),
-                    IrInstruction::InlineGo(
-                        "\nvar var_2 any\n_ = var_2\nvar_2 = var_0".to_string(),
-                    ),
-                    IrInstruction::SwitchType(
-                        IrValue::Var("var_2".into()),
-                        vec![Case {
-                            type_name: "int".to_string(),
-                            instrs: vec![IrInstruction::VarAssignment(
-                                "var_1".to_string(),
-                                IrValue::Int(100),
-                            )],
-                            identifier_binding: Some("x".to_string()),
-                            condition: None,
-                            conditional_branches: None,
-                            span: empty_range(),
-                        }],
                     ),
                 ],
             ),
