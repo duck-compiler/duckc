@@ -1,0 +1,92 @@
+use go "net/http";
+use std::web::{Req, Res};
+
+component ExampleComponent(props: { name: String }) jsx {
+    return (
+        <>
+            <span>Hallo</span>
+        </>
+    )
+}
+
+template ExampleTemplate(props: { my_props: String }) duckx {
+    return (
+        <>
+            <!doctype html>
+            <html>
+                <head>
+                    <title>Duck Page</title>
+                </head>
+                <body>
+                    <h1>HIII {props.my_props}</span>
+                </body>
+            </html>
+        </>
+    )
+}
+
+fn main() {
+    let server = std::web::HttpServer::new(.verbose);
+    async server
+        .handle("GET /hello", fn (req: std::web::Req, res: &mut std::web::Res) {
+            res.set_cookie(&std::web::Cookie::new("hallo", "welt"));
+            let user_agent = req.header("User-Agent");
+            res
+                .status(200)
+                .json_str("[\"hello\"]");
+        })
+        .handle("GET /duckx", fn (req: std::web::Req, res: &mut std::web::Res) {
+            res.set_cookie(&std::web::Cookie::new("hallo", "welt"));
+            let user_agent = req.header("User-Agent");
+            res
+                .status(200)
+                .duckx(ExampleTemplate({ my_props: "whaaat" }))
+        })
+        .handle("GET /lool/{id}", fn (req: std::web::Req, res: &mut std::web::Res) {
+            const id = req.param("id");
+
+            res.set_cookie(&std::web::Cookie::new("hallo", "welt"));
+            let user_agent = req.header("User-Agent");
+            res
+                .status(200)
+                .str(id.to_string())
+        })
+        .handle("POST /post", fn (req: std::web::Req, res: &mut std::web::Res) {
+            res
+                .json({
+                    x: "hello",
+                });
+        })
+        .serve_component("/component", ExampleComponent({ name: "yooo" }))
+        .serve_dynamic_component<{ name: String }>("/other", ExampleComponent, fn () -> { name: String } {
+            return { name: "yoo"}
+        })
+        .serve_template("/stat", ExampleTemplate({ my_props: "yoo" }))
+        .listen(":8080");
+
+    std::task::sleep(std::time::Duration::seconds(1));
+
+    let hello_response = std::web::fetch(.GET, "http://localhost:8080/hello").send();
+    std::assert(hello_response == "[\"hello\"]", "didn't receive what we sent :(");
+
+    let id_lool_response = std::web::fetch(.GET, "http://localhost:8080/lool/1000").send();
+    std::assert(id_lool_response == "1000", "response isn't as expecteddd");
+
+    let post_response: String = match std::web::fetch(.POST, "http://localhost:8080/post").send() {
+        String @str => str,
+        else => std::assert(false, "could send post") as !,
+    };
+
+    let parsed_response = post_response->parse_json<{ x: String }>();
+    std::assert(parsed_response != .err, "couldn't parse json from post response");
+
+    match parsed_response {
+        { x: String } @parsed => {
+            std::assert(parsed.x == "hello", "response.x is not hello");
+        },
+        .err => std::assert(false, "something is completely fck"),
+    };
+
+    std::assert(std::web::fetch(.GET, "http://localhost:8080/post").send() == "Method Not Allowed", "get against post worked :(");
+    std::io::println("everythings great!");
+}

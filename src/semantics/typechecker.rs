@@ -631,19 +631,39 @@ impl TypeExpr {
                                     return;
                                 }
 
+                                let Some(in_param_type) = in_param_types.get(index) else {
+                                    failure_with_occurence(
+                                        "Missing Parameter in Function Call",
+                                        target.1,
+                                        [(
+                                            format!(
+                                                "This function requires a {}",
+                                                param_type.1.0.as_clean_user_faced_type_name(),
+                                            ),
+                                            param_type.1.1,
+                                        ),(
+                                            format!(
+                                                "You need to pass a {} to this function",
+                                                param_type.1.0.as_clean_user_faced_type_name(),
+                                            ),
+                                            target.1,
+                                        )]
+                                    )
+                                };
+
                                 if let Some(param_name) = &param_type.0
                                     && param_name == "self"
                                 {
                                     check_type_compatability_full(
                                         &param_type.1,
-                                        &in_param_types.get(index).unwrap().0,
+                                        &in_param_type.0,
                                         type_env,
                                         is_const_var(&params[index].0),
                                     );
                                 } else {
                                     check_type_compatability_full(
                                         &param_type.1,
-                                        &in_param_types.get(index).expect("no param type").0,
+                                        &in_param_type.0,
                                         type_env,
                                         is_const_var(&params[index].0),
                                     );

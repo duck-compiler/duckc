@@ -1,0 +1,4 @@
+{
+    "stdout": "\u001b[41m http-server \u001b[0m\u001b[38;2;0;0;0m\u001b[45m GET /hello \u001b[0m\u001b[0m\n\u001b[41m http-server \u001b[0m\u001b[38;2;0;0;0m\u001b[45m GET /duckx \u001b[0m\u001b[0m\n\u001b[41m http-server \u001b[0m\u001b[38;2;0;0;0m\u001b[45m GET /lool/{id} \u001b[0m\u001b[0m\n\u001b[41m http-server \u001b[0m\u001b[38;2;0;0;0m\u001b[45m POST /post \u001b[0m\u001b[0m\n\u001b[41m http-server \u001b[0m\u001b[38;2;0;0;0m\u001b[44m \u25c9 /component \u001b[0m\u001b[0m\n\u001b[41m http-server \u001b[0m\u001b[38;2;0;0;0m\u001b[44m \u25c9 /other (react component with dynamic props) \u001b[0m\u001b[0m\n\u001b[41m http-server \u001b[0m\u001b[38;2;0;0;0m\u001b[43m \u25c9 /stat (duckx template) \u001b[0m\u001b[0m\n\u001b[41m http-server \u001b[0m listening on :8080\neverythings great!\n",
+    "stderr": ""
+}

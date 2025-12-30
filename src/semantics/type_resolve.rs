@@ -1,9 +1,7 @@
 use std::{
-    cell::{Cell, RefCell},
-    collections::{HashMap, HashSet},
-    rc::Rc,
-    sync::mpsc::Sender,
+    cell::{Cell, RefCell}, collections::{HashMap, HashSet}, rc::Rc, sync::mpsc::Sender
 };
+use colored::Colorize;
 
 use chumsky::container::Container;
 use indexmap::IndexMap;
@@ -3407,7 +3405,19 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             let ident = mangle(path);
             let (type_expr, is_const, _) = type_env
                 .get_identifier_type_and_const(&ident)
-                .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {ident}"));
+                .unwrap_or_else(|| {
+                    failure_with_occurence(
+                        "Unknown identifier".to_string(),
+                        *span,
+                        [(
+                            format!(
+                                "The identifier {} is not found in the current scope",
+                                ident.red(),
+                            ),
+                            *span
+                        )]
+                    );
+                });
             resolve_all_aliases_type_expr(&mut type_expr.clone().into_empty_span(), type_env);
             *value_expr = ValueExpr::Variable(true, ident, Some(type_expr), Some(is_const), true);
         }
@@ -4387,17 +4397,57 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
 
     if fields.len() != og_def.fields.len() {
         let msg = "Amount of fields doesn't match.";
+
+        let mut hints = vec![
+            format!(
+                "{} has {} fields. You provided {} fields",
+                og_def.name,
+                og_def.fields.len(),
+                fields.len(),
+            ),
+        ];
+
+        let fields_that_are_too_much = fields.iter()
+            .map(|field| field.0.clone())
+            .filter(|field| {
+                !og_def.fields
+                    .iter()
+                    .map(|og_field| &og_field.name)
+                    .any(|field_name| *field_name == *field)
+            })
+            .collect::<Vec<String>>();
+
+        let missing_fields = og_def.fields
+            .iter()
+            .map(|field| field.name.clone())
+            .filter(|field| !fields.iter().any(|given_field| given_field.0 == *field))
+            .collect::<Vec<String>>();
+
+        if fields_that_are_too_much.len() >= 1 {
+            hints.push(
+                format!(
+                    "The field(s) {} do not exist on type {}",
+                    fields_that_are_too_much.join(", ").yellow(),
+                    og_def.name.yellow(),
+                )
+            );
+        }
+
+        if missing_fields.len() >= 1 {
+            hints.push(
+                format!(
+                    "The field(s) {} are/is missing",
+                    missing_fields.join(", ").to_string().yellow(),
+                ),
+            );
+        }
+
         failure_with_occurence(
             msg,
             span,
-            [(
-                format!(
-                    "{} has {} fields. You provided {} fields",
-                    og_def.name,
-                    og_def.fields.len(),
-                    fields.len(),
-                ),
-                span,
+            vec![(
+                hints.join(". "),
+                span
             )],
         );
     }
@@ -4591,16 +4641,28 @@ fn typeresolve_if_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Type
 
 fn typeresolve_variable(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
     let ValueExpr::Variable(_, identifier, type_expr_opt, const_opt, needs_copy) = value_expr.0
-    else {
-        unreachable!("only pass structs to this function")
-    };
+        else {
+            unreachable!("only pass structs to this function")
+        };
     // if let Some(type_expr) = type_expr_opt {
     //     resolve_all_aliases_type_expr(type_expr, type_env);
     //     return;
     // }
     let (type_expr, is_const, _) = type_env
         .get_identifier_type_and_const(identifier)
-        .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));
+        .unwrap_or_else(||
+            failure_with_occurence(
+                "Unknown identifier".to_string(),
+                value_expr.1,
+                [(
+                    format!(
+                        "The identifier {} is not found in the current scope",
+                        identifier.yellow(),
+                    ),
+                    value_expr.1
+                )]
+            )
+        );
 
     //resolve_all_aliases_type_expr(&mut type_expr, type_env, generics_to_ignore);
 

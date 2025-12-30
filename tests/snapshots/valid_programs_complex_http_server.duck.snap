@@ -1,0 +1,4 @@
+{
+    "stdout": "\u001b[41m http-server \u001b[0m handling route GET /hello\n\u001b[41m http-server \u001b[0m handling route GET /duckx\n\u001b[41m http-server \u001b[0m handling route POST /post\n\u001b[41m http-server \u001b[0m binding to :8080\neverythings great!\n",
+    "stderr": ""
+}

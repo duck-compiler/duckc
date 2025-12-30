@@ -1,8 +1,11 @@
-use std::http;
+use std::web;
 use std::io::{println};
 
 fn main() {
-    std::http::serve_string("/", "hello, world");
+    let x: String | .err = "hallo";
+
+    std::web::serve_string("/", "hello, world");
     println("listening on port 8080");
-    let http_server = std::http::listen(3000);
+    let http_server = std::web::listen(3000);
+    let http_server = std::web::listen(3000);
 }
