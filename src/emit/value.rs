@@ -2291,16 +2291,36 @@ impl ValueExpr {
                 }
 
                 if let Some(arm) = else_arm {
-                    let _type_name = arm.type_case.0.as_clean_go_type_name(type_env);
-
                     let (mut arm_instrs, arm_res) =
                         arm.value_expr.0.direct_or_with_instr(type_env, env, *span);
                     if let Some(res) = arm_res {
                         arm_instrs.push(IrInstruction::VarAssignment(result_var_name.clone(), res));
                     }
 
+                    if let Some(ident) = arm.identifier_binding.as_ref() {
+                        let mut instrs = Vec::new();
+                        let go_ty = arm.type_case.0.as_go_type_annotation(type_env);
+
+                        let tmp_var = env.new_var();
+
+                        instrs.push(IrInstruction::VarDecl(tmp_var.clone(), go_ty.clone()));
+                        instrs.push(IrInstruction::VarAssignment(
+                            tmp_var.clone(),
+                            IrValue::Imm(format!("{ident}.({go_ty})")),
+                        ));
+
+                        instrs.push(IrInstruction::VarDecl(ident.clone(), go_ty.clone()));
+                        instrs.push(IrInstruction::VarAssignment(
+                            ident.clone(),
+                            IrValue::Var(tmp_var),
+                        ));
+                        instrs.extend(arm_instrs);
+
+                        arm_instrs = vec![IrInstruction::Block(instrs)];
+                    }
+
                     cases.push(Case {
-                        type_name: "__else".to_string(),
+                        type_name: "any".to_string(),
                         instrs: arm_instrs,
                         identifier_binding: arm.identifier_binding.clone(),
                         condition: arm.condition.clone(),

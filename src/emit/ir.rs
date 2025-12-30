@@ -71,15 +71,6 @@ impl IrInstruction {
                                 .join("\n")
                         )
                     }
-                    if case.type_name == "__else" {
-                        let ir_instructions = case
-                            .instrs
-                            .iter()
-                            .map(|ir| ir.emit_as_go())
-                            .collect::<Vec<_>>()
-                            .join("\n");
-                        return format!("default: {{ {ir_instructions}\nbreak; }}");
-                    }
 
                     let mut instructions = vec![];
                     let type_name = case.type_name.clone();
@@ -169,7 +160,6 @@ impl IrInstruction {
 
                 let processed_cases: Vec<String> = type_cases
                     .iter()
-                    .filter(|case| case.type_name != "__else")
                     .map(|case| emit_case_go(case, &against.emit_as_go(), else_case))
                     .collect();
 
