@@ -1,4 +1,5 @@
 use go "path/filepath";
+use go "path";
 
 struct FilePath {
     path_ref: String,

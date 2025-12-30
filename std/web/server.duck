@@ -1,0 +1,388 @@
+use go "net/http";
+use ::web::{RenderedJsx, JsxComponent, render};
+
+struct Req {
+    request_ref: &go "http.Request",
+} impl {
+    fn header(name: String) -> String | .none {
+        go {
+            value := (*self).request_ref.Header.Get(name)
+            if value == "" {
+            	return Tag__none {}
+            }
+
+            return value;
+        };
+
+        return .none;
+    }
+
+    fn param(name: String) -> String | .none {
+        return go {
+            value := (*self).request_ref.PathValue(name)
+            if value == "" {
+                return Tag__none {}
+            }
+            $ = value
+        } as String;
+    }
+
+    /// reads the value of query param ?<name>=<value> from given request url in self.request_ref.URL
+    fn query_param(name: String) -> String | .none {
+        go {
+            value := (*self).request_ref.URL.Query().Get(name)
+            if value == "" {
+                return Tag__none { }
+            }
+            return value
+        }
+    }
+
+    fn body_str() -> String | .err {
+        return go {
+            bodyBytes, err := ioutil.ReadAll((*self).request_ref.Body)
+            if err != nil {
+            	return Tag__err { }
+            }
+
+            (*self).request_ref.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+            $ = string(bodyBytes)
+        } as String
+    }
+
+    fn json<T: {}>() -> T | .err {
+        const body = match self.body_str() {
+            String @str => str,
+            else => return .err,
+        };
+
+        return parse_json<T>(body)
+    }
+
+    fn cookie(name: String) -> Cookie | .none {
+        let cookie: &go "http.Cookie" = go {
+            cookie, err := (*self).request_ref.Cookie(name)
+            if err != nil {
+            	return Tag__none {}
+            }
+
+            $ = cookie
+        };
+
+        return Cookie::from_go_cookie(cookie);
+    }
+}
+
+struct Cookie {
+    fname: String,
+    fvalue: String,
+    fquoted: Bool,
+    fpath: String,
+    fdomain: String,
+    fexpires: std::time::Time | .none,
+    fraw_expires: String,
+    fmax_age: Int,
+    fsecure: Bool,
+    fhttp_only: Bool,
+    fsame_site: .default | .lax | .strict | .none,
+    fpartitioned: Bool,
+    fraw: String,
+    funparsed: String[],
+} impl {
+    static fn new(name: String, value: String) -> Cookie {
+        return Cookie {
+            fname: name,
+            fvalue: value,
+            fquoted: false,
+            fpath: "",
+            fdomain: "",
+            fexpires: .none,
+            fraw_expires: "",
+            fmax_age: 0,
+            fsecure: false,
+            fhttp_only: false,
+            fsame_site: .default,
+            fpartitioned: false,
+            fraw: "",
+            funparsed: [],
+        };
+    }
+
+    static fn from_go_cookie(go_cookie: &go "http.Cookie") -> Cookie {
+        let name: String;
+        let value: String;
+        let quoted: Bool;
+        let p: String;
+        let domain: String;
+        let expires: std::time::Time | .none;
+        let raw_expires: String;
+        let max_age: Int;
+        let secure: Bool;
+        let http_only: Bool;
+        let same_site: .default | .lax | .strict | .none;
+        let partitioned: Bool;
+        let raw: String;
+        let unparsed: String[];
+
+        go {
+            name = go_cookie.Name
+            value = go_cookie.Value
+            quoted = go_cookie.Quoted
+            p = go_cookie.Path
+            domain = go_cookie.Domain
+            if go_cookie.Expires.IsZero() {
+            	expires = Tag__none {}
+            } else {
+            	expires = go_cookie.Expires
+            }
+
+            max_age = go_cookie.MaxAge
+            secure = go_cookie.Secure
+            http_only = go_cookie.HttpOnly
+            switch go_cookie.SameSite {
+            	case http.SameSiteDefaultMode:
+             		same_site = Tag__default {}
+             	case http.SameSiteLaxMode:
+              		same_site = Tag__lax {}
+              	case http.SameSiteStrictMode:
+               		same_site = Tag__strict {}
+               	case http.SameSiteNoneMode:
+                	same_site = Tag__none {}
+            }
+
+            partitioned = go_cookie.Partitioned
+            raw = go_cookie.Raw
+            unparsed = go_cookie.Unparsed
+        };
+
+        return Cookie {
+            fname: name,
+            fvalue: value,
+            fquoted: quoted,
+            fpath: p,
+            fdomain: domain,
+            fexpires: expires,
+            fraw_expires: raw_expires,
+            fmax_age: max_age,
+            fsecure: secure,
+            fhttp_only: http_only,
+            fsame_site: same_site,
+            fpartitioned: partitioned,
+            fraw: raw,
+            funparsed: unparsed,
+        }
+    }
+
+    fn to_go_cookie() -> &go "http.Cookie" {
+        let expires: go "time.Time" = go {
+            if ((*self).fexpires == Tag__none {}) {
+            	$ = time.Time {}
+            } else {
+            	t, okkk := (*self).fexpires.(time.Time);
+             	if okkk {
+             		$ = t
+              	} else {
+               		$ = time.Time {}
+               	}
+            }
+        };
+
+        let same_site: go "http.SameSite" = match self.fsame_site {
+            .default => go { $ = http.SameSiteDefaultMode } as go "http.SameSite",
+            .lax => go { $ = http.SameSiteLaxMode } as go "http.SameSite",
+            .strict => go { $ = http.SameSiteStrictMode } as go "http.SameSite",
+            .none => go { $ = http.SameSiteNoneMode } as go "http.SameSite",
+        } as go "http.SameSite";
+
+        let go_cookie: go "http.Cookie" = go {
+            cookie := http.Cookie {}
+            cookie.Name = (*self).fname;
+            cookie.Value = (*self).fvalue;
+            cookie.Path = (*self).fpath;
+            cookie.Domain = (*self).fdomain;
+            cookie.Expires = expires;
+            cookie.RawExpires = (*self).fraw_expires;
+            cookie.MaxAge = (*self).fmax_age;
+            cookie.Secure = (*self).fsecure;
+            cookie.HttpOnly = (*self).fhttp_only;
+            cookie.SameSite = same_site;
+            cookie.Partitioned = (*self).fpartitioned;
+            cookie.Raw = (*self).fraw;
+            cookie.Unparsed = (*self).funparsed;
+
+            $ = cookie
+        } as go "http.Cookie";
+
+        return &go_cookie;
+    }
+
+    mut fn http_only(enabled: Bool) -> &mut Cookie {
+        self.fhttp_only = enabled;
+        return self;
+    }
+}
+
+struct Res {
+    writer: &go "http.ResponseWriter",
+} impl {
+    fn status(code: Int) -> &Res {
+        go {
+            (*(*self).writer).WriteHeader(int(code))
+        }
+        return self;
+    }
+
+    fn header(key: String, value: String) -> &Res {
+        go {
+            (*(*self).writer).Header().Set(key, value)
+        }
+        return self;
+    }
+
+    mut fn set_cookie(cookie: &Cookie) -> &Res {
+        let go_cookie = cookie.to_go_cookie();
+        go {
+            http.SetCookie(*(*self).writer, go_cookie)
+        }
+        return self;
+    }
+
+    fn str(content: String) {
+        go {
+            (*(*self).writer).Write([]byte(content))
+        }
+    }
+
+    fn json<T: {}>(body: T) {
+        self.header("Content-Type", "application/json");
+        let jso = body.to_json();
+        go {
+            (*(*self).writer).Write([]byte(jso))
+        }
+    }
+
+    fn json_str(str: String) {
+        self.header("Content-Type", "application/json")
+            .str(str);
+    }
+
+    fn duckx(templ: Html) {
+        self.str(render(templ))
+    }
+}
+
+type LogLevel = .verbose | .none;
+
+struct HttpServer {
+    mux: &go "http.ServeMux",
+    log_level: LogLevel,
+} impl {
+    static fn new(log_level: LogLevel) -> HttpServer {
+        let mux: &go "http.ServeMux" = go {
+            $ = http.NewServeMux()
+        };
+
+        return HttpServer {
+            mux: mux,
+            log_level: log_level,
+        }
+    }
+
+    fn handle(route: String, handler: fn(req: Req, res: &mut Res)) -> &HttpServer {
+        self.log(f"{f" {route} ".on_magenta().rgb(0, 0, 0)}");
+        const handle_fn = fn (response_writer: go "http.ResponseWriter", request: &go "http.Request") {
+            let req = Req { request_ref: request };
+            let res = Res { writer: &response_writer };
+            handler(req, &mut res);
+        };
+
+        go {
+            (*self).mux.HandleFunc(route, func (w http.ResponseWriter, r *http.Request) { handle_fn(w, r) } )
+        }
+        return self;
+    }
+
+    fn serve_component(
+        route: String,
+        rendered: RenderedJsx,
+    ) -> &HttpServer {
+        self.log({f" ◉ {route} ".on_blue().rgb(0, 0, 0)});
+
+        let with_react = self.__with_react;
+        go {
+            (*self).mux.HandleFunc(route, func (w http.ResponseWriter, r *http.Request) {
+                w.Write([]byte(with_react(rendered)))
+            })
+        }
+
+        return self;
+    }
+
+    fn serve_dynamic_component<P>(
+        route: String,
+        jsx_component: JsxComponent<P>,
+        prop_supplier: mut fn () -> P,
+    ) -> &HttpServer {
+        self.log({f" ◉ {route} (react component with dynamic props) ".on_blue().rgb(0, 0, 0)});
+
+        let with_react = self.__with_react;
+        go {
+            (*self).mux.HandleFunc(route, func (w http.ResponseWriter, r *http.Request) {
+                var jsx = jsx_component(prop_supplier());
+                w.Write([]byte(with_react(jsx)))
+            })
+        }
+
+        return self;
+    }
+
+    fn serve_template(route: String, templ: Html) -> &HttpServer {
+        self.log({f" ◉ {route} (duckx template) ".on_yellow().rgb(0, 0, 0)});
+        let render = ::web::render;
+
+        go {
+            (*self).mux.HandleFunc(route, func (w http.ResponseWriter, r *http.Request) {
+                w.Write([]byte(render(templ)))
+            })
+        }
+
+        return self;
+    }
+
+    fn __with_react(
+        rendered_jsx: RenderedJsx
+    ) -> String {
+        let layout: String = f"
+            <!DOCTYPE html>
+            <html>
+                <body>
+                    <script type='module'>
+                        import \{ h, render } from 'https://esm.sh/preact';
+                        import \{ useState } from 'https://esm.sh/preact/hooks';
+                        import htm from 'https://esm.sh/htm';
+
+                        const html = htm.bind(h);
+
+                        {rendered_jsx.1}
+                        render(html`<$\{{rendered_jsx.0}} />`, document.body);
+                    </script>
+                </body>
+            </html>
+        ";
+
+        return layout;
+    }
+
+    fn listen(bind: String) {
+        self.log(f" listening on {bind}");
+        go {
+            http.ListenAndServe(bind, (*self).mux)
+        }
+    }
+
+    fn log(msg: String) {
+        if (self.log_level == .verbose) {
+            std::io::println(f"{" http-server ".on_red()}{msg}");
+        }
+    }
+}
