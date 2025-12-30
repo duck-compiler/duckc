@@ -3405,7 +3405,19 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             let ident = mangle(path);
             let (type_expr, is_const, _) = type_env
                 .get_identifier_type_and_const(&ident)
-                .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {ident}"));
+                .unwrap_or_else(|| {
+                    failure_with_occurence(
+                        "Unknown identifier".to_string(),
+                        *span,
+                        [(
+                            format!(
+                                "The identifier {} is not found in the current scope",
+                                ident.red(),
+                            ),
+                            *span
+                        )]
+                    );
+                });
             resolve_all_aliases_type_expr(&mut type_expr.clone().into_empty_span(), type_env);
             *value_expr = ValueExpr::Variable(true, ident, Some(type_expr), Some(is_const), true);
         }
@@ -4629,16 +4641,28 @@ fn typeresolve_if_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Type
 
 fn typeresolve_variable(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
     let ValueExpr::Variable(_, identifier, type_expr_opt, const_opt, needs_copy) = value_expr.0
-    else {
-        unreachable!("only pass structs to this function")
-    };
+        else {
+            unreachable!("only pass structs to this function")
+        };
     // if let Some(type_expr) = type_expr_opt {
     //     resolve_all_aliases_type_expr(type_expr, type_env);
     //     return;
     // }
     let (type_expr, is_const, _) = type_env
         .get_identifier_type_and_const(identifier)
-        .unwrap_or_else(|| panic!("Couldn't resolve type of identifier {identifier}"));
+        .unwrap_or_else(||
+            failure_with_occurence(
+                "Unknown identifier".to_string(),
+                value_expr.1,
+                [(
+                    format!(
+                        "The identifier {} is not found in the current scope",
+                        identifier.yellow(),
+                    ),
+                    value_expr.1
+                )]
+            )
+        );
 
     //resolve_all_aliases_type_expr(&mut type_expr, type_env, generics_to_ignore);
 
