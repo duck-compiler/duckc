@@ -288,7 +288,7 @@ struct HttpServer {
         }
     }
 
-    fn handle(route: String, handler: fn(req: Req, res: &mut Res)) -> &HttpServer {
+    fn handle(route: String, handler: mut fn(req: Req, res: &mut Res)) -> &HttpServer {
         self.log(f"{f" {route} ".on_magenta().rgb(0, 0, 0)}");
         const handle_fn = fn (response_writer: go "http.ResponseWriter", request: &go "http.Request") {
             let req = Req { request_ref: request };
