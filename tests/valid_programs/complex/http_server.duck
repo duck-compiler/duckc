@@ -467,10 +467,10 @@ fn main() {
 
     std::task::sleep(std::time::Duration::seconds(1));
 
-    let hello_response = std::http::fetch(.GET, "http://localhost:8080/hello").send();
+    let hello_response = std::web::fetch(.GET, "http://localhost:8080/hello").send();
     std::assert(hello_response == "[\"hello\"]", "didn't receive what we sent :(");
 
-    let post_response: String = match std::http::fetch(.POST, "http://localhost:8080/post").send() {
+    let post_response: String = match std::web::fetch(.POST, "http://localhost:8080/post").send() {
         String @str => str,
         else => std::assert(false, "could send post") as !,
     };
@@ -485,6 +485,6 @@ fn main() {
         .err => std::assert(false, "something is completely fck"),
     };
 
-    std::assert(std::http::fetch(.GET, "http://localhost:8080/post").send() == "Method Not Allowed", "get against post worked :(");
+    std::assert(std::web::fetch(.GET, "http://localhost:8080/post").send() == "Method Not Allowed", "get against post worked :(");
     std::io::println("everythings great!");
 }

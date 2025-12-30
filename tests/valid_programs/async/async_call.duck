@@ -1,4 +1,4 @@
-use std::http::{fetch};
+use std::web::{fetch};
 use std::io::{println};
 
 fn a() -> String {
