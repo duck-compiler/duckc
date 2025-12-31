@@ -349,6 +349,23 @@ struct HttpServer {
         return self;
     }
 
+    fn serve_dynamic_template<T>(
+        route: String,
+        templ: mut fn (props: T) -> Html,
+        props_supplier: mut fn () -> T,
+    ) -> &HttpServer {
+        self.log({f" ◉ {route} (duckx template) ".on_yellow().rgb(0, 0, 0)});
+        let render = ::web::render;
+
+        go {
+            (*self).mux.HandleFunc(route, func (w http.ResponseWriter, r *http.Request) {
+                w.Write([]byte(render(templ(props_supplier()))))
+            })
+        }
+
+        return self;
+    }
+
     fn __with_react(
         rendered_jsx: RenderedJsx
     ) -> String {
