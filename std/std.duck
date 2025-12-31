@@ -14,16 +14,6 @@ module sync;
 module cmd;
 module path;
 
-component lol() jsx {
-    return (<><p>yo</p></>);
-}
-
-fn parse_json<T: {}>(input: String) -> T | .err {
-    go {
-        return <<<@T>>>_FromJson(input);
-    } as !
-}
-
 fn assert(expr: Bool, fail_msg: String | ..) {
     if (!expr) {
         std::error::panic(f"{"assert failed".red()}{match fail_msg {
