@@ -3383,14 +3383,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
         ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
             unset_copy_var_assign(v);
-
             typeresolve_value_expr((&mut v.0, v.1), type_env);
-
-            let t = TypeExpr::from_value_expr(v, type_env);
-            if t.0.is_duck() {
-                let msg = "Cannot take references to ducks";
-                failure_with_occurence(msg, v.1, [(msg, v.1)]);
-            }
         }
 
         ValueExpr::HtmlString(contents) => {
