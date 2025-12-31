@@ -1,0 +1,16 @@
+template Page(props: { param: String }) duckx {
+    <html lang="en">
+      <body>
+          <p>You sent: {props.param}</p>
+      </body>
+    </html>
+}
+
+fn main() {
+    std::web::HttpServer::new(.none)
+        .handle("GET /{param}", fn(req, res) {
+            const param = match req.param("param") { String @s => s, else => return, };
+            res.duckx(Page({param: param}));
+        })
+        .listen(":3003");
+}

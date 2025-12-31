@@ -1,7 +1,12 @@
 import Fastify from 'fastify'
 const fastify = Fastify({
-  logger: true
+  logger: false
 })
+
+let port = 3001;
+if (process.argv.length >= 3) {
+  port = parseInt(process.argv[2], 10) ?? 3001;
+}
 
 // Declare a route
 fastify.get('/', async function handler(request, reply) {
@@ -10,7 +15,8 @@ fastify.get('/', async function handler(request, reply) {
 
 // Run the server!
 try {
-  await fastify.listen({ port: 3001 })
+  console.log("fastify port: " + port)
+  await fastify.listen({ port: port })
 } catch (err) {
   fastify.log.error(err)
   process.exit(1)
