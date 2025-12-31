@@ -17,7 +17,7 @@ fn start_command_and_oha_against(
 
     std::task::sleep(Duration::seconds(5));
 
-    let json_output: String = match Cmd::exec(f"oha http://localhost:{port.to_string()} -n 500000 --output-format json") {
+    let json_output: String = match Cmd::exec(f"oha --rand-regex-url http://localhost:{port.to_string()}/[a-z][A-Z][0-9] -n 500000 -c 200 --output-format json") {
         String @str => str,
         else => {
             println("error :(");
@@ -29,7 +29,10 @@ fn start_command_and_oha_against(
         .ensure_dir()
         .write(json_output);
 
-    proc.kill();
+    match proc.kill() {
+        .err => println(f"error killing the process ({bench_name})"),
+        else => {},
+    }
     std::task::sleep(Duration::seconds(1));
 
     return .none;
@@ -50,7 +53,30 @@ fn main() {
         .arg("src/express.js")
         .dir("./http_hello_world/");
 
+    let node_fastify_http_hello_world = Cmd::new("node")
+        .arg("src/fastify.js")
+        .arg("3010")
+        .dir("./http_hello_world/");
+
+    let node_express_js_http_hello_world = Cmd::new("node")
+        .arg("src/express.js")
+        .arg("3011")
+        .dir("./http_hello_world/");
+
     start_command_and_oha_against("duck http - hello world", dargo_http_hello_world, 3000);
     start_command_and_oha_against("bun fastify - hello world", bun_fastify_http_hello_world, 3001);
     start_command_and_oha_against("bun express.js - hello world", bun_express_js_http_hello_world, 3002);
+    start_command_and_oha_against("node fastify - hello world", node_fastify_http_hello_world, 3010);
+    start_command_and_oha_against("node express.js - hello world", node_express_js_http_hello_world, 3011);
+
+    let dargo_echo_ssr = Cmd::new("dargo")
+        .arg("run")
+        .dir("./echo_ssr/");
+
+    let bun_echo_ssr = Cmd::new("bun")
+        .arg("start")
+        .dir("./echo_ssr/");
+
+    start_command_and_oha_against("duck http - echo ssr", dargo_echo_ssr, 3003);
+    start_command_and_oha_against("bun nextjs - echo ssr", bun_echo_ssr, 3004);
 }

@@ -1,0 +1,19 @@
+struct Person {
+    name: String,
+    age: Int,
+    occupation: String,
+}
+
+fn f(param: { name: String, age: Int }) {
+    std::io::println(param.name);
+    std::io::println(param.age.to_string());
+}
+
+fn main() {
+    f(Person { name: "John Smith", age: 29, occupation: "Programmer" }); // even though Person also has a field occupation, the duck doesn't care
+
+    f({name: "John Programmer", age: 92, occupation: "Smith"}); // you can also create annonymous objects using the {} syntax
+
+    const accepts_any: {} = 1; // since the empty duck doesn't impose any requirements, it is the any type
+
+}

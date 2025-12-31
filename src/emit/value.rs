@@ -34,9 +34,16 @@ fn emit_duck(
         TypeExpr::from_value_expr(d, type_env)
     };
 
-    let ValueExpr::Duck(fields) = &d.0 else {
+    let mut d = d.clone();
+
+    let ValueExpr::Duck(fields) = &mut d.0 else {
         panic!("Compiler Bug: Only call this method by with a duck type ");
     };
+
+    let TypeExpr::Duck(Duck { fields: ty_fields }) = &t.0 else {
+        panic!("Compiler Bug: type is not a duck")
+    };
+    fields.retain(|f| ty_fields.iter().any(|f2| f2.name.as_str() == f.0.as_str()));
 
     let mut res = Vec::new();
     let mut res_vars = Vec::new();
