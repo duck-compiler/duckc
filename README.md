@@ -1,10 +1,15 @@
 # 🐥 Duck - The programming language for modern full-stack web-development
 
+> ⚠️ We're in an early Alpha Stage and not production ready yet. 
+
 <div align="center">
- [Website](https://duck-lang.dev)
+ [Website] | [Tour of Duck] | [Blog] | [Standard Library]
 </div>
 
-> ⚠️ We're in an early Alpha Stage and not production ready yet. 
+[Website]: https://duck-lang.dev/
+[Tour of Duck]: https://duck-lang.dev/docs/category/tour-of-duck
+[Blog]: https://blog.duck-lang.dev/
+[Standard Library]: https://github.com/duck-compiler/duckc/tree/main/std
 
 [![Discord](https://img.shields.io/discord/1375234462983524383.svg?label=Discord&logo=Discord&colorB=7289da&style=for-the-badge)](https://discord.gg/J6Q7qyeESM)
 
