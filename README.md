@@ -1,6 +1,6 @@
 <div align="center"> <img src="https://duck-lang.dev/duck.png" width="200" alt="Duck Programming Language Logo">
 
-Duck<br />
+<b>Duck</b><br />
 the programming language for modern full-stack web-development
 
 <br />
