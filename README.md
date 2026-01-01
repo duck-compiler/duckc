@@ -17,7 +17,7 @@ the programming language for modern full-stack web-development
 
 Duck is a modern, compiled and batteries included programming language for full-stack web-development, that's built on top of the go ecosystem, it leverages the concepts of duck-typing onto a fast and reliable platform while introducing JSX like server-side templating and client-side react components as first-class citizens.
 
-This repository hosts the source code for [Duck](https://duck-lang.org). It contains the compiler, it's build tool [dargo](https://github.com/duck-compiler/duck-spielwiese/blob/main/docs/002-dargo.md), the standard library and documentation.
+This repository hosts the source code for [Duck](https://duck-lang.dev). It contains the compiler, it's build tool [dargo](https://github.com/duck-compiler/duck-spielwiese/blob/main/docs/002-dargo.md), the standard library and documentation.
 
 ## ✨ Key Features
 * **Compiles to Go**: The program compiles down to a native Go binary, easy cross-compilation, and the performance of Go.
