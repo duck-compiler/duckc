@@ -1,5 +1,5 @@
 use crate::parse::{type_parser::type_expression_parser, value_parser::value_expr_parser};
-use std::{collections::HashMap, fs::File, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 
 use chumsky::{input::BorrowInput, prelude::*};
 use tree_sitter::{Node, Parser as TSParser};
@@ -870,10 +870,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
 
 fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
     let joined = current_dir.join(&name);
-    let mod_dir = File::open(&joined);
-    if let Ok(mod_dir) = mod_dir
-        && mod_dir.metadata().unwrap().is_dir()
-    {
+    if joined.is_dir() {
         std::fs::read_dir(&joined)
             .unwrap()
             .filter_map(|dir_entry| match dir_entry {
