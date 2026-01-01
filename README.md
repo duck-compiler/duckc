@@ -1,5 +1,9 @@
 # 🐥 Duck - The programming language for modern full-stack web-development
 
+<div align="center">
+ [Website](https://duck-lang.dev)
+</div>
+
 > ⚠️ We're in an early Alpha Stage and not production ready yet. 
 
 [![Discord](https://img.shields.io/discord/1375234462983524383.svg?label=Discord&logo=Discord&colorB=7289da&style=for-the-badge)](https://discord.gg/J6Q7qyeESM)
