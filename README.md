@@ -3,7 +3,7 @@
 > ⚠️ We're in an early Alpha Stage and not production ready yet. 
 
 <div align="center">
- [Website] | [Tour of Duck] | [Blog] | [Standard Library]
+[Website] | [Tour of Duck] | [Blog] | [Standard Library]
 </div>
 
 [Website]: https://duck-lang.dev/
