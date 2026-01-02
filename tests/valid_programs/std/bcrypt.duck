@@ -1,0 +1,22 @@
+use std::io::println;
+use std::password::BCrypt;
+
+fn main() {
+    const b = BCrypt::new();
+    const original = "secret password 😎";
+
+    const h = match b.hash(original) {
+        Byte[] @h => h,
+        else => std::error::panic("could not hash"),
+    };
+
+    match b.verify(original, h) {
+        .ok => println("secret password 😎 ok"),
+        .err => println("secret password 😎 not ok"),
+    };
+
+    match b.verify("123", h) {
+        .ok => println("123 ok"),
+        .err => println("123 not ok"),
+    };
+}

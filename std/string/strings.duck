@@ -162,13 +162,10 @@ extend String with impl {
     }
 
     /// returns a byte array of the string
-    fn to_bytes() -> Int[] {
-        let bytes: Int[] = [];
+    fn to_bytes() -> Byte[] {
         go {
-             b := []byte(self)
-             bytes = *(*[]int)(unsafe.Pointer(&b))
-        }
-        return bytes;
+             $ = []byte(self)
+        } as Byte[]
     }
 
     fn bold() -> String {

@@ -569,6 +569,11 @@ fn walk_access_raw(
                                     Some((r#"fmt.Sprintf("%d", "#.to_string(), stars_count, false));
                                 skip = true;
                             }
+                            TypeExpr::Byte => {
+                                flag =
+                                    Some((r#"fmt.Sprintf("%d", "#.to_string(), stars_count, false));
+                                skip = true;
+                            }
                             TypeExpr::UInt => {
                                 flag =
                                     Some((r#"fmt.Sprintf("%d", "#.to_string(), stars_count, false));
@@ -646,6 +651,11 @@ fn walk_access_raw(
                                 skip = true;
                             }
                             TypeExpr::Int => {
+                                flag =
+                                    Some((r#"fmt.Sprintf("%d", "#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Byte => {
                                 flag =
                                     Some((r#"fmt.Sprintf("%d", "#.to_string(), stars_count, false));
                                 skip = true;
@@ -729,6 +739,10 @@ fn walk_access_raw(
                                 flag = Some((r#"IDENTITY("#.to_string(), stars_count, false));
                                 skip = true;
                             }
+                            TypeExpr::Byte => {
+                                flag = Some((r#"IDENTITY("#.to_string(), stars_count, false));
+                                skip = true;
+                            }
                             TypeExpr::UInt => {
                                 flag = Some((r#"IDENTITY("#.to_string(), stars_count, false));
                                 skip = true;
@@ -768,6 +782,10 @@ fn walk_access_raw(
                                 skip = true;
                             }
                             TypeExpr::Int => {
+                                flag = Some((r#"Int_Hash("#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Byte => {
                                 flag = Some((r#"Int_Hash("#.to_string(), stars_count, false));
                                 skip = true;
                             }
@@ -811,6 +829,10 @@ fn walk_access_raw(
                             }
                             TypeExpr::Int => {
                                 flag = Some((r#"Int_Ord("#.to_string(), stars_count, false));
+                                skip = true;
+                            }
+                            TypeExpr::Byte => {
+                                flag = Some((r#"Byte_Ord("#.to_string(), stars_count, false));
                                 skip = true;
                             }
                             TypeExpr::UInt => {

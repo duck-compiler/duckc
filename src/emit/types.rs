@@ -1508,11 +1508,37 @@ pub fn emit_type_definitions(
     }
 
     result.push(IrInstruction::FunDef(
+        "Byte_Hash".to_string(),
+        None,
+        vec![("self".to_string(), "byte".to_string())],
+        Some("int".to_string()),
+        vec![IrInstruction::InlineGo("return self".to_string())],
+    ));
+
+    result.push(IrInstruction::FunDef(
         "Int_Hash".to_string(),
         None,
         vec![("self".to_string(), "int".to_string())],
         Some("int".to_string()),
         vec![IrInstruction::InlineGo("return self".to_string())],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "byte_FromJson".to_string(),
+        None,
+        vec![("json_str".to_string(), "string".to_string())],
+        Some("(byte, error)".to_string()),
+        vec![IrInstruction::InlineGo(
+            r#"
+                var b byte
+                err := json.Unmarshal([]byte(json_str), &b)
+                if err != nil {
+                    return 0, err
+                }
+                return b, nil
+            "#
+            .to_string(),
+        )],
     ));
 
     result.push(IrInstruction::FunDef(
@@ -1557,6 +1583,17 @@ pub fn emit_type_definitions(
             "#
             .to_string(),
         )],
+    ));
+
+    result.push(IrInstruction::FunDef(
+        "Byte_Ord".to_string(),
+        None,
+        vec![
+            ("self".to_string(), "byte".to_string()),
+            ("other".to_string(), "*byte".to_string()),
+        ],
+        Some("any".to_string()),
+        vec![IrInstruction::InlineGo("if self < *other { return Tag__smaller{} } else if self > *other { return Tag__greater{} } else { return Tag__equal{} }".to_string())],
     ));
 
     result.push(IrInstruction::FunDef(
@@ -1817,6 +1854,7 @@ pub fn emit_type_definitions(
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Byte => "byte".to_string(),
             TypeExpr::Statement => "Tup_".to_string(),
             TypeExpr::Never => "any".to_string(),
             TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
@@ -1892,6 +1930,7 @@ impl TypeExpr {
 
     pub fn type_id(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Byte => "byte".to_string(),
             TypeExpr::Statement => "Statement".to_string(),
             TypeExpr::Never => "Never".to_string(),
             TypeExpr::TemplParam(name) => panic!("templ param should not be here {name}"),
@@ -1998,6 +2037,7 @@ impl TypeExpr {
 
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Byte => "byte".to_string(),
             TypeExpr::Statement => "Statement".to_string(),
             TypeExpr::Never => "Never".to_string(),
             TypeExpr::TemplParam(name) => panic!("should not be here {name}"),

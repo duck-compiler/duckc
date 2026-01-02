@@ -13,6 +13,7 @@ module web;
 module sync;
 module cmd;
 module path;
+module password;
 
 fn assert(expr: Bool, fail_msg: String | ..) {
     if (!expr) {
