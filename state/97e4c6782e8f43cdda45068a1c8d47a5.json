@@ -1,7 +1,7 @@
 {
     "id": "97e4c6782e8f43cdda45068a1c8d47a5",
     "file_path": "../../src/semantics/typechecker.rs",
-    "line_number": 1783,
+    "line_number": 1795,
     "title": "STRUCT DISPLAY NAME",
     "tag": "todo",
     "module_tag": "semantics",
