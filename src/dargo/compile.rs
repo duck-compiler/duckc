@@ -1,7 +1,13 @@
 use colored::Colorize;
 use duckwind::EmitEnv;
 use lazy_static::lazy_static;
-use std::{ffi::OsString, fs, path::PathBuf, sync::mpsc, time::Duration};
+use std::{
+    ffi::OsString,
+    fs,
+    path::{Path, PathBuf},
+    sync::mpsc,
+    time::Duration,
+};
 
 use crate::{
     DARGO_DOT_DIR,
@@ -146,23 +152,22 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         escape_string_for_go(css.as_str())
     );
 
-    let go_output_file = write_in_duck_dotdir(format!("{src_file_name}.gen.go").as_str(), &go_code);
+    let go_file_name = format!("{src_file_name}.gen.go");
+    let go_output_file = write_in_duck_dotdir(&go_file_name, &go_code);
+
     if compile_args.optimize_go {
         let _ = go_cli::format(go_output_file.as_path());
     }
 
-    let compile_output_target = {
-        let mut target_file = DARGO_DOT_DIR.clone();
-        target_file.push(
-            binary_output_name
-                .map(OsString::from)
-                .unwrap_or(OsString::from("duck_out")),
-        );
-
-        target_file
-    };
-
-    go_cli::build(&compile_output_target, &go_output_file).map_err(|err| {
+    let executable_path = go_cli::build(
+        &DARGO_DOT_DIR,
+        binary_output_name
+            .map(OsString::from)
+            .unwrap_or(OsString::from("duck_out"))
+            .as_os_str(),
+        &Path::new(&go_file_name),
+    )
+    .map_err(|err| {
         (
             format!("{}{}", *COMPILE_TAG, err.0),
             CompileErrKind::GoCli(err.1),
@@ -177,6 +182,6 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
     );
 
     return Ok(CompileOutput {
-        binary_path: compile_output_target,
+        binary_path: executable_path,
     });
 }

@@ -1,0 +1,8 @@
+use go "github.com/spf13/cobra";
+
+fn main() {
+    go {
+        cmd := &cobra.Command{}
+        _ = cmd
+    }
+}

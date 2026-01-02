@@ -307,18 +307,15 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         let _ = go_cli::format(go_output_file.as_path());
     }
 
-    let compile_output_target = {
-        let mut target_file = DARGO_DOT_DIR.clone();
-        target_file.push(
-            binary_output_name
-                .map(OsString::from)
-                .unwrap_or(OsString::from("dargo_test_out")),
-        );
-
-        target_file
-    };
-
-    go_cli::build(&compile_output_target, &go_output_file).map_err(|err| {
+    let executable_path = go_cli::build(
+        &DARGO_DOT_DIR,
+        binary_output_name
+            .map(OsString::from)
+            .unwrap_or(OsString::from("duck_out"))
+            .as_os_str(),
+        &go_output_file,
+    )
+    .map_err(|err| {
         (
             format!("{}{}", *COMPILE_TEST_TAG, err.0),
             CompileTestErrKind::GoCli(err.1),
@@ -333,6 +330,6 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
     );
 
     return Ok(CompileOutput {
-        binary_path: compile_output_target,
+        binary_path: executable_path,
     });
 }
