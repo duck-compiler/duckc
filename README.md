@@ -59,6 +59,9 @@ Download the latest release of `duckup` for your OS from the [duckup](https://gi
 # To install the latest toolchain
 duckup update
 
+# To check if everything is setup correctly
+duckup env
+
 # To see if the installation was successful, run following command
 dargo help
 ```
