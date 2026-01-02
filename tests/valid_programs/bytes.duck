@@ -1,0 +1,15 @@
+use std::io::println;
+
+fn main() {
+    const b = 1 as Byte;
+    const as_json = b.to_json();
+    const parsed = parse_json<typeof b>(as_json);
+    b.to_string()->println();
+    parsed.to_string()->println();
+
+    if ((1 as Byte) > (2 as Byte)) {
+        println("1 is larger than 2?");
+    } else {
+        println("1 is smaller than 2");
+    }
+}

@@ -1376,7 +1376,8 @@ impl TypeExpr {
     pub fn is_number(&self) -> bool {
         return *self == TypeExpr::Float
             || matches!(*self, TypeExpr::Int)
-            || matches!(*self, TypeExpr::UInt);
+            || matches!(*self, TypeExpr::UInt)
+            || matches!(*self, TypeExpr::Byte);
     }
 
     pub fn is_tuple(&self) -> bool {
@@ -1540,6 +1541,17 @@ pub fn check_type_compatability_full(
     }
 
     match &required_type.0 {
+        TypeExpr::Byte => {
+            if !matches!(given_type.0, TypeExpr::Byte) {
+                fail_requirement(
+                    "this expects a Byte.".to_string(),
+                    format!(
+                        "this is not a Byte. it's a {}",
+                        format!("{}", given_type.0).bright_yellow()
+                    ),
+                )
+            }
+        }
         TypeExpr::UInt => {
             if !matches!(given_type.0, TypeExpr::UInt) {
                 fail_requirement(

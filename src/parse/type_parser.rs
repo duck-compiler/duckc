@@ -39,6 +39,7 @@ pub enum TypeExpr {
     Html,
     TemplParam(String),
     Any,
+    Byte,
     Struct {
         name: String,
         type_params: Vec<Spanned<TypeExpr>>,
@@ -87,6 +88,7 @@ impl TypeExpr {
         let param2 = &format!("({param2})");
         match self {
             TypeExpr::Int => format!("Int_Ord({param1}, &{param2})"),
+            TypeExpr::Byte => format!("Byte_Ord({param1}, &{param2})"),
             TypeExpr::UInt => format!("UInt_Ord({param1}, &{param2})"),
             TypeExpr::Float => format!("Float_Ord({param1}, &{param2})"),
             TypeExpr::Bool(..) => format!("Bool_Ord({param1}, &{param2})"),
@@ -127,6 +129,7 @@ impl TypeExpr {
         let param2 = &format!("({param2})");
         match self {
             TypeExpr::Int
+            | TypeExpr::Byte
             | TypeExpr::Float
             | TypeExpr::Bool(..)
             | TypeExpr::Char
@@ -196,6 +199,7 @@ impl TypeExpr {
 
         match self {
             TypeExpr::Int => format!("Int_Hash({param1})"),
+            TypeExpr::Byte => format!("Byte_Hash({param1})"),
             TypeExpr::UInt => format!("UInt_Hash({param1})"),
             TypeExpr::Float => format!("Float_Hash({param1})"),
             TypeExpr::Bool(..) => format!("Bool_Hash({param1})"),
@@ -232,6 +236,7 @@ impl TypeExpr {
         let param1 = &format!("({param1})");
         match self {
             TypeExpr::Int
+            | TypeExpr::Byte
             | TypeExpr::UInt
             | TypeExpr::Float
             | TypeExpr::Bool(..)
@@ -368,6 +373,7 @@ impl TypeExpr {
             TypeExpr::String(..)
             | TypeExpr::Int
             | TypeExpr::UInt
+            | TypeExpr::Byte
             | TypeExpr::Float
             | TypeExpr::Bool(..)
             | TypeExpr::Char
@@ -455,6 +461,7 @@ impl TypeExpr {
             TypeExpr::String(..) => format!("fmt.Sprintf(\"\\\"%s\\\"\", {param1})"),
             TypeExpr::Char => format!("fmt.Sprintf(\"\\\"%c\\\"\", {param1})"),
             TypeExpr::Int => format!("strconv.Itoa({param1})"),
+            TypeExpr::Byte => format!("strconv.Itoa(int({param1}))"),
             TypeExpr::UInt => format!("fmt.Sprintf(\"%d\", {param1})"),
             TypeExpr::Float => format!("fmt.Sprintf(\"%f\", {param1})"),
             TypeExpr::Bool(..) => format!("fmt.Sprintf(\"%t\", {param1})"),
@@ -518,6 +525,7 @@ impl TypeExpr {
         match self {
             TypeExpr::String(..) => param1.to_string(),
             TypeExpr::Int => format!("strconv.Itoa({param1})"),
+            TypeExpr::Byte => format!("strconv.Itoa(int({param1}))"),
             TypeExpr::UInt => format!("fmt.Sprintf(\"%d\", {param1})"),
             TypeExpr::Float => format!("fmt.Sprintf(\"%f\", {param1})"),
             TypeExpr::Bool(..) => format!("fmt.Sprintf(\"%t\", {param1})"),
@@ -597,6 +605,7 @@ impl TypeExpr {
             | TypeExpr::String(..)
             | TypeExpr::Bool(..)
             | TypeExpr::Char
+            | TypeExpr::Byte
             | TypeExpr::Float
             | TypeExpr::UInt
             | TypeExpr::Tag(..) => true,
@@ -630,6 +639,7 @@ impl TypeExpr {
             | TypeExpr::Char
             | TypeExpr::Float
             | TypeExpr::UInt
+            | TypeExpr::Byte
             | TypeExpr::Tag(..) => true,
             _ => false,
         }
@@ -659,6 +669,7 @@ impl TypeExpr {
             | TypeExpr::String(..)
             | TypeExpr::Bool(..)
             | TypeExpr::Char
+            | TypeExpr::Byte
             | TypeExpr::Float
             | TypeExpr::UInt
             | TypeExpr::Tag(..) => true,
@@ -692,6 +703,7 @@ impl TypeExpr {
             | TypeExpr::String(..)
             | TypeExpr::Bool(..)
             | TypeExpr::Char
+            | TypeExpr::Byte
             | TypeExpr::UInt
             | TypeExpr::Float => true,
             _ => false,
@@ -728,6 +740,7 @@ impl TypeExpr {
             | TypeExpr::Char
             | TypeExpr::Float
             | TypeExpr::UInt
+            | TypeExpr::Byte
             | TypeExpr::Tag(..) => true,
             _ => false,
         }
@@ -760,6 +773,7 @@ impl TypeExpr {
             }
             TypeExpr::Int
             | TypeExpr::String(..)
+            | TypeExpr::Byte
             | TypeExpr::Bool(..)
             | TypeExpr::Char
             | TypeExpr::UInt
@@ -867,6 +881,7 @@ impl TypeExpr {
             TypeExpr::Int
             | TypeExpr::String(..)
             | TypeExpr::Bool(..)
+            | TypeExpr::Byte
             | TypeExpr::Char
             | TypeExpr::Float
             | TypeExpr::UInt
@@ -880,6 +895,7 @@ impl TypeExpr {
             TypeExpr::String(..)
             | TypeExpr::Int
             | TypeExpr::Float
+            | TypeExpr::Byte
             | TypeExpr::Bool(..)
             | TypeExpr::Go(..)
             | TypeExpr::Tag(..)
@@ -1062,6 +1078,7 @@ where
                     |((is_global, identifier), type_params)| match identifier[0].as_str() {
                         "Int" => TypeExpr::Int,
                         "UInt" => TypeExpr::UInt,
+                        "Byte" => TypeExpr::Byte,
                         "Float" => TypeExpr::Float,
                         "Bool" => TypeExpr::Bool(None),
                         "String" => TypeExpr::String(None),
@@ -1278,6 +1295,7 @@ where
                     |((is_global, identifier), type_params)| match identifier[0].as_str() {
                         "Int" => TypeExpr::Int,
                         "UInt" => TypeExpr::UInt,
+                        "Byte" => TypeExpr::Byte,
                         "Float" => TypeExpr::Float,
                         "Bool" => TypeExpr::Bool(None),
                         "String" => TypeExpr::String(None),
@@ -1421,6 +1439,7 @@ where
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            TypeExpr::Byte => write!(f, "Byte"),
             TypeExpr::Statement => write!(f, "Statement"),
             TypeExpr::Never => write!(f, "never"),
             TypeExpr::TemplParam(name) => write!(f, "TemplParam {name}"),

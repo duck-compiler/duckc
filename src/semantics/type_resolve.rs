@@ -881,6 +881,7 @@ where
 {
     f_t(v, env);
     match &mut v.0 {
+        TypeExpr::Byte => {},
         TypeExpr::Never | TypeExpr::Statement => {}
         TypeExpr::NamedDuck {
             name: _,
@@ -1829,6 +1830,7 @@ fn replace_generics_in_type_expr(
     type_env: &mut TypeEnv<'_>,
 ) {
     match expr {
+        TypeExpr::Byte => {}
         TypeExpr::UInt => {}
         TypeExpr::Statement | TypeExpr::Never => {}
         TypeExpr::TemplParam(name) => {
@@ -2256,6 +2258,7 @@ pub fn is_const_var(v: &ValueExpr) -> bool {
 
 pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
+        TypeExpr::Byte => {}
         TypeExpr::UInt => {}
         TypeExpr::Statement | TypeExpr::Never => {}
         TypeExpr::Ref(t) | TypeExpr::RefMut(t) => sort_fields_type_expr(&mut t.0),
@@ -3576,7 +3579,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         }
         ValueExpr::Int(_, t) => {
             if let Some(t) = t.as_ref().as_ref()
-                && !matches!(t.0, TypeExpr::Int | TypeExpr::UInt)
+                && !matches!(t.0, TypeExpr::Int | TypeExpr::UInt | TypeExpr::Byte)
             {
                 let msg = "Int literal can only coerce to number type";
                 failure_with_occurence(msg, t.1, [(msg, t.1), (msg, *span)]);
