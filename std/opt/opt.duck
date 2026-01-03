@@ -5,7 +5,7 @@ struct Opt<T> {
 } impl {
     static fn some<T>(value: T) -> Opt<T> {
         return Opt<T> {
-            inner: Some { value: value, }
+            inner: Some<T> { value: value, }
         }
     }
 
@@ -73,7 +73,7 @@ struct Opt<T> {
 
     fn unwrap() -> T {
         return match self.inner {
-            .none => ::error::panic("unwrap on none") as !,
+            .none => ::error::panic("unwrap on none"),
             Some<T> @some => some.value,
         };
     }

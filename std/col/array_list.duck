@@ -22,16 +22,18 @@ struct ArrayList<T> {
         return self;
     }
 
-    mut fn pop() -> Opt<T> {
-        let popped_val: Opt<T> = .none;
-        go {
-            if (len((*self).elems) > 0) {
+    mut fn pop() -> ::opt::Opt<T> {
+        if (self.len() > 0) {
+            const value: T = go {
                 var index = len((*self).elems) - 1;
-                popped_val = (*self).elems[index];
+                $ = (*self).elems[index];
                 (*self).elems = (*self).elems[:index];
-            }
+            } as T;
+
+            return ::opt::Opt::some<T>(value);
         }
-        return popped_val;
+
+        return ::opt::Opt::none<T>();
     }
 
     fn get(

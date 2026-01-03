@@ -10,5 +10,7 @@ fn main() {
     global_string->println();
 
     global_map.set("Test", 200);
-    match global_map.get(&"Test") { &Int @int => std::string::from_int(*int), else => return }->println();
+    global_map.get(&"Test")
+        .expect("should be set")
+        .to_string()->println();
 }

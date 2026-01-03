@@ -1,0 +1,38 @@
+use std::io;
+use std::assert;
+use std::col::{Iter, ArrayList};
+use std::opt::{Opt};
+
+fn main() {
+    let it = Iter::range(1, 6);
+    let result = it.reduce(mut fn(acc: &mut Int, elem: Int) {
+        *acc = *acc + elem;
+    });
+
+    std::assert(result.is_some(), "should be somee");
+    std::assert(result.unwrap() == 15, f"should be 15 is {result.unwrap().to_string()}");
+
+    let it = Iter::empty<Int>();
+    let result = it.reduce(mut fn(acc: &mut Int, elem: Int) {
+        *acc = *acc + elem;
+    });
+
+    std::assert(result.is_none(), "should be none");
+
+    let it = Iter::range(10, 11);
+    let result = it.reduce(mut fn(acc: &mut Int, elem: Int) {
+        *acc = *acc + elem;
+    });
+
+    std::assert(result.unwrap() == 10, "only one element should be ten");
+
+    let list = ArrayList::from_array<String>(["a", "b", "c"]);
+    let result = list.iter().reduce(mut fn(acc: &mut &String, elem: &String) {
+        let combined = f"{**acc}{*elem}";
+        *acc = &combined;
+    });
+
+    std::assert(*result.unwrap() == "abc", "order is wrong in reduce");
+
+    std::io::println("perfect")
+}

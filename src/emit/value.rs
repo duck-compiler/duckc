@@ -1370,23 +1370,25 @@ impl ValueExpr {
                 let var_name = env.new_var();
                 let mut res_instr = Vec::new();
 
-                res_instr.push(IrInstruction::VarDecl(
-                    var_name.clone(),
-                    return_type.0.as_go_type_annotation(type_env),
-                ));
-                res_instr.push(IrInstruction::VarAssignment(
-                    var_name.clone(),
-                    IrValue::Imm(format!(
-                        "{}()",
-                        mangle(&[
-                            "std",
-                            "sync",
-                            "Channel",
-                            "new",
-                            &inner_return_type.0.as_clean_go_type_name(type_env),
-                        ])
-                    )),
-                ));
+                if !inner_return_type.0.is_never() {
+                    res_instr.push(IrInstruction::VarDecl(
+                        var_name.clone(),
+                        return_type.0.as_go_type_annotation(type_env),
+                    ));
+                    res_instr.push(IrInstruction::VarAssignment(
+                        var_name.clone(),
+                        IrValue::Imm(format!(
+                            "{}()",
+                            mangle(&[
+                                "std",
+                                "sync",
+                                "Channel",
+                                "new",
+                                &inner_return_type.0.as_clean_go_type_name(type_env),
+                            ])
+                        )),
+                    ));
+                }
 
                 let ValueExpr::FunctionCall {
                     target: e_target,

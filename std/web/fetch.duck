@@ -18,7 +18,7 @@ fn http_header_to_string(header: HttpHeader) -> String {
 struct Fetch {
     method: FetchMethod,
     url: String,
-    body: ::Opt<String>,
+    body: String | .none,
     headers: go "map[string]string",
 } impl {
     mut fn set_body(s: String) -> &mut Fetch {
