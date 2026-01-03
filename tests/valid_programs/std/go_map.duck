@@ -1,4 +1,5 @@
 use std::col::{GoMap};
+use std::io::{println};
 
 fn main() {
     let m = GoMap::new<String, Int>();
@@ -7,18 +8,10 @@ fn main() {
     m.set("B", 23);
     m.set("D", 100);
 
-    match m.get(&"A") {
-        &Int @i => (*i)->std::string::from_int()->std::io::println(),
-        else => {}
-    }
+    m.get(&"A").unwrap().to_string()->println();
 
-    match m.get_mut(&"A") {
-        &mut Int @i => *i = 10,
-        else => {}
-    }
+    let x = m.get_mut(&"A").unwrap();
+    *x = 10;
 
-    match m.get(&"A") {
-        &Int @i => (*i)->std::string::from_int()->std::io::println(),
-        else => {}
-    }
+    m.get(&"A").unwrap().to_string()->println();
 }
