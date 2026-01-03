@@ -177,7 +177,7 @@ impl TypeExpr {
                             }
 
                             if !type_expr.0.is_string() {
-                                let mut hints = [
+                                let hints = [
                                     (
                                         format!(
                                             "interpolated values inside a f-string must evaluate to a string",
