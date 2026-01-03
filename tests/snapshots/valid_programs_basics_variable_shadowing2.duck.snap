@@ -1,0 +1,4 @@
+{
+    "stdout": "original x is 100\nshadowing x is 200\n",
+    "stderr": ""
+}

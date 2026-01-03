@@ -1,0 +1,11 @@
+use std::result::Result;
+
+fn main() {
+    const a: Int = 10;
+    const a: String = "aa";
+    const a = Result::ok<(), ()>(());
+
+    a.if_ok(fn(e) {
+        const a = a;
+    });
+}

@@ -1,0 +1,12 @@
+use std::io::println;
+
+fn main() {
+    const x = 100;
+    const print_oringinal_x = fn() {
+        println(f"original x is {x.to_string()}");
+    };
+    let x = x;
+    x = 200;
+    print_oringinal_x();
+    println(f"shadowing x is {x.to_string()}");
+}
