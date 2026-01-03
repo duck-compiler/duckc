@@ -289,18 +289,18 @@ struct Iter<T> {
         result
     }
 
-    mut fn find(f: fn(e: T) -> Bool) -> ::Opt<T> {
+    mut fn find(f: fn(e: T) -> Bool) -> ::opt::Opt<T> {
         while (true) {
             match self.next_fn() {
                 T @t => {
                     if (f(t)) {
-                        return t;
+                        return ::opt::Opt::some<T>(t);
                     }
                 },
                 .no_next_elem => break,
             }
         }
-        return .none;
+        return ::opt::Opt::none<T>();
     }
 
     mut fn any(f: fn(e: T) -> Bool) -> Bool {

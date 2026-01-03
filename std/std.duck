@@ -1,8 +1,5 @@
 use go "encoding/json";
 
-type None = .none;
-type Opt<T> = T | None;
-
 module io;
 module task;
 module time;
