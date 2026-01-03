@@ -1,5 +1,7 @@
 use go "time";
 
+use ::opt::Opt;
+
 struct Channel<T> {
     inner: go "chan {T}"
 } impl {
@@ -23,27 +25,42 @@ struct Channel<T> {
     }
 
     fn recv_timeout(duration: ::time::Duration) -> Opt<T> {
-        const tag_none = .none;
         const as_seconds = duration.as_seconds;
+
+        let v: T;
+        let is_nothing = false;
+
         go {
             select {
-                case v := <- (*self).inner:
-                    return v
+                case v = <- (*self).inner:
                 case <-time.After(duration.raw_duration):
-                    return tag_none
+                    is_nothing = true
             }
-        } as Opt<T>
+        };
+
+        if (!is_nothing) {
+            Opt::some<T>(v)
+        } else {
+            Opt::none<T>()
+        }
     }
 
-    fn try_recv() -> ::Opt<T> {
-        const tag_none = .none;
+    fn try_recv() -> Opt<T> {
+        let v: T;
+        let is_nothing = false;
+
         go {
             select {
-                case v := <-(*self).inner:
-                    return v
+                case v = <-(*self).inner:
                 default:
-                    return tag_none
+                	is_nothing = true
             }
-        } as !
+        };
+
+        if (!is_nothing) {
+            Opt::some<T>(v)
+        } else {
+            Opt::none<T>()
+        }
     }
 }

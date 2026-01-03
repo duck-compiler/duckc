@@ -1,7 +1,5 @@
-use std::sync::{Mutex};
-use std::sync::{AtomicBool};
-use std::sync::{Channel};
-use std::io::{println};
+use std::sync::{Mutex, AtomicBool, Channel};
+use std::io::println;
 
 fn bool_to_string(b: Bool) -> String {
     return if (b) {
@@ -21,10 +19,14 @@ fn main() {
     const test_channel = Channel::new<Int>();
     async (fn() {
         test_channel.send(67);
+        test_channel.send(34);
+        test_channel.send(22);
     })();
     test_channel.recv_block()->std::string::from_int()->println();
-    println(f"Trying to read from channel (should be none) { match test_channel.try_recv() { .none => "none", else => "something is there" }}");
-    println(f"Trying to read from channel with timeout 500ms (should be none) { match test_channel.recv_timeout(std::time::Duration::milliseconds(500)) { .none => "none", else => "something is there" }}");
+    println(f"Trying to read from channel (should be 34) { test_channel.try_recv().map<String>(fn(e) { e.to_string() }).expect("expected something") }");
+    println(f"Trying to read from channel with timeout 733ms (should be 22) { test_channel.recv_timeout(std::time::Duration::milliseconds(733)).map<String>(fn(e) { e.to_string() }).expect("expected something") }");
+    println(f"Trying to read from channel (should be none) { if (test_channel.try_recv().is_none()) { "none" } else { "something is there" }}");
+    println(f"Trying to read from channel with timeout 500ms (should be none) { if (test_channel.recv_timeout(std::time::Duration::milliseconds(500)).is_none()) { "none" } else { "something is there" }}");
     async (fn() {
         std::task::sleep(std::time::Duration::seconds(1));
         const lock_result = m.try_lock(fn(v){});

@@ -3154,6 +3154,9 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             typeresolve_value_expr((&mut inner.0, inner.1), type_env);
 
             let inner_type = TypeExpr::from_value_expr(inner.as_ref(), type_env);
+            if inner_type.0.is_never() {
+                return;
+            }
 
             let channel_type = TypeExpr::from_value_expr(&(owned, *span), type_env);
             if let TypeExpr::Struct {
