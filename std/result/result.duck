@@ -1,4 +1,5 @@
 use ::error;
+use ::opt::Opt;
 
 struct Ok<T> {
     v: T,
@@ -54,6 +55,20 @@ struct Result<T, E> {
         match (self.i) {
             Err<E> @e => Result::err<T, U>(f(e.e)),
             Ok<T> @ok => Result::ok<T, U>(ok.v),
+        }
+    }
+
+    fn ok() -> Opt<T> {
+        match (self.i) {
+            Ok<T> @ok => Opt::some<T>(ok.v),
+            else => Opt::none<T>(),
+        }
+    }
+
+    fn err() -> Opt<E> {
+        match (self.i) {
+            Err<E> @e => Opt::some<E>(e.e),
+            else => Opt::none<E>(),
         }
     }
 

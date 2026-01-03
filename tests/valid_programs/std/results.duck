@@ -52,4 +52,9 @@ fn main() {
     Result::err<Int, ()>(()).or_else_get(mut fn() { const i = counter; counter = counter + 1; i }).to_string()->println();
     Result::err<Int, ()>(()).or_else_get(mut fn() { const i = counter; counter = counter + 1; i }).to_string()->println();
     Result::err<Int, ()>(()).or_else_get(mut fn() { const i = counter; counter = counter + 1; i }).to_string()->println();
+
+    std::assert(Result::err<(), ()>(()).ok().is_none(), "err ok is_none failed");
+    std::assert(Result::err<(), ()>(()).err().is_some(), "err err is_some failed");
+    std::assert(Result::ok<(), ()>(()).ok().is_some(), "ok ok is_some failed");
+    std::assert(Result::ok<(), ()>(()).err().is_none(), "ok err is_none failed");
 }
