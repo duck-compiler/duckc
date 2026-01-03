@@ -24,41 +24,48 @@ struct GoMap<K, V> {
        }
     }
 
-    fn get(k: &K) -> ::Opt<&V> {
-        const tag_none = .none;
-        go {
+    fn get(k: &K) -> ::opt::Opt<&V> {
+        const tag_none = ::opt::Opt::none<&V>();
+        const x = go {
             val, ok := (*self).inner[*k]
             if ok {
                $ = val
             } else {
-                $ = tag_none
+                return tag_none
             }
-       } as ::Opt<&V>
+        } as &V;
+
+        return ::opt::Opt::some<&V>(x);
     }
 
-    mut fn get_mut(k: &K) -> ::Opt<&mut V> {
-        const tag_none = .none;
-        go {
+    mut fn get_mut(k: &K) -> ::opt::Opt<&mut V> {
+        const tag_none = ::opt::Opt::none<&mut V>();
+
+        const x = go {
             val, ok := (*self).inner[*k]
             if ok {
-               $ = val
+            	$ = val
             } else {
-                $ = tag_none
+                return tag_none;
             }
-       } as ::Opt<&mut V>
+       } as &mut V;
+
+       return ::opt::Opt::some<&mut V>(x);
     }
 
-    mut fn remove(k: &K) -> ::Opt<V> {
-        const tag_none = .none;
-         go {
+    mut fn remove(k: &K) -> ::opt::Opt<V> {
+        const tag_none = ::opt::Opt::none<V>();
+        const x = go {
             key_deref := *k
             val, ok := (*self).inner[key_deref]
             if ok {
                 delete((*self).inner, key_deref)
-                $ = val
+                $ = *val
             } else {
-                $ = tag_none
+                return tag_none
             }
-        } as ::Opt<V>
+        } as V;
+
+        return ::opt::Opt::some<V>(x)
     }
 }
