@@ -61,12 +61,10 @@ struct Req {
 
     fn cookie(name: String) -> Cookie | .none {
         let cookie: &go "http.Cookie" = go {
-            cookie, err := (*self).request_ref.Cookie(name)
+            $, err := (*self).request_ref.Cookie(name)
             if err != nil {
             	return Tag__none {}
             }
-
-            $ = cookie
         };
 
         return Cookie::from_go_cookie(cookie);

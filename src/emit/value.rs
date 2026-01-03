@@ -225,37 +225,35 @@ impl ToIr {
         self.per_var_counter.push(Default::default());
     }
 
+    pub fn reset_var_counters(&mut self) {
+        self.per_var_counter.clear();
+        self.push_var_counters();
+    }
+
     pub fn pop_var_counters(&mut self) {
         self.per_var_counter.pop();
     }
 
-    pub fn push_with_var_counter(&mut self, s: &str) -> String {
-        let count = *self
-            .per_var_counter
+    /// Returns whether it has been previously declared
+    pub fn already_declared_and_inc(&mut self, s: &str) -> bool {
+        let before = self.already_declared(s);
+        self.per_var_counter
             .last_mut()
             .unwrap()
             .entry(s.to_string())
             .and_modify(|f| *f = *f + 1)
             .or_default();
-        if count > 0 {
-            format!("{s}_{count}")
-        } else {
-            s.to_string()
-        }
+        before
     }
 
-    pub fn with_var_counter(&mut self, s: &str) -> String {
+    pub fn already_declared(&mut self, s: &str) -> bool {
         let count = *self
             .per_var_counter
             .last_mut()
             .unwrap()
             .entry(s.to_string())
             .or_default();
-        if count > 0 {
-            format!("{s}_{count}")
-        } else {
-            s.to_string()
-        }
+        count > 0
     }
 
     pub fn top_label_cloned(&self) -> Option<String> {
@@ -401,7 +399,7 @@ fn walk_access_raw(
 
                     s.push_front(var_name);
                 } else {
-                    s.push_front(env.with_var_counter(&name));
+                    s.push_front(name.clone());
                 }
 
                 s[0] = fix_ident_for_go(&s[0], imports);
@@ -2465,18 +2463,17 @@ impl ValueExpr {
                     .as_go_type_annotation(type_env);
 
                 let mut v = Vec::new();
-                let name = env.push_with_var_counter(name);
-
-                v.push(IrInstruction::VarDecl(name.clone(), type_expression));
 
                 if let Some(initializer) = initializer.as_ref() {
                     if let Some(direct) = initializer.0.direct_emit(type_env, env, span) {
+                        v.push(IrInstruction::VarDecl(name.clone(), type_expression));
                         v.push(IrInstruction::VarAssignment(name.clone(), direct));
                     } else {
                         let (init_r, inti_r_res) =
                             walk_access(initializer, type_env, env, span, true, false, false);
                         v.extend(init_r);
                         if let Some(init_r_res) = inti_r_res {
+                            v.push(IrInstruction::VarDecl(name.clone(), type_expression));
                             v.push(IrInstruction::VarAssignment(
                                 name.clone(),
                                 IrValue::Imm(init_r_res),
@@ -2486,6 +2483,7 @@ impl ValueExpr {
                         }
                     }
                 } else {
+                    v.push(IrInstruction::VarDecl(name.clone(), type_expression));
                     if type_expr.as_ref().unwrap().0.is_struct() {
                         v.push(IrInstruction::VarAssignment(
                             name.clone(),
@@ -2789,15 +2787,26 @@ impl ValueExpr {
                 let mut res_var = None;
 
                 env.push_var_counters();
+                let mut sub_scopes_openend = 0;
                 for block_expr in block_exprs.iter() {
                     let ty = TypeExpr::from_value_expr(block_expr, type_env);
 
                     let (block_instr, block_res) =
                         block_expr.0.direct_or_with_instr(type_env, env, span);
 
+                    if let ValueExpr::VarDecl(d) = &block_expr.0 {
+                        if env.already_declared_and_inc(&d.0.name) {
+                            res_instr.push(IrInstruction::InlineGo("\n{\n".to_string()));
+                            sub_scopes_openend += 1;
+                        }
+                    }
+
                     res_instr.extend(block_instr);
 
                     if ty.0.is_never() {
+                        for _ in 0..sub_scopes_openend {
+                            res_instr.push(IrInstruction::InlineGo("\n}\n".to_string()));
+                        }
                         return (res_instr, None);
                     }
 
@@ -2823,6 +2832,10 @@ impl ValueExpr {
                         res_var.unwrap(),
                     ));
                     res_var = Some(IrValue::Var(fresvar));
+                }
+
+                for _ in 0..sub_scopes_openend {
+                    res_instr.push(IrInstruction::InlineGo("\n}\n".to_string()));
                 }
 
                 if !res_instr.is_empty() {
@@ -2987,13 +3000,9 @@ impl ValueExpr {
             }
             ValueExpr::RawVariable(_, p) => (
                 vec![],
-                as_rvar(fix_ident_for_go(
-                    &env.with_var_counter(&mangle(p)),
-                    type_env.all_go_imports,
-                )),
+                as_rvar(fix_ident_for_go(&mangle(p), type_env.all_go_imports)),
             ),
             ValueExpr::Variable(_, x, var_type, _, needs_copy) => {
-                let x = env.with_var_counter(x);
                 let x = fix_ident_for_go(&x, type_env.all_go_imports);
                 if *needs_copy {
                     let var_type = var_type
