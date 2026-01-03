@@ -3905,7 +3905,16 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                                         }
                                     })
                                     .unwrap();
-                                failure_with_occurence(msg, span, [(msg, span)]);
+
+                                failure_with_occurence(
+                                    msg,
+                                    value_expr.1,
+                                    [
+                                        (msg, value_expr.1),
+                                        (&format!("The type param {name} must be known at compiletime"), span)
+                                    ]
+                                );
+
                             }
                         }
 
@@ -3966,7 +3975,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                             } else {
                                 let msg =
                                     &format!("Could not infer type for template parameter {name}");
-                                let span = fn_def
+                                let inner_span = fn_def
                                     .generics
                                     .iter()
                                     .find_map(|x| {
@@ -3977,7 +3986,15 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                                         }
                                     })
                                     .unwrap();
-                                failure_with_occurence(msg, span, [(msg, span)]);
+
+                                failure_with_occurence(
+                                    msg,
+                                    value_expr.1,
+                                    [
+                                        (msg, value_expr.1),
+                                        (&format!("The type param {name} must be known at compiletime"), inner_span)
+                                    ]
+                                );
                             }
                         }
 
@@ -4580,7 +4597,15 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
                         }
                     })
                     .unwrap();
-                failure_with_occurence(msg, span, [(msg, span)]);
+
+                failure_with_occurence(
+                    msg,
+                    value_expr.1,
+                    [
+                        (msg, value_expr.1),
+                        (&format!("The type param {name} must be known at compiletime"), span)
+                    ]
+                );
             }
         }
 

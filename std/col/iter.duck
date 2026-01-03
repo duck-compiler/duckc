@@ -9,6 +9,14 @@ struct Iter<T> {
         }
     }
 
+    static fn empty<T>() -> Iter<T> {
+        return Iter<T> {
+            next_fn: fn () -> T | .no_next_elem {
+                return .no_next_elem;
+            }
+        }
+    }
+
     static fn range(start_inclusive: Int, end_exclusive: Int) -> Iter<Int> {
         Iter::from<Int>(mut fn() {
             if (start_inclusive >= end_exclusive) {
@@ -62,6 +70,42 @@ struct Iter<T> {
                 .no_next_elem => return
             }
         }
+    }
+
+    mut fn chain(other_iters: Iter<T>[] | Iter<T>) -> Iter<T> {
+        let remaining_iters = ArrayList::from_array<Iter<T>>(match other_iters {
+            Iter<T>[] @iters => iters,
+            Iter<T> @iter => [iter],
+        });
+
+        let current_iter = self;
+
+        const next_fn = mut fn () -> T | .no_next_elem {
+            while (true) {
+                const next_elem = current_iter.next_fn();
+                match next_elem {
+                    T @value => return value,
+                    .no_next_elem => {},
+                };
+
+                if (remaining_iters.len() > 0) {
+                    const next_iter = remaining_iters.pop();
+                    match next_iter {
+                        Iter<T> @it => {
+                            current_iter = &mut it;
+                            continue;
+                        },
+                        .none => return .no_next_elem,
+                    }
+                }
+
+                return .no_next_elem;
+            }
+
+            return .no_next_elem;
+        };
+
+        return Iter::from<T>(next_fn)
     }
 
     mut fn map<U>(apply: fn(T) -> U) -> Iter<U> {

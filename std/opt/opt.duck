@@ -1,0 +1,103 @@
+struct Some<T> { value: T }
+
+struct Opt<T> {
+    inner: Some<T> | .none,
+} impl {
+    static fn some<T>(value: T) -> Opt<T> {
+        return Opt<T> {
+            inner: Some { value: value, }
+        }
+    }
+
+    static fn none<T>() -> Opt<T> {
+        return Opt<T> {
+            inner: .none,
+        }
+    }
+
+    fn is_some() -> Bool {
+        return self.inner != .none;
+    }
+
+    fn if_some(consumer: mut fn (value: T)) {
+        match self.inner {
+            .none => return,
+            Some<T> @some => consumer(some.value),
+        }
+    }
+
+    fn if_none(consumer: mut fn ()) {
+        match self.inner {
+            .none => consumer(),
+            Some<T> @some => return,
+        }
+    }
+
+    fn is_none() -> Bool {
+        return self.inner == .none;
+    }
+
+    fn map<R>(f: mut fn (value: T) -> R) -> Opt<R> {
+        return match self.inner {
+            .none => Opt<R> { inner: .none },
+            Some<T> @some => Opt<R> { inner: Some { value: f(some.value) } },
+        }
+    }
+
+    fn filter(predicate: mut fn (value: T) -> Bool) -> Opt<T> {
+        return match self.inner {
+            .none => Opt<T> { inner: .none },
+            Some<T> @some => {
+                if (predicate(some.value)) {
+                    *self
+                } else {
+                    Opt <T> { inner: .none }
+                }
+            }
+        }
+    }
+
+    fn or_else(other: T) -> T {
+        return match self.inner {
+            .none => other,
+            Some<T> @some => some.value,
+        };
+    }
+
+    fn or_else_get(other_supplier: mut fn () -> T) -> T {
+        return match self.inner {
+            .none => other_supplier(),
+            Some<T> @some => some.value,
+        };
+    }
+
+    fn unwrap() -> T {
+        return match self.inner {
+            .none => ::error::panic("unwrap on none") as !,
+            Some<T> @some => some.value,
+        };
+    }
+
+    fn expect(msg: String) -> T {
+        return match self.inner {
+            .none => ::error::panic(f"expect failed: {msg}"),
+            Some<T> @some => some.value,
+        }
+    }
+
+    fn iter() -> ::col::Iter<T> {
+        let consumed = false;
+        match self.inner {
+            .none => ::col::Iter::empty<T>(),
+            Some<T> @some => ::col::Iter::from<T>(mut fn () -> T | .no_next_elem {
+                if (consumed) {
+                    return .no_next_elem;
+                } else {
+                    consumed = true;
+                    return some.value;
+                }
+            }),
+        }
+    }
+
+}
