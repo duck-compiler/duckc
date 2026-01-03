@@ -175,6 +175,28 @@ impl TypeExpr {
                             if type_expr.0.is_never() {
                                 return (TypeExpr::Never, type_expr.1);
                             }
+
+                            if !type_expr.0.is_string() {
+                                failure_with_occurence(
+                                    "Incompatible Types",
+                                    e.1,
+                                    [
+                                        (
+                                            format!(
+                                                "interpolated values inside a f-string must evaluate to a string",
+                                            ),
+                                            e.1,
+                                        ),
+                                        (
+                                            format!(
+                                                "this is of type {}",
+                                                type_expr.0.as_clean_user_faced_type_name().yellow()
+                                            ),
+                                            e.1,
+                                        ),
+                                    ],
+                                );
+                            }
                             require(
                                 type_expr.0.is_string(),
                                 format!("Needs to be string, is {type_expr:?}"),
