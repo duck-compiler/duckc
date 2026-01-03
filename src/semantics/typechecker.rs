@@ -1708,8 +1708,8 @@ pub fn check_type_compatability_full(
                 }
             } else {
                 fail_requirement(
-                    "This is an immutable reference".to_string(),
-                    "So this needs to be an immutable reference or a mutable reference".to_string(),
+                    format!("This is an immutable reference to {}", required_type.0.as_clean_user_faced_type_name().yellow()),
+                    format!("So this needs to be an immutable reference or a mutable reference but it's of type {}", given_type.0.as_clean_user_faced_type_name().yellow()),
                 );
             }
         }
