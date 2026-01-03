@@ -4,12 +4,26 @@ use go "unicode/utf8";
 
 /// these are the main string utilities of the duck std library
 extend String with impl {
-    fn split_lines() -> String[] {
+    fn split_arr(sep: String) -> String[] {
+        return go {
+            $ = strings.Split(self, sep)
+        }
+    }
+
+    fn split(sep: String) -> ::col::ArrayList<String> {
+        return ArrayList::from_array<String>(self.split_arr(sep));
+    }
+
+    fn split_lines_arr() -> String[] {
         let lines: String[] = go {
             $ = strings.Split(self, "\n")
         };
 
         return lines;
+    }
+
+    fn split_lines() -> ::col::ArrayList<String> {
+        return ArrayList::from_array<String>(self.split_lines_arr());
     }
 
     /// returns the length of the string self
@@ -93,6 +107,18 @@ extend String with impl {
             s = strings.ToLower(self)
         }
         return s;
+    }
+
+    fn trim_left(cutset: String) -> String {
+        return go {
+            $ = strings.TrimLeft(self, cutset)
+        } as String;
+    }
+
+    fn trim_right(cutset: String) -> String {
+        return go {
+            $ = strings.TrimRight(self, cutset)
+        } as String;
     }
 
     /// returns the string with trimmed space at the beginning and end of the string
