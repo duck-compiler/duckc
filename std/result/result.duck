@@ -1,0 +1,117 @@
+use ::error;
+
+struct Ok<T> {
+    v: T,
+}
+
+struct Err<E> {
+    e: E,
+} impl {
+    static fn from_go(go_err: go "error") -> Err<String> {
+        let r: Err<String>;
+        go {
+            r.e = go_err.Error()
+        }
+        r
+    }
+}
+
+struct Result<T, E> {
+    i: Ok<T> | Err<E>,
+} impl {
+    static fn ok<T, E>(v: T) -> Result<T, E> {
+        Result<T, E> {
+            i: Ok<T> { v: v },
+        }
+    }
+
+    static fn err<T, E>(e: E) -> Result<T, E> {
+        Result<T, E> {
+            i: Err<E> { e: e },
+        }
+    }
+
+    static fn from_go<T>(go_err: go "error") -> Result<T, String> {
+        Result::err<T, String>(Err::from_go(go_err))
+    }
+
+    static fn from_go_select<T>(v: T, go_err: go "error", is_error: Bool) -> Result<T, String> {
+        if (is_error) {
+            Result<T, String> { i: Err::from_go(go_err) }
+        } else {
+            Result::ok<T, String>(v)
+        }
+    }
+
+    fn map<U>(f: mut fn(T) -> U) -> Result<U, E> {
+        match (self.i) {
+            Ok<T> @ok => Result::ok<U, E>(f(ok.v)),
+            Err<E> @e => Result::err<U, E>(e.e),
+        }
+    }
+
+    fn map_err<U>(f: mut fn(E) -> U) -> Result<T, U> {
+        match (self.i) {
+            Err<E> @e => Result::err<T, U>(f(e.e)),
+            Ok<T> @ok => Result::ok<T, U>(ok.v),
+        }
+    }
+
+    fn if_ok(f: mut fn(&mut T) -> ()) -> Result<T, E> {
+        match self.i {
+            Ok<T> @ok => f(&mut ok.v),
+            Err<E> @err => {},
+        };
+        *self
+    }
+
+    fn if_err(f: mut fn(&mut E) -> ()) -> Result<T, E> {
+        match self.i {
+            Ok<T> @ok => {},
+            Err<E> @err => f(&mut err.e),
+        };
+        *self
+    }
+
+    fn expect(msg: String) -> T {
+        match (self.i) {
+            Ok<T> @ok => ok.v,
+            else => error::panic(msg),
+        }
+    }
+
+    fn expect_err(msg: String) -> E {
+        match (self.i) {
+            Err<E> @e => e.e,
+            else => error::panic(msg),
+        }
+    }
+
+    fn or_else(v: T) -> T {
+        match self.i {
+            Ok<T> @ok => ok.v,
+            else => v,
+        }
+    }
+
+    fn or_else_get(f: mut fn() -> T) -> T {
+        match self.i {
+            Ok<T> @ok => ok.v,
+            else => f(),
+        }
+    }
+
+    fn unwrap() -> T {
+        match (self.i) {
+            Ok<T> @ok => ok.v,
+            else => error::panic("called unwrap on Err"),
+        }
+    }
+
+    fn unwrap_err() -> E {
+        match (self.i) {
+            Err<E> @e => e.e,
+            else => error::panic("called unwrap_err on Ok"),
+        }
+    }
+}

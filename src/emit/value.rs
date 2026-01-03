@@ -2483,6 +2483,20 @@ impl ValueExpr {
                             return (v, None);
                         }
                     }
+                } else {
+                    if type_expr.as_ref().unwrap().0.is_struct() {
+                        v.push(IrInstruction::VarAssignment(
+                            name.clone(),
+                            IrValue::Struct(
+                                type_expr
+                                    .as_ref()
+                                    .unwrap()
+                                    .0
+                                    .as_clean_go_type_name(type_env),
+                                vec![],
+                            ),
+                        ));
+                    }
                 }
 
                 (v, Some(IrValue::empty_tuple()))

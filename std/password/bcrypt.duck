@@ -1,5 +1,7 @@
 use go "golang.org/x/crypto/bcrypt";
 
+use ::result::Result;
+
 struct BCrypt {
     cost: Int,
 } impl {
@@ -19,33 +21,39 @@ struct BCrypt {
         }
     }
 
-    fn hash(s: String) -> Byte[] | .err {
+    fn hash(s: String) -> Result<Byte[], String> {
         const s_bytes = s.to_bytes();
         const cost = self.cost;
-        const e = .err;
+
+        let res: Byte[];
+        let e: go "error";
+        let is_err: Bool;
+
         go {
-            res, err := bcrypt.GenerateFromPassword(s_bytes, cost);
-            if err != nil {
-            	return e
-            }
-            $ = res
-        } as Byte[]
+            res, e = bcrypt.GenerateFromPassword(s_bytes, cost);
+            is_err = e != nil
+        }
+
+        Result::from_go_select(res, e, is_err)
     }
 
     fn verify(
         clear_text: String,
         hashed: Byte[],
-    ) -> .ok | .err {
+    ) -> Result<(), String> {
         const b = clear_text.to_bytes();
         const t_err = .err;
         const t_ok = .ok;
-        go {
-            err := bcrypt.CompareHashAndPassword(hashed, b)
-            if err != nil {
-            	return t_err
-            }
 
-            return t_ok
-        } as !
+        let res: ();
+        let e: go "error";
+        let is_err: Bool;
+
+        go {
+            e = bcrypt.CompareHashAndPassword(hashed, b)
+            is_err = e != nil
+        }
+
+        Result::from_go_select(res, e, is_err)
     }
 }

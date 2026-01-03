@@ -1,0 +1,55 @@
+use std::result::Result;
+use std::io::println;
+
+fn main() {
+    let r = Result::ok<(), ()>(());
+    r.expect("1 failed");
+    let r2 = Result::err<(), ()>(());
+    r2.expect_err("2 failed");
+
+    println("");
+    r.map_err(fn(v: ()) -> () {}).expect("3 failed").to_string()->println();
+    r2.map(fn(v: ()) -> () {}).expect_err("4 failed").to_string()->println();
+
+    println("");
+    r.map_err(fn(v: ()) -> Int { 3 }).expect("5 failed").to_string()->println();
+    r2.map(fn(v: ()) -> Int { 4 }).expect_err("6 failed").to_string()->println();
+
+    println("");
+    r.map_err(fn(v: ()) -> Int { 3 }).expect("7 failed").to_string()->println();
+    r2.map(fn(v: ()) -> Int { 4 }).expect_err("8 failed").to_string()->println();
+
+    println("");
+    r.map(fn(v: ()) -> Int { 3 }).expect("9 failed").to_string()->println();
+    r2.map_err(fn(v: ()) -> Int { 4 }).expect_err("10 failed").to_string()->println();
+
+    println("");
+    let r3 = Result::ok<Int, ()>(3);
+    r3.if_err(fn(e) { std::error::panic("error: entered if_err") })
+        .if_ok(fn(e) { *e = *e * 10 })
+        .expect("11 failed")
+        .to_string()
+        ->println();
+
+    let r4 = Result::err<(), Int>(4);
+    r4.if_err(fn(e) { *e = *e * 10 })
+        .if_ok(fn(e) { std::error::panic("error: entered if_ok") })
+        .expect_err("11 failed")
+        .to_string()
+        ->println();
+
+     println("");
+
+    Result::err<Int, ()>(()).or_else(-6).to_string()->println();
+    Result::err<Int, ()>(()).or_else_get(fn() { -8 }).to_string()->println();
+
+    println("");
+
+    let counter = 0;
+    Result::err<Int, ()>(()).or_else_get(mut fn() { const i = counter; counter = counter + 1; i }).to_string()->println();
+    Result::err<Int, ()>(()).or_else_get(mut fn() { const i = counter; counter = counter + 1; i }).to_string()->println();
+    Result::err<Int, ()>(()).or_else_get(mut fn() { const i = counter; counter = counter + 1; i }).to_string()->println();
+    Result::err<Int, ()>(()).or_else_get(mut fn() { const i = counter; counter = counter + 1; i }).to_string()->println();
+    Result::err<Int, ()>(()).or_else_get(mut fn() { const i = counter; counter = counter + 1; i }).to_string()->println();
+    Result::err<Int, ()>(()).or_else_get(mut fn() { const i = counter; counter = counter + 1; i }).to_string()->println();
+}

@@ -5,18 +5,11 @@ fn main() {
     const b = BCrypt::new();
     const original = "secret password 😎";
 
-    const h = match b.hash(original) {
-        Byte[] @h => h,
-        else => std::error::panic("could not hash"),
-    };
+    const h = b.hash(original).unwrap();
 
-    match b.verify(original, h) {
-        .ok => println("secret password 😎 ok"),
-        .err => println("secret password 😎 not ok"),
-    };
+    b.verify(original, h).expect("this should not fail");
+    println("secret password 😎 ok");
 
-    match b.verify("123", h) {
-        .ok => println("123 ok"),
-        .err => println("123 not ok"),
-    };
+    b.verify("123", h).expect_err("this should fail");
+    println("123 not ok");
 }
