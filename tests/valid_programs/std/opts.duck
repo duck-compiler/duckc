@@ -1,0 +1,53 @@
+use go "database/sql";
+
+use std::opt::{Opt};
+
+fn main() {
+    let x = Opt::some("yoo");
+    x.expect("we've expected it");
+    x.unwrap();
+    x.filter(fn (v) { v == "yoo" }).unwrap();
+    x.map<String>(fn (v) { v.to_upper() })
+        .filter(fn (v) { v == "YOO" }).unwrap();
+
+    std::assert(x.map<String>(fn (v) { v.to_upper() })
+        .filter(fn (v) { v == "yoo" }).or_else("HELLO") == "HELLO", "or else didn't work");
+
+    std::assert(x.is_some(), "x is some :(");
+    std::assert(!x.is_none(), "x is some :(");
+
+    Opt::none<String>()
+        .if_none(fn () {
+            std::io::println("this should be printed because none is none");
+        });
+
+    Opt::none<String>()
+        .if_some(fn (v: String) {
+            std::io::println("this should not be printed because none is not some");
+        });
+
+    Opt::some<String>("that's right")
+        .if_some(fn (v: String) {
+            std::io::println(f"{v}");
+        });
+
+    Opt::some<String>("that's right")
+        .if_none(fn () {
+            std::io::println("this shouldn't be called");
+        });
+
+    Opt::some<String>("Hallo")
+        .map<String>(fn (x: String) { x.to_upper() })
+        .iter()
+        .chain([
+            Opt::some<String>("elem").iter(),
+            Opt::none<String>()
+                .iter()
+        ])
+        .chain(
+            Opt::some<String>("loool").iter(),
+        )
+        .for_each(fn (elem) {
+            std::io::println(elem)
+        });
+}
