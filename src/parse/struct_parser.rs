@@ -134,6 +134,9 @@ where
                 }
 
                 for m in &methods {
+                    if m.0.0.as_ref().is_some_and(|v| matches!(v, Token::Static)) {
+                        continue;
+                    }
                     if let Some(decl_span) = names_with_spans.get(&m.0.1.name) {
                         let msg = format!("{} declared multiple times", m.0.1.name);
 
@@ -147,6 +150,28 @@ where
                         );
                     }
                     names_with_spans.insert(m.0.1.name.clone(), m.1);
+                }
+
+                {
+                    let mut names_with_spans = HashMap::new();
+                    for m in &methods {
+                        if !m.0.0.as_ref().is_some_and(|v| matches!(v, Token::Static)) {
+                            continue;
+                        }
+                        if let Some(decl_span) = names_with_spans.get(&m.0.1.name) {
+                            let msg = format!("{} declared multiple times", m.0.1.name);
+
+                            let declared_here_again_msg = format!("You declared {} here", m.0.1.name);
+                            let other_msg = format!("But you already declared {} here", m.0.1.name);
+
+                            failure_with_occurence(
+                                msg.clone(),
+                                m.1,
+                                [(declared_here_again_msg, m.1), (other_msg, *decl_span)],
+                            );
+                        }
+                        names_with_spans.insert(m.0.1.name.clone(), m.1);
+                    }
                 }
 
                 let (mut_methods_names, methods, static_methods) = methods.into_iter().fold(

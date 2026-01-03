@@ -15,6 +15,7 @@ module cmd;
 module path;
 module password;
 module opt;
+module result;
 
 fn assert(expr: Bool, fail_msg: String | ..) {
     if (!expr) {
