@@ -1,0 +1,14 @@
+use std::io::println;
+
+fn main() {
+    let x = 10;
+    println(x.to_string());
+    x += 15;
+    println(x.to_string());
+    x /= 2;
+    println(x.to_string());
+    x *= 3;
+    println(x.to_string());
+    x %= 5;
+    println(x.to_string());
+}

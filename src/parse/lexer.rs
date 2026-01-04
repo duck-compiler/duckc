@@ -86,6 +86,11 @@ pub enum Token {
     For,
     In,
     Defer,
+    PlusEquals,
+    SubEquals,
+    MulEquals,
+    DivEquals,
+    ModEquals,
 }
 
 impl Display for Token {
@@ -146,6 +151,11 @@ impl Display for Token {
             Token::DocComment(comment) => &format!("/// {comment}"),
             Token::Comment(comment) => &format!("// {comment}"),
             Token::Async => "async",
+            Token::PlusEquals => "+=",
+            Token::SubEquals => "-=",
+            Token::MulEquals => "*=",
+            Token::DivEquals => "/=",
+            Token::ModEquals => "%=",
         };
         write!(f, "{t}")
     }
@@ -549,6 +559,14 @@ pub fn lex_single<'a>(
         let thin_arrow = just("->").to(Token::ThinArrow);
         let thick_arrow = just("=>").to(Token::ThickArrow);
 
+        let assign_equals = choice((
+            just("+=").to(Token::PlusEquals),
+            just("-=").to(Token::SubEquals),
+            just("*=").to(Token::MulEquals),
+            just("/=").to(Token::DivEquals),
+            just("%=").to(Token::ModEquals),
+        ));
+
         let doc_comment = just("///")
             .ignore_then(
                 any()
@@ -640,6 +658,7 @@ pub fn lex_single<'a>(
                 .then_ignore(whitespace().at_least(1))
                 .to(Token::RefMut))
             .or(doc_comment)
+            .or(assign_equals)
             .or(comment)
             .or(fmt_string)
             .or(thin_arrow)
