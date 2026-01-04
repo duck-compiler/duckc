@@ -19,10 +19,9 @@ fn main() {
     }
 
     while (i < length) {
-        match numbers.get(i) {
-            Some<Int> @some => sum = sum + some.value,
-            else => std::io::println("Error getting element"),
-        }
+        numbers.get(i).if_some(mut fn (value: Int) {
+            sum = sum + value
+        });
         i = i + 1;
     }
 
