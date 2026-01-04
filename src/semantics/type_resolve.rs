@@ -66,6 +66,14 @@ fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, type_env: &mut
             continue;
         }
 
+        for (_, p) in &mut extension_method.0.params {
+            resolve_all_aliases_type_expr(p, type_env);
+            process_keyof_in_type_expr(&mut p.0, type_env);
+        }
+
+        resolve_all_aliases_type_expr(&mut extension_method.0.return_type, type_env);
+        process_keyof_in_type_expr(&mut extension_method.0.return_type.0, type_env);
+
         let underlying_fn_type = extension_method.0.type_expr();
 
         let access_fn_type = TypeExpr::Fun(
@@ -641,7 +649,7 @@ impl TypeEnv<'_> {
         None
     }
 
-    pub fn find_ducks_and_tuples(&mut self) -> Vec<NeedsSearchResult> {
+    pub fn find_ducks_and_tuples(&mut self, src_file: &SourceFile) -> Vec<NeedsSearchResult> {
         let mut result = Vec::new();
 
         let cloned_resolve = self.resolved_methods.clone();
@@ -659,6 +667,13 @@ impl TypeEnv<'_> {
             .function_definitions
             .clone()
             .iter_mut()
+            .chain(
+                src_file
+                    .extensions_defs
+                    .clone()
+                    .iter_mut()
+                    .flat_map(|x| x.function_definitions.iter_mut().map(|x| &mut x.0)),
+            )
             .chain(self.generic_fns_generated.clone().iter_mut())
             .chain(
                 self.generic_methods_generated
@@ -881,7 +896,7 @@ where
 {
     f_t(v, env);
     match &mut v.0 {
-        TypeExpr::Byte => {},
+        TypeExpr::Byte => {}
         TypeExpr::Never | TypeExpr::Statement => {}
         TypeExpr::NamedDuck {
             name: _,
@@ -2445,11 +2460,20 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             sort_fields_type_expr(&mut type_definition.type_expression.0);
         });
 
-    // todo: check if we'd rather sort after generic generation
     source_file
         .function_definitions
         .iter_mut()
+        .chain(
+            source_file
+                .extensions_defs
+                .iter_mut()
+                .flat_map(|x| x.function_definitions.iter_mut().map(|x| &mut x.0)),
+        )
         .for_each(|function_definition| {
+            sort_fields_type_expr(&mut function_definition.return_type.0);
+            for t in function_definition.params.iter_mut() {
+                sort_fields_type_expr(&mut t.1.0);
+            }
             sort_fields_value_expr(&mut function_definition.value_expr.0);
         });
 
@@ -3914,10 +3938,14 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                                     value_expr.1,
                                     [
                                         (msg, value_expr.1),
-                                        (&format!("The type param {name} must be known at compiletime"), span)
-                                    ]
+                                        (
+                                            &format!(
+                                                "The type param {name} must be known at compiletime"
+                                            ),
+                                            span,
+                                        ),
+                                    ],
                                 );
-
                             }
                         }
 
@@ -3995,8 +4023,13 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                                     value_expr.1,
                                     [
                                         (msg, value_expr.1),
-                                        (&format!("The type param {name} must be known at compiletime"), inner_span)
-                                    ]
+                                        (
+                                            &format!(
+                                                "The type param {name} must be known at compiletime"
+                                            ),
+                                            inner_span,
+                                        ),
+                                    ],
                                 );
                             }
                         }
@@ -4606,8 +4639,11 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
                     value_expr.1,
                     [
                         (msg, value_expr.1),
-                        (&format!("The type param {name} must be known at compiletime"), span)
-                    ]
+                        (
+                            &format!("The type param {name} must be known at compiletime"),
+                            span,
+                        ),
+                    ],
                 );
             }
         }

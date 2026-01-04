@@ -1,0 +1,18 @@
+use std::io::println;
+use std::col::ArrayList;
+
+extend String with impl {
+    fn split_lines2() -> ArrayList<String> {
+        const lines: String[] = go {
+            $ = strings.Split(self, "\n")
+        };
+
+        ArrayList::from_array(lines)
+    }
+}
+
+fn main() {
+    const l = "a\nb";
+    l.split_lines().to_string()->println();
+    l.split_lines2().as_ref().to_string()->println();
+}
