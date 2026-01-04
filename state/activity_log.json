@@ -1,5 +1,15 @@
 [
     {
+        "type": "closed",
+        "timestamp": "2026-01-04T03:35:00.317826",
+        "issue_id": "67253afb2d99d44e686ad77b0cd44619",
+        "issue_title": "check if we'd rather sort after generic generation",
+        "author_info": {
+            "name": "Robin F\u00fcllgraf",
+            "email": "146665916+Apfelfrosch@users.noreply.github.com"
+        }
+    },
+    {
         "type": "created",
         "timestamp": "2025-12-28T00:26:09.881129",
         "issue_id": "e18934d01edf88269debb344175a2cc5",
@@ -984,16 +994,6 @@
         "timestamp": "2025-07-09T23:15:12.304401",
         "issue_id": "fcb3f9eb5327dfccc556c11af2cad15a",
         "issue_title": "!(\"combine then and else, then return combined type\");",
-        "author_info": {
-            "name": "Maurice Schmidt",
-            "email": "mvmogo@gmail.com"
-        }
-    },
-    {
-        "type": "created",
-        "timestamp": "2025-07-09T23:15:12.304401",
-        "issue_id": "1bc39227f7b86613ca803ab82b8f6b34",
-        "issue_title": "Match Expressions need to be type resolved just as the function defs",
         "author_info": {
             "name": "Maurice Schmidt",
             "email": "mvmogo@gmail.com"

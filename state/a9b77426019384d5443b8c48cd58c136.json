@@ -1,7 +1,7 @@
 {
     "id": "a9b77426019384d5443b8c48cd58c136",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 2177,
+    "line_number": 2192,
     "title": "type_params",
     "tag": "todo",
     "module_tag": "semantics",

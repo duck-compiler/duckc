@@ -1,7 +1,7 @@
 {
     "id": "d143368bcfbf509206f9ba783934e568",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 74,
+    "line_number": 82,
     "title": "mutable extension fns?",
     "tag": "todo",
     "module_tag": "semantics",
