@@ -1016,14 +1016,59 @@ where
 
             let assignment = atom
                 .clone()
-                .then_ignore(just(Token::ControlChar('=')))
+                .then(choice((
+                    just(Token::ControlChar('=')),
+                    just(Token::PlusEquals),
+                    just(Token::SubEquals),
+                    just(Token::MulEquals),
+                    just(Token::DivEquals),
+                    just(Token::ModEquals),
+                )))
                 .then(value_expr_parser.clone())
-                .map_with(|(target, value_expr), e| {
+                .map_with(|((target, op), value_expr), e| {
                     ValueExpr::VarAssign(
                         (
                             Assignment {
-                                target,
-                                value_expr: value_expr.clone(),
+                                target: target.clone(),
+                                value_expr: match op {
+                                    Token::ControlChar('=') => value_expr.clone(),
+                                    Token::PlusEquals => (
+                                        ValueExpr::Add(
+                                            target.clone().into(),
+                                            value_expr.clone().into(),
+                                        ),
+                                        value_expr.1,
+                                    ),
+                                    Token::SubEquals => (
+                                        ValueExpr::Sub(
+                                            target.clone().into(),
+                                            value_expr.clone().into(),
+                                        ),
+                                        value_expr.1,
+                                    ),
+                                    Token::MulEquals => (
+                                        ValueExpr::Mul(
+                                            target.clone().into(),
+                                            value_expr.clone().into(),
+                                        ),
+                                        value_expr.1,
+                                    ),
+                                    Token::DivEquals => (
+                                        ValueExpr::Div(
+                                            target.clone().into(),
+                                            value_expr.clone().into(),
+                                        ),
+                                        value_expr.1,
+                                    ),
+                                    Token::ModEquals => (
+                                        ValueExpr::Mod(
+                                            target.clone().into(),
+                                            value_expr.clone().into(),
+                                        ),
+                                        value_expr.1,
+                                    ),
+                                    _ => panic!("invalid assign op {op:?}"),
+                                },
                             },
                             e.span(),
                         )
