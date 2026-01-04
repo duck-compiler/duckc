@@ -1,6 +1,8 @@
 use go "strings";
 use go "strconv";
 use go "unicode/utf8";
+use ::col::{ArrayList};
+use ::result::{Result};
 
 /// these are the main string utilities of the duck std library
 extend String with impl {
@@ -10,7 +12,7 @@ extend String with impl {
         }
     }
 
-    fn split(sep: String) -> ::col::ArrayList<String> {
+    fn split(sep: String) -> ArrayList<String> {
         return ArrayList::from_array<String>(self.split_arr(sep));
     }
 
@@ -22,7 +24,7 @@ extend String with impl {
         return lines;
     }
 
-    fn split_lines() -> ::col::ArrayList<String> {
+    fn split_lines() -> ArrayList<String> {
         return ArrayList::from_array<String>(self.split_lines_arr());
     }
 
@@ -168,23 +170,25 @@ extend String with impl {
     }
 
     /// returns the string as a int or .err_parsing if couldn't parse to int
-    fn to_int() -> Int | .err_parsing {
+    fn to_int() -> Result<Int, String> {
         let res: Int = 0;
         let err_occurred: Bool = false;
+        let err: go "error";
         go {
-            i, err := strconv.Atoi(self)
+            as_int, err := strconv.Atoi(self)
             if err != nil {
                 err_occurred = true
+                err = err
             } else {
-                res = i
+                res = as_int
             }
         }
 
         if (err_occurred) {
-            return .err_parsing;
+            return Result::from_go<Int>(err);
         }
 
-        return res;
+        return Result::ok<Int, String>(res);
     }
 
     /// returns a byte array of the string
