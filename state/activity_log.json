@@ -1,6 +1,16 @@
 [
     {
         "type": "closed",
+        "timestamp": "2026-01-04T19:32:54.406290",
+        "issue_id": "55b87cf3bb4499e965e33b5e4efe9c0f",
+        "issue_title": "todo!() in value.rs @ line 3454",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "closed",
         "timestamp": "2026-01-04T03:35:00.317826",
         "issue_id": "67253afb2d99d44e686ad77b0cd44619",
         "issue_title": "check if we'd rather sort after generic generation",
@@ -984,16 +994,6 @@
         "timestamp": "2025-07-09T23:15:12.304401",
         "issue_id": "08d4ea6633203a66f7130937bdba9646",
         "issue_title": "add correct return type of block",
-        "author_info": {
-            "name": "Maurice Schmidt",
-            "email": "mvmogo@gmail.com"
-        }
-    },
-    {
-        "type": "created",
-        "timestamp": "2025-07-09T23:15:12.304401",
-        "issue_id": "fcb3f9eb5327dfccc556c11af2cad15a",
-        "issue_title": "!(\"combine then and else, then return combined type\");",
         "author_info": {
             "name": "Maurice Schmidt",
             "email": "mvmogo@gmail.com"

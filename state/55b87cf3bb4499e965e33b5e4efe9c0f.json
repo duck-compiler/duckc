@@ -13,7 +13,8 @@
         "email": "mvmogo@gmail.com"
     },
     "source_line": "todo!()",
-    "status": "open",
+    "status": "closed",
     "first_seen": "2025-07-09T23:15:12.305255",
-    "history": []
+    "history": [],
+    "closed_at": "2026-01-04T19:32:54.415705"
 }
