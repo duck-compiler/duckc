@@ -75,8 +75,8 @@ struct Result<T, E> {
         }
     }
 
-    fn if_ok(f: mut fn(T) -> ()) -> Result<T, E> {
-        match self.value {
+    fn if_ok(f: mut fn(&mut T) -> ()) -> Result<T, E> {
+        match (&mut self.value) {
             T @value => f(value),
             Err<E> @err => {},
         };
@@ -84,7 +84,7 @@ struct Result<T, E> {
     }
 
     fn if_err(f: mut fn(&mut E) -> ()) -> Result<T, E> {
-        match self.value {
+        match (&mut self.value) {
             T @value => {},
             Err<E> @e => f(&mut e.err),
         };

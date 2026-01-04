@@ -27,7 +27,7 @@ fn main() {
     println("");
     let r3 = Result::ok<Int, ()>(3);
     r3.if_err(fn(e) { std::error::panic("error: entered if_err") })
-        .if_ok(fn(e) { (e * 10).to_string()->println() })
+        .if_ok(fn(e) { (*e * 10).to_string()->println() })
         .expect("11 failed");
 
     let r4 = Result::err<(), Int>(4);

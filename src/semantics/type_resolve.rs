@@ -3733,15 +3733,28 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
     }
 
     typeresolve_value_expr((&mut value_expr.0, value_expr.1), type_env);
+
+    let (match_var_type, mv_count, mv_is_mut) =
+        TypeExpr::from_value_expr_dereferenced_with_count_and_mut(value_expr, type_env);
+
     arms.iter_mut().for_each(|arm| {
         type_env.push_identifier_types();
         if let Some(identifier) = &arm.identifier_binding {
+            let tmp_t = if let Some(base_type) = arm.base.as_ref().cloned() {
+                base_type
+            } else {
+                arm.type_case.clone()
+            };
             type_env.insert_identifier_type(
                 identifier.clone(),
-                if let Some(base_type) = arm.base.as_ref().cloned() {
-                    base_type.0
+                if mv_count >= 1 {
+                    if mv_is_mut {
+                        TypeExpr::RefMut(tmp_t.into())
+                    } else {
+                        TypeExpr::Ref(tmp_t.into())
+                    }
                 } else {
-                    arm.type_case.0.clone()
+                    tmp_t.0
                 },
                 false,
                 false,
@@ -3753,8 +3766,6 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
         typeresolve_value_expr((&mut arm.value_expr.0, arm.value_expr.1), type_env);
         type_env.pop_identifier_types();
     });
-
-    let match_var_type = TypeExpr::from_value_expr(value_expr, type_env);
 
     let mut all = if let TypeExpr::Or(contents) = match_var_type.0 {
         contents
@@ -3783,7 +3794,20 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
         }
         type_env.push_identifier_types();
         if let Some(identifier) = &arm.identifier_binding {
-            type_env.insert_identifier_type(identifier.clone(), else_type.0, false, false);
+            type_env.insert_identifier_type(
+                identifier.clone(),
+                if mv_count >= 1 {
+                    if mv_is_mut {
+                        TypeExpr::RefMut(else_type.into())
+                    } else {
+                        TypeExpr::Ref(else_type.into())
+                    }
+                } else {
+                    else_type.0
+                },
+                false,
+                false,
+            );
             if let Some(condition) = &mut arm.condition {
                 typeresolve_value_expr((&mut condition.0, condition.1), type_env);
             }

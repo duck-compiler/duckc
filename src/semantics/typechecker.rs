@@ -40,12 +40,8 @@ impl TypeExpr {
         value_expr: &Spanned<ValueExpr>,
         type_env: &mut TypeEnv,
     ) -> Spanned<TypeExpr> {
-        let mut res = TypeExpr::from_value_expr(value_expr, type_env);
-
-        while let TypeExpr::Ref(v) | TypeExpr::RefMut(v) = res.0 {
-            res.0 = v.0;
-        }
-
+        let (res, _, _) =
+            TypeExpr::from_value_expr_dereferenced_with_count_and_mut(value_expr, type_env);
         res
     }
 
@@ -53,15 +49,34 @@ impl TypeExpr {
         value_expr: &Spanned<ValueExpr>,
         type_env: &mut TypeEnv,
     ) -> (Spanned<TypeExpr>, usize) {
+        let (res, counter, _) =
+            TypeExpr::from_value_expr_dereferenced_with_count_and_mut(value_expr, type_env);
+        (res, counter)
+    }
+
+    pub fn from_value_expr_dereferenced_with_count_and_mut(
+        value_expr: &Spanned<ValueExpr>,
+        type_env: &mut TypeEnv,
+    ) -> (Spanned<TypeExpr>, usize, bool) {
         let mut res = TypeExpr::from_value_expr(value_expr, type_env);
         let mut counter = 0;
+        let mut is_mut = true;
 
-        while let TypeExpr::Ref(v) | TypeExpr::RefMut(v) = res.0 {
-            res.0 = v.0;
-            counter += 1;
+        loop {
+            if let TypeExpr::Ref(v) = res.0 {
+                res.0 = v.0;
+                counter += 1;
+                is_mut = false;
+            } else if let TypeExpr::RefMut(v) = res.0 {
+                res.0 = v.0;
+                counter += 1;
+                is_mut = true;
+            } else {
+                break;
+            }
         }
 
-        (res, counter)
+        (res, counter, is_mut)
     }
 
     #[track_caller]
@@ -911,7 +926,7 @@ impl TypeExpr {
                     else_arm,
                     span: _,
                 } => {
-                    let v_expr_type = TypeExpr::from_value_expr(value_expr, type_env);
+                    let v_expr_type = TypeExpr::from_value_expr_dereferenced(value_expr, type_env);
                     if v_expr_type.0.is_never() {
                         return (TypeExpr::Never, *complete_span);
                     }
@@ -942,7 +957,7 @@ impl TypeExpr {
 
                     if else_arm.is_none() {
                         let possible_types: Vec<Spanned<TypeExpr>> =
-                            match &TypeExpr::from_value_expr(value_expr, type_env).0 {
+                            match &TypeExpr::from_value_expr_dereferenced(value_expr, type_env).0 {
                                 TypeExpr::Or(types) => types.clone(),
                                 other => vec![(other.clone(), value_expr.1)],
                             };
