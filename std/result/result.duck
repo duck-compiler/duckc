@@ -5,11 +5,14 @@ struct Err<E> {
     err: E,
 } impl {
     static fn from_go(go_err: go "error") -> Err<String> {
-        let r: Err<String>;
+        let r: Err<String> = Err<String> {
+            err: "",
+        };
         go {
             r.err = go_err.Error()
         }
-        r
+
+        return r
     }
 }
 
@@ -29,7 +32,7 @@ struct Result<T, E> {
     }
 
     static fn from_go<T>(go_err: go "error") -> Result<T, String> {
-        Result::err<T, String>(Err::from_go(go_err))
+        Result::err<T, String>(Err::from_go(go_err).err)
     }
 
     static fn from_go_select<T>(
