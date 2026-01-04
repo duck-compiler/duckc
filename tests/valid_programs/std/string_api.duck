@@ -33,7 +33,7 @@ fn main() {
         assert("'HALLO'.substring(1, 3) is not 'AL'");
     ("HALLO".repeat(2) == "HALLOHALLO")->
         assert("'HALLO'.repeat(2) is not 'HALLOHALLO'");
-    ("5".to_int() == 5)->
+    ("5".to_int().unwrap() == 5)->
         assert("'5'.to_int() is not 5");
 
     std::io::println("red".red());
