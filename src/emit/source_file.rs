@@ -10,7 +10,7 @@ use crate::{
     semantics::type_resolve::TypeEnv,
 };
 
-const JSON_UTILITIES: &'static str = include_str!("json_util.go");
+const JSON_UTILITIES: &str = include_str!("json_util.go");
 
 impl SourceFile {
     pub fn emit(

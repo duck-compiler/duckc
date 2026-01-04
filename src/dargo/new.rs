@@ -115,7 +115,7 @@ pub fn new_project(
                 // todo: this is currently a silent error - if there's one
                 let _ = fs::write(&main_src_file, generate_default_main_duck());
                 duck_with_message(format!("You've sucessfully created a new project in ./{project_name}").leak());
-                println!("");
+                println!();
                 println!("Run following commands to get started");
                 println!("    cd {project_name}");
                 println!("    dargo run");

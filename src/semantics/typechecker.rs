@@ -194,9 +194,7 @@ impl TypeExpr {
                             if !type_expr.0.is_string() {
                                 let hints = [
                                     (
-                                        format!(
-                                            "interpolated values inside a f-string must evaluate to a string",
-                                        ),
+                                        "interpolated values inside a f-string must evaluate to a string".to_string(),
                                         e.1,
                                     ),
                                     (
