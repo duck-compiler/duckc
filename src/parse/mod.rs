@@ -63,6 +63,18 @@ pub fn failure_with_occurence(
     occured_at: SS,
     labels: impl IntoIterator<Item = (impl AsRef<str>, SS)>,
 ) -> ! {
+    let mut srcs = vec![(occured_at.context.file_name, occured_at.context.file_contents)];
+
+    let labels = labels.into_iter()
+        .collect::<Vec<_>>();
+
+    for label in &labels {
+        let ctx = label.1.context;
+        if ctx.file_name != occured_at.context.file_name {
+            srcs.push((label.1.context.file_name, label.1.context.file_contents));
+        }
+    }
+
     Report::build(
         ReportKind::Error,
         (occured_at.context.file_name, occured_at.into_range()),
@@ -75,10 +87,7 @@ pub fn failure_with_occurence(
             .with_color(Color::Yellow)
     }))
     .finish()
-    .eprint(sources([(
-        occured_at.context.file_name,
-        occured_at.context.file_contents,
-    )]))
+    .eprint(sources(srcs))
     .unwrap();
     panic!("{}", msg.as_ref())
 }
