@@ -1,0 +1,42 @@
+use std::col::ArrayList;
+
+fn main() {
+    let a = "a,b,c"
+        .split(",")
+        .get(0)
+        .unwrap();
+    std::assert(a == "a", "a is not a");
+
+    let b = "a,b,c"
+        .split(",")
+        .get(1)
+        .unwrap();
+    std::assert(b == "b", "b is not b");
+
+    let c = "a,b,c"
+        .split(",")
+        .get(2)
+        .unwrap();
+    std::assert(c == "c", "c is not c");
+
+    let abc_len = "a,b,c".split(",").len();
+    std::assert(abc_len == 3, "len is not 3");
+
+    let a = ",1\n,2\n,3"
+        .split_lines()
+        .iter()
+        .map<Int>(fn (line: &String) -> Int {
+            line.split(",")
+                .get(1)
+                .expect("expected after coma")
+                .to_int()
+                .expect("couldn't parse to int")
+        })
+        .reduce(fn (acc: &mut Int, elem: Int) {
+            *acc += elem
+        })
+        .expect("couldn't reduce");
+
+    std::assert(a == 6, "a is not 6");
+    std::io::println("splitting works");
+}

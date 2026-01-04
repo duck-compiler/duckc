@@ -57,5 +57,8 @@ fn main() {
     std::io::println("on orange rgb".on_rgb(242, 107, 10));
 
     "HOLLO".to_bytes();
-    std::io::println("all string api tests have passed")
+    std::io::println("all string api tests have passed");
+
+    assert("   L".trim_left(" ").len() == 1, "trim left ducked");
+    assert("   L   ".trim_left(" ").trim_right(" ").len() == 1, "trim right and left ducked")
 }
