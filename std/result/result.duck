@@ -75,9 +75,9 @@ struct Result<T, E> {
         }
     }
 
-    fn if_ok(f: mut fn(&mut T) -> ()) -> Result<T, E> {
+    fn if_ok(f: mut fn(T) -> ()) -> Result<T, E> {
         match self.value {
-            T @value => f(&mut value),
+            T @value => f(value),
             Err<E> @err => {},
         };
         *self
