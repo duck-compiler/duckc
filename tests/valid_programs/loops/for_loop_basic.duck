@@ -1,3 +1,5 @@
+use std::opt::{Some, Opt};
+
 fn main() {
     let numbers: std::col::ArrayList<Int> = std::col::ArrayList::new<Int>();
     numbers.push(1);
@@ -18,7 +20,7 @@ fn main() {
 
     while (i < length) {
         match numbers.get(i) {
-            Int @value => sum = sum + value,
+            Some<Int> @some => sum = sum + some.value,
             else => std::io::println("Error getting element"),
         }
         i = i + 1;

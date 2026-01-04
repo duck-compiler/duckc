@@ -1,3 +1,5 @@
+use std::opt::{Some, Opt};
+
 fn main() {
     let matrix: std::col::ArrayList<std::col::ArrayList<Int>> = std::col::ArrayList::new<std::col::ArrayList<Int>>();
 
@@ -28,7 +30,8 @@ fn main() {
 
     while (i < outer_length) {
         match matrix.get(i) {
-            std::col::ArrayList<Int> @row => {
+            Some<std::col::ArrayList<Int>> @some => {
+                let row = some.value;
                 let j: Int = 0;
                 let inner_length: Int = 0;
                 go {
@@ -37,7 +40,7 @@ fn main() {
 
                 while (j < inner_length) {
                     match row.get(j) {
-                        Int @value => total = total + value,
+                        Some<Int> @some => total = total + some.value,
                         else => std::io::println("Error getting element"),
                     }
                     j = j + 1;
