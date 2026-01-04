@@ -204,6 +204,12 @@ pub enum IrValue {
     Negate(Box<IrValue>),
     Deref(Box<IrValue>),
     Nil,
+    ShiftLeft(Box<IrValue>, Box<IrValue>),
+    ShiftRight(Box<IrValue>, Box<IrValue>),
+    BitAnd(Box<IrValue>, Box<IrValue>),
+    BitOr(Box<IrValue>, Box<IrValue>),
+    BitXor(Box<IrValue>, Box<IrValue>),
+    BitNot(Box<IrValue>),
 }
 
 impl IrValue {
@@ -1339,6 +1345,74 @@ impl ValueExpr {
         span: SS,
     ) -> (Vec<IrInstruction>, Option<IrValue>) {
         match self {
+            ValueExpr::BitAnd { lhs, rhs }
+            | ValueExpr::BitOr { lhs, rhs }
+            | ValueExpr::BitXor { lhs, rhs }
+            | ValueExpr::ShiftLeft {
+                target: lhs,
+                amount: rhs,
+            }
+            | ValueExpr::ShiftRight {
+                target: lhs,
+                amount: rhs,
+            } => {
+                let (mut lhs_instr, lhs_res) = lhs.0.emit(type_env, env, lhs.1);
+                let Some(lhs_res) = lhs_res else {
+                    return (lhs_instr, None);
+                };
+
+                let (rhs_instr, rhs_res) = rhs.0.emit(type_env, env, rhs.1);
+                let Some(rhs_res) = rhs_res else {
+                    return (rhs_instr, None);
+                };
+
+                lhs_instr.extend(rhs_instr);
+
+                let res_var = env.new_var();
+
+                let left_type = TypeExpr::from_value_expr(lhs, type_env);
+
+                let lhs_res = Box::new(lhs_res);
+                let rhs_res = Box::new(rhs_res);
+
+                lhs_instr.extend([
+                    IrInstruction::VarDecl(
+                        res_var.clone(),
+                        left_type.0.as_go_type_annotation(type_env),
+                    ),
+                    IrInstruction::VarAssignment(
+                        res_var.clone(),
+                        match self {
+                            ValueExpr::BitAnd { .. } => IrValue::BitAnd(lhs_res, rhs_res),
+                            ValueExpr::BitOr { .. } => IrValue::BitOr(lhs_res, rhs_res),
+                            ValueExpr::BitXor { .. } => IrValue::BitXor(lhs_res, rhs_res),
+                            ValueExpr::ShiftLeft { .. } => IrValue::ShiftLeft(lhs_res, rhs_res),
+                            ValueExpr::ShiftRight { .. } => IrValue::ShiftRight(lhs_res, rhs_res),
+                            _ => unreachable!(),
+                        },
+                    ),
+                ]);
+
+                (lhs_instr, as_rvar(res_var))
+            }
+            ValueExpr::BitNot(t) => {
+                let (mut instr, res) = t.0.emit(type_env, env, t.1);
+                let Some(res) = res else {
+                    return (instr, None);
+                };
+
+                let inner_type = TypeExpr::from_value_expr(t, type_env);
+                let res_var = env.new_var();
+                instr.extend([
+                    IrInstruction::VarDecl(
+                        res_var.clone(),
+                        inner_type.0.as_go_type_annotation(type_env),
+                    ),
+                    IrInstruction::VarAssignment(res_var.clone(), IrValue::BitNot(res.into())),
+                ]);
+
+                (instr, as_rvar(res_var))
+            }
             ValueExpr::Negate(t) => {
                 let (mut inner_instr, inner_res) = t.0.emit(type_env, env, t.1);
 

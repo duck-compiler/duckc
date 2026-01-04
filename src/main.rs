@@ -243,9 +243,24 @@ fn parse_src_file(
 
     fn typename_reset_global_value_expr(type_expr: &mut ValueExpr) {
         match type_expr {
-            ValueExpr::Negate(d) | ValueExpr::Async(d) | ValueExpr::Defer(d) => {
-                typename_reset_global_value_expr(&mut d.0)
+            ValueExpr::BitAnd { lhs, rhs }
+            | ValueExpr::BitOr { lhs, rhs }
+            | ValueExpr::BitXor { lhs, rhs }
+            | ValueExpr::ShiftLeft {
+                target: lhs,
+                amount: rhs,
             }
+            | ValueExpr::ShiftRight {
+                target: lhs,
+                amount: rhs,
+            } => {
+                typename_reset_global_value_expr(&mut lhs.0);
+                typename_reset_global_value_expr(&mut rhs.0);
+            }
+            ValueExpr::Negate(d)
+            | ValueExpr::Async(d)
+            | ValueExpr::Defer(d)
+            | ValueExpr::BitNot(d) => typename_reset_global_value_expr(&mut d.0),
             ValueExpr::As(v, t) => {
                 typename_reset_global(&mut t.0);
                 typename_reset_global_value_expr(&mut v.0);

@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
-use chumsky::{input::BorrowInput, prelude::*};
+use chumsky::{input::BorrowInput, prelude::*, span::Span};
 
 pub type TypeParam = TypeExpr;
 
@@ -149,6 +149,27 @@ pub enum ValueExpr {
     Ref(Box<Spanned<ValueExpr>>),
     RefMut(Box<Spanned<ValueExpr>>),
     Deref(Box<Spanned<ValueExpr>>),
+    ShiftLeft {
+        target: Box<Spanned<ValueExpr>>,
+        amount: Box<Spanned<ValueExpr>>,
+    },
+    ShiftRight {
+        target: Box<Spanned<ValueExpr>>,
+        amount: Box<Spanned<ValueExpr>>,
+    },
+    BitAnd {
+        lhs: Box<Spanned<ValueExpr>>,
+        rhs: Box<Spanned<ValueExpr>>,
+    },
+    BitOr {
+        lhs: Box<Spanned<ValueExpr>>,
+        rhs: Box<Spanned<ValueExpr>>,
+    },
+    BitXor {
+        lhs: Box<Spanned<ValueExpr>>,
+        rhs: Box<Spanned<ValueExpr>>,
+    },
+    BitNot(Box<Spanned<ValueExpr>>),
 }
 
 pub trait IntoBlock {
@@ -297,6 +318,12 @@ impl ValueExpr {
             | ValueExpr::Sub(..)
             | ValueExpr::Div(..)
             | ValueExpr::Mod(..)
+            | ValueExpr::BitAnd { .. }
+            | ValueExpr::BitOr { .. }
+            | ValueExpr::BitXor { .. }
+            | ValueExpr::ShiftLeft { .. }
+            | ValueExpr::ShiftRight { .. }
+            | ValueExpr::BitNot(..)
             | ValueExpr::FunctionCall { .. } => true,
         }
     }
@@ -819,6 +846,7 @@ where
                 BoolNegate,
                 Deref,
                 Negate,
+                BitNegate,
             }
 
             let inline_go = select_ref! { Token::InlineGo(x) => x.to_owned() }
@@ -832,6 +860,7 @@ where
                 just(Token::ControlChar('!')).map(|_| AtomPreParseUnit::BoolNegate),
                 just(Token::ControlChar('*')).map(|_| AtomPreParseUnit::Deref),
                 just(Token::ControlChar('-')).map(|_| AtomPreParseUnit::Negate),
+                just(Token::ControlChar('~')).map(|_| AtomPreParseUnit::BitNegate),
             ))
             .repeated()
             .collect::<Vec<_>>()
@@ -969,6 +998,9 @@ where
                                 AtomPreParseUnit::Negate => {
                                     ValueExpr::Negate((acc_expr, acc_span).into())
                                 }
+                                AtomPreParseUnit::BitNegate => {
+                                    ValueExpr::BitNot((acc_expr, acc_span).into())
+                                }
                             },
                             acc_span,
                         )
@@ -1023,6 +1055,8 @@ where
                     just(Token::MulEquals),
                     just(Token::DivEquals),
                     just(Token::ModEquals),
+                    just(Token::ShiftLeftEquals),
+                    just(Token::ShiftRightEquals),
                 )))
                 .then(value_expr_parser.clone())
                 .map_with(|((target, op), value_expr), e| {
@@ -1067,7 +1101,21 @@ where
                                         ),
                                         value_expr.1,
                                     ),
-                                    _ => panic!("invalid assign op {op:?}"),
+                                    Token::ShiftLeftEquals => (
+                                        ValueExpr::ShiftLeft {
+                                            target: target.clone().into(),
+                                            amount: value_expr.clone().into(),
+                                        },
+                                        value_expr.1,
+                                    ),
+                                    Token::ShiftRightEquals => (
+                                        ValueExpr::ShiftRight {
+                                            target: target.clone().into(),
+                                            amount: value_expr.clone().into(),
+                                        },
+                                        value_expr.1,
+                                    ),
+                                    _ => panic!("Compiler Bug: invalid assign op {op:?}"),
                                 },
                             },
                             e.span(),
@@ -1087,6 +1135,11 @@ where
                         just(Token::ControlChar('*')),
                         just(Token::ControlChar('/')),
                         just(Token::ControlChar('%')),
+                        just(Token::ControlChar('&')),
+                        just(Token::ControlChar('|')),
+                        just(Token::ControlChar('^')),
+                        just(Token::ControlChar('>')).ignore_then(just(Token::ControlChar('>'))),
+                        just(Token::ControlChar('<')).ignore_then(just(Token::ControlChar('<'))),
                     ))
                     .then(term)
                     .repeated()
@@ -1099,6 +1152,26 @@ where
                             Token::ControlChar('*') => ValueExpr::Mul(Box::new(acc), Box::new(x)),
                             Token::ControlChar('/') => ValueExpr::Div(Box::new(acc), Box::new(x)),
                             Token::ControlChar('%') => ValueExpr::Mod(Box::new(acc), Box::new(x)),
+                            Token::ControlChar('&') => ValueExpr::BitAnd {
+                                lhs: Box::new(acc),
+                                rhs: Box::new(x),
+                            },
+                            Token::ControlChar('|') => ValueExpr::BitOr {
+                                lhs: Box::new(acc),
+                                rhs: Box::new(x),
+                            },
+                            Token::ControlChar('^') => ValueExpr::BitXor {
+                                lhs: Box::new(acc),
+                                rhs: Box::new(x),
+                            },
+                            Token::ControlChar('<') => ValueExpr::ShiftLeft {
+                                target: Box::new(acc),
+                                amount: Box::new(x),
+                            },
+                            Token::ControlChar('>') => ValueExpr::ShiftRight {
+                                target: Box::new(acc),
+                                amount: Box::new(x),
+                            },
                             _ => unreachable!(),
                         };
                         (new_expr, span)

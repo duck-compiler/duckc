@@ -982,6 +982,19 @@ pub fn trav_value_expr_with_cancel<F1, F2, F3>(
     }
 
     match &mut v.0 {
+        ValueExpr::BitXor { lhs, rhs }
+        | ValueExpr::BitOr { lhs, rhs }
+        | ValueExpr::BitAnd { lhs, rhs } => {
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), lhs, env, cancel.clone());
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), rhs, env, cancel.clone());
+        }
+        ValueExpr::ShiftLeft { target, amount } | ValueExpr::ShiftRight { target, amount } => {
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), target, env, cancel.clone());
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), amount, env, cancel.clone());
+        }
+        ValueExpr::BitNot(d) => {
+            trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), d, env, cancel.clone());
+        }
         ValueExpr::Negate(v) => {
             trav_value_expr_with_cancel(f_t.clone(), f_vv.clone(), v, env, cancel.clone());
         }
@@ -1591,6 +1604,19 @@ fn replace_generics_in_value_expr(
     type_env: &mut TypeEnv<'_>,
 ) {
     match expr {
+        ValueExpr::BitAnd { lhs, rhs }
+        | ValueExpr::BitOr { lhs, rhs }
+        | ValueExpr::BitXor { lhs, rhs } => {
+            replace_generics_in_value_expr(&mut lhs.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut rhs.0, set_params, type_env);
+        }
+        ValueExpr::ShiftLeft { target, amount } | ValueExpr::ShiftRight { target, amount } => {
+            replace_generics_in_value_expr(&mut target.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut amount.0, set_params, type_env);
+        }
+        ValueExpr::BitNot(d) => {
+            replace_generics_in_value_expr(&mut d.0, set_params, type_env);
+        }
         ValueExpr::RawStruct {
             is_global,
             name,
@@ -2066,6 +2092,17 @@ pub fn resolve_type_expr(type_expr: &Spanned<TypeExpr>, env: &mut TypeEnv) -> Sp
 
 pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
     match expr {
+        ValueExpr::BitAnd { lhs, rhs }
+        | ValueExpr::BitOr { lhs, rhs }
+        | ValueExpr::BitXor { lhs, rhs } => {
+            sort_fields_value_expr(&mut lhs.0);
+            sort_fields_value_expr(&mut rhs.0);
+        }
+        ValueExpr::ShiftLeft { target, amount } | ValueExpr::ShiftRight { target, amount } => {
+            sort_fields_value_expr(&mut target.0);
+            sort_fields_value_expr(&mut amount.0);
+        }
+        ValueExpr::BitNot(d) => sort_fields_value_expr(&mut d.0),
         ValueExpr::RawStruct {
             is_global: _,
             name: _,
@@ -3151,6 +3188,44 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     let value_expr = value_expr.0;
     let owned = value_expr.clone();
     match value_expr {
+        ValueExpr::BitAnd { lhs, rhs }
+        | ValueExpr::BitOr { lhs, rhs }
+        | ValueExpr::BitXor { lhs, rhs }
+        | ValueExpr::ShiftLeft {
+            target: lhs,
+            amount: rhs,
+        }
+        | ValueExpr::ShiftRight {
+            target: lhs,
+            amount: rhs,
+        } => {
+            typeresolve_value_expr((&mut lhs.0, lhs.1), type_env);
+            typeresolve_value_expr((&mut rhs.0, rhs.1), type_env);
+
+            let lhs_type = TypeExpr::from_value_expr(lhs, type_env);
+            let rhs_type = TypeExpr::from_value_expr(rhs, type_env);
+
+            for t in [&lhs_type, &rhs_type] {
+                match &t.0 {
+                    TypeExpr::Int | TypeExpr::UInt => {}
+                    _ => {
+                        let msg = "Can only use bit operations on Int or UInt";
+                        failure_with_occurence(msg, *span, [(msg, lhs_type.1), (msg, rhs_type.1)]);
+                    }
+                }
+            }
+        }
+        ValueExpr::BitNot(inner) => {
+            typeresolve_value_expr((&mut inner.0, inner.1), type_env);
+            let t = TypeExpr::from_value_expr(inner, type_env);
+            match &t.0 {
+                TypeExpr::Int | TypeExpr::UInt => {}
+                _ => {
+                    let msg = "Can only use bit operations on Int or UInt";
+                    failure_with_occurence(msg, *span, [(msg, t.1)]);
+                }
+            }
+        }
         ValueExpr::Negate(v) => {
             typeresolve_value_expr((&mut v.0, v.1), type_env);
 
@@ -3163,7 +3238,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     failure_with_occurence(msg, v.1, [(msg, v.1)]);
                 }
                 _ => {
-                    let msg = "Can only negate numbers (Int, UInt, Float)";
+                    let msg = "Can only negate numbers that can have negative values (Int, Float)";
                     failure_with_occurence(msg, v.1, [(msg, v.1)]);
                 }
             }

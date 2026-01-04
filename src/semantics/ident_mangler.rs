@@ -353,6 +353,17 @@ pub fn mangle_value_expr(
     mangle_env: &mut MangleEnv,
 ) {
     match value_expr {
+        ValueExpr::BitAnd { lhs, rhs }
+        | ValueExpr::BitOr { lhs, rhs }
+        | ValueExpr::BitXor { lhs, rhs } => {
+            mangle_value_expr(&mut lhs.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut rhs.0, global_prefix, prefix, mangle_env);
+        }
+        ValueExpr::BitNot(d) => mangle_value_expr(&mut d.0, global_prefix, prefix, mangle_env),
+        ValueExpr::ShiftLeft { target, amount } | ValueExpr::ShiftRight { target, amount } => {
+            mangle_value_expr(&mut target.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut amount.0, global_prefix, prefix, mangle_env);
+        }
         ValueExpr::RawStruct {
             is_global,
             name,

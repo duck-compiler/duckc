@@ -74,6 +74,21 @@ impl TypeExpr {
 
         return (
             match value_expr {
+                ValueExpr::BitAnd { lhs: inner, rhs: _ }
+                | ValueExpr::BitOr { lhs: inner, rhs: _ }
+                | ValueExpr::BitXor { lhs: inner, rhs: _ }
+                | ValueExpr::ShiftLeft {
+                    target: inner,
+                    amount: _,
+                }
+                | ValueExpr::ShiftRight {
+                    target: inner,
+                    amount: _,
+                }
+                | ValueExpr::BitNot(inner) => {
+                    let inner_type = TypeExpr::from_value_expr(inner, type_env);
+                    inner_type.0
+                }
                 ValueExpr::RawStruct { .. } => panic!("raw struct should not be here"),
                 ValueExpr::Negate(v) => TypeExpr::from_value_expr(v.as_ref(), type_env).0,
                 ValueExpr::Async(e) => {
@@ -201,11 +216,7 @@ impl TypeExpr {
                                     ),
                                 ];
 
-                                failure_with_occurence(
-                                    "Incompatible Types",
-                                    e.1,
-                                    hints,
-                                );
+                                failure_with_occurence("Incompatible Types", e.1, hints);
                             }
                             require(
                                 type_expr.0.is_string(),
@@ -667,19 +678,22 @@ impl TypeExpr {
                                     failure_with_occurence(
                                         "Missing Parameter in Function Call",
                                         target.1,
-                                        [(
-                                            format!(
-                                                "This function requires a {}",
-                                                param_type.1.0.as_clean_user_faced_type_name(),
+                                        [
+                                            (
+                                                format!(
+                                                    "This function requires a {}",
+                                                    param_type.1.0.as_clean_user_faced_type_name(),
+                                                ),
+                                                param_type.1.1,
                                             ),
-                                            param_type.1.1,
-                                        ),(
-                                            format!(
-                                                "You need to pass a {} to this function",
-                                                param_type.1.0.as_clean_user_faced_type_name(),
+                                            (
+                                                format!(
+                                                    "You need to pass a {} to this function",
+                                                    param_type.1.0.as_clean_user_faced_type_name(),
+                                                ),
+                                                target.1,
                                             ),
-                                            target.1,
-                                        )]
+                                        ],
                                     )
                                 };
 
@@ -1708,8 +1722,14 @@ pub fn check_type_compatability_full(
                 }
             } else {
                 fail_requirement(
-                    format!("This is an immutable reference to {}", required_type.0.as_clean_user_faced_type_name().yellow()),
-                    format!("So this needs to be an immutable reference or a mutable reference but it's of type {}", given_type.0.as_clean_user_faced_type_name().yellow()),
+                    format!(
+                        "This is an immutable reference to {}",
+                        required_type.0.as_clean_user_faced_type_name().yellow()
+                    ),
+                    format!(
+                        "So this needs to be an immutable reference or a mutable reference but it's of type {}",
+                        given_type.0.as_clean_user_faced_type_name().yellow()
+                    ),
                 );
             }
         }
