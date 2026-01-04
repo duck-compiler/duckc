@@ -559,8 +559,22 @@ fn append_global_prefix_type_expr(type_expr: &mut TypeExpr, mangle_env: &mut Man
 
 fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut MangleEnv) {
     match value_expr {
+        ValueExpr::BitAnd { lhs, rhs }
+        | ValueExpr::BitOr { lhs, rhs }
+        | ValueExpr::BitXor { lhs, rhs }
+        | ValueExpr::ShiftLeft {
+            target: lhs,
+            amount: rhs,
+        }
+        | ValueExpr::ShiftRight {
+            target: lhs,
+            amount: rhs,
+        } => {
+            append_global_prefix_value_expr(&mut lhs.0, mangle_env);
+            append_global_prefix_value_expr(&mut rhs.0, mangle_env);
+        }
         ValueExpr::RawStruct { .. } => panic!("raw struct shouldn't be here"),
-        ValueExpr::Async(d) | ValueExpr::Defer(d) => {
+        ValueExpr::Async(d) | ValueExpr::Defer(d) | ValueExpr::BitNot(d) => {
             append_global_prefix_value_expr(&mut d.0, mangle_env)
         }
         ValueExpr::As(v, t) => {
