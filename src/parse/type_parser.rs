@@ -1147,8 +1147,6 @@ where
                     }
                 });
 
-            
-
             and_parser
                 .separated_by(just(Token::ControlChar('|')))
                 .at_least(1)
@@ -1377,8 +1375,6 @@ where
                         (TypeExpr::And(elems), e.span())
                     }
                 });
-
-            
 
             and_parser
                 .separated_by(just(Token::ControlChar('|')))

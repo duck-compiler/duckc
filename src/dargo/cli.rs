@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use crate::{
     dargo::{
-        self, compile::CompileErrKind, docs::DocsErrKind, init::InitErrKind, run::RunErrKind, new::NewErrKind,
-        test::TestErrKind,
+        self, compile::CompileErrKind, docs::DocsErrKind, init::InitErrKind, new::NewErrKind,
+        run::RunErrKind, test::TestErrKind,
     },
     tags::Tag,
 };
@@ -167,12 +167,8 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
             })?;
         }
         Commands::New(new_args) => {
-            dargo::new::new_project(None, new_args).map_err(|err| {
-                (
-                    format!("{}{}", Tag::Dargo, err.0,),
-                    CliErrKind::New(err.1),
-                )
-            })?;
+            dargo::new::new_project(None, new_args)
+                .map_err(|err| (format!("{}{}", Tag::Dargo, err.0,), CliErrKind::New(err.1)))?;
         }
     }
 

@@ -63,10 +63,12 @@ pub fn failure_with_occurence(
     occured_at: SS,
     labels: impl IntoIterator<Item = (impl AsRef<str>, SS)>,
 ) -> ! {
-    let mut srcs = vec![(occured_at.context.file_name, occured_at.context.file_contents)];
+    let mut srcs = vec![(
+        occured_at.context.file_name,
+        occured_at.context.file_contents,
+    )];
 
-    let labels = labels.into_iter()
-        .collect::<Vec<_>>();
+    let labels = labels.into_iter().collect::<Vec<_>>();
 
     for label in &labels {
         let ctx = label.1.context;

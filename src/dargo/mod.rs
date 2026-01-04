@@ -6,6 +6,6 @@ pub mod compile_test;
 pub mod docs;
 pub mod init;
 pub mod loader;
+pub mod new;
 pub mod run;
 pub mod test;
-pub mod new;

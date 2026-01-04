@@ -1944,8 +1944,7 @@ impl ValueExpr {
                                             format!(
                                                 "fmt.Sprintf(\"{}\", {})",
                                                 escape_string_for_go(&html_str),
-                                                printf_params.to_vec()
-                                                    .join(", "),
+                                                printf_params.to_vec().join(", "),
                                             ),
                                             id,
                                         ));
@@ -2866,10 +2865,11 @@ impl ValueExpr {
                         block_expr.0.direct_or_with_instr(type_env, env, span);
 
                     if let ValueExpr::VarDecl(d) = &block_expr.0
-                        && env.already_declared_and_inc(&d.0.name) {
-                            res_instr.push(IrInstruction::InlineGo("\n{\n".to_string()));
-                            sub_scopes_openend += 1;
-                        }
+                        && env.already_declared_and_inc(&d.0.name)
+                    {
+                        res_instr.push(IrInstruction::InlineGo("\n{\n".to_string()));
+                        sub_scopes_openend += 1;
+                    }
 
                     res_instr.extend(block_instr);
 
