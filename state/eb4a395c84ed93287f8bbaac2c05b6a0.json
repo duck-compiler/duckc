@@ -1,7 +1,7 @@
 {
     "id": "eb4a395c84ed93287f8bbaac2c05b6a0",
     "file_path": "../../src/parse/lexer.rs",
-    "line_number": 1334,
+    "line_number": 1353,
     "title": "discuss if \u03c0 should be an valid identifier",
     "tag": "todo",
     "module_tag": "parse",
