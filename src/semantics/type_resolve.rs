@@ -180,38 +180,34 @@ impl Default for TypeEnv<'_> {
             duckx_components: Vec::new(),
             jsx_component_dependencies: HashMap::new(),
             function_headers: HashMap::new(),
-            function_definitions: {
-                let mut v = Vec::new();
-                v.push(FunctionDefintion {
-                    name: "parse_json".to_string(),
-                    return_type: TypeExpr::Or(vec![
-                        TypeExpr::TemplParam("T".to_string()).into_empty_span(),
-                        TypeExpr::Tag("err".to_string()).into_empty_span(),
-                    ])
-                    .into_empty_span(),
-                    params: vec![(
-                        "json_str".to_string(),
-                        TypeExpr::String(None).into_empty_span(),
-                    )],
-                    value_expr: ValueExpr::InlineGo(
-                        String::new(),
-                        Some(TypeExpr::Never.into_empty_span()),
-                    )
-                    .into_empty_span()
-                    .into_block()
-                    .into_return(),
-                    generics: vec![(
-                        Generic {
-                            name: "T".to_string(),
-                            constraint: None,
-                        },
-                        empty_range(),
-                    )],
-                    span: empty_range(),
-                    comments: vec![],
-                });
-                v
-            },
+            function_definitions: vec![FunctionDefintion {
+                name: "parse_json".to_string(),
+                return_type: TypeExpr::Or(vec![
+                    TypeExpr::TemplParam("T".to_string()).into_empty_span(),
+                    TypeExpr::Tag("err".to_string()).into_empty_span(),
+                ])
+                .into_empty_span(),
+                params: vec![(
+                    "json_str".to_string(),
+                    TypeExpr::String(None).into_empty_span(),
+                )],
+                value_expr: ValueExpr::InlineGo(
+                    String::new(),
+                    Some(TypeExpr::Never.into_empty_span()),
+                )
+                .into_empty_span()
+                .into_block()
+                .into_return(),
+                generics: vec![(
+                    Generic {
+                        name: "T".to_string(),
+                        constraint: None,
+                    },
+                    empty_range(),
+                )],
+                span: empty_range(),
+                comments: vec![],
+            }],
             struct_definitions: Vec::new(),
             schema_defs: Vec::new(),
             named_duck_definitions: Vec::new(),
@@ -3025,7 +3021,7 @@ pub fn check_returns(
     }
 }
 
-pub fn infer_against_returns<'a>(
+pub fn infer_against_returns(
     v: &mut Spanned<ValueExpr>,
     target_type: &Spanned<TypeExpr>,
     env: &mut TypeEnv,
