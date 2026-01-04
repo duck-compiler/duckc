@@ -123,6 +123,20 @@ extend String with impl {
         } as String;
     }
 
+    /// returns the string with the given prefix removed
+    fn trim_prefix(prefix: String) -> String {
+        return go {
+            $ = strings.TrimPrefix(self, prefix)
+        } as String;
+    }
+
+    /// returns the string with the given suffix removed
+    fn trim_suffix(suffix: String) -> String {
+        return go {
+            $ = strings.TrimSuffix(self, suffix)
+        } as String;
+    }
+
     /// returns the string with trimmed space at the beginning and end of the string
     fn trim() -> String {
         let s: String = "";
@@ -316,7 +330,7 @@ fn from_int(x: Int) -> String {
     return res;
 }
 
-/// returns x in uppercase
+/// returns x as an integer
 fn to_int(x: String) -> Int {
     let res: Int = 0;
     go {
