@@ -7,6 +7,7 @@ use crate::{
     },
     parse::{
         Field,
+        source_file_parser::SourceFile,
         struct_parser::StructDefinition,
         type_parser::{Duck, TypeExpr},
     },
@@ -119,14 +120,14 @@ pub fn fix_type_name(s: &str, imports: &HashSet<String>) -> String {
 pub fn emit_type_definitions(
     type_env: &mut TypeEnv,
     to_ir: &mut ToIr,
-    // imports: &'static HashSet<String>,
+    src_file: &SourceFile,
 ) -> Vec<IrInstruction> {
     let imports = type_env.all_go_imports;
 
     let mut result = Vec::new();
     let mut emitted_types = HashSet::new();
 
-    let mut all_tuples_and_ducks = type_env.find_ducks_and_tuples();
+    let mut all_tuples_and_ducks = type_env.find_ducks_and_tuples(src_file);
 
     let tags_to_push = ["greater", "smaller", "equal"];
 

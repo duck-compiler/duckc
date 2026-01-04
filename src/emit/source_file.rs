@@ -27,7 +27,7 @@ impl SourceFile {
 
         let mut imports = HashSet::new();
 
-        for use_statement in self.use_statements {
+        for use_statement in &self.use_statements {
             if let UseStatement::Go(name, alias) = use_statement {
                 let import_name = alias
                     .as_ref()
@@ -38,14 +38,14 @@ impl SourceFile {
                     imports.insert(import_name.clone());
                 }
 
-                go_imports.push((alias, name));
+                go_imports.push((alias.to_owned(), name.to_owned()));
             }
         }
 
         let imports = Box::leak(Box::new(imports)) as &'static HashSet<String>;
         type_env.all_go_imports = imports;
 
-        let type_definitions = emit_type_definitions(type_env, &mut to_ir);
+        let type_definitions = emit_type_definitions(type_env, &mut to_ir, &self);
 
         let mut instructions = Vec::new();
         instructions.push(IrInstruction::GoPackage(pkg_name));
