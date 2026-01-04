@@ -1,5 +1,13 @@
 use go "fmt";
 
+/// prints the string to the stdout
+fn print(str: String) {
+    go {
+        fmt.Print(str);
+    }
+}
+
+/// prints the string to the stdout with a newline
 fn println(str: String) {
     go {
         fmt.Println(str);
