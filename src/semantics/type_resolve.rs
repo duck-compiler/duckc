@@ -1249,145 +1249,139 @@ pub fn merge_all_or_value_expr(v: &mut Spanned<ValueExpr>, env: &mut TypeEnv) {
 }
 
 fn trav_fn_merge_or() -> impl Fn(&mut Spanned<TypeExpr>, &mut TypeEnv) + Clone {
-    |node, env| match &node.0 {
-        TypeExpr::Or(..) => {
-            let mut out = Vec::new();
-            let mut seen = HashSet::new();
+    |node, env| if let TypeExpr::Or(..) = &node.0 {
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
 
-            fn do_it(
-                current: &mut Spanned<TypeExpr>,
-                out: &mut Vec<Spanned<TypeExpr>>,
-                seen: &mut HashSet<String>,
-                env: &mut TypeEnv,
-            ) -> bool {
-                if let TypeExpr::Or(or_contents) = &mut current.0 {
-                    for x in or_contents {
-                        if do_it(x, out, seen, env) {
-                            return true;
-                        }
-                    }
-                } else {
-                    let contains_templ_param = Cell::new(false);
-                    trav_type_expr(
-                        |v, _| {
-                            if matches!(
-                                v.0,
-                                TypeExpr::TypeName(..)
-                                    | TypeExpr::RawTypeName(..)
-                                    | TypeExpr::TemplParam(..)
-                            ) {
-                                contains_templ_param.set(true);
-                            }
-                        },
-                        current,
-                        env,
-                    );
-                    if contains_templ_param.get() {
+        fn do_it(
+            current: &mut Spanned<TypeExpr>,
+            out: &mut Vec<Spanned<TypeExpr>>,
+            seen: &mut HashSet<String>,
+            env: &mut TypeEnv,
+        ) -> bool {
+            if let TypeExpr::Or(or_contents) = &mut current.0 {
+                for x in or_contents {
+                    if do_it(x, out, seen, env) {
                         return true;
                     }
-                    let ty_id = current.0.type_id(env);
-                    if seen.insert(ty_id) {
-                        out.push(current.clone());
-                    }
                 }
-
-                false
+            } else {
+                let contains_templ_param = Cell::new(false);
+                trav_type_expr(
+                    |v, _| {
+                        if matches!(
+                            v.0,
+                            TypeExpr::TypeName(..)
+                                | TypeExpr::RawTypeName(..)
+                                | TypeExpr::TemplParam(..)
+                        ) {
+                            contains_templ_param.set(true);
+                        }
+                    },
+                    current,
+                    env,
+                );
+                if contains_templ_param.get() {
+                    return true;
+                }
+                let ty_id = current.0.type_id(env);
+                if seen.insert(ty_id) {
+                    out.push(current.clone());
+                }
             }
 
-            if !do_it(node, &mut out, &mut seen, env) {
-                if out.len() >= 2 {
-                    node.0 = TypeExpr::Or(out);
-                } else {
-                    node.0 = out.into_iter().next().unwrap().0;
-                }
+            false
+        }
+
+        if !do_it(node, &mut out, &mut seen, env) {
+            if out.len() >= 2 {
+                node.0 = TypeExpr::Or(out);
+            } else {
+                node.0 = out.into_iter().next().unwrap().0;
             }
         }
-        _ => {}
     }
 }
 
 fn trav_fn_replace_intersections() -> impl Fn(&mut Spanned<TypeExpr>, &mut TypeEnv) + Clone {
     |node, env| {
         let span = node.1;
-        match &node.0 {
-            TypeExpr::And(sub_types) => {
-                let mut found_fields = HashMap::<String, Spanned<TypeExpr>>::new();
+        if let TypeExpr::And(sub_types) = &node.0 {
+            let mut found_fields = HashMap::<String, Spanned<TypeExpr>>::new();
 
-                fn do_it(
-                    sub_types: &[Spanned<TypeExpr>],
-                    found_fields: &mut HashMap<String, Spanned<TypeExpr>>,
-                    env: &mut TypeEnv,
-                ) {
-                    for sub_type in sub_types.iter() {
-                        if matches!(sub_type.0, TypeExpr::Any) {
-                            continue;
-                        }
+            fn do_it(
+                sub_types: &[Spanned<TypeExpr>],
+                found_fields: &mut HashMap<String, Spanned<TypeExpr>>,
+                env: &mut TypeEnv,
+            ) {
+                for sub_type in sub_types.iter() {
+                    if matches!(sub_type.0, TypeExpr::Any) {
+                        continue;
+                    }
 
-                        if let TypeExpr::And(sub_types) = &sub_type.0 {
-                            do_it(sub_types, found_fields, env);
-                            continue;
-                        }
+                    if let TypeExpr::And(sub_types) = &sub_type.0 {
+                        do_it(sub_types, found_fields, env);
+                        continue;
+                    }
 
-                        if let TypeExpr::Duck(Duck { fields }) = &sub_type.0 {
-                            for field in fields.iter() {
-                                if let Some(already_seen) = found_fields.get(&field.name) {
-                                    if field.type_expr.0.type_id(env) != already_seen.0.type_id(env)
-                                    {
-                                        // TODO(@Apfelfrosch): Should these be combined into a union? I would say no
-                                        failure_with_occurence(
-                                            format!("Different definitions for {}", field.name),
-                                            field.type_expr.1,
-                                            [
-                                                (
-                                                    format!(
-                                                        "Definition 1 is here ({})",
-                                                        already_seen
-                                                            .0
-                                                            .as_clean_user_faced_type_name()
-                                                    ),
-                                                    already_seen.1,
+                    if let TypeExpr::Duck(Duck { fields }) = &sub_type.0 {
+                        for field in fields.iter() {
+                            if let Some(already_seen) = found_fields.get(&field.name) {
+                                if field.type_expr.0.type_id(env) != already_seen.0.type_id(env)
+                                {
+                                    // TODO(@Apfelfrosch): Should these be combined into a union? I would say no
+                                    failure_with_occurence(
+                                        format!("Different definitions for {}", field.name),
+                                        field.type_expr.1,
+                                        [
+                                            (
+                                                format!(
+                                                    "Definition 1 is here ({})",
+                                                    already_seen
+                                                        .0
+                                                        .as_clean_user_faced_type_name()
                                                 ),
-                                                (
-                                                    format!(
-                                                        "Conflicting definition is here ({})",
-                                                        field
-                                                            .type_expr
-                                                            .0
-                                                            .as_clean_user_faced_type_name()
-                                                    ),
-                                                    field.type_expr.1,
+                                                already_seen.1,
+                                            ),
+                                            (
+                                                format!(
+                                                    "Conflicting definition is here ({})",
+                                                    field
+                                                        .type_expr
+                                                        .0
+                                                        .as_clean_user_faced_type_name()
                                                 ),
-                                            ],
-                                        )
-                                    }
-                                } else {
-                                    found_fields
-                                        .insert(field.name.clone(), field.type_expr.clone());
+                                                field.type_expr.1,
+                                            ),
+                                        ],
+                                    )
                                 }
+                            } else {
+                                found_fields
+                                    .insert(field.name.clone(), field.type_expr.clone());
                             }
-                        } else {
-                            let msg = "Can only use intersection (&) with ducks";
-                            failure_with_occurence(msg, sub_type.1, [(msg, sub_type.1)]);
                         }
+                    } else {
+                        let msg = "Can only use intersection (&) with ducks";
+                        failure_with_occurence(msg, sub_type.1, [(msg, sub_type.1)]);
                     }
                 }
-
-                do_it(sub_types, &mut found_fields, env);
-
-                let fields = found_fields.into_iter().fold(Vec::new(), |mut acc, elem| {
-                    acc.push(Field {
-                        name: elem.0,
-                        type_expr: elem.1,
-                    });
-                    acc
-                });
-                let mut res_duck_type = TypeExpr::Duck(Duck { fields });
-
-                sort_fields_type_expr(&mut res_duck_type);
-
-                *node = (res_duck_type, span);
             }
-            _ => {}
+
+            do_it(sub_types, &mut found_fields, env);
+
+            let fields = found_fields.into_iter().fold(Vec::new(), |mut acc, elem| {
+                acc.push(Field {
+                    name: elem.0,
+                    type_expr: elem.1,
+                });
+                acc
+            });
+            let mut res_duck_type = TypeExpr::Duck(Duck { fields });
+
+            sort_fields_type_expr(&mut res_duck_type);
+
+            *node = (res_duck_type, span);
         }
     }
 }
@@ -3113,11 +3107,9 @@ fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: 
                 name: req_name,
                 type_params: req_type_params,
             } = &req.0
-            {
-                if name.as_str() == req_name.as_str() && type_params.is_empty() {
+                && name.as_str() == req_name.as_str() && type_params.is_empty() {
                     *type_params = req_type_params.to_vec();
                 }
-            }
         }
         ValueExpr::Int(_, ty) => {
             if matches!(req.0, TypeExpr::Int) || matches!(req.0, TypeExpr::UInt) {
@@ -3508,7 +3500,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 .get_identifier_type_and_const(&ident)
                 .unwrap_or_else(|| {
                     failure_with_occurence(
-                        "Unknown identifier".to_string(),
+                        "Unknown identifier",
                         *span,
                         [(
                             format!(
@@ -3553,7 +3545,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 let ty = TypeExpr::from_value_expr(expr, type_env);
 
                 if let Some(given_type) = given_type.as_ref() {
-                    check_type_compatability(&given_type, &ty, type_env);
+                    check_type_compatability(given_type, &ty, type_env);
                 }
                 found_types.push(ty);
             }
@@ -3859,8 +3851,8 @@ fn infer_type_params(
         }
         TypeExpr::TemplParam(name) | TypeExpr::TypeName(_, name, _) => {
             if let Some(infered_type) = generic_params.get_mut(name) {
-                if let Some(infered_type) = infered_type.as_ref() {
-                    if infered_type.0.clone().into_empty_span().0
+                if let Some(infered_type) = infered_type.as_ref()
+                    && infered_type.0.clone().into_empty_span().0
                         != value_type.0.clone().into_empty_span().0
                     {
                         let msg = format!("Conflicting values for template parameter {name}");
@@ -3870,7 +3862,6 @@ fn infer_type_params(
                             [(&msg, value_type.1), (&msg, infered_type.1)],
                         );
                     }
-                }
                 *infered_type = Some(value_type.clone());
             }
         }
@@ -3968,8 +3959,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                     .iter()
                     .find(|x| name.as_str() == x.name.as_str())
                     .cloned()
-                {
-                    if !fn_def.generics.is_empty() {
+                    && !fn_def.generics.is_empty() {
                         let mut infered_generics = fn_def.generics.iter().cloned().fold(
                             IndexMap::<String, Option<Spanned<TypeExpr>>>::new(),
                             |mut acc, e| {
@@ -4028,7 +4018,6 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                         typeresolve_function_call(value_expr, type_env);
                         return;
                     }
-                }
             }
             ValueExpr::FieldAccess {
                 target_obj,
@@ -4607,7 +4596,7 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
             .filter(|field| !fields.iter().any(|given_field| given_field.0 == *field))
             .collect::<Vec<String>>();
 
-        if fields_that_are_too_much.len() >= 1 {
+        if !fields_that_are_too_much.is_empty() {
             hints.push(format!(
                 "The field(s) {} do not exist on type {}",
                 fields_that_are_too_much.join(", ").yellow(),
@@ -4615,7 +4604,7 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
             ));
         }
 
-        if missing_fields.len() >= 1 {
+        if !missing_fields.is_empty() {
             hints.push(format!(
                 "The field(s) {} are/is missing",
                 missing_fields.join(", ").to_string().yellow(),
@@ -4626,11 +4615,9 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
     }
 
     for f in fields.iter() {
-        if og_def
+        if !og_def
             .fields
-            .iter()
-            .find(|og_field| og_field.name.as_str() == f.0)
-            .is_none()
+            .iter().any(|og_field| og_field.name.as_str() == f.0)
         {
             let msg = format!("Invalid field {}", f.0);
             failure_with_occurence(
@@ -4832,7 +4819,7 @@ fn typeresolve_variable(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
         .get_identifier_type_and_const(identifier)
         .unwrap_or_else(|| {
             failure_with_occurence(
-                "Unknown identifier".to_string(),
+                "Unknown identifier",
                 value_expr.1,
                 [(
                     format!(
