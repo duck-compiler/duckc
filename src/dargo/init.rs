@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{dargo::cli::{InitArgs}, tags::Tag};
+use crate::{dargo::cli::InitArgs, tags::Tag};
 
 #[derive(Debug)]
 pub enum InitErrKind {

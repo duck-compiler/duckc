@@ -1147,7 +1147,7 @@ where
                     }
                 });
 
-            let union_expr = and_parser
+            and_parser
                 .separated_by(just(Token::ControlChar('|')))
                 .at_least(1)
                 .collect::<Vec<Spanned<TypeExpr>>>()
@@ -1160,9 +1160,7 @@ where
                         merge_or(&expr, &mut elems);
                         (TypeExpr::Or(elems), e.span())
                     }
-                });
-
-            union_expr
+                })
         },
     )
 }
@@ -1378,7 +1376,7 @@ where
                     }
                 });
 
-            let union_expr = and_parser
+            and_parser
                 .separated_by(just(Token::ControlChar('|')))
                 .at_least(1)
                 .collect::<Vec<Spanned<TypeExpr>>>()
@@ -1391,9 +1389,7 @@ where
                         merge_or(&expr, &mut elems);
                         (TypeExpr::Or(elems), e.span())
                     }
-                });
-
-            union_expr
+                })
         },
     )
 }

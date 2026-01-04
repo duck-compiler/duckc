@@ -5,8 +5,8 @@ fn str_arr_len(arr: String[]) -> Int {
 }
 
 fn print_diff(lstr: String, rstr: String) {
-    const llines = lstr.split_lines();
-    const rlines = rstr.split_lines();
+    const llines = lstr.split_lines_arr();
+    const rlines = rstr.split_lines_arr();
 
     const n = llines->str_arr_len();
     const m = rlines->str_arr_len();

@@ -1,15 +1,31 @@
 use go "strings";
 use go "strconv";
 use go "unicode/utf8";
+use ::col::{ArrayList};
+use ::result::{Result};
 
 /// these are the main string utilities of the duck std library
 extend String with impl {
-    fn split_lines() -> String[] {
+    fn split_arr(sep: String) -> String[] {
+        return go {
+            $ = strings.Split(self, sep)
+        }
+    }
+
+    fn split(sep: String) -> ArrayList<String> {
+        return ArrayList::from_array<String>(self.split_arr(sep));
+    }
+
+    fn split_lines_arr() -> String[] {
         let lines: String[] = go {
             $ = strings.Split(self, "\n")
         };
 
         return lines;
+    }
+
+    fn split_lines() -> ArrayList<String> {
+        return ArrayList::from_array<String>(self.split_lines_arr());
     }
 
     /// returns the length of the string self
@@ -95,6 +111,18 @@ extend String with impl {
         return s;
     }
 
+    fn trim_left(cutset: String) -> String {
+        return go {
+            $ = strings.TrimLeft(self, cutset)
+        } as String;
+    }
+
+    fn trim_right(cutset: String) -> String {
+        return go {
+            $ = strings.TrimRight(self, cutset)
+        } as String;
+    }
+
     /// returns the string with trimmed space at the beginning and end of the string
     fn trim() -> String {
         let s: String = "";
@@ -142,23 +170,25 @@ extend String with impl {
     }
 
     /// returns the string as a int or .err_parsing if couldn't parse to int
-    fn to_int() -> Int | .err_parsing {
+    fn to_int() -> Result<Int, String> {
         let res: Int = 0;
         let err_occurred: Bool = false;
+        let err: go "error";
         go {
-            i, err := strconv.Atoi(self)
+            as_int, err := strconv.Atoi(self)
             if err != nil {
                 err_occurred = true
+                err = err
             } else {
-                res = i
+                res = as_int
             }
         }
 
         if (err_occurred) {
-            return .err_parsing;
+            return Result::from_go<Int>(err);
         }
 
-        return res;
+        return Result::ok<Int, String>(res);
     }
 
     /// returns a byte array of the string

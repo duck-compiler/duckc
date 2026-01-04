@@ -815,7 +815,7 @@ pub fn emit_type_definitions(
                         fun_name,
                         None,
                         vec![("json_str".to_string(), "string".to_string())],
-                        Some(format!("({}, error)", type_name)),
+                        Some(format!("({type_name}, error)")),
                         vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }
@@ -1232,7 +1232,7 @@ pub fn emit_type_definitions(
                         format!("{receiver}_FromJson"),
                         None,
                         vec![("json_str".to_string(), "string".to_string())],
-                        Some(format!("(*{}, error)", receiver)),
+                        Some(format!("(*{receiver}, error)")),
                         vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }

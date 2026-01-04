@@ -165,7 +165,7 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
             .map(OsString::from)
             .unwrap_or(OsString::from("duck_out"))
             .as_os_str(),
-        &Path::new(&go_file_name),
+        Path::new(&go_file_name),
     )
     .map_err(|err| {
         (

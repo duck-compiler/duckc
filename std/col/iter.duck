@@ -1,4 +1,5 @@
 use ::col::{ArrayList};
+use ::opt::{Opt, Some};
 
 struct Iter<T> {
     next_fn: mut fn() -> T | .no_next_elem,
@@ -93,7 +94,7 @@ struct Iter<T> {
                 if (remaining_iters.len() > 0) {
                     const next_iter = remaining_iters.pop();
                     match next_iter.inner {
-                        ::opt::Some<Iter<T>> @some => {
+                        Some<Iter<T>> @some => {
                             current_iter = &mut some.value;
                             continue;
                         },
@@ -244,10 +245,10 @@ struct Iter<T> {
         return init;
     }
 
-    mut fn reduce(f: mut fn(acc: &mut T, elem: T)) -> ::opt::Opt<T> {
+    mut fn reduce(f: mut fn(acc: &mut T, elem: T)) -> Opt<T> {
         let first = match (self.next()) {
             T @t => t,
-            .no_next_elem => return ::opt::Opt::none<T>(),
+            .no_next_elem => return Opt::none<T>(),
         };
 
         while (true) {
@@ -258,7 +259,14 @@ struct Iter<T> {
             f(&mut first, elem);
         }
 
-        return ::opt::Opt::some<T>(first);
+        return Opt::some<T>(first);
+    }
+
+    mut fn first() -> Opt<T> {
+        return match self.next_fn() {
+            T @value => Opt::some<T>(value),
+            .no_next_elem => Opt::none<T>(),
+        };
     }
 
     mut fn into_list() -> ArrayList<T> {
@@ -289,18 +297,18 @@ struct Iter<T> {
         result
     }
 
-    mut fn find(f: fn(e: T) -> Bool) -> ::opt::Opt<T> {
+    mut fn find(f: fn(e: T) -> Bool) -> Opt<T> {
         while (true) {
             match self.next_fn() {
                 T @t => {
                     if (f(t)) {
-                        return ::opt::Opt::some<T>(t);
+                        return Opt::some<T>(t);
                     }
                 },
                 .no_next_elem => break,
             }
         }
-        return ::opt::Opt::none<T>();
+        return Opt::none<T>();
     }
 
     mut fn any(f: fn(e: T) -> Bool) -> Bool {

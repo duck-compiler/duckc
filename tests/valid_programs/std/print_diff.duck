@@ -15,7 +15,7 @@ fn main() {
     println("Comparing A-B-C with A-X-C:".on_blue());
     print_diff("A\nB\nC", "A\nX\nC");
 
-    let lines = "one\ntwo\nthree".split_lines();
+    let lines = "one\ntwo\nthree".split_lines_arr();
     (lines->str_arr_len() == 3)->
         assert("split_lines should return 3 lines");
 

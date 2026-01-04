@@ -247,7 +247,7 @@ impl ToIr {
             .last_mut()
             .unwrap()
             .entry(s.to_string())
-            .and_modify(|f| *f = *f + 1)
+            .and_modify(|f| *f += 1)
             .or_default();
         before
     }
@@ -1944,11 +1944,7 @@ impl ValueExpr {
                                             format!(
                                                 "fmt.Sprintf(\"{}\", {})",
                                                 escape_string_for_go(&html_str),
-                                                printf_params
-                                                    .iter()
-                                                    .cloned()
-                                                    .collect::<Vec<_>>()
-                                                    .join(", "),
+                                                printf_params.to_vec().join(", "),
                                             ),
                                             id,
                                         ));
@@ -2868,11 +2864,11 @@ impl ValueExpr {
                     let (block_instr, block_res) =
                         block_expr.0.direct_or_with_instr(type_env, env, span);
 
-                    if let ValueExpr::VarDecl(d) = &block_expr.0 {
-                        if env.already_declared_and_inc(&d.0.name) {
-                            res_instr.push(IrInstruction::InlineGo("\n{\n".to_string()));
-                            sub_scopes_openend += 1;
-                        }
+                    if let ValueExpr::VarDecl(d) = &block_expr.0
+                        && env.already_declared_and_inc(&d.0.name)
+                    {
+                        res_instr.push(IrInstruction::InlineGo("\n{\n".to_string()));
+                        sub_scopes_openend += 1;
                     }
 
                     res_instr.extend(block_instr);
@@ -3077,7 +3073,7 @@ impl ValueExpr {
                 as_rvar(fix_ident_for_go(&mangle(p), type_env.all_go_imports)),
             ),
             ValueExpr::Variable(_, x, var_type, _, needs_copy) => {
-                let x = fix_ident_for_go(&x, type_env.all_go_imports);
+                let x = fix_ident_for_go(x, type_env.all_go_imports);
                 if *needs_copy {
                     let var_type = var_type
                         .as_ref()

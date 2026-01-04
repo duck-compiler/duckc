@@ -130,13 +130,14 @@ pub fn build(
         };
 
     let mut mod_init_cmd = Command::new(&go_bin);
-    mod_init_cmd.args([
-        OsString::from("mod"),
-        OsString::from("init"),
-        designated_binary_name.to_owned(),
-    ])
-    .stdout(Stdio::null())
-    .stderr(Stdio::null());
+    mod_init_cmd
+        .args([
+            OsString::from("mod"),
+            OsString::from("init"),
+            designated_binary_name.to_owned(),
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
 
     let mut tidy_cmd = Command::new(&go_bin);
     tidy_cmd.args([OsString::from("mod"), OsString::from("tidy")]);

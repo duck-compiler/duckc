@@ -13,6 +13,6 @@ extend String with impl {
 
 fn main() {
     const l = "a\nb";
-    l.split_lines().to_string()->println();
+    l.split_lines_arr().to_string()->println();
     l.split_lines2().as_ref().to_string()->println();
 }

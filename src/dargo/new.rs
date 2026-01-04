@@ -2,7 +2,9 @@ use colored::Colorize;
 use lazy_static::lazy_static;
 
 use std::{
-    fs::{self, create_dir}, io, path::{Path, PathBuf}
+    fs::{self, create_dir},
+    io,
+    path::{Path, PathBuf},
 };
 
 use crate::{dargo::cli::NewArgs, duck_with_message, tags::Tag};
@@ -48,15 +50,20 @@ pub fn new_project(
     custom_dargo_toml_path: Option<PathBuf>,
     new_args: NewArgs,
 ) -> Result<(), (String, NewErrKind)> {
-    let project_name = if let Some(project_name) = new_args.project_name { project_name } else {
+    let project_name = if let Some(project_name) = new_args.project_name {
+        project_name
+    } else {
         println!("what do you want the project to be called?");
 
         let mut buffer = String::new();
         let stdin = io::stdin();
-        stdin.read_line(&mut buffer).map_err(|_| (
-            "couldn't prompt for a project name, please try again providing the projects name".to_string(),
-            NewErrKind::CannotPrompt
-        ))?;
+        stdin.read_line(&mut buffer).map_err(|_| {
+            (
+                "couldn't prompt for a project name, please try again providing the projects name"
+                    .to_string(),
+                NewErrKind::CannotPrompt,
+            )
+        })?;
 
         buffer.clone()
     };
@@ -86,9 +93,7 @@ pub fn new_project(
     let dargo_toml_path =
         custom_dargo_toml_path.unwrap_or_else(|| target_dir.join("./dargo.toml").to_path_buf());
 
-    let dargo_toml_content = generate_default_dargo_toml(
-        project_name
-    );
+    let dargo_toml_content = generate_default_dargo_toml(project_name);
 
     fs::write(&dargo_toml_path, dargo_toml_content).map_err(|write_error| {
         let message = format!(
@@ -114,8 +119,10 @@ pub fn new_project(
             if !main_src_file.exists() {
                 // todo: this is currently a silent error - if there's one
                 let _ = fs::write(&main_src_file, generate_default_main_duck());
-                duck_with_message(format!("You've sucessfully created a new project in ./{project_name}").leak());
-                println!("");
+                duck_with_message(
+                    format!("You've sucessfully created a new project in ./{project_name}").leak(),
+                );
+                println!();
                 println!("Run following commands to get started");
                 println!("    cd {project_name}");
                 println!("    dargo run");

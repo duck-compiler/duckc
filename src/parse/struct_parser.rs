@@ -161,7 +161,8 @@ where
                         if let Some(decl_span) = names_with_spans.get(&m.0.1.name) {
                             let msg = format!("{} declared multiple times", m.0.1.name);
 
-                            let declared_here_again_msg = format!("You declared {} here", m.0.1.name);
+                            let declared_here_again_msg =
+                                format!("You declared {} here", m.0.1.name);
                             let other_msg = format!("But you already declared {} here", m.0.1.name);
 
                             failure_with_occurence(
