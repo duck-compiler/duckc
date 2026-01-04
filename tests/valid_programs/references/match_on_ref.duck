@@ -1,0 +1,60 @@
+use std::io::println;
+fn main() {
+    let z: String | Int = 10;
+
+    println("1");
+    match &mut z {
+        Int @i => {
+            println(f"int: {(i.to_string())}");
+            *i = 2;
+        },
+        String @s => {
+            println(f"string: {(*s)}");
+            *s = "fwafwa";
+        }
+    }
+
+    println("2");
+    match &mut z {
+        Int @i => {
+            println(f"int: {(i.to_string())}");
+            *i = 2;
+        },
+        String @s => {
+            println(f"string: {(*s)}");
+            *s = "fwafwa";
+        }
+    }
+
+    println("3");
+    match &mut z {
+        String @s => {
+            println(f"string: {(*s)}");
+            *s = "fwafwa";
+        }
+        else @i => {
+            *i *= 20;
+            println("multiplied int by 20");
+        },
+    }
+
+    println("4");
+    match z {
+        Int @i => {
+            println(f"int: {(i.to_string())}");
+        },
+        String @s => {
+            println(f"string: {s}");
+        }
+    }
+
+    println("5");
+    match &&&&&z {
+        Int @i => {
+            println(f"int: {(i.to_string())}");
+        },
+        String @s => {
+            println(f"string: {*s}");
+        }
+    }
+}

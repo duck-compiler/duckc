@@ -18,6 +18,12 @@
 // 	}
 // 	fmt.Println(object_to_string(x))
 // }
+//
+
+type go_iface struct {
+	t unsafe.Pointer
+	v unsafe.Pointer
+}
 
 func isJsonWhitespace(r rune) bool {
 	return r == '\r' || r == '\n' || r == '\t' || r == ' '
