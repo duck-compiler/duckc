@@ -605,8 +605,20 @@ impl TypeExpr {
 
                                 let params = fn_def.params.clone();
                                 for (index, param) in params.iter().enumerate() {
-                                    let given_type =
-                                        in_param_types.get(index).expect("todo: len doesnt match");
+                                    let given_type = in_param_types.get(index)
+                                        .unwrap_or_else(|| {
+                                            failure_with_occurence(
+                                                "Missing Function Parameter",
+                                                *complete_span,
+                                                [(
+                                                    format!("missing this param"),
+                                                    param.1.1
+                                                ), (
+                                                    format!("in this function function call"),
+                                                    *complete_span
+                                                )]
+                                            )
+                                        });
                                     // TODO: check if we should clone the typeenv
                                     check_type_compatability_full(
                                         &param.1.clone(),
