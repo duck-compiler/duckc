@@ -138,6 +138,36 @@ struct ArrayList<T> {
         return result;
     }
 
+    fn contains(something: T) -> Bool {
+        let result = false;
+
+        go {
+            for _, e := range (*self).elems {
+                if e == something {
+                    result = true
+                    break
+                }
+            }
+        }
+
+        return result;
+    }
+
+    fn any(f: fn(x: T) -> Bool) -> Bool {
+        let result = false;
+
+        go {
+            for _, e := range (*self).elems {
+                if f(e) {
+                    result = true
+                    break
+                }
+            }
+        }
+
+        return result;
+    }
+
     fn find_index(
         predicate: fn(element: T) -> Bool
     ) -> Int | .none {
