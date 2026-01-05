@@ -65,7 +65,7 @@ struct Iter<T> {
         };
     }
 
-    mut fn for_each(f: fn(T)) {
+    mut fn for_each(f: mut fn(T)) {
         while (true) {
             let next = self.next_fn();
             match next {
