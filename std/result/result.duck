@@ -38,6 +38,17 @@ struct Result<T, E> {
     static fn from_go_select<T>(
         value: T,
         go_err: go "error",
+    ) -> Result<T, String> {
+        if (go { $ = (go_err != nil) } as Bool) {
+            Result<T, String> { value: Err::from_go(go_err) }
+        } else {
+            Result::ok<T, String>(value)
+        }
+    }
+
+    static fn from_go_select_with_bool<T>(
+        value: T,
+        go_err: go "error",
         is_error: Bool
     ) -> Result<T, String> {
         if (is_error) {

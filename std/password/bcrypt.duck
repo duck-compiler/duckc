@@ -27,14 +27,12 @@ struct BCrypt {
 
         let res: Byte[];
         let e: go "error";
-        let is_err: Bool;
 
         go {
             res, e = bcrypt.GenerateFromPassword(s_bytes, cost);
-            is_err = e != nil
         }
 
-        Result::from_go_select(res, e, is_err)
+        Result::from_go_select(res, e)
     }
 
     fn verify(
@@ -42,18 +40,14 @@ struct BCrypt {
         hashed: Byte[],
     ) -> Result<(), String> {
         const b = clear_text.to_bytes();
-        const t_err = .err;
-        const t_ok = .ok;
 
-        let res: ();
+        const res = ();
         let e: go "error";
-        let is_err: Bool;
 
         go {
             e = bcrypt.CompareHashAndPassword(hashed, b)
-            is_err = e != nil
         }
 
-        Result::from_go_select(res, e, is_err)
+        Result::from_go_select(res, e)
     }
 }
