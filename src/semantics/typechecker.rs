@@ -2141,8 +2141,8 @@ pub fn check_type_compatability_full(
         TypeExpr::String(..) => {
             if !given_type.0.is_string() {
                 fail_requirement(
-                    "this expects a String.".to_string(),
-                    "this is not a String.".to_string(),
+                    format!("this expects a {}", "String".yellow()),
+                    format!("this is not a {}. It's of type {}", "String".yellow(), given_type.0.as_clean_user_faced_type_name().yellow())
                 );
             }
         }
