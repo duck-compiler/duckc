@@ -1,0 +1,14 @@
+type X = { name: String };
+type Y = X[.name];
+
+type A = String[];
+type B = A[Int];
+
+type V = { name: String, inner: { lol: { x: String[] }} };
+type W = V[.inner][.lol][.x][Int];
+
+fn main() {
+    let x: Y = "hallo";
+    let x: B = "hallo";
+    let z: W = "hallo";
+}

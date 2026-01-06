@@ -1,0 +1,6 @@
+type X = { name: String };
+type Y = X[Int];
+
+fn main() {
+    let x: Y = 5;
+}

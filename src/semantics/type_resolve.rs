@@ -1,9 +1,6 @@
 use colored::Colorize;
 use std::{
-    cell::{Cell, RefCell},
-    collections::{HashMap, HashSet},
-    rc::Rc,
-    sync::mpsc::Sender,
+    cell::{Cell, RefCell}, collections::{HashMap, HashSet}, rc::Rc, sync::mpsc::Sender
 };
 
 use chumsky::container::Container;
@@ -886,12 +883,19 @@ fn build_tuples_and_ducks_value_expr_trav_fn(
     }
 }
 
-pub fn trav_type_expr<F1>(f_t: F1, v: &mut Spanned<TypeExpr>, env: &mut TypeEnv)
-where
-    F1: Fn(&mut Spanned<TypeExpr>, &mut TypeEnv) + Clone,
+pub fn trav_type_expr<V>(
+    f_t: V,
+    v: &mut Spanned<TypeExpr>,
+    env: &mut TypeEnv
+) where
+    V: Fn(&mut Spanned<TypeExpr>, &mut TypeEnv) + Clone,
 {
     f_t(v, env);
     match &mut v.0 {
+        TypeExpr::Indexed(target, index) => {
+            trav_type_expr(f_t.clone(), target.as_mut(), env);
+            trav_type_expr(f_t.clone(), index.as_mut(), env);
+        },
         TypeExpr::Byte => {}
         TypeExpr::Never | TypeExpr::Statement => {}
         TypeExpr::NamedDuck {
@@ -1388,6 +1392,94 @@ fn resolve_all_intersection_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut 
     trav_value_expr(trav_fn_replace_intersections(), |_, _| {}, expr, env);
 }
 
+fn resolve_all_indexed_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv) {
+    match &mut expr.0 {
+        TypeExpr::Indexed(target, index) => {
+            resolve_all_indexed_type_expr(target, env);
+            resolve_all_indexed_type_expr(index, env);
+
+            let mut resolved_target = resolve_type_expr(target, env);
+            resolve_all_indexed_type_expr(&mut resolved_target, env);
+
+            let result_type = match &index.0 {
+                TypeExpr::Tag(tag_name) => {
+                    // todo: this fails before printing
+                    resolved_target.0
+                        .typeof_field(tag_name.clone(), env)
+                        .or_else(|| resolved_target.0.ref_typeof_field(tag_name.clone(), env))
+                        .unwrap_or_else(|| {
+                            failure_with_occurence(
+                                "Invalid Type Index",
+                                resolved_target.1,
+                                [(
+                                    format!("Field {} not found on type {}", tag_name, resolved_target.0.as_clean_user_faced_type_name()),
+                                    resolved_target.1,
+                                ), (
+                                    format!("this type has no field {}", resolved_target.0.as_clean_user_faced_type_name().yellow()),
+                                    resolved_target.1,
+                                )]
+                            )
+                        })
+                }
+                TypeExpr::Int => {
+                    match &resolved_target.0 {
+                        // todo: add type index for tuples
+                        TypeExpr::Array(inner) => inner.0.clone(),
+                        _ => failure_with_occurence(
+                            "Invalid Type Index",
+                            resolved_target.1,
+                            [(
+                                format!("type access with using {} only works on arrays", "Int".yellow()),
+                                index.1,
+                            ), (
+                                format!("this is not an array, it's of type {}", resolved_target.0.as_clean_user_faced_type_name().yellow()),
+                                resolved_target.1,
+                            )]
+                        )
+                    }
+                }
+                _ => unreachable!("compiler error: index must be of type int or tag, this should have been filtered by the parser")
+            };
+
+            expr.0 = result_type;
+        }
+        TypeExpr::Array(inner) | TypeExpr::Ref(inner) | TypeExpr::RefMut(inner) | TypeExpr::KeyOf(inner) => {
+            resolve_all_indexed_type_expr(inner, env);
+        }
+        TypeExpr::Duck(duck) => {
+            for field in &mut duck.fields {
+                resolve_all_indexed_type_expr(&mut field.type_expr, env);
+            }
+        }
+        TypeExpr::Tuple(elements) | TypeExpr::Or(elements) | TypeExpr::And(elements) => {
+            for el in elements {
+                resolve_all_indexed_type_expr(el, env);
+            }
+        }
+        TypeExpr::Fun(params, ret, _) => {
+            for p in params {
+                resolve_all_indexed_type_expr(&mut p.1, env);
+            }
+            resolve_all_indexed_type_expr(ret, env);
+        }
+        TypeExpr::Struct { type_params, .. } | TypeExpr::NamedDuck { type_params, .. } => {
+            for tp in type_params {
+                resolve_all_indexed_type_expr(tp, env);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn resolve_all_indexed_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeEnv) {
+    trav_value_expr(
+        |t_node, env| resolve_all_indexed_type_expr(t_node, env),
+        |_, _| {},
+        expr,
+        env,
+    );
+}
+
 fn resolve_all_aliases_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv) {
     let span = expr.1;
     trav_type_expr(
@@ -1415,6 +1507,8 @@ fn resolve_all_aliases_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv
         expr,
         env,
     );
+
+    resolve_all_indexed_type_expr(expr, env);
     resolve_all_intersection_type_expr(expr, env);
     merge_all_or_type_expr(expr, env);
 }
@@ -1465,6 +1559,8 @@ fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeE
         expr,
         env,
     );
+
+    resolve_all_indexed_value_expr(expr, env);
     resolve_all_intersection_value_expr(expr, env);
     merge_all_or_value_expr(expr, env);
 }
@@ -1859,6 +1955,7 @@ fn replace_generics_in_type_expr(
     type_env: &mut TypeEnv<'_>,
 ) {
     match expr {
+        TypeExpr::Indexed(..) => {}
         TypeExpr::Byte => {}
         TypeExpr::UInt => {}
         TypeExpr::Statement | TypeExpr::Never => {}
@@ -2298,6 +2395,10 @@ pub fn is_const_var(v: &ValueExpr) -> bool {
 
 pub fn sort_fields_type_expr(expr: &mut TypeExpr) {
     match expr {
+        TypeExpr::Indexed(target, index) => {
+            sort_fields_type_expr(&mut target.as_mut().0);
+            sort_fields_type_expr(&mut index.as_mut().0);
+        }
         TypeExpr::Byte => {}
         TypeExpr::UInt => {}
         TypeExpr::Statement | TypeExpr::Never => {}
@@ -4925,4 +5026,82 @@ fn typeresolve_lambda(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
     type_env.pop_identifier_types();
 
     check_returns(return_type.as_ref().unwrap(), value_expr, type_env);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parse::type_parser::Duck;
+    use crate::parse::Field;
+
+    #[test]
+    fn test_resolve_indexed_types() {
+        let mut env = TypeEnv::default();
+
+        let user_def = StructDefinition {
+            name: "User".to_string(),
+            fields: vec![
+                Field::new("name".to_string(), (TypeExpr::String(None), empty_range())),
+                Field::new("age".to_string(), (TypeExpr::Int, empty_range())),
+            ],
+            ..Default::default()
+        };
+        env.struct_definitions.push(user_def);
+
+        let mut t1 = (
+            TypeExpr::Indexed(
+                Box::new((TypeExpr::Duck(Duck {
+                    fields: vec![Field::new("x".to_string(), (TypeExpr::Int, empty_range()))]
+                }), empty_range())),
+                Box::new((TypeExpr::Tag("x".to_string()), empty_range()))
+            ),
+            empty_range()
+        );
+        resolve_all_indexed_type_expr(&mut t1, &mut env);
+        assert_eq!(t1.0, TypeExpr::Int);
+
+        let inner_duck = TypeExpr::Duck(Duck {
+            fields: vec![Field::new("b".to_string(), (TypeExpr::String(None), empty_range()))]
+        });
+        let outer_duck = TypeExpr::Duck(Duck {
+            fields: vec![Field::new("a".to_string(), (inner_duck, empty_range()))]
+        });
+
+        let mut t2 = (
+            TypeExpr::Indexed(
+                Box::new((
+                    TypeExpr::Indexed(
+                        Box::new((outer_duck, empty_range())),
+                        Box::new((TypeExpr::Tag("a".to_string()), empty_range()))
+                    ),
+                    empty_range()
+                )),
+                Box::new((TypeExpr::Tag("b".to_string()), empty_range()))
+            ),
+            empty_range()
+        );
+        resolve_all_indexed_type_expr(&mut t2, &mut env);
+        assert_eq!(t2.0, TypeExpr::String(None));
+
+        let mut t3 = (
+            TypeExpr::Indexed(
+                Box::new((TypeExpr::TypeName(false, "User".to_string(), vec![]), empty_range())),
+                Box::new((TypeExpr::Tag("name".to_string()), empty_range()))
+            ),
+            empty_range()
+        );
+
+        resolve_all_aliases_type_expr(&mut t3, &mut env);
+        assert_eq!(t3.0, TypeExpr::String(None));
+
+        let mut t4 = (
+            TypeExpr::Indexed(
+                Box::new((TypeExpr::Array(Box::new((TypeExpr::Int, empty_range()))), empty_range())),
+                Box::new((TypeExpr::Int, empty_range()))
+            ),
+            empty_range()
+        );
+        resolve_all_indexed_type_expr(&mut t4, &mut env);
+        assert_eq!(t4.0, TypeExpr::Int);
+    }
 }
