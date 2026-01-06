@@ -31,11 +31,9 @@ fn main() {
         .expect("11 failed");
 
     let r4 = Result::err<(), Int>(4);
-    r4.if_err(fn(e) { *e = *e * 10 })
+    r4.if_err(fn(e) { (*e * 10).to_string()->println() })
         .if_ok(fn(e) { std::error::panic("error: entered if_ok") })
-        .expect_err("11 failed")
-        .to_string()
-        ->println();
+        .expect_err("11 failed");
 
      println("");
 
