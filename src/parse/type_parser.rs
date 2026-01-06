@@ -6,11 +6,9 @@ use chumsky::prelude::*;
 
 use crate::{
     parse::{
-        Field, SS, Spanned,
-        generics_parser::{Generic, generics_parser},
-        value_parser::{TypeParam, empty_range},
+        Field, SS, Spanned, failure_with_occurence, generics_parser::{Generic, generics_parser}, value_parser::{TypeParam, empty_range}
     },
-    semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
+    semantics::{ident_mangler::mangle, type_resolve::TypeEnv}
 };
 
 use super::lexer::Token;
@@ -68,6 +66,7 @@ pub enum TypeExpr {
         bool,                                     // is mut
     ),
     Array(Box<Spanned<TypeExpr>>),
+    Indexed(Box<Spanned<TypeExpr>>, Box<Spanned<TypeExpr>>),
     TypeOf(String),
     KeyOf(Box<Spanned<TypeExpr>>),
     Ref(Box<Spanned<TypeExpr>>),
@@ -1326,16 +1325,36 @@ where
             let array = term_type_expr
                 .clone()
                 .then(
-                    (just(Token::ControlChar('[')).then(just(Token::ControlChar(']'))))
+                    just(Token::ControlChar('['))
+                        .ignore_then((p.clone()).or_not())
+                        .then_ignore(just(Token::ControlChar(']')))
                         .repeated()
-                        .collect::<Vec<_>>(),
+                        .collect::<Vec<Option<Spanned<TypeExpr>>>>(),
                 )
-                .map(|((x, span), is_array)| {
-                    is_array
-                        .iter()
-                        .fold(x, |acc, _| TypeExpr::Array((acc, span).into()))
+                .map(|(base, prefixes)| {
+                    prefixes.into_iter().fold(base, |acc, inner| {
+                        let span = acc.1;
+                        match inner {
+                            Some(index_type) => {
+                                match &index_type.0 {
+                                    TypeExpr::Tag(_) | TypeExpr::Int => {
+                                        (TypeExpr::Indexed(Box::new(acc), Box::new(index_type)), span)
+                                    }
+                                    _ => failure_with_occurence(
+                                        "Invalid Type Index",
+                                        index_type.1,
+                                        [(
+                                            format!("Type Index must be Int or Tag. You've provided {}", index_type.0.as_clean_user_faced_type_name()),
+                                            index_type.1
+                                        )]
+                                    ),
+                                }
+                            }
+                            None => (TypeExpr::Array(Box::new(acc)), span),
+                        }
+                    })
                 })
-                .map_with(|x, e| (x, e.span()));
+                .map_with(|(x, _), e| (x, e.span()));
 
             #[derive(Debug, Clone)]
             enum RefType {
@@ -1435,6 +1454,7 @@ where
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            TypeExpr::Indexed(target, index) => write!(f, "{}[{}]", target.as_ref().0, index.as_ref().0),
             TypeExpr::Byte => write!(f, "Byte"),
             TypeExpr::Statement => write!(f, "Statement"),
             TypeExpr::Never => write!(f, "never"),
@@ -2672,6 +2692,30 @@ pub mod tests {
             "(&mut String)[]",
             TypeExpr::Array(
                 TypeExpr::RefMut(TypeExpr::String(None).into_empty_span().into())
+                    .into_empty_span()
+                    .into(),
+            ),
+        );
+
+        assert_type_expression(
+            "String[.username]",
+            TypeExpr::Indexed(
+                TypeExpr::String(None)
+                    .into_empty_span()
+                    .into(),
+                TypeExpr::Tag("username".to_string())
+                    .into_empty_span()
+                    .into(),
+            ),
+        );
+
+        assert_type_expression(
+            "String[Int]",
+            TypeExpr::Indexed(
+                TypeExpr::String(None)
+                    .into_empty_span()
+                    .into(),
+                TypeExpr::Int
                     .into_empty_span()
                     .into(),
             ),
