@@ -1855,6 +1855,7 @@ pub fn emit_type_definitions(
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Indexed(..) => unreachable!("indexed should be resolved during type resolve"),
             TypeExpr::Byte => "byte".to_string(),
             TypeExpr::Statement => "Tup_".to_string(),
             TypeExpr::Never => "any".to_string(),
@@ -1931,6 +1932,7 @@ impl TypeExpr {
 
     pub fn type_id(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Indexed(..) => unreachable!("should be reached"),
             TypeExpr::Byte => "byte".to_string(),
             TypeExpr::Statement => "Statement".to_string(),
             TypeExpr::Never => "Never".to_string(),
@@ -2038,6 +2040,7 @@ impl TypeExpr {
 
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Indexed(..) => unreachable!("indexed should have been replaced"),
             TypeExpr::Byte => "byte".to_string(),
             TypeExpr::Statement => "Statement".to_string(),
             TypeExpr::Never => "Never".to_string(),
