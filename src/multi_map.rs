@@ -27,18 +27,10 @@ impl<K: Eq + Hash, V> MultiMap<K, V> {
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        let v = self.inner.get(k);
-        match v {
-            Some(v) => unsafe {
-                let ptr = v.as_ptr();
-                let mut result = Vec::with_capacity(v.len());
-                for i in 0..v.len() {
-                    result.push(ptr.add(i).as_ref().unwrap());
-                }
-                result
-            },
-            None => Vec::new(),
-        }
+        self.inner
+            .get(k)
+            .map(|v| v.iter().collect())
+            .unwrap_or_default()
     }
 
     pub fn get_mut<'a, Q>(&'a mut self, k: &Q) -> Vec<&'a mut V>
@@ -46,18 +38,10 @@ impl<K: Eq + Hash, V> MultiMap<K, V> {
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        let v = self.inner.get_mut(k);
-        match v {
-            Some(v) => unsafe {
-                let ptr = v.as_mut_ptr();
-                let mut result = Vec::with_capacity(v.len());
-                for i in 0..v.len() {
-                    result.push(ptr.add(i).as_mut().unwrap());
-                }
-                result
-            },
-            None => Vec::new(),
-        }
+        self.inner
+            .get_mut(k)
+            .map(|v| v.iter_mut().collect())
+            .unwrap_or_default()
     }
 
     pub fn contains_key<Q>(&self, k: &Q) -> bool
@@ -69,32 +53,13 @@ impl<K: Eq + Hash, V> MultiMap<K, V> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&K, Vec<&V>)> {
-        MultiMapIterator {
-            multi_map: self,
-            key_idx: 0,
-        }
+        self.inner.iter().map(|(k, v)| (k, v.iter().collect()))
     }
 
     pub fn iter_flat(&self) -> impl Iterator<Item = (&K, &V)> {
         self.inner
             .iter()
             .flat_map(|(k, v)| v.iter().map(move |v| (k, v)))
-    }
-}
-
-struct MultiMapIterator<'a, K: Eq + Hash, V> {
-    multi_map: &'a MultiMap<K, V>,
-    key_idx: usize,
-}
-
-impl<'a, K: Eq + Hash, V> Iterator for MultiMapIterator<'a, K, V> {
-    type Item = (&'a K, Vec<&'a V>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let key = self.multi_map.inner.keys().nth(self.key_idx)?;
-        let values = self.multi_map.get(key);
-        self.key_idx += 1;
-        Some((key, values))
     }
 }
 
