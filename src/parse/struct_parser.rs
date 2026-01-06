@@ -32,7 +32,7 @@ pub enum DerivableInterface {
     EmitJs,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct StructDefinition {
     pub name: String,
     pub fields: Vec<Field>,
