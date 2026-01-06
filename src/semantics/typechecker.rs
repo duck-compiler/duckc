@@ -2082,8 +2082,8 @@ pub fn check_type_compatability_full(
                         format!("{}", required_type.0).bright_yellow(),
                     ),
                     format!(
-                        "because of the fact, that the required type {} is a duck. The value you need to pass must be a duck aswell, but it isn't.",
-                        format!("{}", required_type.0).bright_yellow(),
+                        "this must be a duck as well, but it's {}",
+                        format!("{}", given_type.0).bright_yellow(),
                     ),
                 ),
             }
