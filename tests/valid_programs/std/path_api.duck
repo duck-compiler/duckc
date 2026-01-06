@@ -25,7 +25,7 @@ fn yoo() {
         .write("hello");
 
     std::assert(f.size() == 5, "file size is not fivbeee");
-    std::assert(f.read() != .err, "read should be an error");
+    std::assert(f.read().is_err(), "read should be an error");
 
     f.expect("file written");
     f.delete();
