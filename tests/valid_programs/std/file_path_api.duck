@@ -60,14 +60,14 @@ fn yoo() {
     std::assert(FilePath::new("whatever/home.txt").filename() == "home.txt", "filename is not home.txt");
     std::assert(FilePath::new("whatever/home.txt").extension() == ".txt", "extension is not .txt");
     std::assert(FilePath::new("whatever/home.txt").size() == .err, "unknown file exist");
-    std::assert(FilePath::new("whatever/home.txt").read() == .err, "couldn't read non existing file");
+    std::assert(FilePath::new("whatever/home.txt").read().is_err(), "couldn't read non existing file");
 
     let f = FilePath::new("testyyy/file.txt")
         .ensure_dir()
         .write("hello");
 
     std::assert(f.size() == 5, "file size is not fivbeee");
-    std::assert(f.read() != .err, "read should be an error");
+    std::assert(f.read().is_ok(), "read should be okay");
 
     f.expect("file written");
     f.delete();

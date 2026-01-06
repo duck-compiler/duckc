@@ -1,4 +1,5 @@
 use ::col::{ArrayList};
+use ::result::Result;
 use go "os/exec";
 use go "os";
 
@@ -39,7 +40,10 @@ struct Cmd {
 
     static fn exec(
         command: String,
-    ) -> String | .err {
+    ) -> Result<
+        { stdout: String, stderr: String, exitcode: Int },
+        ()
+    >{
         const splitted: String[] = go {
             $ = strings.Split(command, " ")
         };
@@ -72,9 +76,6 @@ struct Cmd {
             	cmd.Dir = dir
             }
 
-            cmd.Stdout = os.Stdout
-            cmd.Stderr = os.Stderr
-
             err := cmd.Start()
             if err != nil {
             	return Tag__err {}
@@ -86,7 +87,13 @@ struct Cmd {
         return Process { inner: process }
     }
 
-    fn run() -> String | .err {
+    fn run() -> Result<
+        { stdout: String, stderr: String, exitcode: Int },
+        ()
+    > {
+        let output = { stdout: "", stderr: "", exitcode: 0 };
+        const err_res = Result::err<typeof output, ()>(());
+
         go {
             cmd := exec.Command((*self).program, (*self).cmd_args.elems...)
 
@@ -94,13 +101,30 @@ struct Cmd {
             	cmd.Dir = dir
             }
 
-            out, err := cmd.CombinedOutput()
+            var outBuf bytes.Buffer
+            var errBuf bytes.Buffer
+
+            cmd.Stdout = &outBuf;
+            cmd.Stderr = &errBuf;
+
+            err := cmd.Run()
             if err != nil {
-                return Tag__err { }
+                if exitErr, ok := err.(*exec.ExitError); ok {
+                    output.Setstderr(string(exitErr.Stderr))
+                    output.Setexitcode(exitErr.ExitCode())
+                    goto err_program_exited_017171
+                }
+
+                // todo: return go error
+                return err_res
             }
 
-            return string(out)
+            output.Setstdout(outBuf.String())
+            output.Setstderr(errBuf.String())
+            err_program_exited_017171:
         }
+
+        return Result::ok<typeof output, ()>(output);
     }
 
     fn run_and_forget() -> .err | .none {

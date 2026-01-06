@@ -1,4 +1,5 @@
 use std::col::{ArrayList};
+use std::assert;
 use std::io::{println};
 
 fn main() {
@@ -9,4 +10,14 @@ fn main() {
         .for_each(fn(x: Int) -> () { x->std::string::from_int()->println(); });
     x.map<String>(fn (val: String) -> String { return "const"; })
         .for_each(fn(x: String) -> () { x->println(); });
+
+    const flags = ArrayList::from_array(["random", "--flag", "other"])
+        .filter(fn (arg) { arg.starts_with("--") })
+        .map<String>(fn (flag) { flag.trim_prefix("--") });
+
+    flags.contains("flag")
+        ->assert("contains didn't work");
+
+    flags.any(fn (flag) { flag == "flag" })
+        ->assert("any didnt work");
 }

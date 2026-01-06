@@ -1,6 +1,14 @@
 use go "path/filepath";
 use go "path";
+use ::col::{Iter, ArrayList};
+use ::result::{Result};
 
+struct DirEntry {
+    file_path: FilePath,
+    is_dir: Bool,
+}
+
+[auto(ToJson, FromJson, Eq)]
 struct FilePath {
     path_ref: String,
     last_error: String | .none,
@@ -12,6 +20,121 @@ struct FilePath {
             } as String,
             last_error: .none,
         };
+    }
+
+    /// returns the paths to all directories at self
+    fn iter_dirs() -> Iter<FilePath> {
+        const empty_iter = Iter::empty<FilePath>();
+        if (self.failed()) {
+            return empty_iter;
+        }
+
+        let entries = ArrayList::new<FilePath>();
+        const to_dir_entry = fn (path_ref: String) -> FilePath {
+            FilePath {
+                path_ref: path_ref,
+                last_error: .none,
+            }
+        };
+
+        let error = false;
+        go {
+            files, err := os.ReadDir((*self).path_ref)
+            if err != nil {
+                (*self).last_error = err.Error()
+                return empty_iter
+            }
+
+            for _, f := range files {
+                child_path := filepath.Join((*self).path_ref, f.Name())
+                entries.push(to_dir_entry(child_path))
+            }
+        }
+
+        return entries.iter()
+            .map<FilePath>(fn (entry) { *entry })
+    }
+
+    /// Recursively finds all files within this directory
+    fn walk() -> Iter<FilePath> {
+        if (self.failed()) {
+            return Iter::empty<FilePath>();
+        }
+
+        let file_paths = ArrayList::new<String>();
+        let root = self.path_ref;
+
+        go {
+            filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+                if err != nil {
+                    return nil
+                }
+
+                file_paths.elems = append(file_paths.elems, p)
+                return nil
+            })
+        }
+
+        let current_idx = 0;
+
+        return Iter::from<FilePath>(mut fn() -> FilePath | .no_next_elem {
+            if (current_idx >= file_paths.len()) {
+                return .no_next_elem;
+            }
+
+            const fp = file_paths.get(current_idx);
+            if (fp.is_some()) {
+                current_idx = current_idx + 1;
+                return FilePath {
+                    path_ref: fp.unwrap(),
+                    last_error: .none,
+                };
+            }
+
+            return .no_next_elem
+        });
+    }
+
+    /// Recursively finds all files within this directory, skipping directory entries.
+    fn walk_files() -> Iter<FilePath> {
+        if (self.failed()) {
+            return Iter::empty<FilePath>();
+        }
+
+        let file_paths = ArrayList::new<String>();
+        let root = self.path_ref;
+
+        go {
+            filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+                if err != nil {
+                    return nil
+                }
+
+                if !info.IsDir() {
+                    file_paths.elems = append(file_paths.elems, p)
+                }
+                return nil
+            })
+        }
+
+        let current_idx = 0;
+
+        return Iter::from<FilePath>(mut fn() -> FilePath | .no_next_elem {
+            if (current_idx >= file_paths.len()) {
+                return .no_next_elem;
+            }
+
+            const fp = file_paths.get(current_idx);
+            if (fp.is_some()) {
+                current_idx = current_idx + 1;
+                return FilePath {
+                    path_ref: fp.unwrap(),
+                    last_error: .none,
+                };
+            }
+
+            return .no_next_elem
+        });
     }
 
     fn failed() -> Bool {
@@ -123,26 +246,29 @@ struct FilePath {
         return self;
     }
 
-    fn read() -> String | .err {
+    fn read() -> Result<String, ()> {
+        const err_result = Result::err<String, ()>(());
         if (self.failed()) {
-            return .err;
+            return err_result;
         }
 
-        return go {
+        const content = go {
             bs, err := os.ReadFile((*self).path_ref)
             if err != nil {
-            	return Tag__err {}
+               	return err_result
             }
 
-            return string(bs)
+            $ = string(bs)
         } as String;
+
+        return Result::ok<String, ()>(content);
     }
 
     fn size() -> Int | .err {
         return go {
             s, err := os.Stat((*self).path_ref)
             if err != nil {
-            	return Tag__err {}
+               	return Tag__err {}
             }
 
             return int(s.Size())

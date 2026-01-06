@@ -57,14 +57,14 @@ struct Opt<T> {
         }
     }
 
-    fn or_else(other: T) -> T {
+    fn or_else<R>(other: R) -> T | R {
         return match self.inner {
             .none => other,
             Some<T> @some => some.value,
         };
     }
 
-    fn or_else_get(other_supplier: mut fn () -> T) -> T {
+    fn or_else_get<R>(other_supplier: mut fn () -> R) -> T | R {
         return match self.inner {
             .none => other_supplier(),
             Some<T> @some => some.value,

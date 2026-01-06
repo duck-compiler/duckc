@@ -85,7 +85,7 @@ struct ArrayList<T> {
         return self;
     }
 
-    fn map<U>(f: fn(x: T) -> U) -> ArrayList<U> {
+    fn map<U>(f: mut fn(x: T) -> U) -> ArrayList<U> {
         let res: ArrayList<U> = ArrayList::new<U>();
         go {
             for _, e := range (*self).elems {
@@ -95,7 +95,7 @@ struct ArrayList<T> {
         return res;
     }
 
-    fn filter(f: fn(x: T) -> Bool) -> ArrayList<T> {
+    fn filter(f: mut fn(x: T) -> Bool) -> ArrayList<T> {
         let res: ArrayList<T> = ArrayList::new<T>();
         go {
             for _, e := range (*self).elems {
@@ -107,7 +107,7 @@ struct ArrayList<T> {
         return res;
     }
 
-    fn reduce<U>(f: fn(acc: U, x: T) -> U, initial_value: U) -> U {
+    fn reduce<U>(f: mut fn(acc: U, x: T) -> U, initial_value: U) -> U {
         let acc: U = initial_value;
         go {
             for _, e := range (*self).elems {
@@ -117,7 +117,7 @@ struct ArrayList<T> {
         return acc;
     }
 
-    fn for_each(f: fn(e: T) -> ()) {
+    fn for_each(f: mut fn(e: T) -> ()) {
         go {
             for _, e := range (*self).elems {
                 f(e)
@@ -135,6 +135,36 @@ struct ArrayList<T> {
                 }
             }
         }
+        return result;
+    }
+
+    fn contains(something: T) -> Bool {
+        let result = false;
+
+        go {
+            for _, e := range (*self).elems {
+                if e == something {
+                    result = true
+                    break
+                }
+            }
+        }
+
+        return result;
+    }
+
+    fn any(f: fn(x: T) -> Bool) -> Bool {
+        let result = false;
+
+        go {
+            for _, e := range (*self).elems {
+                if f(e) {
+                    result = true
+                    break
+                }
+            }
+        }
+
         return result;
     }
 

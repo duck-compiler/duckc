@@ -1,0 +1,88 @@
+use go "sync";
+use go "runtime";
+use std::col::{GoMap};
+use std::col::{ArrayList};
+use std::result::Result;
+use std::io::println;
+use std::path::{FilePath};
+use std::cmd::{Cmd};
+
+fn main() {
+    const args = go {
+        $ = os.Args
+    } as String[];
+
+    const flags = ArrayList::from_array(args)
+        .filter(fn (arg) { arg.starts_with("--") })
+        .map<String>(fn (flag) { flag.trim_prefix("--") });
+
+    const cicd_mode = flags.contains("cicd");
+
+    const wg: go "sync.WaitGroup";
+    go {
+        num_cpus := runtime.NumCPU()
+        sem := make(chan struct{}, num_cpus)
+    }
+
+    let results = ArrayList::new<{
+        src_path: FilePath,
+        test_type: .valid | .error | .invalid,
+        dargo_output: { stdout: String, stderr: String, exitcode: Int },
+        binary_result: Result<{ stdout: String, stderr: String, exitcode: Int }, ()>, // this be an error, whe nthe dargo couldn't build
+    }>();
+
+    const map_with_type = fn (fp: FilePath, tag: .valid | .error | .invalid) -> (FilePath, .valid | .error | .invalid) {
+        return (fp, tag);
+    };
+
+    const valid_program_files = FilePath::new("./valid_programs/")
+        .walk_files()
+        .map<(FilePath, .valid | .error | .invalid)>(fn (fp) { map_with_type(fp, .valid) })
+        .chain([
+            FilePath::new("./errors/")
+                .walk_files()
+                .map<(FilePath, .valid | .error | .invalid)>(fn (fp) { map_with_type(fp, .error) }),
+            FilePath::new("./invalid_programs/")
+                .walk_files()
+                .map<(FilePath, .valid | .error | .invalid)>(fn (fp) { map_with_type(fp, .invalid) }),
+        ])
+        .filter(fn (fp) {
+            fp.0.filename().ends_with(".duck")
+        })
+        .for_each(mut fn (fp) {
+            const f = mut fn () {
+                const binary_name = fp.0.path_ref.replace("/", "_").replace(".", "_");
+                const dargo_output = Cmd::exec(f"dargo compile --output-name {binary_name} {fp.0.path_ref}")
+                    .expect("couldn't run dargo - are you sure it's installed on this system?");
+
+                const binary_result = Cmd::new(f"./{binary_name}")
+                    .dir("./.dargo/")
+                    .run();
+
+                results.push({
+                    src_path: fp.0,
+                    test_type: fp.1,
+                    dargo_output: dargo_output,
+                    binary_result: binary_result,
+                });
+            };
+
+            go {
+                wg.Add(1)
+                go func() {
+                	defer wg.Done()
+
+                 	sem <- struct{}{}
+                  	defer func() { <-sem }()
+
+                 	f();
+                }()
+
+            }
+        });
+
+    go {
+       	wg.Wait()
+    }
+
+}

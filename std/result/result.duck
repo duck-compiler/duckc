@@ -87,15 +87,15 @@ struct Result<T, E> {
     }
 
     fn if_ok(f: mut fn(&mut T) -> ()) -> Result<T, E> {
-        match (&mut self.value) {
-            T @value => f(value),
+        match (self.value) {
+            T @value => f(&mut value),
             Err<E> @err => {},
         };
         *self
     }
 
     fn if_err(f: mut fn(&mut E) -> ()) -> Result<T, E> {
-        match (&mut self.value) {
+        match (self.value) {
             T @value => {},
             Err<E> @e => f(&mut e.err),
         };
@@ -116,14 +116,14 @@ struct Result<T, E> {
         }
     }
 
-    fn or_else(default_value: T) -> T {
+    fn or_else<R>(default_value: R) -> T | R {
         match self.value {
             T @value => value,
             else => default_value,
         }
     }
 
-    fn or_else_get(default_supplier: mut fn() -> T) -> T {
+    fn or_else_get<R>(default_supplier: mut fn() -> R) -> T | R {
         match self.value {
             T @value => value,
             else => default_supplier(),
@@ -141,6 +141,20 @@ struct Result<T, E> {
         match self.value {
             Err<E> @e => e.err,
             else => error::panic("called unwrap_err on Ok"),
+        }
+    }
+
+    fn is_err() -> Bool {
+        match self.value {
+            Err<E> => true,
+            T => false,
+        }
+    }
+
+    fn is_ok() -> Bool {
+        match self.value {
+            Err<E> => false,
+            T => true,
         }
     }
 }

@@ -605,8 +605,20 @@ impl TypeExpr {
 
                                 let params = fn_def.params.clone();
                                 for (index, param) in params.iter().enumerate() {
-                                    let given_type =
-                                        in_param_types.get(index).expect("todo: len doesnt match");
+                                    let given_type = in_param_types.get(index)
+                                        .unwrap_or_else(|| {
+                                            failure_with_occurence(
+                                                "Missing Function Parameter",
+                                                *complete_span,
+                                                [(
+                                                    format!("missing this param"),
+                                                    param.1.1
+                                                ), (
+                                                    format!("in this function function call"),
+                                                    *complete_span
+                                                )]
+                                            )
+                                        });
                                     // TODO: check if we should clone the typeenv
                                     check_type_compatability_full(
                                         &param.1.clone(),
@@ -2070,8 +2082,8 @@ pub fn check_type_compatability_full(
                         format!("{}", required_type.0).bright_yellow(),
                     ),
                     format!(
-                        "because of the fact, that the required type {} is a duck. The value you need to pass must be a duck aswell, but it isn't.",
-                        format!("{}", required_type.0).bright_yellow(),
+                        "this must be a duck as well, but it's {}",
+                        format!("{}", given_type.0).bright_yellow(),
                     ),
                 ),
             }
@@ -2113,6 +2125,11 @@ pub fn check_type_compatability_full(
                 .zip(given_item_types.iter())
                 .enumerate()
             {
+                if let TypeExpr::Or(req_variants) = &req_param.0
+                    && req_variants.iter().any(|variant| variant.0.type_id(type_env) == given_param.0.type_id(type_env)) {
+                        return
+                }
+
                 if req_param.0.type_id(type_env) != given_param.0.type_id(type_env) {
                     failure_with_occurence(
                         "Incompatible Types",
@@ -2141,8 +2158,8 @@ pub fn check_type_compatability_full(
         TypeExpr::String(..) => {
             if !given_type.0.is_string() {
                 fail_requirement(
-                    "this expects a String.".to_string(),
-                    "this is not a String.".to_string(),
+                    format!("this expects a {}", "String".yellow()),
+                    format!("this is not a {}. It's of type {}", "String".yellow(), given_type.0.as_clean_user_faced_type_name().yellow())
                 );
             }
         }
