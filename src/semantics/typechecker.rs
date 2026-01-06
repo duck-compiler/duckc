@@ -2125,6 +2125,11 @@ pub fn check_type_compatability_full(
                 .zip(given_item_types.iter())
                 .enumerate()
             {
+                if let TypeExpr::Or(req_variants) = &req_param.0
+                    && req_variants.iter().any(|variant| variant.0.type_id(type_env) == given_param.0.type_id(type_env)) {
+                        return
+                }
+
                 if req_param.0.type_id(type_env) != given_param.0.type_id(type_env) {
                     failure_with_occurence(
                         "Incompatible Types",
