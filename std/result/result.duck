@@ -143,4 +143,18 @@ struct Result<T, E> {
             else => error::panic("called unwrap_err on Ok"),
         }
     }
+
+    fn is_err() -> Bool {
+        match self.value {
+            Err<E> => true,
+            T => false,
+        }
+    }
+
+    fn is_ok() -> Bool {
+        match self.value {
+            Err<E> => false,
+            T => true,
+        }
+    }
 }
