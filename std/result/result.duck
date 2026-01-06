@@ -116,14 +116,14 @@ struct Result<T, E> {
         }
     }
 
-    fn or_else(default_value: T) -> T {
+    fn or_else<R>(default_value: R) -> T | R {
         match self.value {
             T @value => value,
             else => default_value,
         }
     }
 
-    fn or_else_get(default_supplier: mut fn() -> T) -> T {
+    fn or_else_get<R>(default_supplier: mut fn() -> R) -> T | R {
         match self.value {
             T @value => value,
             else => default_supplier(),
