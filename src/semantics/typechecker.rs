@@ -1243,7 +1243,7 @@ impl TypeExpr {
         }
     }
 
-    fn typeof_field(&self, field_name: String, type_env: &mut TypeEnv) -> Option<TypeExpr> {
+    pub fn typeof_field(&self, field_name: String, type_env: &mut TypeEnv) -> Option<TypeExpr> {
         if self.implements_into_iter(type_env)
             && field_name.as_str() == "iter"
             && let TypeExpr::Array(inner) = self
@@ -1434,7 +1434,7 @@ impl TypeExpr {
         })
     }
 
-    fn ref_typeof_field(&self, field_name: String, type_env: &mut TypeEnv) -> Option<TypeExpr> {
+    pub fn ref_typeof_field(&self, field_name: String, type_env: &mut TypeEnv) -> Option<TypeExpr> {
         match self {
             Self::Ref(t) | Self::RefMut(t) => {
                 t.0.typeof_field(field_name.clone(), type_env)
@@ -1612,6 +1612,7 @@ pub fn check_type_compatability_full(
     }
 
     match &required_type.0 {
+        TypeExpr::Indexed(..) => unreachable!("indexed types should have been replaced by now"),
         TypeExpr::Byte => {
             if !matches!(given_type.0, TypeExpr::Byte) {
                 fail_requirement(
