@@ -5047,6 +5047,7 @@ mod tests {
             ..Default::default()
         };
         env.struct_definitions.push(user_def);
+
         let mut t1 = (
             TypeExpr::Indexed(
                 Box::new((TypeExpr::Duck(Duck {

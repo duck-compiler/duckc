@@ -1,0 +1,6 @@
+type X = { name: String, inner: { lol: { x: String[] }} };
+type Y = X[.inner][.lol][.x];
+
+fn main() {
+    let x: Y = "hallo";
+}

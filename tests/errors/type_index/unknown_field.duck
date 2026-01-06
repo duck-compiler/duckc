@@ -1,0 +1,6 @@
+type X = { name: String };
+type Y = X[.other];
+
+fn main() {
+    let z: Y;
+}
