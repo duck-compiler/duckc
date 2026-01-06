@@ -1,0 +1,4 @@
+{
+    "stdout": " type resolve  sort fields\n type resolve  insert type definitions\n type resolve  resolve aliases in function signatures and prepare function types\n",
+    "stderr": "\nthread 'main' panicked at src/semantics/typechecker.rs:1421:18:\nTried to access field that doesn't exist\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+}
