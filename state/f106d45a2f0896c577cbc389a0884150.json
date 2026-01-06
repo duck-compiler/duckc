@@ -1,7 +1,7 @@
 {
     "id": "f106d45a2f0896c577cbc389a0884150",
     "file_path": "../../src/parse/type_parser.rs",
-    "line_number": 2085,
+    "line_number": 2105,
     "title": "allow no return type in fn's type expr",
     "tag": "todo",
     "module_tag": "parse",

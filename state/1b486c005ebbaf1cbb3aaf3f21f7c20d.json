@@ -1,8 +1,8 @@
 {
-    "id": "3849d474f8457250bace59f302873341",
+    "id": "1b486c005ebbaf1cbb3aaf3f21f7c20d",
     "file_path": "../../src/semantics/type_resolve.rs",
-    "line_number": 1614,
-    "title": "todo!(); in type_resolve.rs @ line 1614",
+    "line_number": 1426,
+    "title": "add type index for tuples",
     "tag": "todo",
     "module_tag": "semantics",
     "user": null,
@@ -12,8 +12,8 @@
         "name": "Maurice Schmidt",
         "email": "mvmogo@gmail.com"
     },
-    "source_line": "todo!();",
+    "source_line": "// todo: add type index for tuples",
     "status": "open",
-    "first_seen": "2025-12-06T20:33:48.263619",
+    "first_seen": "2026-01-06T20:48:05.106801",
     "history": []
 }

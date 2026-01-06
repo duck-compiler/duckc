@@ -1,5 +1,25 @@
 [
     {
+        "type": "created",
+        "timestamp": "2026-01-06T20:48:05.100669",
+        "issue_id": "780a97f082de38350f38b680414695d7",
+        "issue_title": "this fails before printing",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
+        "type": "created",
+        "timestamp": "2026-01-06T20:48:05.100669",
+        "issue_id": "1b486c005ebbaf1cbb3aaf3f21f7c20d",
+        "issue_title": "add type index for tuples",
+        "author_info": {
+            "name": "Maurice Schmidt",
+            "email": "mvmogo@gmail.com"
+        }
+    },
+    {
         "type": "closed",
         "timestamp": "2026-01-04T19:32:54.406290",
         "issue_id": "55b87cf3bb4499e965e33b5e4efe9c0f",
@@ -974,26 +994,6 @@
         "timestamp": "2025-07-09T23:15:12.304401",
         "issue_id": "7ca202446ad9d30d5c9dd75fcc8f32cb",
         "issue_title": "mvmo - 03.07.2025: this should check if the last is without a semicolon",
-        "author_info": {
-            "name": "Maurice Schmidt",
-            "email": "mvmogo@gmail.com"
-        }
-    },
-    {
-        "type": "created",
-        "timestamp": "2025-07-09T23:15:12.304401",
-        "issue_id": "55b87cf3bb4499e965e33b5e4efe9c0f",
-        "issue_title": "todo!() in value.rs @ line 785",
-        "author_info": {
-            "name": "Maurice Schmidt",
-            "email": "mvmogo@gmail.com"
-        }
-    },
-    {
-        "type": "created",
-        "timestamp": "2025-07-09T23:15:12.304401",
-        "issue_id": "08d4ea6633203a66f7130937bdba9646",
-        "issue_title": "add correct return type of block",
         "author_info": {
             "name": "Maurice Schmidt",
             "email": "mvmogo@gmail.com"
