@@ -8,6 +8,7 @@ struct DirEntry {
     is_dir: Bool,
 }
 
+[auto(ToJson, FromJson, Eq)]
 struct FilePath {
     path_ref: String,
     last_error: String | .none,
@@ -245,19 +246,22 @@ struct FilePath {
         return self;
     }
 
-    fn read() -> String | .err {
+    fn read() -> Result<String, ()> {
+        const err_result = Result::err<String, ()>(());
         if (self.failed()) {
-            return .err;
+            return err_result;
         }
 
-        return go {
+        const content = go {
             bs, err := os.ReadFile((*self).path_ref)
             if err != nil {
-               	return Tag__err {}
+               	return err_result
             }
 
-            return string(bs)
+            $ = string(bs)
         } as String;
+
+        return Result::ok<String, ()>(content);
     }
 
     fn size() -> Int | .err {
