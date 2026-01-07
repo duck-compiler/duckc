@@ -16,73 +16,111 @@ type Todo = {
 };
 
 component TodoEntry(props: { todo: Todo }) jsx {
-    return (
-      <div className="p-5 bg-amber-500 text-amber-100 font-bold w-full flex justify-between">
-        <span>{props.todo.title}</span>
-        {props.todo.done ? (
-            <button onClick={props.toggleCallback}>✅</button>
-        ) : (
-            <button onClick={props.toggleCallback}>❌</button>
-        )}
+  return (
+    <div className="flex items-center justify-between p-4 mb-3 transition-all duration-200 border border-zinc-800 bg-zinc-900 rounded-xl hover:border-amber-500/50 group">
+      <div className="flex items-center space-x-4">
+        <button
+          onClick={props.toggleCallback}
+          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+            props.todo.done
+            ? "bg-amber-500 border-amber-500"
+            : "border-zinc-600 hover:border-amber-500"
+            }`}
+        >
+          {props.todo.done && <span className="text-xs text-black">✓</span>}
+        </button>
+        <div className="flex flex-col">
+          <span className={`text-sm font-medium transition-all ${
+            props.todo.done ? "text-zinc-500 line-through" : "text-zinc-100"
+            }`}>
+              {props.todo.title}
+            </span>
+            {props.todo.description && (
+              <span className="text-xs text-zinc-500">{props.todo.description}</span>
+            )}
+        </div>
       </div>
-    )
+
+      <button className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-red-400">
+        <span className="text-xs">Delete</span>
+      </button>
+    </div>
+  )
 }
 
 component NewTodoInput() jsx {
-    const [title, setTitle] = useState("");
-    const [description, setDescription] = useState("");
+  const [title, setTitle] = useState("");
 
-    function submit(event) {
-      event.preventDefault();
-      const todo = {
-        title,
-        description,
-        done: false,
-      };
+  function submit(event) {
+    event.preventDefault();
+    if (title.trim() === "") return;
 
-      fetch("http://localhost:8080/createTodo", { method: "POST", body: JSON.stringify(todo) });
+    const todo = {
+      title,
+      description: "",
+      done: false,
+    };
 
-      props.submitCallback(todo)
-    }
+    fetch("http://localhost:8080/createTodo", {
+      method: "POST",
+      body: JSON.stringify(todo)
+    });
 
-    return (
-      <>
-        <form onSubmit={submit}>
-          <input className="bg-amber-200 text-black p-2" type="text" placeholder="What to do next?" value={title} onChange={(event) => setTitle(event.target.value)} />
-          <button className="text-amber-100 font-bold bg-amber-500 p-2">create todo</button>
-        </form>
-      </>
-    )
+    props.submitCallback(todo);
+    setTitle("");
+  }
+
+  return (
+    <form onSubmit={submit} className="flex gap-2 mt-8">
+      <input
+      className="flex-1 px-4 py-3 text-sm transition-all border outline-none bg-zinc-900 border-zinc-800 rounded-xl text-zinc-100 focus:border-amber-500"
+      type="text"
+      placeholder="What's your next mission?"
+      value={title}
+      onChange={(event) => setTitle(event.target.value)}
+      />
+      <button className="px-6 py-3 text-sm font-bold transition-transform rounded-xl bg-amber-500 text-zinc-950 hover:scale-105 active:scale-95">
+        Add
+      </button>
+    </form>
+  )
 }
 
 component TodoList(props: { todos: Todo[] }) jsx {
-    const [todos, setTodos] = useState(props.todos);
+  const [todos, setTodos] = useState(props.todos);
 
-    return (
-      <>
-        <div className="grid">
-          {todos.filter(todo => todo.done).map(todo => (
-            <TodoEntry todo={todo} toggleCallback={() => setTodos(todos => todos.map(t => {
-              if (t.title == todo.title) {
-                t.done = !t.done
-              }
+  const toggleTodo = (title) => {
+    setTodos(prev => prev.map(t =>
+      t.title === title ? { ...t, done: !t.done } : t
+    ));
+  };
 
-              return t
-            }))} />
-          ))}
-          {todos.filter(todo => !todo.done).map(todo => (
-            <TodoEntry todo={todo} toggleCallback={() => setTodos(todos => todos.map(t => {
-              if (t.title == todo.title) {
-                t.done = !t.done
-              }
+  return (
+    <div className="w-full max-w-md p-8 shadow-2xl bg-zinc-950 rounded-3xl border border-zinc-800">
+      <header className="mb-8">
+        <h1 className="text-2xl font-black tracking-tight text-zinc-100">Tasks</h1>
+        <p className="text-sm text-zinc-500">{todos.filter(t => !t.done).length} remaining</p>
+      </header>
 
-              return t
-            }))} />
-          ))}
-        </div>
-        <NewTodoInput submitCallback={(todo) => setTodos(todos => [...todos, todo])} />
-      </>
-    )
+      <div className="space-y-1">
+        {todos.length === 0 ? (
+          <div className="py-10 text-center border-2 border-dashed border-zinc-800 rounded-2xl">
+            <p className="text-zinc-600">No tasks. Relax!</p>
+          </div>
+        ) : (
+          todos.map(todo => (
+            <TodoEntry
+            key={todo.title}
+            todo={todo}
+            toggleCallback={() => toggleTodo(todo.title)}
+            />
+          ))
+        )}
+      </div>
+
+      <NewTodoInput submitCallback={(todo) => setTodos(prev => [...prev, todo])} />
+    </div>
+  )
 }
 
 template TodoApp(props: { storage: Storage }) duckx {
@@ -98,7 +136,6 @@ template TodoApp(props: { storage: Storage }) duckx {
             </head>
             <body>
                 <main class="min-w-screen min-h-screen" style="background-color: black; min-height: 100vh; min-width: 100vw;">
-                    <span class="text-amber-100 font-bold text-xl">Todo App written in Duck</span>
                     <TodoList todos={props.storage.todos} />
                 </main>
             </body>
