@@ -1,0 +1,149 @@
+use std::io::{println};
+use std::path::{FilePath};
+use std::col::{ArrayList};
+use std::web::{HttpServer, Req, Res};
+use std::error::{panic};
+use std::time::{Time};
+
+type Storage = {
+    todos: Todo[],
+};
+
+type Todo = {
+    done: Bool,
+    title: String,
+    description: String,
+};
+
+component TodoEntry(props: { todo: Todo }) jsx {
+    return (
+      <div className="p-5 bg-amber-500 text-amber-100 font-bold w-full flex justify-between">
+        <span>{props.todo.title}</span>
+        {props.todo.done ? (
+            <button onClick={props.toggleCallback}>✅</button>
+        ) : (
+            <button onClick={props.toggleCallback}>❌</button>
+        )}
+      </div>
+    )
+}
+
+component NewTodoInput() jsx {
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+
+    function submit(event) {
+      event.preventDefault();
+      const todo = {
+        title,
+        description,
+        done: false,
+      };
+
+      fetch("http://localhost:8080/createTodo", { method: "POST", body: JSON.stringify(todo) });
+
+      props.submitCallback(todo)
+    }
+
+    return (
+      <>
+        <form onSubmit={submit}>
+          <input className="bg-amber-200 text-black p-2" type="text" placeholder="What to do next?" value={title} onChange={(event) => setTitle(event.target.value)} />
+          <button className="text-amber-100 font-bold bg-amber-500 p-2">create todo</button>
+        </form>
+      </>
+    )
+}
+
+component TodoList(props: { todos: Todo[] }) jsx {
+    const [todos, setTodos] = useState(props.todos);
+
+    return (
+      <>
+        <div className="grid">
+          {todos.filter(todo => todo.done).map(todo => (
+            <TodoEntry todo={todo} toggleCallback={() => setTodos(todos => todos.map(t => {
+              if (t.title == todo.title) {
+                t.done = !t.done
+              }
+
+              return t
+            }))} />
+          ))}
+          {todos.filter(todo => !todo.done).map(todo => (
+            <TodoEntry todo={todo} toggleCallback={() => setTodos(todos => todos.map(t => {
+              if (t.title == todo.title) {
+                t.done = !t.done
+              }
+
+              return t
+            }))} />
+          ))}
+        </div>
+        <NewTodoInput submitCallback={(todo) => setTodos(todos => [...todos, todo])} />
+      </>
+    )
+}
+
+template TodoApp(props: { storage: Storage }) duckx {
+    return (
+        <>
+        <!doctype html>
+        <html>
+            <head>
+                <title>Todo App written in Duck</title>
+                <style>
+                    {go { $ = TAILWIND_STR } as String}
+                </style>
+            </head>
+            <body>
+                <main class="min-w-screen min-h-screen" style="background-color: black; min-height: 100vh; min-width: 100vw;">
+                    <span class="text-amber-100 font-bold text-xl">Todo App written in Duck</span>
+                    <TodoList todos={props.storage.todos} />
+                </main>
+            </body>
+        </html>
+        </>
+    )
+}
+
+fn main() {
+    let storage_json_file = FilePath::new("./.todo/storage.json");
+    let storage: Storage = match storage_json_file
+        .ensure_dir()
+        .read() {
+        String @str => {
+            let parse_result = parse_json<Storage>(str);
+            match parse_result {
+                Storage @storage => storage,
+                else => panic("couldn't parse storage file") as !,
+            }
+        },
+        else => { todos: [] as Todo[] },
+    };
+
+    HttpServer::new(.verbose)
+        .serve_dynamic_template<{ storage: Storage }>("/", TodoApp, fn () -> { storage: Storage } { return { storage: storage }})
+        .handle("POST /createTodo", mut fn (req: Req, res: &mut Res) {
+            const todo = match req.json<Todo>() {
+                Todo @todo => todo,
+                else => {
+                    res.status(400).json({
+                        message: "bad request"
+                    });
+                    return;
+                },
+            };
+
+            storage.todos = *ArrayList::from_array(storage.todos)
+                .push(todo)
+                .as_ref();
+
+            storage_json_file.write(storage.to_json()).expect("couldn't write file :(");
+
+            res.json({
+                message: "created todo",
+            });
+        })
+        .listen(":8080");
+}
