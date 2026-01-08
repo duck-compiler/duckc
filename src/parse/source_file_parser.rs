@@ -34,7 +34,7 @@ pub struct SourceFile {
     pub use_statements: Vec<UseStatement>,
     pub extensions_defs: Vec<ExtensionsDef>,
     pub sub_modules: Vec<(String, SourceFile)>,
-    pub jsx_compontents: Vec<JsxComponent>,
+    pub jsx_components: Vec<JsxComponent>,
     pub duckx_components: Vec<DuckxComponent>,
     pub test_cases: Vec<TestCase>,
     pub schema_defs: Vec<SchemaDefinition>,
@@ -81,7 +81,7 @@ impl SourceFile {
             let mut mangle_env = MangleEnv {
                 sub_mods: s.sub_modules.iter().map(|x| x.0.clone()).collect(),
                 global_prefix: global_prefix.clone(),
-                jsx_components: s.jsx_compontents.iter().map(|x| x.name.clone()).collect(),
+                jsx_components: s.jsx_components.iter().map(|x| x.name.clone()).collect(),
                 duckx_components: s.duckx_components.iter().map(|x| x.name.clone()).collect(),
                 imports: {
                     let mut imports = HashMap::new();
@@ -149,9 +149,9 @@ impl SourceFile {
                     result.schema_defs.push(schema_def);
                 }
 
-                for jsx_component in src.jsx_compontents {
+                for jsx_component in src.jsx_components {
                     mangle_env.insert_ident(jsx_component.name[prefix.len()..].to_string());
-                    result.jsx_compontents.push(jsx_component);
+                    result.jsx_components.push(jsx_component);
                 }
 
                 for duck_component in src.duckx_components {
@@ -341,7 +341,7 @@ impl SourceFile {
                 result.schema_defs.push(schema_def);
             }
 
-            for component in &s.jsx_compontents {
+            for component in &s.jsx_components {
                 // todo: mangle components in jsx
                 let mut component = component.clone();
 
@@ -351,7 +351,7 @@ impl SourceFile {
 
                 component.name = mangle(&p);
                 mangle_jsx_component(&mut component, global_prefix, prefix, &mut mangle_env);
-                result.jsx_compontents.push(component.clone());
+                result.jsx_components.push(component.clone());
             }
 
             for c in &s.duckx_components {
@@ -388,7 +388,7 @@ impl SourceFile {
             sub_mods: Vec::new(),
             global_prefix: global_prefix.clone(),
             jsx_components: flattened_source_file
-                .jsx_compontents
+                .jsx_components
                 .iter()
                 .map(|x| x.name.clone())
                 .collect(),
@@ -489,7 +489,7 @@ impl SourceFile {
             component.name = mangle(&p);
         }
 
-        for jsx_component in &mut flattened_source_file.jsx_compontents {
+        for jsx_component in &mut flattened_source_file.jsx_components {
             let mut c = global_prefix.clone();
             c.extend(unmangle(&jsx_component.name));
             jsx_component.name = mangle(&c);
@@ -921,7 +921,7 @@ fn module_descent(name: String, current_dir: PathBuf) -> SourceFile {
                     acc.struct_definitions.extend(parsed_src.struct_definitions);
                     acc.sub_modules.extend(parsed_src.sub_modules);
                     acc.test_cases.extend(parsed_src.test_cases);
-                    acc.jsx_compontents.extend(parsed_src.jsx_compontents);
+                    acc.jsx_components.extend(parsed_src.jsx_components);
                     acc.duckx_components.extend(parsed_src.duckx_components);
                     acc.global_var_decls.extend(parsed_src.global_var_decls);
                     acc.schema_defs.extend(parsed_src.schema_defs);
@@ -1076,7 +1076,7 @@ where
                 struct_definitions,
                 use_statements,
                 sub_modules,
-                jsx_compontents: jsx_components,
+                jsx_components,
                 duckx_components: template_components,
                 test_cases,
                 schema_defs,
@@ -1152,7 +1152,7 @@ mod tests {
             (
                 "component MyComp() jsx {console.log('hallo, welt')}",
                 SourceFile {
-                    jsx_compontents: vec![JsxComponent {
+                    jsx_components: vec![JsxComponent {
                         name: "MyComp".to_string(),
                         props_type: TypeExpr::Duck(Duck { fields: vec![] }).into_empty_span(),
                         javascript_source: (
@@ -1166,7 +1166,7 @@ mod tests {
             (
                 "component MyComp(props: {x: String, y: Int}) jsx {console.log('hallo, welt')}",
                 SourceFile {
-                    jsx_compontents: vec![JsxComponent {
+                    jsx_components: vec![JsxComponent {
                         name: "MyComp".to_string(),
                         props_type: TypeExpr::Duck(Duck {
                             fields: vec![
@@ -1351,7 +1351,7 @@ mod tests {
 
             source_file_into_empty_range(&mut parse);
 
-            for c in parse.jsx_compontents.iter_mut() {
+            for c in parse.jsx_components.iter_mut() {
                 type_expr_into_empty_range(&mut c.props_type);
             }
 

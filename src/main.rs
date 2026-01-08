@@ -498,8 +498,8 @@ fn parse_src_file(
                 result.push_use(s);
             }
         }
-        for s in &std_src_file.jsx_compontents {
-            result.jsx_compontents.push(s.clone());
+        for s in &std_src_file.jsx_components {
+            result.jsx_components.push(s.clone());
         }
         for s in &std_src_file.duckx_components {
             result.duckx_components.push(s.clone());

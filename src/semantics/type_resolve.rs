@@ -2604,7 +2604,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         });
 
     source_file
-        .jsx_compontents
+        .jsx_components
         .iter_mut()
         .for_each(|function_definition| {
             sort_fields_type_expr(&mut function_definition.props_type.0);
@@ -2818,7 +2818,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     });
 
     source_file
-        .jsx_compontents
+        .jsx_components
         .iter_mut()
         .for_each(|jsx_component| {
             resolve_all_aliases_type_expr(&mut jsx_component.props_type, type_env);
@@ -2874,7 +2874,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             type_env.duckx_components.push(duckx_component.clone());
         });
 
-    for comp in &source_file.jsx_compontents {
+    for comp in &source_file.jsx_components {
         type_env.jsx_components.push(comp.clone());
         type_env.check_for_tailwind(&comp.javascript_source.0);
     }
@@ -2958,7 +2958,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             false,
         );
     }
-    for s in &mut source_file.jsx_compontents {
+    for s in &mut source_file.jsx_components {
         typeresolve_jsx_component(s, type_env);
     }
 
@@ -2971,7 +2971,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         typeresolve_test_case(test_case, type_env);
     }
 
-    type_env.jsx_components = source_file.jsx_compontents.clone();
+    type_env.jsx_components = source_file.jsx_components.clone();
     type_env.duckx_components = source_file.duckx_components.clone();
 
     for extensions_def in &mut source_file.extensions_defs {

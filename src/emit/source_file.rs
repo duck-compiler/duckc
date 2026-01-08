@@ -155,7 +155,7 @@ impl SourceFile {
             )],
         ));
 
-        for c in self.jsx_compontents {
+        for c in self.jsx_components {
             instructions.push(c.emit(type_env));
         }
 
