@@ -21,6 +21,9 @@ The compile command allows to compile a given file
 ## build
 Build the project with all of it's dependencies
 
+## test
+The test command compiles and runs tests within the current project. You can run all tests or specify a specific file.
+
 ---
 
 [< Previous](001-getting-started.md) | [Home](README.md) | [Next >](003-foundation-intro.md)
