@@ -75,7 +75,7 @@ component NewTodoInput() jsx {
       <input
       className="flex-1 px-4 py-3 text-sm transition-all border outline-none bg-zinc-900 border-zinc-800 rounded-xl text-zinc-100 focus:border-amber-500"
       type="text"
-      placeholder="What's your next mission?"
+      placeholder="What duck app to write next?"
       value={title}
       onChange={(event) => setTitle(event.target.value)}
       />
@@ -105,7 +105,7 @@ component TodoList(props: { todos: Todo[] }) jsx {
       <div className="space-y-1">
         {todos.length === 0 ? (
           <div className="py-10 text-center border-2 border-dashed border-zinc-800 rounded-2xl">
-            <p className="text-zinc-600">No tasks. Relax!</p>
+            <p className="text-zinc-600">No tasks. Chill!</p>
           </div>
         ) : (
           todos.map(todo => (
@@ -135,7 +135,7 @@ template TodoApp(props: { storage: Storage }) duckx {
                 </style>
             </head>
             <body>
-                <main class="min-w-screen min-h-screen" style="background-color: black; min-height: 100vh; min-width: 100vw;">
+                <main class="min-w-screen min-h-screen flex items-center justify-center" style="background-color: black; min-height: 100vh; min-width: 100vw;">
                     <TodoList todos={props.storage.todos} />
                 </main>
             </body>
@@ -161,12 +161,31 @@ fn main() {
 
     HttpServer::new(.verbose)
         .serve_dynamic_template<{ storage: Storage }>("/", TodoApp, fn () -> { storage: Storage } { return { storage: storage }})
+        .handle("DELETE /todo/{id}", mut fn (req: Req, res: &mut Res) {
+            const id = match req.param("id") {
+                String @id => id,
+                else => {
+                    res.status(400).json({
+                        message: "bad request",
+                    });
+
+                    return;
+                }
+            };
+
+            storage.todos = *ArrayList::from_array(storage.todos)
+                .as_ref();
+
+            res.json({
+                message: "todo: deleted todo",
+            });
+        })
         .handle("POST /createTodo", mut fn (req: Req, res: &mut Res) {
             const todo = match req.json<Todo>() {
                 Todo @todo => todo,
                 else => {
                     res.status(400).json({
-                        message: "bad request"
+                        message: "bad request",
                     });
                     return;
                 },
