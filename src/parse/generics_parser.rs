@@ -1,4 +1,5 @@
 use chumsky::{input::BorrowInput, prelude::*};
+use serde::{Deserialize, Serialize};
 
 use crate::parse::{
     SS, Spanned, failure_with_occurence,
@@ -6,7 +7,8 @@ use crate::parse::{
     type_parser::{TypeExpr, type_expression_parser},
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct Generic {
     pub name: String,
     pub constraint: Option<Spanned<TypeExpr>>,

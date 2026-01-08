@@ -2,6 +2,7 @@ use crate::parse::{type_parser::type_expression_parser, value_parser::value_expr
 use std::{collections::HashMap, path::PathBuf};
 
 use chumsky::{input::BorrowInput, prelude::*};
+use serde::{Deserialize, Serialize};
 use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
@@ -26,7 +27,8 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct SourceFile {
     pub function_definitions: Vec<FunctionDefintion>,
     pub type_definitions: Vec<TypeDefinition>,
@@ -41,7 +43,8 @@ pub struct SourceFile {
     pub global_var_decls: Vec<GlobalVariableDeclaration>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct GlobalVariableDeclaration {
     pub is_mut: bool,
     pub name: String,

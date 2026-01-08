@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::parse::{
     Field, SS, Spanned, failure_with_occurence,
@@ -20,7 +21,7 @@ pub struct NamedDuckDefinition {
     pub generics: Vec<Spanned<Generic>>,
 }
 
-#[derive(Copy, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum DerivableInterface {
     Eq,
     ToString,
@@ -32,7 +33,8 @@ pub enum DerivableInterface {
     EmitJs,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct StructDefinition {
     pub name: String,
     pub fields: Vec<Field>,

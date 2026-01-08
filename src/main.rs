@@ -60,6 +60,16 @@ lazy_static! {
             })
             .expect("couldn't get pathbuf for std lib")
     };
+    static ref DUCK_MANGLED_STD_PATH: PathBuf = {
+        env::home_dir()
+            .map(|mut path| {
+                path.push(".duck");
+                path.push("std");
+                path.push("mangled_std.json");
+                path
+            })
+            .expect("couldn't get pathbuf for mangled std lib")
+    };
     static ref DARGO_DOT_DIR: PathBuf = {
         fn require_sub_dir(str: &str) {
             let Ok(current_dir) = env::current_dir() else {
@@ -175,41 +185,55 @@ fn parse_src_file(
         std::process::exit(0);
     }
 
-    let file_text = std::fs::read_to_string(DUCK_STD_PATH.to_path_buf())
-        .unwrap()
-        .leak();
-    let lex = lex("std.duck", file_text);
-    let mut std_src_file = source_file_parser(
-        {
-            let mut buf = DUCK_STD_PATH.to_path_buf();
-            buf.pop();
-            buf
-        },
-        make_input,
-    )
-    .parse(make_input(
-        SS {
-            start: 0,
-            end: file_text.len(),
-            context: Context {
-                file_name: "std.duck",
-                file_contents: file_text,
+    let std_src_file = if DUCK_MANGLED_STD_PATH.exists() {
+        let json_src = std::fs::read(DUCK_MANGLED_STD_PATH.as_path())
+            .expect("Could not load mangled std src")
+            .leak();
+        rmp_serde::from_slice(json_src).expect("Could not deserialized mangled std")
+    } else {
+        let file_text = std::fs::read_to_string(DUCK_STD_PATH.as_path())
+            .unwrap()
+            .leak();
+        let lex = lex("std.duck", file_text);
+        let mut std_src_file = source_file_parser(
+            {
+                let mut buf = DUCK_STD_PATH.to_path_buf();
+                buf.pop();
+                buf
             },
-        },
-        lex.as_slice(),
-    ))
-    .unwrap()
-    .flatten(&vec!["std".to_string()], false);
+            make_input,
+        )
+        .parse(make_input(
+            SS {
+                start: 0,
+                end: file_text.len(),
+                context: Context {
+                    file_name: "std.duck",
+                    file_contents: file_text,
+                },
+            },
+            lex.as_slice(),
+        ))
+        .unwrap()
+        .flatten(&vec!["std".to_string()], false);
 
-    for func in std_src_file.function_definitions.iter_mut() {
-        for (_, p) in &mut func.params {
-            typename_reset_global(&mut p.0);
+        for func in std_src_file.function_definitions.iter_mut() {
+            for (_, p) in &mut func.params {
+                typename_reset_global(&mut p.0);
+            }
+
+            typename_reset_global(&mut func.return_type.0);
+
+            typename_reset_global_value_expr(&mut func.value_expr.0);
         }
 
-        typename_reset_global(&mut func.return_type.0);
+        let serialized =
+            rmp_serde::to_vec(&std_src_file).expect("Could not serialized mangled std");
+        std::fs::write(DUCK_MANGLED_STD_PATH.as_path(), serialized)
+            .expect("Could not write serialized mangled std");
 
-        typename_reset_global_value_expr(&mut func.value_expr.0);
-    }
+        std_src_file
+    };
 
     fn typename_reset_global(t: &mut TypeExpr) {
         match t {

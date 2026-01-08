@@ -1,4 +1,5 @@
 use chumsky::{input::BorrowInput, prelude::*};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     parse::{
@@ -18,7 +19,8 @@ use super::{
 pub type Param = (String, Spanned<TypeExpr>);
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct FunctionDefintion {
     pub name: String,
     pub return_type: Spanned<TypeExpr>,
@@ -72,7 +74,8 @@ impl Default for FunctionDefintion {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct LambdaFunctionExpr {
     pub is_mut: bool,
     pub params: Vec<(String, Option<Spanned<TypeExpr>>)>,

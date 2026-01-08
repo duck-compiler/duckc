@@ -6,6 +6,7 @@ use chumsky::{
     input::{BorrowInput, Input},
     span::SimpleSpan,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::parse::{lexer::Token, type_parser::TypeExpr};
 
@@ -23,7 +24,7 @@ pub mod type_parser;
 pub mod use_statement_parser;
 pub mod value_parser;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Context {
     pub file_name: &'static str,
     pub file_contents: &'static str,
@@ -33,7 +34,8 @@ pub type SS = SimpleSpan<usize, Context>;
 pub type Spanned<T> = (T, SS);
 pub type SpannedMutRef<'a, T> = (&'a mut T, SS);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct Field {
     pub name: String,
     pub type_expr: Spanned<TypeExpr>,

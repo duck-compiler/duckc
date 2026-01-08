@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use chumsky::{input::BorrowInput, prelude::*};
+use serde::{Deserialize, Serialize};
 use tree_sitter::{Node, Parser as TSParser};
 
 use crate::{
@@ -14,7 +15,8 @@ use crate::{
 
 use super::lexer::Token;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct DuckxComponent {
     pub name: String,
     pub props_type: Spanned<TypeExpr>,

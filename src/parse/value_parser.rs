@@ -13,10 +13,12 @@ use crate::{
 
 use super::{lexer::Token, type_parser::TypeExpr};
 use chumsky::{input::BorrowInput, prelude::*, span::Span};
+use serde::{Deserialize, Serialize};
 
 pub type TypeParam = TypeExpr;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct MatchArm {
     pub type_case: Spanned<TypeExpr>,
     pub base: Option<Spanned<TypeExpr>>,
@@ -26,25 +28,29 @@ pub struct MatchArm {
     pub span: SS,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub enum ValFmtStringContents {
     String(String),
     Expr(Spanned<ValueExpr>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub enum ValHtmlStringContents {
     String(String),
     Expr(Spanned<ValueExpr>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub enum DuckxContents {
     HtmlString(Vec<ValHtmlStringContents>),
     Expr(Spanned<ValueExpr>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct Declaration {
     pub name: String,
     pub type_expr: Option<Spanned<TypeExpr>>,
@@ -52,13 +58,15 @@ pub struct Declaration {
     pub is_const: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct Assignment {
     pub target: Spanned<ValueExpr>,
     pub value_expr: Spanned<ValueExpr>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub enum ValueExpr {
     Defer(Box<Spanned<ValueExpr>>),
     Async(Box<Spanned<ValueExpr>>),

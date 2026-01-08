@@ -3,24 +3,29 @@ use std::fmt::{Display, Formatter, Result};
 use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     parse::{
-        Field, SS, Spanned, failure_with_occurence, generics_parser::{Generic, generics_parser}, value_parser::{TypeParam, empty_range}
+        Field, SS, Spanned, failure_with_occurence,
+        generics_parser::{Generic, generics_parser},
+        value_parser::{TypeParam, empty_range},
     },
-    semantics::{ident_mangler::mangle, type_resolve::TypeEnv}
+    semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
 };
 
 use super::lexer::Token;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct TypeDefinition {
     pub name: String,
     pub type_expression: Spanned<TypeExpr>,
     pub generics: Vec<Spanned<Generic>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct Duck {
     pub fields: Vec<Field>,
 }
@@ -30,7 +35,8 @@ pub struct Struct {
     pub fields: Vec<Field>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub enum TypeExpr {
     Statement,
     Never,
@@ -1356,21 +1362,22 @@ where
                     prefixes.into_iter().fold(base, |acc, inner| {
                         let span = acc.1;
                         match inner {
-                            Some(index_type) => {
-                                match &index_type.0 {
-                                    TypeExpr::Tag(_) | TypeExpr::Int => {
-                                        (TypeExpr::Indexed(Box::new(acc), Box::new(index_type)), span)
-                                    }
-                                    _ => failure_with_occurence(
-                                        "Invalid Type Index",
-                                        index_type.1,
-                                        [(
-                                            format!("Type Index must be Int or Tag. You've provided {}", index_type.0.as_clean_user_faced_type_name()),
-                                            index_type.1
-                                        )]
-                                    ),
+                            Some(index_type) => match &index_type.0 {
+                                TypeExpr::Tag(_) | TypeExpr::Int => {
+                                    (TypeExpr::Indexed(Box::new(acc), Box::new(index_type)), span)
                                 }
-                            }
+                                _ => failure_with_occurence(
+                                    "Invalid Type Index",
+                                    index_type.1,
+                                    [(
+                                        format!(
+                                            "Type Index must be Int or Tag. You've provided {}",
+                                            index_type.0.as_clean_user_faced_type_name()
+                                        ),
+                                        index_type.1,
+                                    )],
+                                ),
+                            },
                             None => (TypeExpr::Array(Box::new(acc)), span),
                         }
                     })
@@ -1475,7 +1482,9 @@ where
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            TypeExpr::Indexed(target, index) => write!(f, "{}[{}]", target.as_ref().0, index.as_ref().0),
+            TypeExpr::Indexed(target, index) => {
+                write!(f, "{}[{}]", target.as_ref().0, index.as_ref().0)
+            }
             TypeExpr::Byte => write!(f, "Byte"),
             TypeExpr::Statement => write!(f, "Statement"),
             TypeExpr::Never => write!(f, "never"),
@@ -2721,9 +2730,7 @@ pub mod tests {
         assert_type_expression(
             "String[.username]",
             TypeExpr::Indexed(
-                TypeExpr::String(None)
-                    .into_empty_span()
-                    .into(),
+                TypeExpr::String(None).into_empty_span().into(),
                 TypeExpr::Tag("username".to_string())
                     .into_empty_span()
                     .into(),
@@ -2733,12 +2740,8 @@ pub mod tests {
         assert_type_expression(
             "String[Int]",
             TypeExpr::Indexed(
-                TypeExpr::String(None)
-                    .into_empty_span()
-                    .into(),
-                TypeExpr::Int
-                    .into_empty_span()
-                    .into(),
+                TypeExpr::String(None).into_empty_span().into(),
+                TypeExpr::Int.into_empty_span().into(),
             ),
         );
     }

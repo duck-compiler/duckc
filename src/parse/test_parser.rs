@@ -1,13 +1,15 @@
 use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::parse::value_parser::value_expr_parser;
 use crate::parse::{SS, Spanned, failure_with_occurence, value_parser::ValueExpr};
 
 use super::lexer::Token;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct TestCase {
     pub name: String,
     pub body: Spanned<ValueExpr>,

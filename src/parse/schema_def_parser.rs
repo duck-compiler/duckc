@@ -1,4 +1,5 @@
 use chumsky::{input::BorrowInput, prelude::*};
+use serde::{Deserialize, Serialize};
 
 use crate::parse::{SS, Spanned};
 
@@ -8,13 +9,15 @@ use super::{
     value_parser::{ValueExpr, value_expr_parser},
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct IfBranch {
     pub condition: Spanned<ValueExpr>,
     pub value_expr: Option<Spanned<ValueExpr>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct SchemaField {
     pub name: String,
     pub type_expr: Spanned<TypeExpr>,
@@ -24,7 +27,8 @@ pub struct SchemaField {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct SchemaDefinition {
     pub name: String,
     pub fields: Vec<SchemaField>,
