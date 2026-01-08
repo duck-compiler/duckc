@@ -68,13 +68,13 @@ fn main() {
     let o2: Option<Int> = some<Int>(200);
 
     debug(o.filter(fn(x: String) -> Bool { return false; }).is_empty());
-    debug(o.filter(fn(x: String) -> Bool { return true }));
-    debug(o.filter(fn(x: String) -> Bool { return false }));
-    debug(o.map<Int>(fn(x: String) -> Int { return 100 }));
+    debug(o.filter(fn(x: String) -> Bool { return true }).inner.to_string());
+    debug(o.filter(fn(x: String) -> Bool { return false }).inner.to_string());
+    debug(o.map<Int>(fn(x: String) -> Int { return 100 }).inner.to_string());
     debug(o.map<Int>(fn(x: String) -> Int { return 100 }).is_empty());
     debug(o.map<Int>(fn(x: String) -> Int { return 100 }).is_some());
-    debug(o.zip<Int>(o2));
+    debug(o.zip<Int>(o2).inner.to_string());
     debug(o.zip<Int>(o2).is_some());
     debug(o.zip<Int>(empty_Option<Int>()).is_empty());
-    debug(empty_Option<String>().unwrap());
+    debug(empty_Option<String>().unwrap().to_string());
 }

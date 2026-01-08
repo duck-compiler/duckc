@@ -27,10 +27,10 @@ fn readln(prompt: String | ..) -> String | .err {
         reader := bufio.NewReader(os.Stdin)
         text, err := reader.ReadString('\n')
         if err != nil {
-            return Tag__err { }
+            return &Tag__err { }
         }
 
-        return text
+        return &text
     } as !
 }
 

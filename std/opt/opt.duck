@@ -16,7 +16,10 @@ struct Opt<T> {
     }
 
     fn is_some() -> Bool {
-        return self.inner != .none;
+        match self.inner {
+            .none => false,
+            else => true,
+        }
     }
 
     fn if_some(consumer: mut fn (value: T)) {
@@ -34,7 +37,10 @@ struct Opt<T> {
     }
 
     fn is_none() -> Bool {
-        return self.inner == .none;
+        match self.inner {
+            .none => true,
+            else => false,
+        }
     }
 
     fn map<R>(f: mut fn (value: T) -> R) -> Opt<R> {

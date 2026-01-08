@@ -41,7 +41,8 @@ struct FilePath {
         go {
             files, err := os.ReadDir((*self).path_ref)
             if err != nil {
-                (*self).last_error = err.Error()
+            	error_msg := err.Error()
+                (*self).last_error = &error_msg
                 return empty_iter
             }
 
@@ -184,7 +185,8 @@ struct FilePath {
             dir := filepath.Dir((*self).path_ref)
             err := os.MkdirAll(dir, 0755)
             if err != nil {
-               	(*self).last_error = err.Error()
+            	s := err.Error()
+               	(*self).last_error = &s
             }
         }
 
@@ -201,13 +203,15 @@ struct FilePath {
         go {
             err := os.WriteFile(tmp_path, []byte(content), 0644)
             if err != nil {
-               	(*self).last_error = err.Error()
+	           	s := err.Error()
+               	(*self).last_error = &s
                	return self
             }
 
             err = os.Rename(tmp_path, (*self).path_ref)
             if err != nil {
-               	(*self).last_error = err.Error()
+                s := err.Error()
+               	(*self).last_error = &s
                	return self
             }
         }
@@ -223,7 +227,8 @@ struct FilePath {
         go {
             err := os.Remove((*self).path_ref)
             if err != nil {
-                (*self).last_error = err.Error()
+                s := err.Error()
+                (*self).last_error = &s
             }
         }
 
@@ -237,7 +242,8 @@ struct FilePath {
 
         go {
             if err := os.Rename((*self).path_ref, new_path); err != nil {
-               	(*self).last_error = err.Error()
+            	s := err.Error()
+               	(*self).last_error = &s
             }
         }
 
@@ -268,10 +274,11 @@ struct FilePath {
         return go {
             s, err := os.Stat((*self).path_ref)
             if err != nil {
-               	return Tag__err {}
+               	return &Tag__err {}
             }
 
-            return int(s.Size())
+            tmp := int(s.Size())
+            return &tmp
         } as Int;
     }
 

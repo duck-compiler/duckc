@@ -8,7 +8,7 @@ struct Req {
         go {
             value := (*self).request_ref.Header.Get(name)
             if value == "" {
-            	return Tag__none {}
+            	return &Tag__none {}
             }
 
             return value;
@@ -21,7 +21,7 @@ struct Req {
         return go {
             value := (*self).request_ref.PathValue(name)
             if value == "" {
-                return Tag__none {}
+                return &Tag__none {}
             }
             $ = value
         } as String;
@@ -32,22 +32,23 @@ struct Req {
         go {
             value := (*self).request_ref.URL.Query().Get(name)
             if value == "" {
-                return Tag__none { }
+                return &Tag__none { }
             }
-            return value
+            return &value
         }
     }
 
     fn body_str() -> String | .err {
-        return go {
+        go {
             bodyBytes, err := ioutil.ReadAll((*self).request_ref.Body)
             if err != nil {
-            	return Tag__err { }
+            	return &Tag__err { }
             }
 
             (*self).request_ref.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
-            $ = string(bodyBytes)
-        } as String
+            body_str := string(bodyBytes)
+            return &body_str
+        } as !
     }
 
     fn json<T: {}>() -> T | .err {
@@ -63,7 +64,7 @@ struct Req {
         let cookie: &go "http.Cookie" = go {
             $, err := (*self).request_ref.Cookie(name)
             if err != nil {
-            	return Tag__none {}
+            	return &Tag__none {}
             }
         };
 

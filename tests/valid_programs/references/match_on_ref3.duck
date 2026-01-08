@@ -1,0 +1,13 @@
+fn a<T>(x: T) -> T {
+    x
+}
+
+fn main() {
+    parse_json<String | Int>("100");
+    const z: Int | String = 20;
+    const a: Int | String = if (true) {
+        1
+    } else {
+        "a"
+    };
+}

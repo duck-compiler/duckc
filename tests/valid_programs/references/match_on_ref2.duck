@@ -1,0 +1,30 @@
+use std::io::println;
+
+struct Lol {
+    x: Int,
+}
+
+fn main() {
+    let z: String | Lol = Lol { x: 100 };
+
+    match &mut z {
+        Lol @i => {
+            i.x *= 200;
+            println(f"z int: {(i.x.to_string())}");
+        },
+        String @s => {
+            println(f"string: {(*s)}");
+            *s = "fwafwa";
+        }
+    }
+
+    match z {
+        Lol @i => {
+            i.x *= 2;
+            println(f"z int 2: {(i.x.to_string())}");
+        },
+        String @s => {
+            println(f"string: {(s)}");
+        }
+    }
+}

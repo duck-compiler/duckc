@@ -1,0 +1,14 @@
+use std::io::println;
+
+fn main() {
+    const z: {x: Int} | { y: String } = { y: "aaa" };
+    match z {
+        {x: Int} @x => x.x.to_string()->println(),
+        {y: String} @x => x.y.to_string()->println(),
+    }
+    const z2: {z: {x: Int} | { y: String }} = {z: { y: "aaa" }};
+    match z2.z {
+        {x: Int} @x => x.x.to_string()->println(),
+        {y: String} @x => x.y.to_string()->println(),
+    }
+}

@@ -31,7 +31,7 @@ struct Location {
         let raw_location: &go "time.Location" = go {
             loc, err := time.LoadLocation(name);
             if err != nil {
-            	return Tag__err {}
+            	return &Tag__err {}
             }
 
             $ = loc;
@@ -40,6 +40,10 @@ struct Location {
         return Location {
             raw_location: raw_location,
         }
+    }
+
+    fn eq(x: &Location) -> Bool {
+        self.to_string() == x.to_string()
     }
 
     fn to_string() -> String {

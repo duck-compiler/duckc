@@ -82,6 +82,10 @@ impl TypeExpr {
         ])
     }
 
+    pub fn is_union(&self) -> bool {
+        matches!(self, TypeExpr::Or(..))
+    }
+
     pub fn call_ord(&self, param1: &str, param2: &str, type_env: &mut TypeEnv) -> String {
         let param1 = &format!("({param1})");
         let param2 = &format!("({param2})");
@@ -140,14 +144,16 @@ impl TypeExpr {
                 "{}_Eq({param1}, {param2})",
                 self.as_clean_go_type_name(type_env)
             ),
-            // TypeExpr::Duck(..) => format!("{}_Eq({param1}, {param2})", self.as_clean_go_type_name(type_env)),
+            TypeExpr::Duck(..) => format!(
+                "{}_Eq({param1}, {param2})",
+                self.as_clean_go_type_name(type_env)
+            ),
             TypeExpr::Struct { .. } => format!("{param1}.eq(&{param2})"),
             TypeExpr::Or(t) => {
                 let mut go_code = format!(
                     r#"
                     var p1 any = {param1}
                     var p2 any = {param2}
-
                 "#
                 );
 
@@ -157,13 +163,27 @@ impl TypeExpr {
                     go_code.push_str(&format!(
                         r#"
                         switch p1.(type) {{
-                        case {conc_type}:
+                        case *{conc_type}:
                             switch p2.(type) {{
+                                case *{conc_type}:
+                                a := p1.(*{conc_type})
+                                b := p2.(*{conc_type})
+                                _ = a
+                                _ = b
+                                eq_res := {}
+                                return eq_res
                                 case {conc_type}:
-                                return true
+                                a := p1.(*{conc_type})
+                                b := p2.({conc_type})
+                                _ = a
+                                _ = b
+                                eq_res := {}
+                                return eq_res
                             }}
                         }}
-                    "#
+                    "#,
+                        t.0.call_eq("*a", "*b", type_env),
+                        t.0.call_eq("*a", "b", type_env),
                     ));
                 }
 
@@ -262,13 +282,14 @@ impl TypeExpr {
                     go_code.push_str(&format!(
                         r#"
                         switch p1.(type) {{
-                        case {conc_type}:
-                            tmp := p1.({conc_type})
+                        case *{conc_type}:
+                            tmp := p1.(*{conc_type})
                             _ = tmp
-                            return {}
+                            r := {}
+                            return &r
                         }}
                     "#,
-                        t.0.call_clone("tmp", type_env)
+                        t.0.call_clone("*tmp", type_env)
                     ));
                 }
 
@@ -347,13 +368,14 @@ impl TypeExpr {
                     go_code.push_str(&format!(
                         r#"
                         switch p1.(type) {{
-                        case {conc_type}:
-                            tmp := p1.({conc_type})
+                        case *{conc_type}:
+                            tmp := p1.(*{conc_type})
                             _ = tmp
-                            return {}
+                            r := {}
+                            return &r
                         }}
                     "#,
-                        t.0.call_copy("tmp", type_env)
+                        t.0.call_copy("*tmp", type_env)
                     ));
                 }
 
@@ -403,7 +425,7 @@ impl TypeExpr {
                             var b {}
                             b, err := {}
                             if err == nil {{
-                                return b, nil
+                                return &b, nil
                             }}
                         }}
                     "#,
@@ -485,13 +507,13 @@ impl TypeExpr {
                     go_code.push_str(&format!(
                         r#"
                         switch p1.(type) {{
-                        case {conc_type}:
-                            tmp := p1.({conc_type})
+                        case *{conc_type}:
+                            tmp := p1.(*{conc_type})
                             _ = tmp
                             return {}
                         }}
                     "#,
-                        t.0.call_to_json("tmp", type_env)
+                        t.0.call_to_json("*tmp", type_env)
                     ));
                 }
 
@@ -551,13 +573,13 @@ impl TypeExpr {
                     go_code.push_str(&format!(
                         r#"
                         switch p1.(type) {{
-                        case {conc_type}:
-                            tmp := p1.({conc_type})
+                        case *{conc_type}:
+                            tmp := p1.(*{conc_type})
                             _ = tmp
                             return {}
                         }}
                     "#,
-                        t.0.call_to_string("tmp", type_env)
+                        t.0.call_to_string("*tmp", type_env)
                     ));
                 }
 
@@ -859,9 +881,8 @@ impl TypeExpr {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_eq(type_env),
             TypeExpr::Array(t) => t.0.implements_eq(type_env),
-            TypeExpr::Duck(Duck { fields: _ }) => {
-                // false && fields.iter().all(|f| f.type_expr.0.implements_eq(type_env))
-                false
+            TypeExpr::Duck(Duck { fields }) => {
+                fields.iter().all(|f| f.type_expr.0.implements_eq(type_env))
             }
             TypeExpr::Tuple(t) | TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_eq(type_env)),
             TypeExpr::Struct { name, type_params } => {

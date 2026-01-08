@@ -4,16 +4,16 @@ use go "os/exec";
 use go "os";
 
 struct Process {
-    inner: &go "os.Process"
+    inner: go "*os.Process"
 } impl {
     fn kill() -> .err | .none {
         go {
             err := (*self).inner.Kill()
             if err != nil {
-            	return Tag__err {}
+            	return &Tag__err {}
             }
 
-            return Tag__none {}
+            return &Tag__none {}
         } as !
     }
 }
@@ -70,15 +70,15 @@ struct Cmd {
     }
 
     fn spawn() -> Process | .err {
-        let process: &go "os.Process" = go {
+        let process: go "*os.Process" = go {
             cmd := exec.Command((*self).program, (*self).cmd_args.elems...)
-            if dir, ok := (*self).cwd.(string); ok {
-            	cmd.Dir = dir
+            if dir, ok := (*self).cwd.(*string); ok {
+            	cmd.Dir = *dir
             }
 
             err := cmd.Start()
             if err != nil {
-            	return Tag__err {}
+            	return &Tag__err {}
             }
 
             $ = cmd.Process
@@ -97,8 +97,8 @@ struct Cmd {
         go {
             cmd := exec.Command((*self).program, (*self).cmd_args.elems...)
 
-            if dir, ok := (*self).cwd.(string); ok {
-            	cmd.Dir = dir
+            if dir, ok := (*self).cwd.(*string); ok {
+            	cmd.Dir = *dir
             }
 
             var outBuf bytes.Buffer
@@ -122,6 +122,7 @@ struct Cmd {
             output.Setstdout(outBuf.String())
             output.Setstderr(errBuf.String())
             err_program_exited_017171:
+            if false {}
         }
 
         return Result::ok<typeof output, ()>(output);
@@ -131,16 +132,16 @@ struct Cmd {
         go {
             cmd := exec.Command((*self).program, (*self).cmd_args.elems...)
 
-            if dir, ok := (*self).cwd.(string); ok {
-               	cmd.Dir = dir
+            if dir, ok := (*self).cwd.(*string); ok {
+               	cmd.Dir = *dir
             }
 
             err := cmd.Run()
             if err != nil {
-                return Tag__err { }
+                return &Tag__err { }
             }
 
-            return Tag__none {}
+            return &Tag__none {}
         }
     }
 }
