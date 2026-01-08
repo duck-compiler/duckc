@@ -10,73 +10,94 @@ fn start_command_and_oha_against(
     cmd: &mut Cmd,
     port: Int,
 ) -> .err | .none {
-    let proc = match cmd.spawn() {
+    const proc = match cmd.spawn() {
         Process @proc => proc,
         else => return .err,
     };
 
+    defer (fn() {
+        match proc.kill() {
+            .err => println(f"error killing the process ({bench_name})"),
+            else => {},
+        }
+    })();
+
     std::task::sleep(Duration::seconds(5));
 
-    let json_output: String = match Cmd::exec(f"oha --rand-regex-url http://localhost:{port.to_string()}/[a-z][A-Z][0-9] -n 500000 -c 200 --output-format json") {
-        String @str => str,
-        else => {
-            println("error :(");
-            return .err;
-        },
-    };
+    const json_output = Cmd::new(f"oha")
+        .arg(f"http://localhost:{port.to_string()}/[a-z][A-Z][0-9]")
+        .arg("-n")
+        .arg("500000")
+        .arg("-c")
+        .arg("200")
+        .arg("--output-format")
+        .arg("json")
+        .run()
+        .unwrap()
+        .stdout;
 
     RESULTS_PATH.join(f"{bench_name.replace(" ", "-")}.json")
         .ensure_dir()
         .write(json_output);
 
-    match proc.kill() {
-        .err => println(f"error killing the process ({bench_name})"),
-        else => {},
-    }
     std::task::sleep(Duration::seconds(1));
-
     return .none;
 }
 
 fn main() {
-    let dargo_http_hello_world = Cmd::new("dargo")
-        .arg("run")
-        .dir("./http_hello_world/");
+    Cmd::new("dargo")
+        .arg("build")
+        .dir("./http_hello_world/").run().unwrap();
 
-    let bun_fastify_http_hello_world = Cmd::new("bun")
+    Cmd::new("dargo")
+        .arg("build")
+        .dir("./echo_ssr/").run().unwrap();
+
+    const dargo_http_hello_world = Cmd::new("./duck_out")
+        .dir("./http_hello_world/.dargo");
+
+    const bun_fastify_http_hello_world = Cmd::new("bun")
         .arg("run")
         .arg("src/fastify.js")
         .dir("./http_hello_world/");
 
-    let bun_express_js_http_hello_world = Cmd::new("bun")
+    const bun_express_js_http_hello_world = Cmd::new("bun")
         .arg("run")
         .arg("src/express.js")
         .dir("./http_hello_world/");
 
-    let node_fastify_http_hello_world = Cmd::new("node")
+    const node_fastify_http_hello_world = Cmd::new("node")
         .arg("src/fastify.js")
         .arg("3010")
         .dir("./http_hello_world/");
 
-    let node_express_js_http_hello_world = Cmd::new("node")
+    const node_express_js_http_hello_world = Cmd::new("node")
         .arg("src/express.js")
         .arg("3011")
         .dir("./http_hello_world/");
 
+    println("Running duck http");
     start_command_and_oha_against("duck http - hello world", dargo_http_hello_world, 3000);
+    println("Running bun fastify");
     start_command_and_oha_against("bun fastify - hello world", bun_fastify_http_hello_world, 3001);
+    println("Running bun express");
     start_command_and_oha_against("bun express.js - hello world", bun_express_js_http_hello_world, 3002);
+    println("Running node fastify");
     start_command_and_oha_against("node fastify - hello world", node_fastify_http_hello_world, 3010);
+    println("Running node express");
     start_command_and_oha_against("node express.js - hello world", node_express_js_http_hello_world, 3011);
 
-    let dargo_echo_ssr = Cmd::new("dargo")
-        .arg("run")
-        .dir("./echo_ssr/");
+    let dargo_echo_ssr = Cmd::new("./duck_out")
+        .dir("./echo_ssr/.dargo");
 
     let bun_echo_ssr = Cmd::new("bun")
         .arg("start")
+        .arg("-p")
+        .arg("3004")
         .dir("./echo_ssr/");
 
+    println("Running duck http echo ssr");
     start_command_and_oha_against("duck http - echo ssr", dargo_echo_ssr, 3003);
+    println("Running bun nextjs http echo ssr");
     start_command_and_oha_against("bun nextjs - echo ssr", bun_echo_ssr, 3004);
 }

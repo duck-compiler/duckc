@@ -175,12 +175,12 @@ pub fn emit_type_definitions(
                         idx := 0
                         f := func() any {{
                             if idx >= len(self) {{
-                                return Tag__no_next_elem{{}}
+                                return &Tag__no_next_elem{{}}
                             }}
 
                             elem_to_ret := &self[idx]
                             idx = idx + 1
-                            return elem_to_ret
+                            return &elem_to_ret
                         }}
 
                         return {iter_from_fn_name}(f)
@@ -221,12 +221,12 @@ pub fn emit_type_definitions(
                         idx := 0
                         f := func() any {{
                             if idx >= len(self) {{
-                                return Tag__no_next_elem{{}}
+                                return &Tag__no_next_elem{{}}
                             }}
 
                             elem_to_ret := &self[idx]
                             idx = idx + 1
-                            return elem_to_ret
+                            return &elem_to_ret
                         }}
 
                         return {iter_from_fn_name}(f)
@@ -465,9 +465,9 @@ pub fn emit_type_definitions(
                         other := *other_param
 
                         if len(self) < len(other) {
-                            return Tag__smaller{}
+                            return &Tag__smaller{}
                         } else if len(self) > len(other) {
-                            return Tag__greater{}
+                            return &Tag__greater{}
                         }
 
                         for i := range self {
@@ -480,14 +480,14 @@ pub fn emit_type_definitions(
                             var mm any
                             mm = inter_res
                             switch mm.(type) {
-                            case Tag__greater:
-                                return Tag__greater{}
-                            case Tag__smaller:
-                                return Tag__smaller{}
+                            case *Tag__greater:
+                                return &Tag__greater{}
+                            case *Tag__smaller:
+                                return &Tag__smaller{}
                             }
                         }
 
-                        return Tag__equal{}
+                        return &Tag__equal{}
                     "#
                     .replace("$%$%$%", &type_expr.0.call_ord("a", "b", type_env));
 
@@ -538,6 +538,41 @@ pub fn emit_type_definitions(
                             r#"fmt.Sprintf("{{%s}}", {})"#,
                             string_parts.join(" + \",\" + ")
                         ))))],
+                    ));
+                }
+
+                if duck_type_expr.implements_eq(type_env) {
+                    let receiver = duck_type_expr.as_go_type_annotation(type_env);
+
+                    let mut go_code = r#"
+                        var cmp_res bool = true
+                    "#
+                    .to_string();
+
+                    for f in fields {
+                        go_code.push('\n');
+                        go_code.push_str(&format!(
+                            "cmp_res = {}\nif !cmp_res {{ return false }}",
+                            f.type_expr.0.call_eq(
+                                &format!("self.Get{}()", f.name),
+                                &format!("other.Get{}()", f.name),
+                                type_env
+                            )
+                        ));
+                    }
+
+                    go_code.push('\n');
+                    go_code.push_str("return cmp_res\n");
+
+                    result.push(IrInstruction::FunDef(
+                        format!("{type_name}_Eq"),
+                        None,
+                        vec![
+                            ("self".to_string(), receiver.clone()),
+                            ("other".to_string(), receiver.clone()),
+                        ],
+                        Some("bool".to_string()),
+                        vec![IrInstruction::InlineGo(go_code)],
                     ));
                 }
 
@@ -942,7 +977,7 @@ pub fn emit_type_definitions(
                 if tuple_type.implements_ord(type_env) {
                     let mut go_code = String::new();
 
-                    go_code.push_str("var r any\nr = Tag__equal{}\n");
+                    go_code.push_str("var r any\nr = &Tag__equal{}\n");
 
                     for (i, field) in fields.iter().enumerate() {
                         go_code.push('\n');
@@ -955,10 +990,10 @@ pub fn emit_type_definitions(
                             r#"
                             r = {ord_call}
                             switch r.(type) {{
-                            case Tag__greater:
-                            return Tag__greater{{}}
-                            case Tag__smaller:
-                            return Tag__smaller{{}}
+                            case *Tag__greater:
+                            return &Tag__greater{{}}
+                            case *Tag__smaller:
+                            return &Tag__smaller{{}}
                             }}
                             "#
                         ));
@@ -1411,7 +1446,7 @@ pub fn emit_type_definitions(
                     let receiver = fixed_struct_name.clone();
                     let mut go_code = String::new();
 
-                    go_code.push_str("var r any\nr = Tag__equal{}\n");
+                    go_code.push_str("var r any\nr = &Tag__equal{}\n");
 
                     for field in fields.iter() {
                         go_code.push('\n');
@@ -1424,10 +1459,10 @@ pub fn emit_type_definitions(
                             r#"
                             r = {ord_call}
                             switch r.(type) {{
-                            case Tag__greater:
-                            return Tag__greater{{}}
-                            case Tag__smaller:
-                            return Tag__smaller{{}}
+                            case *Tag__greater:
+                            return &Tag__greater{{}}
+                            case *Tag__smaller:
+                            return &Tag__smaller{{}}
                             }}
                             "#
                         ));
@@ -1594,7 +1629,7 @@ pub fn emit_type_definitions(
             ("other".to_string(), "*byte".to_string()),
         ],
         Some("any".to_string()),
-        vec![IrInstruction::InlineGo("if self < *other { return Tag__smaller{} } else if self > *other { return Tag__greater{} } else { return Tag__equal{} }".to_string())],
+        vec![IrInstruction::InlineGo("if self < *other { return &Tag__smaller{} } else if self > *other { return &Tag__greater{} } else { return &Tag__equal{} }".to_string())],
     ));
 
     result.push(IrInstruction::FunDef(
@@ -1605,7 +1640,7 @@ pub fn emit_type_definitions(
             ("other".to_string(), "*int".to_string()),
         ],
         Some("any".to_string()),
-        vec![IrInstruction::InlineGo("if self < *other { return Tag__smaller{} } else if self > *other { return Tag__greater{} } else { return Tag__equal{} }".to_string())],
+        vec![IrInstruction::InlineGo("if self < *other { return &Tag__smaller{} } else if self > *other { return &Tag__greater{} } else { return &Tag__equal{} }".to_string())],
     ));
 
     result.push(IrInstruction::FunDef(
@@ -1616,7 +1651,7 @@ pub fn emit_type_definitions(
             ("other".to_string(), "*uint".to_string()),
         ],
         Some("any".to_string()),
-        vec![IrInstruction::InlineGo("if self < *other { return Tag__smaller{} } else if self > *other { return Tag__greater{} } else { return Tag__equal{} }".to_string())],
+        vec![IrInstruction::InlineGo("if self < *other { return &Tag__smaller{} } else if self > *other { return &Tag__greater{} } else { return &Tag__equal{} }".to_string())],
     ));
 
     result.push(IrInstruction::FunDef(
@@ -1656,7 +1691,7 @@ pub fn emit_type_definitions(
         ],
         Some("any".to_string()),
         vec![IrInstruction::InlineGo(
-            "if !self && *other { return Tag__smaller{} } else if self && !*other { return Tag__greater{} } else { return Tag__equal{} }".to_string(),
+            "if !self && *other { return &Tag__smaller{} } else if self && !*other { return &Tag__greater{} } else { return &Tag__equal{} }".to_string(),
         )],
     ));
 
@@ -1705,22 +1740,22 @@ pub fn emit_type_definitions(
             r#"
                 other := *other_param
                 if len(self) < len(other) {
-                    return Tag__smaller{}
+                    return &Tag__smaller{}
                 } else if len(self) > len(other) {
-                    return Tag__greater{}
+                    return &Tag__greater{}
                 } else {
                     runes_self := []rune(self)
                     runes_other := []rune(self)
 
                     for i := range runes_self {
                         if runes_self[i] < runes_other[i] {
-                            return Tag__smaller{}
+                            return &Tag__smaller{}
                         } else if runes_self[i] > runes_other[i] {
-                            return Tag__greater{}
+                            return &Tag__greater{}
                         }
                     }
 
-                    return Tag__equal{}
+                    return &Tag__equal{}
                 }
 
                     "#
@@ -1772,11 +1807,11 @@ pub fn emit_type_definitions(
                 x := self
                 y := *other
                 if x > y {
-                    return Tag__greater{}
+                    return &Tag__greater{}
                 } else if x < y {
-                    return Tag__smaller{}
+                    return &Tag__smaller{}
                 } else {
-                    return Tag__equal{}
+                    return &Tag__equal{}
                 }
                         "#
             .to_string(),
@@ -1838,11 +1873,11 @@ pub fn emit_type_definitions(
                         y := *other
 
                         if x > y {
-                            return Tag__greater{}
+                            return &Tag__greater{}
                         } else if x < y {
-                            return Tag__smaller{}
+                            return &Tag__smaller{}
                         } else {
-                            return Tag__equal{}
+                            return &Tag__equal{}
                         }
                     "#
             .to_string(),

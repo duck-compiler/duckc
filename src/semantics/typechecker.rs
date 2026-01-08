@@ -605,18 +605,18 @@ impl TypeExpr {
 
                                 let params = fn_def.params.clone();
                                 for (index, param) in params.iter().enumerate() {
-                                    let given_type = in_param_types.get(index)
-                                        .unwrap_or_else(|| {
+                                    let given_type =
+                                        in_param_types.get(index).unwrap_or_else(|| {
                                             failure_with_occurence(
                                                 "Missing Function Parameter",
                                                 *complete_span,
-                                                [(
-                                                    format!("missing this param"),
-                                                    param.1.1
-                                                ), (
-                                                    format!("in this function function call"),
-                                                    *complete_span
-                                                )]
+                                                [
+                                                    (format!("missing this param"), param.1.1),
+                                                    (
+                                                        format!("in this function function call"),
+                                                        *complete_span,
+                                                    ),
+                                                ],
                                             )
                                         });
                                     // TODO: check if we should clone the typeenv
@@ -840,18 +840,20 @@ impl TypeExpr {
                     if let Some(r#else) = r#else {
                         let else_type_expr = TypeExpr::from_value_expr(r#else, type_env);
 
-                        if then_type_expr.0.is_never() && else_type_expr.0.is_never() {
-                            return (TypeExpr::Never, *complete_span);
+                        if !matches!(else_type_expr.0, TypeExpr::Statement) {
+                            if then_type_expr.0.is_never() && else_type_expr.0.is_never() {
+                                return (TypeExpr::Never, *complete_span);
+                            }
+
+                            let mut both = (
+                                TypeExpr::Or(vec![then_type_expr, else_type_expr]),
+                                *complete_span,
+                            );
+
+                            merge_all_or_type_expr(&mut both, type_env);
+
+                            return both;
                         }
-
-                        let mut both = (
-                            TypeExpr::Or(vec![then_type_expr, else_type_expr]),
-                            *complete_span,
-                        );
-
-                        merge_all_or_type_expr(&mut both, type_env);
-
-                        return both;
                     }
 
                     TypeExpr::Statement
@@ -2160,7 +2162,11 @@ pub fn check_type_compatability_full(
             if !given_type.0.is_string() {
                 fail_requirement(
                     format!("this expects a {}", "String".yellow()),
-                    format!("this is not a {}. It's of type {}", "String".yellow(), given_type.0.as_clean_user_faced_type_name().yellow())
+                    format!(
+                        "this is not a {}. It's of type {}",
+                        "String".yellow(),
+                        given_type.0.as_clean_user_faced_type_name().yellow()
+                    ),
                 );
             }
         }

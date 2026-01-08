@@ -41,17 +41,33 @@ fn emit_duck(
     };
 
     let TypeExpr::Duck(Duck { fields: ty_fields }) = &t.0 else {
-        panic!("Compiler Bug: type is not a duck")
+        panic!("Compiler Bug: type is not a duck {t:?}")
     };
     fields.retain(|f| ty_fields.iter().any(|f2| f2.name.as_str() == f.0.as_str()));
 
     let mut res = Vec::new();
     let mut res_vars = Vec::new();
-    for (field_name, (field_expr, _)) in fields {
-        let (field_instr, field_res) = field_expr.direct_or_with_instr(type_env, ir, d.1);
+    for (field_name, field_expr) in fields {
+        let (field_instr, field_res) = field_expr.0.direct_or_with_instr(type_env, ir, d.1);
+        let field_type = TypeExpr::from_value_expr(field_expr, type_env);
         res.extend(field_instr);
         if let Some(field_res) = field_res {
-            res_vars.push((field_name.clone(), field_res));
+            res_vars.push((
+                field_name.clone(),
+                if !field_type.0.is_union()
+                    && ty_fields
+                        .iter()
+                        .find(|f| f.name.as_str() == field_name.as_str())
+                        .unwrap()
+                        .type_expr
+                        .0
+                        .is_union()
+                {
+                    IrValue::Pointer(field_res.into())
+                } else {
+                    field_res
+                },
+            ));
         } else {
             return (res, None);
         }
@@ -596,17 +612,17 @@ fn walk_access_raw(
                                     go_code.push_str(&format!(
                                         r#"
                                         switch p1.(type) {{
-                                        case {conc_type}:
-                                            tmp := p1.({conc_type})
+                                        case *{conc_type}:
+                                            tmp := p1.(*{conc_type})
                                             _ = tmp
                                             return {}
                                         }}
                                     "#,
-                                        t.0.call_to_json("tmp", type_env)
+                                        t.0.call_to_json("*tmp", type_env)
                                     ));
                                 }
 
-                                go_code.push_str("\nreturn \"\"");
+                                go_code.push_str("\nvar ret_guard *string\nreturn *ret_guard\n");
                                 let c = format!("func(param1 any) string {{ {go_code} }}(");
 
                                 flag = Some((c, stars_count, false));
@@ -682,17 +698,17 @@ fn walk_access_raw(
                                     go_code.push_str(&format!(
                                         r#"
                                         switch p1.(type) {{
-                                        case {conc_type}:
-                                            tmp := p1.({conc_type})
+                                        case *{conc_type}:
+                                            tmp := p1.(*{conc_type})
                                             _ = tmp
                                             return {}
                                         }}
                                     "#,
-                                        t.0.call_to_string("tmp", type_env)
+                                        t.0.call_to_string("*tmp", type_env)
                                     ));
                                 }
 
-                                go_code.push_str("\nreturn \"\"");
+                                go_code.push_str("\nvar ret_guard *string\nreturn *ret_guard\n");
                                 let c = format!("func(param1 any) string {{ {go_code} }}(");
 
                                 flag = Some((c, stars_count, false));
@@ -1539,19 +1555,29 @@ impl ValueExpr {
                         ),
                     ]);
                     (res_instr, as_rvar(var_name))
-                } else if matches!(v.0, ValueExpr::Duck(..)) {
+                } else if matches!(v.0, ValueExpr::Duck(..)) && !matches!(t.0, TypeExpr::Or(..)) {
                     emit_duck(v, Some(t), env, type_env)
                 } else {
                     let (mut res_instr, res_var) = v.0.emit(type_env, env, v.1);
+                    let inner_type = TypeExpr::from_value_expr(v, type_env);
 
-                    if let Some(IrValue::Var(res_var) | IrValue::Imm(res_var)) = res_var {
+                    if let Some(v) = res_var {
                         let var_name = env.new_var();
                         res_instr.extend([
                             IrInstruction::VarDecl(
                                 var_name.clone(),
                                 t.0.as_go_type_annotation(type_env),
                             ),
-                            IrInstruction::VarAssignment(var_name.clone(), IrValue::Imm(res_var)),
+                            IrInstruction::VarAssignment(
+                                var_name.clone(),
+                                if matches!(t.0, TypeExpr::Or(..))
+                                    && !matches!(inner_type.0, TypeExpr::Or(..))
+                                {
+                                    IrValue::Pointer(v.into())
+                                } else {
+                                    v
+                                },
+                            ),
                         ]);
                         (res_instr, as_rvar(var_name))
                     } else {
@@ -1602,10 +1628,13 @@ impl ValueExpr {
                             IrValue::Var(iter_res_var.clone()),
                             vec![
                                 Case {
-                                    type_name: type_params[0].0.as_go_type_annotation(type_env),
+                                    type_name: format!(
+                                        "*{}",
+                                        type_params[0].0.as_go_type_annotation(type_env)
+                                    ),
                                     instrs: vec![IrInstruction::VarAssignment(
                                         ident.clone(),
-                                        IrValue::Var(case_tmp_var.clone()),
+                                        IrValue::Deref(IrValue::Var(case_tmp_var.clone()).into()),
                                     )],
                                     identifier_binding: Some(case_tmp_var.clone()),
                                     condition: None,
@@ -1613,7 +1642,7 @@ impl ValueExpr {
                                     span: empty_range(),
                                 },
                                 Case {
-                                    type_name: "Tag__no_next_elem".to_string(),
+                                    type_name: "*Tag__no_next_elem".to_string(),
                                     instrs: vec![IrInstruction::Break(Some(label.clone()))],
                                     identifier_binding: None,
                                     condition: None,
@@ -2364,7 +2393,7 @@ impl ValueExpr {
                     None => return (instructions, None),
                 };
 
-                let (_, mv_derefs, _) =
+                let (vexpr_t, mv_derefs, _) =
                     TypeExpr::from_value_expr_dereferenced_with_count_and_mut(value_expr, type_env);
 
                 let result_type = TypeExpr::from_value_expr(&(self.clone(), *span), type_env);
@@ -2391,7 +2420,8 @@ impl ValueExpr {
                 };
 
                 instructions.push(IrInstruction::InlineGo(format!(
-                    "\nvar {match_var} any\n_ = {match_var}\n{match_var} = {pre_var_prefix}{match_pre_var}",
+                    "\nvar {match_var} any\n_ = {match_var}\n{match_var} = {}{pre_var_prefix}{match_pre_var}",
+                    if vexpr_t.0.is_union() { "" } else { "&" }
                 )));
 
                 let end_label = env.new_var();
@@ -2400,7 +2430,7 @@ impl ValueExpr {
                     let type_anno = a.type_case.0.as_go_type_annotation(type_env);
                     let cast_var = env.new_var();
 
-                    let first_cond = format!("{cast_var}, ok := {match_var}.({type_anno}); ok");
+                    let first_cond = format!("{cast_var}, ok := {match_var}.(*{type_anno}); ok");
 
                     let (mut body_instr, body_res_var) =
                         a.value_expr.0.emit(type_env, env, a.value_expr.1);
@@ -2412,22 +2442,11 @@ impl ValueExpr {
 
                     let mut if_body = vec![IrInstruction::InlineGo(format!("_ = {cast_var}\n"))];
                     if let Some(ident) = a.identifier_binding.as_ref() {
-                        if_body.extend([IrInstruction::InlineGo(format!(
-                            r#"
-                            iface_ptr := (*go_iface)(unsafe.Pointer(&{match_var}))
-                            _ = iface_ptr
-                            "#
-                        ))]);
-
                         if_body.push(IrInstruction::VarDecl(
                             ident.clone(),
                             format!(
                                 "{}{}",
-                                if mv_derefs != 0 && !type_anno.starts_with("*") {
-                                    "*"
-                                } else {
-                                    ""
-                                },
+                                if mv_derefs != 0 { "*" } else { "" },
                                 a.base
                                     .as_ref()
                                     .unwrap_or(&a.type_case)
@@ -2437,13 +2456,12 @@ impl ValueExpr {
                         ));
                         if_body.push(IrInstruction::VarAssignment(
                             ident.clone(),
-                            if mv_derefs == 0 {
-                                IrValue::Imm(a.type_case.0.call_copy(&cast_var, type_env))
+                            if mv_derefs == 0 && a.base.as_ref().is_none_or(|s| !s.0.is_union()) {
+                                IrValue::Imm(
+                                    a.type_case.0.call_copy(&format!("*{cast_var}"), type_env),
+                                )
                             } else {
-                                IrValue::Imm(format!(
-                                    "({}{type_anno})(iface_ptr.v)",
-                                    if type_anno.starts_with("*") { "" } else { "*" }
-                                ))
+                                IrValue::Imm(format!("{cast_var}"))
                             },
                         ));
                     }
@@ -2467,47 +2485,34 @@ impl ValueExpr {
 
                     if let Some(ident) = else_arm.identifier_binding.as_ref() {
                         let type_anno = else_arm.type_case.0.as_go_type_annotation(type_env);
-                        let anno = format!(
-                            "{}{type_anno}",
-                            if mv_derefs != 0 && !type_anno.starts_with("*") {
-                                "*"
-                            } else {
-                                ""
-                            },
-                        );
-                        block_instr.extend([IrInstruction::InlineGo(format!(
-                            r#"
-                            iface_ptr := (*go_iface)(unsafe.Pointer(&{match_var}))
-                            _ = iface_ptr
-                            "#
-                        ))]);
+                        let anno = format!("{}{type_anno}", if mv_derefs != 0 { "*" } else { "" },);
 
                         let cast_var = env.new_var();
 
-                        if mv_derefs == 0 {
-                            block_instr.extend([
+                        block_instr.extend([
                                 IrInstruction::InlineGo(format!(r#"
-                                    {cast_var}, ok := {match_var}.({type_anno})
+                                    {cast_var}, ok := {match_var}.(*{type_anno})
                                     if !ok {{
                                         panic("Duck Compiler Bug: else in match failed to cast -> should have been type error")
                                     }}
                                 "#))
-                            ])
-                        }
+                            ]);
 
                         block_instr.extend([
                             IrInstruction::VarDecl(ident.clone(), anno.clone()),
                             IrInstruction::VarAssignment(
                                 ident.clone(),
-                                if mv_derefs == 0 {
+                                if mv_derefs == 0
+                                    && else_arm.base.as_ref().is_none_or(|s| !s.0.is_union())
+                                {
                                     IrValue::Imm(
-                                        else_arm.type_case.0.call_copy(&cast_var, type_env),
+                                        else_arm
+                                            .type_case
+                                            .0
+                                            .call_copy(&format!("*{cast_var}"), type_env),
                                     )
                                 } else {
-                                    IrValue::Imm(format!(
-                                        "({}{type_anno})(iface_ptr.v)",
-                                        if type_anno.starts_with("*") { "" } else { "*" }
-                                    ))
+                                    IrValue::Imm(format!("{cast_var}"))
                                 },
                             ),
                         ]);
@@ -2527,11 +2532,14 @@ impl ValueExpr {
                     }
 
                     block_instr.extend(else_arm_instr);
+                    block_instr.push(IrInstruction::InlineGo(format!("\ngoto {end_label}\n")));
                     instructions.push(IrInstruction::Block(block_instr));
                 }
 
                 instructions.push(IrInstruction::InlineGo(format!(
                     r#"
+
+                    panic("Duck Compiler Bug: Match Unreachable reached")
 
                     {end_label}:
                     if false {{}}
@@ -3238,7 +3246,7 @@ impl ValueExpr {
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
                     IrInstruction::InlineGo(format!(
                         r#"switch {ord_call}.(type) {{
-                            case Tag__smaller:
+                            case *Tag__smaller:
                             {var} = true
                             default:
                             {var} = false
@@ -3280,9 +3288,9 @@ impl ValueExpr {
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
                     IrInstruction::InlineGo(format!(
                         r#"switch {ord_call}.(type) {{
-                            case Tag__smaller:
+                            case *Tag__smaller:
                             {var} = true
-                            case Tag__equal:
+                            case *Tag__equal:
                             {var} = true
                             default:
                             {var} = false
@@ -3324,7 +3332,7 @@ impl ValueExpr {
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
                     IrInstruction::InlineGo(format!(
                         r#"switch {ord_call}.(type) {{
-                            case Tag__greater:
+                            case *Tag__greater:
                             {var} = true
                             default:
                             {var} = false
@@ -3366,9 +3374,9 @@ impl ValueExpr {
                     IrInstruction::VarDecl(var.clone(), "bool".into()),
                     IrInstruction::InlineGo(format!(
                         r#"switch {ord_call}.(type) {{
-                            case Tag__greater:
+                            case *Tag__greater:
                             {var} = true
-                            case Tag__equal:
+                            case *Tag__equal:
                             {var} = true
                             default:
                             {var} = false

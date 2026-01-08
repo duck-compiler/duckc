@@ -87,6 +87,7 @@ fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, type_env: &mut
 
         typeresolve_function_definition(&mut extension_method.0, type_env);
     }
+    type_env.pop_identifier_types();
 }
 
 fn typeresolve_test_case(test_case: &mut TestCase, type_env: &mut TypeEnv) {
@@ -714,9 +715,6 @@ impl TypeEnv<'_> {
             {
                 self.find_ducks_and_tuples_type_expr(t, &mut result);
             }
-
-            // dbg!(&fun_def.name);
-            // dbg!(&cloned_resolve);
             self.find_tuples_and_ducks_value_expr(&mut fun_def.value_expr, &mut result);
         }
 
@@ -3018,8 +3016,208 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             }
         });
 
+    let mut cloned_type_env = type_env.clone();
+    let cloned_resolve = type_env.resolved_methods.clone();
+
+    for fun_def in source_file
+        .function_definitions
+        .iter_mut()
+        .chain(
+            source_file
+                .extensions_defs
+                .iter_mut()
+                .flat_map(|x| x.function_definitions.iter_mut().map(|x| &mut x.0)),
+        )
+        .chain(type_env.generic_fns_generated.iter_mut())
+        .chain(
+            type_env
+                .generic_methods_generated
+                .values_mut()
+                .flat_map(|v| v.iter_mut()),
+        )
+        .chain(
+            source_file
+                .struct_definitions
+                .iter_mut()
+                .filter(|s| s.generics.is_empty())
+                .flat_map(|s| {
+                    let leaked_name = s.name.clone().leak() as &'static str;
+                    s.methods.iter_mut().filter(|m| {
+                        cloned_resolve
+                            .get(leaked_name)
+                            .unwrap_or(&HashSet::default())
+                            .contains(&m.name)
+                    })
+                }),
+        )
+        .chain(
+            type_env
+                .generic_structs_generated
+                .iter_mut()
+                .filter(|s| s.generics.is_empty())
+                .flat_map(|s| {
+                    let leaked_name = s.name.clone().leak() as &'static str;
+                    s.methods.iter_mut().filter(|m| {
+                        cloned_resolve
+                            .get(leaked_name)
+                            .unwrap_or(&HashSet::default())
+                            .contains(&m.name)
+                    })
+                }),
+        )
+        .filter(|f| f.generics.is_empty())
+    {
+        assign_unions_fn_def(fun_def, &mut cloned_type_env);
+    }
+
     type_env.struct_definitions = source_file.struct_definitions.clone();
     type_env.function_definitions = source_file.function_definitions.clone();
+}
+
+fn assign_unions_fn_def(f: &mut FunctionDefintion, type_env: &mut TypeEnv) {
+    if f.generics.is_empty() {
+        assign_union_exprs(&mut f.value_expr, type_env);
+        find_returns_mut(
+            &mut f.value_expr,
+            |ret, env| {
+                assign_union_against(ret, &f.return_type, env);
+            },
+            type_env,
+        );
+    }
+}
+
+fn assign_union_against(
+    v: &mut Spanned<ValueExpr>,
+    union_t: &Spanned<TypeExpr>,
+    env: &mut TypeEnv,
+) {
+    if !matches!(union_t.0, TypeExpr::Or(..)) {
+        return;
+    }
+    let t = TypeExpr::from_value_expr(v, env);
+    if matches!(t.0, TypeExpr::Or(..)) {
+        return;
+    }
+    v.0 = ValueExpr::As(v.clone().into(), union_t.clone());
+}
+
+fn assign_union_exprs(v: &mut Spanned<ValueExpr>, t: &mut TypeEnv) {
+    trav_value_expr_with_cancel(
+        |_, _| {},
+        |v, env| {
+            let ft = if true || matches!(v.0, ValueExpr::If { .. }) {
+                Some(TypeExpr::from_value_expr(v, env))
+            } else {
+                None
+            };
+            let assigns = match &mut v.0 {
+                ValueExpr::Lambda(l) => {
+                    let Some(ret) = l.return_type.as_ref() else {
+                        return;
+                    };
+                    assign_union_exprs(&mut l.value_expr, env);
+                    find_returns_mut(
+                        &mut l.value_expr,
+                        |r, env| {
+                            assign_union_against(r, ret, env);
+                        },
+                        env,
+                    );
+                    return;
+                }
+                ValueExpr::VarDecl(d) => match d.0.initializer.as_mut() {
+                    Some(v) if d.0.type_expr.is_some() => {
+                        vec![(d.0.type_expr.as_ref().cloned().unwrap(), v)]
+                    }
+                    _ => return,
+                },
+                ValueExpr::Match {
+                    value_expr: _,
+                    arms,
+                    else_arm,
+                    span: _,
+                } => {
+                    let mut out = Vec::new();
+                    let ft = ft.unwrap();
+                    for arm in arms.iter_mut() {
+                        out.push((ft.clone(), &mut arm.value_expr));
+                    }
+                    if let Some(e) = else_arm.as_mut() {
+                        out.push((ft.clone(), &mut e.value_expr));
+                    }
+                    out
+                }
+                ValueExpr::If {
+                    condition: _,
+                    then,
+                    r#else,
+                } => {
+                    let mut out = Vec::new();
+                    let ft = ft.unwrap();
+                    out.push((ft.clone(), then.as_mut()));
+                    if let Some(e) = r#else.as_mut() {
+                        out.push((ft.clone(), e.as_mut()));
+                    }
+                    out
+                }
+                ValueExpr::VarAssign(a) => vec![(
+                    TypeExpr::from_value_expr(&a.0.target, env),
+                    &mut a.0.value_expr,
+                )],
+                ValueExpr::Struct {
+                    name,
+                    fields,
+                    type_params,
+                } => {
+                    let def = env.get_struct_def_with_type_params_mut(name, type_params, v.1);
+                    let mut out = Vec::with_capacity(fields.len());
+                    for fields in fields {
+                        let def_field = def
+                            .fields
+                            .iter()
+                            .find(|f| f.name.as_str() == fields.0.as_str());
+                        out.push((def_field.unwrap().type_expr.clone(), &mut fields.1));
+                    }
+                    out
+                }
+                ValueExpr::FunctionCall {
+                    target,
+                    params,
+                    type_params: _,
+                } => {
+                    // if !type_params.is_empty() {
+                    //     println!("return {target:?} {type_params:?}");
+                    //     return;
+                    // }
+                    let TypeExpr::Fun(target_type_params, _target_type_ret, _target_typeis_mut) =
+                        TypeExpr::from_value_expr(target, env).0
+                    else {
+                        unreachable!("Compiler Bug: TypeChecking error")
+                    };
+
+                    let mut out = Vec::new();
+
+                    for (expr_param, (_, target_param)) in params.iter_mut().zip(target_type_params)
+                    {
+                        out.push((target_param, expr_param));
+                    }
+                    out
+                }
+                _ => return,
+            };
+
+            for assign in assigns {
+                assign_union_against(assign.1, &assign.0, env);
+            }
+        },
+        v,
+        t,
+        |v, _| match &v.0 {
+            ValueExpr::Lambda(..) => TravControlFlow::Cancel,
+            _ => TravControlFlow::Continue,
+        },
+    );
 }
 
 fn typeresolve_method_definition(
@@ -3132,6 +3330,31 @@ pub fn infer_against_returns(
                 && let Some(i) = i.as_mut()
             {
                 infer_against(i, target_type, env);
+            }
+        },
+        v,
+        env,
+        |v, _| {
+            if matches!(v.0, ValueExpr::Lambda(..)) {
+                TravControlFlow::Cancel
+            } else {
+                TravControlFlow::Continue
+            }
+        },
+    );
+}
+
+pub fn find_returns_mut<F>(v: &mut Spanned<ValueExpr>, found_return: F, env: &mut TypeEnv)
+where
+    F: Fn(&mut Spanned<ValueExpr>, &mut TypeEnv) + Clone,
+{
+    trav_value_expr_with_cancel(
+        |_, _| {},
+        |v, env| {
+            if let ValueExpr::Return(i) = &mut v.0
+                && let Some(i) = i.as_mut()
+            {
+                found_return(i, env);
             }
         },
         v,
@@ -4293,12 +4516,17 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                         r#"
                         obj, err := ({})
                         if err != nil {{
-                            return Tag__err{{}}
+                            return &Tag__err{{}}
                         }}
 
-                        return obj
+                        return {}
                         "#,
-                        type_params[0].0.call_from_json("json_str", type_env)
+                        type_params[0].0.call_from_json("json_str", type_env),
+                        if type_params[0].0.is_union() {
+                            "obj"
+                        } else {
+                            "&obj"
+                        }
                     );
                     cloned_fn_def.value_expr =
                         ValueExpr::InlineGo(go_code, Some(cloned_fn_def.return_type.clone()))
@@ -4340,13 +4568,13 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                 }
                 header = type_env.get_method_header(&new_fn_name);
                 *ty = Some(TypeExpr::Fun(
-                    cloned_fn_def
+                    header
                         .params
-                        .iter()
-                        .cloned()
-                        .map(|x| (Some(x.0), x.1))
+                        .clone()
+                        .into_iter()
+                        .map(|x| (None, x))
                         .collect(),
-                    cloned_fn_def.return_type.clone().into(),
+                    header.return_type.clone().into(),
                     true,
                 ));
             }
@@ -4399,10 +4627,6 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                     );
 
                     typeresolve_value_expr((&mut m.value_expr.0, m.value_expr.1), type_env);
-                    // if m.name == "for_each" {
-                    //     dbg!(&m.value_expr.0);
-                    // }
-
                     type_env.pop_identifier_types();
                 }
 

@@ -89,7 +89,7 @@ struct Fetch {
             resp, err := http.DefaultClient.Do(req)
 
             if err != nil {
-                return http_error
+                return &http_error
             }
 
             defer resp.Body.Close()
@@ -97,9 +97,10 @@ struct Fetch {
             body, err := ioutil.ReadAll(resp.Body)
 
             if err != nil {
-                return http_error
+                return &http_error
             }
-            return string(body)
+            body_as_string := string(body)
+            return &body_as_string
         } as !
     }
 }

@@ -87,6 +87,6 @@ fn main() {
         .err => std::error::panic("something is completely fck"),
     };
 
-    std::assert(std::web::fetch(.GET, "http://localhost:8080/post").send() == "Method Not Allowed", "get against post worked :(");
+    std::assert(std::web::fetch(.GET, "http://localhost:8080/post").send().to_string().trim() == "Method Not Allowed", "get against post worked :(");
     std::io::println("everythings great!");
 }
