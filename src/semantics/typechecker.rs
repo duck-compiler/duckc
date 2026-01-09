@@ -794,8 +794,6 @@ impl TypeExpr {
                     ty
                 }
                 ValueExpr::Variable(_, ident, type_expr, _, _) => {
-                    let s = Location::caller();
-
                     type_expr
                         .as_ref()
                         .cloned()
