@@ -1,7 +1,7 @@
 use crate::{
     emit::{
         ir::join_ir,
-        value::{IrInstruction, ToIr},
+        value::{Emit, IrInstruction, ToIr},
     },
     parse::{
         schema_def_parser::{SchemaDefinition, SchemaField},
@@ -83,13 +83,15 @@ impl SchemaDefinition {
                     },
                     schema_field.span,
                 )))
-                .emit(type_env, to_ir, schema_field.span)
+                .into_empty_span()
+                .emit(type_env, to_ir)
             } else {
                 ValueExpr::InlineGo(
                     "return Tag__err {}".to_string(),
                     Some((TypeExpr::Never, schema_field.span)),
                 )
-                .emit(type_env, to_ir, schema_field.span)
+                .into_empty_span()
+                .emit(type_env, to_ir)
             };
 
             let null_action_src = join_ir(&null_action_emitted.0);
@@ -164,16 +166,16 @@ impl SchemaDefinition {
             schema_struct_access_srcs.push(src);
 
             if let Some((branch, span)) = &schema_field.if_branch {
-                let emitted_condition = branch.condition.0.emit(type_env, to_ir, *span);
+                let emitted_condition = branch.condition.emit(type_env, to_ir);
                 let condition_src = join_ir(&emitted_condition.0);
                 let condition_var_src =
                     emitted_condition.1.expect("expect result var").emit_as_go();
 
                 let condition_based_value_emitted = if let Some(value_expr) = &branch.value_expr {
-                    ValueExpr::Return(Some(Box::new(value_expr.clone())))
-                        .emit(type_env, to_ir, *span)
+                    (ValueExpr::Return(Some(Box::new(value_expr.clone()))), *span)
+                        .emit(type_env, to_ir)
                 } else {
-                    ValueExpr::InlineGo("".to_string(), None).emit(type_env, to_ir, *span)
+                    (ValueExpr::InlineGo("".to_string(), None), *span).emit(type_env, to_ir)
                 };
 
                 let condition_based_src = join_ir(&condition_based_value_emitted.0);
@@ -214,7 +216,7 @@ impl SchemaDefinition {
             self.span,
         ))));
 
-        let emitted_duck = return_duck.emit(type_env, to_ir, self.span);
+        let emitted_duck = return_duck.into_empty_span().emit(type_env, to_ir);
         let return_duck_src = join_ir(&emitted_duck.0);
         let schema_struct_access_src = schema_struct_access_srcs.join("\n");
 
