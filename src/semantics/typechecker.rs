@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::panic::Location;
 use std::process;
 
 use chumsky::container::Seq;
@@ -794,18 +793,19 @@ impl TypeExpr {
                     ty
                 }
                 ValueExpr::Variable(_, ident, type_expr, _, _) => {
-                    let s = Location::caller();
-
                     type_expr
                         .as_ref()
                         .cloned()
                         .or(type_env.get_identifier_type(ident))
                         .unwrap_or_else(|| {
-                            panic!(
-                                "{} - {s}",
-                                format!("Expected type but didn't get one {ident} {type_expr:?}")
-                                    .leak(),
-                            )
+                            failure_with_occurence(
+                                "Unknown Identifier",
+                                *complete_span,
+                                [(
+                                    format!("couldn't resolve type for identifier {ident}"),
+                                    *complete_span
+                                )],
+                            );
                         })
                         .clone()
                 }
