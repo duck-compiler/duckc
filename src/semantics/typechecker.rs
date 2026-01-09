@@ -801,11 +801,14 @@ impl TypeExpr {
                         .cloned()
                         .or(type_env.get_identifier_type(ident))
                         .unwrap_or_else(|| {
-                            panic!(
-                                "{} - {s}",
-                                format!("Expected type but didn't get one {ident} {type_expr:?}")
-                                    .leak(),
-                            )
+                            failure_with_occurence(
+                                "Unknown Identifier",
+                                *complete_span,
+                                [(
+                                    format!("couldn't resolve type for identifier {ident}"),
+                                    *complete_span
+                                )],
+                            );
                         })
                         .clone()
                 }
