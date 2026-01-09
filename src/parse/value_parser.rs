@@ -1376,7 +1376,7 @@ pub fn source_file_into_empty_range(v: &mut SourceFile) {
         }
     }
 
-    for x in &mut v.jsx_compontents {
+    for x in &mut v.jsx_components {
         x.javascript_source.1 = empty_range()
     }
 }
