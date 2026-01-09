@@ -1,0 +1,128 @@
+const UNICODE_SUPPORTED: Bool = go {
+    lang := os.Getenv("LANG")
+    isUtf8 := strings.Contains(strings.ToLower(lang), "utf-8")
+    $ = isUtf8
+} as Bool;
+
+struct UnicodeSymbols {} impl {
+    static fn arrow_up() -> String    { "↑" }
+    static fn arrow_down() -> String  { "↓" }
+    static fn arrow_left() -> String  { "←" }
+    static fn arrow_right() -> String { "→" }
+    static fn pointer() -> String     { "❯" }
+    static fn pointer_small() -> String { "›" }
+
+    static fn success() -> String     { "✔" }
+    static fn error() -> String       { "✖" }
+    static fn warning() -> String     { "⚠" }
+    static fn info() -> String        { "ℹ" }
+    static fn question() -> String    { "?" }
+    static fn star() -> String        { "★" }
+    static fn heart() -> String       { "♥" }
+
+    static fn checkbox_on() -> String         { "☒" }
+    static fn checkbox_off() -> String        { "☐" }
+    static fn checkbox_circle_on() -> String  { "◉" }
+    static fn checkbox_circle_off() -> String { "◯" }
+
+    static fn line_h() -> String      { "─" }
+    static fn line_v() -> String      { "│" }
+    static fn corner_tl() -> String   { "┌" }
+    static fn corner_tr() -> String   { "┐" }
+    static fn corner_bl() -> String   { "└" }
+    static fn corner_br() -> String   { "┘" }
+    static fn t_left() -> String    { "┤" }
+    static fn t_right() -> String   { "├" }
+    static fn t_top() -> String     { "┬" }
+    static fn t_bottom() -> String  { "┴" }
+    static fn cross_join() -> String  { "┼" }
+
+    static fn block_full() -> String  { "█" }
+    static fn block_dark() -> String  { "▓" }
+    static fn block_medium() -> String{ "▒" }
+    static fn block_light() -> String { "░" }
+    static fn dot() -> String         { "…" }
+    static fn bullet() -> String      { "•" }
+}
+
+struct AsciiSymbols {} impl {
+    static fn arrow_up() -> String    { "^" }
+    static fn arrow_down() -> String  { "v" }
+    static fn arrow_left() -> String  { "<" }
+    static fn arrow_right() -> String { ">" }
+    static fn pointer() -> String     { ">" }
+    static fn pointer_small() -> String { "»" }
+
+    static fn success() -> String     { "v" }
+    static fn error() -> String       { "x" }
+    static fn warning() -> String     { "!" }
+    static fn info() -> String        { "i" }
+    static fn question() -> String    { "?" }
+    static fn star() -> String        { "*" }
+    static fn heart() -> String       { "<3" }
+
+    static fn checkbox_on() -> String         { "[x]" }
+    static fn checkbox_off() -> String        { "[ ]" }
+    static fn checkbox_circle_on() -> String  { "(x)" }
+    static fn checkbox_circle_off() -> String { "( )" }
+
+    static fn line_h() -> String      { "-" }
+    static fn line_v() -> String      { "|" }
+    static fn corner_tl() -> String   { "+" }
+    static fn corner_tr() -> String   { "+" }
+    static fn corner_bl() -> String   { "+" }
+    static fn corner_br() -> String   { "+" }
+    static fn t_left() -> String    { "+" }
+    static fn t_right() -> String   { "+" }
+    static fn t_top() -> String     { "+" }
+    static fn t_bottom() -> String  { "+" }
+    static fn cross_join() -> String  { "+" }
+
+    static fn block_full() -> String  { "#" }
+    static fn block_dark() -> String  { "8" }
+    static fn block_medium() -> String{ "o" }
+    static fn block_light() -> String { "." }
+    static fn dot() -> String         { "..." }
+    static fn bullet() -> String      { "*" }
+}
+
+struct Symbols {} impl {
+    static fn arrow_up() -> String    { if (UNICODE_SUPPORTED) { UnicodeSymbols::arrow_up() } else { AsciiSymbols::arrow_up() } }
+    static fn arrow_down() -> String  { if (UNICODE_SUPPORTED) { UnicodeSymbols::arrow_down() } else { AsciiSymbols::arrow_down() } }
+    static fn arrow_left() -> String  { if (UNICODE_SUPPORTED) { UnicodeSymbols::arrow_left() } else { AsciiSymbols::arrow_left() } }
+    static fn arrow_right() -> String { if (UNICODE_SUPPORTED) { UnicodeSymbols::arrow_right() } else { AsciiSymbols::arrow_right() } }
+    static fn pointer() -> String     { if (UNICODE_SUPPORTED) { UnicodeSymbols::pointer() } else { AsciiSymbols::pointer() } }
+    static fn pointer_small() -> String { if (UNICODE_SUPPORTED) { UnicodeSymbols::pointer_small() } else { AsciiSymbols::pointer_small() } }
+
+    static fn success() -> String     { if (UNICODE_SUPPORTED) { UnicodeSymbols::success() } else { AsciiSymbols::success() } }
+    static fn error() -> String       { if (UNICODE_SUPPORTED) { UnicodeSymbols::error() } else { AsciiSymbols::error() } }
+    static fn warning() -> String     { if (UNICODE_SUPPORTED) { UnicodeSymbols::warning() } else { AsciiSymbols::warning() } }
+    static fn info() -> String        { if (UNICODE_SUPPORTED) { UnicodeSymbols::info() } else { AsciiSymbols::info() } }
+    static fn question() -> String    { if (UNICODE_SUPPORTED) { UnicodeSymbols::question() } else { AsciiSymbols::question() } }
+    static fn star() -> String        { if (UNICODE_SUPPORTED) { UnicodeSymbols::star() } else { AsciiSymbols::star() } }
+    static fn heart() -> String       { if (UNICODE_SUPPORTED) { UnicodeSymbols::heart() } else { AsciiSymbols::heart() } }
+
+    static fn checkbox_on() -> String         { if (UNICODE_SUPPORTED) { UnicodeSymbols::checkbox_on() } else { AsciiSymbols::checkbox_on() } }
+    static fn checkbox_off() -> String        { if (UNICODE_SUPPORTED) { UnicodeSymbols::checkbox_off() } else { AsciiSymbols::checkbox_off() } }
+    static fn checkbox_circle_on() -> String  { if (UNICODE_SUPPORTED) { UnicodeSymbols::checkbox_circle_on() } else { AsciiSymbols::checkbox_circle_on() } }
+    static fn checkbox_circle_off() -> String { if (UNICODE_SUPPORTED) { UnicodeSymbols::checkbox_circle_off() } else { AsciiSymbols::checkbox_circle_off() } }
+
+    static fn line_h() -> String      { if (UNICODE_SUPPORTED) { UnicodeSymbols::line_h() } else { AsciiSymbols::line_h() } }
+    static fn line_v() -> String      { if (UNICODE_SUPPORTED) { UnicodeSymbols::line_v() } else { AsciiSymbols::line_v() } }
+    static fn corner_tl() -> String   { if (UNICODE_SUPPORTED) { UnicodeSymbols::corner_tl() } else { AsciiSymbols::corner_tl() } }
+    static fn corner_tr() -> String   { if (UNICODE_SUPPORTED) { UnicodeSymbols::corner_tr() } else { AsciiSymbols::corner_tr() } }
+    static fn corner_bl() -> String   { if (UNICODE_SUPPORTED) { UnicodeSymbols::corner_bl() } else { AsciiSymbols::corner_bl() } }
+    static fn corner_br() -> String   { if (UNICODE_SUPPORTED) { UnicodeSymbols::corner_br() } else { AsciiSymbols::corner_br() } }
+    static fn t_left() -> String    { if (UNICODE_SUPPORTED) { UnicodeSymbols::t_left() } else { AsciiSymbols::t_left() } }
+    static fn t_right() -> String   { if (UNICODE_SUPPORTED) { UnicodeSymbols::t_right() } else { AsciiSymbols::t_right() } }
+    static fn t_top() -> String     { if (UNICODE_SUPPORTED) { UnicodeSymbols::t_top() } else { AsciiSymbols::t_top() } }
+    static fn t_bottom() -> String  { if (UNICODE_SUPPORTED) { UnicodeSymbols::t_bottom() } else { AsciiSymbols::t_bottom() } }
+    static fn cross_join() -> String  { if (UNICODE_SUPPORTED) { UnicodeSymbols::cross_join() } else { AsciiSymbols::cross_join() } }
+
+    static fn block_full() -> String  { if (UNICODE_SUPPORTED) { UnicodeSymbols::block_full() } else { AsciiSymbols::block_full() } }
+    static fn block_dark() -> String  { if (UNICODE_SUPPORTED) { UnicodeSymbols::block_dark() } else { AsciiSymbols::block_dark() } }
+    static fn block_medium() -> String{ if (UNICODE_SUPPORTED) { UnicodeSymbols::block_medium() } else { AsciiSymbols::block_medium() } }
+    static fn block_light() -> String { if (UNICODE_SUPPORTED) { UnicodeSymbols::block_light() } else { AsciiSymbols::block_light() } }
+    static fn dot() -> String         { if (UNICODE_SUPPORTED) { UnicodeSymbols::dot() } else { AsciiSymbols::dot() } }
+    static fn bullet() -> String      { if (UNICODE_SUPPORTED) { UnicodeSymbols::bullet() } else { AsciiSymbols::bullet() } }
+}

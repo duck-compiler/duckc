@@ -1,14 +1,34 @@
 use std::io::println;
 
 fn main() {
-    const z: {x: Int} | { y: String } = { y: "aaa" };
-    match z {
-        {x: Int} @x => x.x.to_string()->println(),
-        {y: String} @x => x.y.to_string()->println(),
-    }
-    const z2: {z: {x: Int} | { y: String }} = {z: { y: "aaa" }};
-    match z2.z {
-        {x: Int} @x => x.x.to_string()->println(),
-        {y: String} @x => x.y.to_string()->println(),
+
+    print("Navigation: ");
+    Symbols::arrow_up()->print();
+    Symbols::arrow_down()->print();
+    Symbols::arrow_left()->print();
+    Symbols::arrow_right()->print();
+
+    print("Status:     ");
+    Symbols::success()->print();
+    Symbols::error()->print();
+    Symbols::warning()->print();
+    Symbols::info()->print();
+
+    print("Box/Tee:    ");
+    Symbols::corner_tl()->print();
+    Symbols::line_h()->print();
+    Symbols::tee_top()->print();
+    Symbols::line_h()->print();
+    Symbols::corner_tr()->print();
+
+
+    if (UNICODE_SUPPORTED) {
+        assert(Symbols::success() == UnicodeSymbols::success(), "Proxy failed to return Unicode success");
+        assert(Symbols::pointer() == UnicodeSymbols::pointer(), "Proxy failed to return Unicode pointer");
+        assert(Symbols::tee_left() == UnicodeSymbols::tee_left(), "Proxy failed to return Unicode tee");
+    } else {
+        assert(Symbols::success() == AsciiSymbols::success(), "Proxy failed to return Ascii success");
+        assert(Symbols::pointer() == AsciiSymbols::pointer(), "Proxy failed to return Ascii pointer");
+        assert(Symbols::tee_left() == AsciiSymbols::tee_left(), "Proxy failed to return Ascii tee");
     }
 }
