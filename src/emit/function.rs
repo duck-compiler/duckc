@@ -38,7 +38,7 @@ impl FunctionDefintion {
             )
         };
 
-        let (mut emitted_body, result_ir_value) = what.expr.emit(type_env, to_ir);
+        let (mut emitted_body, result_ir_value) = what.emit(type_env, to_ir);
 
         if let Some(result) = result_ir_value {
             emitted_body.push(IrInstruction::Return(Some(result)));

@@ -1,7 +1,10 @@
 use chumsky::{input::BorrowInput, prelude::*};
 use serde::{Deserialize, Serialize};
 
-use crate::{parse::{SS, Spanned}, semantics::type_resolve2::ValueExprWithType};
+use crate::{
+    parse::{SS, Spanned},
+    semantics::type_resolve2::ValueExprWithType,
+};
 
 use super::{
     lexer::Token,

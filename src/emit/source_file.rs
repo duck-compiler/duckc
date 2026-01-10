@@ -58,7 +58,7 @@ impl SourceFile {
             else {
                 panic!(
                     "Compiler Bug: need a var (global declaration {} {:?})",
-                    global_var.name, global_var.initializer.0
+                    global_var.name, global_var.initializer.expr.0
                 )
             };
             let go_type = global_var.type_expr.0.as_go_type_annotation(type_env);

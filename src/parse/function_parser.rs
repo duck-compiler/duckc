@@ -67,10 +67,9 @@ impl Default for FunctionDefintion {
             return_type: TypeExpr::Tuple(vec![]).into_empty_span(),
             params: Default::default(),
             value_expr: ValueExprWithType::n(
-                ValueExpr::Return(Some(
-                    ValueExprWithType::n(ValueExpr::Block(vec![]).into_empty_span()).into(),
-                ))
-                .into_empty_span(),
+                ValueExpr::Return(Some(ValueExpr::Block(vec![]).into_empty_span().into()))
+                    .into_empty_span()
+                    .expr,
             ),
             generics: vec![],
             span: empty_range(),
@@ -232,12 +231,10 @@ pub mod tests {
                         },
                         empty_range(),
                     )],
-                    value_expr: ValueExprWithType::n(
-                        ValueExpr::Return(Some(
-                            ValueExprWithType::n(ValueExpr::Block(vec![]).into_empty_span()).into(),
-                        ))
-                        .into_empty_span(),
-                    ),
+                    value_expr: ValueExpr::Return(Some(
+                        ValueExpr::Block(vec![]).into_empty_span().into(),
+                    ))
+                    .into_empty_span(),
                     span: empty_range(),
                     comments: Vec::new(),
                 },

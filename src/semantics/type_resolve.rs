@@ -41,7 +41,7 @@ use crate::{
 fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
     type_env.push_identifier_types();
     type_env.insert_identifier_type("props".to_string(), c.props_type.0.clone(), false, false);
-    typeresolve_value_expr(&mut c.value_expr.expr, type_env);
+    typeresolve_value_expr((&mut c.value_expr.expr.0, c.value_expr.expr.1), type_env);
     type_env.pop_identifier_types();
 }
 

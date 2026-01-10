@@ -294,7 +294,7 @@ impl SourceFile {
                     }
 
                     mangle_value_expr(
-                        &mut func.value_expr.0,
+                        &mut func.value_expr.expr.0,
                         global_prefix,
                         prefix,
                         &mut mangle_env,
@@ -318,7 +318,7 @@ impl SourceFile {
                     mangle_type_expression(&mut schema_field.type_expr.0, prefix, &mut mangle_env);
                     if let Some(branch) = &mut schema_field.if_branch {
                         mangle_value_expr(
-                            &mut branch.0.condition.0,
+                            &mut branch.0.condition.expr.0,
                             global_prefix,
                             prefix,
                             &mut mangle_env,
@@ -326,7 +326,7 @@ impl SourceFile {
 
                         if let Some(value_expr) = &mut branch.0.value_expr {
                             mangle_value_expr(
-                                &mut value_expr.0,
+                                &mut value_expr.expr.0,
                                 global_prefix,
                                 prefix,
                                 &mut mangle_env,
@@ -336,7 +336,7 @@ impl SourceFile {
 
                     if let Some(value_expr) = &mut schema_field.else_branch_value_expr {
                         mangle_value_expr(
-                            &mut value_expr.0,
+                            &mut value_expr.expr.0,
                             global_prefix,
                             prefix,
                             &mut mangle_env,
@@ -377,7 +377,7 @@ impl SourceFile {
             for test_case in &s.test_cases {
                 let mut test_case = test_case.clone();
                 mangle_value_expr(
-                    &mut test_case.body.0,
+                    &mut test_case.body.expr.0,
                     global_prefix,
                     prefix,
                     &mut mangle_env,
@@ -444,7 +444,10 @@ impl SourceFile {
                 append_global_prefix_type_expr(type_expr, &mut mangle_env);
             }
 
-            append_global_prefix_value_expr(&mut function_definition.value_expr.0, &mut mangle_env);
+            append_global_prefix_value_expr(
+                &mut function_definition.value_expr.expr.0,
+                &mut mangle_env,
+            );
         }
 
         for global in &mut flattened_source_file.global_var_decls {
@@ -453,7 +456,7 @@ impl SourceFile {
             global.name = mangle(&p);
 
             append_global_prefix_type_expr(&mut global.type_expr.0, &mut mangle_env);
-            append_global_prefix_value_expr(&mut global.initializer.0, &mut mangle_env);
+            append_global_prefix_value_expr(&mut global.initializer.expr.0, &mut mangle_env);
         }
 
         for type_definition in &mut flattened_source_file.type_definitions {
@@ -481,7 +484,7 @@ impl SourceFile {
                     append_global_prefix_type_expr(type_expr, &mut mangle_env);
                 }
 
-                append_global_prefix_value_expr(&mut method.value_expr.0, &mut mangle_env);
+                append_global_prefix_value_expr(&mut method.value_expr.expr.0, &mut mangle_env);
             }
         }
 
@@ -489,7 +492,7 @@ impl SourceFile {
             let mut p = global_prefix.clone();
 
             append_global_prefix_type_expr(&mut component.props_type.0, &mut mangle_env);
-            append_global_prefix_value_expr(&mut component.value_expr.0, &mut mangle_env);
+            append_global_prefix_value_expr(&mut component.value_expr.expr.0, &mut mangle_env);
 
             p.extend(unmangle(&component.name));
             component.name = mangle(&p);
@@ -502,7 +505,7 @@ impl SourceFile {
         }
 
         for test_case in &mut flattened_source_file.test_cases {
-            append_global_prefix_value_expr(&mut test_case.body.0, &mut mangle_env);
+            append_global_prefix_value_expr(&mut test_case.body.expr.0, &mut mangle_env);
         }
 
         for ext_def in &mut flattened_source_file.extensions_defs {
@@ -515,7 +518,7 @@ impl SourceFile {
                     append_global_prefix_type_expr(t, &mut mangle_env);
                 }
 
-                append_global_prefix_value_expr(&mut def.0.value_expr.0, &mut mangle_env);
+                append_global_prefix_value_expr(&mut def.0.value_expr.expr.0, &mut mangle_env);
             }
         }
 
@@ -760,7 +763,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
                 append_global_prefix_type_expr(&mut return_type.0, mangle_env);
             }
             mangle_env.push_idents();
-            append_global_prefix_value_expr(&mut value_expr.0, mangle_env);
+            append_global_prefix_value_expr(&mut value_expr.expr.0, mangle_env);
             mangle_env.pop_idents();
         }
         ValueExpr::FunctionCall {
@@ -773,7 +776,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             append_global_prefix_value_expr(&mut target.expr.0, mangle_env);
             params
                 .iter_mut()
-                .for_each(|param| append_global_prefix_value_expr(&mut param.0, mangle_env));
+                .for_each(|param| append_global_prefix_value_expr(&mut param.expr.0, mangle_env));
             for param in type_params {
                 append_global_prefix_type_expr(&mut param.0, mangle_env);
             }
@@ -811,16 +814,16 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
         }
         ValueExpr::Tuple(value_exprs) => value_exprs
             .iter_mut()
-            .for_each(|value_expr| append_global_prefix_value_expr(&mut value_expr.0, mangle_env)),
+            .for_each(|value_expr| append_global_prefix_value_expr(&mut value_expr.expr.0, mangle_env)),
         ValueExpr::Block(value_exprs) => {
             mangle_env.push_idents();
             value_exprs.iter_mut().for_each(|value_expr| {
-                append_global_prefix_value_expr(&mut value_expr.0, mangle_env)
+                append_global_prefix_value_expr(&mut value_expr.expr.0, mangle_env)
             });
             mangle_env.pop_idents();
         }
         ValueExpr::Duck(items) => items.iter_mut().for_each(|(_, value_expr)| {
-            append_global_prefix_value_expr(&mut value_expr.0, mangle_env)
+            append_global_prefix_value_expr(&mut value_expr.expr.0, mangle_env)
         }),
         ValueExpr::Struct {
             name,
@@ -835,7 +838,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             }
 
             fields.iter_mut().for_each(|(_, value_expr)| {
-                append_global_prefix_value_expr(&mut value_expr.0, mangle_env)
+                append_global_prefix_value_expr(&mut value_expr.expr.0, mangle_env)
             });
 
             for (g, _) in type_params {
@@ -860,7 +863,7 @@ fn append_global_prefix_value_expr(value_expr: &mut ValueExpr, mangle_env: &mut 
             mangle_env.insert_ident(declaration.name.clone());
 
             if let Some(initializer) = declaration.initializer.as_mut() {
-                append_global_prefix_value_expr(&mut initializer.0, mangle_env);
+                append_global_prefix_value_expr(&mut initializer.expr.0, mangle_env);
             }
         }
         ValueExpr::Add(lhs, rhs) => {
@@ -2017,7 +2020,7 @@ mod tests {
 
             for func in original.function_definitions.iter_mut() {
                 func.span = empty_range();
-                value_expr_into_empty_range(&mut func.value_expr.expr);
+                value_expr_into_empty_range(&mut func.value_expr);
             }
 
             assert_eq!(expected, original, "{i}");

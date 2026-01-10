@@ -8,7 +8,7 @@ use crate::{
         type_parser::TypeExpr,
         value_parser::{Assignment, ValueExpr},
     },
-    semantics::type_resolve::TypeEnv,
+    semantics::{type_resolve::TypeEnv, type_resolve2::ValueExprWithType},
 };
 
 impl SchemaDefinition {
@@ -69,7 +69,7 @@ impl SchemaDefinition {
             {
                 ValueExpr::VarAssign(Box::new((
                     Assignment {
-                        target: (
+                        target: ValueExprWithType::n((
                             ValueExpr::Variable(
                                 false,
                                 format!("ref_struct.F_{field_name}"),
@@ -78,7 +78,7 @@ impl SchemaDefinition {
                                 false,
                             ),
                             schema_field.span,
-                        ),
+                        )),
                         value_expr: value_expr.clone(),
                     },
                     schema_field.span,
@@ -172,10 +172,14 @@ impl SchemaDefinition {
                     emitted_condition.1.expect("expect result var").emit_as_go();
 
                 let condition_based_value_emitted = if let Some(value_expr) = &branch.value_expr {
-                    (ValueExpr::Return(Some(Box::new(value_expr.clone()))), *span)
-                        .emit(type_env, to_ir)
+                    ValueExprWithType::n((
+                        ValueExpr::Return(Some(Box::new(value_expr.clone()))),
+                        *span,
+                    ))
+                    .emit(type_env, to_ir)
                 } else {
-                    (ValueExpr::InlineGo("".to_string(), None), *span).emit(type_env, to_ir)
+                    ValueExprWithType::n((ValueExpr::InlineGo("".to_string(), None), *span))
+                        .emit(type_env, to_ir)
                 };
 
                 let condition_based_src = join_ir(&condition_based_value_emitted.0);
@@ -192,14 +196,14 @@ impl SchemaDefinition {
             }
         }
 
-        let return_duck = ValueExpr::Return(Some(Box::new((
+        let return_duck = ValueExpr::Return(Some(Box::new(ValueExprWithType::n((
             ValueExpr::Duck(
                 self.fields
                     .iter()
                     .map(|schema_field| {
                         (
                             schema_field.name.clone(),
-                            (
+                            ValueExprWithType::n((
                                 ValueExpr::Variable(
                                     false,
                                     format!("field_{}", schema_field.name),
@@ -208,13 +212,13 @@ impl SchemaDefinition {
                                     false,
                                 ),
                                 schema_field.span,
-                            ),
+                            )),
                         )
                     })
                     .collect::<Vec<_>>(),
             ),
             self.span,
-        ))));
+        )))));
 
         let emitted_duck = return_duck.into_empty_span().emit(type_env, to_ir);
         let return_duck_src = join_ir(&emitted_duck.0);

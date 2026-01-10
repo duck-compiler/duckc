@@ -181,7 +181,7 @@ mod tests {
             let Some(mut ast) = component_parse_result.into_output() else {
                 unreachable!()
             };
-            value_expr_into_empty_range(&mut ast.value_expr.expr);
+            value_expr_into_empty_range(&mut ast.value_expr);
             type_expr_into_empty_range(&mut ast.props_type);
             assert_eq!(ast, expected_ast);
         }
