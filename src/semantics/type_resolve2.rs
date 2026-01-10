@@ -65,7 +65,7 @@ impl ValueExprWithType {
 pub fn resolve_types(v: Spanned<ValueExpr>, headers: &HeadersEnv) -> ValueExprWithType {
     let span = v.1;
     let typ = (
-        match v.0 {
+        match &v.0 {
             ValueExpr::Int(..) => TypeExpr::Int,
             ValueExpr::Float(..) => TypeExpr::Float,
             ValueExpr::Bool(..) => TypeExpr::Bool(None),
