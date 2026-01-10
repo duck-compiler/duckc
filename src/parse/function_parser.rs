@@ -36,8 +36,10 @@ impl FunctionDefintion {
         let return_type = self.return_type.clone();
 
         FunHeader {
+            generics: Vec::new(),
             params: self.params.iter().map(|x| x.1.clone()).collect(),
             return_type,
+
         }
     }
 

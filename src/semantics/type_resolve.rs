@@ -1,6 +1,9 @@
 use colored::Colorize;
 use std::{
-    cell::{Cell, RefCell}, collections::{HashMap, HashSet}, rc::Rc, sync::mpsc::Sender
+    cell::{Cell, RefCell},
+    collections::{HashMap, HashSet},
+    rc::Rc,
+    sync::mpsc::Sender,
 };
 
 use chumsky::container::Container;
@@ -134,6 +137,7 @@ fn typeresolve_jsx_component(c: &mut JsxComponent, type_env: &mut TypeEnv) {
 
 #[derive(Debug, Clone)]
 pub struct FunHeader {
+    pub generics: Vec<Generic>,
     pub params: Vec<Spanned<TypeExpr>>,
     pub return_type: Spanned<TypeExpr>,
 }
@@ -881,11 +885,8 @@ fn build_tuples_and_ducks_value_expr_trav_fn(
     }
 }
 
-pub fn trav_type_expr<V>(
-    f_t: V,
-    v: &mut Spanned<TypeExpr>,
-    env: &mut TypeEnv
-) where
+pub fn trav_type_expr<V>(f_t: V, v: &mut Spanned<TypeExpr>, env: &mut TypeEnv)
+where
     V: Fn(&mut Spanned<TypeExpr>, &mut TypeEnv) + Clone,
 {
     f_t(v, env);
@@ -893,7 +894,7 @@ pub fn trav_type_expr<V>(
         TypeExpr::Indexed(target, index) => {
             trav_type_expr(f_t.clone(), target.as_mut(), env);
             trav_type_expr(f_t.clone(), index.as_mut(), env);
-        },
+        }
         TypeExpr::Byte => {}
         TypeExpr::Never | TypeExpr::Statement => {}
         TypeExpr::NamedDuck {
@@ -1402,20 +1403,34 @@ fn resolve_all_indexed_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv
             let result_type = match &index.0 {
                 TypeExpr::Tag(tag_name) => {
                     // todo: this fails before printing
-                    resolved_target.0
+                    resolved_target
+                        .0
                         .typeof_field(tag_name.clone(), env)
                         .or_else(|| resolved_target.0.ref_typeof_field(tag_name.clone(), env))
                         .unwrap_or_else(|| {
                             failure_with_occurence(
                                 "Invalid Type Index",
                                 resolved_target.1,
-                                [(
-                                    format!("Field {} not found on type {}", tag_name, resolved_target.0.as_clean_user_faced_type_name()),
-                                    resolved_target.1,
-                                ), (
-                                    format!("this type has no field {}", resolved_target.0.as_clean_user_faced_type_name().yellow()),
-                                    resolved_target.1,
-                                )]
+                                [
+                                    (
+                                        format!(
+                                            "Field {} not found on type {}",
+                                            tag_name,
+                                            resolved_target.0.as_clean_user_faced_type_name()
+                                        ),
+                                        resolved_target.1,
+                                    ),
+                                    (
+                                        format!(
+                                            "this type has no field {}",
+                                            resolved_target
+                                                .0
+                                                .as_clean_user_faced_type_name()
+                                                .yellow()
+                                        ),
+                                        resolved_target.1,
+                                    ),
+                                ],
                             )
                         })
                 }
@@ -1426,22 +1441,36 @@ fn resolve_all_indexed_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv
                         _ => failure_with_occurence(
                             "Invalid Type Index",
                             resolved_target.1,
-                            [(
-                                format!("type access with using {} only works on arrays", "Int".yellow()),
-                                index.1,
-                            ), (
-                                format!("this is not an array, it's of type {}", resolved_target.0.as_clean_user_faced_type_name().yellow()),
-                                resolved_target.1,
-                            )]
-                        )
+                            [
+                                (
+                                    format!(
+                                        "type access with using {} only works on arrays",
+                                        "Int".yellow()
+                                    ),
+                                    index.1,
+                                ),
+                                (
+                                    format!(
+                                        "this is not an array, it's of type {}",
+                                        resolved_target.0.as_clean_user_faced_type_name().yellow()
+                                    ),
+                                    resolved_target.1,
+                                ),
+                            ],
+                        ),
                     }
                 }
-                _ => unreachable!("compiler error: index must be of type int or tag, this should have been filtered by the parser")
+                _ => unreachable!(
+                    "compiler error: index must be of type int or tag, this should have been filtered by the parser"
+                ),
             };
 
             expr.0 = result_type;
         }
-        TypeExpr::Array(inner) | TypeExpr::Ref(inner) | TypeExpr::RefMut(inner) | TypeExpr::KeyOf(inner) => {
+        TypeExpr::Array(inner)
+        | TypeExpr::Ref(inner)
+        | TypeExpr::RefMut(inner)
+        | TypeExpr::KeyOf(inner) => {
             resolve_all_indexed_type_expr(inner, env);
         }
         TypeExpr::Duck(duck) => {
@@ -4464,6 +4493,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
         };
 
         header = FunHeader {
+            generics: Vec::new(),
             params: def_params.into_iter().map(|(_, x)| x).collect(),
             return_type: def_ret.as_ref().clone(),
         };
@@ -4554,6 +4584,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                     type_env.function_headers.insert(
                         new_fn_name.clone(),
                         FunHeader {
+                            generics: Vec::new(),
                             params: cloned_fn_def
                                 .params
                                 .iter()
@@ -4724,6 +4755,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                     type_env.function_headers.insert(
                         global_generic_generation_id.clone(),
                         FunHeader {
+                            generics: Vec::new(),
                             params: cloned_fn_def
                                 .params
                                 .iter()
@@ -5255,8 +5287,8 @@ fn typeresolve_lambda(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parse::type_parser::Duck;
     use crate::parse::Field;
+    use crate::parse::type_parser::Duck;
 
     #[test]
     fn test_resolve_indexed_types() {
@@ -5274,21 +5306,27 @@ mod tests {
 
         let mut t1 = (
             TypeExpr::Indexed(
-                Box::new((TypeExpr::Duck(Duck {
-                    fields: vec![Field::new("x".to_string(), (TypeExpr::Int, empty_range()))]
-                }), empty_range())),
-                Box::new((TypeExpr::Tag("x".to_string()), empty_range()))
+                Box::new((
+                    TypeExpr::Duck(Duck {
+                        fields: vec![Field::new("x".to_string(), (TypeExpr::Int, empty_range()))],
+                    }),
+                    empty_range(),
+                )),
+                Box::new((TypeExpr::Tag("x".to_string()), empty_range())),
             ),
-            empty_range()
+            empty_range(),
         );
         resolve_all_indexed_type_expr(&mut t1, &mut env);
         assert_eq!(t1.0, TypeExpr::Int);
 
         let inner_duck = TypeExpr::Duck(Duck {
-            fields: vec![Field::new("b".to_string(), (TypeExpr::String(None), empty_range()))]
+            fields: vec![Field::new(
+                "b".to_string(),
+                (TypeExpr::String(None), empty_range()),
+            )],
         });
         let outer_duck = TypeExpr::Duck(Duck {
-            fields: vec![Field::new("a".to_string(), (inner_duck, empty_range()))]
+            fields: vec![Field::new("a".to_string(), (inner_duck, empty_range()))],
         });
 
         let mut t2 = (
@@ -5296,23 +5334,26 @@ mod tests {
                 Box::new((
                     TypeExpr::Indexed(
                         Box::new((outer_duck, empty_range())),
-                        Box::new((TypeExpr::Tag("a".to_string()), empty_range()))
+                        Box::new((TypeExpr::Tag("a".to_string()), empty_range())),
                     ),
-                    empty_range()
+                    empty_range(),
                 )),
-                Box::new((TypeExpr::Tag("b".to_string()), empty_range()))
+                Box::new((TypeExpr::Tag("b".to_string()), empty_range())),
             ),
-            empty_range()
+            empty_range(),
         );
         resolve_all_indexed_type_expr(&mut t2, &mut env);
         assert_eq!(t2.0, TypeExpr::String(None));
 
         let mut t3 = (
             TypeExpr::Indexed(
-                Box::new((TypeExpr::TypeName(false, "User".to_string(), vec![]), empty_range())),
-                Box::new((TypeExpr::Tag("name".to_string()), empty_range()))
+                Box::new((
+                    TypeExpr::TypeName(false, "User".to_string(), vec![]),
+                    empty_range(),
+                )),
+                Box::new((TypeExpr::Tag("name".to_string()), empty_range())),
             ),
-            empty_range()
+            empty_range(),
         );
 
         resolve_all_aliases_type_expr(&mut t3, &mut env);
@@ -5320,10 +5361,13 @@ mod tests {
 
         let mut t4 = (
             TypeExpr::Indexed(
-                Box::new((TypeExpr::Array(Box::new((TypeExpr::Int, empty_range()))), empty_range())),
-                Box::new((TypeExpr::Int, empty_range()))
+                Box::new((
+                    TypeExpr::Array(Box::new((TypeExpr::Int, empty_range()))),
+                    empty_range(),
+                )),
+                Box::new((TypeExpr::Int, empty_range())),
             ),
-            empty_range()
+            empty_range(),
         );
         resolve_all_indexed_type_expr(&mut t4, &mut env);
         assert_eq!(t4.0, TypeExpr::Int);
