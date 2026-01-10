@@ -10,7 +10,7 @@ use crate::{
         type_parser::{Duck, TypeExpr, type_expression_parser},
         value_parser::{ValHtmlStringContents, ValueExpr, value_expr_parser},
     },
-    semantics::type_resolve::TypeEnv,
+    semantics::{type_resolve::TypeEnv, type_resolve2::ValueExprWithType},
 };
 
 use super::lexer::Token;
@@ -20,7 +20,7 @@ use super::lexer::Token;
 pub struct DuckxComponent {
     pub name: String,
     pub props_type: Spanned<TypeExpr>,
-    pub value_expr: Spanned<ValueExpr>,
+    pub value_expr: ValueExprWithType,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -64,7 +64,8 @@ pub fn find_client_components(
     let mut s = String::new();
     for c in obj {
         match c {
-            ValHtmlStringContents::Expr((e, _)) => {
+            ValHtmlStringContents::Expr(e) => {
+                let (e, _) = &e.expr;
                 if let ValueExpr::HtmlString(contents) = e {
                     find_client_components(contents, out, type_env);
                 }
@@ -124,17 +125,18 @@ where
                 .delimited_by(just(Token::ControlChar('(')), just(Token::ControlChar(')'))),
         )
         .then(value_expr_parser(make_input.clone()))
-        .map(
-            |(((ident, ident_span), props_type), src_tokens)| DuckxComponent {
+        .map(|(((ident, ident_span), props_type), src_tokens)| {
+            let span = src_tokens.expr.1;
+            DuckxComponent {
                 name: ident.clone(),
                 props_type: props_type
                     .unwrap_or((TypeExpr::Duck(Duck { fields: Vec::new() }), ident_span)),
-                value_expr: (
+                value_expr: ValueExprWithType::n((
                     ValueExpr::Return(Some(Box::new(src_tokens.clone()))),
-                    src_tokens.1,
-                ),
-            },
-        )
+                    span,
+                )),
+            }
+        })
 }
 
 #[cfg(test)]
@@ -179,7 +181,7 @@ mod tests {
             let Some(mut ast) = component_parse_result.into_output() else {
                 unreachable!()
             };
-            value_expr_into_empty_range(&mut ast.value_expr);
+            value_expr_into_empty_range(&mut ast.value_expr.expr);
             type_expr_into_empty_range(&mut ast.props_type);
             assert_eq!(ast, expected_ast);
         }

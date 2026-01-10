@@ -32,6 +32,7 @@ use crate::{
     },
     semantics::{
         ident_mangler::{MANGLE_SEP, mangle, unmangle},
+        type_resolve2::ValueExprWithType,
         typechecker::{check_type_compatability, check_type_compatability_full},
     },
     tags::Tag,
@@ -40,7 +41,7 @@ use crate::{
 fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
     type_env.push_identifier_types();
     type_env.insert_identifier_type("props".to_string(), c.props_type.0.clone(), false, false);
-    typeresolve_value_expr((&mut c.value_expr.0, c.value_expr.1), type_env);
+    typeresolve_value_expr(&mut c.value_expr.expr, type_env);
     type_env.pop_identifier_types();
 }
 
@@ -813,7 +814,7 @@ impl TypeEnv<'_> {
 
     fn find_tuples_and_ducks_value_expr(
         &mut self,
-        v: &mut Spanned<ValueExpr>,
+        v: &mut ValueExprWithType,
         out: &mut Vec<NeedsSearchResult>,
     ) {
         let out = Rc::new(RefCell::new(out));
@@ -858,27 +859,25 @@ fn build_tuples_and_ducks_type_expr_trav_fn(
 
 fn build_tuples_and_ducks_value_expr_trav_fn(
     out: Rc<RefCell<&mut Vec<NeedsSearchResult>>>,
-) -> impl Fn(&mut Spanned<ValueExpr>, &mut TypeEnv<'_>) + Clone {
-    move |v, env| match &v.0 {
-        ValueExpr::Tag(name) => {
+) -> impl Fn(&mut ValueExprWithType, &mut TypeEnv<'_>) + Clone {
+    move |v, _| match &v.typ.0 {
+        TypeExpr::Tag(name) => {
             out.borrow_mut()
                 .push(NeedsSearchResult::Tag { name: name.clone() });
         }
-        ValueExpr::Duck(..) => {
-            let TypeExpr::Duck(Duck { fields }) = TypeExpr::from_value_expr(v, env).0 else {
-                panic!()
-            };
-            out.borrow_mut().push(NeedsSearchResult::Duck { fields });
+        TypeExpr::Duck(Duck { fields }) => {
+            out.borrow_mut().push(NeedsSearchResult::Duck {
+                fields: fields.clone(),
+            });
         }
-        ValueExpr::Tuple(..) => {
-            let TypeExpr::Tuple(fields) = TypeExpr::from_value_expr(v, env).0 else {
-                panic!()
-            };
-            out.borrow_mut().push(NeedsSearchResult::Tuple { fields });
+        TypeExpr::Tuple(fields) => {
+            out.borrow_mut().push(NeedsSearchResult::Tuple {
+                fields: fields.clone(),
+            });
         }
-        ValueExpr::Array(.., ty) => {
+        TypeExpr::Array(ty) => {
             out.borrow_mut().push(NeedsSearchResult::Array {
-                type_expr: ty.as_ref().cloned().unwrap(),
+                type_expr: ty.as_ref().clone(),
             });
         }
         _ => {}
@@ -955,10 +954,10 @@ pub enum TravControlFlow {
     Continue,
 }
 
-pub fn trav_value_expr<F1, F2>(f_t: F1, f_vv: F2, v: &mut Spanned<ValueExpr>, env: &mut TypeEnv)
+pub fn trav_value_expr<F1, F2>(f_t: F1, f_vv: F2, v: &mut ValueExprWithType, env: &mut TypeEnv)
 where
     F1: Fn(&mut Spanned<TypeExpr>, &mut TypeEnv) + Clone,
-    F2: Fn(&mut Spanned<ValueExpr>, &mut TypeEnv) + Clone,
+    F2: Fn(&mut ValueExprWithType, &mut TypeEnv) + Clone,
 {
     trav_value_expr_with_cancel(f_t, f_vv, v, env, |_, _| TravControlFlow::Continue);
 }
@@ -966,13 +965,13 @@ where
 pub fn trav_value_expr_with_cancel<F1, F2, F3>(
     f_t: F1,
     f_vv: F2,
-    v: &mut Spanned<ValueExpr>,
+    v: &mut ValueExprWithType,
     env: &mut TypeEnv,
     cancel: F3,
 ) where
     F1: Fn(&mut Spanned<TypeExpr>, &mut TypeEnv) + Clone,
-    F2: Fn(&mut Spanned<ValueExpr>, &mut TypeEnv) + Clone,
-    F3: Fn(&mut Spanned<ValueExpr>, &mut TypeEnv) -> TravControlFlow + Clone,
+    F2: Fn(&mut ValueExprWithType, &mut TypeEnv) + Clone,
+    F3: Fn(&mut ValueExprWithType, &mut TypeEnv) -> TravControlFlow + Clone,
 {
     f_vv(v, env);
 
@@ -980,7 +979,7 @@ pub fn trav_value_expr_with_cancel<F1, F2, F3>(
         return;
     }
 
-    match &mut v.0 {
+    match &mut v.expr.0 {
         ValueExpr::BitXor { lhs, rhs }
         | ValueExpr::BitOr { lhs, rhs }
         | ValueExpr::BitAnd { lhs, rhs } => {
@@ -1243,7 +1242,7 @@ pub fn merge_all_or_type_expr(v: &mut Spanned<TypeExpr>, env: &mut TypeEnv) {
     trav_type_expr(trav_fn_merge_or(), v, env);
 }
 
-pub fn merge_all_or_value_expr(v: &mut Spanned<ValueExpr>, env: &mut TypeEnv) {
+pub fn merge_all_or_value_expr(v: &mut ValueExprWithType, env: &mut TypeEnv) {
     trav_value_expr(trav_fn_merge_or(), |_, _| {}, v, env);
 }
 
@@ -1387,7 +1386,7 @@ fn resolve_all_intersection_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut Ty
     trav_type_expr(trav_fn_replace_intersections(), expr, env);
 }
 
-fn resolve_all_intersection_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeEnv) {
+fn resolve_all_intersection_value_expr(expr: &mut ValueExprWithType, env: &mut TypeEnv) {
     trav_value_expr(trav_fn_replace_intersections(), |_, _| {}, expr, env);
 }
 
@@ -1498,7 +1497,7 @@ fn resolve_all_indexed_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv
     }
 }
 
-fn resolve_all_indexed_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeEnv) {
+fn resolve_all_indexed_value_expr(expr: &mut ValueExprWithType, env: &mut TypeEnv) {
     trav_value_expr(
         |t_node, env| resolve_all_indexed_type_expr(t_node, env),
         |_, _| {},
@@ -1540,7 +1539,7 @@ fn resolve_all_aliases_type_expr(expr: &mut Spanned<TypeExpr>, env: &mut TypeEnv
     merge_all_or_type_expr(expr, env);
 }
 
-fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeEnv) {
+fn resolve_all_aliases_value_expr(expr: &mut ValueExprWithType, env: &mut TypeEnv) {
     trav_value_expr(
         |node, env| match &mut node.0 {
             TypeExpr::TypeOf(_identifier) => {
@@ -1565,7 +1564,7 @@ fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeE
                 name,
                 fields: _,
                 type_params,
-            } = &mut f.0
+            } = &mut f.expr.0
                 && let TypeExpr::Struct {
                     name: new_name,
                     type_params: new_type_params,
@@ -1592,7 +1591,7 @@ fn resolve_all_aliases_value_expr(expr: &mut Spanned<ValueExpr>, env: &mut TypeE
     merge_all_or_value_expr(expr, env);
 }
 
-fn process_keyof_in_value_expr(expr: &mut Spanned<ValueExpr>, type_env: &mut TypeEnv) {
+fn process_keyof_in_value_expr(expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
     trav_value_expr(
         |f, env| {
             process_keyof_in_type_expr(&mut f.0, env);
@@ -1686,7 +1685,7 @@ fn replace_generics_in_struct_definition(
             replace_generics_in_type_expr(&mut t.0, generics, type_env);
             resolve_all_aliases_type_expr(t, type_env);
         }
-        replace_generics_in_value_expr(&mut m.value_expr.0, generics, type_env);
+        replace_generics_in_value_expr(&mut m.value_expr.expr.0, generics, type_env);
         resolve_all_aliases_value_expr(&mut m.value_expr, type_env);
     }
 }
@@ -1705,7 +1704,7 @@ fn replace_generics_in_function_definition(
         replace_generics_in_type_expr(&mut t.0, set_params, type_env);
         resolve_all_aliases_type_expr(t, type_env);
     }
-    replace_generics_in_value_expr(&mut t.value_expr.0, set_params, type_env);
+    replace_generics_in_value_expr(&mut t.value_expr.expr.0, set_params, type_env);
     resolve_all_aliases_value_expr(&mut t.value_expr, type_env);
 }
 
@@ -1718,15 +1717,15 @@ fn replace_generics_in_value_expr(
         ValueExpr::BitAnd { lhs, rhs }
         | ValueExpr::BitOr { lhs, rhs }
         | ValueExpr::BitXor { lhs, rhs } => {
-            replace_generics_in_value_expr(&mut lhs.0, set_params, type_env);
-            replace_generics_in_value_expr(&mut rhs.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut lhs.expr.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut rhs.expr.0, set_params, type_env);
         }
         ValueExpr::ShiftLeft { target, amount } | ValueExpr::ShiftRight { target, amount } => {
-            replace_generics_in_value_expr(&mut target.0, set_params, type_env);
-            replace_generics_in_value_expr(&mut amount.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut target.expr.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut amount.expr.0, set_params, type_env);
         }
         ValueExpr::BitNot(d) => {
-            replace_generics_in_value_expr(&mut d.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut d.expr.0, set_params, type_env);
         }
         ValueExpr::RawStruct {
             is_global,
@@ -1737,10 +1736,10 @@ fn replace_generics_in_value_expr(
             panic!("Compiler Bug: raw struct sholdnt be here {name:?} {is_global}")
         }
         ValueExpr::Async(d) | ValueExpr::Defer(d) => {
-            replace_generics_in_value_expr(&mut d.0, set_params, type_env)
+            replace_generics_in_value_expr(&mut d.expr.0, set_params, type_env)
         }
         ValueExpr::As(v, t) => {
-            replace_generics_in_value_expr(&mut v.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut v.expr.0, set_params, type_env);
             replace_generics_in_type_expr(&mut t.0, set_params, type_env);
         }
         ValueExpr::For {
@@ -1748,11 +1747,11 @@ fn replace_generics_in_value_expr(
             target,
             block,
         } => {
-            replace_generics_in_value_expr(&mut target.0, set_params, type_env);
-            replace_generics_in_value_expr(&mut block.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut target.expr.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut block.expr.0, set_params, type_env);
         }
         ValueExpr::Deref(t) | ValueExpr::Ref(t) | ValueExpr::RefMut(t) => {
-            replace_generics_in_value_expr(&mut t.0, set_params, type_env)
+            replace_generics_in_value_expr(&mut t.expr.0, set_params, type_env)
         }
         ValueExpr::Add(lhs, rhs)
         | ValueExpr::Mul(lhs, rhs)
@@ -1767,48 +1766,48 @@ fn replace_generics_in_value_expr(
         | ValueExpr::GreaterThanOrEquals(lhs, rhs)
         | ValueExpr::And(lhs, rhs)
         | ValueExpr::Or(lhs, rhs) => {
-            replace_generics_in_value_expr(&mut lhs.0, set_params, type_env);
-            replace_generics_in_value_expr(&mut rhs.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut lhs.expr.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut rhs.expr.0, set_params, type_env);
         }
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {
-                    replace_generics_in_value_expr(&mut e.0, set_params, type_env);
+                    replace_generics_in_value_expr(&mut e.expr.0, set_params, type_env);
                 }
             }
         }
         ValueExpr::Negate(e) | ValueExpr::BoolNegate(e) | ValueExpr::Return(Some(e)) => {
-            replace_generics_in_value_expr(&mut e.0, set_params, type_env)
+            replace_generics_in_value_expr(&mut e.expr.0, set_params, type_env)
         }
         ValueExpr::Array(exprs, _ty) => {
             for e in exprs {
-                replace_generics_in_value_expr(&mut e.0, set_params, type_env);
+                replace_generics_in_value_expr(&mut e.expr.0, set_params, type_env);
             }
         }
         ValueExpr::ArrayAccess(target, index) => {
-            replace_generics_in_value_expr(&mut target.0, set_params, type_env);
-            replace_generics_in_value_expr(&mut index.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut target.expr.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut index.expr.0, set_params, type_env);
         }
         ValueExpr::Block(exprs) => {
             for e in exprs {
-                replace_generics_in_value_expr(&mut e.0, set_params, type_env);
+                replace_generics_in_value_expr(&mut e.expr.0, set_params, type_env);
             }
         }
         ValueExpr::Duck(def) => {
             for (_, expr) in def {
-                replace_generics_in_value_expr(&mut expr.0, set_params, type_env);
+                replace_generics_in_value_expr(&mut expr.expr.0, set_params, type_env);
             }
         }
         ValueExpr::FieldAccess {
             target_obj,
             field_name: _,
         } => {
-            replace_generics_in_value_expr(&mut target_obj.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut target_obj.expr.0, set_params, type_env);
         }
         ValueExpr::FormattedString(contents) => {
             for c in contents {
                 if let ValFmtStringContents::Expr(e) = c {
-                    replace_generics_in_value_expr(&mut e.0, set_params, type_env);
+                    replace_generics_in_value_expr(&mut e.expr.0, set_params, type_env);
                 }
             }
         }
@@ -1818,9 +1817,9 @@ fn replace_generics_in_value_expr(
             type_params,
             ..
         } => {
-            for v in [&mut target.0]
+            for v in [&mut target.expr.0]
                 .into_iter()
-                .chain(params.iter_mut().map(|x| &mut x.0))
+                .chain(params.iter_mut().map(|x| &mut x.expr.0))
             {
                 replace_generics_in_value_expr(v, set_params, type_env);
             }
@@ -1833,10 +1832,10 @@ fn replace_generics_in_value_expr(
             then,
             r#else,
         } => {
-            replace_generics_in_value_expr(&mut condition.0, set_params, type_env);
-            replace_generics_in_value_expr(&mut then.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut condition.expr.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut then.expr.0, set_params, type_env);
             if let Some(r#else) = r#else {
-                replace_generics_in_value_expr(&mut r#else.0, set_params, type_env);
+                replace_generics_in_value_expr(&mut r#else.expr.0, set_params, type_env);
             }
         }
         ValueExpr::Lambda(def) => {
@@ -1848,7 +1847,7 @@ fn replace_generics_in_value_expr(
             if let Some(return_type) = def.return_type.as_mut() {
                 replace_generics_in_type_expr(&mut return_type.0, set_params, type_env);
             }
-            replace_generics_in_value_expr(&mut def.value_expr.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut def.value_expr.expr.0, set_params, type_env);
         }
         ValueExpr::Struct {
             name,
@@ -1866,7 +1865,7 @@ fn replace_generics_in_value_expr(
             }
 
             for f in fields {
-                replace_generics_in_value_expr(&mut f.1.0, set_params, type_env);
+                replace_generics_in_value_expr(&mut f.1.expr.0, set_params, type_env);
             }
 
             for t in type_params {
@@ -1875,24 +1874,24 @@ fn replace_generics_in_value_expr(
         }
         ValueExpr::Tuple(fields) => {
             for f in fields {
-                replace_generics_in_value_expr(&mut f.0, set_params, type_env);
+                replace_generics_in_value_expr(&mut f.expr.0, set_params, type_env);
             }
         }
         ValueExpr::While { condition, body } => {
-            replace_generics_in_value_expr(&mut condition.0, set_params, type_env);
-            replace_generics_in_value_expr(&mut body.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut condition.expr.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut body.expr.0, set_params, type_env);
         }
         ValueExpr::VarDecl(decl) => {
             if let Some(type_expr) = &mut decl.0.type_expr {
                 replace_generics_in_type_expr(&mut type_expr.0, set_params, type_env);
             }
             if let Some(initializer) = decl.0.initializer.as_mut() {
-                replace_generics_in_value_expr(&mut initializer.0, set_params, type_env);
+                replace_generics_in_value_expr(&mut initializer.expr.0, set_params, type_env);
             }
         }
         ValueExpr::VarAssign(a) => {
-            replace_generics_in_value_expr(&mut a.0.target.0, set_params, type_env);
-            replace_generics_in_value_expr(&mut a.0.value_expr.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut a.0.target.expr.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut a.0.value_expr.expr.0, set_params, type_env);
         }
         ValueExpr::Match {
             value_expr,
@@ -1900,21 +1899,21 @@ fn replace_generics_in_value_expr(
             else_arm,
             span: _,
         } => {
-            replace_generics_in_value_expr(&mut value_expr.0, set_params, type_env);
+            replace_generics_in_value_expr(&mut value_expr.expr.0, set_params, type_env);
             for arm in arms {
                 replace_generics_in_type_expr(&mut arm.type_case.0, set_params, type_env);
                 if let Some(condition) = &mut arm.condition {
-                    replace_generics_in_value_expr(&mut condition.0, set_params, type_env);
+                    replace_generics_in_value_expr(&mut condition.expr.0, set_params, type_env);
                 }
-                replace_generics_in_value_expr(&mut arm.value_expr.0, set_params, type_env);
+                replace_generics_in_value_expr(&mut arm.value_expr.expr.0, set_params, type_env);
             }
 
             if let Some(arm) = else_arm {
                 replace_generics_in_type_expr(&mut arm.type_case.0, set_params, type_env);
                 if let Some(condition) = &mut arm.condition {
-                    replace_generics_in_value_expr(&mut condition.0, set_params, type_env);
+                    replace_generics_in_value_expr(&mut condition.expr.0, set_params, type_env);
                 }
-                replace_generics_in_value_expr(&mut arm.value_expr.0, set_params, type_env);
+                replace_generics_in_value_expr(&mut arm.value_expr.expr.0, set_params, type_env);
             }
         }
         ValueExpr::InlineGo(go_src, ty) => {
@@ -2207,14 +2206,14 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
         ValueExpr::BitAnd { lhs, rhs }
         | ValueExpr::BitOr { lhs, rhs }
         | ValueExpr::BitXor { lhs, rhs } => {
-            sort_fields_value_expr(&mut lhs.0);
-            sort_fields_value_expr(&mut rhs.0);
+            sort_fields_value_expr(&mut lhs.expr.0);
+            sort_fields_value_expr(&mut rhs.expr.0);
         }
         ValueExpr::ShiftLeft { target, amount } | ValueExpr::ShiftRight { target, amount } => {
-            sort_fields_value_expr(&mut target.0);
-            sort_fields_value_expr(&mut amount.0);
+            sort_fields_value_expr(&mut target.expr.0);
+            sort_fields_value_expr(&mut amount.expr.0);
         }
-        ValueExpr::BitNot(d) => sort_fields_value_expr(&mut d.0),
+        ValueExpr::BitNot(d) => sort_fields_value_expr(&mut d.expr.0),
         ValueExpr::RawStruct {
             is_global: _,
             name: _,
@@ -2222,15 +2221,15 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
             type_params,
         } => {
             for field in fields {
-                sort_fields_value_expr(&mut field.1.0);
+                sort_fields_value_expr(&mut field.1.expr.0);
             }
             for t in type_params {
                 sort_fields_type_expr(&mut t.0);
             }
         }
-        ValueExpr::Async(d) | ValueExpr::Defer(d) => sort_fields_value_expr(&mut d.0),
+        ValueExpr::Async(d) | ValueExpr::Defer(d) => sort_fields_value_expr(&mut d.expr.0),
         ValueExpr::As(v, t) => {
-            sort_fields_value_expr(&mut v.0);
+            sort_fields_value_expr(&mut v.expr.0);
             sort_fields_type_expr(&mut t.0);
         }
         ValueExpr::For {
@@ -2238,22 +2237,22 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
             target,
             block,
         } => {
-            sort_fields_value_expr(&mut target.0);
-            sort_fields_value_expr(&mut block.0);
+            sort_fields_value_expr(&mut target.expr.0);
+            sort_fields_value_expr(&mut block.expr.0);
         }
         ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
-            sort_fields_value_expr(&mut v.0)
+            sort_fields_value_expr(&mut v.expr.0)
         }
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {
-                    sort_fields_value_expr(&mut e.0);
+                    sort_fields_value_expr(&mut e.expr.0);
                 }
             }
         }
         ValueExpr::Array(exprs, _ty) => {
             for expr in exprs {
-                sort_fields_value_expr(&mut expr.0);
+                sort_fields_value_expr(&mut expr.expr.0);
             }
         }
         ValueExpr::VarDecl(d) => {
@@ -2268,7 +2267,7 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
             }
 
             if let Some(initializer) = initializer.as_mut() {
-                sort_fields_value_expr(&mut initializer.0);
+                sort_fields_value_expr(&mut initializer.expr.0);
             }
         }
         ValueExpr::Lambda(l) => {
@@ -2286,7 +2285,7 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
                     sort_fields_type_expr(&mut p.0);
                 }
             }
-            sort_fields_value_expr(&mut value_expr.0);
+            sort_fields_value_expr(&mut value_expr.expr.0);
         }
         ValueExpr::Add(lhs, rhs)
         | ValueExpr::Mul(lhs, rhs)
@@ -2301,34 +2300,34 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
         | ValueExpr::GreaterThanOrEquals(lhs, rhs)
         | ValueExpr::And(lhs, rhs)
         | ValueExpr::Or(lhs, rhs) => {
-            sort_fields_value_expr(&mut lhs.0);
-            sort_fields_value_expr(&mut rhs.0);
+            sort_fields_value_expr(&mut lhs.expr.0);
+            sort_fields_value_expr(&mut rhs.expr.0);
         }
         ValueExpr::ArrayAccess(target, idx) => {
-            sort_fields_value_expr(&mut target.0);
-            sort_fields_value_expr(&mut idx.0);
+            sort_fields_value_expr(&mut target.expr.0);
+            sort_fields_value_expr(&mut idx.expr.0);
         }
         ValueExpr::Block(exprs) => {
             for expr in exprs {
-                sort_fields_value_expr(&mut expr.0);
+                sort_fields_value_expr(&mut expr.expr.0);
             }
         }
-        ValueExpr::Negate(e) | ValueExpr::BoolNegate(e) => sort_fields_value_expr(&mut e.0),
+        ValueExpr::Negate(e) | ValueExpr::BoolNegate(e) => sort_fields_value_expr(&mut e.expr.0),
         ValueExpr::Duck(init) => {
             for i in init {
-                sort_fields_value_expr(&mut i.1.0);
+                sort_fields_value_expr(&mut i.1.expr.0);
             }
         }
         ValueExpr::FieldAccess {
             target_obj,
             field_name: _,
         } => {
-            sort_fields_value_expr(&mut target_obj.0);
+            sort_fields_value_expr(&mut target_obj.expr.0);
         }
         ValueExpr::FormattedString(content) => {
             for c in content {
                 if let ValFmtStringContents::Expr(e) = c {
-                    sort_fields_value_expr(&mut e.0);
+                    sort_fields_value_expr(&mut e.expr.0);
                 }
             }
         }
@@ -2339,9 +2338,9 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
             ..
         } => {
             // todo: type_params
-            sort_fields_value_expr(&mut target.0);
+            sort_fields_value_expr(&mut target.expr.0);
             for p in params {
-                sort_fields_value_expr(&mut p.0);
+                sort_fields_value_expr(&mut p.expr.0);
             }
         }
         ValueExpr::If {
@@ -2349,10 +2348,10 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
             then,
             r#else,
         } => {
-            sort_fields_value_expr(&mut condition.0);
-            sort_fields_value_expr(&mut then.0);
+            sort_fields_value_expr(&mut condition.expr.0);
+            sort_fields_value_expr(&mut then.expr.0);
             if let Some(r#else) = r#else {
-                sort_fields_value_expr(&mut r#else.0);
+                sort_fields_value_expr(&mut r#else.expr.0);
             }
         }
         ValueExpr::Match {
@@ -2361,46 +2360,46 @@ pub fn sort_fields_value_expr(expr: &mut ValueExpr) {
             else_arm,
             span: _,
         } => {
-            sort_fields_value_expr(&mut value_expr.0);
+            sort_fields_value_expr(&mut value_expr.expr.0);
             for arm in arms {
                 sort_fields_type_expr(&mut arm.type_case.0);
                 if let Some(condition) = &mut arm.condition {
-                    sort_fields_value_expr(&mut condition.0);
+                    sort_fields_value_expr(&mut condition.expr.0);
                 }
-                sort_fields_value_expr(&mut arm.value_expr.0);
+                sort_fields_value_expr(&mut arm.value_expr.expr.0);
             }
 
             if let Some(arm) = else_arm {
                 sort_fields_type_expr(&mut arm.type_case.0);
                 if let Some(condition) = &mut arm.condition {
-                    sort_fields_value_expr(&mut condition.0);
+                    sort_fields_value_expr(&mut condition.expr.0);
                 }
-                sort_fields_value_expr(&mut arm.value_expr.0);
+                sort_fields_value_expr(&mut arm.value_expr.expr.0);
             }
         }
         ValueExpr::Return(r) => {
             if let Some(r) = r {
-                sort_fields_value_expr(&mut r.0);
+                sort_fields_value_expr(&mut r.expr.0);
             }
         }
         ValueExpr::Struct { fields, .. } => {
             for field in fields {
-                sort_fields_value_expr(&mut field.1.0);
+                sort_fields_value_expr(&mut field.1.expr.0);
             }
         }
         ValueExpr::Tuple(fields) => {
             for field in fields {
-                sort_fields_value_expr(&mut field.0);
+                sort_fields_value_expr(&mut field.expr.0);
             }
         }
         ValueExpr::VarAssign(a) => {
             let Assignment { target, value_expr } = &mut a.0;
-            sort_fields_value_expr(&mut target.0);
-            sort_fields_value_expr(&mut value_expr.0);
+            sort_fields_value_expr(&mut target.expr.0);
+            sort_fields_value_expr(&mut value_expr.expr.0);
         }
         ValueExpr::While { condition, body } => {
-            sort_fields_value_expr(&mut condition.0);
-            sort_fields_value_expr(&mut body.0);
+            sort_fields_value_expr(&mut condition.expr.0);
+            sort_fields_value_expr(&mut body.expr.0);
         }
         ValueExpr::Break
         | ValueExpr::InlineGo(..)
@@ -2554,7 +2553,7 @@ pub fn typeresolve_struct_def(
                     true,
                     false,
                 );
-                typeresolve_value_expr((&mut m.value_expr.0, m.value_expr.1), type_env);
+                typeresolve_value_expr((&mut m.value_expr.expr.0, m.value_expr.expr.1), type_env);
                 type_env.pop_identifier_types();
             }
         }
@@ -2627,7 +2626,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             for t in function_definition.params.iter_mut() {
                 sort_fields_type_expr(&mut t.1.0);
             }
-            sort_fields_value_expr(&mut function_definition.value_expr.0);
+            sort_fields_value_expr(&mut function_definition.value_expr.expr.0);
         });
 
     source_file
@@ -2642,7 +2641,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .iter_mut()
         .for_each(|function_definition| {
             sort_fields_type_expr(&mut function_definition.props_type.0);
-            sort_fields_value_expr(&mut function_definition.value_expr.0);
+            sort_fields_value_expr(&mut function_definition.value_expr.expr.0);
         });
 
     source_file
@@ -2650,21 +2649,21 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .iter_mut()
         .for_each(|global_var_decl| {
             sort_fields_type_expr(&mut global_var_decl.type_expr.0);
-            sort_fields_value_expr(&mut global_var_decl.initializer.0);
+            sort_fields_value_expr(&mut global_var_decl.initializer.expr.0);
         });
 
     source_file.schema_defs.iter_mut().for_each(|schema_def| {
         for schema_field in &mut schema_def.fields {
             sort_fields_type_expr(&mut schema_field.type_expr.0);
             if let Some(branch) = &mut schema_field.if_branch {
-                sort_fields_value_expr(&mut branch.0.condition.0);
-                if let Some((value_expr, _)) = &mut branch.0.value_expr {
-                    sort_fields_value_expr(value_expr);
+                sort_fields_value_expr(&mut branch.0.condition.expr.0);
+                if let Some(value_expr) = &mut branch.0.value_expr {
+                    sort_fields_value_expr(&mut value_expr.expr.0);
                 }
             }
 
             if let Some(value_expr) = &mut schema_field.else_branch_value_expr {
-                sort_fields_value_expr(&mut value_expr.0);
+                sort_fields_value_expr(&mut value_expr.expr.0);
             }
         }
     });
@@ -2772,13 +2771,13 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 resolve_all_aliases_value_expr(&mut branch.0.condition, type_env);
                 if let Some(value_expr) = &mut branch.0.value_expr {
                     resolve_all_aliases_value_expr(value_expr, type_env);
-                    potential_types.push(TypeExpr::from_value_expr(value_expr, type_env));
+                    potential_types.push(value_expr.typ.clone());
                 }
             }
 
             if let Some(value_expr) = &mut schema_field.else_branch_value_expr {
                 resolve_all_aliases_value_expr(value_expr, type_env);
-                potential_types.push(TypeExpr::from_value_expr(value_expr, type_env));
+                potential_types.push(value_expr.typ.clone());
             }
 
             resolve_all_aliases_type_expr(&mut schema_field.type_expr, type_env);
@@ -2892,7 +2891,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                         Some("props".to_string()),
                         duckx_component.props_type.clone(),
                     )],
-                    Box::new((TypeExpr::Html, duckx_component.value_expr.1)),
+                    Box::new((TypeExpr::Html, duckx_component.value_expr.expr.1)),
                     true,
                 ),
                 true,
@@ -2977,7 +2976,10 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     for global in &mut source_file.global_var_decls {
         resolve_all_aliases_type_expr(&mut global.type_expr, type_env);
         resolve_all_aliases_value_expr(&mut global.initializer, type_env);
-        typeresolve_value_expr((&mut global.initializer.0, global.initializer.1), type_env);
+        typeresolve_value_expr(
+            (&mut global.initializer.expr.0, global.initializer.expr.1),
+            type_env,
+        );
         type_env.insert_identifier_type(
             global.name.clone(),
             global.type_expr.0.clone(),
@@ -3117,30 +3119,33 @@ fn assign_unions_fn_def(f: &mut FunctionDefintion, type_env: &mut TypeEnv) {
 }
 
 fn assign_union_against(
-    v: &mut Spanned<ValueExpr>,
+    v: &mut ValueExprWithType,
     union_t: &Spanned<TypeExpr>,
-    env: &mut TypeEnv,
+    _env: &mut TypeEnv,
 ) {
     if !matches!(union_t.0, TypeExpr::Or(..)) {
         return;
     }
-    let t = TypeExpr::from_value_expr(v, env);
+    let t = v.typ.clone();
     if matches!(t.0, TypeExpr::Or(..)) {
         return;
     }
-    v.0 = ValueExpr::As(v.clone().into(), union_t.clone());
+    v.expr.0 = ValueExpr::As(
+        ValueExprWithType::new(v.expr.clone(), union_t.clone()).into(),
+        union_t.clone(),
+    );
 }
 
-fn assign_union_exprs(v: &mut Spanned<ValueExpr>, t: &mut TypeEnv) {
+fn assign_union_exprs(v: &mut ValueExprWithType, t: &mut TypeEnv) {
     trav_value_expr_with_cancel(
         |_, _| {},
         |v, env| {
-            let ft = if true || matches!(v.0, ValueExpr::If { .. }) {
-                Some(TypeExpr::from_value_expr(v, env))
+            let ft = if true || matches!(v.expr.0, ValueExpr::If { .. }) {
+                Some(TypeExpr::from_value_expr(&v.expr, env))
             } else {
                 None
             };
-            let assigns = match &mut v.0 {
+            let assigns = match &mut v.expr.0 {
                 ValueExpr::Lambda(l) => {
                     let Some(ret) = l.return_type.as_ref() else {
                         return;
@@ -3191,7 +3196,7 @@ fn assign_union_exprs(v: &mut Spanned<ValueExpr>, t: &mut TypeEnv) {
                     out
                 }
                 ValueExpr::VarAssign(a) => vec![(
-                    TypeExpr::from_value_expr(&a.0.target, env),
+                    TypeExpr::from_value_expr(&a.0.target.expr, env),
                     &mut a.0.value_expr,
                 )],
                 ValueExpr::Struct {
@@ -3199,7 +3204,7 @@ fn assign_union_exprs(v: &mut Spanned<ValueExpr>, t: &mut TypeEnv) {
                     fields,
                     type_params,
                 } => {
-                    let def = env.get_struct_def_with_type_params_mut(name, type_params, v.1);
+                    let def = env.get_struct_def_with_type_params_mut(name, type_params, v.expr.1);
                     let mut out = Vec::with_capacity(fields.len());
                     for fields in fields {
                         let def_field = def
@@ -3220,7 +3225,7 @@ fn assign_union_exprs(v: &mut Spanned<ValueExpr>, t: &mut TypeEnv) {
                     //     return;
                     // }
                     let TypeExpr::Fun(target_type_params, _target_type_ret, _target_typeis_mut) =
-                        TypeExpr::from_value_expr(target, env).0
+                        TypeExpr::from_value_expr(&target.expr, env).0
                     else {
                         unreachable!("Compiler Bug: TypeChecking error")
                     };
@@ -3326,7 +3331,7 @@ fn typeresolve_function_definition(
 
 pub fn check_returns(
     against: &Spanned<TypeExpr>,
-    v: &mut Spanned<ValueExpr>,
+    v: &mut ValueExprWithType,
     type_env: &mut TypeEnv,
 ) {
     let returns = find_returns(v, type_env);
@@ -3348,14 +3353,14 @@ pub fn check_returns(
 }
 
 pub fn infer_against_returns(
-    v: &mut Spanned<ValueExpr>,
+    v: &mut ValueExprWithType,
     target_type: &Spanned<TypeExpr>,
     env: &mut TypeEnv,
 ) {
     trav_value_expr_with_cancel(
         |_, _| {},
         |v, env| {
-            if let ValueExpr::Return(i) = &mut v.0
+            if let ValueExpr::Return(i) = &mut v.expr.0
                 && let Some(i) = i.as_mut()
             {
                 infer_against(i, target_type, env);
@@ -3373,14 +3378,14 @@ pub fn infer_against_returns(
     );
 }
 
-pub fn find_returns_mut<F>(v: &mut Spanned<ValueExpr>, found_return: F, env: &mut TypeEnv)
+pub fn find_returns_mut<F>(v: &mut ValueExprWithType, found_return: F, env: &mut TypeEnv)
 where
-    F: Fn(&mut Spanned<ValueExpr>, &mut TypeEnv) + Clone,
+    F: Fn(&mut ValueExprWithType, &mut TypeEnv) + Clone,
 {
     trav_value_expr_with_cancel(
         |_, _| {},
         |v, env| {
-            if let ValueExpr::Return(i) = &mut v.0
+            if let ValueExpr::Return(i) = &mut v.expr.0
                 && let Some(i) = i.as_mut()
             {
                 found_return(i, env);
@@ -3389,7 +3394,7 @@ where
         v,
         env,
         |v, _| {
-            if matches!(v.0, ValueExpr::Lambda(..)) {
+            if matches!(v.expr.0, ValueExpr::Lambda(..)) {
                 TravControlFlow::Cancel
             } else {
                 TravControlFlow::Continue
@@ -3398,7 +3403,7 @@ where
     );
 }
 
-pub fn find_returns(v: &mut Spanned<ValueExpr>, env: &mut TypeEnv) -> Vec<Spanned<ValueExpr>> {
+pub fn find_returns(v: &mut ValueExprWithType, env: &mut TypeEnv) -> Vec<ValueExprWithType> {
     let out = RefCell::new(Vec::new());
     trav_value_expr_with_cancel(
         |_, _| {},
@@ -3422,8 +3427,8 @@ pub fn find_returns(v: &mut Spanned<ValueExpr>, env: &mut TypeEnv) -> Vec<Spanne
     out.take()
 }
 
-fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: &TypeEnv) {
-    match &mut v.0 {
+fn infer_against(v: &mut ValueExprWithType, req: &Spanned<TypeExpr>, type_env: &TypeEnv) {
+    match &mut v.expr.0 {
         ValueExpr::Return(inner) => {
             infer_against(inner.as_mut().unwrap(), req, type_env);
         }
@@ -3437,7 +3442,7 @@ fn infer_against(v: &mut Spanned<ValueExpr>, req: &Spanned<TypeExpr>, type_env: 
                         infer_against(&mut field.1, &req_field.type_expr, type_env);
                     }
                 }
-                v.0 = ValueExpr::As(v.clone().into(), req.clone());
+                v.expr.0 = ValueExpr::As(v.clone().into(), req.clone());
             }
         }
         ValueExpr::InlineGo(_, ty) => {
@@ -3540,11 +3545,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             target: lhs,
             amount: rhs,
         } => {
-            typeresolve_value_expr((&mut lhs.0, lhs.1), type_env);
-            typeresolve_value_expr((&mut rhs.0, rhs.1), type_env);
+            typeresolve_value_expr((&mut lhs.expr.0, lhs.expr.1), type_env);
+            typeresolve_value_expr((&mut rhs.expr.0, rhs.expr.1), type_env);
 
-            let lhs_type = TypeExpr::from_value_expr(lhs, type_env);
-            let rhs_type = TypeExpr::from_value_expr(rhs, type_env);
+            let lhs_type = TypeExpr::from_value_expr(&lhs.expr, type_env);
+            let rhs_type = TypeExpr::from_value_expr(&rhs.expr, type_env);
 
             for t in [&lhs_type, &rhs_type] {
                 match &t.0 {

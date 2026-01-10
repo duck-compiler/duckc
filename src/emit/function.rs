@@ -31,14 +31,14 @@ impl FunctionDefintion {
         to_ir: &mut ToIr,
     ) -> IrInstruction {
         to_ir.reset_var_counters();
-        let ValueExpr::Return(Some(what)) = &self.value_expr.0 else {
+        let ValueExpr::Return(Some(what)) = &self.value_expr.expr.0 else {
             panic!(
                 "Compiler Bug: every function needs to return something {} {:?}",
-                self.name, self.value_expr.0
+                self.name, self.value_expr.expr.0
             )
         };
 
-        let (mut emitted_body, result_ir_value) = what.emit(type_env, to_ir);
+        let (mut emitted_body, result_ir_value) = what.expr.emit(type_env, to_ir);
 
         if let Some(result) = result_ir_value {
             emitted_body.push(IrInstruction::Return(Some(result)));
