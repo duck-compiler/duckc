@@ -41,7 +41,7 @@ use crate::{
 fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
     type_env.push_identifier_types();
     type_env.insert_identifier_type("props".to_string(), c.props_type.0.clone(), false, false);
-    typeresolve_value_expr((&mut c.value_expr.expr.0, c.value_expr.expr.1), type_env);
+    typeresolve_value_expr(&mut c.value_expr, type_env);
     type_env.pop_identifier_types();
 }
 
@@ -96,10 +96,7 @@ fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, type_env: &mut
 
 fn typeresolve_test_case(test_case: &mut TestCase, type_env: &mut TypeEnv) {
     type_env.push_identifier_types();
-    typeresolve_value_expr(
-        (&mut test_case.body.expr.0, test_case.body.expr.1),
-        type_env,
-    );
+    typeresolve_value_expr(&mut test_case.body, type_env);
     type_env.pop_identifier_types();
 }
 
@@ -2556,7 +2553,7 @@ pub fn typeresolve_struct_def(
                     true,
                     false,
                 );
-                typeresolve_value_expr((&mut m.value_expr.expr.0, m.value_expr.expr.1), type_env);
+                typeresolve_value_expr(&mut m.value_expr, type_env);
                 type_env.pop_identifier_types();
             }
         }
@@ -2979,10 +2976,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
     for global in &mut source_file.global_var_decls {
         resolve_all_aliases_type_expr(&mut global.type_expr, type_env);
         resolve_all_aliases_value_expr(&mut global.initializer, type_env);
-        typeresolve_value_expr(
-            (&mut global.initializer.expr.0, global.initializer.expr.1),
-            type_env,
-        );
+        typeresolve_value_expr(&mut global.initializer, type_env);
         type_env.insert_identifier_type(
             global.name.clone(),
             global.type_expr.0.clone(),
@@ -3287,13 +3281,7 @@ fn typeresolve_method_definition(
         false,
     );
 
-    typeresolve_value_expr(
-        (
-            &mut function_definition.value_expr.expr.0,
-            function_definition.value_expr.expr.1,
-        ),
-        type_env,
-    );
+    typeresolve_value_expr(&mut function_definition.value_expr, type_env);
 
     type_env.pop_identifier_types();
 }
@@ -3321,13 +3309,7 @@ fn typeresolve_function_definition(
         type_env,
     );
 
-    typeresolve_value_expr(
-        (
-            &mut function_definition.value_expr.expr.0,
-            function_definition.value_expr.expr.1,
-        ),
-        type_env,
-    );
+    typeresolve_value_expr(&mut function_definition.value_expr, type_env);
 
     type_env.pop_identifier_types();
 }
@@ -3532,11 +3514,9 @@ fn infer_against(v: &mut ValueExprWithType, req: &Spanned<TypeExpr>, type_env: &
     }
 }
 
-fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let span = &value_expr.1;
-    let value_expr = value_expr.0;
-    let owned = value_expr.clone();
-    match value_expr {
+fn typeresolve_value_expr(value_expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
+    let span = value_expr.expr.1;
+    match &mut value_expr.expr.0 {
         ValueExpr::BitAnd { lhs, rhs }
         | ValueExpr::BitOr { lhs, rhs }
         | ValueExpr::BitXor { lhs, rhs }
@@ -3548,8 +3528,8 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             target: lhs,
             amount: rhs,
         } => {
-            typeresolve_value_expr((&mut lhs.expr.0, lhs.expr.1), type_env);
-            typeresolve_value_expr((&mut rhs.expr.0, rhs.expr.1), type_env);
+            typeresolve_value_expr(lhs, type_env);
+            typeresolve_value_expr(rhs, type_env);
 
             let lhs_type = TypeExpr::from_value_expr(&lhs.expr, type_env);
             let rhs_type = TypeExpr::from_value_expr(&rhs.expr, type_env);
@@ -3559,24 +3539,24 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     TypeExpr::Int | TypeExpr::UInt => {}
                     _ => {
                         let msg = "Can only use bit operations on Int or UInt";
-                        failure_with_occurence(msg, *span, [(msg, lhs_type.1), (msg, rhs_type.1)]);
+                        failure_with_occurence(msg, span, [(msg, lhs_type.1), (msg, rhs_type.1)]);
                     }
                 }
             }
         }
         ValueExpr::BitNot(inner) => {
-            typeresolve_value_expr((&mut inner.expr.0, inner.expr.1), type_env);
+            typeresolve_value_expr(inner, type_env);
             let t = TypeExpr::from_value_expr(&inner.expr, type_env);
             match &t.0 {
                 TypeExpr::Int | TypeExpr::UInt => {}
                 _ => {
                     let msg = "Can only use bit operations on Int or UInt";
-                    failure_with_occurence(msg, *span, [(msg, t.1)]);
+                    failure_with_occurence(msg, span, [(msg, t.1)]);
                 }
             }
         }
         ValueExpr::Negate(v) => {
-            typeresolve_value_expr((&mut v.expr.0, v.expr.1), type_env);
+            typeresolve_value_expr(v, type_env);
 
             let ty = TypeExpr::from_value_expr(&v.expr, type_env);
 
@@ -3596,23 +3576,23 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         ValueExpr::Async(inner) => {
             if !matches!(inner.expr.0, ValueExpr::FunctionCall { .. }) {
                 let msg = "Can only async call a function call".to_string();
-                failure_with_occurence(msg.clone(), *span, [(msg.clone(), inner.expr.1)]);
+                failure_with_occurence(msg.clone(), inner.expr.1, [(msg.clone(), inner.expr.1)]);
             }
 
-            typeresolve_value_expr((&mut inner.expr.0, inner.expr.1), type_env);
+            typeresolve_value_expr(inner, type_env);
 
             let inner_type = TypeExpr::from_value_expr(&inner.expr, type_env);
             if inner_type.0.is_never() {
                 return;
             }
 
-            let channel_type = TypeExpr::from_value_expr(&(owned, *span), type_env);
+            let channel_type = TypeExpr::from_value_expr(&inner.expr, type_env);
             if let TypeExpr::Struct {
                 ref name,
                 ref type_params,
             } = channel_type.0
             {
-                type_env.get_struct_def_with_type_params_mut(name, type_params, *span);
+                type_env.get_struct_def_with_type_params_mut(name, type_params, inner.expr.1);
             }
             let new_channel_fn_name = mangle(&["std", "sync", "Channel", "new"]);
 
@@ -3633,16 +3613,16 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                             Some(true),
                             false,
                         ),
-                        *span,
+                        span,
                     ))
                     .into(),
                     params: vec![],
                     type_params: vec![inner_type],
                 },
-                *span,
+                span,
             ));
 
-            typeresolve_function_call((&mut new_channel_call.expr.0, *span), type_env);
+            typeresolve_function_call(&mut new_channel_call, type_env);
 
             let TypeExpr::Struct {
                 name: chan_struct_name,
@@ -3656,7 +3636,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 .get_struct_def_with_type_params_mut(
                     &chan_struct_name,
                     &chan_struct_type_params,
-                    *span,
+                    span,
                 )
                 .clone();
 
@@ -3667,22 +3647,22 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 }
 
                 typeresolve_value_expr(
-                    (
-                        &mut ValueExpr::FieldAccess {
+                    &mut ValueExprWithType::n((
+                        ValueExpr::FieldAccess {
                             target_obj: new_channel_call.clone().into(),
                             field_name: m.name.clone(),
                         },
-                        *span,
-                    ),
+                        span,
+                    )),
                     type_env,
                 );
             }
         }
         ValueExpr::Defer(inner) => {
-            typeresolve_value_expr((&mut inner.expr.0, inner.expr.1), type_env);
+            typeresolve_value_expr(inner, type_env);
             if !matches!(inner.expr.0, ValueExpr::FunctionCall { .. }) {
                 let msg = "Can only defer a function call".to_string();
-                failure_with_occurence(msg.clone(), *span, [(msg.clone(), inner.expr.1)]);
+                failure_with_occurence(msg.clone(), span, [(msg.clone(), inner.expr.1)]);
             }
         }
         ValueExpr::As(v, t) => {
@@ -3703,15 +3683,15 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 *ty = Some(ct.as_ref().clone());
             }
 
-            typeresolve_value_expr((&mut v.expr.0, v.expr.1), type_env);
-            let _ = TypeExpr::from_value_expr(&(value_expr.clone(), *span), type_env);
+            typeresolve_value_expr(v, type_env);
+            let _ = TypeExpr::from_value_expr(&v.expr, type_env);
         }
         ValueExpr::For {
             ident: (ident, is_const, ty),
             target,
             block,
         } => {
-            typeresolve_value_expr((&mut target.expr.0, target.expr.1), type_env);
+            typeresolve_value_expr(target, type_env);
             let mut target_type = TypeExpr::from_value_expr(&target.expr, type_env);
 
             let current = &mut target_type;
@@ -3781,9 +3761,10 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                         .into_empty_span(),
                     ],
                     type_params: vec![type_params[0].clone()],
-                };
+                }
+                .into_empty_span();
 
-                typeresolve_value_expr((&mut new_iter_call_expr, target.expr.1), type_env);
+                typeresolve_value_expr(&mut new_iter_call_expr, type_env);
 
                 let mut iter_def = type_env
                     .get_struct_def_with_type_params_mut(&name, &type_params, target.expr.1)
@@ -3796,13 +3777,13 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     }
 
                     typeresolve_value_expr(
-                        (
-                            &mut ValueExpr::FieldAccess {
-                                target_obj: new_iter_call_expr.clone().into_empty_span().into(),
+                        &mut ValueExprWithType::n((
+                            ValueExpr::FieldAccess {
+                                target_obj: new_iter_call_expr.clone().into(),
                                 field_name: m.name.clone(),
                             },
-                            *span,
-                        ),
+                            span,
+                        )),
                         type_env,
                     );
                 }
@@ -3825,12 +3806,12 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             type_env.push_identifier_types();
             *ty = Some(target_type.clone().0);
             type_env.insert_identifier_type(ident.clone(), target_type.0, *is_const, false);
-            typeresolve_value_expr((&mut block.expr.0, block.expr.1), type_env);
+            typeresolve_value_expr(block, type_env);
             type_env.pop_identifier_types();
         }
 
         ValueExpr::Deref(v) => {
-            typeresolve_value_expr((&mut v.expr.0, v.expr.1), type_env);
+            typeresolve_value_expr(v, type_env);
             let t = TypeExpr::from_value_expr(&v.expr, type_env);
             if !t.0.implements_copy(type_env) {
                 let msg = "The value of this type needs to implement Copy since it is dereferenced, but it does not";
@@ -3840,13 +3821,13 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
 
         ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
             unset_copy_var_assign(v);
-            typeresolve_value_expr((&mut v.expr.0, v.expr.1), type_env);
+            typeresolve_value_expr(v, type_env);
         }
 
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {
-                    typeresolve_value_expr((&mut e.expr.0, e.expr.1), type_env);
+                    typeresolve_value_expr(e, type_env);
                 }
 
                 if let ValHtmlStringContents::String(s) = c {
@@ -3861,26 +3842,25 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 .unwrap_or_else(|| {
                     failure_with_occurence(
                         "Unknown identifier",
-                        *span,
+                        span,
                         [(
                             format!(
                                 "The identifier {} is not found in the current scope",
                                 ident.red(),
                             ),
-                            *span,
+                            span,
                         )],
                     );
                 });
             resolve_all_aliases_type_expr(&mut type_expr.clone().into_empty_span(), type_env);
-            *value_expr = ValueExpr::Variable(true, ident, Some(type_expr), Some(is_const), true);
+            value_expr.expr.0 =
+                ValueExpr::Variable(true, ident, Some(type_expr), Some(is_const), true);
         }
-        ValueExpr::VarDecl(..) => typeresolve_var_decl((value_expr, *span), type_env),
+        ValueExpr::VarDecl(..) => typeresolve_var_decl(value_expr, type_env),
         ValueExpr::FormattedString(contents) => {
             for c in contents {
                 match c {
-                    ValFmtStringContents::Expr(e) => {
-                        typeresolve_value_expr((&mut e.expr.0, e.expr.1), type_env)
-                    }
+                    ValFmtStringContents::Expr(e) => typeresolve_value_expr(e, type_env),
                     ValFmtStringContents::String(s) => {
                         type_env.check_for_tailwind(s);
                     }
@@ -3891,8 +3871,8 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             let target = target.as_mut();
 
             let idx = idx.as_mut();
-            typeresolve_value_expr((&mut target.expr.0, target.expr.1), type_env);
-            typeresolve_value_expr((&mut idx.expr.0, idx.expr.1), type_env);
+            typeresolve_value_expr(target, type_env);
+            typeresolve_value_expr(idx, type_env);
         }
         ValueExpr::Array(exprs, given_type) => {
             let mut found_types = Vec::new();
@@ -3901,7 +3881,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                     infer_against(expr, given_type, type_env);
                 }
 
-                typeresolve_value_expr((&mut expr.expr.0, expr.expr.1), type_env);
+                typeresolve_value_expr(expr, type_env);
                 let ty = TypeExpr::from_value_expr(&expr.expr, type_env);
 
                 if let Some(given_type) = given_type.as_ref() {
@@ -3913,38 +3893,38 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
             if given_type.is_none() {
                 if found_types.is_empty() {
                     let msg = "empty array must be wrapped in as expression";
-                    failure_with_occurence(msg, *span, [(msg, *span)]);
+                    failure_with_occurence(msg, span, [(msg, span)]);
                 }
-                let mut as_or = (TypeExpr::Or(found_types), *span);
+                let mut as_or = (TypeExpr::Or(found_types), span);
                 merge_all_or_type_expr(&mut as_or, type_env);
                 *given_type = Some(as_or);
             }
         }
         ValueExpr::InlineGo(_, ty) => {
             if ty.is_none() {
-                *ty = Some(TypeExpr::unit_with_span(*span));
+                *ty = Some(TypeExpr::unit_with_span(span));
             }
         }
-        ValueExpr::Lambda(..) => typeresolve_lambda((value_expr, *span), type_env),
-        ValueExpr::FunctionCall { .. } => typeresolve_function_call((value_expr, *span), type_env),
-        ValueExpr::Variable(..) => typeresolve_variable((value_expr, *span), type_env),
-        ValueExpr::If { .. } => typeresolve_if_expr((value_expr, *span), type_env),
-        ValueExpr::While { .. } => typeresolve_while((value_expr, *span), type_env),
-        ValueExpr::Tuple(..) => typeresolve_tuple((value_expr, *span), type_env),
-        ValueExpr::Block(..) => typeresolve_block((value_expr, *span), type_env),
-        ValueExpr::Duck(..) => typeresolve_duck_value_expr((value_expr, *span), type_env),
+        ValueExpr::Lambda(..) => typeresolve_lambda(value_expr, type_env),
+        ValueExpr::FunctionCall { .. } => typeresolve_function_call(value_expr, type_env),
+        ValueExpr::Variable(..) => typeresolve_variable(value_expr, type_env),
+        ValueExpr::If { .. } => typeresolve_if_expr(value_expr, type_env),
+        ValueExpr::While { .. } => typeresolve_while(value_expr, type_env),
+        ValueExpr::Tuple(..) => typeresolve_tuple(value_expr, type_env),
+        ValueExpr::Block(..) => typeresolve_block(value_expr, type_env),
+        ValueExpr::Duck(..) => typeresolve_duck_value_expr(value_expr, type_env),
         ValueExpr::FieldAccess {
             target_obj,
             field_name: _,
         } => {
             let target_obj = target_obj.as_mut();
-            typeresolve_value_expr((&mut target_obj.expr.0, target_obj.expr.1), type_env);
+            typeresolve_value_expr(target_obj, type_env);
 
             let target_type = TypeExpr::from_value_expr(&target_obj.expr, type_env);
 
             if let TypeExpr::Struct { name, type_params } = &target_type.0 {
                 let mut def = type_env
-                    .get_struct_def_with_type_params_mut(name, type_params, *span)
+                    .get_struct_def_with_type_params_mut(name, type_params, span)
                     .clone();
 
                 if type_env.total_structs_resolved.insert(def.name.clone()) {
@@ -3979,10 +3959,7 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                             false,
                         );
 
-                        typeresolve_value_expr(
-                            (&mut m.value_expr.expr.0, m.value_expr.expr.1),
-                            type_env,
-                        );
+                        typeresolve_value_expr(&mut m.value_expr, type_env);
                         type_env.pop_identifier_types();
                     }
 
@@ -4002,15 +3979,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 }
             }
         }
-        ValueExpr::Struct { .. } => typeresolve_struct((value_expr, *span), type_env),
-        ValueExpr::Return(Some(value_expr)) => {
-            typeresolve_value_expr((&mut value_expr.expr.0, value_expr.expr.1), type_env)
-        }
-        ValueExpr::VarAssign(..) => typeresolve_var_assign((value_expr, *span), type_env),
-        ValueExpr::Match { .. } => typeresolve_match((value_expr, *span), type_env),
-        ValueExpr::BoolNegate(value_expr) => {
-            typeresolve_value_expr((&mut value_expr.expr.0, value_expr.expr.1), type_env)
-        }
+        ValueExpr::Struct { .. } => typeresolve_struct(value_expr, type_env),
+        ValueExpr::Return(Some(value_expr)) => typeresolve_value_expr(value_expr, type_env),
+        ValueExpr::VarAssign(..) => typeresolve_var_assign(value_expr, type_env),
+        ValueExpr::Match { .. } => typeresolve_match(value_expr, type_env),
+        ValueExpr::BoolNegate(value_expr) => typeresolve_value_expr(value_expr, type_env),
         ValueExpr::Equals(lhs, rhs)
         | ValueExpr::NotEquals(lhs, rhs)
         | ValueExpr::LessThan(lhs, rhs)
@@ -4024,8 +3997,8 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
         | ValueExpr::Mul(lhs, rhs)
         | ValueExpr::Mod(lhs, rhs)
         | ValueExpr::Or(lhs, rhs) => {
-            typeresolve_value_expr((&mut lhs.expr.0, lhs.expr.1), type_env);
-            typeresolve_value_expr((&mut rhs.expr.0, rhs.expr.1), type_env);
+            typeresolve_value_expr(lhs, type_env);
+            typeresolve_value_expr(rhs, type_env);
         }
         ValueExpr::String(str, _) => {
             type_env.check_for_tailwind(str);
@@ -4035,11 +4008,11 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
                 && !matches!(t.0, TypeExpr::Int | TypeExpr::UInt | TypeExpr::Byte)
             {
                 let msg = "Int literal can only coerce to number type";
-                failure_with_occurence(msg, t.1, [(msg, t.1), (msg, *span)]);
+                failure_with_occurence(msg, t.1, [(msg, t.1), (msg, span)]);
             }
 
             if t.is_none() {
-                *t = Some((TypeExpr::Int, *span));
+                *t = Some((TypeExpr::Int, span));
             }
         }
         ValueExpr::Bool(..)
@@ -4052,13 +4025,13 @@ fn typeresolve_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     }
 }
 
-fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+fn typeresolve_match(value_expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
     let ValueExpr::Match {
         value_expr,
         arms,
         else_arm,
         span,
-    } = value_expr.0
+    } = &mut value_expr.expr.0
     else {
         unreachable!("only pass match exprs to this function")
     };
@@ -4095,7 +4068,7 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
         }
     }
 
-    typeresolve_value_expr((&mut value_expr.expr.0, value_expr.expr.1), type_env);
+    typeresolve_value_expr(value_expr, type_env);
 
     let (match_var_type, mv_count, mv_is_mut) =
         TypeExpr::from_value_expr_dereferenced_with_count_and_mut(&value_expr.expr, type_env);
@@ -4123,13 +4096,10 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
                 false,
             );
             if let Some(condition) = &mut arm.condition {
-                typeresolve_value_expr((&mut condition.expr.0, condition.expr.1), type_env);
+                typeresolve_value_expr(condition, type_env);
             }
         }
-        typeresolve_value_expr(
-            (&mut arm.value_expr.expr.0, arm.value_expr.expr.1),
-            type_env,
-        );
+        typeresolve_value_expr(&mut arm.value_expr, type_env);
         type_env.pop_identifier_types();
     });
 
@@ -4175,13 +4145,10 @@ fn typeresolve_match(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEn
                 false,
             );
             if let Some(condition) = &mut arm.condition {
-                typeresolve_value_expr((&mut condition.expr.0, condition.expr.1), type_env);
+                typeresolve_value_expr(condition, type_env);
             }
         }
-        typeresolve_value_expr(
-            (&mut arm.value_expr.expr.0, arm.value_expr.expr.1),
-            type_env,
-        );
+        typeresolve_value_expr(&mut arm.value_expr, type_env);
         type_env.pop_identifier_types();
     } else if !all.is_empty() {
         for c in arms.iter() {
@@ -4326,13 +4293,13 @@ fn infer_type_params(
     }
 }
 
-fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let span = value_expr.1;
+fn typeresolve_function_call(value_expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
+    let span = value_expr.expr.1;
     let ValueExpr::FunctionCall {
         target,
         params,
         type_params,
-    } = value_expr.0
+    } = &mut value_expr.expr.0
     else {
         unreachable!("only pass functioncalls to this function")
     };
@@ -4359,7 +4326,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                     );
 
                     for (p, t) in params.iter_mut().zip(fn_def.params.iter().map(|x| &x.1)) {
-                        typeresolve_value_expr((&mut p.expr.0, p.expr.1), type_env);
+                        typeresolve_value_expr(p, type_env);
                         infer_type_params(
                             t,
                             &TypeExpr::from_value_expr(&p.expr, type_env),
@@ -4390,9 +4357,9 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
 
                             failure_with_occurence(
                                 msg,
-                                value_expr.1,
+                                value_expr.expr.1,
                                 [
-                                    (msg, value_expr.1),
+                                    (msg, value_expr.expr.1),
                                     (
                                         &format!(
                                             "The type param {name} must be known at compiletime"
@@ -4413,7 +4380,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                 target_obj,
                 field_name,
             } => {
-                typeresolve_value_expr((&mut target_obj.expr.0, target_obj.expr.1), type_env);
+                typeresolve_value_expr(target_obj, type_env);
                 let target_type =
                     TypeExpr::from_value_expr_dereferenced(&target_obj.expr, type_env);
 
@@ -4444,7 +4411,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                         );
 
                         for (p, t) in params.iter_mut().zip(fn_def.params.iter().map(|x| &x.1)) {
-                            typeresolve_value_expr((&mut p.expr.0, p.expr.1), type_env);
+                            typeresolve_value_expr(p, type_env);
                             infer_type_params(
                                 t,
                                 &TypeExpr::from_value_expr(&p.expr, type_env),
@@ -4475,9 +4442,9 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
 
                                 failure_with_occurence(
                                     msg,
-                                    value_expr.1,
+                                    value_expr.expr.1,
                                     [
-                                        (msg, value_expr.1),
+                                        (msg, value_expr.expr.1),
                                         (
                                             &format!(
                                                 "The type param {name} must be known at compiletime"
@@ -4498,7 +4465,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
             _ => {}
         }
 
-        typeresolve_value_expr((&mut target.expr.0, target.expr.1), type_env);
+        typeresolve_value_expr(target, type_env);
         let target_type = TypeExpr::from_value_expr(&target.expr, type_env);
 
         let TypeExpr::Fun(def_params, def_ret, _) = target_type.0 else {
@@ -4630,7 +4597,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                 target_obj,
                 field_name,
             } => {
-                typeresolve_value_expr((&mut target_obj.expr.0, target_obj.expr.1), type_env);
+                typeresolve_value_expr(target_obj, type_env);
 
                 let self_type = TypeExpr::from_value_expr_dereferenced(&target_obj.expr, type_env);
                 let target_type =
@@ -4675,10 +4642,7 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
                         false,
                     );
 
-                    typeresolve_value_expr(
-                        (&mut m.value_expr.expr.0, m.value_expr.expr.1),
-                        type_env,
-                    );
+                    typeresolve_value_expr(&mut m.value_expr, type_env);
                     type_env.pop_identifier_types();
                 }
 
@@ -4805,13 +4769,13 @@ fn typeresolve_function_call(value_expr: SpannedMutRef<ValueExpr>, type_env: &mu
         .zip(header.params.iter())
         .for_each(|(param_expr, param_def)| {
             infer_against(param_expr, param_def, type_env);
-            typeresolve_value_expr((&mut param_expr.expr.0, param_expr.expr.1), type_env)
+            typeresolve_value_expr(param_expr, type_env)
         });
 }
 
-fn typeresolve_var_decl(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let _span = value_expr.1;
-    let ValueExpr::VarDecl(declaration) = value_expr.0 else {
+fn typeresolve_var_decl(value_expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
+    let _span = value_expr.expr.1;
+    let ValueExpr::VarDecl(declaration) = &mut value_expr.expr.0 else {
         unreachable!("only pass var declarations to this function")
     };
 
@@ -4824,10 +4788,10 @@ fn typeresolve_var_decl(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
         if let Some(initializer) = declaration.initializer.as_mut() {
             infer_against(initializer, type_expr, type_env);
 
-            typeresolve_value_expr((&mut initializer.expr.0, initializer.expr.1), type_env);
+            typeresolve_value_expr(initializer, type_env);
         }
     } else if let Some(initializer) = declaration.initializer.as_mut() {
-        typeresolve_value_expr((&mut initializer.expr.0, initializer.expr.1), type_env);
+        typeresolve_value_expr(initializer, type_env);
 
         let type_expr = TypeExpr::from_value_expr(&initializer.expr, type_env);
         declaration.type_expr = Some((type_expr.0.clone(), initializer.expr.1));
@@ -4921,26 +4885,20 @@ fn unset_const_func_call_assign(v: &mut ValueExprWithType) {
 //     }
 // }
 
-fn typeresolve_var_assign(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let _span = value_expr.1;
-    let ValueExpr::VarAssign(assignment) = value_expr.0 else {
+fn typeresolve_var_assign(value_expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
+    let _span = value_expr.expr.1;
+    let ValueExpr::VarAssign(assignment) = &mut value_expr.expr.0 else {
         unreachable!("only pass var assignments to this function")
     };
 
-    typeresolve_value_expr(
-        (&mut assignment.0.target.expr.0, assignment.0.target.expr.1),
-        type_env,
-    );
+    typeresolve_value_expr(&mut assignment.0.target, type_env);
 
     unset_copy_var_assign(&mut assignment.0.target);
     let target_type = TypeExpr::from_value_expr(&assignment.0.target.expr, type_env);
 
     infer_against(&mut assignment.0.value_expr, &target_type, type_env);
 
-    typeresolve_value_expr(
-        (&mut assignment.0.value_expr.expr.0, assignment.0.value_expr.expr.1),
-        type_env,
-    );
+    typeresolve_value_expr(&mut assignment.0.value_expr, type_env);
 
     check_type_compatability_full(
         &target_type,
@@ -4953,13 +4911,13 @@ fn typeresolve_var_assign(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut T
     );
 }
 
-fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let span = value_expr.1;
+fn typeresolve_struct(value_expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
+    let span = value_expr.expr.1;
     let ValueExpr::Struct {
         name,
         fields,
         type_params,
-    } = value_expr.0
+    } = &mut value_expr.expr.0
     else {
         unreachable!("only pass structs to this function")
     };
@@ -5069,7 +5027,7 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
                     .unwrap(),
             )
         }) {
-            typeresolve_value_expr((&mut p.expr.0, p.expr.1), type_env);
+            typeresolve_value_expr(p, type_env);
             infer_type_params(
                 t,
                 &TypeExpr::from_value_expr(&p.expr, type_env),
@@ -5098,9 +5056,9 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
 
                 failure_with_occurence(
                     msg,
-                    value_expr.1,
+                    value_expr.expr.1,
                     [
-                        (msg, value_expr.1),
+                        (msg, value_expr.expr.1),
                         (
                             &format!("The type param {name} must be known at compiletime"),
                             span,
@@ -5137,7 +5095,7 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
             .unwrap()
             .type_expr;
         infer_against(&mut f.1, &og_field, type_env);
-        typeresolve_value_expr((&mut f.1.expr.0, f.1.expr.1), type_env);
+        typeresolve_value_expr(&mut f.1, type_env);
         check_type_compatability(
             &og_field,
             &TypeExpr::from_value_expr(&f.1.expr, type_env),
@@ -5146,72 +5104,73 @@ fn typeresolve_struct(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
     }
 }
 
-fn typeresolve_block(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let ValueExpr::Block(value_exprs) = value_expr.0 else {
+fn typeresolve_block(value_expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
+    let ValueExpr::Block(value_exprs) = &mut value_expr.expr.0 else {
         unreachable!("only pass structs to this function")
     };
 
     type_env.push_identifier_types();
-    value_exprs.iter_mut().for_each(|value_expr| {
-        typeresolve_value_expr((&mut value_expr.expr.0, value_expr.expr.1), type_env)
-    });
+    value_exprs
+        .iter_mut()
+        .for_each(|value_expr| typeresolve_value_expr(value_expr, type_env));
     type_env.pop_identifier_types();
 }
 
-fn typeresolve_duck_value_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let ValueExpr::Duck(items) = value_expr.0 else {
+fn typeresolve_duck_value_expr(value_expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
+    let ValueExpr::Duck(items) = &mut value_expr.expr.0 else {
         unreachable!("only pass structs to this function")
     };
 
-    items.iter_mut().for_each(|(_, value_expr)| {
-        typeresolve_value_expr((&mut value_expr.expr.0, value_expr.expr.1), type_env)
-    });
+    items
+        .iter_mut()
+        .for_each(|(_, value_expr)| typeresolve_value_expr(value_expr, type_env));
 }
 
-fn typeresolve_tuple(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let ValueExpr::Tuple(value_exprs) = value_expr.0 else {
+fn typeresolve_tuple(value_expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
+    let ValueExpr::Tuple(value_exprs) = &mut value_expr.expr.0 else {
         unreachable!("only pass structs to this function")
     };
 
     value_exprs
         .iter_mut()
-        .for_each(|value_expr| typeresolve_value_expr((&mut value_expr.expr.0, value_expr.expr.1), type_env));
+        .for_each(|value_expr| typeresolve_value_expr(value_expr, type_env));
 }
 
-fn typeresolve_while(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let ValueExpr::While { condition, body } = value_expr.0 else {
+fn typeresolve_while(value_expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
+    let ValueExpr::While { condition, body } = &mut value_expr.expr.0 else {
         unreachable!("only pass structs to this function")
     };
 
-    typeresolve_value_expr((&mut condition.expr.0, condition.expr.1), type_env);
+    typeresolve_value_expr(condition, type_env);
     type_env.push_identifier_types();
-    typeresolve_value_expr((&mut body.expr.0, body.expr.1), type_env);
+    typeresolve_value_expr(body, type_env);
     type_env.pop_identifier_types();
 }
 
-fn typeresolve_if_expr(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
+fn typeresolve_if_expr(value_expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
     let ValueExpr::If {
         condition,
         then,
         r#else,
-    } = value_expr.0
+    } = &mut value_expr.expr.0
     else {
         unreachable!("only pass structs to this function")
     };
 
-    typeresolve_value_expr((&mut condition.expr.0, condition.expr.1), type_env);
+    typeresolve_value_expr(condition.as_mut(), type_env);
     type_env.push_identifier_types();
-    typeresolve_value_expr((&mut then.expr.0, then.expr.1), type_env);
+    typeresolve_value_expr(then, type_env);
     type_env.pop_identifier_types();
     if let Some(r#else) = r#else {
         type_env.push_identifier_types();
-        typeresolve_value_expr((&mut r#else.expr.0, r#else.expr.1), type_env);
+        typeresolve_value_expr(r#else, type_env);
         type_env.pop_identifier_types();
     }
 }
 
-fn typeresolve_variable(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let ValueExpr::Variable(_, identifier, type_expr_opt, const_opt, needs_copy) = value_expr.0
+fn typeresolve_variable(value_expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
+    let ValueExpr::Variable(_, identifier, type_expr_opt, const_opt, needs_copy) =
+        &mut value_expr.expr.0
     else {
         unreachable!("only pass structs to this function")
     };
@@ -5220,13 +5179,13 @@ fn typeresolve_variable(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
         .unwrap_or_else(|| {
             failure_with_occurence(
                 "Unknown identifier",
-                value_expr.1,
+                value_expr.expr.1,
                 [(
                     format!(
                         "The identifier {} is not found in the current scope",
                         identifier.yellow(),
                     ),
-                    value_expr.1,
+                    value_expr.expr.1,
                 )],
             )
         });
@@ -5236,10 +5195,10 @@ fn typeresolve_variable(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
     if *needs_copy && !type_expr.implements_copy(type_env) {
         failure_with_occurence(
             "This type is not trivially copyable",
-            value_expr.1,
+            value_expr.expr.1,
             [(
                 "A type is trivially copyable if it's either a primitive, an immutable reference or a composition of primitive types",
-                value_expr.1,
+                value_expr.expr.1,
             )],
         )
     }
@@ -5248,8 +5207,8 @@ fn typeresolve_variable(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut Typ
     *const_opt = Some(is_const);
 }
 
-fn typeresolve_lambda(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeEnv) {
-    let ValueExpr::Lambda(lambda_body) = value_expr.0 else {
+fn typeresolve_lambda(value_expr: &mut ValueExprWithType, type_env: &mut TypeEnv) {
+    let ValueExpr::Lambda(lambda_body) = &mut value_expr.expr.0 else {
         unreachable!("only pass structs to this function")
     };
 
@@ -5258,7 +5217,7 @@ fn typeresolve_lambda(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
         params,
         return_type,
         value_expr,
-    } = &mut **lambda_body;
+    } = lambda_body.as_mut();
 
     let captured = type_env.identifier_types[1..]
         .iter()
@@ -5299,7 +5258,7 @@ fn typeresolve_lambda(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
 
     infer_against_returns(value_expr, return_type.as_ref().unwrap(), type_env);
 
-    typeresolve_value_expr((&mut value_expr.expr.0, value_expr.expr.1), type_env);
+    typeresolve_value_expr(value_expr, type_env);
     type_env.pop_identifier_types();
 
     check_returns(return_type.as_ref().unwrap(), value_expr, type_env);
