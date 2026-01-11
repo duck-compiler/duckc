@@ -1081,7 +1081,7 @@ impl TypeExpr {
         }
     }
 
-    fn has_method_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
+    pub fn has_method_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
         if name.as_str() == "to_string" && self.implements_to_string(type_env) {
             return true;
         }
@@ -1142,7 +1142,7 @@ impl TypeExpr {
         }
     }
 
-    fn has_field_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
+    pub fn has_field_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
         match self {
             Self::Tuple(fields) => {
                 if let Ok(tuple_access_idx) = name.parse::<usize>() {
@@ -1202,14 +1202,14 @@ impl TypeExpr {
         }
     }
 
-    fn has_extension_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
+    pub fn has_extension_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
         let extension_fn_name = &self.build_extension_access_function_name(&name, type_env);
         return type_env
             .extension_functions
             .contains_key(&extension_fn_name.clone());
     }
 
-    fn ref_has_field_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
+    pub fn ref_has_field_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
         match self {
             Self::Ref(t) | Self::RefMut(t) => {
                 t.0.has_field_by_name(name.clone(), type_env)
@@ -1219,7 +1219,7 @@ impl TypeExpr {
         }
     }
 
-    fn ref_has_method_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
+    pub fn ref_has_method_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
         match self {
             Self::Ref(t) | Self::RefMut(t) => {
                 t.0.has_method_by_name(name.clone(), type_env)
@@ -1551,6 +1551,10 @@ pub fn check_type_compatability_full(
 ) {
     let given_type = given_type.clone();
 
+    if matches!(given_type.0, TypeExpr::Uninit) {
+        panic!("un init type");
+    }
+
     if matches!(given_type.0, TypeExpr::TemplParam(..) | TypeExpr::Never) {
         return;
     }
@@ -1598,6 +1602,7 @@ pub fn check_type_compatability_full(
     }
 
     match &required_type.0 {
+        TypeExpr::Uninit => unreachable!("uninit types should have been replaced by now"),
         TypeExpr::Indexed(..) => unreachable!("indexed types should have been replaced by now"),
         TypeExpr::Byte => {
             if !matches!(given_type.0, TypeExpr::Byte) {
@@ -1900,8 +1905,9 @@ pub fn check_type_compatability_full(
                         format!("{}", required_type.0).bright_yellow(),
                     ),
                     format!(
-                        "because of the fact, that the required type {} is a struct. The value you need to pass must be a  aswell, but it isn't.",
+                        "because of the fact, that the required type {} is a struct. The value you need to pass must be a aswell, but it isn't. {:?}",
                         format!("{}", required_type.0).bright_yellow(),
+                        given_type.0,
                     ),
                 )
             }

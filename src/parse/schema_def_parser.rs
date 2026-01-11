@@ -9,7 +9,7 @@ use crate::{
 use super::{
     lexer::Token,
     type_parser::{TypeExpr, type_expression_parser},
-    value_parser::{ValueExpr, value_expr_parser},
+    value_parser::value_expr_parser,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -38,6 +38,7 @@ pub struct Struct {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(bound(deserialize = "'de: 'static"))]
 pub enum TypeExpr {
+    Uninit,
     Statement,
     Never,
     Html,
@@ -1482,6 +1483,7 @@ where
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            TypeExpr::Uninit => panic!("Compiler Bug: Uninit should never be displayed"),
             TypeExpr::Indexed(target, index) => {
                 write!(f, "{}[{}]", target.as_ref().0, index.as_ref().0)
             }

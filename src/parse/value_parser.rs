@@ -1436,7 +1436,7 @@ mod tests {
 
     use crate::{
         parse::{
-            Field, Spanned,
+            Field,
             function_parser::LambdaFunctionExpr,
             lexer::lex_parser,
             make_input,

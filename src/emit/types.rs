@@ -6,7 +6,7 @@ use crate::{
         value::{IrInstruction, IrValue, ToIr},
     },
     parse::{
-        Field,
+        Field, Spanned,
         source_file_parser::SourceFile,
         struct_parser::StructDefinition,
         type_parser::{Duck, TypeExpr},
@@ -1887,9 +1887,45 @@ pub fn emit_type_definitions(
     result
 }
 
+pub trait AsDereferenced {
+    fn dereferenced(&self) -> &Spanned<TypeExpr> {
+        self.derefenced_with_count().0
+    }
+    fn derefenced_with_count(&self) -> (&Spanned<TypeExpr>, usize) {
+        let (x, y, _) = self.derefenced_with_count_and_mut();
+        (x, y)
+    }
+    fn derefenced_with_count_and_mut(&self) -> (&Spanned<TypeExpr>, usize, bool);
+}
+
+impl AsDereferenced for Spanned<TypeExpr> {
+    fn derefenced_with_count_and_mut(&self) -> (&Spanned<TypeExpr>, usize, bool) {
+        let mut count = 0;
+        let mut current_res = self;
+        let mut is_mut = true;
+
+        loop {
+            if matches!(current_res.0, TypeExpr::Ref(..)) {
+                is_mut = false;
+            }
+            match &current_res.0 {
+                TypeExpr::Ref(i) | TypeExpr::RefMut(i) => {
+                    count += 1;
+                    current_res = i.as_ref();
+                }
+                _ => {}
+            }
+            break;
+        }
+
+        (current_res, count, is_mut)
+    }
+}
+
 impl TypeExpr {
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Uninit => panic!("uninit should be replaced"),
             TypeExpr::Indexed(..) => unreachable!("indexed should be resolved during type resolve"),
             TypeExpr::Byte => "byte".to_string(),
             TypeExpr::Statement => "Tup_".to_string(),
@@ -1967,6 +2003,7 @@ impl TypeExpr {
 
     pub fn type_id(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Uninit => panic!("type expr uninit"),
             TypeExpr::Indexed(..) => unreachable!("should be reached"),
             TypeExpr::Byte => "byte".to_string(),
             TypeExpr::Statement => "Statement".to_string(),
@@ -2075,6 +2112,7 @@ impl TypeExpr {
 
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {
         return match self {
+            TypeExpr::Uninit => unreachable!("Uninit"),
             TypeExpr::Indexed(..) => unreachable!("indexed should have been replaced"),
             TypeExpr::Byte => "byte".to_string(),
             TypeExpr::Statement => "Statement".to_string(),

@@ -49,12 +49,33 @@ pub struct ValueExprWithType {
     pub typ: Spanned<TypeExpr>,
 }
 
+pub trait NeverTypeExt {
+    fn replace_if_not_never(&mut self, t: &Spanned<TypeExpr>);
+    fn replace_if_other_never(&mut self, t: &Spanned<TypeExpr>);
+}
+
+impl NeverTypeExt for Spanned<TypeExpr> {
+    fn replace_if_not_never(&mut self, t: &Spanned<TypeExpr>) {
+        if !self.0.is_never() {
+            self.0 = t.0.clone();
+            self.1 = t.1;
+        }
+    }
+
+    fn replace_if_other_never(&mut self, t: &Spanned<TypeExpr>) {
+        if t.0.is_never() {
+            self.0 = t.0.clone();
+            self.1 = t.1;
+        }
+    }
+}
+
 impl ValueExprWithType {
     pub fn n(expr: Spanned<ValueExpr>) -> Self {
         let s = expr.1;
         Self {
             expr,
-            typ: (TypeExpr::Any, s),
+            typ: (TypeExpr::Uninit, s),
         }
     }
     pub fn new(expr: Spanned<ValueExpr>, typ: Spanned<TypeExpr>) -> Self {
