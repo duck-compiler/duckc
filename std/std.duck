@@ -13,6 +13,7 @@ module path;
 module password;
 module opt;
 module result;
+module components;
 
 fn assert(expr: Bool, fail_msg: String | ..) {
     if (!expr) {
