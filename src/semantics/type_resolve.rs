@@ -15,7 +15,7 @@ use crate::{
         Field, SS, Spanned,
         duckx_component_parser::DuckxComponent,
         extensions_def_parser::ExtensionsDef,
-        failure_with_occurence,
+        failure, failure_with_occurence,
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         generics_parser::Generic,
         jsx_component_parser::{
@@ -3978,7 +3978,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExprWithType, type_env: &mut Typ
 
                 let target_type = target.typ.dereferenced();
                 let TypeExpr::Array(array_content_type) = &target_type.0 else {
-                    unreachable!()
+                    unreachable!("{:?}\n{:?}", &target.typ.0, target_type.0)
                 };
                 value_expr.typ = array_content_type.as_ref().clone();
             }
@@ -4107,6 +4107,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExprWithType, type_env: &mut Typ
                     .0
                     .ref_has_method_by_name(field_name.clone(), type_env)
                 || target_obj_type_expr
+                    .dereferenced()
                     .0
                     .has_extension_by_name(field_name.clone(), type_env))
             {
@@ -4127,15 +4128,15 @@ fn typeresolve_value_expr(value_expr: &mut ValueExprWithType, type_env: &mut Typ
                                 .bright_yellow(),
                             field_name.bright_blue()
                         ),
-                        span,
+                        target_obj.expr.1,
                     )],
                 )
             }
 
-            let target_obj_type_expr = target_obj_type_expr.clone();
-            value_expr.typ = target_obj_type_expr.clone();
+            let target_obj_type_expr = target_obj_type_expr;
             value_expr.typ.replace_if_not_never(&(
                 target_obj_type_expr
+                    .dereferenced()
                     .0
                     .typeof_field(field_name.to_string(), type_env)
                     .or_else(|| {
@@ -4664,10 +4665,6 @@ fn typeresolve_function_call(value_expr: &mut ValueExprWithType, type_env: &mut 
 
                 let target_type = target_obj.typ.dereferenced();
 
-                if field_name == "on_red" {
-                    dbg!(&target_obj);
-                }
-
                 if let TypeExpr::Struct {
                     name: struct_name,
                     type_params: struct_type_params,
@@ -5061,12 +5058,70 @@ fn typeresolve_function_call(value_expr: &mut ValueExprWithType, type_env: &mut 
         }
     }
 
+    if !matches!(target.typ.0, TypeExpr::Fun(..)) {
+        failure(
+            target.expr.1.context.file_name,
+            "Tried to invoke a non-function value".to_string(),
+            (
+                "This is the value you tried to invoke as a function.".to_string(),
+                target.expr.1,
+            ),
+            vec![
+                (
+                    format!(
+                        "the thing you tried to invoke is of type {}",
+                        TypeExpr::from_value_expr(&target.expr, type_env)
+                            .0
+                            .as_clean_go_type_name(type_env)
+                    ),
+                    target.expr.1,
+                ),
+                (
+                    format!(
+                        "{} cannot be called as it's not of type function!",
+                        TypeExpr::from_value_expr(&target.expr, type_env)
+                            .0
+                            .as_clean_go_type_name(type_env)
+                    ),
+                    target.expr.1,
+                ),
+            ],
+            target.expr.1.context.file_contents,
+        );
+    }
+
+    if params.len() != header.params.len() {
+        failure_with_occurence(
+            "Wrong number of parameters",
+            value_expr.expr.1,
+            [
+                (
+                    format!("This function takes {} parameters", header.params.len()),
+                    target.expr.1,
+                ),
+                (
+                    format!("You provided {} parameters", params.len()),
+                    value_expr.expr.1,
+                ),
+            ],
+        );
+    }
+
     params
         .iter_mut()
         .zip(header.params.iter())
         .for_each(|(param_expr, param_def)| {
             infer_against(param_expr, param_def, type_env);
-            typeresolve_value_expr(param_expr, type_env)
+            typeresolve_value_expr(param_expr, type_env);
+            if matches!(param_def.0, TypeExpr::Any) {
+                return;
+            }
+            check_type_compatability_full(
+                param_def,
+                &param_expr.typ,
+                type_env,
+                is_const_var(&param_expr.expr.0),
+            );
         });
     value_expr.typ = header.return_type;
 }
@@ -5082,11 +5137,14 @@ fn typeresolve_var_decl(value_expr: &mut ValueExprWithType, type_env: &mut TypeE
     // Resolve the type expression on the declaration
     if let Some(type_expr) = &mut declaration.type_expr {
         resolve_all_aliases_type_expr(type_expr, type_env);
+        process_keyof_in_type_expr(&mut type_expr.0, type_env);
 
         if let Some(initializer) = declaration.initializer.as_mut() {
             infer_against(initializer, type_expr, type_env);
 
             typeresolve_value_expr(initializer, type_env);
+
+            check_type_compatability(type_expr, &initializer.typ, type_env);
         }
     } else if let Some(initializer) = declaration.initializer.as_mut() {
         typeresolve_value_expr(initializer, type_env);

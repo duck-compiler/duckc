@@ -1914,6 +1914,7 @@ impl AsDereferenced for Spanned<TypeExpr> {
                 TypeExpr::Ref(i) | TypeExpr::RefMut(i) => {
                     count += 1;
                     current_res = i.as_ref();
+                    continue;
                 }
                 _ => {}
             }

@@ -14,7 +14,6 @@ use crate::parse::{
 };
 use crate::semantics::ident_mangler::{MANGLE_SEP, mangle};
 use crate::semantics::type_resolve::{TypeEnv, is_const_var, merge_all_or_type_expr};
-use crate::semantics::type_resolve2::ValueExprWithType;
 
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
@@ -373,7 +372,7 @@ impl TypeExpr {
                     let mut f = Vec::new();
 
                     for (name, value_expr) in fields {
-                        let (value_expr, span) = (&value_expr.expr, value_expr.expr.1);
+                        let (value_expr, _span) = (&value_expr.expr, value_expr.expr.1);
                         let spanned_type = TypeExpr::from_value_expr(&value_expr, type_env);
 
                         if spanned_type.0.is_never() {
@@ -707,12 +706,6 @@ impl TypeExpr {
                                 if let Some(param_name) = &param_type.0
                                     && param_name == "self"
                                 {
-                                    check_type_compatability_full(
-                                        &param_type.1,
-                                        &in_param_type.0,
-                                        type_env,
-                                        is_const_var(&params[index].expr.0),
-                                    );
                                 } else {
                                     check_type_compatability_full(
                                         &param_type.1,
@@ -1810,7 +1803,7 @@ pub fn check_type_compatability_full(
                     format!("{}", required_type.0).bright_yellow(),
                 ),
                 format!(
-                    "because of the fact, that the required type is {}. The value you need to pass must be a tag aswell, but it is a {}",
+                    "because of the fact, that the required type is {}. The value you need to pass must be a tag as well, but it is a {}",
                     format!("{}", required_type.0).bright_yellow(),
                     format!("{}", given_type.0).bright_yellow(),
                 ),
@@ -1846,7 +1839,7 @@ pub fn check_type_compatability_full(
                     format!("{}", required_type.0).bright_yellow(),
                 ),
                 format!(
-                    "because of the fact, that the required type is {}. The value you need to pass must be a tag aswell, but it is a {}",
+                    "because of the fact, that the required type is {}. The value you need to pass must be a tag as well, but it is a {}",
                     format!("{}", required_type.0).bright_yellow(),
                     format!("{}", given_type.0).bright_yellow(),
                 ),
@@ -1905,9 +1898,9 @@ pub fn check_type_compatability_full(
                         format!("{}", required_type.0).bright_yellow(),
                     ),
                     format!(
-                        "because of the fact, that the required type {} is a struct. The value you need to pass must be a aswell, but it isn't. {:?}",
+                        "because of the fact, that the required type {} is a struct. The value you need to pass must be a as well, but it is a {}",
                         format!("{}", required_type.0).bright_yellow(),
-                        given_type.0,
+                        given_type.0.as_clean_user_faced_type_name(),
                     ),
                 )
             }

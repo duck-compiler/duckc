@@ -83,7 +83,7 @@ impl ValueExprWithType {
     }
 }
 
-pub fn resolve_types(v: Spanned<ValueExpr>, headers: &HeadersEnv) -> ValueExprWithType {
+pub fn resolve_types(v: Spanned<ValueExpr>, _headers: &HeadersEnv) -> ValueExprWithType {
     let span = v.1;
     let typ = (
         match &v.0 {

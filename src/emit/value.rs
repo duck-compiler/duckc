@@ -990,54 +990,58 @@ fn walk_access_raw(
                 }
 
                 stars = stars_to_set;
-                current_obj = ValueExprWithType::new(
-                    if let ValueExpr::Variable(a, var_name, b, c, needs_copy) = &target.expr.0
-                        && !type_params.is_empty()
-                    {
-                        let generic_name = [var_name.clone()]
-                            .into_iter()
-                            .chain(
-                                type_params
-                                    .iter()
-                                    .map(|(t, _)| t.as_clean_go_type_name(type_env)),
-                            )
-                            .collect::<Vec<_>>()
-                            .join(MANGLE_SEP);
+                current_obj = if let ValueExpr::Variable(a, var_name, b, c, needs_copy) =
+                    &target.expr.0
+                    && !type_params.is_empty()
+                {
+                    let generic_name = [var_name.clone()]
+                        .into_iter()
+                        .chain(
+                            type_params
+                                .iter()
+                                .map(|(t, _)| t.as_clean_go_type_name(type_env)),
+                        )
+                        .collect::<Vec<_>>()
+                        .join(MANGLE_SEP);
+                    ValueExprWithType::new(
                         (
                             ValueExpr::Variable(*a, generic_name, b.clone(), *c, *needs_copy),
                             target.expr.1,
+                        ),
+                        (b.as_ref().cloned().unwrap(), target.expr.1),
+                    )
+                } else if let ValueExpr::FieldAccess {
+                    target_obj,
+                    field_name,
+                } = target.expr.0
+                {
+                    let _span = target.expr.1;
+                    let generic_name = [field_name.clone()]
+                        .into_iter()
+                        .chain(
+                            type_params
+                                .iter()
+                                .map(|(t, _)| t.as_clean_go_type_name(type_env)),
                         )
-                    } else if let ValueExpr::FieldAccess {
-                        target_obj,
-                        field_name,
-                    } = target.expr.0
-                    {
-                        let span = target.expr.1;
-                        let generic_name = [field_name.clone()]
-                            .into_iter()
-                            .chain(
-                                type_params
-                                    .iter()
-                                    .map(|(t, _)| t.as_clean_go_type_name(type_env)),
-                            )
-                            .collect::<Vec<_>>()
-                            .join(MANGLE_SEP);
-                        (
-                            if flag.is_some() {
-                                target_obj.expr.0
-                            } else {
+                        .collect::<Vec<_>>()
+                        .join(MANGLE_SEP);
+                    if flag.is_some() {
+                        *target_obj
+                    } else {
+                        ValueExprWithType::new(
+                            (
                                 ValueExpr::FieldAccess {
                                     target_obj: target_obj.clone(),
                                     field_name: generic_name.clone(),
-                                }
-                            },
-                            span,
+                                },
+                                target.expr.1,
+                            ),
+                            target.typ,
                         )
-                    } else {
-                        target.expr
-                    },
-                    target.typ.clone(),
-                );
+                    }
+                } else {
+                    *target
+                };
             }
             ValueExpr::FieldAccess {
                 target_obj,
