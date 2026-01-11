@@ -398,7 +398,7 @@ struct HttpServer {
 
     fn log(msg: String) {
         if (self.log_level == .verbose) {
-            std::io::println(f"{" http-server ".on_red()}{msg}");
+            std::io::println(f"{" http-server abc ".on_red()}{msg}");
         }
     }
 }

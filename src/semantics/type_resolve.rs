@@ -3127,12 +3127,11 @@ fn assign_union_against(
     if !matches!(union_t.0, TypeExpr::Or(..)) {
         return;
     }
-    let t = v.typ.clone();
-    if matches!(t.0, TypeExpr::Or(..)) {
+    if matches!(v.typ.0, TypeExpr::Or(..)) {
         return;
     }
     v.expr.0 = ValueExpr::As(
-        ValueExprWithType::new(v.expr.clone(), union_t.clone()).into(),
+        ValueExprWithType::new(v.expr.clone(), v.typ.clone()).into(),
         union_t.clone(),
     );
 }
@@ -3921,7 +3920,7 @@ fn typeresolve_value_expr(value_expr: &mut ValueExprWithType, type_env: &mut Typ
                 match c {
                     ValFmtStringContents::Expr(e) => {
                         typeresolve_value_expr(e, type_env);
-                        t = e.typ.clone();
+                        t.replace_if_other_never(&e.typ);
                         if !t.0.is_never() && !t.0.is_string() {
                             let hints = [
                                 (
@@ -4182,8 +4181,8 @@ fn typeresolve_value_expr(value_expr: &mut ValueExprWithType, type_env: &mut Typ
             value_expr.typ = (lhs.typ.0.clone(), value_expr.expr.1);
         }
         ValueExpr::String(str, _) => {
-            type_env.check_for_tailwind(str);
             value_expr.typ = (TypeExpr::String(None), value_expr.expr.1);
+            type_env.check_for_tailwind(str);
         }
         ValueExpr::Int(_, t) => {
             if let Some(t) = t.as_ref().as_ref()
@@ -4662,7 +4661,12 @@ fn typeresolve_function_call(value_expr: &mut ValueExprWithType, type_env: &mut 
                 field_name,
             } => {
                 typeresolve_value_expr(target_obj, type_env);
+
                 let target_type = target_obj.typ.dereferenced();
+
+                if field_name == "on_red" {
+                    dbg!(&target_obj);
+                }
 
                 if let TypeExpr::Struct {
                     name: struct_name,

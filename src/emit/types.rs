@@ -1173,6 +1173,8 @@ pub fn emit_type_definitions(
 
             instructions.extend(instructions_to_be_duck_conform);
 
+            // dbg!(&method.name, &struct_name, &method.value_expr);
+
             let mut body = method.emit(
                 Some((
                     "duck_internal_self".to_string(),
