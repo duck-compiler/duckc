@@ -1,6 +1,6 @@
 # Go Interop
 
-[< Previous](014-advanced-function-penetration.md) | [Home](README.md) | [Next >](016-advanced-sus-funs.md)
+[< Previous](014-advanced-typesystem.md) | [Home](README.md) | [Next >](016-advanced-sus-funs.md)
 
 ---
 
@@ -37,6 +37,6 @@ This will work as expected.
 
 ---
 
-[< Previous](014-advanced-function-penetration.md) | [Home](README.md) | [Next >](016-advanced-sus-funs.md)
+[< Previous](014-advanced-typesystem.md) | [Home](README.md) | [Next >](016-advanced-sus-funs.md)
 
 <div align="center">🦆</div>

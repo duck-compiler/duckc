@@ -1,6 +1,6 @@
 # Functions
 
-[< Previous](005-foundation-variables.md) | [Home](README.md) | [Next >](007-foundation-modules.md)
+[< Previous](005-foundation-variables.md) | [Home](README.md) | [Next >](007-foundation-pass-operator.md)
 
 ---
 
@@ -42,6 +42,6 @@ fn multiply_by_two(to_multiply: Int) -> Int {
 
 ---
 
-[< Previous](005-foundation-variables.md) | [Home](README.md) | [Next >](007-foundation-modules.md)
+[< Previous](005-foundation-variables.md) | [Home](README.md) | [Next >](007-foundation-pass-operator.md)
 
 <div align="center">🦆</div>
