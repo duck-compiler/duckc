@@ -28,7 +28,7 @@ false
 ## Int
 The int a is 64-bit integer, which is represented by a go int64 wrapped in a struct. You can just chain any digit between 0-9 to a int
 ```duck
-duck
+5
 ```
 
 ## Float
