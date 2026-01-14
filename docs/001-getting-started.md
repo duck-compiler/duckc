@@ -4,80 +4,63 @@
 
 ---
 
-# 1. Installation
-Dargo is our buildtool, it comes with everything needed to setup and build a project.
-
-To install dargo, clone the master branch ouf our github repository.
+## Installation
+We host a simple install script at duckup.sh, one for unix (Linux/MacOS etc.) and one for windows powershell.
 
 ```sh
-git clone git@github.com:duck-compiler/duckc.git
+# On MacOS/Linux etc.
+curl -fsSL https://duckup.sh | bash
+
+# On Windows
+powershell -c "irm https://win.duckup.sh | iex"
 ```
 
-navigate into the just cloned repository
+The script installs duckup, which is our toolchain manager, it orchestrates different versions of duck on the same system allowing you to switch between them with ease. Duckup allows you to install specific versions of duck and configure them correctly for your system.
 
 ```sh
-cd duckc
+# Installing the latest version of dargo
+duckup update
 ```
 
-install the project to your computer.
+That command installs dargo, which is the tool to compile duck code, create new projects, manage dependencies and much more. We'll dive deeper into all the features of dargo, but right now, we'll use it to create a new project and run a "hello, world" example.
+
+## Creating a "Hello, World" example
+
+After the installation was successful we'll continue by setting up a project.
 
 ```sh
-cargo install --path .
+# Creating a new dargo project 
+dargo create <project-name> # project name will be prompted if not provided
+cd <project-name>
 ```
 
-To verify that your installation was successful run following command
+If you already have an existing dir, you could initialize a new project, using init
+
 ```sh
-dargo --help
-```
-
-If your computer tells you, that the given command was not found the installation didn't work. Please reach out to us on our [discord](todo)
-
-# 2. Project setup
-
-After the installation was successful we'll continue by setting up a project. Therefore you'll run following command and replace <project-name> with your project name
-```sh
-dargo create <project-name>
-```
-This will create a directory with the given project name.
-
-Alternatively you can navigate into an already existing directory and run
-```sh
+# Initializing a project in current directory
 dargo init
 ```
-This will initialize a project in the current directory with the project name as the name of the directory it was initialized in.
 
-# 3. Hello, World!
-Now that we have our project setup, we'll navigate into the source directory and edit our just created main.duck. Which should look somewhat like
+That will initialize a project in the current directory with the project name as the name of the directory it was initialized in.
 
-```duck
+Now that we have our project setup, we can take a look into the `src/main.duck` file. It already contains a simple "Hello, World".
+
+```rs
+use std::io::{println};
+  
 fn main() {
+    println("Hello, World!");
 }
 ```
 
-We'll import the standard library using the `use` keyword.
+We can run it with (you probably can already guess) dargo.
 
-```duck
-use std;
-```
-
-No we can access the standard library, which contains a module called `io`, containing a function called `println`, which we'll use to say hello to the world.
-Our final program will look like that
-
-```duck
-use std;
-
-fn main() {
-    std::io::println("Hello, World!");
-}
-```
-
-We'll navigate back to the terminal and run the command
 ```sh
+# Compile and run the project in current dir
 dargo run
 ```
-inside of the root of our project.
 
-Then we'll see Hello, World! printed out to the stdout
+This should print "Hello, World!"
 
 ---
 
