@@ -12,6 +12,16 @@ struct Channel<T> {
         }
     }
 
+    static fn buffered<T>(cap: Int) -> Channel<T> {
+        const go_chan: go "chan {T}" = go {
+            $ = make(chan <<<T>>>, int(cap))
+        };
+
+        Channel<T> {
+            inner: go_chan,
+        }
+    }
+
     fn send(x: T) {
         go {
             (*self).inner <- x
