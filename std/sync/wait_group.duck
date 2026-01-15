@@ -1,0 +1,63 @@
+use go "sync";
+use std::sync::Channel;
+
+struct WaitGroup {
+    inner: go "sync.WaitGroup",
+} impl {
+    static fn new() -> WaitGroup {
+        const inner_wg = go {
+            var waitGroup sync.WaitGroup
+            $ = waitGroup
+        } as go "sync.WaitGroup";
+
+        return WaitGroup {
+            inner: inner_wg,
+        }
+    }
+
+    fn add(delta: Int) {
+        go {
+            (*self).inner.Add(int(delta))
+        }
+    }
+
+    fn done() {
+        go {
+            (*self).inner.Done()
+        }
+    }
+
+    fn wait() {
+        go {
+            (*self).inner.Wait()
+        }
+    }
+}
+
+
+fn main() {
+    const wg = WaitGroup::new();
+    const results = Channel::new<Int>();
+    const task_count = 3;
+
+    wg.add(task_count);
+
+    for (i in std::col::Iter::range(0, task_count)) {
+        const f = fn() {
+            results.send(i);
+            wg.done();
+        };
+
+        async f();
+    }
+
+    wg.wait();
+
+    let count = 0;
+    while (count < task_count) {
+        results.try_recv().expect("Worker results should be available after wg.wait()");
+        count = count + 1;
+    }
+
+    std::assert(count == 3, "Expected 3");
+}
