@@ -1,5 +1,5 @@
 use go "sync";
-use std::sync::Channel;
+use ::sync::Channel;
 
 struct WaitGroup {
     inner: go "sync.WaitGroup",
@@ -32,32 +32,12 @@ struct WaitGroup {
             (*self).inner.Wait()
         }
     }
-}
 
-
-fn main() {
-    const wg = WaitGroup::new();
-    const results = Channel::new<Int>();
-    const task_count = 3;
-
-    wg.add(task_count);
-
-    for (i in std::col::Iter::range(0, task_count)) {
-        const f = fn() {
-            results.send(i);
-            wg.done();
-        };
-
-        async f();
+    fn run(action: fn ()) {
+        self.add(1);
+        async (fn() {
+            defer self.done();
+            action();
+        })();
     }
-
-    wg.wait();
-
-    let count = 0;
-    while (count < task_count) {
-        results.try_recv().expect("Worker results should be available after wg.wait()");
-        count = count + 1;
-    }
-
-    std::assert(count == 3, "Expected 3");
 }
