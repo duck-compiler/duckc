@@ -12,6 +12,7 @@ CICD = False
 BUILD_DUCKC_IN_RELEASE = False
 UPDATE_SNAPSHOTS = False
 ONLY_ERRORS = False
+FILTER = None
 
 COLOR_RED = "\033[91m"
 COLOR_GREEN = "\033[92m"
@@ -435,11 +436,15 @@ def perform_tests():
         "skipped": 0
     }
 
-    compiler_path = build_and_move_cargo_binary("dargo", "release" if BUILD_DUCKC_IN_RELEASE else "debug");
-
+    compiler_path = build_and_move_cargo_binary("dargo", "release" if BUILD_DUCKC_IN_RELEASE else "debug")
     print(f"{COLOR_YELLOW}Duck Compiler is located at {COLOR_RESET}{compiler_path}{COLOR_RESET}")
 
-    assert_error_files = find_duck_files_in_directory("./errors")
+    def apply_filter(files):
+        if not FILTER:
+            return files
+        return [f for f in files if FILTER.lower() in f.lower()]
+
+    assert_error_files = apply_filter(find_duck_files_in_directory("./errors"))
     if assert_error_files:
         print(f"\n{COLOR_CYAN}--- Evaluating Programs with Error Assertions (snapshots) ---{COLOR_RESET}")
         for program in assert_error_files:
@@ -450,20 +455,19 @@ def perform_tests():
         print_summary(test_stats)
         return
 
-    invalid_program_files = find_duck_files_in_directory("./invalid_programs")
-    print(f"\n{COLOR_YELLOW}Starting the evaluation of the invalid test cases...")
-    for invalid_program in invalid_program_files:
-        compile_failure(compiler_path, invalid_program, test_stats)
-        pass
+    invalid_program_files = apply_filter(find_duck_files_in_directory("./invalid_programs"))
+    if invalid_program_files:
+        print(f"\n{COLOR_YELLOW}Starting the evaluation of the invalid test cases...")
+        for invalid_program in invalid_program_files:
+            compile_failure(compiler_path, invalid_program, test_stats)
 
-    assert_program_files = find_duck_files_in_directory("./valid_programs")
+    assert_program_files = apply_filter(find_duck_files_in_directory("./valid_programs"))
     if assert_program_files:
         print(f"\n{COLOR_CYAN}--- Evaluating Programs with Assertions (snapshots) ---{COLOR_RESET}")
         for program in assert_program_files:
             compile_and_run_with_assert(compiler_path, program, test_stats)
 
     print_summary(test_stats)
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Test runner for the duck compiler"
@@ -501,6 +505,13 @@ if __name__ == "__main__":
         help='Run script in error only mode. Helps when working on error handling.'
     )
 
+    parser.add_argument(
+        '-f', '--filter',
+        type=str,
+        default=None,
+        help='Only run tests whose filenames contain this string.'
+    )
+
     args = parser.parse_args()
 
     VERBOSE = args.verbose
@@ -522,5 +533,9 @@ if __name__ == "__main__":
     BUILD_DUCKC_IN_RELEASE = args.release
     if BUILD_DUCKC_IN_RELEASE:
         print(f"{COLOR_YELLOW}Building duckc in release mode.{COLOR_RESET}")
+
+    FILTER = args.filter
+    if FILTER:
+        print(f"{COLOR_YELLOW} filtering tests by name: {FILTER}{COLOR_RESET}")
 
     perform_tests()
