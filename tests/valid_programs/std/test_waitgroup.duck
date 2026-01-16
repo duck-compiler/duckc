@@ -1,0 +1,23 @@
+use std::sync::{WaitGroup, Channel};
+
+fn main() {
+    const wg = WaitGroup::new();
+    const task_count = 3;
+    const results = Channel::buffered<Int>(task_count);
+
+    for (i in std::col::Iter::range(0, task_count)) {
+        wg.run(fn () {
+            results.send(i);
+        });
+    }
+
+    wg.wait();
+
+    let count = 0;
+    while (count < task_count) {
+        results.try_recv().expect("Worker results should be available after wg.wait()");
+        count = count + 1;
+    }
+
+    std::assert(count == 3, "Expected 3");
+}

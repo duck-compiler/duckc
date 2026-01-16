@@ -1,0 +1,43 @@
+use go "sync";
+use ::sync::Channel;
+
+struct WaitGroup {
+    inner: go "sync.WaitGroup",
+} impl {
+    static fn new() -> WaitGroup {
+        const inner_wg = go {
+            var waitGroup sync.WaitGroup
+            $ = waitGroup
+        } as go "sync.WaitGroup";
+
+        return WaitGroup {
+            inner: inner_wg,
+        }
+    }
+
+    fn add(delta: Int) {
+        go {
+            (*self).inner.Add(int(delta))
+        }
+    }
+
+    fn done() {
+        go {
+            (*self).inner.Done()
+        }
+    }
+
+    fn wait() {
+        go {
+            (*self).inner.Wait()
+        }
+    }
+
+    fn run(action: fn ()) {
+        self.add(1);
+        async (fn() {
+            defer self.done();
+            action();
+        })();
+    }
+}
