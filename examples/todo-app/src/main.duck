@@ -4,7 +4,6 @@ use std::col::{ArrayList};
 use std::web::{HttpServer, Req, Res};
 use std::error::{panic};
 use std::time::{Time};
-use std::components::lucide::{ListTodo};
 
 type Storage = {
     todos: Todo[],
@@ -100,7 +99,6 @@ component TodoList(props: { todos: Todo[] }) jsx {
     <div className="w-full max-w-md p-8 shadow-2xl bg-zinc-950 rounded-3xl border border-zinc-800">
       <header className="mb-8">
         <h1 className="text-2xl font-black tracking-tight text-zinc-100 flex gap-2 items-center">
-          <ListTodo className="text-white" />
           Tasks
         </h1>
         <p className="text-sm text-zinc-500">{todos.filter(t => !t.done).length} remaining</p>
