@@ -5,11 +5,14 @@ use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::parse::{
-    Field, SS, Spanned, failure_with_occurence,
-    function_parser::{FunctionDefintion, function_definition_parser},
-    generics_parser::{Generic, generics_parser},
-    type_parser::type_expression_parser,
+use crate::{
+    parse::{
+        Field, SS, Spanned, failure_with_occurence,
+        function_parser::{FunctionDefintion, function_definition_parser},
+        generics_parser::{Generic, generics_parser},
+        type_parser::type_expression_parser,
+    },
+    semantics::type_resolve2::{MethodHeader, StructHeader},
 };
 
 use super::lexer::Token;
@@ -43,6 +46,35 @@ pub struct StructDefinition {
     pub generics: Vec<Spanned<Generic>>,
     pub doc_comments: Vec<Spanned<String>>,
     pub derived: HashSet<DerivableInterface>,
+}
+
+impl StructDefinition {
+    pub fn to_header(&self) -> StructHeader {
+        StructHeader {
+            fields: self
+                .fields
+                .iter()
+                .map(|x| (x.name.clone(), x.type_expr.clone()))
+                .collect(),
+            methods: self.methods.iter().fold(
+                HashMap::with_capacity(self.methods.len()),
+                |mut acc, e| {
+                    acc.insert(
+                        e.name.clone(),
+                        MethodHeader {
+                            generics: e.generics.clone(),
+                            is_mut: self.mut_methods.contains(&e.name),
+                            params: e.params.iter().map(|x| x.1.clone()).collect(),
+                            return_type: e.return_type.clone(),
+                        },
+                    );
+                    acc
+                },
+            ),
+            derived: self.derived.clone(),
+            generics: self.generics.clone(),
+        }
+    }
 }
 
 pub fn struct_definition_parser<'src, M, I>(

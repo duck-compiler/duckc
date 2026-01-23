@@ -2048,14 +2048,15 @@ impl TypeExpr {
             ),
             TypeExpr::Struct { .. } => self.as_clean_go_type_name(type_env),
             TypeExpr::NamedDuck { .. } => self.as_clean_go_type_name(type_env),
-            TypeExpr::Duck(duck) => format!(
-                "Duck_{}",
-                duck.fields
+            TypeExpr::Duck(duck) => format!("Duck_{}", {
+                let mut fields = duck.fields.clone();
+                fields.sort_by(|a, b| a.name.cmp(&b.name));
+                fields
                     .iter()
                     .map(|field| format!("{}_{}", field.name, field.type_expr.0.type_id(type_env)))
                     .collect::<Vec<_>>()
                     .join("_")
-            ),
+            }),
             TypeExpr::Tuple(fields) => {
                 format!(
                     "Tup_{}",

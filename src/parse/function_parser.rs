@@ -32,6 +32,15 @@ pub struct FunctionDefintion {
 }
 
 impl FunctionDefintion {
+    pub fn to_header2(&self) -> crate::semantics::type_resolve2::FunHeader {
+        let return_type = self.return_type.clone();
+
+        crate::semantics::type_resolve2::FunHeader {
+            generics: Vec::new(),
+            params: self.params.iter().map(|x| x.1.clone()).collect(),
+            return_type,
+        }
+    }
     pub fn to_header(&self) -> FunHeader {
         let return_type = self.return_type.clone();
 
