@@ -7,7 +7,7 @@ use crate::{
         type_parser::{Duck, TypeExpr},
         value_parser::ValueExpr,
     },
-    semantics::type_resolve::{TypeEnv, trav_type_expr, trav_value_expr},
+    semantics::{type_resolve::{TypeEnv, trav_type_expr, trav_value_expr}, type_resolve2::ValueExprWithType},
 };
 
 pub mod duckx_component;
@@ -78,7 +78,7 @@ pub fn fix_all_idents_type_expr(
 }
 
 pub fn fix_all_idents_value_expr(
-    v: &mut Spanned<ValueExpr>,
+    v: &mut ValueExprWithType,
     type_env: &mut TypeEnv,
     imports: &'static HashSet<String>,
 ) {
@@ -110,7 +110,7 @@ pub fn fix_all_idents_value_expr(
             }
             _ => {}
         },
-        |v, _| match &mut v.0 {
+        |v, _| match &mut v.expr.0 {
             ValueExpr::Struct {
                 name,
                 fields,

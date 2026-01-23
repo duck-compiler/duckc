@@ -60,6 +60,16 @@ lazy_static! {
             })
             .expect("couldn't get pathbuf for std lib")
     };
+    static ref DUCK_MANGLED_STD_PATH: PathBuf = {
+        env::home_dir()
+            .map(|mut path| {
+                path.push(".duck");
+                path.push("std");
+                path.push("mangled_std.json");
+                path
+            })
+            .expect("couldn't get pathbuf for mangled std lib")
+    };
     static ref DARGO_DOT_DIR: PathBuf = {
         fn require_sub_dir(str: &str) {
             let Ok(current_dir) = env::current_dir() else {
@@ -175,41 +185,55 @@ fn parse_src_file(
         std::process::exit(0);
     }
 
-    let file_text = std::fs::read_to_string(DUCK_STD_PATH.to_path_buf())
-        .unwrap()
-        .leak();
-    let lex = lex("std.duck", file_text);
-    let mut std_src_file = source_file_parser(
-        {
-            let mut buf = DUCK_STD_PATH.to_path_buf();
-            buf.pop();
-            buf
-        },
-        make_input,
-    )
-    .parse(make_input(
-        SS {
-            start: 0,
-            end: file_text.len(),
-            context: Context {
-                file_name: "std.duck",
-                file_contents: file_text,
+    let std_src_file = if DUCK_MANGLED_STD_PATH.exists() {
+        let json_src = std::fs::read(DUCK_MANGLED_STD_PATH.as_path())
+            .expect("Could not load mangled std src")
+            .leak();
+        rmp_serde::from_slice(json_src).expect("Could not deserialized mangled std")
+    } else {
+        let file_text = std::fs::read_to_string(DUCK_STD_PATH.as_path())
+            .unwrap()
+            .leak();
+        let lex = lex("std.duck", file_text);
+        let mut std_src_file = source_file_parser(
+            {
+                let mut buf = DUCK_STD_PATH.to_path_buf();
+                buf.pop();
+                buf
             },
-        },
-        lex.as_slice(),
-    ))
-    .unwrap()
-    .flatten(&vec!["std".to_string()], false);
+            make_input,
+        )
+        .parse(make_input(
+            SS {
+                start: 0,
+                end: file_text.len(),
+                context: Context {
+                    file_name: "std.duck",
+                    file_contents: file_text,
+                },
+            },
+            lex.as_slice(),
+        ))
+        .unwrap()
+        .flatten(&vec!["std".to_string()], false);
 
-    for func in std_src_file.function_definitions.iter_mut() {
-        for (_, p) in &mut func.params {
-            typename_reset_global(&mut p.0);
+        for func in std_src_file.function_definitions.iter_mut() {
+            for (_, p) in &mut func.params {
+                typename_reset_global(&mut p.0);
+            }
+
+            typename_reset_global(&mut func.return_type.0);
+
+            typename_reset_global_value_expr(&mut func.value_expr.expr.0);
         }
 
-        typename_reset_global(&mut func.return_type.0);
+        let serialized =
+            rmp_serde::to_vec(&std_src_file).expect("Could not serialized mangled std");
+        std::fs::write(DUCK_MANGLED_STD_PATH.as_path(), serialized)
+            .expect("Could not write serialized mangled std");
 
-        typename_reset_global_value_expr(&mut func.value_expr.0);
-    }
+        std_src_file
+    };
 
     fn typename_reset_global(t: &mut TypeExpr) {
         match t {
@@ -254,32 +278,32 @@ fn parse_src_file(
                 target: lhs,
                 amount: rhs,
             } => {
-                typename_reset_global_value_expr(&mut lhs.0);
-                typename_reset_global_value_expr(&mut rhs.0);
+                typename_reset_global_value_expr(&mut lhs.expr.0);
+                typename_reset_global_value_expr(&mut rhs.expr.0);
             }
             ValueExpr::Negate(d)
             | ValueExpr::Async(d)
             | ValueExpr::Defer(d)
-            | ValueExpr::BitNot(d) => typename_reset_global_value_expr(&mut d.0),
+            | ValueExpr::BitNot(d) => typename_reset_global_value_expr(&mut d.expr.0),
             ValueExpr::As(v, t) => {
                 typename_reset_global(&mut t.0);
-                typename_reset_global_value_expr(&mut v.0);
+                typename_reset_global_value_expr(&mut v.expr.0);
             }
             ValueExpr::Deref(v) | ValueExpr::Ref(v) | ValueExpr::RefMut(v) => {
-                typename_reset_global_value_expr(&mut v.0)
+                typename_reset_global_value_expr(&mut v.expr.0)
             }
             ValueExpr::For {
                 ident: _,
                 target,
                 block,
             } => {
-                typename_reset_global_value_expr(&mut target.0);
-                typename_reset_global_value_expr(&mut block.0);
+                typename_reset_global_value_expr(&mut target.expr.0);
+                typename_reset_global_value_expr(&mut block.expr.0);
             }
             ValueExpr::HtmlString(contents) => {
                 for c in contents {
                     if let ValHtmlStringContents::Expr(e) = c {
-                        typename_reset_global_value_expr(&mut e.0);
+                        typename_reset_global_value_expr(&mut e.expr.0);
                     }
                 }
             }
@@ -289,19 +313,19 @@ fn parse_src_file(
                 else_arm,
                 span: _,
             } => {
-                typename_reset_global_value_expr(&mut value_expr.0);
+                typename_reset_global_value_expr(&mut value_expr.expr.0);
                 for arm in arms {
-                    typename_reset_global_value_expr(&mut arm.value_expr.0);
+                    typename_reset_global_value_expr(&mut arm.value_expr.expr.0);
                     typename_reset_global(&mut arm.type_case.0);
                 }
                 if let Some(else_arm) = else_arm {
-                    typename_reset_global_value_expr(&mut else_arm.value_expr.0);
+                    typename_reset_global_value_expr(&mut else_arm.value_expr.expr.0);
                     typename_reset_global(&mut else_arm.type_case.0);
                 }
             }
             ValueExpr::Block(exprs) => {
                 for expr in exprs {
-                    typename_reset_global_value_expr(&mut expr.0);
+                    typename_reset_global_value_expr(&mut expr.expr.0);
                 }
             }
             ValueExpr::Add(l, r)
@@ -317,8 +341,8 @@ fn parse_src_file(
             | ValueExpr::GreaterThanOrEquals(l, r)
             | ValueExpr::And(l, r)
             | ValueExpr::Or(l, r) => {
-                typename_reset_global_value_expr(&mut l.0);
-                typename_reset_global_value_expr(&mut r.0);
+                typename_reset_global_value_expr(&mut l.expr.0);
+                typename_reset_global_value_expr(&mut r.expr.0);
             }
             ValueExpr::Lambda(l) => {
                 let LambdaFunctionExpr {
@@ -337,11 +361,11 @@ fn parse_src_file(
                     typename_reset_global(&mut return_type.0);
                 }
 
-                typename_reset_global_value_expr(&mut value_expr.0);
+                typename_reset_global_value_expr(&mut value_expr.expr.0);
             }
             ValueExpr::ArrayAccess(target, idx) => {
-                typename_reset_global_value_expr(&mut target.0);
-                typename_reset_global_value_expr(&mut idx.0);
+                typename_reset_global_value_expr(&mut target.expr.0);
+                typename_reset_global_value_expr(&mut idx.expr.0);
             }
             ValueExpr::FunctionCall {
                 target,
@@ -351,25 +375,25 @@ fn parse_src_file(
             } => {
                 // todo: type_params
                 for p in params {
-                    typename_reset_global_value_expr(&mut p.0);
+                    typename_reset_global_value_expr(&mut p.expr.0);
                 }
-                typename_reset_global_value_expr(&mut target.0);
+                typename_reset_global_value_expr(&mut target.expr.0);
             }
             ValueExpr::FieldAccess { target_obj, .. } => {
-                typename_reset_global_value_expr(&mut target_obj.0);
+                typename_reset_global_value_expr(&mut target_obj.expr.0);
             }
             ValueExpr::Array(exprs, _ty) => {
                 for expr in exprs {
-                    typename_reset_global_value_expr(&mut expr.0);
+                    typename_reset_global_value_expr(&mut expr.expr.0);
                 }
             }
             ValueExpr::BoolNegate(expr) | ValueExpr::Return(Some(expr)) => {
-                typename_reset_global_value_expr(&mut expr.0);
+                typename_reset_global_value_expr(&mut expr.expr.0);
             }
             ValueExpr::FormattedString(content) => {
                 for c in content {
                     if let ValFmtStringContents::Expr(e) = c {
-                        typename_reset_global_value_expr(&mut e.0);
+                        typename_reset_global_value_expr(&mut e.expr.0);
                     }
                 }
             }
@@ -378,15 +402,15 @@ fn parse_src_file(
                 then,
                 r#else,
             } => {
-                typename_reset_global_value_expr(&mut condition.0);
-                typename_reset_global_value_expr(&mut then.0);
+                typename_reset_global_value_expr(&mut condition.expr.0);
+                typename_reset_global_value_expr(&mut then.expr.0);
                 if let Some(r#else) = r#else {
-                    typename_reset_global_value_expr(&mut r#else.0);
+                    typename_reset_global_value_expr(&mut r#else.expr.0);
                 }
             }
             ValueExpr::While { condition, body } => {
-                typename_reset_global_value_expr(&mut condition.0);
-                typename_reset_global_value_expr(&mut body.0);
+                typename_reset_global_value_expr(&mut condition.expr.0);
+                typename_reset_global_value_expr(&mut body.expr.0);
             }
             ValueExpr::VarDecl(b) => {
                 let Declaration {
@@ -401,27 +425,27 @@ fn parse_src_file(
                 }
 
                 if let Some(initializer) = initializer.as_mut() {
-                    typename_reset_global_value_expr(&mut initializer.0);
+                    typename_reset_global_value_expr(&mut initializer.expr.0);
                 }
             }
             ValueExpr::VarAssign(b) => {
                 let Assignment { target, value_expr } = &mut b.0;
-                typename_reset_global_value_expr(&mut target.0);
-                typename_reset_global_value_expr(&mut value_expr.0);
+                typename_reset_global_value_expr(&mut target.expr.0);
+                typename_reset_global_value_expr(&mut value_expr.expr.0);
             }
             ValueExpr::Tuple(fields) => {
                 for field in fields {
-                    typename_reset_global_value_expr(&mut field.0);
+                    typename_reset_global_value_expr(&mut field.expr.0);
                 }
             }
             ValueExpr::Duck(fields) => {
                 for field in fields {
-                    typename_reset_global_value_expr(&mut field.1.0);
+                    typename_reset_global_value_expr(&mut field.1.expr.0);
                 }
             }
             ValueExpr::Struct { fields, .. } => {
                 for field in fields {
-                    typename_reset_global_value_expr(&mut field.1.0);
+                    typename_reset_global_value_expr(&mut field.1.expr.0);
                 }
             }
             ValueExpr::RawStruct {
@@ -432,7 +456,7 @@ fn parse_src_file(
             } => {
                 *is_global = false;
                 for field in fields {
-                    typename_reset_global_value_expr(&mut field.1.0);
+                    typename_reset_global_value_expr(&mut field.1.expr.0);
                 }
                 for type_param in type_params {
                     typename_reset_global(&mut type_param.0);

@@ -7,7 +7,7 @@ use crate::{
     DARGO_DOT_DIR,
     cli::go_cli::{self, GoCliErrKind},
     dargo::cli::CompileArgs,
-    emit::{ir::join_ir, types::escape_string_for_go},
+    emit::{ir::join_ir, types::escape_string_for_go, value::Emit},
     lex,
     parse::value_parser::empty_range,
     parse_src_file,
@@ -186,7 +186,6 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
                 join_ir(
                     &test_case
                         .body
-                        .0
                         .emit(
                             &mut type_env,
                             &mut crate::emit::value::ToIr {
@@ -194,7 +193,6 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
                                 per_var_counter: vec![Default::default()],
                                 labels: Vec::new(),
                             },
-                            test_case.body.1
                         )
                         .0
                 )

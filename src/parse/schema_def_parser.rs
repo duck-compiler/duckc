@@ -1,30 +1,37 @@
 use chumsky::{input::BorrowInput, prelude::*};
+use serde::{Deserialize, Serialize};
 
-use crate::parse::{SS, Spanned};
+use crate::{
+    parse::{SS, Spanned},
+    semantics::type_resolve2::ValueExprWithType,
+};
 
 use super::{
     lexer::Token,
     type_parser::{TypeExpr, type_expression_parser},
-    value_parser::{ValueExpr, value_expr_parser},
+    value_parser::value_expr_parser,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct IfBranch {
-    pub condition: Spanned<ValueExpr>,
-    pub value_expr: Option<Spanned<ValueExpr>>,
+    pub condition: ValueExprWithType,
+    pub value_expr: Option<ValueExprWithType>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct SchemaField {
     pub name: String,
     pub type_expr: Spanned<TypeExpr>,
     pub if_branch: Option<Spanned<IfBranch>>,
-    pub else_branch_value_expr: Option<Spanned<ValueExpr>>,
+    pub else_branch_value_expr: Option<ValueExprWithType>,
     pub span: SS,
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct SchemaDefinition {
     pub name: String,
     pub fields: Vec<SchemaField>,
