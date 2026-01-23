@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
+use colored::Colorize;
+
 const INITIAL_MAP_CAP: usize = 4096;
 
 use indexmap::IndexMap;
@@ -17,7 +19,9 @@ use crate::{
     },
     semantics::{
         type_resolve::{
-            TravControlFlow, TypeEnv, build_struct_generic_id, infer_against, is_const_var, replace_generics_in_type_expr, trav_type_expr2, unset_const_func_call_assign, unset_copy_var_assign
+            TravControlFlow, TypeEnv, build_struct_generic_id, infer_against, is_const_var,
+            replace_generics_in_type_expr, trav_type_expr2, unset_const_func_call_assign,
+            unset_copy_var_assign,
         },
         typechecker::{check_type_compatability, check_type_compatability_full},
     },
@@ -715,6 +719,203 @@ fn resolve_all_types_function_definition<F>(
     typeresolve_value_expr(&mut fun_def.value_expr, globals, &mut local_scope);
 }
 
+fn typeresolve_struct(
+    value_expr: &mut ValueExprWithType,
+    globals: &GlobalsEnv,
+    locals: &mut LocalScoped,
+) {
+    let span = value_expr.expr.1;
+    let ValueExpr::Struct {
+        name,
+        fields,
+        type_params,
+    } = &mut value_expr.expr.0
+    else {
+        unreachable!("only pass structs to this function")
+    };
+
+    let Some(og_def) = globals.get_struct_header(name, type_params, globals) else {
+        let msg = &format!("Struct {name} does not exist");
+        failure_with_occurence(msg, span, [(msg, span)])
+    };
+
+    if fields.len() != og_def.fields.len() {
+        let msg = "Amount of fields doesn't match.";
+
+        let mut hints = vec![format!(
+            "{} has {} fields. You provided {} fields",
+            name,
+            og_def.fields.len(),
+            fields.len(),
+        )];
+
+        let fields_that_are_too_much = fields
+            .iter()
+            .map(|field| field.0.clone())
+            .filter(|field| {
+                !og_def
+                    .fields
+                    .iter()
+                    .map(|og_field| og_field.0.clone())
+                    .any(|field_name| field_name.as_str() == field.as_str())
+            })
+            .collect::<Vec<String>>();
+
+        let missing_fields = og_def
+            .fields
+            .iter()
+            .map(|field| field.0.clone())
+            .filter(|field| !fields.iter().any(|given_field| given_field.0 == *field))
+            .collect::<Vec<String>>();
+
+        if !fields_that_are_too_much.is_empty() {
+            hints.push(format!(
+                "The field(s) {} do not exist on type {}",
+                fields_that_are_too_much.join(", ").yellow(),
+                name.yellow(),
+            ));
+        }
+
+        if !missing_fields.is_empty() {
+            hints.push(format!(
+                "The field(s) {} are/is missing",
+                missing_fields.join(", ").to_string().yellow(),
+            ));
+        }
+
+        failure_with_occurence(msg, span, vec![(hints.join(". "), span)]);
+    }
+
+    for f in fields.iter() {
+        if !og_def.fields.iter().any(|og_field| name.as_str() == f.0) {
+            let msg = format!("Invalid field {}", f.0);
+            failure_with_occurence(
+                msg,
+                span,
+                [(
+                    format!(
+                        "{} doesn't have a field named {}. It has fields {}",
+                        name,
+                        f.0,
+                        og_def
+                            .fields
+                            .iter()
+                            .map(|f| f.0.clone())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    ),
+                    span,
+                )],
+            );
+        }
+    }
+
+    if type_params.is_empty() && !og_def.generics.is_empty() {
+        let og_def = og_def.clone();
+        let og_gen = og_def.generics.clone();
+
+        let mut infered_generics = og_def.generics.iter().cloned().fold(
+            IndexMap::<String, Option<Spanned<TypeExpr>>>::new(),
+            |mut acc, e| {
+                acc.insert(e.0.name.clone(), None);
+                acc
+            },
+        );
+
+        for (p, t) in fields.iter_mut().map(|f| {
+            (
+                &mut f.1,
+                og_def
+                    .fields
+                    .iter()
+                    .find_map(|f2| {
+                        if f2.0.as_str() == f.0.as_str() {
+                            Some(f2.1.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap(),
+            )
+        }) {
+            typeresolve_value_expr(p, globals, locals);
+            // infer_type_params(t, &p.typ, &mut infered_generics, type_env);
+        }
+
+        let mut new_type_params = Vec::new();
+
+        for (name, infered) in infered_generics.into_iter() {
+            if let Some(infered) = infered {
+                new_type_params.push(infered);
+            } else {
+                let msg = &format!("Could not infer type for template parameter {name}");
+                let span = og_gen
+                    .iter()
+                    .find_map(|x| {
+                        if x.0.name.as_str() == name.as_str() {
+                            Some(x.1)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap();
+
+                failure_with_occurence(
+                    msg,
+                    value_expr.expr.1,
+                    [
+                        (msg, value_expr.expr.1),
+                        (
+                            &format!("The type param {name} must be known at compiletime"),
+                            span,
+                        ),
+                    ],
+                );
+            }
+        }
+
+        *type_params = new_type_params;
+        typeresolve_struct(value_expr, globals, locals);
+        return;
+    }
+
+    if type_params.len() != og_def.generics.len() {
+        let msg = "Wrong number of type parameters A";
+        failure_with_occurence(msg, span, [(msg, span)])
+    }
+
+    // for t in type_params.iter_mut() {
+    //     resolve_all_aliases_type_expr(t, type_env);
+    // }
+
+    let def = globals
+        .get_struct_header(name.as_str(), type_params.as_slice(), globals)
+        .unwrap()
+        .clone();
+
+    for f in fields.iter_mut() {
+        let og_field = &def
+            .fields
+            .iter()
+            .find(|og_field| og_field.0.as_str() == f.0.as_str())
+            .unwrap()
+            .1;
+        // infer_against(&mut f.1, &og_field, type_env);
+        typeresolve_value_expr(&mut f.1, globals, locals);
+        check_type_compatability(og_field, &f.1.typ, &mut TypeEnv::default());
+        if f.1.typ.0.is_never() {
+            value_expr.typ = (TypeExpr::Never, value_expr.expr.1);
+        }
+    }
+    value_expr.typ = (
+        TypeExpr::Struct {
+            name: name.clone(),
+            type_params: type_params.clone(),
+        },
+        value_expr.expr.1,
+    );
+}
+
 fn resolve_all_types_source_file(source_file: &mut SourceFile) {
     const NUM_THREADS: usize = 8;
     let generics_output = GenericsOutput::default();
@@ -1211,200 +1412,6 @@ fn typeresolve_lambda(
     ));
 }
 
-fn typeresolve_struct(value_expr: &mut ValueExprWithType, globals: &GlobalsEnv, locals: &mut LocalScoped) {
-    let span = value_expr.expr.1;
-    let ValueExpr::Struct {
-        name,
-        fields,
-        type_params,
-    } = &mut value_expr.expr.0
-    else {
-        unreachable!("only pass structs to this function")
-    };
-
-    let og_def = globals.get_struct_header(name, type_params);
-
-    if fields.len() != og_def.fields.len() {
-        let msg = "Amount of fields doesn't match.";
-
-        let mut hints = vec![format!(
-            "{} has {} fields. You provided {} fields",
-            og_def.name,
-            og_def.fields.len(),
-            fields.len(),
-        )];
-
-        let fields_that_are_too_much = fields
-            .iter()
-            .map(|field| field.0.clone())
-            .filter(|field| {
-                !og_def
-                    .fields
-                    .iter()
-                    .map(|og_field| &og_field.name)
-                    .any(|field_name| *field_name == *field)
-            })
-            .collect::<Vec<String>>();
-
-        let missing_fields = og_def
-            .fields
-            .iter()
-            .map(|field| field.name.clone())
-            .filter(|field| !fields.iter().any(|given_field| given_field.0 == *field))
-            .collect::<Vec<String>>();
-
-        if !fields_that_are_too_much.is_empty() {
-            hints.push(format!(
-                "The field(s) {} do not exist on type {}",
-                fields_that_are_too_much.join(", ").yellow(),
-                og_def.name.yellow(),
-            ));
-        }
-
-        if !missing_fields.is_empty() {
-            hints.push(format!(
-                "The field(s) {} are/is missing",
-                missing_fields.join(", ").to_string().yellow(),
-            ));
-        }
-
-        failure_with_occurence(msg, span, vec![(hints.join(". "), span)]);
-    }
-
-    for f in fields.iter() {
-        if !og_def
-            .fields
-            .iter()
-            .any(|og_field| og_field.name.as_str() == f.0)
-        {
-            let msg = format!("Invalid field {}", f.0);
-            failure_with_occurence(
-                msg,
-                span,
-                [(
-                    format!(
-                        "{} doesn't have a field named {}. It has fields {}",
-                        og_def.name,
-                        f.0,
-                        og_def
-                            .fields
-                            .iter()
-                            .map(|f| f.name.clone())
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                    ),
-                    span,
-                )],
-            );
-        }
-    }
-
-    if type_params.is_empty() && !og_def.generics.is_empty() {
-        let og_def = og_def.clone();
-        let og_gen = og_def.generics.clone();
-
-        let mut infered_generics = og_def.generics.iter().cloned().fold(
-            IndexMap::<String, Option<Spanned<TypeExpr>>>::new(),
-            |mut acc, e| {
-                acc.insert(e.0.name.clone(), None);
-                acc
-            },
-        );
-
-        for (p, t) in fields.iter_mut().map(|f| {
-            (
-                &mut f.1,
-                og_def
-                    .fields
-                    .iter()
-                    .find_map(|f2| {
-                        if f2.name.as_str() == f.0.as_str() {
-                            Some(&f2.type_expr)
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap(),
-            )
-        }) {
-            typeresolve_value_expr(p, type_env);
-            infer_type_params(t, &p.typ, &mut infered_generics, type_env);
-        }
-
-        let mut new_type_params = Vec::new();
-
-        for (name, infered) in infered_generics.into_iter() {
-            if let Some(infered) = infered {
-                new_type_params.push(infered);
-            } else {
-                let msg = &format!("Could not infer type for template parameter {name}");
-                let span = og_gen
-                    .iter()
-                    .find_map(|x| {
-                        if x.0.name.as_str() == name.as_str() {
-                            Some(x.1)
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap();
-
-                failure_with_occurence(
-                    msg,
-                    value_expr.expr.1,
-                    [
-                        (msg, value_expr.expr.1),
-                        (
-                            &format!("The type param {name} must be known at compiletime"),
-                            span,
-                        ),
-                    ],
-                );
-            }
-        }
-
-        *type_params = new_type_params;
-        typeresolve_struct(value_expr, type_env);
-        return;
-    }
-
-    if type_params.len() != og_def.generics.len() {
-        let msg = "Wrong number of type parameters A";
-        failure_with_occurence(msg, span, [(msg, span)])
-    }
-
-    for t in type_params.iter_mut() {
-        resolve_all_aliases_type_expr(t, type_env);
-    }
-
-    let def = type_env
-        .get_struct_def_with_type_params_mut(name.as_str(), type_params.as_slice(), span)
-        .clone();
-
-    for f in fields.iter_mut() {
-        let og_field = def
-            .fields
-            .iter()
-            .find(|og_field| og_field.name.as_str() == f.0.as_str())
-            .cloned()
-            .unwrap()
-            .type_expr;
-        infer_against(&mut f.1, &og_field, type_env);
-        typeresolve_value_expr(&mut f.1, type_env);
-        check_type_compatability(&og_field, &f.1.typ, type_env);
-        if f.1.typ.0.is_never() {
-            value_expr.typ = (TypeExpr::Never, value_expr.expr.1);
-        }
-    }
-    value_expr.typ = (
-        TypeExpr::Struct {
-            name: name.clone(),
-            type_params: type_params.clone(),
-        },
-        value_expr.expr.1,
-    );
-}
-
 fn typeresolve_value_expr(
     value_expr: &mut ValueExprWithType,
     globals: &GlobalsEnv,
@@ -1439,6 +1446,7 @@ fn typeresolve_value_expr(
                 span,
             ));
         }
+        ValueExpr::Struct { .. } => typeresolve_struct(value_expr, globals, locals),
         ValueExpr::Lambda(..) => typeresolve_lambda(value_expr, globals, locals),
         ValueExpr::If { .. } => typeresolve_if_expr(value_expr, globals, locals),
         ValueExpr::While { .. } => typeresolve_while(value_expr, globals, locals),
