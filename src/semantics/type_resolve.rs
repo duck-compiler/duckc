@@ -33,7 +33,7 @@ use crate::{
     },
     semantics::{
         ident_mangler::{MANGLE_SEP, mangle, unmangle},
-        type_resolve2::{NeverTypeExt, ValueExprWithType},
+        type_resolve2::{GlobalsEnv, LocalScoped, NeverTypeExt, ValueExprWithType},
         typechecker::{check_type_compatability, check_type_compatability_full},
     },
     tags::Tag,
@@ -255,6 +255,15 @@ pub fn build_struct_generic_id(
     for t in type_params {
         res.push('_');
         res.push_str(&t.0.as_clean_go_type_name(type_env));
+    }
+    res
+}
+
+pub fn build_struct_generic_id2(struct_name: &str, type_params: &[Spanned<TypeExpr>]) -> String {
+    let mut res = struct_name.to_string();
+    for t in type_params {
+        res.push('_');
+        res.push_str(&t.0.as_clean_go_type_name2());
     }
     res
 }
@@ -2041,6 +2050,135 @@ fn replace_generics_in_named_duck_def(
 ) {
     for f in &mut def.fields {
         replace_generics_in_type_expr(&mut f.type_expr.0, set_params, type_env);
+    }
+}
+
+pub fn replace_generics_in_type_expr2(
+    expr: &mut TypeExpr,
+    set_params: &IndexMap<String, TypeExpr>,
+    globals: &GlobalsEnv,
+) {
+    match expr {
+        TypeExpr::Uninit => {}
+        TypeExpr::Indexed(..) => {}
+        TypeExpr::Byte => {}
+        TypeExpr::UInt => {}
+        TypeExpr::Statement | TypeExpr::Never => {}
+        TypeExpr::TemplParam(name) => {
+            if let Some(replacement) = set_params.get(name).cloned() {
+                *expr = replacement;
+            }
+        }
+        TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
+            replace_generics_in_type_expr2(&mut t.0, set_params, globals)
+        }
+        TypeExpr::Html => {}
+        TypeExpr::TypeOf(..) => {}
+        TypeExpr::KeyOf(type_expr) => {
+            replace_generics_in_type_expr2(&mut type_expr.as_mut().0, set_params, globals);
+        }
+        TypeExpr::Array(t) => {
+            replace_generics_in_type_expr2(&mut t.0, set_params, globals);
+        }
+        TypeExpr::Duck(d) => {
+            for f in &mut d.fields {
+                replace_generics_in_type_expr2(&mut f.type_expr.0, set_params, globals);
+            }
+        }
+        TypeExpr::Fun(params, ret, _) => {
+            for p in params {
+                replace_generics_in_type_expr2(&mut p.1.0, set_params, globals);
+            }
+            replace_generics_in_type_expr2(&mut ret.0, set_params, globals);
+        }
+        TypeExpr::Or(contents) => {
+            for c in contents {
+                replace_generics_in_type_expr2(&mut c.0, set_params, globals);
+            }
+        }
+        TypeExpr::Tuple(fields) => {
+            for f in fields {
+                replace_generics_in_type_expr2(&mut f.0, set_params, globals);
+            }
+        }
+        TypeExpr::TypeName(_, name, generics) => {
+            for (g, _) in generics {
+                replace_generics_in_type_expr2(g, set_params, globals);
+            }
+            if let Some(replacement) = set_params.get(name) {
+                *expr = replacement.clone();
+            }
+        }
+        TypeExpr::Struct { name, type_params } => {
+            if let Some(TypeExpr::TypeName(_, new_name, g)) = set_params.get(name)
+                && g.is_empty()
+            {
+                *name = new_name.clone();
+            }
+
+            for t in type_params {
+                replace_generics_in_type_expr2(&mut t.0, set_params, globals);
+            }
+        }
+        TypeExpr::NamedDuck { name, type_params } => {
+            if let Some(TypeExpr::TypeName(_, new_name, g)) = set_params.get(name)
+                && g.is_empty()
+            {
+                *name = new_name.clone();
+            }
+
+            for t in type_params {
+                replace_generics_in_type_expr2(&mut t.0, set_params, globals);
+            }
+        }
+        TypeExpr::Go(go_type) => {
+            let mut out = String::new();
+            let chars = go_type.chars().collect::<Vec<_>>();
+            let mut i = 0;
+
+            while i < chars.len() {
+                let current = chars[i];
+
+                if current == '{' {
+                    let mut other_curly_brace = i + 1;
+                    let mut inner_buf = String::new();
+                    while other_curly_brace < chars.len() && chars[other_curly_brace] != '}' {
+                        inner_buf.push(chars[other_curly_brace]);
+                        other_curly_brace += 1;
+                    }
+                    if other_curly_brace < chars.len() && chars[other_curly_brace] == '}' {
+                        let replacement = set_params.get(&inner_buf);
+                        if let Some(replacement) = replacement {
+                            out.push_str(&replacement.as_go_type_annotation2(globals));
+                            i = other_curly_brace;
+                        }
+                    }
+                } else {
+                    out.push(current);
+                }
+                i += 1;
+            }
+            *go_type = out;
+        }
+        TypeExpr::Any
+        | TypeExpr::Char
+        | TypeExpr::Bool(..)
+        | TypeExpr::Int
+        | TypeExpr::Float
+        | TypeExpr::String(..)
+        | TypeExpr::Tag(..) => {}
+        TypeExpr::RawTypeName(_, typename, _) => {
+            if typename.len() == 1
+                && let Some(replacement) = set_params.get(&typename[0])
+            {
+                *expr = replacement.clone();
+            }
+        }
+        TypeExpr::And(variants) => {
+            for variant in variants.iter_mut() {
+                replace_generics_in_type_expr2(&mut variant.0, set_params, globals);
+            }
+        }
     }
 }
 
@@ -3981,6 +4119,108 @@ pub fn find_returns(v: &mut ValueExprWithType, env: &mut TypeEnv) -> Vec<ValueEx
     out.take()
 }
 
+pub fn infer_against2(v: &mut ValueExprWithType, req: &Spanned<TypeExpr>, globals: &GlobalsEnv) {
+    match &mut v.expr.0 {
+        ValueExpr::Return(inner) => {
+            infer_against2(inner.as_mut().unwrap(), req, globals);
+        }
+        ValueExpr::Duck(fields) => {
+            if let TypeExpr::Duck(Duck { fields: req_fields }) = &req.0 {
+                for field in fields {
+                    if let Some(req_field) = req_fields
+                        .iter()
+                        .find(|t| t.name.as_str() == field.0.as_str())
+                    {
+                        infer_against2(&mut field.1, &req_field.type_expr, globals);
+                    }
+                }
+                v.expr.0 = ValueExpr::As(v.clone().into(), req.clone());
+            }
+        }
+        ValueExpr::InlineGo(_, ty) => {
+            if ty.is_none() {
+                *ty = Some(req.clone());
+            }
+        }
+        ValueExpr::Struct {
+            name,
+            fields: _,
+            type_params,
+        } => {
+            if let TypeExpr::Struct {
+                name: req_name,
+                type_params: req_type_params,
+            } = &req.0
+                && name.as_str() == req_name.as_str()
+                && type_params.is_empty()
+            {
+                *type_params = req_type_params.to_vec();
+            }
+        }
+        ValueExpr::Int(_, ty) => {
+            if matches!(req.0, TypeExpr::Int) || matches!(req.0, TypeExpr::UInt) {
+                *ty = Some(req.clone());
+            }
+        }
+        ValueExpr::Ref(target) | ValueExpr::RefMut(target) => {
+            if let TypeExpr::Ref(next_ty) | TypeExpr::RefMut(next_ty) = &req.0 {
+                infer_against2(target, next_ty, globals);
+            }
+        }
+        ValueExpr::Array(exprs, v_t) => {
+            if let TypeExpr::Array(req_t) = &req.0 {
+                *v_t = Some(req_t.as_ref().clone());
+                for expr in exprs {
+                    infer_against2(expr, req_t, globals);
+                }
+            }
+        }
+        ValueExpr::Tuple(exprs) => {
+            if let TypeExpr::Tuple(fields) = &req.0 {
+                for (e, ty) in exprs.iter_mut().zip(fields.iter()) {
+                    infer_against2(e, ty, globals);
+                }
+            }
+        }
+        ValueExpr::Block(exprs) => exprs
+            .last_mut()
+            .iter_mut()
+            .for_each(|v| infer_against2(v, req, globals)),
+        ValueExpr::Lambda(expr) => {
+            if let TypeExpr::Fun(params, ret_type, _) = &req.0 {
+                for (expr_type, def_type) in expr
+                    .params
+                    .iter_mut()
+                    .map(|(_, ty)| ty)
+                    .zip(params.iter().map(|(_, x)| x))
+                {
+                    if expr_type.is_none() {
+                        *expr_type = Some(def_type.clone());
+                    }
+                }
+
+                if expr.return_type.is_none() {
+                    expr.return_type = Some(ret_type.as_ref().clone());
+                }
+            }
+        }
+        ValueExpr::If {
+            condition: _,
+            then,
+            r#else,
+        } => {
+            infer_against2(then, req, globals);
+            if let Some(r#else) = r#else {
+                infer_against2(r#else, req, globals);
+            }
+        }
+        ValueExpr::Negate(inner) => {
+            infer_against2(inner, req, globals);
+        }
+        _ => {}
+    }
+}
+
 pub fn infer_against(v: &mut ValueExprWithType, req: &Spanned<TypeExpr>, type_env: &TypeEnv) {
     match &mut v.expr.0 {
         ValueExpr::Return(inner) => {
@@ -5741,6 +5981,22 @@ fn typeresolve_var_decl(value_expr: &mut ValueExprWithType, type_env: &mut TypeE
         false,
     );
     value_expr.typ = (TypeExpr::Statement, span);
+}
+
+pub fn is_base_const_var<'a>(v: &'a ValueExprWithType, locals: &LocalScoped) -> Option<&'a str> {
+    match &v.expr.0 {
+        ValueExpr::ArrayAccess(target, ..) => is_base_const_var(target, locals),
+        ValueExpr::Deref(inner) => is_base_const_var(inner, locals),
+        ValueExpr::FieldAccess {
+            target_obj,
+            field_name: _,
+        } => is_base_const_var(target_obj, locals),
+        ValueExpr::Variable(_, name, ..) => locals
+            .get_info_for_ident(name)
+            .filter(|f| f.is_const)
+            .map(|x| name.as_str()),
+        _ => None,
+    }
 }
 
 pub fn unset_copy_var_assign(v: &mut ValueExprWithType) {

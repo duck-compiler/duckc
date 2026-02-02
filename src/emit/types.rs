@@ -14,6 +14,7 @@ use crate::{
     semantics::{
         ident_mangler::{MANGLE_SEP, mangle},
         type_resolve::{NeedsSearchResult, TypeEnv},
+        type_resolve2::GlobalsEnv,
     },
 };
 
@@ -1926,6 +1927,79 @@ impl AsDereferenced for Spanned<TypeExpr> {
 }
 
 impl TypeExpr {
+    pub fn as_go_type_annotation2(&self, globals: &GlobalsEnv) -> String {
+        return match self {
+            TypeExpr::Uninit => panic!("uninit should be replaced"),
+            TypeExpr::Indexed(..) => unreachable!("indexed should be resolved during type resolve"),
+            TypeExpr::Byte => "byte".to_string(),
+            TypeExpr::Statement => "Tup_".to_string(),
+            TypeExpr::Never => "any".to_string(),
+            TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
+                format!("*{}", t.0.as_go_type_annotation2(globals))
+            }
+            TypeExpr::Html => "func (env *TemplEnv) string".to_string(),
+            TypeExpr::TypeOf(..) => panic!("typeof should be replace by now"),
+            TypeExpr::KeyOf(..) => panic!("keyof should be replace by now"),
+            TypeExpr::RawTypeName(..) => panic!(),
+            TypeExpr::Array(t) => format!("[]{}", t.0.as_go_type_annotation2(globals)),
+            TypeExpr::Any => "interface{}".to_string(),
+            TypeExpr::Tag(..) => self.as_clean_go_type_name2(),
+            TypeExpr::Bool(..) => "bool".to_string(),
+            TypeExpr::Int => "int".to_string(),
+            TypeExpr::Float => "float64".to_string(),
+            TypeExpr::UInt => "uint".to_string(),
+            TypeExpr::Char => "rune".to_string(),
+            TypeExpr::String(..) => "string".to_string(),
+            TypeExpr::Go(identifier) => identifier.clone(),
+
+            // todo: type params
+            TypeExpr::TypeName(_, name, _) => panic!("type name should be replaced {name}"),
+            TypeExpr::Fun(params, return_type, _) => format!(
+                "func({}) {}",
+                params
+                    .iter()
+                    .map(|(name, type_expr)| match name {
+                        Some(name) =>
+                            format!("{name} {}", type_expr.0.as_go_type_annotation2(globals)),
+                        None => type_expr.0.as_go_type_annotation2(globals),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(","),
+                return_type.0.as_go_type_annotation2(globals),
+            ),
+            TypeExpr::Struct {
+                name: _struct,
+                type_params: _,
+            } => format!(
+                "*{}",
+                fix_type_name(&self.as_clean_go_type_name2(), &globals.all_go_imports)
+            ),
+            TypeExpr::NamedDuck { .. } => {
+                fix_type_name(&self.as_clean_go_type_name2(), &globals.all_go_imports)
+            }
+            TypeExpr::Duck(duck) => {
+                let mut fields = duck.fields.clone();
+                fields.sort_by_key(|field| field.name.clone());
+
+                format!(
+                    "interface {{\n{}\n}}",
+                    fields
+                        .iter()
+                        .map(|field| format!(
+                            "   Has{}[{}]",
+                            field.name,
+                            field.type_expr.0.as_go_type_annotation2(globals)
+                        ))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                )
+            }
+            TypeExpr::Tuple(_fields) => self.as_clean_go_type_name2(),
+            TypeExpr::Or(_variants) => "any".to_string(),
+            TypeExpr::And(_variants) => "any".to_string(),
+        };
+    }
     pub fn as_go_type_annotation(&self, type_env: &mut TypeEnv) -> String {
         return match self {
             TypeExpr::Uninit => panic!("uninit should be replaced"),
@@ -2001,6 +2075,96 @@ impl TypeExpr {
             TypeExpr::Tuple(_fields) => self.as_clean_go_type_name(type_env),
             TypeExpr::Or(_variants) => "any".to_string(),
             TypeExpr::And(_variants) => "any".to_string(),
+        };
+    }
+
+    pub fn type_id2(&self, type_env: &GlobalsEnv) -> String {
+        return match self {
+            TypeExpr::Uninit => panic!("type expr uninit"),
+            TypeExpr::Indexed(..) => unreachable!("should be reached"),
+            TypeExpr::Byte => "byte".to_string(),
+            TypeExpr::Statement => "Statement".to_string(),
+            TypeExpr::Never => "Never".to_string(),
+            TypeExpr::TemplParam(name) => panic!("templ param should not be here {name}"),
+            TypeExpr::Ref(t) => format!("Ref_{}", t.0.type_id2(type_env)),
+            TypeExpr::RefMut(t) => format!("RefMut_{}", t.0.type_id2(type_env)),
+            TypeExpr::Html => "Html".to_string(),
+            TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
+            TypeExpr::KeyOf(..) => panic!("keyof should be replaced"),
+
+            TypeExpr::RawTypeName(_, ident, _) => {
+                panic!("{ident:?}")
+            }
+            TypeExpr::String(_) => "string".to_string(),
+            TypeExpr::Array(t) => format!("Array_{}", t.0.type_id2(type_env)),
+            TypeExpr::Any => "Any".to_string(),
+            TypeExpr::Bool(..) => "bool".to_string(),
+            TypeExpr::Int => "int".to_string(),
+            TypeExpr::UInt => "uint".to_string(),
+            TypeExpr::Float => "float64".to_string(),
+            TypeExpr::Char => "rune".to_string(),
+            TypeExpr::Tag(..) => self.as_clean_go_type_name2(),
+            TypeExpr::Go(identifier) => identifier.clone().replace(".", "_"),
+            // todo: type params
+            TypeExpr::TypeName(_, name, _type_params) => name.clone(),
+            TypeExpr::Fun(params, return_type, _) => format!(
+                "Fun_From_{}_To_{}",
+                params
+                    .iter()
+                    .map(|(name, type_expr)| format!(
+                        "{}_{}",
+                        name.clone().unwrap_or_else(|| "".to_string()),
+                        type_expr.0.type_id2(type_env)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("_"),
+                return_type.0.type_id2(type_env),
+            ),
+            TypeExpr::Struct { .. } => self.as_clean_go_type_name2(),
+            TypeExpr::NamedDuck { .. } => self.as_clean_go_type_name2(),
+            TypeExpr::Duck(duck) => format!("Duck_{}", {
+                let mut fields = duck.fields.clone();
+                fields.sort_by(|a, b| a.name.cmp(&b.name));
+                fields
+                    .iter()
+                    .map(|field| format!("{}_{}", field.name, field.type_expr.0.type_id2(type_env)))
+                    .collect::<Vec<_>>()
+                    .join("_")
+            }),
+            TypeExpr::Tuple(fields) => {
+                format!(
+                    "Tup_{}",
+                    fields
+                        .iter()
+                        .map(|type_expr| type_expr.0.type_id2(type_env))
+                        .collect::<Vec<_>>()
+                        .join("_")
+                )
+            }
+            TypeExpr::Or(variants) => {
+                // mvmo 03.07.25: Check for double sort
+                let mut variants = variants
+                    .clone()
+                    .iter()
+                    .map(|variant| variant.0.type_id2(type_env))
+                    .collect::<Vec<_>>();
+
+                variants.sort();
+
+                return format!("Union_{}", variants.join("_or_"));
+            }
+            TypeExpr::And(variants) => {
+                // mvmo 03.07.25: Check for double sort
+                let mut variants = variants
+                    .clone()
+                    .iter()
+                    .map(|variant| variant.0.type_id2(type_env))
+                    .collect::<Vec<_>>();
+
+                variants.sort();
+
+                return format!("Intersection_{}", variants.join("_and_"));
+            }
         };
     }
 
@@ -2112,6 +2276,124 @@ impl TypeExpr {
 
     pub fn is_statement(&self) -> bool {
         matches!(self, TypeExpr::Statement)
+    }
+
+    pub fn as_clean_go_type_name2(&self) -> String {
+        return match self {
+            TypeExpr::Uninit => unreachable!("Uninit"),
+            TypeExpr::Indexed(..) => unreachable!("indexed should have been replaced"),
+            TypeExpr::Byte => "byte".to_string(),
+            TypeExpr::Statement => "Statement".to_string(),
+            TypeExpr::Never => "Never".to_string(),
+            TypeExpr::TemplParam(name) => panic!("should not be here {name}"),
+            TypeExpr::Ref(t) => format!("Ref___{}", t.0.as_clean_go_type_name2()),
+            TypeExpr::RefMut(t) => format!("RefMut___{}", t.0.as_clean_go_type_name2()),
+            TypeExpr::Html => "Html".to_string(),
+            TypeExpr::TypeOf(..) => panic!("typeof should be replaced"),
+            TypeExpr::KeyOf(..) => panic!("keyof should be replaced"),
+
+            TypeExpr::RawTypeName(_, ident, _) => {
+                panic!("{ident:?}")
+            }
+            TypeExpr::Array(t) => format!("Array_{}", t.0.as_clean_go_type_name2()),
+            TypeExpr::Any => "Any".to_string(),
+            TypeExpr::Bool(..) => "bool".to_string(),
+            TypeExpr::Int => "int".to_string(),
+            TypeExpr::UInt => "uint".to_string(),
+            TypeExpr::Float => "float64".to_string(),
+            TypeExpr::Char => "rune".to_string(),
+            TypeExpr::String(..) => "string".to_string(),
+            TypeExpr::Tag(identifier) => format!("Tag__{identifier}"),
+            TypeExpr::Go(identifier) => identifier.clone().replace(".", "_"),
+            // todo: type params
+            TypeExpr::TypeName(_, name, type_params) => TypeExpr::Struct {
+                name: name.clone(),
+                type_params: type_params.clone(),
+            }
+            .as_clean_go_type_name2(),
+            TypeExpr::Fun(params, return_type, is_mut) => format!(
+                "Fun_{}_From_{}_To_{}",
+                if *is_mut { "Mut" } else { "NotMut" },
+                params
+                    .iter()
+                    .map(|(name, type_expr)| format!(
+                        "{}_{}",
+                        name.clone().unwrap_or_else(|| "".to_string()),
+                        type_expr.0.as_clean_go_type_name2()
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("_"),
+                return_type.0.as_clean_go_type_name2(),
+            ),
+            TypeExpr::Struct {
+                name: s,
+                type_params,
+            } => format!(
+                "Struct_{}",
+                vec![s.clone()]
+                    .into_iter()
+                    .chain(type_params.iter().map(|(x, _)| x.as_clean_go_type_name2()),)
+                    .collect::<Vec<_>>()
+                    .join(MANGLE_SEP)
+            ),
+            TypeExpr::NamedDuck {
+                name: s,
+                type_params,
+            } => format!(
+                "Interface_{}",
+                vec![s.clone()]
+                    .into_iter()
+                    .chain(type_params.iter().map(|(x, _)| x.as_clean_go_type_name2()),)
+                    .collect::<Vec<_>>()
+                    .join(MANGLE_SEP),
+            ),
+            TypeExpr::Duck(duck) => format!(
+                "Duck_{}",
+                duck.fields
+                    .iter()
+                    .map(|field| format!(
+                        "{}_{}",
+                        field.name,
+                        field.type_expr.0.as_clean_go_type_name2()
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("_")
+            ),
+            TypeExpr::Tuple(fields) => {
+                format!(
+                    "Tup_{}",
+                    fields
+                        .iter()
+                        .map(|type_expr| type_expr.0.as_clean_go_type_name2())
+                        .collect::<Vec<_>>()
+                        .join("_")
+                )
+            }
+            TypeExpr::Or(variants) => {
+                // mvmo 03.07.25: Check for double sort
+                let mut variants = variants
+                    .clone()
+                    .iter()
+                    .map(|variant| variant.0.as_clean_go_type_name2())
+                    .collect::<Vec<_>>();
+
+                variants.sort();
+
+                return format!("Union_{}", variants.join("_or_"));
+            }
+            TypeExpr::And(variants) => {
+                // mvmo 03.07.25: Check for double sort
+                let mut variants = variants
+                    .clone()
+                    .iter()
+                    .map(|variant| variant.0.as_clean_go_type_name2())
+                    .collect::<Vec<_>>();
+
+                variants.sort();
+
+                return format!("Intersection_{}", variants.join("_and_"));
+            }
+        };
     }
 
     pub fn as_clean_go_type_name(&self, type_env: &mut TypeEnv) -> String {

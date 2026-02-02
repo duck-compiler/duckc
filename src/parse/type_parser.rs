@@ -11,7 +11,7 @@ use crate::{
         generics_parser::{Generic, generics_parser},
         value_parser::{TypeParam, empty_range},
     },
-    semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
+    semantics::{ident_mangler::mangle, type_resolve::TypeEnv, type_resolve2::GlobalsEnv},
 };
 
 use super::lexer::Token;
@@ -614,6 +614,32 @@ impl TypeExpr {
         }
     }
 
+    pub fn implements_from_json2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_from_json2(globals),
+            TypeExpr::Array(t) => t.0.implements_from_json2(globals),
+            TypeExpr::Duck(Duck { fields }) => fields
+                .iter()
+                .all(|f| f.type_expr.0.implements_from_json2(globals)),
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_from_json2(globals)),
+            TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_from_json2(globals)),
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::FromJson)
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Byte
+            | TypeExpr::Float
+            | TypeExpr::UInt
+            | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
     pub fn implements_from_json(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_from_json(type_env),
@@ -636,6 +662,37 @@ impl TypeExpr {
             | TypeExpr::Byte
             | TypeExpr::Float
             | TypeExpr::UInt
+            | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn implements_to_json2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_to_json2(globals),
+            TypeExpr::Array(t) => t.0.implements_to_json2(globals),
+            TypeExpr::Duck(Duck { fields }) => fields
+                .iter()
+                .all(|f| f.type_expr.0.implements_to_json2(globals)),
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_to_json2(globals)),
+            TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_to_json2(globals)),
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::ToJson)
+                    || (def.methods.get("to_json").is_some_and(|f| {
+                        f.is_mut
+                            && f.params.is_empty()
+                            && matches!(f.return_type.0, TypeExpr::String(..))
+                    }))
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Float
+            | TypeExpr::UInt
+            | TypeExpr::Byte
             | TypeExpr::Tag(..) => true,
             _ => false,
         }
@@ -673,6 +730,36 @@ impl TypeExpr {
         }
     }
 
+    pub fn implements_to_string2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_to_string2(globals),
+            TypeExpr::Array(t) => t.0.implements_to_string2(globals),
+            TypeExpr::Duck(Duck { fields }) => fields
+                .iter()
+                .all(|f| f.type_expr.0.implements_to_string2(globals)),
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_to_string2(globals)),
+            TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_to_string2(globals)),
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::ToString)
+                    || (def.methods.get("to_string").is_some_and(|f| {
+                        f.params.is_empty()
+                            && matches!(f.return_type.0, TypeExpr::String(..))
+                            && !f.is_mut
+                    }))
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Byte
+            | TypeExpr::Float
+            | TypeExpr::UInt
+            | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
     pub fn implements_to_string(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_to_string(type_env),
@@ -701,6 +788,36 @@ impl TypeExpr {
             | TypeExpr::Float
             | TypeExpr::UInt
             | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn implements_hash2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_hash2(globals),
+            TypeExpr::Array(t) => t.0.implements_hash2(globals),
+            TypeExpr::Duck(Duck { fields: _ }) => {
+                false
+                // && fields
+                //     .iter()
+                //     .all(|f| f.type_expr.0.implements_hash2(globals))
+            }
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_hash2(globals)),
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::Hash)
+                    || (def.methods.get("hash").is_some_and(|f| {
+                        f.params.is_empty() && f.return_type.0 == TypeExpr::Int && !f.is_mut
+                    }))
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Byte
+            | TypeExpr::UInt
+            | TypeExpr::Float => true,
             _ => false,
         }
     }
@@ -734,6 +851,39 @@ impl TypeExpr {
             | TypeExpr::Byte
             | TypeExpr::UInt
             | TypeExpr::Float => true,
+            _ => false,
+        }
+    }
+
+    pub fn implements_clone2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_clone2(globals),
+            TypeExpr::Array(t) => t.0.implements_clone2(globals),
+            TypeExpr::Duck(Duck { fields: _ }) => {
+                false
+                // && fields
+                //     .iter()
+                //     .all(|f| f.type_expr.0.implements_clone2(globals))
+            }
+            TypeExpr::Tuple(t) | TypeExpr::Or(t) => {
+                t.iter().all(|t| t.0.implements_clone2(globals))
+            }
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::Clone)
+                    || (def.methods.get("clone").is_some_and(|f| {
+                        !f.is_mut && f.params.is_empty() && &f.return_type.0 == self
+                    }))
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Float
+            | TypeExpr::UInt
+            | TypeExpr::Byte
+            | TypeExpr::Tag(..) => true,
             _ => false,
         }
     }
@@ -884,6 +1034,38 @@ impl TypeExpr {
         }
     }
 
+    pub fn implements_eq2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_eq2(globals),
+            TypeExpr::Array(t) => t.0.implements_eq2(globals),
+            TypeExpr::Duck(Duck { fields }) => {
+                fields.iter().all(|f| f.type_expr.0.implements_eq2(globals))
+            }
+            TypeExpr::Tuple(t) | TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_eq2(globals)),
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::Eq)
+                    || def.methods.get("eq").is_some_and(|f| {
+                        f.params.len() == 1
+                            && f.params[0].clone().0.into_empty_span().0
+                                == TypeExpr::Ref(self.clone().into_empty_span().into())
+                            && matches!(f.return_type.0, TypeExpr::Bool(..))
+                            && !f.is_mut
+                    })
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Byte
+            | TypeExpr::Char
+            | TypeExpr::Float
+            | TypeExpr::UInt
+            | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
     pub fn implements_eq(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_eq(type_env),
@@ -913,6 +1095,38 @@ impl TypeExpr {
             | TypeExpr::Float
             | TypeExpr::UInt
             | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn implements_copy2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::String(..)
+            | TypeExpr::Int
+            | TypeExpr::Float
+            | TypeExpr::Byte
+            | TypeExpr::Bool(..)
+            | TypeExpr::Go(..)
+            | TypeExpr::Tag(..)
+            | TypeExpr::Html
+            | TypeExpr::UInt
+            | TypeExpr::Never
+            | TypeExpr::Fun(..)
+            | TypeExpr::Char => true,
+            TypeExpr::Tuple(fields) | TypeExpr::Or(fields) => {
+                fields.iter().all(|(t, _)| t.implements_copy2(globals))
+            }
+            TypeExpr::Duck(Duck { fields: _ }) => true,
+            TypeExpr::Array(t) => t.0.implements_copy2(globals),
+            TypeExpr::Ref(..) => true,
+            TypeExpr::RefMut(..) => true,
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.fields
+                    .clone()
+                    .iter()
+                    .all(|f| f.1.0.implements_copy2(globals))
+            }
             _ => false,
         }
     }

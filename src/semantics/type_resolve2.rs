@@ -8,22 +8,27 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    emit::types::AsDereferenced,
     parse::{
-        Field, Spanned, failure_with_occurence,
+        Field, SS, Spanned, failure_with_occurence,
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         generics_parser::Generic,
         source_file_parser::SourceFile,
         struct_parser::{DerivableInterface, StructDefinition},
         type_parser::{Duck, TypeExpr, merge_or},
-        value_parser::{TypeParam, ValueExpr},
+        value_parser::{
+            MatchArm, TypeParam, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
+            empty_range, type_expr_into_empty_range,
+        },
     },
     semantics::{
+        ident_mangler::mangle,
         type_resolve::{
-            TravControlFlow, TypeEnv, build_struct_generic_id, infer_against, is_const_var,
-            replace_generics_in_type_expr, trav_type_expr2, unset_const_func_call_assign,
-            unset_copy_var_assign,
+            TravControlFlow, TypeEnv, build_struct_generic_id, build_struct_generic_id2,
+            infer_against, infer_against2, is_base_const_var, is_const_var,
+            replace_generics_in_type_expr, replace_generics_in_type_expr2, trav_type_expr2,
+            unset_const_func_call_assign, unset_copy_var_assign,
         },
-        typechecker::{check_type_compatability, check_type_compatability_full},
     },
 };
 
@@ -71,6 +76,12 @@ pub struct StructHeader {
     pub derived: HashSet<DerivableInterface>,
 }
 
+impl StructHeader {
+    pub fn is_mut_method(&self, name: &str) -> bool {
+        self.methods.get(name).filter(|s| s.is_mut).is_some()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct InterfaceDefinition {
     pub fields: HashMap<String, Spanned<TypeExpr>>,
@@ -100,6 +111,7 @@ pub struct GlobalsEnv<'a> {
     pub global_variables: HashMap<String, VariableInfo>,
     pub generics_output: &'a GenericsOutput,
     pub used_objects: scc::HashSet<String>,
+    pub all_go_imports: HashSet<String>,
 }
 
 impl<'a> GlobalsEnv<'a> {
@@ -114,15 +126,11 @@ impl<'a> GlobalsEnv<'a> {
             function_headers: HashMap::with_capacity(INITIAL_MAP_CAP),
             global_variables: HashMap::with_capacity(INITIAL_MAP_CAP),
             generics_output: generics,
+            all_go_imports: HashSet::with_capacity(128),
         }
     }
 
-    pub fn get_fun_header(
-        &self,
-        name: &str,
-        params: &[Spanned<TypeExpr>],
-        globals: &GlobalsEnv,
-    ) -> Option<FunHeader> {
+    pub fn get_fun_header(&self, name: &str, params: &[Spanned<TypeExpr>]) -> Option<FunHeader> {
         if params.is_empty() {
             self.function_headers.get(name).cloned()
         } else {
@@ -135,7 +143,7 @@ impl<'a> GlobalsEnv<'a> {
                 let def = self.functions.get(name);
                 def.map(|s| {
                     self.generics_output
-                        .function_create_generic_instance(s, globals, params);
+                        .function_create_generic_instance(s, self, params);
                     self.generics_output
                         .get_generic_function_header(name, params)
                 })
@@ -150,9 +158,8 @@ impl<'a> GlobalsEnv<'a> {
         struct_params: &[Spanned<TypeExpr>],
         name: &str,
         params: &[Spanned<TypeExpr>],
-        globals: &GlobalsEnv,
     ) -> Option<MethodHeader> {
-        self.get_struct_header(struct_name, struct_params, globals)
+        self.get_struct_header(struct_name, struct_params)
             .map(|s| {
                 if params.is_empty() {
                     s.methods.get(name).cloned()
@@ -162,21 +169,17 @@ impl<'a> GlobalsEnv<'a> {
                         .or_else(|| {
                             self.generics_output.struct_create_generic_instance(
                                 self.structs.get(struct_name).unwrap(),
-                                globals,
+                                self,
                                 struct_params,
                             );
                             let s = self.generics_output.generic_structs.read_sync(
-                                &build_struct_generic_id(
-                                    struct_name,
-                                    struct_params,
-                                    &mut TypeEnv::default(),
-                                ),
+                                &build_struct_generic_id2(struct_name, struct_params),
                                 |_, v| v.clone(),
                             );
 
                             s.map(|s| {
                                 self.generics_output
-                                    .method_create_generic_instance(&s, name, params, globals);
+                                    .method_create_generic_instance(&s, name, params, self);
                                 self.generics_output.get_generic_method_header(
                                     struct_name,
                                     struct_params,
@@ -195,7 +198,6 @@ impl<'a> GlobalsEnv<'a> {
         &self,
         name: &str,
         params: &[Spanned<TypeExpr>],
-        globals: &GlobalsEnv,
     ) -> Option<StructHeader> {
         if params.is_empty() {
             self.struct_headers.get(name).cloned()
@@ -206,7 +208,7 @@ impl<'a> GlobalsEnv<'a> {
                 let def = self.structs.get(name);
                 def.map(|s| {
                     self.generics_output
-                        .struct_create_generic_instance(s, globals, params);
+                        .struct_create_generic_instance(s, self, params);
                     self.generics_output.get_generic_struct_header(name, params)
                 })
                 .flatten()
@@ -233,10 +235,8 @@ impl GenericsOutput {
         name: &str,
         params: &[Spanned<TypeExpr>],
     ) -> Option<FunHeader> {
-        self.generic_function_headers.read_sync(
-            &build_struct_generic_id(name, params, &mut TypeEnv::default()),
-            |_, v| v.clone(),
-        )
+        self.generic_function_headers
+            .read_sync(&build_struct_generic_id2(name, params), |_, v| v.clone())
     }
 
     pub fn get_generic_method_header(
@@ -248,17 +248,11 @@ impl GenericsOutput {
     ) -> Option<MethodHeader> {
         self.generic_method_headers
             .read_sync(
-                &build_struct_generic_id(
-                    &build_struct_generic_id(struct_name, struct_params, &mut TypeEnv::default()),
+                &build_struct_generic_id2(
+                    &build_struct_generic_id2(struct_name, struct_params),
                     params,
-                    &mut TypeEnv::default(),
                 ),
-                |_, v| {
-                    v.read_sync(
-                        &build_struct_generic_id(name, params, &mut TypeEnv::default()),
-                        |_, v| v.clone(),
-                    )
-                },
+                |_, v| v.read_sync(&build_struct_generic_id2(name, params), |_, v| v.clone()),
             )
             .flatten()
     }
@@ -268,10 +262,8 @@ impl GenericsOutput {
         name: &str,
         params: &[Spanned<TypeExpr>],
     ) -> Option<StructHeader> {
-        self.generic_struct_headers.read_sync(
-            &build_struct_generic_id(name, params, &mut TypeEnv::default()),
-            |_, v| v.clone(),
-        )
+        self.generic_struct_headers
+            .read_sync(&build_struct_generic_id2(name, params), |_, v| v.clone())
     }
 
     pub fn method_create_generic_instance(
@@ -281,7 +273,7 @@ impl GenericsOutput {
         params: &[Spanned<TypeParam>],
         globals: &GlobalsEnv,
     ) {
-        let id = build_struct_generic_id(&method_name, params, &mut TypeEnv::default());
+        let id = build_struct_generic_id2(&method_name, params);
 
         if !self
             .generic_block
@@ -347,7 +339,7 @@ impl GenericsOutput {
         globals: &GlobalsEnv,
         params: &[Spanned<TypeParam>],
     ) {
-        let id = build_struct_generic_id(&base_def.name, params, &mut TypeEnv::default());
+        let id = build_struct_generic_id2(&base_def.name, params);
         if !self.generic_block.insert_sync(id.clone()).is_ok() {
             return;
         }
@@ -385,7 +377,7 @@ impl GenericsOutput {
         globals: &GlobalsEnv,
         params: &[Spanned<TypeParam>],
     ) {
-        let id = build_struct_generic_id(&base_def.name, params, &mut TypeEnv::default());
+        let id = build_struct_generic_id2(&base_def.name, params);
         if !self.generic_block.insert_sync(id.clone()).is_ok() {
             return;
         }
@@ -545,11 +537,7 @@ fn reduce_type_expr(t: &mut Spanned<TypeExpr>, globals: &GlobalsEnv, self_type: 
 
                         let mut rhs = alias.expr.0.clone();
 
-                        replace_generics_in_type_expr(
-                            &mut rhs,
-                            &generic_params,
-                            &mut TypeEnv::default(),
-                        );
+                        replace_generics_in_type_expr2(&mut rhs, &generic_params, globals);
                         current = rhs;
                         continue;
                     }
@@ -581,6 +569,7 @@ fn reduce_type_expr(t: &mut Spanned<TypeExpr>, globals: &GlobalsEnv, self_type: 
                     }
                 }
                 t.0 = current;
+                reduce_type_expr(t, globals, self_type);
                 return TravControlFlow::Cancel;
             }
             TypeExpr::And(operands) => {
@@ -590,9 +579,7 @@ fn reduce_type_expr(t: &mut Spanned<TypeExpr>, globals: &GlobalsEnv, self_type: 
                     if let TypeExpr::Duck(Duck { fields }) = &operand.0 {
                         for field in fields {
                             if let Some(ty) = out_duck.get(&field.name) {
-                                if ty.0.type_id(&mut TypeEnv::default())
-                                    != field.type_expr.0.type_id(&mut TypeEnv::default())
-                                {
+                                if ty.0.type_id2(globals) != field.type_expr.0.type_id2(globals) {
                                     let msg = &format!("Duplicate definition for {}", field.name);
                                     failure_with_occurence(
                                         msg,
@@ -630,8 +617,8 @@ fn reduce_type_expr(t: &mut Spanned<TypeExpr>, globals: &GlobalsEnv, self_type: 
                     reduce_type_expr(operand, globals, self_type.clone());
                     merge_or(operand, &mut out_operands);
                 }
-                out_operands.sort_by_key(|t| t.0.type_id(&mut TypeEnv::default()));
-                out_operands.dedup_by_key(|t| t.0.type_id(&mut TypeEnv::default()));
+                out_operands.sort_by_key(|t| t.0.type_id2(globals));
+                out_operands.dedup_by_key(|t| t.0.type_id2(globals));
                 if out_operands.len() == 1 {
                     t.0 = out_operands.pop().expect("Compiler Bug: unreachable").0;
                 } else {
@@ -656,16 +643,16 @@ fn resolve_all_types_struct_definition<F>(
     F: FnOnce(StructHeader),
 {
     for field in struct_def.fields.iter_mut() {
-        replace_generics_in_type_expr(&mut field.type_expr.0, generics, &mut TypeEnv::default());
+        replace_generics_in_type_expr2(&mut field.type_expr.0, generics, globals);
         reduce_type_expr(&mut field.type_expr, globals, self_type.clone());
     }
 
     for method in struct_def.methods.iter_mut() {
         for param in method.params.iter_mut() {
-            replace_generics_in_type_expr(&mut param.1.0, generics, &mut TypeEnv::default());
+            replace_generics_in_type_expr2(&mut param.1.0, generics, globals);
             reduce_type_expr(&mut param.1, globals, self_type.clone());
         }
-        replace_generics_in_type_expr(&mut method.return_type.0, generics, &mut TypeEnv::default());
+        replace_generics_in_type_expr2(&mut method.return_type.0, generics, globals);
     }
 
     header_callback(struct_def.to_header());
@@ -696,7 +683,7 @@ fn resolve_all_types_function_definition<F>(
     let mut local_scope = LocalScoped::default();
 
     for p in fun_def.params.iter_mut() {
-        replace_generics_in_type_expr(&mut p.1.0, generics, &mut TypeEnv::default());
+        replace_generics_in_type_expr2(&mut p.1.0, generics, globals);
         reduce_type_expr(&mut p.1, globals, None);
         local_scope.set_info_for_ident(
             p.0.clone(),
@@ -707,11 +694,7 @@ fn resolve_all_types_function_definition<F>(
         );
     }
 
-    replace_generics_in_type_expr(
-        &mut fun_def.return_type.0,
-        generics,
-        &mut TypeEnv::default(),
-    );
+    replace_generics_in_type_expr2(&mut fun_def.return_type.0, generics, globals);
     reduce_type_expr(&mut fun_def.return_type, globals, None);
 
     header_callback(fun_def.to_header2());
@@ -734,7 +717,7 @@ fn typeresolve_struct(
         unreachable!("only pass structs to this function")
     };
 
-    let Some(og_def) = globals.get_struct_header(name, type_params, globals) else {
+    let Some(og_def) = globals.get_struct_header(name, &[]) else {
         let msg = &format!("Struct {name} does not exist");
         failure_with_occurence(msg, span, [(msg, span)])
     };
@@ -787,7 +770,11 @@ fn typeresolve_struct(
     }
 
     for f in fields.iter() {
-        if !og_def.fields.iter().any(|og_field| name.as_str() == f.0) {
+        if !og_def
+            .fields
+            .iter()
+            .any(|og_field| og_field.0.as_str() == f.0.as_str())
+        {
             let msg = format!("Invalid field {}", f.0);
             failure_with_occurence(
                 msg,
@@ -880,16 +867,16 @@ fn typeresolve_struct(
     }
 
     if type_params.len() != og_def.generics.len() {
-        let msg = "Wrong number of type parameters A";
+        let msg = "Wrong number of type parameters";
         failure_with_occurence(msg, span, [(msg, span)])
     }
 
-    // for t in type_params.iter_mut() {
-    //     resolve_all_aliases_type_expr(t, type_env);
-    // }
+    for t in type_params.iter_mut() {
+        reduce_type_expr(t, globals, None);
+    }
 
     let def = globals
-        .get_struct_header(name.as_str(), type_params.as_slice(), globals)
+        .get_struct_header(name.as_str(), type_params.as_slice())
         .unwrap()
         .clone();
 
@@ -900,23 +887,788 @@ fn typeresolve_struct(
             .find(|og_field| og_field.0.as_str() == f.0.as_str())
             .unwrap()
             .1;
-        // infer_against(&mut f.1, &og_field, type_env);
+        infer_against2(&mut f.1, &og_field, globals);
         typeresolve_value_expr(&mut f.1, globals, locals);
-        check_type_compatability(og_field, &f.1.typ, &mut TypeEnv::default());
+        check_type_compatability(og_field, &f.1.typ, globals);
         if f.1.typ.0.is_never() {
             value_expr.typ = (TypeExpr::Never, value_expr.expr.1);
         }
     }
-    value_expr.typ = (
+    value_expr.typ.replace_if_not_never(&(
         TypeExpr::Struct {
             name: name.clone(),
             type_params: type_params.clone(),
         },
         value_expr.expr.1,
-    );
+    ));
 }
 
-fn resolve_all_types_source_file(source_file: &mut SourceFile) {
+pub fn check_type_compatability(
+    required_type: &Spanned<TypeExpr>,
+    given_type: &Spanned<TypeExpr>,
+    globals: &GlobalsEnv,
+) {
+    let given_type = given_type.clone();
+
+    if matches!(given_type.0, TypeExpr::Uninit) {
+        panic!("un init type");
+    }
+
+    if matches!(given_type.0, TypeExpr::TemplParam(..) | TypeExpr::Never) {
+        return;
+    }
+
+    let fail_requirement = |explain_required: String, explain_given: String| {
+        let (smaller, larger) = if required_type.1.start <= given_type.1.start {
+            (required_type.1, given_type.1)
+        } else {
+            (given_type.1, required_type.1)
+        };
+
+        // this is unused at the moment but come in handy later
+        let _combined_span = SS {
+            start: smaller.start,
+            end: larger.end,
+            context: required_type.1.context,
+        };
+
+        failure_with_occurence(
+            "Incompatible Types",
+            given_type.1,
+            vec![
+                (explain_required.to_string(), required_type.1),
+                (explain_given.to_string(), given_type.1),
+            ],
+        )
+    };
+
+    let is_empty_tuple = if let TypeExpr::Tuple(t) = &required_type.0 {
+        t.is_empty()
+    } else {
+        false
+    };
+
+    if !is_empty_tuple && matches!(given_type.0, TypeExpr::Statement) {
+        let msg = "Statement is not an expression";
+        failure_with_occurence(
+            msg,
+            given_type.1,
+            [(
+                "This needs an expression, you provided a statement",
+                required_type.1,
+            )],
+        );
+    }
+
+    match &required_type.0 {
+        TypeExpr::Uninit => unreachable!("uninit types should have been replaced by now"),
+        TypeExpr::Indexed(..) => unreachable!("indexed types should have been replaced by now"),
+        TypeExpr::Byte => {
+            if !matches!(given_type.0, TypeExpr::Byte) {
+                fail_requirement(
+                    "this expects a Byte.".to_string(),
+                    format!(
+                        "this is not a Byte. it's a {}",
+                        format!("{}", given_type.0).bright_yellow()
+                    ),
+                )
+            }
+        }
+        TypeExpr::UInt => {
+            if !matches!(given_type.0, TypeExpr::UInt) {
+                fail_requirement(
+                    "this expects a UInt.".to_string(),
+                    format!(
+                        "this is not a UInt. it's a {}",
+                        format!("{}", given_type.0).bright_yellow()
+                    ),
+                )
+            }
+        }
+        TypeExpr::Statement => panic!("Compiler Bug: statement should never be required"),
+        TypeExpr::TemplParam(..) | TypeExpr::Never => return,
+        TypeExpr::NamedDuck { name, type_params } => {
+            todo!("named ducks")
+        }
+        TypeExpr::Ref(req_t) => {
+            if let TypeExpr::Ref(given_t) | TypeExpr::RefMut(given_t) = &given_type.0 {
+                let mut req_x = req_t.clone();
+                let mut given_x = given_t.clone();
+
+                loop {
+                    match req_x.0 {
+                        TypeExpr::Ref(inner_ty) => {
+                            req_x = inner_ty;
+                            if let TypeExpr::Ref(inner_given_ty)
+                            | TypeExpr::RefMut(inner_given_ty) = given_x.0
+                            {
+                                given_x = inner_given_ty;
+                            } else if req_x.0.type_id2(globals) != given_x.0.type_id2(globals) {
+                                fail_requirement(
+                                    "Referenced types need to match exactly".to_string(),
+                                    "So this needs to be exactly the same type".to_string(),
+                                );
+                            }
+                        }
+                        TypeExpr::RefMut(inner_ty) => {
+                            req_x = inner_ty;
+                            if let TypeExpr::RefMut(inner_given_ty) = given_x.0 {
+                                given_x = inner_given_ty;
+                            } else if req_x.0.type_id2(globals) != given_x.0.type_id2(globals) {
+                                fail_requirement(
+                                    "Referenced types need to match exactly".to_string(),
+                                    "So this needs to be exactly the same type".to_string(),
+                                );
+                            }
+                        }
+                        _ => {
+                            if req_x.0.type_id2(globals) == given_x.0.type_id2(globals) {
+                                break;
+                            } else {
+                                fail_requirement(
+                                    "Referenced types need to match exactly".to_string(),
+                                    "So this needs to be exactly the same type".to_string(),
+                                );
+                            }
+                        }
+                    }
+                }
+            } else {
+                fail_requirement(
+                    format!(
+                        "This is an immutable reference to {}",
+                        required_type.0.as_clean_user_faced_type_name().yellow()
+                    ),
+                    format!(
+                        "So this needs to be an immutable reference or a mutable reference but it's of type {}",
+                        given_type.0.as_clean_user_faced_type_name().yellow()
+                    ),
+                );
+            }
+        }
+        TypeExpr::RefMut(req_t) => {
+            if let TypeExpr::RefMut(given_t) = &given_type.0 {
+                let mut req_x = req_t.clone();
+                let mut given_x = given_t.clone();
+
+                loop {
+                    match req_x.0 {
+                        TypeExpr::Ref(inner_ty) => {
+                            req_x = inner_ty;
+                            if let TypeExpr::Ref(inner_given_ty)
+                            | TypeExpr::RefMut(inner_given_ty) = given_x.0
+                            {
+                                given_x = inner_given_ty;
+                            } else if req_x.0.type_id2(globals) != given_x.0.type_id2(globals) {
+                                fail_requirement(
+                                    "Referenced types need to match exactly".to_string(),
+                                    "So this needs to be exactly the same type".to_string(),
+                                );
+                            }
+                        }
+                        TypeExpr::RefMut(inner_ty) => {
+                            req_x = inner_ty;
+                            if let TypeExpr::RefMut(inner_given_ty) = given_x.0 {
+                                given_x = inner_given_ty;
+                            } else if req_x.0.type_id2(globals) != given_x.0.type_id2(globals) {
+                                fail_requirement(
+                                    "Referenced types need to match exactly".to_string(),
+                                    "So this needs to be exactly the same type".to_string(),
+                                );
+                            }
+                        }
+                        _ => {
+                            if req_x.0.type_id2(globals) == given_x.0.type_id2(globals) {
+                                break;
+                            } else {
+                                fail_requirement(
+                                    "Referenced types need to match exactly".to_string(),
+                                    "So this needs to be exactly the same type".to_string(),
+                                );
+                            }
+                        }
+                    }
+                }
+            } else {
+                fail_requirement(
+                    "This is a mutable reference".to_string(),
+                    "So this needs to be a mutable reference as well".to_string(),
+                );
+            }
+        }
+        TypeExpr::Html => {
+            if let TypeExpr::Html = &given_type.0 {
+                return;
+            }
+            fail_requirement(
+                format!(
+                    "the required type is {}",
+                    format!("{}", required_type.0).bright_yellow(),
+                ),
+                format!(
+                    "because of the fact, that the required type is {}. The value you need to pass must be a tag as well, but it is a {}",
+                    format!("{}", required_type.0).bright_yellow(),
+                    format!("{}", given_type.0).bright_yellow(),
+                ),
+            )
+        }
+        TypeExpr::TypeOf(..) => panic!("typeof should have been replaced"),
+        TypeExpr::KeyOf(..) => panic!("keyof should have been replaced"),
+        TypeExpr::Any => return,
+        TypeExpr::Go(_) => return,
+        TypeExpr::Tag(required_identifier) => {
+            if let TypeExpr::Tag(given_identifier) = &given_type.0 {
+                if given_identifier != required_identifier {
+                    fail_requirement(
+                        format!(
+                            "the required tag is {}",
+                            format!(".{required_identifier}").bright_yellow(),
+                        ),
+                        format!(
+                            "but you've provided the tag {}",
+                            format!(".{given_identifier}").bright_yellow(),
+                        ),
+                    )
+                }
+
+                // everything's okay
+                return;
+            }
+
+            // todo: produce snapshot for the given error
+            fail_requirement(
+                format!(
+                    "the required type is {}",
+                    format!("{}", required_type.0).bright_yellow(),
+                ),
+                format!(
+                    "because of the fact, that the required type is {}. The value you need to pass must be a tag as well, but it is a {}",
+                    format!("{}", required_type.0).bright_yellow(),
+                    format!("{}", given_type.0).bright_yellow(),
+                ),
+            )
+        }
+        TypeExpr::Struct {
+            name: req_name,
+            type_params: req_type_params,
+        } => {
+            if let TypeExpr::Struct {
+                name: given_name,
+                type_params: given_type_params,
+            } = &given_type.0
+            {
+                // TODO: STRUCT DISPLAY NAME
+                if req_name.as_str() != given_name.as_str() {
+                    fail_requirement(
+                        format!("the required struct is {}", req_name.bright_yellow(),),
+                        format!("you have given a {}", given_name.bright_yellow(),),
+                    );
+                }
+
+                for (idx, (req_param, given_param)) in req_type_params
+                    .iter()
+                    .zip(given_type_params.iter())
+                    .enumerate()
+                {
+                    if req_param.0.type_id2(globals) != given_param.0.type_id2(globals) {
+                        failure_with_occurence(
+                            "Type parameters do not match",
+                            given_param.1,
+                            [
+                                (
+                                    format!(
+                                        "type parameter no. {} is required to be a {}",
+                                        idx + 1,
+                                        req_param.0.as_clean_user_faced_type_name()
+                                    ),
+                                    req_param.1,
+                                ),
+                                (
+                                    format!(
+                                        "you have given a {}",
+                                        given_param.0.as_clean_user_faced_type_name()
+                                    ),
+                                    given_param.1,
+                                ),
+                            ],
+                        );
+                    }
+                }
+            } else {
+                fail_requirement(
+                    format!(
+                        "the required type {} is a struct",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                    format!(
+                        "because of the fact, that the required type {} is a struct. The value you need to pass must be a as well, but it is a {}",
+                        format!("{}", required_type.0).bright_yellow(),
+                        given_type.0.as_clean_user_faced_type_name(),
+                    ),
+                )
+            }
+        }
+        TypeExpr::Duck(duck) => {
+            if duck.fields.is_empty() {
+                return;
+            }
+
+            match &given_type.0 {
+                TypeExpr::Duck(given_duck) => {
+                    let required_duck = duck;
+
+                    for required_field in required_duck.fields.iter() {
+                        let companion_field = given_duck
+                            .fields
+                            .iter()
+                            .find(|field| field.name == required_field.name);
+
+                        if companion_field.is_none() {
+                            fail_requirement(
+                                format!(
+                                    "this type states that it has requires a field {} of type {}",
+                                    required_field.name.bright_purple(),
+                                    format!("{}", required_field.type_expr.0).bright_yellow(),
+                                ),
+                                format!(
+                                    "the given type doesn't have a field {}",
+                                    required_field.name.bright_purple(),
+                                ),
+                            )
+                        }
+
+                        let companion_field = companion_field.unwrap();
+
+                        check_type_compatability(
+                            &required_field.type_expr,
+                            &companion_field.type_expr,
+                            globals,
+                        );
+                    }
+                }
+                TypeExpr::NamedDuck {
+                    name: _,
+                    type_params: _,
+                } => {
+                    assert_eq!(
+                        required_type.0.type_id2(globals),
+                        given_type.0.type_id2(globals)
+                    );
+                    return;
+                }
+                TypeExpr::Struct {
+                    name: struct_name,
+                    type_params,
+                } => {
+                    let struct_def = globals.get_struct_header(struct_name, type_params).unwrap();
+
+                    for required_field in duck.fields.iter() {
+                        if let TypeExpr::Fun(_, _, is_mut) = required_field.type_expr.0 {
+                            let companion_method = struct_def
+                                .methods
+                                .iter()
+                                .find(|method| method.0.as_str() == required_field.name.as_str());
+
+                            if companion_method.is_none() {
+                                fail_requirement(
+                                    format!(
+                                        "this type states that it requires a field {} of type {}",
+                                        required_field.name.bright_purple(),
+                                        format!("{}", required_field.type_expr.0).bright_yellow(),
+                                    ),
+                                    format!(
+                                        "the given type doesn't have a field or method with name {}",
+                                        required_field.name.bright_purple(),
+                                    ),
+                                );
+                            }
+
+                            if is_mut {
+                                if !struct_def.is_mut_method(&required_field.name) {
+                                    fail_requirement(
+                                        format!(
+                                            "this type states that it requires a mutable method named {}",
+                                            required_field.name.bright_purple(),
+                                        ),
+                                        format!(
+                                            "the given type doesn't have a mutable method named {}",
+                                            required_field.name.bright_purple(),
+                                        ),
+                                    );
+                                }
+                                if false // TODO: check if struct allows mutable access
+                                    && !{
+                                        let mut is_mut_ref = false;
+
+                                        let mut current = given_type.0.clone();
+                                        while let TypeExpr::RefMut(next) = current {
+                                            is_mut_ref = true;
+
+                                            if let TypeExpr::Ref(..) = next.0 {
+                                                is_mut_ref = false;
+                                                break;
+                                            }
+
+                                            current = next.0;
+                                        }
+
+                                        is_mut_ref
+                                    }
+                                {
+                                    fail_requirement(
+                                        "this needs mutable access".to_string(),
+                                        "this is a const var".to_string(),
+                                    );
+                                }
+                            }
+
+                            let companion_method = companion_method.unwrap();
+                            check_type_compatability(
+                                &required_field.type_expr,
+                                &(companion_method.1.to_type(), required_type.1), // TODO: add correct span
+                                globals,
+                            );
+                            return;
+                        }
+
+                        let companion_field = struct_def
+                            .fields
+                            .iter()
+                            .find(|field| field.0.as_str() == required_field.name.as_str());
+
+                        if companion_field.is_none() {
+                            fail_requirement(
+                                format!(
+                                    "this type states that it has requires a field {} of type {}",
+                                    required_field.name.bright_purple(),
+                                    format!("{}", required_field.type_expr.0).bright_yellow(),
+                                ),
+                                format!(
+                                    "the given type doesn't have a field {}",
+                                    required_field.name.bright_purple(),
+                                ),
+                            )
+                        }
+
+                        let companion_field = companion_field.unwrap();
+
+                        check_type_compatability(
+                            &required_field.type_expr,
+                            &companion_field.1,
+                            globals,
+                        );
+                    }
+                }
+                _ => fail_requirement(
+                    format!(
+                        "the required type {} is a duck",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                    format!(
+                        "this must be a duck as well, but it's {}",
+                        format!("{}", given_type.0).bright_yellow(),
+                    ),
+                ),
+            }
+        }
+        TypeExpr::Tuple(item_types) => {
+            if item_types.is_empty() && matches!(given_type.0, TypeExpr::Statement) {
+                return;
+            }
+            if !given_type.0.is_tuple() {
+                fail_requirement(
+                    format!(
+                        "{} is a tuple",
+                        format!("{}", required_type.0).bright_yellow(),
+                    ),
+                    String::new(),
+                )
+            }
+
+            let required_item_types = item_types;
+            let TypeExpr::Tuple(given_item_types) = &given_type.0 else {
+                unreachable!()
+            };
+
+            if given_item_types.len() < required_item_types.len() {
+                fail_requirement(
+                    format!(
+                        "requires {} item(s)",
+                        format!("{}", required_item_types.len()).bright_green(),
+                    ),
+                    format!(
+                        "only has {} item(s)",
+                        format!("{}", given_item_types.len()).bright_green(),
+                    ),
+                )
+            }
+
+            for (idx, (req_param, given_param)) in required_item_types
+                .iter()
+                .zip(given_item_types.iter())
+                .enumerate()
+            {
+                if let TypeExpr::Or(req_variants) = &req_param.0
+                    && req_variants.iter().any(|variant| {
+                        variant.0.type_id2(globals) == given_param.0.type_id2(globals)
+                    })
+                {
+                    return;
+                }
+
+                if req_param.0.type_id2(globals) != given_param.0.type_id2(globals) {
+                    failure_with_occurence(
+                        "Incompatible Types",
+                        given_param.1,
+                        [
+                            (
+                                format!(
+                                    "item no. {} is required to be a {}",
+                                    idx + 1,
+                                    req_param.0.as_clean_user_faced_type_name()
+                                ),
+                                req_param.1,
+                            ),
+                            (
+                                format!(
+                                    "you have given a {}",
+                                    given_param.0.as_clean_user_faced_type_name()
+                                ),
+                                given_param.1,
+                            ),
+                        ],
+                    );
+                }
+            }
+        }
+        TypeExpr::String(..) => {
+            if !given_type.0.is_string() {
+                fail_requirement(
+                    format!("this expects a {}", "String".yellow()),
+                    format!(
+                        "this is not a {}. It's of type {}",
+                        "String".yellow(),
+                        given_type.0.as_clean_user_faced_type_name().yellow()
+                    ),
+                );
+            }
+        }
+        TypeExpr::Int => {
+            if !matches!(given_type.0, TypeExpr::Int) {
+                fail_requirement(
+                    "this expects an Int.".to_string(),
+                    format!(
+                        "this is not an Int. it's a {}",
+                        format!("{}", given_type.0).bright_yellow()
+                    ),
+                )
+            }
+        }
+        TypeExpr::Bool(..) => {
+            if !given_type.0.is_bool() {
+                fail_requirement(
+                    format!("a {} value is required here", "Bool".bright_yellow(),),
+                    format!(
+                        "this is not a Bool. it's a {}",
+                        format!("{}", given_type.0).bright_yellow()
+                    ),
+                )
+            }
+        }
+        TypeExpr::Char => {
+            if !given_type.0.is_char() {
+                fail_requirement(
+                    "this expects a Char.".to_string(),
+                    "this is not a Char.".to_string(),
+                );
+            }
+        }
+        TypeExpr::Float => {
+            if !matches!(given_type.0, TypeExpr::Float) {
+                fail_requirement(
+                    "this expects a Float.".to_string(),
+                    format!(
+                        "this is not a Float. it's a {}",
+                        format!("{}", given_type.0).bright_yellow()
+                    ),
+                )
+            }
+        }
+        TypeExpr::Or(contents) => {
+            let other_contents = if let TypeExpr::Or(other_contents) = &given_type.0 {
+                if other_contents.len() > contents.len() {
+                    fail_requirement(
+                        "This union is smaller than".to_string(),
+                        "this one".to_string(),
+                    );
+                }
+                other_contents
+            } else {
+                &vec![given_type.clone()]
+            };
+
+            for giv in other_contents.iter() {
+                let found = contents
+                    .iter()
+                    .any(|c| c.0.type_id2(globals) == giv.0.type_id2(globals));
+                if !found {
+                    let msg = format!(
+                        "This expression is of type `{}`",
+                        giv.0.as_clean_user_faced_type_name().blue(),
+                    );
+                    let msg = msg.as_str();
+
+                    failure_with_occurence(
+                        "Incompatible Types",
+                        giv.1,
+                        [
+                            (msg, giv.1),
+                            (
+                                format!(
+                                    "Must be one of these: {}",
+                                    contents
+                                        .iter()
+                                        .map(|c| c.0.as_clean_user_faced_type_name())
+                                        .collect::<Vec<_>>()
+                                        .join(", ")
+                                        .yellow()
+                                )
+                                .as_str(),
+                                required_type.1,
+                            ),
+                        ],
+                    );
+                }
+            }
+        }
+        TypeExpr::Fun(required_params, required_return_type, is_mut_required) => {
+            if !given_type.0.is_fun() {
+                fail_requirement(
+                    "this requires a function".to_string(),
+                    "this value isn't even a function.".to_string(),
+                )
+            }
+
+            let TypeExpr::Fun(given_params, given_return_type, is_mut_given) = &given_type.0 else {
+                unreachable!("we've already checked that it's a function")
+            };
+
+            if !*is_mut_required && *is_mut_given {
+                fail_requirement(
+                    "this requires a function that does not modify its environment".to_string(),
+                    "thus, this must not be a mut fn".to_string(),
+                );
+            }
+
+            if given_params.len() != required_params.len() {
+                fail_requirement(
+                    format!(
+                        "this requires a function with {} argument(s)",
+                        format!("{}", required_params.len()).bright_green(),
+                    ),
+                    format!(
+                        "this is a function, but it takes {} arguments(s)",
+                        format_args!("{}", given_params.len())
+                    ),
+                )
+            }
+
+            for (idx, ((_, req_param), (_, given_param))) in
+                required_params.iter().zip(given_params.iter()).enumerate()
+            {
+                if req_param.0.type_id2(globals) != given_param.0.type_id2(globals) {
+                    failure_with_occurence(
+                        "Parameter types do not match",
+                        given_param.1,
+                        [
+                            (
+                                format!(
+                                    "parameter no. {} is required to be a {}",
+                                    idx + 1,
+                                    req_param.0.as_clean_user_faced_type_name()
+                                ),
+                                req_param.1,
+                            ),
+                            (
+                                format!(
+                                    "you have given a {}",
+                                    given_param.0.as_clean_user_faced_type_name()
+                                ),
+                                given_param.1,
+                            ),
+                        ],
+                    );
+                }
+            }
+            if required_return_type.0.type_id2(globals) != given_return_type.0.type_id2(globals) {
+                failure_with_occurence(
+                    "Return types do not match",
+                    given_return_type.1,
+                    [
+                        (
+                            format!(
+                                "Return type needs to be a {}",
+                                required_return_type.0.as_clean_user_faced_type_name()
+                            ),
+                            required_return_type.1,
+                        ),
+                        (
+                            format!(
+                                "You have given a {}",
+                                given_return_type.0.as_clean_user_faced_type_name(),
+                            ),
+                            given_return_type.1,
+                        ),
+                    ],
+                );
+            }
+        }
+
+        TypeExpr::Array(content_type) => {
+            if !given_type.0.is_array() {
+                fail_requirement(
+                    format!("this requires an array of {}", &content_type.0),
+                    "this is not an array".to_string(),
+                );
+            }
+
+            let TypeExpr::Array(given_content_type) = given_type.clone().0 else {
+                unreachable!("we've checked that given_type is an array")
+            };
+
+            if content_type.0.type_id2(globals) != given_content_type.0.type_id2(globals) {
+                failure_with_occurence(
+                    "Array content types do not match",
+                    given_content_type.1,
+                    [
+                        (
+                            format!(
+                                "This requires an array of {}",
+                                content_type.0.as_clean_user_faced_type_name().yellow()
+                            ),
+                            content_type.1,
+                        ),
+                        (
+                            format!(
+                                "You have given an array of {}",
+                                given_content_type
+                                    .0
+                                    .as_clean_user_faced_type_name()
+                                    .yellow()
+                            ),
+                            given_content_type.1,
+                        ),
+                    ],
+                )
+            }
+        }
+        TypeExpr::RawTypeName(..) | TypeExpr::TypeName(..) | TypeExpr::And(..) => {
+            panic!("{required_type:?} should not be here")
+        }
+    }
+}
+
+pub fn resolve_all_types_source_file(source_file: &mut SourceFile) {
     const NUM_THREADS: usize = 8;
     let generics_output = GenericsOutput::default();
     let globals_env = std::thread::scope(|s| {
@@ -1063,10 +1815,10 @@ fn resolve_all_types_source_file(source_file: &mut SourceFile) {
         globals_env
     });
 
-    let chunk_count = (source_file.function_definitions.len() / NUM_THREADS).max(1);
+    let chunk_size = (source_file.function_definitions.len() / NUM_THREADS).max(1);
     let globals_env = &globals_env;
-    std::thread::scope(move |s| {
-        for fun_def in source_file.function_definitions.chunks_mut(chunk_count) {
+    std::thread::scope(|s| {
+        for fun_def in source_file.function_definitions.chunks_mut(chunk_size) {
             s.spawn(move || {
                 for f in fun_def {
                     resolve_all_types_function_definition(
@@ -1079,6 +1831,9 @@ fn resolve_all_types_source_file(source_file: &mut SourceFile) {
             });
         }
     });
+
+    dbg!(&source_file.function_definitions);
+    dbg!(&generics_output);
 }
 
 fn typeresolve_function_call(
@@ -1114,7 +1869,7 @@ fn typeresolve_function_call(
 
         match &mut target.expr.0 {
             ValueExpr::Variable(_, name, ty, _, _needs_copy) => {
-                let x = globals.get_fun_header(name, type_params, globals);
+                let x = globals.get_fun_header(name, type_params);
                 if let Some(x) = x {
                     let fun_type = (x.to_type(), target.expr.1);
                     *ty = Some(fun_type.0.clone());
@@ -1140,7 +1895,6 @@ fn typeresolve_function_call(
                         struct_type_params,
                         field_name,
                         type_params,
-                        globals,
                     );
                     if let Some(def) = def {
                         target.typ = (def.to_type(), target.expr.1);
@@ -1183,17 +1937,12 @@ fn typeresolve_function_call(
         .iter_mut()
         .zip(header_params.iter())
         .for_each(|(param_expr, (_, param_def))| {
-            infer_against(param_expr, param_def, &mut TypeEnv::default());
+            infer_against2(param_expr, param_def, globals);
             typeresolve_value_expr(param_expr, globals, locals);
             if matches!(param_def.0, TypeExpr::Any) {
                 return;
             }
-            check_type_compatability_full(
-                param_def,
-                &param_expr.typ,
-                &mut TypeEnv::default(),
-                is_const_var(&param_expr.expr.0),
-            );
+            check_type_compatability(param_def, &param_expr.typ, globals);
         });
 
     value_expr.typ = ret.as_ref().clone();
@@ -1412,13 +2161,641 @@ fn typeresolve_lambda(
     ));
 }
 
-fn typeresolve_value_expr(
+fn typeresolve_variable(
+    value_expr: &mut ValueExprWithType,
+    globals: &GlobalsEnv,
+    locals: &LocalScoped,
+) {
+    let ValueExpr::Variable(_, identifier, type_expr_opt, const_opt, needs_copy) =
+        &mut value_expr.expr.0
+    else {
+        unreachable!("only pass structs to this function")
+    };
+    let VariableInfo {
+        typ: (type_expr, _),
+        is_const,
+    } = locals.get_info_for_ident(identifier).unwrap_or_else(|| {
+        failure_with_occurence(
+            "Unknown identifier",
+            value_expr.expr.1,
+            [(
+                format!(
+                    "The identifier {} is not found in the current scope",
+                    identifier.yellow(),
+                ),
+                value_expr.expr.1,
+            )],
+        )
+    });
+
+    if *needs_copy && !type_expr.implements_copy2(globals) {
+        failure_with_occurence(
+            "This type is not trivially copyable",
+            value_expr.expr.1,
+            [(
+                &format!(
+                    "A type is trivially copyable if it's either a primitive, an immutable reference or a composition of primitive types {}",
+                    type_expr
+                ),
+                value_expr.expr.1,
+            )],
+        )
+    }
+
+    *type_expr_opt = Some(type_expr.clone());
+    *const_opt = Some(*is_const);
+    value_expr
+        .typ
+        .replace_if_not_never(&(type_expr.clone(), value_expr.expr.1));
+}
+
+pub fn typeresolve_duck_value_expr(
+    value_expr: &mut ValueExprWithType,
+    globals: &GlobalsEnv,
+    locals: &mut LocalScoped,
+) {
+    let ValueExpr::Duck(items) = &mut value_expr.expr.0 else {
+        unreachable!("only pass structs to this function")
+    };
+
+    let mut field_types = Vec::new();
+    items.iter_mut().for_each(|(n, v)| {
+        typeresolve_value_expr(v, globals, locals);
+        value_expr.typ.replace_if_other_never(&v.typ);
+        field_types.push(Field {
+            name: n.clone(),
+            type_expr: v.typ.clone(),
+        });
+    });
+    value_expr.typ.replace_if_not_never(&(
+        TypeExpr::Duck(Duck {
+            fields: field_types,
+        }),
+        value_expr.expr.1,
+    ));
+}
+
+fn typeresolve_var_decl(
+    value_expr: &mut ValueExprWithType,
+    globals: &GlobalsEnv,
+    locals: &mut LocalScoped,
+) {
+    let span = value_expr.expr.1;
+    let ValueExpr::VarDecl(declaration) = &mut value_expr.expr.0 else {
+        unreachable!("only pass var declarations to this function")
+    };
+
+    let declaration = &mut declaration.0;
+
+    // Resolve the type expression on the declaration
+    if let Some(type_expr) = &mut declaration.type_expr {
+        reduce_type_expr(type_expr, globals, None);
+
+        if let Some(initializer) = declaration.initializer.as_mut() {
+            infer_against2(initializer, type_expr, globals);
+
+            typeresolve_value_expr(initializer, globals, locals);
+            check_type_compatability(type_expr, &initializer.typ, globals);
+        }
+    } else if let Some(initializer) = declaration.initializer.as_mut() {
+        typeresolve_value_expr(initializer, globals, locals);
+
+        let type_expr = &initializer.typ;
+        declaration.type_expr = Some((type_expr.0.clone(), initializer.expr.1));
+    }
+
+    locals.set_info_for_ident(
+        declaration.name.clone(),
+        VariableInfo {
+            typ: declaration.type_expr.clone().unwrap(),
+            is_const: declaration.is_const,
+        },
+    );
+
+    value_expr.typ = (TypeExpr::Statement, span);
+}
+
+fn typeresolve_var_assign(
+    value_expr: &mut ValueExprWithType,
+    globals: &GlobalsEnv,
+    locals: &mut LocalScoped,
+) {
+    let _span = value_expr.expr.1;
+    let ValueExpr::VarAssign(assignment) = &mut value_expr.expr.0 else {
+        unreachable!("only pass var assignments to this function")
+    };
+
+    typeresolve_value_expr(&mut assignment.0.target, globals, locals);
+
+    unset_copy_var_assign(&mut assignment.0.target);
+    let target_type = &assignment.0.target.typ;
+
+    // if let ValueExpr::Variable(_, name, ..) = &assignment.0.target.expr.0 {
+    //     let span = assignment.0.target.expr.1;
+    //     if let Some(info) = locals.get_info_for_ident(name) {
+
+    // if let Some(name) = is_base_const_var(&assignment.0.target, locals) {
+    //     let span = assignment.0.target.expr.1;
+    //     let msg = &format!("Can't assign to const variable {name}");
+    //     failure_with_occurence(msg, span, [(msg, span)])
+    // }
+
+    //     } else {
+    //         let msg = &format!("Variable {name} does not exist");
+    //         failure_with_occurence(msg, span, [(msg, span)]);
+    //     }
+    // }
+
+    infer_against2(&mut assignment.0.value_expr, &target_type, globals);
+
+    typeresolve_value_expr(&mut assignment.0.value_expr, globals, locals);
+
+    check_type_compatability(&target_type, &assignment.0.value_expr.typ, globals);
+
+    value_expr.typ = (TypeExpr::Statement, value_expr.expr.1);
+}
+
+fn typeresolve_match(
+    value_expr_param: &mut ValueExprWithType,
+    globals: &GlobalsEnv,
+    locals: &mut LocalScoped,
+) {
+    let ValueExpr::Match {
+        value_expr,
+        arms,
+        else_arm,
+        span,
+    } = &mut value_expr_param.expr.0
+    else {
+        unreachable!("only pass match exprs to this function")
+    };
+
+    for arm in arms.iter_mut() {
+        reduce_type_expr(&mut arm.type_case, globals, None);
+    }
+
+    let mut replacements = Vec::new();
+
+    for (i, arm) in arms.clone().into_iter().enumerate() {
+        let span = arm.type_case.1;
+        let o = arm.type_case.clone();
+        if let TypeExpr::Or(v) = arm.type_case.0 {
+            let mut s = Vec::new();
+            for v in v {
+                s.push(MatchArm {
+                    type_case: v,
+                    base: Some(o.clone()),
+                    condition: arm.condition.clone(),
+                    identifier_binding: arm.identifier_binding.clone(),
+                    span,
+                    value_expr: arm.value_expr.clone(),
+                })
+            }
+            replacements.push((i, s));
+        }
+    }
+
+    for (i, replacements) in replacements.into_iter().rev() {
+        arms.remove(i);
+        for x in replacements.into_iter().rev() {
+            arms.insert(i, x);
+        }
+    }
+
+    typeresolve_value_expr(value_expr, globals, locals);
+
+    let (match_var_type, mv_count, mv_is_mut) = value_expr.typ.derefenced_with_count_and_mut();
+    let match_var_type = match_var_type.clone();
+
+    arms.iter_mut().for_each(|arm| {
+        locals.push_scope();
+        if let Some(identifier) = &arm.identifier_binding {
+            let tmp_t = if let Some(base_type) = arm.base.as_ref().cloned() {
+                base_type
+            } else {
+                arm.type_case.clone()
+            };
+            locals.set_info_for_ident(
+                identifier.clone(),
+                VariableInfo {
+                    typ: (
+                        if mv_count >= 1 {
+                            if mv_is_mut {
+                                TypeExpr::RefMut(tmp_t.into())
+                            } else {
+                                TypeExpr::Ref(tmp_t.into())
+                            }
+                        } else {
+                            tmp_t.0
+                        },
+                        arm.span, // TODO(@Apfelfrosch), replace this with identifier span
+                    ),
+                    is_const: false,
+                },
+            );
+            if let Some(condition) = &mut arm.condition {
+                typeresolve_value_expr(condition, globals, locals);
+            }
+        }
+        typeresolve_value_expr(&mut arm.value_expr, globals, locals);
+        locals.pop_scope();
+    });
+
+    let mut all = if let TypeExpr::Or(contents) = match_var_type.0 {
+        contents
+    } else {
+        vec![match_var_type]
+    };
+
+    for c in arms.iter() {
+        if c.condition.is_none() {
+            let type_id = c.type_case.0.type_id2(globals);
+            all.retain(|f| f.0.type_id2(globals) != type_id);
+        }
+    }
+
+    let else_type = if all.is_empty() {
+        (TypeExpr::Any, value_expr.expr.1)
+    } else {
+        let mut tmp = (TypeExpr::Or(all.clone()), value_expr.expr.1);
+        reduce_type_expr(&mut tmp, globals, None);
+        tmp
+    };
+
+    if let Some(arm) = else_arm {
+        if !arm.type_case.0.is_never() {
+            arm.type_case = else_type.clone();
+        }
+        locals.push_scope();
+        if let Some(identifier) = &arm.identifier_binding {
+            locals.set_info_for_ident(
+                identifier.clone(),
+                VariableInfo {
+                    typ: (
+                        if mv_count >= 1 {
+                            if mv_is_mut {
+                                TypeExpr::RefMut(else_type.into())
+                            } else {
+                                TypeExpr::Ref(else_type.into())
+                            }
+                        } else {
+                            else_type.0
+                        },
+                        arm.span,
+                    ),
+                    is_const: false,
+                },
+            );
+            if let Some(condition) = &mut arm.condition {
+                typeresolve_value_expr(condition, globals, locals);
+            }
+        }
+        typeresolve_value_expr(&mut arm.value_expr, globals, locals);
+        locals.pop_scope();
+    } else if !all.is_empty() {
+        for c in arms.iter() {
+            if c.type_case.0.type_id2(globals) == all[0].0.type_id2(globals)
+                && c.condition.is_some()
+            {
+                failure_with_occurence(
+                    "Unexhaustive Match",
+                    *span,
+                    vec![
+                        (
+                            format!(
+                                "possible type {} not covered",
+                                format!("{}", all[0].0).bright_yellow()
+                            ),
+                            *span,
+                        ),
+                        (
+                            format!(
+                                "This only covers {} partially and you're not providing an else",
+                                format!("{}", all[0].0).bright_yellow()
+                            ),
+                            c.span,
+                        ),
+                    ],
+                );
+            }
+        }
+
+        failure_with_occurence(
+            "Unexhaustive Match",
+            *span,
+            vec![(
+                format!(
+                    "possible type {} not covered",
+                    format!("{}", all[0].0).bright_yellow()
+                ),
+                *span,
+            )],
+        );
+    }
+
+    let mut x = || {
+        let v_expr_type = value_expr.typ.clone();
+        if v_expr_type.0.is_never() {
+            return (TypeExpr::Never, *span);
+        }
+
+        let mut arms = arms.clone();
+        if let Some(arm) = else_arm {
+            arms.push(arm.as_ref().clone());
+        }
+
+        let mut arm_types = Vec::new();
+        for arm in &arms {
+            let arm_type = arm.value_expr.typ.clone();
+
+            let mut cloned_arm_type = arm_type.clone().0.into_empty_span();
+            reduce_type_expr(&mut cloned_arm_type, globals, None);
+            type_expr_into_empty_range(&mut cloned_arm_type);
+
+            if !arm_types.iter().any(|t: &Spanned<TypeExpr>| {
+                let mut cl1 = t.clone();
+                type_expr_into_empty_range(&mut cl1);
+                cl1.0.unconst() == cloned_arm_type.0.unconst()
+            }) {
+                arm_types.push((arm_type.0.unconst(), arm.value_expr.expr.1));
+            }
+        }
+
+        // arm_types.retain(|f| !f.0.is_unit());
+
+        if else_arm.is_none() {
+            let possible_types: Vec<Spanned<TypeExpr>> =
+                match value_expr.typ.dereferenced().0.clone() {
+                    TypeExpr::Or(types) => types,
+                    other => vec![(other, value_expr.expr.1)],
+                };
+
+            let mut covered_types = Vec::new();
+            for arm in &arms {
+                let case_type = &arm.type_case.0;
+
+                let mut cloned_arm_type = case_type.clone().into_empty_span();
+                type_expr_into_empty_range(&mut cloned_arm_type);
+                if !covered_types.iter().any(|t: &Spanned<TypeExpr>| {
+                    let mut cl1 = t.clone();
+                    type_expr_into_empty_range(&mut cl1);
+                    cl1.0 == cloned_arm_type.0
+                }) {
+                    covered_types.push((case_type.clone(), arm.type_case.1));
+                }
+            }
+
+            possible_types.iter().for_each(|possible_type| {
+                let mut b = possible_type.clone();
+                type_expr_into_empty_range(&mut b);
+                let is_covered = &covered_types.iter().any(|x| {
+                    let mut a = x.clone();
+                    type_expr_into_empty_range(&mut a);
+                    a.0.unconst() == b.0.unconst()
+                });
+                if !is_covered {
+                    let missing_type = possible_type;
+                    failure_with_occurence(
+                        "Unexhaustive Match",
+                        *span,
+                        vec![(
+                            format!(
+                                "possible type {} not covered",
+                                format!("{}", missing_type.0).bright_yellow()
+                            ),
+                            *span,
+                        )],
+                    );
+                }
+            });
+        }
+
+        let was_empty_before = arm_types.is_empty();
+        arm_types.retain(|t| !t.0.is_never());
+
+        if arm_types.is_empty() && !was_empty_before {
+            return (TypeExpr::Never, *span);
+        }
+
+        if arm_types.is_empty() {
+            (TypeExpr::Tuple(vec![]), *span)
+        } else {
+            let mut a = (TypeExpr::Or(arm_types), *span);
+            reduce_type_expr(&mut a, globals, None);
+            a
+        }
+    };
+    let x = x();
+    value_expr_param.typ.replace_if_not_never(&x);
+}
+
+pub fn typeresolve_value_expr(
     value_expr: &mut ValueExprWithType,
     globals: &GlobalsEnv,
     locals: &mut LocalScoped,
 ) {
     let span = value_expr.expr.1;
     match &mut value_expr.expr.0 {
+        ValueExpr::Async(..) => todo!(),
+        ValueExpr::For { .. } => todo!(),
+        ValueExpr::RawVariable(_, path) => {
+            let ident = mangle(path);
+            let VariableInfo { typ, is_const } =
+                locals.get_info_for_ident(&ident).unwrap_or_else(|| {
+                    failure_with_occurence(
+                        "Unknown identifier",
+                        span,
+                        [(
+                            format!(
+                                "The identifier {} is not found in the current scope",
+                                ident.red(),
+                            ),
+                            span,
+                        )],
+                    );
+                });
+            value_expr.expr.0 =
+                ValueExpr::Variable(true, ident, Some(typ.0.clone()), Some(*is_const), true);
+            value_expr.typ = (typ.0.clone(), span);
+        }
+        ValueExpr::Duck(..) => typeresolve_duck_value_expr(value_expr, globals, locals),
+        ValueExpr::As(v, t) => {
+            if let ValueExpr::InlineGo(_, ty) = &mut v.expr.0 {
+                *ty = Some(t.clone());
+            } else if let ValueExpr::Int(_, ty) = &mut v.expr.0 {
+                *ty = Some(t.clone());
+            } else if let ValueExpr::Float(float_value) = &mut v.expr.0 {
+                match &t.0 {
+                    TypeExpr::Int | TypeExpr::UInt => {
+                        v.expr.0 = ValueExpr::Int(*float_value as u64, Some(t.clone()));
+                    }
+                    _ => {}
+                }
+            } else if let ValueExpr::Array(_, ty) = &mut v.expr.0
+                && let TypeExpr::Array(ct) = &t.0
+            {
+                *ty = Some(ct.as_ref().clone());
+            }
+
+            typeresolve_value_expr(v, globals, locals);
+            let v_type = &v.typ;
+
+            value_expr.typ = if v_type.0.is_never() {
+                (TypeExpr::Never, v_type.1)
+            } else {
+                check_type_compatability(t, v_type, globals);
+                t.clone()
+            };
+        }
+        ValueExpr::FieldAccess { .. } => {}
+        ValueExpr::Array(exprs, given_type) => {
+            if let Some(given_type) = given_type.as_mut() {
+                reduce_type_expr(given_type, globals, None);
+            }
+
+            let mut found_types = Vec::new();
+            for expr in exprs {
+                if let Some(given_type) = given_type.as_ref() {
+                    infer_against2(expr, given_type, globals);
+                }
+
+                typeresolve_value_expr(expr, globals, locals);
+                let ty = &expr.typ;
+
+                if let Some(given_type) = given_type.as_ref() {
+                    check_type_compatability(given_type, &ty, globals);
+                }
+                found_types.push(ty.clone());
+            }
+
+            if given_type.is_none() {
+                if found_types.is_empty() {
+                    let msg = "empty array must be wrapped in as expression";
+                    failure_with_occurence(msg, span, [(msg, span)]);
+                }
+                let mut as_or = (TypeExpr::Or(found_types), span);
+                reduce_type_expr(&mut as_or, globals, None);
+                *given_type = Some(as_or);
+            }
+            value_expr.typ = (
+                TypeExpr::Array(given_type.as_ref().cloned().unwrap().into()),
+                span,
+            );
+        }
+        ValueExpr::VarAssign(..) => typeresolve_var_assign(value_expr, globals, locals),
+        ValueExpr::VarDecl(..) => typeresolve_var_decl(value_expr, globals, locals),
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    typeresolve_value_expr(e, globals, locals);
+                    value_expr.typ.replace_if_other_never(&e.typ);
+                }
+
+                if let ValHtmlStringContents::String(s) = c {
+                    // TODO: add tailwind
+                    // type_env.check_for_tailwind(s);
+                }
+            }
+            value_expr.typ.replace_if_not_never(&(TypeExpr::Html, span));
+        }
+        ValueExpr::Variable(..) => typeresolve_variable(value_expr, globals, locals),
+        ValueExpr::Match { .. } => typeresolve_match(value_expr, globals, locals),
+        ValueExpr::InlineGo(_, ty) => {
+            if ty.is_none() {
+                *ty = Some(TypeExpr::unit_with_span(span));
+            }
+            value_expr.typ = ty
+                .as_ref()
+                .cloned()
+                .expect("Compiler Bug: Inline Go does not have type");
+        }
+        ValueExpr::Deref(v) => {
+            typeresolve_value_expr(v, globals, locals);
+            let t = &v.typ;
+            if !t.0.implements_copy2(globals) {
+                let msg = "The value of this type needs to implement Copy since it is dereferenced, but it does not";
+                failure_with_occurence(msg, v.expr.1, [(msg, v.expr.1)]);
+            }
+
+            if let TypeExpr::Ref(v) | TypeExpr::RefMut(v) = &t.0 {
+                value_expr.typ = v.as_ref().clone();
+            } else {
+                failure_with_occurence(
+                    "Can only dereference a reference",
+                    span,
+                    [("This is not a reference".to_string(), v.expr.1)],
+                );
+            }
+        }
+        ValueExpr::FormattedString(contents) => {
+            let mut t = (TypeExpr::String(None), span);
+            for c in contents {
+                match c {
+                    ValFmtStringContents::Expr(e) => {
+                        typeresolve_value_expr(e, globals, locals);
+                        t.replace_if_other_never(&e.typ);
+                        if !t.0.is_never() && !t.0.is_string() {
+                            let hints = [
+                                (
+                                    "interpolated values inside a f-string must evaluate to a string".to_string(),
+                                    e.expr.1,
+                                ),
+                                (
+                                    format!(
+                                        "this is of type {}{}",
+                                        t.0.as_clean_user_faced_type_name().yellow(),
+                                        if t.0.implements_to_string2(globals) {
+                                            format!(
+                                                ", which implements {}. Add the method-call after the value",
+                                                "to_string".yellow(),
+                                            )
+                                        } else {
+                                            String::new()
+                                        }
+                                    ),
+                                    e.expr.1,
+                                ),
+                            ];
+
+                            failure_with_occurence("Incompatible Types", e.expr.1, hints);
+                        }
+                    }
+                    ValFmtStringContents::String(s) => {
+                        // type_env.check_for_tailwind(s); // TODO: TAILWIND CHECK
+                    }
+                }
+            }
+            value_expr.typ = t;
+        }
+        ValueExpr::ArrayAccess(target, idx) => {
+            typeresolve_value_expr(target, globals, locals);
+            typeresolve_value_expr(idx, globals, locals);
+
+            if target.typ.0.is_never() || idx.typ.0.is_never() {
+                value_expr.typ = (TypeExpr::Never, span);
+            } else {
+                if !target.typ.0.is_array() && !target.typ.0.ref_is_array() {
+                    let msg = &format!(
+                        "Needs to be array, but is {}",
+                        target.typ.0.as_clean_user_faced_type_name()
+                    );
+                    failure_with_occurence(msg, target.expr.1, [(msg, target.expr.1)]);
+                }
+                if !idx.typ.0.is_int() {
+                    let msg = &format!(
+                        "Array index needs to be int, but is {}",
+                        idx.typ.0.as_clean_user_faced_type_name()
+                    );
+                    failure_with_occurence(msg, idx.expr.1, [(msg, idx.expr.1)]);
+                }
+
+                let target_type = target.typ.dereferenced();
+                let TypeExpr::Array(array_content_type) = &target_type.0 else {
+                    unreachable!("{:?}\n{:?}", &target.typ.0, target_type.0)
+                };
+                value_expr.typ = array_content_type.as_ref().clone();
+            }
+        }
         ValueExpr::RefMut(v) => {
             unset_copy_var_assign(v);
             typeresolve_value_expr(v, globals, locals);
@@ -1583,6 +2960,5 @@ fn typeresolve_value_expr(
         ValueExpr::Break | ValueExpr::Return(None) | ValueExpr::Continue => {
             value_expr.typ = (TypeExpr::Never, value_expr.expr.1);
         }
-        _ => todo!(),
     }
 }

@@ -506,7 +506,7 @@ fn parse_src_file(
     let mut result = src_file.unwrap().flatten(&vec![], true);
 
     #[allow(clippy::nonminimal_bool)]
-    if true {
+    if !true {
         // <- use this if you want to test without std
         for s in &std_src_file.function_definitions {
             result.function_definitions.push(s.clone());
@@ -544,13 +544,10 @@ fn parse_src_file(
 }
 
 fn typecheck<'a>(src_file_ast: &mut SourceFile, tailwind_tx: &'a Sender<String>) -> TypeEnv<'a> {
-    let mut type_env = TypeEnv {
-        tailwind_sender: Some(tailwind_tx),
-        ..TypeEnv::default()
-    };
-    type_resolve::typeresolve_source_file(src_file_ast, &mut type_env);
-
-    type_env
+    crate::semantics::type_resolve2::resolve_all_types_source_file(src_file_ast);
+    dbg!("end");
+    std::process::exit(0);
+    TypeEnv::default()
 }
 
 fn write_in_duck_dotdir(file_name: &str, content: &str) -> PathBuf {
