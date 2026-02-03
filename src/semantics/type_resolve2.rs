@@ -22,7 +22,7 @@ use crate::{
         },
     },
     semantics::{
-        ident_mangler::mangle,
+        ident_mangler::{mangle, unmangle},
         type_resolve::{
             NeedsSearchResult, TravControlFlow, TypeEnv, build_struct_generic_id,
             build_struct_generic_id2, infer_against, infer_against2, is_base_const_var,
@@ -2603,8 +2603,233 @@ pub fn typeresolve_value_expr(
 ) {
     let span = value_expr.expr.1;
     match &mut value_expr.expr.0 {
-        ValueExpr::Async(..) => todo!(),
-        ValueExpr::For { .. } => todo!(),
+        ValueExpr::Async(inner) => {
+            typeresolve_value_expr(inner, globals, locals);
+            let ValueExpr::FunctionCall {
+                target,
+                params,
+                type_params: _,
+            } = &inner.expr.0
+            else {
+                let msg = "Can only async call a function call".to_string();
+                failure_with_occurence(msg.clone(), inner.expr.1, [(msg.clone(), inner.expr.1)]);
+            };
+
+            value_expr.typ.replace_if_not_never(&(
+                if [target.as_ref()]
+                    .into_iter()
+                    .chain(params.iter())
+                    .any(|v| v.typ.0.is_never())
+                {
+                    TypeExpr::Never
+                } else {
+                    TypeExpr::Struct {
+                        name: mangle(&["std", "sync", "Channel"]),
+                        type_params: vec![inner.typ.clone()],
+                    }
+                },
+                span,
+            ));
+
+            let channel_type = inner.typ.clone();
+            if let TypeExpr::Struct {
+                ref name,
+                ref type_params,
+            } = channel_type.0
+            {
+                globals.get_struct_header(name, type_params);
+            }
+            let new_channel_fn_name = mangle(&["std", "sync", "Channel", "new"]);
+
+            let fn_type = globals
+                .function_headers
+                .get(&new_channel_fn_name)
+                .expect("new channel fn not found")
+                .to_type();
+
+            let mut new_channel_call = ValueExprWithType::n((
+                ValueExpr::FunctionCall {
+                    target: ValueExprWithType::n((
+                        ValueExpr::Variable(
+                            true,
+                            new_channel_fn_name.clone(),
+                            Some(fn_type),
+                            Some(true),
+                            false,
+                        ),
+                        span,
+                    ))
+                    .into(),
+                    params: vec![],
+                    type_params: vec![inner.typ.clone()],
+                },
+                span,
+            ));
+
+            typeresolve_function_call(&mut new_channel_call, globals, locals);
+
+            let TypeExpr::Struct {
+                name: chan_struct_name,
+                type_params: chan_struct_type_params,
+            } = &new_channel_call.typ.0
+            else {
+                panic!("Compiler Bug: Async doesn't return channel")
+            };
+
+            let channel_struct_def = globals
+                .get_struct_header(&chan_struct_name, &chan_struct_type_params)
+                .clone();
+
+            // this loop ensures that all channel methods are emitted
+            // TODO: STRUCT RESOLVE for cascading generics
+            // for m in &channel_struct_def.methods {
+            //     if !m.generics.is_empty() {
+            //         continue;
+            //     }
+
+            //     typeresolve_value_expr(
+            //         &mut ValueExprWithType::n((
+            //             ValueExpr::FieldAccess {
+            //                 target_obj: new_channel_call.clone().into(),
+            //                 field_name: m.name.clone(),
+            //             },
+            //             span,
+            //         )),
+            //         globals,
+            //         locals,
+            //     );
+            // }
+        }
+        ValueExpr::For {
+            ident: (ident, is_const, ty),
+            target,
+            block,
+        } => {
+            typeresolve_value_expr(target, globals, locals);
+            let mut target_type = target.typ.clone();
+
+            let current = &mut target_type;
+            let ref_type = 0;
+
+            let fail = || {
+                let msg = "Can only use for on std::col::Iterator".to_string();
+                failure_with_occurence(msg.clone(), target.expr.1, [(msg.clone(), target.expr.1)])
+            };
+            if let TypeExpr::Struct { name, type_params } = current.clone().0 {
+                let unmangled = unmangle(name.as_str());
+
+                if unmangled.as_slice() != ["std", "col", "Iter"] || type_params.len() != 1 {
+                    fail();
+                }
+
+                let new_iter_call = mangle(&["std", "col", "Iter", "from"]);
+
+                let mut new_iter_call_expr = ValueExpr::FunctionCall {
+                    target: ValueExpr::Variable(
+                        true,
+                        new_iter_call,
+                        Some(TypeExpr::Fun(
+                            vec![(
+                                None,
+                                TypeExpr::Fun(
+                                    vec![],
+                                    TypeExpr::Or(vec![
+                                        type_params[0].clone(),
+                                        TypeExpr::Tag("no_next_elem".to_string()).into_empty_span(),
+                                    ])
+                                    .into_empty_span()
+                                    .into(),
+                                    true,
+                                )
+                                .into_empty_span(),
+                            )],
+                            (current.clone().0, target.expr.1).into(),
+                            true,
+                        )),
+                        Some(true),
+                        false,
+                    )
+                    .into_empty_span()
+                    .into(),
+                    params: vec![
+                        ValueExpr::Lambda(
+                            LambdaFunctionExpr {
+                                is_mut: true,
+                                params: vec![],
+                                return_type: Some(
+                                    TypeExpr::Or(vec![
+                                        type_params[0].clone(),
+                                        TypeExpr::Tag("no_next_elem".to_string()).into_empty_span(),
+                                    ])
+                                    .into_empty_span(),
+                                ),
+                                value_expr: ValueExpr::Return(Some(
+                                    ValueExpr::Tag("no_next_elem".to_string())
+                                        .into_empty_span()
+                                        .into(),
+                                ))
+                                .into_empty_span(),
+                            }
+                            .into(),
+                        )
+                        .into_empty_span(),
+                    ],
+                    type_params: vec![type_params[0].clone()],
+                }
+                .into_empty_span();
+
+                typeresolve_value_expr(&mut new_iter_call_expr, globals, locals);
+
+                let mut iter_def = globals.get_struct_header(&name, &type_params).clone();
+
+                // this loop ensures that all channel methods are emitted
+                // TODO CASCADING GENERICS
+                // for m in iter_def.methods.iter_mut() {
+                //     if !m.generics.is_empty() {
+                //         continue;
+                //     }
+
+                //     typeresolve_value_expr(
+                //         &mut ValueExprWithType::n((
+                //             ValueExpr::FieldAccess {
+                //                 target_obj: new_iter_call_expr.clone().into(),
+                //                 field_name: m.name.clone(),
+                //             },
+                //             span,
+                //         )),
+                //         globals,
+                //         locals,
+                //     );
+                // }
+
+                let content_type = type_params[0].clone();
+
+                if ref_type > 0 {
+                    target_type.0 = if ref_type == 1 {
+                        TypeExpr::Ref(content_type.clone().into())
+                    } else {
+                        TypeExpr::RefMut(content_type.clone().into())
+                    };
+                } else {
+                    *current = content_type.clone();
+                }
+            } else {
+                fail();
+            }
+
+            locals.push_scope();
+            *ty = Some(target_type.clone().0);
+            locals.set_info_for_ident(
+                ident.clone(),
+                VariableInfo {
+                    typ: target_type,
+                    is_const: *is_const,
+                },
+            );
+            typeresolve_value_expr(block, globals, locals);
+            locals.pop_scope();
+            value_expr.typ = (TypeExpr::Statement, span);
+        }
         ValueExpr::RawVariable(_, path) => {
             let ident = mangle(path);
             let VariableInfo { typ, is_const } =
