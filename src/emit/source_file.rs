@@ -77,6 +77,7 @@ impl SourceFile {
             .iter_mut()
             .chain(type_env.generic_fns_generated.clone().iter_mut())
         {
+            dbg!(&function_definition.name);
             // generic functions shouldn't be emitted, as they have incomplete type information
             if !function_definition.generics.is_empty() {
                 continue;

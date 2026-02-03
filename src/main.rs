@@ -7,6 +7,7 @@
 )]
 
 use std::{
+    collections::{HashMap, HashSet},
     env,
     error::Error,
     fs::{self, File},
@@ -24,7 +25,7 @@ use tags::Tag;
 use crate::{
     parse::{
         Context, SS,
-        function_parser::LambdaFunctionExpr,
+        function_parser::{FunctionDefintion, LambdaFunctionExpr},
         lexer::lex_parser,
         make_input, parse_failure,
         source_file_parser::source_file_parser,
@@ -552,8 +553,73 @@ fn typecheck<'a>(src_file_ast: &mut SourceFile, tailwind_tx: &'a Sender<String>)
     // dbg!(&_r.generics_output.generic_functions);
     dbg!(now.elapsed().as_millis());
     dbg!("end");
-    std::process::exit(0);
-    TypeEnv::default()
+
+    let mut generic_fns_generated = Vec::new();
+    _r.generics_output.generic_functions.iter_sync(|_, v| {
+        generic_fns_generated.push(v.clone());
+        true
+    });
+
+    let mut generic_structs_generated = Vec::new();
+    _r.generics_output.generic_structs.iter_sync(|_, v| {
+        generic_structs_generated.push(v.clone());
+        true
+    });
+
+    let mut generic_methods_generated: HashMap<String, Vec<FunctionDefintion>> = HashMap::new();
+    _r.generics_output
+        .generic_methods
+        .iter_sync(|struct_name, methods| {
+            generic_methods_generated
+                .entry(struct_name.clone())
+                .or_default();
+            methods.iter_sync(|_, method_definition| {
+                generic_methods_generated
+                    .get_mut(struct_name)
+                    .unwrap()
+                    .push(method_definition.clone());
+                true
+            });
+            true
+        });
+
+    let mut extension_functions = HashMap::new();
+    _r.extension_functions.iter_sync(|k, v| {
+        extension_functions.insert(k.clone(), v.clone());
+        true
+    });
+
+    let mut jsx_component_dependencies: HashMap<
+        String,
+        crate::parse::jsx_component_parser::JsxComponentDependencies,
+    > = HashMap::new();
+    _r.jsx_component_dependencies.iter_sync(|k, v| {
+        let mut client_components = Vec::new();
+        v.client_components.iter_sync(|elem| {
+            client_components.push(elem.to_string());
+            true
+        });
+        jsx_component_dependencies
+            .entry(k.clone())
+            .or_default()
+            .client_components = client_components;
+        true
+    });
+
+    TypeEnv {
+        all_go_imports: Box::leak(Box::new(HashSet::new())),
+        duckx_components: src_file_ast.duckx_components.clone(),
+        jsx_components: src_file_ast.jsx_components.clone(),
+        jsx_component_dependencies,
+        extension_functions,
+        function_definitions: src_file_ast.function_definitions.clone(),
+        struct_definitions: src_file_ast.struct_definitions.clone(),
+
+        generic_fns_generated,
+        generic_structs_generated,
+        generic_methods_generated,
+        ..Default::default()
+    }
 }
 
 fn write_in_duck_dotdir(file_name: &str, content: &str) -> PathBuf {

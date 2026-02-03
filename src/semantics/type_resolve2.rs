@@ -110,7 +110,8 @@ pub struct DuckxComponentHeader {
     pub props: Spanned<TypeExpr>,
 }
 
-fn typeresolve_jsx_component(c: &mut JsxComponent, type_env: &GlobalsEnv) {
+fn typeresolve_jsx_component(c: &mut JsxComponent, globals: &GlobalsEnv) {
+    reduce_type_expr(&mut c.props_type, globals, None);
     let units = c.find_units();
     let mut edits = Vec::new();
 
@@ -133,14 +134,15 @@ fn typeresolve_jsx_component(c: &mut JsxComponent, type_env: &GlobalsEnv) {
                 // here we could implement rpc calls
                 let ident = &c.javascript_source.0[range.start_byte..range.end_byte];
 
-                if type_env.jsx_component_headers.contains_key(ident) {
-                    type_env
+                if globals.jsx_component_headers.contains_key(ident) {
+                    globals
                         .jsx_component_dependencies
                         .entry_sync(c.name.clone())
                         .or_default()
                         .get_mut()
                         .client_components
-                        .insert_sync(ident.to_string());
+                        .insert_sync(ident.to_string())
+                        .unwrap();
                 }
             }
         }
@@ -154,6 +156,11 @@ pub struct JsxComponentDependencies {
 }
 
 #[derive(Debug, Clone)]
+pub struct JsxComponentHeader {
+    pub props_type: Spanned<TypeExpr>,
+}
+
+#[derive(Debug, Clone)]
 pub struct GlobalsEnv {
     pub type_aliases: HashMap<String, TypeAlias>,
 
@@ -161,7 +168,7 @@ pub struct GlobalsEnv {
 
     pub extension_functions: scc::HashMap<String, (Spanned<TypeExpr>, TypeExpr)>, // key = extension function name, (actual_fn_type, access_fn_type)
 
-    pub jsx_component_headers: HashMap<String, DuckxComponentHeader>,
+    pub jsx_component_headers: HashMap<String, JsxComponentHeader>,
     pub duckx_component_headers: HashMap<String, DuckxComponentHeader>,
 
     pub structs: HashMap<String, StructDefinition>,
@@ -1888,6 +1895,87 @@ pub fn resolve_all_types_source_file(source_file: &mut SourceFile) -> GlobalsEnv
                 },
             );
 
+        let mut handles = Vec::with_capacity(NUM_THREADS);
+
+        for jsx_components in source_file
+            .jsx_components
+            .chunks((source_file.jsx_components.len() / NUM_THREADS).max(1))
+        {
+            handles.push(s.spawn(move || {
+                let mut res = HashMap::with_capacity(jsx_components.len());
+                for jsx_component in jsx_components {
+                    res.insert(
+                        jsx_component.name.clone(),
+                        JsxComponentHeader {
+                            props_type: jsx_component.props_type.clone(),
+                        },
+                    );
+                }
+                res
+            }));
+        }
+
+        globals_env.jsx_component_headers = handles
+            .into_iter()
+            .map(|j| j.join().expect("Compiler Bug: Handles "))
+            .fold(
+                HashMap::with_capacity(source_file.jsx_components.len()),
+                |mut acc, elem| {
+                    for (k, v) in elem.into_iter() {
+                        acc.insert(k, v);
+                    }
+                    acc
+                },
+            );
+
+        let mut handles = Vec::with_capacity(NUM_THREADS);
+
+        for duckx_components in source_file
+            .duckx_components
+            .chunks((source_file.duckx_components.len() / NUM_THREADS).max(1))
+        {
+            handles.push(s.spawn(move || {
+                let mut res = HashMap::with_capacity(duckx_components.len());
+                for duckx_component in duckx_components {
+                    res.insert(
+                        duckx_component.name.clone(),
+                        DuckxComponentHeader {
+                            props: duckx_component.props_type.clone(),
+                        },
+                    );
+                }
+                res
+            }));
+        }
+
+        globals_env.duckx_component_headers = handles
+            .into_iter()
+            .map(|j| j.join().expect("Compiler Bug: Handles "))
+            .fold(
+                HashMap::with_capacity(source_file.jsx_components.len()),
+                |mut acc, elem| {
+                    for (k, v) in elem.into_iter() {
+                        acc.insert(k, v);
+                    }
+                    acc
+                },
+            );
+
+        globals_env
+            .duckx_component_headers
+            .clone()
+            .into_iter()
+            .for_each(|(name, duckx_component)| {
+                globals_env.function_headers.insert(
+                    name,
+                    FunHeader {
+                        generics: Vec::default(),
+                        params: vec![duckx_component.props],
+                        return_type: TypeExpr::Html.into_empty_span(),
+                    },
+                );
+            });
+
         globals_env
     });
 
@@ -1984,6 +2072,7 @@ pub fn resolve_all_types_source_file(source_file: &mut SourceFile) -> GlobalsEnv
 }
 
 fn typeresolve_duckx_component(c: &mut DuckxComponent, globals: &GlobalsEnv) {
+    reduce_type_expr(&mut c.props_type, globals, None);
     let mut scope = LocalScoped::default();
     scope.set_info_for_ident(
         "props".to_string(),

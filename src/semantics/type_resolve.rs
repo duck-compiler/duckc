@@ -262,12 +262,22 @@ pub fn build_struct_generic_id(
 }
 
 pub fn build_struct_generic_id2(struct_name: &str, type_params: &[Spanned<TypeExpr>]) -> String {
-    let mut res = struct_name.to_string();
-    for t in type_params {
-        res.push('_');
-        res.push_str(&t.0.as_clean_go_type_name2());
-    }
-    res
+    // let mut res = struct_name.to_string();
+    // for t in type_params {
+    //     res.push('_');
+    //     res.push_str(&t.0.as_clean_go_type_name2());
+    // }
+    // res
+    mangle(
+        &[struct_name.to_string()]
+            .into_iter()
+            .chain(
+                type_params
+                    .iter()
+                    .map(|(ty, _)| ty.as_clean_go_type_name2()),
+            )
+            .collect::<Vec<_>>(),
+    )
 }
 
 impl TypeEnv<'_> {
