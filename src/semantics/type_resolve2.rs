@@ -24,7 +24,11 @@ use crate::{
     semantics::{
         ident_mangler::mangle,
         type_resolve::{
-            NeedsSearchResult, TravControlFlow, TypeEnv, build_struct_generic_id, build_struct_generic_id2, infer_against, infer_against2, is_base_const_var, is_const_var, replace_generics_in_type_expr, replace_generics_in_type_expr2, trav_type_expr2, unset_const_func_call_assign, unset_copy_var_assign
+            NeedsSearchResult, TravControlFlow, TypeEnv, build_struct_generic_id,
+            build_struct_generic_id2, infer_against, infer_against2, is_base_const_var,
+            is_const_var, replace_generics_in_type_expr, replace_generics_in_type_expr2,
+            replace_generics_in_value_expr2, trav_type_expr2, unset_const_func_call_assign,
+            unset_copy_var_assign,
         },
     },
 };
@@ -179,12 +183,12 @@ impl GlobalsEnv {
                             s.map(|s| {
                                 self.generics_output
                                     .method_create_generic_instance(&s, name, params, self);
-                                self.generics_output.get_generic_method_header(
+                                dbg!(self.generics_output.get_generic_method_header(
                                     struct_name,
                                     struct_params,
                                     name,
                                     params,
-                                )
+                                ))
                             })
                             .flatten()
                         })
@@ -247,10 +251,7 @@ impl GenericsOutput {
     ) -> Option<MethodHeader> {
         self.generic_method_headers
             .read_sync(
-                &build_struct_generic_id2(
-                    &build_struct_generic_id2(struct_name, struct_params),
-                    params,
-                ),
+                &build_struct_generic_id2(struct_name, struct_params),
                 |_, v| v.read_sync(&build_struct_generic_id2(name, params), |_, v| v.clone()),
             )
             .flatten()
@@ -507,18 +508,22 @@ impl ValueExprWithType {
 }
 
 // replaces OR, AND and type aliases
-fn reduce_type_expr(t: &mut Spanned<TypeExpr>, globals: &GlobalsEnv, self_type: Option<&TypeExpr>) {
+pub fn reduce_type_expr(
+    t: &mut Spanned<TypeExpr>,
+    globals: &GlobalsEnv,
+    self_type: Option<&TypeExpr>,
+) {
     trav_type_expr2(
         |t, _| match &mut t.0 {
             TypeExpr::TypeName(..) => {
-                let mut current = t.0.clone();
+                let mut current = t.clone();
 
-                while let TypeExpr::TypeName(_, ident, params) = &current {
+                while let TypeExpr::TypeName(_, ident, params) = &current.0 {
                     if ident == "Self"
                         && let Some(ty) = self_type.clone()
                         && params.is_empty()
                     {
-                        current = ty.clone();
+                        current = ty.clone().into_empty_span();
                         break;
                     }
 
@@ -534,7 +539,7 @@ fn reduce_type_expr(t: &mut Spanned<TypeExpr>, globals: &GlobalsEnv, self_type: 
                             generic_params.insert(alias_param.0.name.clone(), param.0.clone());
                         }
 
-                        let mut rhs = alias.expr.0.clone();
+                        let mut rhs = alias.expr.clone();
 
                         replace_generics_in_type_expr2(&mut rhs, &generic_params, globals);
                         current = rhs;
@@ -547,11 +552,11 @@ fn reduce_type_expr(t: &mut Spanned<TypeExpr>, globals: &GlobalsEnv, self_type: 
                             failure_with_occurence(msg, t.1, [(msg, t.1)]);
                         }
 
-                        current = TypeExpr::Struct {
+                        current.0 = TypeExpr::Struct {
                             name: ident.clone(),
                             type_params: params.clone(),
                         };
-                        continue;
+                        break;
                     }
 
                     if let Some(interface_def) = globals.interfaces.get(ident) {
@@ -560,14 +565,14 @@ fn reduce_type_expr(t: &mut Spanned<TypeExpr>, globals: &GlobalsEnv, self_type: 
                             failure_with_occurence(msg, t.1, [(msg, t.1)]);
                         }
 
-                        current = TypeExpr::NamedDuck {
+                        current.0 = TypeExpr::NamedDuck {
                             name: ident.clone(),
                             type_params: params.clone(),
                         };
-                        continue;
+                        break;
                     }
                 }
-                t.0 = current;
+                t.0 = current.0;
                 reduce_type_expr(t, globals, self_type);
                 return TravControlFlow::Cancel;
             }
@@ -642,21 +647,26 @@ fn resolve_all_types_struct_definition<F>(
     F: FnOnce(StructHeader),
 {
     for field in struct_def.fields.iter_mut() {
-        replace_generics_in_type_expr2(&mut field.type_expr.0, generics, globals);
-        reduce_type_expr(&mut field.type_expr, globals, self_type.clone());
+        replace_generics_in_type_expr2(&mut field.type_expr, generics, globals);
     }
 
     for method in struct_def.methods.iter_mut() {
-        for param in method.params.iter_mut() {
-            replace_generics_in_type_expr2(&mut param.1.0, generics, globals);
-            reduce_type_expr(&mut param.1, globals, self_type.clone());
+        if !method.generics.is_empty() {
+            continue;
         }
-        replace_generics_in_type_expr2(&mut method.return_type.0, generics, globals);
+        for param in method.params.iter_mut() {
+            replace_generics_in_type_expr2(&mut param.1, generics, globals);
+        }
+        replace_generics_in_type_expr2(&mut method.return_type, generics, globals);
+        replace_generics_in_value_expr2(&mut method.value_expr.expr.0, generics, globals);
     }
 
     header_callback(struct_def.to_header());
 
     for method in struct_def.methods.iter_mut() {
+        if !method.generics.is_empty() {
+            continue;
+        }
         let mut local_scope = LocalScoped::default();
         for param in method.params.iter_mut() {
             local_scope.set_info_for_ident(
@@ -682,8 +692,7 @@ fn resolve_all_types_function_definition<F>(
     let mut local_scope = LocalScoped::default();
 
     for p in fun_def.params.iter_mut() {
-        replace_generics_in_type_expr2(&mut p.1.0, generics, globals);
-        reduce_type_expr(&mut p.1, globals, None);
+        replace_generics_in_type_expr2(&mut p.1, generics, globals);
         local_scope.set_info_for_ident(
             p.0.clone(),
             VariableInfo {
@@ -693,11 +702,9 @@ fn resolve_all_types_function_definition<F>(
         );
     }
 
-    replace_generics_in_type_expr2(&mut fun_def.return_type.0, generics, globals);
-    reduce_type_expr(&mut fun_def.return_type, globals, None);
-
+    replace_generics_in_type_expr2(&mut fun_def.return_type, generics, globals);
     header_callback(fun_def.to_header2());
-
+    replace_generics_in_value_expr2(&mut fun_def.value_expr.expr.0, generics, globals);
     typeresolve_value_expr(&mut fun_def.value_expr, globals, &mut local_scope);
 }
 
@@ -1820,12 +1827,14 @@ pub fn resolve_all_types_source_file(source_file: &mut SourceFile) -> GlobalsEnv
             for fun_def in source_file.function_definitions.chunks_mut(chunk_size) {
                 s.spawn(move || {
                     for f in fun_def {
-                        resolve_all_types_function_definition(
-                            f,
-                            globals_env,
-                            |_| {},
-                            &IndexMap::default(),
-                        );
+                        if f.generics.is_empty() {
+                            resolve_all_types_function_definition(
+                                f,
+                                globals_env,
+                                |_| {},
+                                &IndexMap::default(),
+                            );
+                        }
                     }
                 });
             }

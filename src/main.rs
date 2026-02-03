@@ -547,7 +547,8 @@ fn parse_src_file(
 }
 
 fn typecheck<'a>(src_file_ast: &mut SourceFile, tailwind_tx: &'a Sender<String>) -> TypeEnv<'a> {
-    crate::semantics::type_resolve2::resolve_all_types_source_file(src_file_ast);
+    let _r = crate::semantics::type_resolve2::resolve_all_types_source_file(src_file_ast);
+    dbg!(&_r.generics_output.generic_functions);
     dbg!("end");
     std::process::exit(0);
     TypeEnv::default()

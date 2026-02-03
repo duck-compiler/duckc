@@ -8,8 +8,24 @@ type L2<Z> = Z;
 struct Lol {}
 struct Lol2<T> {
     x: T,
+} impl {
+    fn lol<X>(x: X) {
+
+    }
 }
 
-fn main() {}
+fn main() {
+    b<String>("abc").lol<Int>(10);
+    c<Int | Bool>();
+}
+
+fn b<T>(x: T) -> Lol2<T> {
+    Lol2<T> {
+        x: x,
+    }
+}
+
+fn c<T>() -> T | String {
+}
 
 fn a() -> X<Float> {}

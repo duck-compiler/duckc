@@ -33,7 +33,9 @@ use crate::{
     },
     semantics::{
         ident_mangler::{MANGLE_SEP, mangle, unmangle},
-        type_resolve2::{GlobalsEnv, LocalScoped, NeverTypeExt, ValueExprWithType},
+        type_resolve2::{
+            GlobalsEnv, LocalScoped, NeverTypeExt, ValueExprWithType, reduce_type_expr,
+        },
         typechecker::{check_type_compatability, check_type_compatability_full},
     },
     tags::Tag,
@@ -1786,6 +1788,263 @@ fn replace_generics_in_function_definition(
     resolve_all_aliases_value_expr(&mut t.value_expr, type_env);
 }
 
+pub fn replace_generics_in_value_expr2(
+    expr: &mut ValueExpr,
+    set_params: &IndexMap<String, TypeExpr>,
+    type_env: &GlobalsEnv,
+) {
+    match expr {
+        ValueExpr::BitAnd { lhs, rhs }
+        | ValueExpr::BitOr { lhs, rhs }
+        | ValueExpr::BitXor { lhs, rhs } => {
+            replace_generics_in_value_expr2(&mut lhs.expr.0, set_params, type_env);
+            replace_generics_in_value_expr2(&mut rhs.expr.0, set_params, type_env);
+        }
+        ValueExpr::ShiftLeft { target, amount } | ValueExpr::ShiftRight { target, amount } => {
+            replace_generics_in_value_expr2(&mut target.expr.0, set_params, type_env);
+            replace_generics_in_value_expr2(&mut amount.expr.0, set_params, type_env);
+        }
+        ValueExpr::BitNot(d) => {
+            replace_generics_in_value_expr2(&mut d.expr.0, set_params, type_env);
+        }
+        ValueExpr::RawStruct {
+            is_global,
+            name,
+            fields: _,
+            type_params: _,
+        } => {
+            panic!("Compiler Bug: raw struct sholdnt be here {name:?} {is_global}")
+        }
+        ValueExpr::Async(d) | ValueExpr::Defer(d) => {
+            replace_generics_in_value_expr2(&mut d.expr.0, set_params, type_env)
+        }
+        ValueExpr::As(v, t) => {
+            replace_generics_in_value_expr2(&mut v.expr.0, set_params, type_env);
+            replace_generics_in_type_expr2(t, set_params, type_env);
+        }
+        ValueExpr::For {
+            ident: _,
+            target,
+            block,
+        } => {
+            replace_generics_in_value_expr2(&mut target.expr.0, set_params, type_env);
+            replace_generics_in_value_expr2(&mut block.expr.0, set_params, type_env);
+        }
+        ValueExpr::Deref(t) | ValueExpr::Ref(t) | ValueExpr::RefMut(t) => {
+            replace_generics_in_value_expr2(&mut t.expr.0, set_params, type_env)
+        }
+        ValueExpr::Add(lhs, rhs)
+        | ValueExpr::Mul(lhs, rhs)
+        | ValueExpr::Div(lhs, rhs)
+        | ValueExpr::Sub(lhs, rhs)
+        | ValueExpr::Mod(lhs, rhs)
+        | ValueExpr::Equals(lhs, rhs)
+        | ValueExpr::NotEquals(lhs, rhs)
+        | ValueExpr::LessThan(lhs, rhs)
+        | ValueExpr::LessThanOrEquals(lhs, rhs)
+        | ValueExpr::GreaterThan(lhs, rhs)
+        | ValueExpr::GreaterThanOrEquals(lhs, rhs)
+        | ValueExpr::And(lhs, rhs)
+        | ValueExpr::Or(lhs, rhs) => {
+            replace_generics_in_value_expr2(&mut lhs.expr.0, set_params, type_env);
+            replace_generics_in_value_expr2(&mut rhs.expr.0, set_params, type_env);
+        }
+        ValueExpr::HtmlString(contents) => {
+            for c in contents {
+                if let ValHtmlStringContents::Expr(e) = c {
+                    replace_generics_in_value_expr2(&mut e.expr.0, set_params, type_env);
+                }
+            }
+        }
+        ValueExpr::Negate(e) | ValueExpr::BoolNegate(e) | ValueExpr::Return(Some(e)) => {
+            replace_generics_in_value_expr2(&mut e.expr.0, set_params, type_env)
+        }
+        ValueExpr::Array(exprs, _ty) => {
+            for e in exprs {
+                replace_generics_in_value_expr2(&mut e.expr.0, set_params, type_env);
+            }
+        }
+        ValueExpr::ArrayAccess(target, index) => {
+            replace_generics_in_value_expr2(&mut target.expr.0, set_params, type_env);
+            replace_generics_in_value_expr2(&mut index.expr.0, set_params, type_env);
+        }
+        ValueExpr::Block(exprs) => {
+            for e in exprs {
+                replace_generics_in_value_expr2(&mut e.expr.0, set_params, type_env);
+            }
+        }
+        ValueExpr::Duck(def) => {
+            for (_, expr) in def {
+                replace_generics_in_value_expr2(&mut expr.expr.0, set_params, type_env);
+            }
+        }
+        ValueExpr::FieldAccess {
+            target_obj,
+            field_name: _,
+        } => {
+            replace_generics_in_value_expr2(&mut target_obj.expr.0, set_params, type_env);
+        }
+        ValueExpr::FormattedString(contents) => {
+            for c in contents {
+                if let ValFmtStringContents::Expr(e) = c {
+                    replace_generics_in_value_expr2(&mut e.expr.0, set_params, type_env);
+                }
+            }
+        }
+        ValueExpr::FunctionCall {
+            target,
+            params,
+            type_params,
+            ..
+        } => {
+            for v in [&mut target.expr.0]
+                .into_iter()
+                .chain(params.iter_mut().map(|x| &mut x.expr.0))
+            {
+                replace_generics_in_value_expr2(v, set_params, type_env);
+            }
+            for t in type_params.iter_mut() {
+                replace_generics_in_type_expr2(t, set_params, type_env);
+            }
+        }
+        ValueExpr::If {
+            condition,
+            then,
+            r#else,
+        } => {
+            replace_generics_in_value_expr2(&mut condition.expr.0, set_params, type_env);
+            replace_generics_in_value_expr2(&mut then.expr.0, set_params, type_env);
+            if let Some(r#else) = r#else {
+                replace_generics_in_value_expr2(&mut r#else.expr.0, set_params, type_env);
+            }
+        }
+        ValueExpr::Lambda(def) => {
+            for (_, p) in &mut def.params {
+                if let Some(p) = p.as_mut() {
+                    replace_generics_in_type_expr2(p, set_params, type_env);
+                }
+            }
+            if let Some(return_type) = def.return_type.as_mut() {
+                replace_generics_in_type_expr2(return_type, set_params, type_env);
+            }
+            replace_generics_in_value_expr2(&mut def.value_expr.expr.0, set_params, type_env);
+        }
+        ValueExpr::Struct {
+            name,
+            fields,
+            type_params,
+        } => {
+            if let Some(replacement) = set_params.get(name) {
+                match replacement {
+                    TypeExpr::TypeName(_, new_name, _new_params) => {
+                        *name = new_name.clone();
+                        // *type_params = new_params.as_ref().cloned();
+                    }
+                    _ => panic!("invalid"),
+                }
+            }
+
+            for f in fields {
+                replace_generics_in_value_expr2(&mut f.1.expr.0, set_params, type_env);
+            }
+
+            for t in type_params {
+                replace_generics_in_type_expr2(t, set_params, type_env);
+            }
+        }
+        ValueExpr::Tuple(fields) => {
+            for f in fields {
+                replace_generics_in_value_expr2(&mut f.expr.0, set_params, type_env);
+            }
+        }
+        ValueExpr::While { condition, body } => {
+            replace_generics_in_value_expr2(&mut condition.expr.0, set_params, type_env);
+            replace_generics_in_value_expr2(&mut body.expr.0, set_params, type_env);
+        }
+        ValueExpr::VarDecl(decl) => {
+            if let Some(type_expr) = &mut decl.0.type_expr {
+                replace_generics_in_type_expr2(type_expr, set_params, type_env);
+            }
+            if let Some(initializer) = decl.0.initializer.as_mut() {
+                replace_generics_in_value_expr2(&mut initializer.expr.0, set_params, type_env);
+            }
+        }
+        ValueExpr::VarAssign(a) => {
+            replace_generics_in_value_expr2(&mut a.0.target.expr.0, set_params, type_env);
+            replace_generics_in_value_expr2(&mut a.0.value_expr.expr.0, set_params, type_env);
+        }
+        ValueExpr::Match {
+            value_expr,
+            arms,
+            else_arm,
+            span: _,
+        } => {
+            replace_generics_in_value_expr2(&mut value_expr.expr.0, set_params, type_env);
+            for arm in arms {
+                replace_generics_in_type_expr2(&mut arm.type_case, set_params, type_env);
+                if let Some(condition) = &mut arm.condition {
+                    replace_generics_in_value_expr2(&mut condition.expr.0, set_params, type_env);
+                }
+                replace_generics_in_value_expr2(&mut arm.value_expr.expr.0, set_params, type_env);
+            }
+
+            if let Some(arm) = else_arm {
+                replace_generics_in_type_expr2(&mut arm.type_case, set_params, type_env);
+                if let Some(condition) = &mut arm.condition {
+                    replace_generics_in_value_expr2(&mut condition.expr.0, set_params, type_env);
+                }
+                replace_generics_in_value_expr2(&mut arm.value_expr.expr.0, set_params, type_env);
+            }
+        }
+        ValueExpr::InlineGo(go_src, ty) => {
+            if let Some(ty) = ty {
+                replace_generics_in_type_expr2(ty, set_params, type_env);
+            }
+            let mut to_replace = go_src.to_string();
+            loop {
+                let start_idx = to_replace.find("<<<");
+                if let Some(start_idx) = start_idx {
+                    let end = to_replace.find(">>>");
+                    if let Some(end_idx) = end {
+                        let mut name = &to_replace[start_idx + 3..end_idx];
+                        let mut concrete_type = false;
+                        if name.starts_with("@") {
+                            let replaced_name = name.replace("@", "");
+                            name = replaced_name.leak();
+
+                            concrete_type = true
+                        }
+
+                        let replacement = set_params.get(name);
+                        if let Some(replacement) = replacement {
+                            let type_anno = if concrete_type {
+                                replacement.as_clean_go_type_name2()
+                            } else {
+                                replacement.as_go_type_annotation2(type_env)
+                            };
+                            to_replace.replace_range(start_idx..end_idx + 3, type_anno.as_str());
+                        }
+                        continue;
+                    }
+                }
+                break;
+            }
+            *go_src = to_replace;
+        }
+        ValueExpr::Bool(..)
+        | ValueExpr::Break
+        | ValueExpr::Char(..)
+        | ValueExpr::String(..)
+        | ValueExpr::Continue
+        | ValueExpr::Float(..)
+        | ValueExpr::Int(..)
+        | ValueExpr::RawVariable(..)
+        | ValueExpr::Return(..)
+        | ValueExpr::Tag(..)
+        | ValueExpr::Variable(..) => {}
+    }
+}
+
 fn replace_generics_in_value_expr(
     expr: &mut ValueExpr,
     set_params: &IndexMap<String, TypeExpr>,
@@ -2054,132 +2313,135 @@ fn replace_generics_in_named_duck_def(
 }
 
 pub fn replace_generics_in_type_expr2(
-    expr: &mut TypeExpr,
+    expr: &mut Spanned<TypeExpr>,
     set_params: &IndexMap<String, TypeExpr>,
     globals: &GlobalsEnv,
 ) {
-    match expr {
-        TypeExpr::Uninit => {}
-        TypeExpr::Indexed(..) => {}
-        TypeExpr::Byte => {}
-        TypeExpr::UInt => {}
-        TypeExpr::Statement | TypeExpr::Never => {}
-        TypeExpr::TemplParam(name) => {
-            if let Some(replacement) = set_params.get(name).cloned() {
-                *expr = replacement;
-            }
-        }
-        TypeExpr::Ref(t) | TypeExpr::RefMut(t) => {
-            replace_generics_in_type_expr2(&mut t.0, set_params, globals)
-        }
-        TypeExpr::Html => {}
-        TypeExpr::TypeOf(..) => {}
-        TypeExpr::KeyOf(type_expr) => {
-            replace_generics_in_type_expr2(&mut type_expr.as_mut().0, set_params, globals);
-        }
-        TypeExpr::Array(t) => {
-            replace_generics_in_type_expr2(&mut t.0, set_params, globals);
-        }
-        TypeExpr::Duck(d) => {
-            for f in &mut d.fields {
-                replace_generics_in_type_expr2(&mut f.type_expr.0, set_params, globals);
-            }
-        }
-        TypeExpr::Fun(params, ret, _) => {
-            for p in params {
-                replace_generics_in_type_expr2(&mut p.1.0, set_params, globals);
-            }
-            replace_generics_in_type_expr2(&mut ret.0, set_params, globals);
-        }
-        TypeExpr::Or(contents) => {
-            for c in contents {
-                replace_generics_in_type_expr2(&mut c.0, set_params, globals);
-            }
-        }
-        TypeExpr::Tuple(fields) => {
-            for f in fields {
-                replace_generics_in_type_expr2(&mut f.0, set_params, globals);
-            }
-        }
-        TypeExpr::TypeName(_, name, generics) => {
-            for (g, _) in generics {
-                replace_generics_in_type_expr2(g, set_params, globals);
-            }
-            if let Some(replacement) = set_params.get(name) {
-                *expr = replacement.clone();
-            }
-        }
-        TypeExpr::Struct { name, type_params } => {
-            if let Some(TypeExpr::TypeName(_, new_name, g)) = set_params.get(name)
-                && g.is_empty()
-            {
-                *name = new_name.clone();
-            }
-
-            for t in type_params {
-                replace_generics_in_type_expr2(&mut t.0, set_params, globals);
-            }
-        }
-        TypeExpr::NamedDuck { name, type_params } => {
-            if let Some(TypeExpr::TypeName(_, new_name, g)) = set_params.get(name)
-                && g.is_empty()
-            {
-                *name = new_name.clone();
-            }
-
-            for t in type_params {
-                replace_generics_in_type_expr2(&mut t.0, set_params, globals);
-            }
-        }
-        TypeExpr::Go(go_type) => {
-            let mut out = String::new();
-            let chars = go_type.chars().collect::<Vec<_>>();
-            let mut i = 0;
-
-            while i < chars.len() {
-                let current = chars[i];
-
-                if current == '{' {
-                    let mut other_curly_brace = i + 1;
-                    let mut inner_buf = String::new();
-                    while other_curly_brace < chars.len() && chars[other_curly_brace] != '}' {
-                        inner_buf.push(chars[other_curly_brace]);
-                        other_curly_brace += 1;
-                    }
-                    if other_curly_brace < chars.len() && chars[other_curly_brace] == '}' {
-                        let replacement = set_params.get(&inner_buf);
-                        if let Some(replacement) = replacement {
-                            out.push_str(&replacement.as_go_type_annotation2(globals));
-                            i = other_curly_brace;
-                        }
-                    }
-                } else {
-                    out.push(current);
+    fn do_it(expr: &mut TypeExpr, set_params: &IndexMap<String, TypeExpr>, globals: &GlobalsEnv) {
+        match expr {
+            TypeExpr::Uninit => {}
+            TypeExpr::Indexed(..) => {}
+            TypeExpr::Byte => {}
+            TypeExpr::UInt => {}
+            TypeExpr::Statement | TypeExpr::Never => {}
+            TypeExpr::TemplParam(name) => {
+                if let Some(replacement) = set_params.get(name).cloned() {
+                    *expr = replacement;
                 }
-                i += 1;
             }
-            *go_type = out;
-        }
-        TypeExpr::Any
-        | TypeExpr::Char
-        | TypeExpr::Bool(..)
-        | TypeExpr::Int
-        | TypeExpr::Float
-        | TypeExpr::String(..)
-        | TypeExpr::Tag(..) => {}
-        TypeExpr::RawTypeName(_, typename, _) => {
-            if typename.len() == 1
-                && let Some(replacement) = set_params.get(&typename[0])
-            {
-                *expr = replacement.clone();
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => do_it(&mut t.0, set_params, globals),
+            TypeExpr::Html => {}
+            TypeExpr::TypeOf(..) => {}
+            TypeExpr::KeyOf(type_expr) => {
+                do_it(&mut type_expr.as_mut().0, set_params, globals);
             }
-        }
-        TypeExpr::And(variants) => {
-            for variant in variants.iter_mut() {
-                replace_generics_in_type_expr2(&mut variant.0, set_params, globals);
+            TypeExpr::Array(t) => {
+                do_it(&mut t.0, set_params, globals);
+            }
+            TypeExpr::Duck(d) => {
+                for f in &mut d.fields {
+                    do_it(&mut f.type_expr.0, set_params, globals);
+                }
+            }
+            TypeExpr::Fun(params, ret, _) => {
+                for p in params {
+                    do_it(&mut p.1.0, set_params, globals);
+                }
+                do_it(&mut ret.0, set_params, globals);
+            }
+            TypeExpr::Or(contents) => {
+                for c in contents {
+                    do_it(&mut c.0, set_params, globals);
+                }
+            }
+            TypeExpr::Tuple(fields) => {
+                for f in fields {
+                    do_it(&mut f.0, set_params, globals);
+                }
+            }
+            TypeExpr::TypeName(_, name, generics) => {
+                for (g, _) in generics {
+                    do_it(g, set_params, globals);
+                }
+                if let Some(replacement) = set_params.get(name) {
+                    *expr = replacement.clone();
+                }
+            }
+            TypeExpr::Struct { name, type_params } => {
+                if let Some(TypeExpr::TypeName(_, new_name, g)) = set_params.get(name)
+                    && g.is_empty()
+                {
+                    *name = new_name.clone();
+                }
+
+                for t in type_params {
+                    do_it(&mut t.0, set_params, globals);
+                }
+            }
+            TypeExpr::NamedDuck { name, type_params } => {
+                if let Some(TypeExpr::TypeName(_, new_name, g)) = set_params.get(name)
+                    && g.is_empty()
+                {
+                    *name = new_name.clone();
+                }
+
+                for t in type_params {
+                    do_it(&mut t.0, set_params, globals);
+                }
+            }
+            TypeExpr::Go(go_type) => {
+                let mut out = String::new();
+                let chars = go_type.chars().collect::<Vec<_>>();
+                let mut i = 0;
+
+                while i < chars.len() {
+                    let current = chars[i];
+
+                    if current == '{' {
+                        let mut other_curly_brace = i + 1;
+                        let mut inner_buf = String::new();
+                        while other_curly_brace < chars.len() && chars[other_curly_brace] != '}' {
+                            inner_buf.push(chars[other_curly_brace]);
+                            other_curly_brace += 1;
+                        }
+                        if other_curly_brace < chars.len() && chars[other_curly_brace] == '}' {
+                            let replacement = set_params.get(&inner_buf);
+                            if let Some(replacement) = replacement {
+                                out.push_str(&replacement.as_go_type_annotation2(globals));
+                                i = other_curly_brace;
+                            }
+                        }
+                    } else {
+                        out.push(current);
+                    }
+                    i += 1;
+                }
+                *go_type = out;
+            }
+            TypeExpr::Any
+            | TypeExpr::Char
+            | TypeExpr::Bool(..)
+            | TypeExpr::Int
+            | TypeExpr::Float
+            | TypeExpr::String(..)
+            | TypeExpr::Tag(..) => {}
+            TypeExpr::RawTypeName(_, typename, _) => {
+                if typename.len() == 1
+                    && let Some(replacement) = set_params.get(&typename[0])
+                {
+                    *expr = replacement.clone();
+                }
+            }
+            TypeExpr::And(variants) => {
+                for variant in variants.iter_mut() {
+                    do_it(&mut variant.0, set_params, globals);
+                }
             }
         }
     }
+
+    do_it(&mut expr.0, set_params, globals);
+    reduce_type_expr(expr, globals, None);
 }
 
 pub fn replace_generics_in_type_expr(
