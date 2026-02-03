@@ -5,7 +5,20 @@ type Z = String | Int | Lol | Lol2<Int>;
 type L1<X> = L2<X>;
 type L2<Z> = Z;
 
-struct Lol {}
+struct Lol {
+    o: &Lol | .none,
+} impl {
+    fn abc() {
+        // const x: Int = "a";
+    }
+}
+
+extend String with impl {
+    fn len() -> Int {
+        const a: Z = 100;
+    }
+}
+
 struct Lol2<T> {
     x: T,
 } impl {
@@ -15,6 +28,9 @@ struct Lol2<T> {
 }
 
 fn main() {
+    const l: Lol = Lol {
+        o: .none
+    };
     b<String>("abc").lol<Int>(10);
     c<Int | Bool>();
 }

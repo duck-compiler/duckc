@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     emit::types::AsDereferenced,
     parse::{
-        Field, SS, Spanned, failure_with_occurence,
+        Field, SS, Spanned,
+        extensions_def_parser::ExtensionsDef,
+        failure_with_occurence,
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         generics_parser::Generic,
         source_file_parser::SourceFile,
@@ -104,16 +106,28 @@ pub struct TypeAlias {
 #[derive(Debug, Clone)]
 pub struct GlobalsEnv {
     pub type_aliases: HashMap<String, TypeAlias>,
-    pub interfaces: HashMap<String, InterfaceDefinition>,
+
+    pub extension_functions: scc::HashMap<String, (Spanned<TypeExpr>, TypeExpr)>, // key = extension function name, (actual_fn_type, access_fn_type)
+
     pub structs: HashMap<String, StructDefinition>,
-    pub functions: HashMap<String, FunctionDefintion>,
     pub struct_headers: HashMap<String, StructHeader>,
+
+    pub functions: HashMap<String, FunctionDefintion>,
     pub function_headers: HashMap<String, FunHeader>,
+
     pub global_variables: HashMap<String, VariableInfo>,
+
     pub generics_output: GenericsOutput,
+
     pub used_objects: scc::HashSet<String>,
     pub total_resolved: scc::HashSet<String>,
     pub all_go_imports: HashSet<String>,
+}
+
+impl Default for GlobalsEnv {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GlobalsEnv {
@@ -121,12 +135,12 @@ impl GlobalsEnv {
         Self {
             used_objects: scc::HashSet::with_capacity(INITIAL_MAP_CAP),
             type_aliases: HashMap::with_capacity(INITIAL_MAP_CAP),
-            interfaces: HashMap::with_capacity(INITIAL_MAP_CAP),
             structs: HashMap::with_capacity(256),
             struct_headers: HashMap::with_capacity(256),
             functions: HashMap::with_capacity(INITIAL_MAP_CAP),
             function_headers: HashMap::with_capacity(INITIAL_MAP_CAP),
             global_variables: HashMap::with_capacity(INITIAL_MAP_CAP),
+            extension_functions: scc::HashMap::with_capacity(INITIAL_MAP_CAP),
             total_resolved: scc::HashSet::with_capacity(INITIAL_MAP_CAP),
             generics_output: GenericsOutput::default(),
             all_go_imports: HashSet::with_capacity(128),
@@ -183,12 +197,12 @@ impl GlobalsEnv {
                             s.map(|s| {
                                 self.generics_output
                                     .method_create_generic_instance(&s, name, params, self);
-                                dbg!(self.generics_output.get_generic_method_header(
+                                self.generics_output.get_generic_method_header(
                                     struct_name,
                                     struct_params,
                                     name,
                                     params,
-                                ))
+                                )
                             })
                             .flatten()
                         })
@@ -324,6 +338,7 @@ impl GenericsOutput {
                     .unwrap();
             },
             &generics,
+            &mut LocalScoped::default(),
         );
 
         self.generic_methods
@@ -364,6 +379,7 @@ impl GenericsOutput {
                     .unwrap();
             },
             &generics,
+            &mut LocalScoped::default(),
         );
 
         self.generic_functions
@@ -559,18 +575,8 @@ pub fn reduce_type_expr(
                         break;
                     }
 
-                    if let Some(interface_def) = globals.interfaces.get(ident) {
-                        if params.len() != interface_def.generics.len() {
-                            let msg = "Wrong number of type parameters";
-                            failure_with_occurence(msg, t.1, [(msg, t.1)]);
-                        }
-
-                        current.0 = TypeExpr::NamedDuck {
-                            name: ident.clone(),
-                            type_params: params.clone(),
-                        };
-                        break;
-                    }
+                    let msg = &format!("Could not find type definition for {ident}");
+                    failure_with_occurence(msg, t.1, [(msg, t.1)]);
                 }
                 t.0 = current.0;
                 reduce_type_expr(t, globals, self_type);
@@ -648,6 +654,7 @@ fn resolve_all_types_struct_definition<F>(
 {
     for field in struct_def.fields.iter_mut() {
         replace_generics_in_type_expr2(&mut field.type_expr, generics, globals);
+        reduce_type_expr(&mut field.type_expr, globals, self_type);
     }
 
     for method in struct_def.methods.iter_mut() {
@@ -656,8 +663,11 @@ fn resolve_all_types_struct_definition<F>(
         }
         for param in method.params.iter_mut() {
             replace_generics_in_type_expr2(&mut param.1, generics, globals);
+            reduce_type_expr(&mut param.1, globals, self_type);
         }
         replace_generics_in_type_expr2(&mut method.return_type, generics, globals);
+        reduce_type_expr(&mut method.return_type, globals, self_type);
+        // TODO: Self type in value expr types
         replace_generics_in_value_expr2(&mut method.value_expr.expr.0, generics, globals);
     }
 
@@ -686,10 +696,11 @@ fn resolve_all_types_function_definition<F>(
     globals: &GlobalsEnv,
     header_callback: F,
     generics: &IndexMap<String, TypeExpr>,
+    local_scope: &mut LocalScoped,
 ) where
     F: FnOnce(FunHeader),
 {
-    let mut local_scope = LocalScoped::default();
+    local_scope.push_scope();
 
     for p in fun_def.params.iter_mut() {
         replace_generics_in_type_expr2(&mut p.1, generics, globals);
@@ -705,7 +716,9 @@ fn resolve_all_types_function_definition<F>(
     replace_generics_in_type_expr2(&mut fun_def.return_type, generics, globals);
     header_callback(fun_def.to_header2());
     replace_generics_in_value_expr2(&mut fun_def.value_expr.expr.0, generics, globals);
-    typeresolve_value_expr(&mut fun_def.value_expr, globals, &mut local_scope);
+    typeresolve_value_expr(&mut fun_def.value_expr, globals, local_scope);
+
+    local_scope.pop_scope();
 }
 
 fn typeresolve_struct(
@@ -1820,12 +1833,13 @@ pub fn resolve_all_types_source_file(source_file: &mut SourceFile) -> GlobalsEnv
         globals_env
     });
 
-    let chunk_size = (source_file.function_definitions.len() / NUM_THREADS).max(1);
     {
         let globals_env = &globals_env;
         std::thread::scope(|s| {
+            let mut handles = Vec::with_capacity(NUM_THREADS);
+            let chunk_size = (source_file.function_definitions.len() / NUM_THREADS).max(1);
             for fun_def in source_file.function_definitions.chunks_mut(chunk_size) {
-                s.spawn(move || {
+                handles.push(s.spawn(move || {
                     for f in fun_def {
                         if f.generics.is_empty() {
                             resolve_all_types_function_definition(
@@ -1833,14 +1847,116 @@ pub fn resolve_all_types_source_file(source_file: &mut SourceFile) -> GlobalsEnv
                                 globals_env,
                                 |_| {},
                                 &IndexMap::default(),
+                                &mut LocalScoped::default(),
                             );
                         }
                     }
-                });
+                }));
+            }
+
+            for h in handles.drain(..) {
+                h.join().unwrap();
+            }
+
+            let chunk_size = (source_file.struct_definitions.len() / NUM_THREADS).max(1);
+            for struct_def in source_file.struct_definitions.chunks_mut(chunk_size) {
+                handles.push(s.spawn(move || {
+                    for f in struct_def {
+                        if f.generics.is_empty() {
+                            resolve_all_types_struct_definition(
+                                f,
+                                globals_env,
+                                &IndexMap::default(),
+                                Some(&TypeExpr::Struct {
+                                    name: f.name.clone(),
+                                    type_params: Vec::new(),
+                                }),
+                                |_| {},
+                            );
+                        }
+                    }
+                }));
+            }
+
+            for h in handles.drain(..) {
+                h.join().unwrap();
+            }
+
+            let chunk_size = (source_file.extensions_defs.len() / NUM_THREADS).max(1);
+            for ext_def in source_file.extensions_defs.chunks_mut(chunk_size) {
+                handles.push(s.spawn(move || {
+                    for f in ext_def {
+                        typeresolve_extensions_def(f, globals_env);
+                    }
+                }));
+            }
+
+            for h in handles.drain(..) {
+                h.join().unwrap();
             }
         });
     }
     globals_env
+}
+
+fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, globals: &GlobalsEnv) {
+    let mut locals = LocalScoped::default();
+    locals.push_scope();
+    locals.set_info_for_ident(
+        "self".to_string(),
+        VariableInfo {
+            typ: extensions_def.target_type_expr.clone(),
+            is_const: false,
+        },
+    );
+
+    let type_expr = extensions_def.target_type_expr.clone();
+    for extension_method in &mut extensions_def.function_definitions {
+        let extension_function_name = type_expr
+            .0
+            .build_extension_access_function_name2(&extension_method.0.name.clone());
+
+        if globals
+            .extension_functions
+            .contains_sync(&extension_function_name)
+        {
+            continue;
+        }
+
+        for (_, p) in &mut extension_method.0.params {
+            reduce_type_expr(p, globals, None);
+            // TODO: keyof
+        }
+
+        reduce_type_expr(&mut extension_method.0.return_type, globals, None);
+        // TODO: keyof
+
+        let underlying_fn_type = extension_method.0.type_expr();
+
+        let access_fn_type = TypeExpr::Fun(
+            vec![(Some("self".to_string()), type_expr.clone())],
+            Box::new(extension_method.0.type_expr()),
+            // todo: mutable extension fns?
+            false,
+        );
+
+        globals
+            .extension_functions
+            .insert_sync(
+                extension_function_name,
+                (underlying_fn_type.clone(), access_fn_type.clone()),
+            )
+            .unwrap();
+
+        resolve_all_types_function_definition(
+            &mut extension_method.0,
+            globals,
+            |_| {},
+            &IndexMap::default(),
+            &mut locals,
+        );
+    }
+    locals.pop_scope();
 }
 
 fn typeresolve_function_call(

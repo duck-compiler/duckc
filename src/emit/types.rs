@@ -2258,6 +2258,14 @@ impl TypeExpr {
         };
     }
 
+    pub fn build_extension_access_function_name2(&self, extension_name: &str) -> String {
+        return format!(
+            "Extend_{}_with_{}",
+            self.as_clean_go_type_name2(),
+            extension_name,
+        );
+    }
+
     pub fn build_extension_access_function_name(
         &self,
         extension_name: &str,
