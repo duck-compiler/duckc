@@ -315,7 +315,12 @@ pub fn mangle_duckx_component(
     mangle_env: &mut MangleEnv,
 ) {
     mangle_type_expression(&mut comp.props_type.0, prefix, mangle_env);
-    mangle_value_expr(&mut comp.value_expr.0, global_prefix, prefix, mangle_env);
+    mangle_value_expr(
+        &mut comp.value_expr.expr.0,
+        global_prefix,
+        prefix,
+        mangle_env,
+    );
 }
 
 pub fn mangle_jsx_component(
@@ -356,13 +361,13 @@ pub fn mangle_value_expr(
         ValueExpr::BitAnd { lhs, rhs }
         | ValueExpr::BitOr { lhs, rhs }
         | ValueExpr::BitXor { lhs, rhs } => {
-            mangle_value_expr(&mut lhs.0, global_prefix, prefix, mangle_env);
-            mangle_value_expr(&mut rhs.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut lhs.expr.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut rhs.expr.0, global_prefix, prefix, mangle_env);
         }
-        ValueExpr::BitNot(d) => mangle_value_expr(&mut d.0, global_prefix, prefix, mangle_env),
+        ValueExpr::BitNot(d) => mangle_value_expr(&mut d.expr.0, global_prefix, prefix, mangle_env),
         ValueExpr::ShiftLeft { target, amount } | ValueExpr::ShiftRight { target, amount } => {
-            mangle_value_expr(&mut target.0, global_prefix, prefix, mangle_env);
-            mangle_value_expr(&mut amount.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut target.expr.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut amount.expr.0, global_prefix, prefix, mangle_env);
         }
         ValueExpr::RawStruct {
             is_global,
@@ -377,7 +382,7 @@ pub fn mangle_value_expr(
             }
 
             fields.iter_mut().for_each(|(_, value_expr)| {
-                mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
+                mangle_value_expr(&mut value_expr.expr.0, global_prefix, prefix, mangle_env)
             });
 
             for (g, _) in type_params.iter_mut() {
@@ -391,10 +396,10 @@ pub fn mangle_value_expr(
             };
         }
         ValueExpr::Negate(d) | ValueExpr::Async(d) | ValueExpr::Defer(d) => {
-            mangle_value_expr(&mut d.0, global_prefix, prefix, mangle_env)
+            mangle_value_expr(&mut d.expr.0, global_prefix, prefix, mangle_env)
         }
         ValueExpr::As(v, t) => {
-            mangle_value_expr(&mut v.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut v.expr.0, global_prefix, prefix, mangle_env);
             mangle_type_expression(&mut t.0, prefix, mangle_env);
         }
         ValueExpr::For {
@@ -402,16 +407,16 @@ pub fn mangle_value_expr(
             target,
             block,
         } => {
-            mangle_value_expr(&mut target.0, global_prefix, prefix, mangle_env);
-            mangle_value_expr(&mut block.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut target.expr.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut block.expr.0, global_prefix, prefix, mangle_env);
         }
         ValueExpr::Deref(t) | ValueExpr::Ref(t) | ValueExpr::RefMut(t) => {
-            mangle_value_expr(&mut t.0, global_prefix, prefix, mangle_env)
+            mangle_value_expr(&mut t.expr.0, global_prefix, prefix, mangle_env)
         }
         ValueExpr::HtmlString(contents) => {
             for c in contents {
                 if let ValHtmlStringContents::Expr(e) = c {
-                    mangle_value_expr(&mut e.0, global_prefix, prefix, mangle_env);
+                    mangle_value_expr(&mut e.expr.0, global_prefix, prefix, mangle_env);
                 }
             }
         }
@@ -425,8 +430,8 @@ pub fn mangle_value_expr(
         ValueExpr::Continue => {}
         ValueExpr::Break => {}
         ValueExpr::ArrayAccess(target, idx) => {
-            mangle_value_expr(&mut target.0, global_prefix, prefix, mangle_env);
-            mangle_value_expr(&mut idx.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut target.expr.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut idx.expr.0, global_prefix, prefix, mangle_env);
         }
         ValueExpr::Match {
             value_expr,
@@ -434,14 +439,19 @@ pub fn mangle_value_expr(
             else_arm,
             span: _,
         } => {
-            mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut value_expr.expr.0, global_prefix, prefix, mangle_env);
             for arm in arms {
                 mangle_type_expression(&mut arm.type_case.0, prefix, mangle_env);
                 mangle_env.push_idents();
                 if let Some(identifier) = &arm.identifier_binding {
                     mangle_env.insert_ident(identifier.clone());
                 }
-                mangle_value_expr(&mut arm.value_expr.0, global_prefix, prefix, mangle_env);
+                mangle_value_expr(
+                    &mut arm.value_expr.expr.0,
+                    global_prefix,
+                    prefix,
+                    mangle_env,
+                );
                 mangle_env.pop_idents();
             }
 
@@ -451,20 +461,25 @@ pub fn mangle_value_expr(
                 if let Some(identifier) = &arm.identifier_binding {
                     mangle_env.insert_ident(identifier.clone());
                 }
-                mangle_value_expr(&mut arm.value_expr.0, global_prefix, prefix, mangle_env);
+                mangle_value_expr(
+                    &mut arm.value_expr.expr.0,
+                    global_prefix,
+                    prefix,
+                    mangle_env,
+                );
                 mangle_env.pop_idents();
             }
         }
         ValueExpr::FormattedString(contents) => {
             for c in contents {
                 if let ValFmtStringContents::Expr(e) = c {
-                    mangle_value_expr(&mut e.0, global_prefix, prefix, mangle_env);
+                    mangle_value_expr(&mut e.expr.0, global_prefix, prefix, mangle_env);
                 }
             }
         }
         ValueExpr::Array(exprs, _ty) => {
             for expr in exprs {
-                mangle_value_expr(&mut expr.0, global_prefix, prefix, mangle_env);
+                mangle_value_expr(&mut expr.expr.0, global_prefix, prefix, mangle_env);
             }
         }
         ValueExpr::InlineGo(t, ty) => {
@@ -569,7 +584,7 @@ pub fn mangle_value_expr(
                 mangle_type_expression(&mut return_type.0, prefix, mangle_env);
             }
             mangle_env.push_idents();
-            mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut value_expr.expr.0, global_prefix, prefix, mangle_env);
             mangle_env.pop_idents();
         }
         ValueExpr::FunctionCall {
@@ -579,9 +594,9 @@ pub fn mangle_value_expr(
             ..
         } => {
             // TODO: type params
-            mangle_value_expr(&mut target.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut target.expr.0, global_prefix, prefix, mangle_env);
             params.iter_mut().for_each(|param| {
-                mangle_value_expr(&mut param.0, global_prefix, prefix, mangle_env)
+                mangle_value_expr(&mut param.expr.0, global_prefix, prefix, mangle_env)
             });
             for param in type_params {
                 mangle_type_expression(&mut param.0, prefix, mangle_env);
@@ -599,35 +614,35 @@ pub fn mangle_value_expr(
             then,
             r#else,
         } => {
-            mangle_value_expr(&mut condition.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut condition.expr.0, global_prefix, prefix, mangle_env);
 
             mangle_env.push_idents();
-            mangle_value_expr(&mut then.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut then.expr.0, global_prefix, prefix, mangle_env);
             mangle_env.pop_idents();
 
             if let Some(r#else) = r#else {
                 mangle_env.push_idents();
-                mangle_value_expr(&mut r#else.0, global_prefix, prefix, mangle_env);
+                mangle_value_expr(&mut r#else.expr.0, global_prefix, prefix, mangle_env);
             }
         }
         ValueExpr::While { condition, body } => {
-            mangle_value_expr(&mut condition.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut condition.expr.0, global_prefix, prefix, mangle_env);
             mangle_env.push_idents();
-            mangle_value_expr(&mut body.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut body.expr.0, global_prefix, prefix, mangle_env);
             mangle_env.pop_idents();
         }
         ValueExpr::Tuple(value_exprs) => value_exprs.iter_mut().for_each(|value_expr| {
-            mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
+            mangle_value_expr(&mut value_expr.expr.0, global_prefix, prefix, mangle_env)
         }),
         ValueExpr::Block(value_exprs) => {
             mangle_env.push_idents();
             value_exprs.iter_mut().for_each(|value_expr| {
-                mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
+                mangle_value_expr(&mut value_expr.expr.0, global_prefix, prefix, mangle_env)
             });
             mangle_env.pop_idents();
         }
         ValueExpr::Duck(items) => items.iter_mut().for_each(|(_, value_expr)| {
-            mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
+            mangle_value_expr(&mut value_expr.expr.0, global_prefix, prefix, mangle_env)
         }),
         ValueExpr::Struct {
             name,
@@ -642,7 +657,7 @@ pub fn mangle_value_expr(
             }
 
             fields.iter_mut().for_each(|(_, value_expr)| {
-                mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
+                mangle_value_expr(&mut value_expr.expr.0, global_prefix, prefix, mangle_env)
             });
 
             for (g, _) in type_params {
@@ -650,20 +665,20 @@ pub fn mangle_value_expr(
             }
         }
         ValueExpr::FieldAccess { target_obj, .. } => {
-            mangle_value_expr(&mut target_obj.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut target_obj.expr.0, global_prefix, prefix, mangle_env);
         }
         ValueExpr::Return(Some(value_expr)) => {
-            mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env)
+            mangle_value_expr(&mut value_expr.expr.0, global_prefix, prefix, mangle_env)
         }
         ValueExpr::VarAssign(assignment) => {
             mangle_value_expr(
-                &mut assignment.0.target.0,
+                &mut assignment.0.target.expr.0,
                 global_prefix,
                 prefix,
                 mangle_env,
             );
             mangle_value_expr(
-                &mut assignment.0.value_expr.0,
+                &mut assignment.0.value_expr.expr.0,
                 global_prefix,
                 prefix,
                 mangle_env,
@@ -678,19 +693,19 @@ pub fn mangle_value_expr(
             mangle_env.insert_ident(declaration.name.clone());
 
             if let Some(initializer) = declaration.initializer.as_mut() {
-                mangle_value_expr(&mut initializer.0, global_prefix, prefix, mangle_env);
+                mangle_value_expr(&mut initializer.expr.0, global_prefix, prefix, mangle_env);
             }
         }
         ValueExpr::Add(lhs, rhs) => {
-            mangle_value_expr(&mut lhs.0, global_prefix, prefix, mangle_env);
-            mangle_value_expr(&mut rhs.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut lhs.expr.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut rhs.expr.0, global_prefix, prefix, mangle_env);
         }
         ValueExpr::Mul(lhs, rhs)
         | ValueExpr::Sub(lhs, rhs)
         | ValueExpr::Mod(lhs, rhs)
         | ValueExpr::Div(lhs, rhs) => {
-            mangle_value_expr(&mut lhs.0, global_prefix, prefix, mangle_env);
-            mangle_value_expr(&mut rhs.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut lhs.expr.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut rhs.expr.0, global_prefix, prefix, mangle_env);
         }
         ValueExpr::Equals(lhs, rhs)
         | ValueExpr::NotEquals(lhs, rhs)
@@ -700,11 +715,11 @@ pub fn mangle_value_expr(
         | ValueExpr::GreaterThanOrEquals(lhs, rhs)
         | ValueExpr::And(lhs, rhs)
         | ValueExpr::Or(lhs, rhs) => {
-            mangle_value_expr(&mut lhs.0, global_prefix, prefix, mangle_env);
-            mangle_value_expr(&mut rhs.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut lhs.expr.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut rhs.expr.0, global_prefix, prefix, mangle_env);
         }
         ValueExpr::BoolNegate(value_expr) => {
-            mangle_value_expr(&mut value_expr.0, global_prefix, prefix, mangle_env);
+            mangle_value_expr(&mut value_expr.expr.0, global_prefix, prefix, mangle_env);
         }
     }
 }

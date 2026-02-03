@@ -1,12 +1,12 @@
 use crate::{
-    emit::value::{IrInstruction, ToIr},
+    emit::value::{Emit, IrInstruction, ToIr},
     parse::{SS, duckx_component_parser::DuckxComponent},
     semantics::type_resolve::TypeEnv,
 };
 
 impl DuckxComponent {
-    pub fn emit(&self, type_env: &mut TypeEnv, to_ir: &mut ToIr, span: SS) -> IrInstruction {
-        let (instr, _) = self.value_expr.0.emit(type_env, to_ir, span);
+    pub fn emit(&self, type_env: &mut TypeEnv, to_ir: &mut ToIr, _span: SS) -> IrInstruction {
+        let (instr, _) = self.value_expr.emit(type_env, to_ir);
         IrInstruction::FunDef(
             self.name.clone(),
             None,

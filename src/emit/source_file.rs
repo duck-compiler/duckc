@@ -4,7 +4,7 @@ use crate::{
     emit::{
         ir::fix_idents_in_ir,
         types::emit_type_definitions,
-        value::{IrInstruction, IrValue, ToIr},
+        value::{Emit, IrInstruction, IrValue, ToIr},
     },
     parse::{SS, source_file_parser::SourceFile, use_statement_parser::UseStatement},
     semantics::type_resolve::TypeEnv,
@@ -54,11 +54,11 @@ impl SourceFile {
 
         for global_var in &self.global_var_decls {
             let (mut init_code, Some(IrValue::Var(res_name) | IrValue::Imm(res_name))) =
-                global_var.initializer.0.emit(type_env, &mut to_ir, span)
+                global_var.initializer.emit(type_env, &mut to_ir)
             else {
                 panic!(
                     "Compiler Bug: need a var (global declaration {} {:?})",
-                    global_var.name, global_var.initializer.0
+                    global_var.name, global_var.initializer.expr.0
                 )
             };
             let go_type = global_var.type_expr.0.as_go_type_annotation(type_env);
