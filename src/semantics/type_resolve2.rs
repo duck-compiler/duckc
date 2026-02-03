@@ -11,6 +11,7 @@ use crate::{
     emit::types::AsDereferenced,
     parse::{
         Field, SS, Spanned,
+        duckx_component_parser::DuckxComponent,
         extensions_def_parser::ExtensionsDef,
         failure_with_occurence,
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
@@ -1964,9 +1965,34 @@ pub fn resolve_all_types_source_file(source_file: &mut SourceFile) -> GlobalsEnv
             for h in handles.drain(..) {
                 h.join().unwrap();
             }
+
+            let chunk_size = (source_file.duckx_components.len() / NUM_THREADS).max(1);
+            for duckx_component in source_file.duckx_components.chunks_mut(chunk_size) {
+                handles.push(s.spawn(move || {
+                    for f in duckx_component {
+                        typeresolve_duckx_component(f, globals_env);
+                    }
+                }));
+            }
+
+            for h in handles.drain(..) {
+                h.join().unwrap();
+            }
         });
     }
     globals_env
+}
+
+fn typeresolve_duckx_component(c: &mut DuckxComponent, globals: &GlobalsEnv) {
+    let mut scope = LocalScoped::default();
+    scope.set_info_for_ident(
+        "props".to_string(),
+        VariableInfo {
+            typ: c.props_type.clone(),
+            is_const: false,
+        },
+    );
+    typeresolve_value_expr(&mut c.value_expr, globals, &mut scope);
 }
 
 fn typeresolve_extensions_def(extensions_def: &mut ExtensionsDef, globals: &GlobalsEnv) {
