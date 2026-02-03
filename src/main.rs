@@ -553,7 +553,7 @@ fn typecheck<'a>(src_file_ast: &mut SourceFile, tailwind_tx: &'a Sender<String>)
     dbg!(now.elapsed().as_millis());
     dbg!("end");
     std::process::exit(0);
-    _r
+    TypeEnv::default()
 }
 
 fn write_in_duck_dotdir(file_name: &str, content: &str) -> PathBuf {

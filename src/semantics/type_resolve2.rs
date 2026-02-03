@@ -15,6 +15,7 @@ use crate::{
         failure_with_occurence,
         function_parser::{FunctionDefintion, LambdaFunctionExpr},
         generics_parser::Generic,
+        jsx_component_parser::{Edit, JsxComponent, JsxSourceUnit, do_edits},
         source_file_parser::SourceFile,
         struct_parser::{DerivableInterface, StructDefinition},
         type_parser::{Duck, TypeExpr, merge_or},
@@ -104,10 +105,63 @@ pub struct TypeAlias {
 }
 
 #[derive(Debug, Clone)]
+pub struct DuckxComponentHeader {
+    pub props: Spanned<TypeExpr>,
+}
+
+fn typeresolve_jsx_component(c: &mut JsxComponent, type_env: &GlobalsEnv) {
+    let units = c.find_units();
+    let mut edits = Vec::new();
+
+    for (range, unit) in units.iter() {
+        match unit {
+            JsxSourceUnit::Jsx => {
+                edits.push((range.start_byte, Edit::Insert("html`".to_string())));
+                edits.push((range.end_byte, Edit::Insert("`".to_string())));
+            }
+            JsxSourceUnit::OpeningJsx => edits.push((range.start_byte, Edit::Delete(2))),
+            JsxSourceUnit::ClosingJsx => edits.push((range.start_byte, Edit::Delete(3))),
+            JsxSourceUnit::Expression => {
+                if range.start_byte > 0
+                    && &c.javascript_source.0[range.start_byte - 1..(range.start_byte)] != "$"
+                {
+                    edits.push((range.start_byte, Edit::Insert("$".to_string())))
+                }
+            }
+            JsxSourceUnit::Ident => {
+                // here we could implement rpc calls
+                let ident = &c.javascript_source.0[range.start_byte..range.end_byte];
+
+                if type_env.jsx_component_headers.contains_key(ident) {
+                    type_env
+                        .jsx_component_dependencies
+                        .entry_sync(c.name.clone())
+                        .or_default()
+                        .get_mut()
+                        .client_components
+                        .insert_sync(ident.to_string());
+                }
+            }
+        }
+    }
+    do_edits(&mut c.javascript_source.0, &mut edits);
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct JsxComponentDependencies {
+    pub client_components: scc::HashSet<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct GlobalsEnv {
     pub type_aliases: HashMap<String, TypeAlias>,
 
+    pub jsx_component_dependencies: scc::HashMap<String, JsxComponentDependencies>,
+
     pub extension_functions: scc::HashMap<String, (Spanned<TypeExpr>, TypeExpr)>, // key = extension function name, (actual_fn_type, access_fn_type)
+
+    pub jsx_component_headers: HashMap<String, DuckxComponentHeader>,
+    pub duckx_component_headers: HashMap<String, DuckxComponentHeader>,
 
     pub structs: HashMap<String, StructDefinition>,
     pub struct_headers: HashMap<String, StructHeader>,
@@ -144,6 +198,9 @@ impl GlobalsEnv {
             total_resolved: scc::HashSet::with_capacity(INITIAL_MAP_CAP),
             generics_output: GenericsOutput::default(),
             all_go_imports: HashSet::with_capacity(128),
+            jsx_component_dependencies: scc::HashMap::with_capacity(INITIAL_MAP_CAP),
+            jsx_component_headers: HashMap::with_capacity(INITIAL_MAP_CAP),
+            duckx_component_headers: HashMap::with_capacity(INITIAL_MAP_CAP),
         }
     }
 
@@ -1887,6 +1944,19 @@ pub fn resolve_all_types_source_file(source_file: &mut SourceFile) -> GlobalsEnv
                 handles.push(s.spawn(move || {
                     for f in ext_def {
                         typeresolve_extensions_def(f, globals_env);
+                    }
+                }));
+            }
+
+            for h in handles.drain(..) {
+                h.join().unwrap();
+            }
+
+            let chunk_size = (source_file.jsx_components.len() / NUM_THREADS).max(1);
+            for jsx_component in source_file.jsx_components.chunks_mut(chunk_size) {
+                handles.push(s.spawn(move || {
+                    for f in jsx_component {
+                        typeresolve_jsx_component(f, globals_env);
                     }
                 }));
             }
