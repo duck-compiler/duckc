@@ -924,6 +924,41 @@ impl TypeExpr {
         }
     }
 
+    pub fn implements_ord2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_ord2(globals),
+            TypeExpr::Array(t) => t.0.implements_ord2(globals),
+            TypeExpr::Duck(Duck { fields: _ }) => {
+                false
+                // false
+                //     && fields
+                //         .iter()
+                //         .all(|f| f.type_expr.0.implements_ord2(globals))
+            }
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_ord2(globals)),
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::Ord)
+                    || (def.methods.get("ord").is_some_and(|f| {
+                        !f.is_mut
+                            && f.params.len() == 1
+                            && f.params[0].0.clone().into_empty_span().0
+                                == TypeExpr::Ref(self.clone().into_empty_span().into())
+                            && f.return_type.0.clone().into_empty_span().0 == TypeExpr::ord_result()
+                    }))
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Byte
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::UInt
+            | TypeExpr::Float => true,
+            _ => false,
+        }
+    }
+
     pub fn implements_ord(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_ord(type_env),
@@ -972,6 +1007,35 @@ impl TypeExpr {
         }
     }
 
+    pub fn implements_into_iter_mut2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.methods.get("iter_mut").is_some_and(|f| {
+                    !f.is_mut
+                        && if let TypeExpr::Struct { name, type_params } = &f.return_type.0 {
+                            if name.as_str() == mangle(&["std", "col", "Iter"]) {
+                                if type_params.len() == 1 {
+                                    type_params[0].0.clone().into_empty_span().0
+                                        == TypeExpr::RefMut(self.clone().into_empty_span().into())
+                                            .into_empty_span()
+                                            .0
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                })
+            }
+            TypeExpr::Array(..) => true,
+            _ => false,
+        }
+    }
+
     pub fn implements_into_iter_mut(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::Struct { name, type_params } => {
@@ -997,6 +1061,35 @@ impl TypeExpr {
                         }
                     }
                 }) && def.mut_methods.contains("iter_mut")
+            }
+            TypeExpr::Array(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn implements_into_iter2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.methods.get("iter").is_some_and(|f| {
+                    !f.is_mut
+                        && if let TypeExpr::Struct { name, type_params } = &f.return_type.0 {
+                            if name.as_str() == mangle(&["std", "col", "Iter"]) {
+                                if type_params.len() == 1 {
+                                    type_params[0].0.clone().into_empty_span().0
+                                        == TypeExpr::Ref(self.clone().into_empty_span().into())
+                                            .into_empty_span()
+                                            .0
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                })
             }
             TypeExpr::Array(..) => true,
             _ => false,

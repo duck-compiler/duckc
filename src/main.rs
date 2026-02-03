@@ -34,7 +34,10 @@ use crate::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
         },
     },
-    semantics::type_resolve::{self, TypeEnv},
+    semantics::{
+        type_resolve::{self, TypeEnv},
+        type_resolve2::GlobalsEnv,
+    },
 };
 
 use lazy_static::lazy_static;

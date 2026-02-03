@@ -24,10 +24,7 @@ use crate::{
     semantics::{
         ident_mangler::mangle,
         type_resolve::{
-            TravControlFlow, TypeEnv, build_struct_generic_id, build_struct_generic_id2,
-            infer_against, infer_against2, is_base_const_var, is_const_var,
-            replace_generics_in_type_expr, replace_generics_in_type_expr2, trav_type_expr2,
-            unset_const_func_call_assign, unset_copy_var_assign,
+            NeedsSearchResult, TravControlFlow, TypeEnv, build_struct_generic_id, build_struct_generic_id2, infer_against, infer_against2, is_base_const_var, is_const_var, replace_generics_in_type_expr, replace_generics_in_type_expr2, trav_type_expr2, unset_const_func_call_assign, unset_copy_var_assign
         },
     },
 };
@@ -101,7 +98,7 @@ pub struct TypeAlias {
 }
 
 #[derive(Debug, Clone)]
-pub struct GlobalsEnv<'a> {
+pub struct GlobalsEnv {
     pub type_aliases: HashMap<String, TypeAlias>,
     pub interfaces: HashMap<String, InterfaceDefinition>,
     pub structs: HashMap<String, StructDefinition>,
@@ -109,13 +106,14 @@ pub struct GlobalsEnv<'a> {
     pub struct_headers: HashMap<String, StructHeader>,
     pub function_headers: HashMap<String, FunHeader>,
     pub global_variables: HashMap<String, VariableInfo>,
-    pub generics_output: &'a GenericsOutput,
+    pub generics_output: GenericsOutput,
     pub used_objects: scc::HashSet<String>,
+    pub total_resolved: scc::HashSet<String>,
     pub all_go_imports: HashSet<String>,
 }
 
-impl<'a> GlobalsEnv<'a> {
-    pub fn new(generics: &'a GenericsOutput) -> GlobalsEnv<'a> {
+impl GlobalsEnv {
+    pub fn new() -> GlobalsEnv {
         Self {
             used_objects: scc::HashSet::with_capacity(INITIAL_MAP_CAP),
             type_aliases: HashMap::with_capacity(INITIAL_MAP_CAP),
@@ -125,7 +123,8 @@ impl<'a> GlobalsEnv<'a> {
             functions: HashMap::with_capacity(INITIAL_MAP_CAP),
             function_headers: HashMap::with_capacity(INITIAL_MAP_CAP),
             global_variables: HashMap::with_capacity(INITIAL_MAP_CAP),
-            generics_output: generics,
+            total_resolved: scc::HashSet::with_capacity(INITIAL_MAP_CAP),
+            generics_output: GenericsOutput::default(),
             all_go_imports: HashSet::with_capacity(128),
         }
     }
@@ -1668,11 +1667,10 @@ pub fn check_type_compatability(
     }
 }
 
-pub fn resolve_all_types_source_file(source_file: &mut SourceFile) {
+pub fn resolve_all_types_source_file(source_file: &mut SourceFile) -> GlobalsEnv {
     const NUM_THREADS: usize = 8;
-    let generics_output = GenericsOutput::default();
     let globals_env = std::thread::scope(|s| {
-        let mut globals_env = GlobalsEnv::new(&generics_output);
+        let mut globals_env = GlobalsEnv::new();
 
         let mut handles = Vec::with_capacity(NUM_THREADS);
 
@@ -1816,24 +1814,24 @@ pub fn resolve_all_types_source_file(source_file: &mut SourceFile) {
     });
 
     let chunk_size = (source_file.function_definitions.len() / NUM_THREADS).max(1);
-    let globals_env = &globals_env;
-    std::thread::scope(|s| {
-        for fun_def in source_file.function_definitions.chunks_mut(chunk_size) {
-            s.spawn(move || {
-                for f in fun_def {
-                    resolve_all_types_function_definition(
-                        f,
-                        globals_env,
-                        |_| {},
-                        &IndexMap::default(),
-                    );
-                }
-            });
-        }
-    });
-
-    dbg!(&source_file.function_definitions);
-    dbg!(&generics_output);
+    {
+        let globals_env = &globals_env;
+        std::thread::scope(|s| {
+            for fun_def in source_file.function_definitions.chunks_mut(chunk_size) {
+                s.spawn(move || {
+                    for f in fun_def {
+                        resolve_all_types_function_definition(
+                            f,
+                            globals_env,
+                            |_| {},
+                            &IndexMap::default(),
+                        );
+                    }
+                });
+            }
+        });
+    }
+    globals_env
 }
 
 fn typeresolve_function_call(
@@ -2647,7 +2645,61 @@ pub fn typeresolve_value_expr(
                 t.clone()
             };
         }
-        ValueExpr::FieldAccess { .. } => {}
+        ValueExpr::FieldAccess {
+            target_obj,
+            field_name,
+        } => {
+            typeresolve_value_expr(target_obj, globals, locals);
+            let target_type = &target_obj.typ;
+
+            if let TypeExpr::Struct { name, type_params } = &target_type.0 {
+                let mut def = globals.get_struct_header(name, type_params).clone();
+
+                // TODO: STRUCT RESOLVE
+            }
+            let target_obj_type_expr = &target_obj.typ;
+            if !(target_obj_type_expr
+                .dereferenced()
+                .0
+                .has_field_by_name2(field_name, globals)
+                || target_obj_type_expr
+                    .dereferenced()
+                    .0
+                    .has_method_by_name2(field_name, globals))
+            // TODO: Extensions
+            {
+                // dbg!(&field_name, &target_obj_type_expr);
+                failure_with_occurence(
+                    "Invalid Field Access",
+                    {
+                        let mut span = span;
+                        span.end += 2;
+                        span
+                    },
+                    vec![(
+                        format!(
+                            "this is of type {} and it has no field '{}'",
+                            target_obj_type_expr
+                                .0
+                                .as_clean_user_faced_type_name()
+                                .bright_yellow(),
+                            field_name.bright_blue()
+                        ),
+                        target_obj.expr.1,
+                    )],
+                )
+            }
+
+            let target_obj_type_expr = target_obj_type_expr;
+            value_expr.typ.replace_if_not_never(&(
+                target_obj_type_expr
+                    .dereferenced()
+                    .0
+                    .typeof_field2(field_name.to_string(), globals)
+                    .unwrap_or_else(|| panic!("Invalid field access {}", target_obj_type_expr.0)),
+                value_expr.expr.1,
+            ));
+        }
         ValueExpr::Array(exprs, given_type) => {
             if let Some(given_type) = given_type.as_mut() {
                 reduce_type_expr(given_type, globals, None);

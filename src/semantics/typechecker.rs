@@ -14,6 +14,7 @@ use crate::parse::{
 };
 use crate::semantics::ident_mangler::{MANGLE_SEP, mangle};
 use crate::semantics::type_resolve::{TypeEnv, is_const_var, merge_all_or_type_expr};
+use crate::semantics::type_resolve2::GlobalsEnv;
 
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
@@ -1074,6 +1075,49 @@ impl TypeExpr {
         }
     }
 
+    pub fn has_method_by_name2(&self, name: &str, globals: &GlobalsEnv) -> bool {
+        if name == "to_string" && self.implements_to_string2(globals) {
+            return true;
+        }
+        if name == "clone" && self.implements_clone2(globals) {
+            return true;
+        }
+        if name == "to_json" && self.implements_to_json2(globals) {
+            return true;
+        }
+        if name == "hash" && self.implements_hash2(globals) {
+            return true;
+        }
+        if name == "ord" && self.implements_ord2(globals) {
+            return true;
+        }
+        if name == "len"
+            && let TypeExpr::Array(..) = self
+        {
+            return true;
+        }
+        if name == "iter" && self.implements_into_iter2(globals) {
+            return true;
+        }
+        if name == "iter_mut" && self.implements_into_iter_mut2(globals) {
+            return true;
+        }
+        match self {
+            Self::Struct {
+                name: r#struct,
+                type_params,
+            } => {
+                let header = globals
+                    .get_struct_header(r#struct.as_str(), type_params)
+                    .unwrap();
+
+                let has_method_with_name = header.methods.get(name).is_some();
+                has_method_with_name
+            }
+            _ => false,
+        }
+    }
+
     pub fn has_method_by_name(&self, name: String, type_env: &mut TypeEnv) -> bool {
         if name.as_str() == "to_string" && self.implements_to_string(type_env) {
             return true;
@@ -1131,6 +1175,34 @@ impl TypeExpr {
 
                 return has_method_with_name || has_generic_method_with_name;
             }
+            _ => false,
+        }
+    }
+
+    pub fn has_field_by_name2(&self, name: &str, globals: &GlobalsEnv) -> bool {
+        match self {
+            Self::Tuple(fields) => {
+                if let Ok(tuple_access_idx) = name.parse::<usize>() {
+                    fields.len() > tuple_access_idx
+                } else {
+                    false
+                }
+            }
+            Self::Struct {
+                name: struct_name,
+                type_params,
+            } => {
+                let header = globals.get_struct_header(struct_name, type_params).unwrap();
+
+                header.fields.contains_key(name)
+            }
+            Self::NamedDuck {
+                name: duck_name,
+                type_params,
+            } => {
+                todo!("named ducks in has_field_by_name")
+            }
+            Self::Duck(duck) => duck.fields.iter().any(|f| f.name.as_str() == name),
             _ => false,
         }
     }
@@ -1220,6 +1292,147 @@ impl TypeExpr {
             }
             _ => false,
         }
+    }
+
+    pub fn typeof_field2(&self, field_name: String, globals: &GlobalsEnv) -> Option<TypeExpr> {
+        if self.implements_into_iter2(globals)
+            && field_name.as_str() == "iter"
+            && let TypeExpr::Array(inner) = self
+        {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((
+                    TypeExpr::Struct {
+                        name: mangle(&["std", "col", "Iter"]),
+                        type_params: vec![(TypeExpr::Ref(inner.as_ref().clone().into()), inner.1)],
+                    },
+                    empty_range(),
+                )),
+                false,
+            ));
+        }
+
+        if field_name.as_str() == "len"
+            && let TypeExpr::Array(..) = self
+        {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((TypeExpr::Int, empty_range())),
+                false,
+            ));
+        }
+
+        if self.implements_into_iter_mut2(globals)
+            && field_name.as_str() == "iter_mut"
+            && let TypeExpr::Array(inner) = self
+        {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((
+                    TypeExpr::Struct {
+                        name: mangle(&["std", "col", "Iter"]),
+                        type_params: vec![(
+                            TypeExpr::RefMut(inner.as_ref().clone().into()),
+                            inner.1,
+                        )],
+                    },
+                    empty_range(),
+                )),
+                false,
+            ));
+        }
+
+        if self.implements_to_string2(globals) && field_name.as_str() == "to_string" {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((TypeExpr::String(None), empty_range())),
+                false,
+            ));
+        }
+
+        if self.implements_to_json2(globals) && field_name.as_str() == "to_json" {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((TypeExpr::String(None), empty_range())),
+                false,
+            ));
+        }
+
+        if self.implements_clone2(globals) && field_name.as_str() == "clone" {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((self.clone(), empty_range())),
+                false,
+            ));
+        }
+
+        if self.implements_hash2(globals) && field_name.as_str() == "hash" {
+            return Some(TypeExpr::Fun(
+                vec![],
+                Box::new((TypeExpr::Int, empty_range())),
+                false,
+            ));
+        }
+
+        if self.implements_ord2(globals) && field_name.as_str() == "ord" {
+            return Some(TypeExpr::Fun(
+                vec![(
+                    "other".to_string().into(),
+                    TypeExpr::Ref(self.clone().into_empty_span().into()).into_empty_span(),
+                )],
+                Box::new(TypeExpr::ord_result().into_empty_span()),
+                false,
+            ));
+        }
+
+        Some(match self {
+            Self::Tuple(fields) => fields[field_name.parse::<usize>().unwrap()].0.clone(),
+            Self::Struct {
+                name: r#struct,
+                type_params,
+            } => {
+                let header = globals
+                    .get_struct_header(r#struct.as_str(), type_params)
+                    .unwrap();
+
+                header
+                    .fields
+                    .iter()
+                    .map(|(name, t)| (name.clone(), t.0.clone()))
+                    .chain(
+                        header
+                            .methods
+                            .iter()
+                            .map(|(name, t)| (name.clone(), t.to_type())),
+                    )
+                    .find(|struct_field| struct_field.0 == field_name)
+                    .expect("Tried to access field that doesn't exist")
+                    .1
+                    .clone()
+            }
+            Self::NamedDuck { name, type_params } => {
+                // TODO: named ducks
+                todo!("named ducks typeof field")
+            }
+            Self::Duck(duck) => duck
+                .fields
+                .iter()
+                .find(|struct_field| *struct_field.name == field_name)
+                .expect("Tried to access field that doesn't exist")
+                .type_expr
+                .0
+                .clone(),
+            _ => {
+                todo!("extensions")
+                // let extension_fn_name =
+                //     self.build_extension_access_function_name(&field_name, type_env);
+                // let extension = type_env.extension_functions.get(&extension_fn_name);
+                // match extension {
+                //     Some(extension_def) => return Some(extension_def.0.0.clone()),
+                //     None => return None,
+                // }
+            }
+        })
     }
 
     pub fn typeof_field(&self, field_name: String, type_env: &mut TypeEnv) -> Option<TypeExpr> {
