@@ -551,8 +551,6 @@ fn typecheck<'a>(src_file_ast: &mut SourceFile, tailwind_tx: &'a Sender<String>)
     let now = std::time::Instant::now();
     let _r = crate::semantics::type_resolve2::resolve_all_types_source_file(src_file_ast);
     // dbg!(&_r.generics_output.generic_functions);
-    dbg!(now.elapsed().as_millis());
-    dbg!("end");
 
     let mut generic_fns_generated = Vec::new();
     _r.generics_output.generic_functions.iter_sync(|_, v| {
@@ -606,7 +604,7 @@ fn typecheck<'a>(src_file_ast: &mut SourceFile, tailwind_tx: &'a Sender<String>)
         true
     });
 
-    TypeEnv {
+    let t = TypeEnv {
         all_go_imports: Box::leak(Box::new(HashSet::new())),
         duckx_components: src_file_ast.duckx_components.clone(),
         jsx_components: src_file_ast.jsx_components.clone(),
@@ -619,7 +617,10 @@ fn typecheck<'a>(src_file_ast: &mut SourceFile, tailwind_tx: &'a Sender<String>)
         generic_structs_generated,
         generic_methods_generated,
         ..Default::default()
-    }
+    };
+    dbg!(now.elapsed().as_millis());
+    dbg!("end");
+    t
 }
 
 fn write_in_duck_dotdir(file_name: &str, content: &str) -> PathBuf {
