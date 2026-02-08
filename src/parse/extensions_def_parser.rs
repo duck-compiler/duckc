@@ -1,4 +1,5 @@
 use chumsky::{input::BorrowInput, prelude::*};
+use serde::{Deserialize, Serialize};
 
 use crate::parse::{
     SS, Spanned,
@@ -13,7 +14,8 @@ use super::{
 pub type Param = (String, Spanned<TypeExpr>);
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct ExtensionsDef {
     pub target_type_expr: Spanned<TypeExpr>,
     pub function_definitions: Vec<Spanned<FunctionDefintion>>,

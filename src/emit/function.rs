@@ -1,5 +1,5 @@
 use crate::{
-    emit::value::{IrInstruction, IrValue, ToIr},
+    emit::value::{Emit, IrInstruction, IrValue, ToIr},
     parse::{
         failure_with_occurence,
         function_parser::FunctionDefintion,
@@ -31,14 +31,14 @@ impl FunctionDefintion {
         to_ir: &mut ToIr,
     ) -> IrInstruction {
         to_ir.reset_var_counters();
-        let ValueExpr::Return(Some(what)) = &self.value_expr.0 else {
+        let ValueExpr::Return(Some(what)) = &self.value_expr.expr.0 else {
             panic!(
                 "Compiler Bug: every function needs to return something {} {:?}",
-                self.name, self.value_expr.0
+                self.name, self.value_expr.expr.0
             )
         };
 
-        let (mut emitted_body, result_ir_value) = what.0.emit(type_env, to_ir, self.span);
+        let (mut emitted_body, result_ir_value) = what.emit(type_env, to_ir);
 
         if let Some(result) = result_ir_value {
             emitted_body.push(IrInstruction::Return(Some(result)));
@@ -84,7 +84,7 @@ impl FunctionDefintion {
     ) -> IrInstruction {
         to_ir.reset_var_counters();
 
-        let (emitted_body, _result_var) = self.value_expr.0.emit(type_env, to_ir, self.span);
+        let (emitted_body, _result_var) = self.value_expr.emit(type_env, to_ir);
 
         let mut final_params = vec![("self".to_string(), (target_type.clone(), empty_range()))];
         final_params.extend_from_slice(&self.params);
