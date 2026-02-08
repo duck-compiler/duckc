@@ -125,10 +125,23 @@ pub fn emit_type_definitions(
 ) -> Vec<IrInstruction> {
     let imports = type_env.all_go_imports;
 
+
     let mut result = Vec::new();
     let mut emitted_types = HashSet::new();
+    println!("hallooooo!!");
+    println!();
+    println!();
+    println!();
+
+    dbg!(&type_env.generic_structs_generated);
+
+    println!();
+    println!();
+    println!();
+    println!("endeeeeee");
 
     let mut all_tuples_and_ducks = type_env.find_ducks_and_tuples(src_file);
+
 
     let tags_to_push = ["greater", "smaller", "equal"];
 
@@ -1014,12 +1027,19 @@ pub fn emit_type_definitions(
         }
     }
 
-    for s in type_env
+    for (i, s) in type_env
         .struct_definitions
         .clone()
         .iter_mut()
-        .chain(type_env.generic_structs_generated.clone().iter_mut())
-        .filter(|s| s.generics.is_empty())
+        .map(|s| (0, s))
+        .chain(
+            type_env
+                .generic_structs_generated
+                .clone()
+                .iter_mut()
+                .map(|x| (1, x)),
+        )
+        .filter(|(_, s)| s.generics.is_empty())
     {
         let fixed_struct_name = format!("Struct_{}", s.name);
         result.push(IrInstruction::StructDef(
@@ -1175,7 +1195,9 @@ pub fn emit_type_definitions(
             instructions.extend(instructions_to_be_duck_conform);
 
             // dbg!(&method.name, &struct_name, &method.value_expr);
+            //
 
+            dbg!(&method.value_expr);
             let mut body = method.emit(
                 Some((
                     "duck_internal_self".to_string(),

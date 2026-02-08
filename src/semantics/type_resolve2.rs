@@ -30,9 +30,9 @@ use crate::{
         type_resolve::{
             NeedsSearchResult, TravControlFlow, TypeEnv, build_struct_generic_id,
             build_struct_generic_id2, infer_against, infer_against2, is_base_const_var,
-            is_const_var, replace_generics_in_type_expr, replace_generics_in_type_expr2,
-            replace_generics_in_value_expr2, trav_type_expr2, unset_const_func_call_assign,
-            unset_copy_var_assign,
+            is_const_var, replace_generics_in_struct_definition, replace_generics_in_type_expr,
+            replace_generics_in_type_expr2, replace_generics_in_value_expr2, trav_type_expr2,
+            unset_const_func_call_assign, unset_copy_var_assign,
         },
     },
 };
@@ -183,6 +183,7 @@ pub struct GlobalsEnv {
 
     pub used_objects: scc::HashSet<String>,
     pub total_resolved: scc::HashSet<String>,
+    pub resolved_methods: scc::HashMap<String, HashSet<String>>,
     pub all_go_imports: HashSet<String>,
 }
 
@@ -209,6 +210,7 @@ impl GlobalsEnv {
             jsx_component_dependencies: scc::HashMap::with_capacity(INITIAL_MAP_CAP),
             jsx_component_headers: HashMap::with_capacity(INITIAL_MAP_CAP),
             duckx_component_headers: HashMap::with_capacity(INITIAL_MAP_CAP),
+            resolved_methods: scc::HashMap::with_capacity(INITIAL_MAP_CAP),
         }
     }
 
@@ -260,8 +262,14 @@ impl GlobalsEnv {
                             );
 
                             s.map(|s| {
-                                self.generics_output
-                                    .method_create_generic_instance(&s, name, params, self);
+                                self.generics_output.method_create_generic_instance(
+                                    &s,
+                                    struct_name,
+                                    struct_params,
+                                    name,
+                                    params,
+                                    self,
+                                );
                                 self.generics_output.get_generic_method_header(
                                     struct_name,
                                     struct_params,
@@ -309,6 +317,7 @@ pub struct GenericsOutput {
     pub generic_struct_headers: scc::HashMap<String, StructHeader>,
     pub generic_methods: scc::HashMap<String, scc::HashMap<String, FunctionDefintion>>,
     pub generic_method_headers: scc::HashMap<String, scc::HashMap<String, MethodHeader>>,
+    pub resolve_block: scc::HashSet<String>,
 }
 
 impl GenericsOutput {
@@ -345,9 +354,74 @@ impl GenericsOutput {
             .read_sync(&build_struct_generic_id2(name, params), |_, v| v.clone())
     }
 
+    pub fn resolve_all_methods(
+        &self,
+        struct_name: &str,
+        type_params: &[Spanned<TypeExpr>],
+        globals: &GlobalsEnv,
+    ) {
+        let id = &build_struct_generic_id2(struct_name, type_params);
+        if self.resolve_block.insert_sync(id.to_string()).is_err() {
+            return;
+        }
+        self.generic_structs.update_sync(id, |_, struct_def| {
+            let mut_methods = struct_def.mut_methods.clone();
+            let _ = globals.total_resolved.insert_sync(struct_def.name.clone());
+            for method in &mut struct_def.methods {
+                if !method.generics.is_empty() {
+                    continue;
+                }
+
+                globals
+                    .resolved_methods
+                    .entry_sync(struct_def.name.clone())
+                    .or_default()
+                    .get_mut()
+                    .insert(method.name.clone());
+
+                let mut locals = LocalScoped::default();
+                let is_mut = mut_methods.contains(&method.name);
+                let self_type = TypeExpr::Struct {
+                    name: struct_name.to_string(),
+                    type_params: type_params.to_vec(),
+                }
+                .into_empty_span();
+
+                for param in method.params.iter() {
+                    locals.set_info_for_ident(
+                        param.0.clone(),
+                        VariableInfo {
+                            typ: param.1.clone(),
+                            is_const: true,
+                        },
+                    );
+                }
+
+                locals.set_info_for_ident(
+                    "self".to_string(),
+                    VariableInfo {
+                        typ: if is_mut {
+                            TypeExpr::RefMut(self_type.into()).into_empty_span()
+                        } else {
+                            TypeExpr::Ref(self_type.into()).into_empty_span()
+                        },
+                        is_const: true,
+                    },
+                );
+
+                typeresolve_value_expr(&mut method.value_expr, globals, &mut locals);
+                // if method.name.contains("give_me_a_list") {
+                //     dbg!(&struct_def.name, &method.name, &method.value_expr);
+                // }
+            }
+        });
+    }
+
     pub fn method_create_generic_instance(
         &self,
         s: &StructDefinition,
+        s_name: &str,
+        s_params: &[Spanned<TypeParam>],
         method_name: &str,
         params: &[Spanned<TypeParam>],
         globals: &GlobalsEnv,
@@ -382,7 +456,34 @@ impl GenericsOutput {
             },
         );
         let name = result.name.clone();
-        let is_mut = s.mut_methods.contains(&base_def.name);
+
+        let self_type = TypeExpr::Struct {
+            name: s_name.to_string(),
+            type_params: s_params.to_vec(),
+        }
+        .into_empty_span();
+
+        for (_, ty) in result.params.iter_mut() {
+            replace_generics_in_type_expr2(ty, &generics, globals);
+            reduce_type_expr(ty, globals, Some(&self_type.0));
+        }
+        replace_generics_in_type_expr2(&mut result.return_type, &generics, globals);
+        reduce_type_expr(&mut result.return_type, globals, Some(&self_type.0));
+
+        let mut locals = LocalScoped::default();
+        let is_mut = s.mut_methods.contains(method_name);
+
+        locals.set_info_for_ident(
+            "self".to_string(),
+            VariableInfo {
+                typ: if is_mut {
+                    TypeExpr::RefMut(self_type.into()).into_empty_span()
+                } else {
+                    TypeExpr::Ref(self_type.into()).into_empty_span()
+                },
+                is_const: true,
+            },
+        );
 
         resolve_all_types_function_definition(
             &mut result,
@@ -403,7 +504,7 @@ impl GenericsOutput {
                     .unwrap();
             },
             &generics,
-            &mut LocalScoped::default(),
+            &mut locals,
         );
 
         self.generic_methods
@@ -474,6 +575,8 @@ impl GenericsOutput {
             },
         );
 
+        replace_generics_in_struct_definition2(&mut result, &generics, globals);
+
         let name = result.name.clone();
         // TODO: fix for cascading (don't resolve immediately)
         resolve_all_types_struct_definition(
@@ -497,9 +600,30 @@ impl GenericsOutput {
     }
 }
 
+pub fn replace_generics_in_struct_definition2(
+    def: &mut StructDefinition,
+    generics: &IndexMap<String, TypeExpr>,
+    type_env: &GlobalsEnv,
+) {
+    for f in def.fields.iter_mut() {
+        replace_generics_in_type_expr2(&mut f.type_expr, generics, type_env);
+    }
+
+    for m in def.methods.iter_mut() {
+        for t in [&mut m.return_type]
+            .into_iter()
+            .chain(m.params.iter_mut().map(|x| &mut x.1))
+        {
+            replace_generics_in_type_expr2(t, generics, type_env);
+        }
+        replace_generics_in_value_expr2(&mut m.value_expr.expr.0, generics, type_env);
+    }
+}
+
 impl Default for GenericsOutput {
     fn default() -> Self {
         Self {
+            resolve_block: scc::HashSet::with_capacity(256),
             generic_block: scc::HashSet::with_capacity(256),
             generic_methods: scc::HashMap::with_capacity(4096),
             generic_method_headers: scc::HashMap::with_capacity(4096),
@@ -738,10 +862,19 @@ fn resolve_all_types_struct_definition<F>(
 
     header_callback(struct_def.to_header());
 
+    let _ = globals.total_resolved.insert_sync(struct_def.name.clone());
+
     for method in struct_def.methods.iter_mut() {
         if !method.generics.is_empty() {
             continue;
         }
+        globals
+            .resolved_methods
+            .entry_sync(struct_def.name.clone())
+            .or_default()
+            .get_mut()
+            .insert(method.name.clone());
+
         let mut local_scope = LocalScoped::default();
         for param in method.params.iter_mut() {
             local_scope.set_info_for_ident(
@@ -752,6 +885,21 @@ fn resolve_all_types_struct_definition<F>(
                 },
             );
         }
+
+        let is_mut = struct_def.mut_methods.contains(&method.name);
+        let self_type = self_type.cloned().unwrap().into_empty_span();
+
+        local_scope.set_info_for_ident(
+            "self".to_string(),
+            VariableInfo {
+                typ: if is_mut {
+                    TypeExpr::RefMut(self_type.into()).into_empty_span()
+                } else {
+                    TypeExpr::Ref(self_type.into()).into_empty_span()
+                },
+                is_const: true,
+            },
+        );
         typeresolve_value_expr(&mut method.value_expr, globals, &mut local_scope);
     }
 }
@@ -800,6 +948,23 @@ fn typeresolve_struct(
     else {
         unreachable!("only pass structs to this function")
     };
+
+    let mut as_type = (
+        TypeExpr::TypeName(true, name.clone(), type_params.to_vec()),
+        value_expr.expr.1,
+    );
+    reduce_type_expr(&mut as_type, globals, None);
+    {
+        let TypeExpr::Struct {
+            name: a,
+            type_params: b,
+        } = as_type.0
+        else {
+            panic!("Compiler Bug: {as_type:?}")
+        };
+        *name = a;
+        *type_params = b;
+    }
 
     let Some(og_def) = globals.get_struct_header(name, &[]) else {
         let msg = &format!("Struct {name} does not exist");
@@ -2196,7 +2361,7 @@ fn typeresolve_function_call(
                 if let TypeExpr::Struct {
                     name,
                     type_params: struct_type_params,
-                } = &target_obj.typ.0
+                } = &target_obj.typ.dereferenced().0
                 {
                     let def = globals.get_method_header(
                         name,
@@ -2482,19 +2647,30 @@ fn typeresolve_variable(
     let VariableInfo {
         typ: (type_expr, _),
         is_const,
-    } = locals.get_info_for_ident(identifier).unwrap_or_else(|| {
-        failure_with_occurence(
-            "Unknown identifier",
-            value_expr.expr.1,
-            [(
-                format!(
-                    "The identifier {} is not found in the current scope",
-                    identifier.yellow(),
-                ),
+    } = locals
+        .get_info_for_ident(identifier)
+        .cloned()
+        .or_else(|| {
+            globals
+                .get_fun_header(identifier, &[])
+                .map(|fun_header| VariableInfo {
+                    typ: (fun_header.to_type(), value_expr.expr.1),
+                    is_const: true,
+                })
+        })
+        .unwrap_or_else(|| {
+            failure_with_occurence(
+                "Unknown identifier",
                 value_expr.expr.1,
-            )],
-        )
-    });
+                [(
+                    format!(
+                        "The identifier {} is not found in the current scope",
+                        identifier.yellow(),
+                    ),
+                    value_expr.expr.1,
+                )],
+            )
+        });
 
     if *needs_copy && !type_expr.implements_copy2(globals) {
         failure_with_occurence(
@@ -2511,7 +2687,7 @@ fn typeresolve_variable(
     }
 
     *type_expr_opt = Some(type_expr.clone());
-    *const_opt = Some(*is_const);
+    *const_opt = Some(is_const);
     value_expr
         .typ
         .replace_if_not_never(&(type_expr.clone(), value_expr.expr.1));
@@ -3153,6 +3329,7 @@ pub fn typeresolve_value_expr(
         }
         ValueExpr::Duck(..) => typeresolve_duck_value_expr(value_expr, globals, locals),
         ValueExpr::As(v, t) => {
+            reduce_type_expr(t, globals, None);
             if let ValueExpr::InlineGo(_, ty) = &mut v.expr.0 {
                 *ty = Some(t.clone());
             } else if let ValueExpr::Int(_, ty) = &mut v.expr.0 {
@@ -3188,9 +3365,9 @@ pub fn typeresolve_value_expr(
             let target_type = &target_obj.typ;
 
             if let TypeExpr::Struct { name, type_params } = &target_type.0 {
-                let mut def = globals.get_struct_header(name, type_params).clone();
-
-                // TODO: STRUCT RESOLVE
+                globals
+                    .generics_output
+                    .resolve_all_methods(name, type_params, globals);
             }
             let target_obj_type_expr = &target_obj.typ;
             if !(target_obj_type_expr

@@ -604,6 +604,25 @@ fn typecheck<'a>(src_file_ast: &mut SourceFile, tailwind_tx: &'a Sender<String>)
         true
     });
 
+    let mut total_structs_resolved = HashSet::new();
+
+    _r.total_resolved.iter_sync(|element| {
+        total_structs_resolved.insert(element.clone());
+        true
+    });
+
+    let mut resolved_methods: HashMap<String, HashSet<String>> = HashMap::new();
+
+    _r.resolved_methods.iter_sync(|struct_name, methods| {
+        for m in methods {
+            resolved_methods
+                .entry(struct_name.to_owned())
+                .or_default()
+                .insert(m.to_owned());
+        }
+        true
+    });
+
     let t = TypeEnv {
         all_go_imports: Box::leak(Box::new(HashSet::new())),
         duckx_components: src_file_ast.duckx_components.clone(),
@@ -616,10 +635,10 @@ fn typecheck<'a>(src_file_ast: &mut SourceFile, tailwind_tx: &'a Sender<String>)
         generic_fns_generated,
         generic_structs_generated,
         generic_methods_generated,
+        total_structs_resolved,
+        resolved_methods,
         ..Default::default()
     };
-    dbg!(now.elapsed().as_millis());
-    dbg!("end");
     t
 }
 

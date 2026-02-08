@@ -672,6 +672,7 @@ impl TypeEnv<'_> {
 
     pub fn find_ducks_and_tuples(&mut self, src_file: &SourceFile) -> Vec<NeedsSearchResult> {
         let mut result = Vec::new();
+        let old = self.clone();
 
         let cloned_resolve = self.resolved_methods.clone();
 
@@ -822,6 +823,7 @@ impl TypeEnv<'_> {
             }
         });
 
+        *self = old;
         result
     }
 
@@ -1757,7 +1759,7 @@ fn process_keyof_in_type_expr(expr: &mut TypeExpr, type_env: &mut TypeEnv) {
     }
 }
 
-fn replace_generics_in_struct_definition(
+pub fn replace_generics_in_struct_definition(
     def: &mut StructDefinition,
     generics: &IndexMap<String, TypeExpr>,
     type_env: &mut TypeEnv<'_>,
@@ -2451,7 +2453,7 @@ pub fn replace_generics_in_type_expr2(
     }
 
     do_it(&mut expr.0, set_params, globals);
-    reduce_type_expr(expr, globals, None);
+    // reduce_type_expr(expr, globals, None);
 }
 
 pub fn replace_generics_in_type_expr(
