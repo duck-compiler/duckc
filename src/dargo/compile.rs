@@ -121,11 +121,10 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
     let (tailwind_worker_send, tailwind_worker_receive) = mpsc::channel::<String>();
     let (tailwind_result_send, tailwind_result_receive) = mpsc::channel::<String>();
 
-    let tailwind_prefix = None::<String>;
+    let tailwind_prefix: Option<String> = None;
 
     std::thread::spawn(move || {
         let mut emit_env = EmitEnv::new_with_default_config();
-        // emit_env.parse_full_string(src_file_file_contents);
         loop {
             let s = tailwind_worker_receive.recv();
             match s {
