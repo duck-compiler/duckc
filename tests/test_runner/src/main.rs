@@ -724,6 +724,9 @@ fn main() {
                 }
             }
 
+            if args.cicd && is_fail {
+                std::process::exit(1);
+            }
             results.lock().unwrap().push(result);
         });
     });
