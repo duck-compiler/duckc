@@ -92,11 +92,8 @@ pub struct InitArgs {
 #[derive(clap::Args, Debug)]
 pub struct NewArgs {
     pub project_name: Option<String>,
-    // Examples:
-    // #[arg(long, short = 'o')]
-    // optimize: bool,
-    // #[arg(long, value_parser = ["x86", "arm"])]
-    // arch: Option<String>
+    #[arg(long)]
+    pub web: bool, // generate an web project
 }
 
 #[derive(Debug)]
