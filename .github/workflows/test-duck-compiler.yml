@@ -70,4 +70,4 @@ jobs:
     - name: Run Rust test runner (parallel)
       run: |
         export RUST_BACKTRACE=0
-        cargo run --release -p test_runner -- --cicd --release --no-build -j 4 --compile-jobs 2
+        cargo run --release -p test_runner -- --cicd --release --no-build
