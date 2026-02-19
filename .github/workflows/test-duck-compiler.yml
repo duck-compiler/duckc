@@ -41,3 +41,34 @@ jobs:
         cd ./tests
         export RUST_BACKTRACE=0
         python run_tests.py --cicd --release
+
+  run_rust_test_runner:
+    name: rust test runner
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Rust toolchain
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+        cache: cargo
+
+    - name: Cache Rust build artifacts
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: . -> target
+        shared-key: rust-test-runner
+
+    - name: Install Duck std
+      run: ./install_std.sh
+
+    - name: Build dargo (release)
+      run: cargo build --release -p dargo
+
+    - name: Run Rust test runner (parallel)
+      run: |
+        export RUST_BACKTRACE=0
+        cargo run --release -p test_runner -- --cicd --release --no-build -j 4 --compile-jobs 2
