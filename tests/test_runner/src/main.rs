@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -642,6 +643,7 @@ fn main() {
         .build()
         .expect("rayon pool");
 
+    let test_start = Instant::now();
     pool.install(|| {
         tests.par_iter().for_each(|test| {
             let result = run_test(
@@ -730,7 +732,7 @@ fn main() {
             results.lock().unwrap().push(result);
         });
     });
-
+    let test_elapsed = test_start.elapsed();
     let mut results = results.into_inner().unwrap();
 
     if args.interactive {
@@ -795,6 +797,7 @@ fn main() {
     println!("{} Passed:      {}", "".green(), passed);
     println!("{} Failed:      {}", "".red(), failed_count);
     println!("{} Skipped:     {}", "".yellow(), skipped);
+    println!("{} Duration:    {:.2}s", "".bright_black(), test_elapsed.as_secs_f64());
     println!("{}", "--------------------".cyan());
 
     if failed_count > 0 {
