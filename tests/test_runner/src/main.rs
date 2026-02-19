@@ -1,9 +1,10 @@
 use clap::Parser;
 use colored::Colorize;
 use rayon::prelude::*;
+use similar::{ChangeTag, TextDiff};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -55,6 +56,8 @@ struct Args {
     #[arg(short, long)]
     update: bool,
     #[arg(short, long)]
+    interactive: bool,
+    #[arg(short, long)]
     errors_only: bool,
     #[arg(short, long)]
     filter: Option<String>,
@@ -81,6 +84,13 @@ struct TestCase {
 enum TestOutcome {
     Passed,
     Failed { message: String },
+    SnapshotMismatch {
+        snapshot_path: PathBuf,
+        expected_stdout: String,
+        expected_stderr: String,
+        actual_stdout: String,
+        actual_stderr: String,
+    },
     Skipped { reason: String },
 }
 
@@ -93,6 +103,23 @@ struct SnapshotData {
 struct TestResult {
     path: PathBuf,
     outcome: TestOutcome,
+}
+
+fn print_snapshot_diff(label: &str, expected: &str, actual: &str) {
+    if expected == actual {
+        return;
+    }
+    eprintln!("  {}:", label.bright_black());
+    let diff = TextDiff::from_lines(expected, actual);
+    for change in diff.iter_all_changes() {
+        let line = change.to_string();
+        match change.tag() {
+            ChangeTag::Delete => eprintln!("  {}", format!("-{line}").red()),
+            ChangeTag::Insert => eprintln!("  {}", format!("+{line}").green()),
+            ChangeTag::Equal => eprintln!("  {}", format!(" {line}").bright_black()),
+        }
+    }
+    eprintln!();
 }
 
 fn path_to_filename(path: &Path) -> String {
@@ -188,6 +215,7 @@ fn run_test(
     compiler_path: &Path,
     tests_dir: &Path,
     update_snapshots: bool,
+    interactive: bool,
     _cicd: bool,
     _verbose: bool,
     compile_limiter: Option<&CompileLimiter>,
@@ -268,6 +296,7 @@ fn run_test(
                 &actual_stdout,
                 &actual_stderr,
                 update_snapshots,
+                interactive,
             )
         }
         TestType::Valid => {
@@ -304,7 +333,6 @@ fn run_test(
             }
 
             let executable_path = tests_dir.join(".dargo").join(&output_name);
-            // On Windows, Go produces {name}.exe
             let exec_path = if cfg!(windows) {
                 let exe = executable_path.parent().unwrap().join(format!("{}.exe", output_name));
                 if exe.exists() {
@@ -365,6 +393,7 @@ fn run_test(
                 &actual_stdout,
                 &actual_stderr,
                 update_snapshots,
+                interactive,
             )
         }
     }
@@ -376,6 +405,7 @@ fn verify_snapshot_result(
     actual_stdout: &str,
     actual_stderr: &str,
     update_snapshots: bool,
+    interactive: bool,
 ) -> TestResult {
     let snapshot_data = SnapshotData {
         stdout: actual_stdout.to_string(),
@@ -395,28 +425,50 @@ fn verify_snapshot_result(
     let content = match fs::read_to_string(snapshot_path) {
         Ok(c) => c,
         Err(_) => {
+            let message = format!(
+                "No snapshot found. Use --update to create. Actual stdout: {:?}, stderr: {:?}",
+                actual_stdout,
+                actual_stderr
+            );
+            if interactive {
+                return TestResult {
+                    path: path.to_path_buf(),
+                    outcome: TestOutcome::SnapshotMismatch {
+                        snapshot_path: snapshot_path.to_path_buf(),
+                        expected_stdout: String::new(),
+                        expected_stderr: String::new(),
+                        actual_stdout: actual_stdout.to_string(),
+                        actual_stderr: actual_stderr.to_string(),
+                    },
+                };
+            }
             return TestResult {
                 path: path.to_path_buf(),
-                outcome: TestOutcome::Failed {
-                    message: format!(
-                        "No snapshot found. Use --update to create. Actual stdout: {:?}, stderr: {:?}",
-                        actual_stdout,
-                        actual_stderr
-                    ),
-                },
-            }
+                outcome: TestOutcome::Failed { message },
+            };
         }
     };
 
     let expected: SnapshotData = match serde_json::from_str(&content) {
         Ok(d) => d,
         Err(e) => {
+            let message = format!("Invalid snapshot JSON: {e}");
+            if interactive {
+                return TestResult {
+                    path: path.to_path_buf(),
+                    outcome: TestOutcome::SnapshotMismatch {
+                        snapshot_path: snapshot_path.to_path_buf(),
+                        expected_stdout: String::new(),
+                        expected_stderr: String::new(),
+                        actual_stdout: actual_stdout.to_string(),
+                        actual_stderr: actual_stderr.to_string(),
+                    },
+                };
+            }
             return TestResult {
                 path: path.to_path_buf(),
-                outcome: TestOutcome::Failed {
-                    message: format!("Invalid snapshot JSON: {e}"),
-                },
-            }
+                outcome: TestOutcome::Failed { message },
+            };
         }
     };
 
@@ -442,9 +494,22 @@ fn verify_snapshot_result(
                 expected.stderr, actual_stderr
             ));
         }
-        TestResult {
-            path: path.to_path_buf(),
-            outcome: TestOutcome::Failed { message: msg },
+        if interactive {
+            TestResult {
+                path: path.to_path_buf(),
+                outcome: TestOutcome::SnapshotMismatch {
+                    snapshot_path: snapshot_path.to_path_buf(),
+                    expected_stdout: expected.stdout.clone(),
+                    expected_stderr: expected.stderr.clone(),
+                    actual_stdout: actual_stdout.to_string(),
+                    actual_stderr: actual_stderr.to_string(),
+                },
+            }
+        } else {
+            TestResult {
+                path: path.to_path_buf(),
+                outcome: TestOutcome::Failed { message: msg },
+            }
         }
     }
 }
@@ -460,6 +525,9 @@ fn main() {
     }
     if args.update {
         eprintln!("{}", "Snapshot Update Mode. All snapshots will be overwritten.".yellow());
+    }
+    if args.interactive {
+        eprintln!("{}", "Interactive mode: will prompt on snapshot mismatch to update.".yellow());
     }
     if args.errors_only {
         eprintln!("{}", "Errors only mode.".yellow());
@@ -581,13 +649,17 @@ fn main() {
                 &compiler_path,
                 &tests_dir,
                 args.update,
+                args.interactive,
                 args.cicd,
                 args.verbose,
                 Some(compile_limiter.as_ref()),
             );
 
             let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
-            let is_fail = matches!(&result.outcome, TestOutcome::Failed { .. });
+            let is_fail = matches!(
+                &result.outcome,
+                TestOutcome::Failed { .. } | TestOutcome::SnapshotMismatch { .. }
+            );
             if is_fail {
                 failed.store(true, Ordering::SeqCst);
             }
@@ -619,6 +691,25 @@ fn main() {
                     );
                     eprintln!("  {}", message);
                 }
+                TestOutcome::SnapshotMismatch {
+                    expected_stdout,
+                    expected_stderr,
+                    actual_stdout,
+                    actual_stderr,
+                    ..
+                } => {
+                    println!(
+                        "[{}/{}] {} {} {}",
+                        done,
+                        total_tests,
+                        "[✗]".bright_black().red(),
+                        "test".yellow(),
+                        rel_path
+                    );
+                    print_snapshot_diff("stdout (expected → actual)", expected_stdout, actual_stdout);
+                    print_snapshot_diff("stderr (expected → actual)", expected_stderr, actual_stderr);
+                    eprintln!("  {} (use -i/--interactive to prompt to update)", "Snapshot mismatch.".bright_black());
+                }
                 TestOutcome::Skipped { reason } => {
                     println!(
                         "[{}/{}] {} {} {} {} {}",
@@ -637,7 +728,49 @@ fn main() {
         });
     });
 
-    let results = results.into_inner().unwrap();
+    let mut results = results.into_inner().unwrap();
+
+    if args.interactive {
+        let stdin = io::stdin();
+        let mut stdin = stdin.lock();
+        let mut line = String::new();
+        for result in &mut results {
+            if let TestOutcome::SnapshotMismatch {
+                ref expected_stdout,
+                ref expected_stderr,
+                ref snapshot_path,
+                ref actual_stdout,
+                ref actual_stderr,
+                ..
+            } = result.outcome
+            {
+                let path_str = result.path.display().to_string();
+                let rel = path_str
+                    .rsplit_once("tests")
+                    .map(|(_, p)| p.trim_start_matches('/').to_string())
+                    .unwrap_or(path_str);
+                print_snapshot_diff("stdout (expected → actual)", expected_stdout, actual_stdout);
+                print_snapshot_diff("stderr (expected → actual)", expected_stderr, actual_stderr);
+                print!("Accept new snapshot for {}? [y/N] ", rel);
+                let _ = io::stdout().flush();
+                line.clear();
+                if stdin.read_line(&mut line).is_ok() {
+                    let answer = line.trim().to_lowercase();
+                    if answer == "y" || answer == "yes" {
+                        let data = SnapshotData {
+                            stdout: actual_stdout.clone(),
+                            stderr: actual_stderr.clone(),
+                        };
+                        if let Ok(json) = serde_json::to_string_pretty(&data) {
+                            let _ = fs::write(snapshot_path, json);
+                            eprintln!("  {} Snapshot updated.", "✔".green());
+                            result.outcome = TestOutcome::Passed;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     let (total, passed, failed_count, skipped) = results.iter().fold(
         (0u64, 0u64, 0u64, 0u64),
@@ -645,7 +778,10 @@ fn main() {
             (
                 t + 1,
                 p + matches!(&r.outcome, TestOutcome::Passed) as u64,
-                f + matches!(&r.outcome, TestOutcome::Failed { .. }) as u64,
+                f + matches!(
+                    &r.outcome,
+                    TestOutcome::Failed { .. } | TestOutcome::SnapshotMismatch { .. }
+                ) as u64,
                 s + matches!(&r.outcome, TestOutcome::Skipped { .. }) as u64,
             )
         },
