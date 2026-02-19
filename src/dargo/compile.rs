@@ -6,7 +6,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::mpsc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use crate::{
@@ -115,8 +115,10 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         .to_string()
         .leak();
 
+    let parse_start = Instant::now();
     let tokens = lex(src_file_name, src_file_file_contents);
     let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
+    let parse_elapsed = parse_start.elapsed();
 
     let (tailwind_worker_send, tailwind_worker_receive) = mpsc::channel::<String>();
     let (tailwind_result_send, tailwind_result_receive) = mpsc::channel::<String>();
@@ -135,15 +137,22 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
 
         let _ = tailwind_result_send.send(emit_env.to_css_stylesheet(true));
     });
+    let typecheck_start = Instant::now();
     let mut type_env = typecheck(&mut src_file_ast, &tailwind_worker_send);
+    let typecheck_elapsed = typecheck_start.elapsed();
+
+    let emit_start = Instant::now();
     let mut go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env, empty_range()));
+    let emit_elapsed = emit_start.elapsed();
 
     // drop the sender here so that the thread knows it should emit the final tailwind
     drop(tailwind_worker_send);
 
+    let duckwind_start = Instant::now();
     let css = tailwind_result_receive
         .recv_timeout(Duration::from_secs(30))
         .expect("tailwind timed out");
+    let duckwind_elapsed = duckwind_start.elapsed();
 
     go_code = cleanup_go_source(&go_code, true);
     go_code = format!(
@@ -158,6 +167,7 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         let _ = go_cli::format(go_output_file.as_path());
     }
 
+    let go_build_start = Instant::now();
     let executable_path = go_cli::build(
         &DARGO_DOT_DIR,
         binary_output_name
@@ -172,6 +182,19 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
             CompileErrKind::GoCli(err.1),
         )
     })?;
+    let go_build_elapsed = go_build_start.elapsed();
+
+    if compile_args.timing {
+        println!();
+        println!("  timing:");
+        println!("    parse:     {:?}", parse_elapsed);
+        println!("    typecheck: {:?}", typecheck_elapsed);
+        println!("    emit:      {:?}", emit_elapsed);
+        println!("    duckwind:  {:?}", duckwind_elapsed);
+        println!("    go build:  {:?}", go_build_elapsed);
+        println!("    total:     {:?}", parse_elapsed + typecheck_elapsed + emit_elapsed + duckwind_elapsed + go_build_elapsed);
+        println!();
+    }
 
     println!(
         "{}{}{} Successfully compiled binary",
