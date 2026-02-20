@@ -1,4 +1,5 @@
 use chumsky::{input::BorrowInput, prelude::*};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     parse::{
@@ -6,7 +7,7 @@ use crate::{
         generics_parser::{Generic, generics_parser},
         value_parser::empty_range,
     },
-    semantics::type_resolve::FunHeader,
+    semantics::{type_resolve::FunHeader, type_resolve2::ValueExprWithType},
 };
 
 use super::{
@@ -18,22 +19,33 @@ use super::{
 pub type Param = (String, Spanned<TypeExpr>);
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct FunctionDefintion {
     pub name: String,
     pub return_type: Spanned<TypeExpr>,
     pub params: Vec<Param>,
-    pub value_expr: Spanned<ValueExpr>,
+    pub value_expr: ValueExprWithType,
     pub generics: Vec<Spanned<Generic>>,
     pub span: SS,
     pub comments: Vec<Spanned<String>>,
 }
 
 impl FunctionDefintion {
+    pub fn to_header2(&self) -> crate::semantics::type_resolve2::FunHeader {
+        let return_type = self.return_type.clone();
+
+        crate::semantics::type_resolve2::FunHeader {
+            generics: Vec::new(),
+            params: self.params.iter().map(|x| x.1.clone()).collect(),
+            return_type,
+        }
+    }
     pub fn to_header(&self) -> FunHeader {
         let return_type = self.return_type.clone();
 
         FunHeader {
+            generics: Vec::new(),
             params: self.params.iter().map(|x| x.1.clone()).collect(),
             return_type,
         }
@@ -52,7 +64,7 @@ impl FunctionDefintion {
                 return_type.into(),
                 false,
             ),
-            self.value_expr.1,
+            self.value_expr.expr.1,
         );
     }
 }
@@ -63,8 +75,11 @@ impl Default for FunctionDefintion {
             name: Default::default(),
             return_type: TypeExpr::Tuple(vec![]).into_empty_span(),
             params: Default::default(),
-            value_expr: ValueExpr::Return(Some(ValueExpr::Block(vec![]).into_empty_span().into()))
-                .into_empty_span(),
+            value_expr: ValueExprWithType::n(
+                ValueExpr::Return(Some(ValueExpr::Block(vec![]).into_empty_span().into()))
+                    .into_empty_span()
+                    .expr,
+            ),
             generics: vec![],
             span: empty_range(),
             comments: Vec::new(),
@@ -72,12 +87,13 @@ impl Default for FunctionDefintion {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct LambdaFunctionExpr {
     pub is_mut: bool,
     pub params: Vec<(String, Option<Spanned<TypeExpr>>)>,
     pub return_type: Option<Spanned<TypeExpr>>,
-    pub value_expr: Spanned<ValueExpr>,
+    pub value_expr: ValueExprWithType,
 }
 
 pub fn function_definition_parser<'src, I, M>(
@@ -120,22 +136,24 @@ where
         .map_with(
             |(((((doc_comments, identifier), generics), params), return_type), mut value_expr),
              ctx| {
-                value_expr = match value_expr {
-                    x @ (ValueExpr::Block(_), _) => x,
+                value_expr = match value_expr.expr {
+                    x @ (ValueExpr::Block(_), _) => ValueExprWithType::n(x),
                     _ => {
                         let msg = "Function must be a block expression";
-                        failure_with_occurence(msg, value_expr.1, [(msg, value_expr.1)]);
+                        failure_with_occurence(msg, value_expr.expr.1, [(msg, value_expr.expr.1)]);
                     }
                 };
+
+                let span = value_expr.expr.1;
 
                 FunctionDefintion {
                     name: identifier,
                     return_type: return_type.unwrap_or((TypeExpr::Tuple(vec![]), ctx.span())),
                     params,
-                    value_expr: (
-                        ValueExpr::Return(Some(Box::new(value_expr.clone()))),
-                        value_expr.1,
-                    ),
+                    value_expr: ValueExprWithType::n((
+                        ValueExpr::Return(Some(Box::new(value_expr))),
+                        span,
+                    )),
                     generics: generics.unwrap_or_default(),
                     span: ctx.span(),
                     comments: doc_comments.unwrap_or_else(Vec::new),

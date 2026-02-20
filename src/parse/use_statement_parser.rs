@@ -1,10 +1,12 @@
 use chumsky::{input::BorrowInput, prelude::*};
+use serde::{Deserialize, Serialize};
 
 use crate::parse::{SS, failure_with_occurence};
 
 use super::lexer::Token;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub enum UseStatement {
     Regular(bool, Vec<String>),
     Go(String, Option<String>),

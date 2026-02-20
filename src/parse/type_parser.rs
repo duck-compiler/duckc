@@ -3,24 +3,29 @@ use std::fmt::{Display, Formatter, Result};
 use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     parse::{
-        Field, SS, Spanned, failure_with_occurence, generics_parser::{Generic, generics_parser}, value_parser::{TypeParam, empty_range}
+        Field, SS, Spanned, failure_with_occurence,
+        generics_parser::{Generic, generics_parser},
+        value_parser::{TypeParam, empty_range},
     },
-    semantics::{ident_mangler::mangle, type_resolve::TypeEnv}
+    semantics::{ident_mangler::mangle, type_resolve::TypeEnv, type_resolve2::GlobalsEnv},
 };
 
 use super::lexer::Token;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct TypeDefinition {
     pub name: String,
     pub type_expression: Spanned<TypeExpr>,
     pub generics: Vec<Spanned<Generic>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct Duck {
     pub fields: Vec<Field>,
 }
@@ -30,8 +35,10 @@ pub struct Struct {
     pub fields: Vec<Field>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub enum TypeExpr {
+    Uninit,
     Statement,
     Never,
     Html,
@@ -607,6 +614,32 @@ impl TypeExpr {
         }
     }
 
+    pub fn implements_from_json2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_from_json2(globals),
+            TypeExpr::Array(t) => t.0.implements_from_json2(globals),
+            TypeExpr::Duck(Duck { fields }) => fields
+                .iter()
+                .all(|f| f.type_expr.0.implements_from_json2(globals)),
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_from_json2(globals)),
+            TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_from_json2(globals)),
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::FromJson)
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Byte
+            | TypeExpr::Float
+            | TypeExpr::UInt
+            | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
     pub fn implements_from_json(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_from_json(type_env),
@@ -629,6 +662,37 @@ impl TypeExpr {
             | TypeExpr::Byte
             | TypeExpr::Float
             | TypeExpr::UInt
+            | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn implements_to_json2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_to_json2(globals),
+            TypeExpr::Array(t) => t.0.implements_to_json2(globals),
+            TypeExpr::Duck(Duck { fields }) => fields
+                .iter()
+                .all(|f| f.type_expr.0.implements_to_json2(globals)),
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_to_json2(globals)),
+            TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_to_json2(globals)),
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::ToJson)
+                    || (def.methods.get("to_json").is_some_and(|f| {
+                        f.is_mut
+                            && f.params.is_empty()
+                            && matches!(f.return_type.0, TypeExpr::String(..))
+                    }))
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Float
+            | TypeExpr::UInt
+            | TypeExpr::Byte
             | TypeExpr::Tag(..) => true,
             _ => false,
         }
@@ -666,6 +730,36 @@ impl TypeExpr {
         }
     }
 
+    pub fn implements_to_string2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_to_string2(globals),
+            TypeExpr::Array(t) => t.0.implements_to_string2(globals),
+            TypeExpr::Duck(Duck { fields }) => fields
+                .iter()
+                .all(|f| f.type_expr.0.implements_to_string2(globals)),
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_to_string2(globals)),
+            TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_to_string2(globals)),
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::ToString)
+                    || (def.methods.get("to_string").is_some_and(|f| {
+                        f.params.is_empty()
+                            && matches!(f.return_type.0, TypeExpr::String(..))
+                            && !f.is_mut
+                    }))
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Byte
+            | TypeExpr::Float
+            | TypeExpr::UInt
+            | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
     pub fn implements_to_string(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_to_string(type_env),
@@ -694,6 +788,36 @@ impl TypeExpr {
             | TypeExpr::Float
             | TypeExpr::UInt
             | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn implements_hash2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_hash2(globals),
+            TypeExpr::Array(t) => t.0.implements_hash2(globals),
+            TypeExpr::Duck(Duck { fields: _ }) => {
+                false
+                // && fields
+                //     .iter()
+                //     .all(|f| f.type_expr.0.implements_hash2(globals))
+            }
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_hash2(globals)),
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::Hash)
+                    || (def.methods.get("hash").is_some_and(|f| {
+                        f.params.is_empty() && f.return_type.0 == TypeExpr::Int && !f.is_mut
+                    }))
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Byte
+            | TypeExpr::UInt
+            | TypeExpr::Float => true,
             _ => false,
         }
     }
@@ -731,6 +855,39 @@ impl TypeExpr {
         }
     }
 
+    pub fn implements_clone2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_clone2(globals),
+            TypeExpr::Array(t) => t.0.implements_clone2(globals),
+            TypeExpr::Duck(Duck { fields: _ }) => {
+                false
+                // && fields
+                //     .iter()
+                //     .all(|f| f.type_expr.0.implements_clone2(globals))
+            }
+            TypeExpr::Tuple(t) | TypeExpr::Or(t) => {
+                t.iter().all(|t| t.0.implements_clone2(globals))
+            }
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::Clone)
+                    || (def.methods.get("clone").is_some_and(|f| {
+                        !f.is_mut && f.params.is_empty() && &f.return_type.0 == self
+                    }))
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::Float
+            | TypeExpr::UInt
+            | TypeExpr::Byte
+            | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
     pub fn implements_clone(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_clone(type_env),
@@ -763,6 +920,41 @@ impl TypeExpr {
             | TypeExpr::UInt
             | TypeExpr::Byte
             | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn implements_ord2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_ord2(globals),
+            TypeExpr::Array(t) => t.0.implements_ord2(globals),
+            TypeExpr::Duck(Duck { fields: _ }) => {
+                false
+                // false
+                //     && fields
+                //         .iter()
+                //         .all(|f| f.type_expr.0.implements_ord2(globals))
+            }
+            TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_ord2(globals)),
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::Ord)
+                    || (def.methods.get("ord").is_some_and(|f| {
+                        !f.is_mut
+                            && f.params.len() == 1
+                            && f.params[0].0.clone().into_empty_span().0
+                                == TypeExpr::Ref(self.clone().into_empty_span().into())
+                            && f.return_type.0.clone().into_empty_span().0 == TypeExpr::ord_result()
+                    }))
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Byte
+            | TypeExpr::Bool(..)
+            | TypeExpr::Char
+            | TypeExpr::UInt
+            | TypeExpr::Float => true,
             _ => false,
         }
     }
@@ -815,6 +1007,35 @@ impl TypeExpr {
         }
     }
 
+    pub fn implements_into_iter_mut2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.methods.get("iter_mut").is_some_and(|f| {
+                    !f.is_mut
+                        && if let TypeExpr::Struct { name, type_params } = &f.return_type.0 {
+                            if name.as_str() == mangle(&["std", "col", "Iter"]) {
+                                if type_params.len() == 1 {
+                                    type_params[0].0.clone().into_empty_span().0
+                                        == TypeExpr::RefMut(self.clone().into_empty_span().into())
+                                            .into_empty_span()
+                                            .0
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                })
+            }
+            TypeExpr::Array(..) => true,
+            _ => false,
+        }
+    }
+
     pub fn implements_into_iter_mut(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::Struct { name, type_params } => {
@@ -840,6 +1061,35 @@ impl TypeExpr {
                         }
                     }
                 }) && def.mut_methods.contains("iter_mut")
+            }
+            TypeExpr::Array(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn implements_into_iter2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.methods.get("iter").is_some_and(|f| {
+                    !f.is_mut
+                        && if let TypeExpr::Struct { name, type_params } = &f.return_type.0 {
+                            if name.as_str() == mangle(&["std", "col", "Iter"]) {
+                                if type_params.len() == 1 {
+                                    type_params[0].0.clone().into_empty_span().0
+                                        == TypeExpr::Ref(self.clone().into_empty_span().into())
+                                            .into_empty_span()
+                                            .0
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                })
             }
             TypeExpr::Array(..) => true,
             _ => false,
@@ -877,6 +1127,38 @@ impl TypeExpr {
         }
     }
 
+    pub fn implements_eq2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_eq2(globals),
+            TypeExpr::Array(t) => t.0.implements_eq2(globals),
+            TypeExpr::Duck(Duck { fields }) => {
+                fields.iter().all(|f| f.type_expr.0.implements_eq2(globals))
+            }
+            TypeExpr::Tuple(t) | TypeExpr::Or(t) => t.iter().all(|t| t.0.implements_eq2(globals)),
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.derived
+                    .contains(&crate::parse::struct_parser::DerivableInterface::Eq)
+                    || def.methods.get("eq").is_some_and(|f| {
+                        f.params.len() == 1
+                            && f.params[0].clone().0.into_empty_span().0
+                                == TypeExpr::Ref(self.clone().into_empty_span().into())
+                            && matches!(f.return_type.0, TypeExpr::Bool(..))
+                            && !f.is_mut
+                    })
+            }
+            TypeExpr::Int
+            | TypeExpr::String(..)
+            | TypeExpr::Bool(..)
+            | TypeExpr::Byte
+            | TypeExpr::Char
+            | TypeExpr::Float
+            | TypeExpr::UInt
+            | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
     pub fn implements_eq(&self, type_env: &mut TypeEnv) -> bool {
         match self {
             TypeExpr::Ref(t) | TypeExpr::RefMut(t) => t.0.implements_eq(type_env),
@@ -906,6 +1188,38 @@ impl TypeExpr {
             | TypeExpr::Float
             | TypeExpr::UInt
             | TypeExpr::Tag(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn implements_copy2(&self, globals: &GlobalsEnv) -> bool {
+        match self {
+            TypeExpr::String(..)
+            | TypeExpr::Int
+            | TypeExpr::Float
+            | TypeExpr::Byte
+            | TypeExpr::Bool(..)
+            | TypeExpr::Go(..)
+            | TypeExpr::Tag(..)
+            | TypeExpr::Html
+            | TypeExpr::UInt
+            | TypeExpr::Never
+            | TypeExpr::Fun(..)
+            | TypeExpr::Char => true,
+            TypeExpr::Tuple(fields) | TypeExpr::Or(fields) => {
+                fields.iter().all(|(t, _)| t.implements_copy2(globals))
+            }
+            TypeExpr::Duck(Duck { fields: _ }) => true,
+            TypeExpr::Array(t) => t.0.implements_copy2(globals),
+            TypeExpr::Ref(..) => true,
+            TypeExpr::RefMut(..) => true,
+            TypeExpr::Struct { name, type_params } => {
+                let def = globals.get_struct_header(name, type_params).unwrap();
+                def.fields
+                    .clone()
+                    .iter()
+                    .all(|f| f.1.0.implements_copy2(globals))
+            }
             _ => false,
         }
     }
@@ -1356,21 +1670,22 @@ where
                     prefixes.into_iter().fold(base, |acc, inner| {
                         let span = acc.1;
                         match inner {
-                            Some(index_type) => {
-                                match &index_type.0 {
-                                    TypeExpr::Tag(_) | TypeExpr::Int => {
-                                        (TypeExpr::Indexed(Box::new(acc), Box::new(index_type)), span)
-                                    }
-                                    _ => failure_with_occurence(
-                                        "Invalid Type Index",
-                                        index_type.1,
-                                        [(
-                                            format!("Type Index must be Int or Tag. You've provided {}", index_type.0.as_clean_user_faced_type_name()),
-                                            index_type.1
-                                        )]
-                                    ),
+                            Some(index_type) => match &index_type.0 {
+                                TypeExpr::Tag(_) | TypeExpr::Int => {
+                                    (TypeExpr::Indexed(Box::new(acc), Box::new(index_type)), span)
                                 }
-                            }
+                                _ => failure_with_occurence(
+                                    "Invalid Type Index",
+                                    index_type.1,
+                                    [(
+                                        format!(
+                                            "Type Index must be Int or Tag. You've provided {}",
+                                            index_type.0.as_clean_user_faced_type_name()
+                                        ),
+                                        index_type.1,
+                                    )],
+                                ),
+                            },
                             None => (TypeExpr::Array(Box::new(acc)), span),
                         }
                     })
@@ -1475,7 +1790,10 @@ where
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            TypeExpr::Indexed(target, index) => write!(f, "{}[{}]", target.as_ref().0, index.as_ref().0),
+            TypeExpr::Uninit => panic!("Compiler Bug: Uninit should never be displayed"),
+            TypeExpr::Indexed(target, index) => {
+                write!(f, "{}[{}]", target.as_ref().0, index.as_ref().0)
+            }
             TypeExpr::Byte => write!(f, "Byte"),
             TypeExpr::Statement => write!(f, "Statement"),
             TypeExpr::Never => write!(f, "never"),
@@ -2721,9 +3039,7 @@ pub mod tests {
         assert_type_expression(
             "String[.username]",
             TypeExpr::Indexed(
-                TypeExpr::String(None)
-                    .into_empty_span()
-                    .into(),
+                TypeExpr::String(None).into_empty_span().into(),
                 TypeExpr::Tag("username".to_string())
                     .into_empty_span()
                     .into(),
@@ -2733,12 +3049,8 @@ pub mod tests {
         assert_type_expression(
             "String[Int]",
             TypeExpr::Indexed(
-                TypeExpr::String(None)
-                    .into_empty_span()
-                    .into(),
-                TypeExpr::Int
-                    .into_empty_span()
-                    .into(),
+                TypeExpr::String(None).into_empty_span().into(),
+                TypeExpr::Int.into_empty_span().into(),
             ),
         );
     }

@@ -1,16 +1,19 @@
 use chumsky::Parser;
 use chumsky::input::BorrowInput;
 use chumsky::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::parse::value_parser::value_expr_parser;
 use crate::parse::{SS, Spanned, failure_with_occurence, value_parser::ValueExpr};
+use crate::semantics::type_resolve2::ValueExprWithType;
 
 use super::lexer::Token;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct TestCase {
     pub name: String,
-    pub body: Spanned<ValueExpr>,
+    pub body: ValueExprWithType,
 }
 
 pub fn test_parser<'src, I, M>(
@@ -24,11 +27,11 @@ where
         .ignore_then(select_ref! { Token::StringLiteral(str) => str.clone() })
         .then(value_expr_parser(make_input))
         .map_with(|(name, mut body), ctx| {
-            body = match body {
-                x @ (ValueExpr::Block(_), _) => x,
+            body = match body.expr {
+                x @ (ValueExpr::Block(_), _) => ValueExprWithType::n(x),
                 _ => {
                     let msg = "Test body needs to be a block";
-                    failure_with_occurence(msg, body.1, [(msg, body.1)]);
+                    failure_with_occurence(msg, body.expr.1, [(msg, body.expr.1)]);
                 }
             };
 
@@ -49,7 +52,7 @@ pub mod tests {
 
     fn strip_spans(spanned_type_expr: Spanned<TestCase>) -> Spanned<TestCase> {
         let (mut expr, _) = spanned_type_expr;
-        expr.body.1 = empty_range();
+        expr.body.expr.1 = empty_range();
         value_expr_into_empty_range(&mut expr.body);
         (expr, empty_range())
     }
