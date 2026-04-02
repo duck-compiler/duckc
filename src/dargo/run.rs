@@ -31,6 +31,7 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
             file: run_args_file.clone(),
             output_name: None,
             optimize_go: run_args.optimize_go,
+            timing: run_args.timing,
         })
         .map_err(|err| {
             (
@@ -97,6 +98,7 @@ pub fn run(run_args: &RunArgs) -> Result<(), (String, RunErrKind)> {
         bin: run_args.bin.clone(),
         output_name: None,
         optimize_go: run_args.optimize_go,
+        timing: run_args.timing,
     })
     .map_err(|err| {
         (

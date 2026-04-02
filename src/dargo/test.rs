@@ -34,6 +34,7 @@ pub fn test(test_args: &TestArgs) -> Result<(), (String, TestErrKind)> {
             file: run_args_file.clone(),
             output_name: None,
             optimize_go: test_args.optimize_go,
+            timing: false,
         })
         .map_err(|err| {
             (
@@ -100,6 +101,7 @@ pub fn test(test_args: &TestArgs) -> Result<(), (String, TestErrKind)> {
         bin: test_args.bin.clone(),
         output_name: None,
         optimize_go: test_args.optimize_go,
+        timing: false,
     })
     .map_err(|err| {
         (

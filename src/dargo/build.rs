@@ -132,6 +132,7 @@ pub fn build(build_args: &BuildArgs) -> Result<BuildOutput, (String, BuildErrKin
                 file: copy_target_clone,
                 output_name: Some(target_binary.name.clone()),
                 optimize_go: build_args.optimize_go,
+                timing: build_args.timing,
             })
             .map_err(|err| {
                 (
@@ -158,6 +159,7 @@ pub fn build(build_args: &BuildArgs) -> Result<BuildOutput, (String, BuildErrKin
         file: copy_target_clone,
         output_name: build_args.output_name.clone(),
         optimize_go: build_args.optimize_go,
+        timing: build_args.timing,
     })
     .map_err(|err| {
         (

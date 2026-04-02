@@ -2872,9 +2872,14 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             type_env.duckx_components.push(duckx_component.clone());
         });
 
+    let mut seen_classes: HashSet<String> = HashSet::new();
     for comp in &source_file.jsx_components {
         type_env.jsx_components.push(comp.clone());
-        type_env.check_for_tailwind(&comp.javascript_source.0);
+        for class_str in extract_class_literals_from_jsx(&comp.javascript_source.0) {
+            if seen_classes.insert(class_str.clone()) {
+                type_env.check_for_tailwind(&class_str);
+            }
+        }
     }
 
     println!(
@@ -5250,6 +5255,51 @@ fn typeresolve_lambda(value_expr: SpannedMutRef<ValueExpr>, type_env: &mut TypeE
     type_env.pop_identifier_types();
 
     check_returns(return_type.as_ref().unwrap(), value_expr, type_env);
+}
+
+
+fn extract_class_literals_from_jsx(src: &str) -> Vec<String> {
+    let bytes = src.as_bytes();
+    let mut result = Vec::new();
+
+    let mut i = 0;
+    while i < bytes.len() {
+        let rest = &bytes[i..];
+
+        let offset = if let Some(_) = rest.strip_prefix(b"className=\"") {
+            b"className=\"".len()
+        } else if let Some(_) = rest.strip_prefix(b"class=\"") {
+            b"class=\"".len()
+        } else {
+            i += 1;
+            continue;
+        };
+
+        let start = i + offset;
+        let mut end = start;
+
+        while end < bytes.len() {
+            match bytes[end] {
+                b'\\' => end += 2,
+                b'"' => break,
+                _ => end += 1,
+            }
+        }
+
+        if end < bytes.len() {
+            if let Ok(s) = std::str::from_utf8(&bytes[start..end]) {
+                let trimmed = s.trim();
+                if !trimmed.is_empty() {
+                    result.push(trimmed.to_string());
+                }
+            }
+            i = end + 1;
+        } else {
+            break
+        }
+    }
+
+    return result
 }
 
 #[cfg(test)]

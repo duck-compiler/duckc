@@ -45,6 +45,8 @@ pub struct BuildArgs {
     pub output_name: Option<String>,
     #[arg(long, short = 'G')]
     pub optimize_go: bool,
+    #[arg(long)]
+    pub timing: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -54,6 +56,8 @@ pub struct CompileArgs {
     pub output_name: Option<String>,
     #[arg(long, short = 'G')]
     pub optimize_go: bool,
+    #[arg(long)]
+    pub timing: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -68,6 +72,8 @@ pub struct RunArgs {
     pub optimize_go: bool,
     #[arg(long, short = 'b')]
     pub bin: Option<String>,
+    #[arg(long)]
+    pub timing: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -92,11 +98,8 @@ pub struct InitArgs {
 #[derive(clap::Args, Debug)]
 pub struct NewArgs {
     pub project_name: Option<String>,
-    // Examples:
-    // #[arg(long, short = 'o')]
-    // optimize: bool,
-    // #[arg(long, value_parser = ["x86", "arm"])]
-    // arch: Option<String>
+    #[arg(long)]
+    pub web: bool, // generate an web project
 }
 
 #[derive(Debug)]

@@ -46,6 +46,39 @@ pub fn generate_default_main_duck() -> String {
         .to_string();
 }
 
+pub fn generate_web_main_duck() -> String {
+    return r#"use std::web;
+
+component Counter(props: { initial: Int }) jsx {
+    const [n, setN] = useState(props.initial);
+    return <div><span>{n}</span> <button onClick={() => setN(n + 1)}>+1</button></div>;
+}
+
+template Page(props: { title: String }) duckx {
+    return (
+        <>
+            <!DOCTYPE html>
+            <html>
+                <head><title>{props.title}</title></head>
+                <body>
+                    <h1>{props.title}</h1>
+                    <Counter initial={42}/>
+                </body>
+            </html>
+        </>
+    )
+}
+
+fn main() {
+    let server = std::web::HttpServer::new(.verbose);
+    server
+        .serve_template("/", Page({ title: "Hello Duck" }))
+        .listen(":8080");
+}
+"#
+    .to_string();
+}
+
 pub fn new_project(
     custom_dargo_toml_path: Option<PathBuf>,
     new_args: NewArgs,
@@ -117,8 +150,12 @@ pub fn new_project(
             };
 
             if !main_src_file.exists() {
-                // todo: this is currently a silent error - if there's one
-                let _ = fs::write(&main_src_file, generate_default_main_duck());
+                let main_content = if new_args.web {
+                    generate_web_main_duck()
+                } else {
+                    generate_default_main_duck()
+                };
+                let _ = fs::write(&main_src_file, main_content);
                 duck_with_message(
                     format!("You've sucessfully created a new project in ./{project_name}").leak(),
                 );
@@ -126,6 +163,9 @@ pub fn new_project(
                 println!("Run following commands to get started");
                 println!("    cd {project_name}");
                 println!("    dargo run");
+                if new_args.web {
+                    println!("Then open http://localhost:8080 in your browser");
+                }
             }
         }
     }
