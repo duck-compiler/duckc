@@ -45,6 +45,7 @@ pub mod emit;
 pub mod go_fixup;
 pub mod multi_map;
 pub mod parse;
+pub mod parser2;
 pub mod reports;
 pub mod semantics;
 pub mod tags;
