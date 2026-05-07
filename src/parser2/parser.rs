@@ -14,7 +14,7 @@ pub trait Phase: sealed::Sealed + 'static {
     /// Type annotation attached to every expression node.
     ///
     /// `()` in `Parsed`
-    /// `TypeExpr` in `Typed`
+    /// `TypeExpr<Typed>` in `Typed`
     type ExprType: Clone + fmt::Debug + PartialEq;
 
     /// How a name *reference* is represented.
@@ -25,23 +25,33 @@ pub trait Phase: sealed::Sealed + 'static {
     /// This eliminates the old `RawVariable` / `Variable` variant duality:
     /// both resolve to the same `Ident` variant; only the payload type changes.
     type Ident: Clone + fmt::Debug + PartialEq;
+
+    /// How a *type name reference* is represented inside `TypeDescription`.
+    ///
+    /// `UnresolvedTypeRef` in `Parsed` - a raw string path from source.
+    /// `DefId` in `Typed` - an index into the `SymbolTable` after resolution.
+    type TypeRef: Clone + fmt::Debug + PartialEq;
 }
 
 /// Phase 1 - output of the parser. Raw string names, no type annotations.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Parsed;
 impl sealed::Sealed for Parsed {}
 impl Phase for Parsed {
     type ExprType = ();
     type Ident    = UnresolvedIdent;
+    type TypeRef  = UnresolvedTypeRef;
 }
 
 /// Phase 2 - output of the resolver + type inferencer.
 /// Every expression has a type; every name reference has a `DefId`.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Typed;
 impl sealed::Sealed for Typed {}
 impl Phase for Typed {
-    type ExprType = TypeExpr;
+    type ExprType = TypeExpr<Typed>;
     type Ident    = DefId;
+    type TypeRef  = DefId;
 }
 
 /// An opaque index into a `SymbolTable`
@@ -75,6 +85,16 @@ impl UnresolvedIdent {
     }
 }
 
+/// A type name reference as it appears in source before resolution.
+///
+/// `path` has one entry for a simple `Foo`, multiple for `pkg::Foo`.
+/// After resolution the resolver replaces this with a `DefId` (`Typed::TypeRef`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnresolvedTypeRef {
+    pub path:      Vec<String>,
+    pub is_global: bool,
+}
+
 /// What kind of binding a `DefId` refers to
 #[derive(Debug, Clone, PartialEq)]
 pub enum DefKind {
@@ -95,7 +115,7 @@ pub struct SymbolDef {
     pub name: String,
     pub span: Span,
     /// Filled in by the type inferencer; `None` only during name resolution.
-    pub ty: Option<TypeExpr>,
+    pub ty: Option<TypeExpr<Typed>>,
 }
 
 /// Built incrementally during name resolution, then read by type inference and emit
@@ -206,13 +226,10 @@ impl<T> WithSpan<T> {
 /// Both pieces carry independent spans so a diagnostic can point at the name
 /// or the type separately.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Field {
+pub struct Field<P: Phase> {
     pub name:      WithSpan<String>,
-    pub type_expr: TypeExpr,
+    pub type_expr: TypeExpr<P>,
 }
-
-/// A sequence of named, typed fields used in struct bodies and duck types.
-pub type FieldsNamedAndTyped = Vec<Field>;
 
 /// A type parameter in a definition, e.g. the `T` in `fn foo<T: Eq>`.
 ///
@@ -220,57 +237,49 @@ pub type FieldsNamedAndTyped = Vec<Field>;
 /// both phases - they are definitions, not references, so they do not go through
 /// the resolver and do not get a `DefId`.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Generic {
+pub struct Generic<P: Phase> {
     pub name:       WithSpan<String>,
-    pub constraint: Option<TypeExpr>,
+    pub constraint: Option<TypeExpr<P>>,
 }
 
 /// A parameter slot inside a `fun(…)` type, e.g. `label: SomeType`.
 #[derive(Debug, Clone, PartialEq)]
-pub struct FunTypeParam {
+pub struct FunTypeParam<P: Phase> {
     pub label:     Option<WithSpan<String>>,
-    pub type_expr: TypeExpr,
+    pub type_expr: TypeExpr<P>,
 }
 
 /// A structural duck type: `{ field: type, ... }`.
 #[derive(Debug, Clone, PartialEq)]
-pub struct DuckType {
-    pub fields: FieldsNamedAndTyped,
+pub struct DuckType<P: Phase> {
+    pub fields: Vec<Field<P>>,
 }
 
-/// A type expression. The span covers the full extent of the written type syntax.
-///
-/// Unlike the old approach where `TypeExpr` was a bare enum and the span was
-/// attached by wrapping in `(TypeExpr, SS)`, the span is part of the node.
-/// Nested types - e.g. the element type inside `Array(Box<TypeExpr>)` — carry
-/// their own span, requiring no extra boxing or tuple wrapping at use-sites.
-///
-/// `TypeExpr` is not phase-generic. Types are resolved and their names are
-/// rewritten to canonical form during the same pass that resolves `Expr` names,
-/// so the resolved `TypeExpr` value is placed directly in `Expr<Typed>::ty`.
+/// A type expression. Generic over `P` because `TypeDescription<P>` contains
+/// `TypeName` whose reference form differs between phases.
 #[derive(Debug, Clone, PartialEq)]
-pub struct TypeExpr {
-    pub desc: TypeDescription,
+pub struct TypeExpr<P: Phase> {
+    pub desc: TypeDescription<P>,
     pub span: Span,
 }
 
-impl TypeExpr {
-    pub fn new(desc: TypeDescription, span: Span) -> Self {
+impl<P: Phase> TypeExpr<P> {
+    pub fn new(desc: TypeDescription<P>, span: Span) -> Self {
         Self { desc, span }
     }
 }
 
-/// All forms a type expression can take, adapted from `parse::type_parser::TypeExpr`.
+/// All forms a type expression can take.
 #[derive(Debug, Clone, PartialEq)]
-pub enum TypeDescription {
+pub enum TypeDescription<P: Phase> {
     // Primitives
     Int,
     UInt,
     Float,
-    Bool(Option<bool>),     // bare `bool`, or a constant true/false singleton
+    Bool(Option<bool>),     // bare `Bool`, or a constant true/false singleton
     Char,
     Byte,
-    String(Option<String>), // bare `string`, or a constant string singleton
+    String(Option<String>), // bare `String`, or a constant string singleton
 
     // Built-in special
     Statement,  // unit type for statement positions
@@ -281,75 +290,67 @@ pub enum TypeDescription {
     // tag types - nominal unit types like `.ok` or `.err`
     Tag(String),
 
-    // introspection 
+    // introspection
     TypeOf(String),
-    KeyOf(Box<TypeExpr>),
+    KeyOf(Box<TypeExpr<P>>),
 
     // composite
-    Tuple(Vec<TypeExpr>),
-    Array(Box<TypeExpr>),
-    Indexed { base: Box<TypeExpr>, index: Box<TypeExpr> },
+    Tuple(Vec<TypeExpr<P>>),
+    Array(Box<TypeExpr<P>>),
+    Indexed { base: Box<TypeExpr<P>>, index: Box<TypeExpr<P>> },
 
     // algebraic
-    Or(Vec<TypeExpr>),   // union        T1 | T2 | …
-    And(Vec<TypeExpr>),  // intersection T1 & T2 & …
+    Or(Vec<TypeExpr<P>>),   // union        T1 | T2 | ..
+    And(Vec<TypeExpr<P>>),  // intersection T1 & T2 & ..
 
-    // fn type 
+    // fn type
     Fun {
-        params:      Vec<FunTypeParam>,
-        return_type: Box<TypeExpr>,
+        params:      Vec<FunTypeParam<P>>,
+        return_type: Box<TypeExpr<P>>,
         is_mut:      bool,
     },
 
-    // References 
-    Ref(Box<TypeExpr>),
-    RefMut(Box<TypeExpr>),
+    // References
+    Ref(Box<TypeExpr<P>>),
+    RefMut(Box<TypeExpr<P>>),
 
-    // Named types - resolved during the semantic pass
-
-    /// Single-segment name with optional type args: `Name<T, U>`.
-    /// `RawTypeName` collapses into this after path resolution.
+    // Named type reference.
+    // `Parsed`:  `type_ref` is an `UnresolvedTypeRef` (raw string path from source).
+    // `Typed`:   `type_ref` is a `DefId` pointing into the `SymbolTable`.
     TypeName {
-        is_global:   bool,
-        name:        String,
-        type_params: Vec<TypeExpr>,
+        type_ref:    P::TypeRef,
+        type_params: Vec<TypeExpr<P>>,
     },
 
-    /// Multi-segment path: `pkg::Name<T>`. Only present in `Parsed`-phase type exprs;
-    /// the resolver rewrites these to `TypeName`.
-    RawTypeName {
-        is_global:   bool,
-        path:        Vec<String>,
-        type_params: Vec<TypeExpr>,
-    },
-
-    /// A generic parameter used inside a generic definition, e.g. `T` in `fn foo<T>`.
+    /// A generic parameter introduced at a definition site, e.g. `T` in `fn foo<T>`.
+    /// Stays as a string in both phases; the resolver creates a scoped `DefId` for it
+    /// separately and does not rewrite this variant.
     TemplParam(String),
 
     // Structural duck types
-    Duck(DuckType),
-    NamedDuck { name: String, type_params: Vec<TypeExpr> },
-    Struct     { name: String, type_params: Vec<TypeExpr> },
+    Duck(DuckType<P>),
+    NamedDuck { name: String, type_params: Vec<TypeExpr<P>> },
+    Struct     { name: String, type_params: Vec<TypeExpr<P>> },
 
-    // Inline Go - escape hatch 
+    // Inline Go - escape hatch
     Go(String),
 }
 
 /// `type <name>[<generics>] = <type_expr>`
 #[derive(Debug, Clone, PartialEq)]
-pub struct TypeAliasDecl {
+pub struct TypeAliasDecl<P: Phase> {
     pub name:      WithSpan<String>,
-    pub generics:  Vec<WithSpan<Generic>>,
-    pub type_expr: TypeExpr,
+    pub generics:  Vec<WithSpan<Generic<P>>>,
+    pub type_expr: TypeExpr<P>,
     pub span:      Span,
 }
 
 /// `struct <name>[<generics>] { <fields> }`
 #[derive(Debug, Clone, PartialEq)]
-pub struct StructDecl {
+pub struct StructDecl<P: Phase> {
     pub name:     WithSpan<String>,
-    pub generics: Vec<WithSpan<Generic>>,
-    pub fields:   FieldsNamedAndTyped,
+    pub generics: Vec<WithSpan<Generic<P>>>,
+    pub fields:   Vec<Field<P>>,
     pub span:     Span,
 }
 
@@ -359,9 +360,9 @@ pub struct StructDecl {
 /// `WithSpan<String>` in both phases. A `DefId` is created for it in the
 /// `SymbolTable` during name resolution, but the AST node itself doesn't change.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Param {
+pub struct Param<P: Phase> {
     pub name:      WithSpan<String>,
-    pub type_expr: TypeExpr,
+    pub type_expr: TypeExpr<P>,
     pub is_mut:    bool,
 }
 
@@ -369,13 +370,13 @@ pub struct Param {
 ///
 /// `P` propagates through the body expression, so
 /// `FunctionDecl<Parsed>` has an untyped body and `FunctionDecl<Typed>` has a
-/// fully-typed body where every sub-expression carries a `TypeExpr`.
+/// fully-typed body where every sub-expression carries a `TypeExpr<Typed>`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDecl<P: Phase> {
     pub name:        WithSpan<String>,
-    pub generics:    Vec<WithSpan<Generic>>,
-    pub params:      Vec<Param>,
-    pub return_type: Option<TypeExpr>,
+    pub generics:    Vec<WithSpan<Generic<P>>>,
+    pub params:      Vec<Param<P>>,
+    pub return_type: Option<TypeExpr<P>>,
     pub body:        Expr<P>,
     pub is_static:   bool,
     pub span:        Span,
@@ -404,7 +405,7 @@ impl Expr<Parsed> {
 
 impl Expr<Typed> {
     /// Construct a typed expression with an explicit type annotation.
-    pub fn typed(kind: ExprKind<Typed>, ty: TypeExpr, span: Span) -> Self {
+    pub fn typed(kind: ExprKind<Typed>, ty: TypeExpr<Typed>, span: Span) -> Self {
         Self { kind, ty, span }
     }
 }
@@ -438,12 +439,12 @@ pub enum ExprKind<P: Phase> {
     Let {
         is_mut:   bool,
         name:     WithSpan<String>,
-        type_ann: Option<TypeExpr>,
+        type_ann: Option<TypeExpr<P>>,
         value:    Box<Expr<P>>,
     },
     Const {
         name:     WithSpan<String>,
-        type_ann: Option<TypeExpr>,
+        type_ann: Option<TypeExpr<P>>,
         value:    Box<Expr<P>>,
     },
 
@@ -512,14 +513,14 @@ pub enum ExprKind<P: Phase> {
     // Function calls
     Call {
         callee:      Box<Expr<P>>,
-        type_params: Vec<TypeExpr>,
+        type_params: Vec<TypeExpr<P>>,
         args:        Vec<Expr<P>>,
     },
 
     // Type cast
     As {
         value:     Box<Expr<P>>,
-        type_expr: TypeExpr,
+        type_expr: TypeExpr<P>,
     },
 
     // Control flow 
@@ -552,7 +553,7 @@ pub enum ExprKind<P: Phase> {
     // "constructors"
     StructLit {
         name:        P::Ident,
-        type_params: Vec<TypeExpr>,
+        type_params: Vec<TypeExpr<P>>,
         /// Field labels are structural, not resolved - `WithSpan<String>` in both phases.
         fields:      Vec<(WithSpan<String>, Expr<P>)>,
     },
@@ -560,11 +561,11 @@ pub enum ExprKind<P: Phase> {
     Array(Vec<Expr<P>>),
     Tuple(Vec<Expr<P>>),
 
-    // llambda 
+    // lambda
     Lambda {
         is_mut:      bool,
-        params:      Vec<Param>,
-        return_type: Option<TypeExpr>,
+        params:      Vec<Param<P>>,
+        return_type: Option<TypeExpr<P>>,
         body:        Box<Expr<P>>,
     },
 
@@ -586,8 +587,8 @@ pub enum FmtPart<P: Phase> {
 /// One arm of a match expression.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm<P: Phase> {
-    pub pattern: TypeExpr,
-    pub base:    Option<TypeExpr>,
+    pub pattern: TypeExpr<P>,
+    pub base:    Option<TypeExpr<P>>,
     pub binding: Option<WithSpan<String>>,
     pub guard:   Option<Box<Expr<P>>>,
     pub body:    Expr<P>,
@@ -612,7 +613,7 @@ impl UseDecl {
 /// `extend <type_expr> with impl { <methods> }`
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExtensionDecl<P: Phase> {
-    pub target:  TypeExpr,
+    pub target:  TypeExpr<P>,
     pub methods: Vec<FunctionDecl<P>>,
     pub span:    Span,
 }
@@ -621,8 +622,8 @@ pub struct ExtensionDecl<P: Phase> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Item<P: Phase> {
     Function (FunctionDecl<P>),
-    TypeAlias(TypeAliasDecl),
-    Struct   (StructDecl),
+    TypeAlias(TypeAliasDecl<P>),
+    Struct   (StructDecl<P>),
     Use      (UseDecl),
     Extension(ExtensionDecl<P>),
 }
@@ -849,7 +850,7 @@ impl Parser {
         Some(FunctionDecl { name, generics, params, return_type, body, is_static, span })
     }
 
-    fn parse_generics(&mut self) -> Vec<WithSpan<Generic>> {
+    fn parse_generics(&mut self) -> Vec<WithSpan<Generic<Parsed>>> {
         if !matches!(self.peek_kind(), Some(Token::Ctrl('<'))) { return Vec::new(); }
         self.advance(); // eat '<'
         let mut out = Vec::new();
@@ -866,7 +867,7 @@ impl Parser {
         out
     }
 
-    fn parse_params(&mut self) -> Vec<Param> {
+    fn parse_params(&mut self) -> Vec<Param<Parsed>> {
         let mut out = Vec::new();
         loop {
             if matches!(self.peek_kind(), Some(Token::Ctrl(')'))) || self.at_end() { break; }
@@ -883,7 +884,7 @@ impl Parser {
         out
     }
 
-    fn parse_type_alias_decl(&mut self) -> Option<TypeAliasDecl> {
+    fn parse_type_alias_decl(&mut self) -> Option<TypeAliasDecl<Parsed>> {
         let start = self.current_span();
         self.advance(); // eat 'type'
         let name = self.expect_ident();
@@ -896,7 +897,7 @@ impl Parser {
     }
 
 
-    fn parse_struct_decl(&mut self) -> Option<StructDecl> {
+    fn parse_struct_decl(&mut self) -> Option<StructDecl<Parsed>> {
         let start = self.current_span();
         self.advance(); // eat 'struct'
         let name = self.expect_ident();
@@ -908,7 +909,7 @@ impl Parser {
         Some(StructDecl { name, generics, fields, span })
     }
 
-    fn parse_named_fields(&mut self) -> FieldsNamedAndTyped {
+    fn parse_named_fields(&mut self) -> Vec<Field<Parsed>> {
         let mut out = Vec::new();
         loop {
             if matches!(self.peek_kind(), Some(Token::Ctrl('}'))) || self.at_end() { break; }
@@ -1019,11 +1020,11 @@ impl Parser {
 
     // type expressions
 
-    fn parse_type_expr(&mut self) -> Option<TypeExpr> {
+    fn parse_type_expr(&mut self) -> Option<TypeExpr<Parsed>> {
         self.parse_type_or()
     }
 
-    fn parse_type_or(&mut self) -> Option<TypeExpr> {
+    fn parse_type_or(&mut self) -> Option<TypeExpr<Parsed>> {
         let first = self.parse_type_and()?;
         if !matches!(self.peek_kind(), Some(Token::Ctrl('|'))) {
             return Some(first);
@@ -1036,7 +1037,7 @@ impl Parser {
         Some(TypeExpr::new(TypeDescription::Or(variants), span))
     }
 
-    fn parse_type_and(&mut self) -> Option<TypeExpr> {
+    fn parse_type_and(&mut self) -> Option<TypeExpr<Parsed>> {
         let first = self.parse_type_postfix()?;
         if !matches!(self.peek_kind(), Some(Token::Ctrl('&'))) {
             return Some(first);
@@ -1049,7 +1050,7 @@ impl Parser {
         Some(TypeExpr::new(TypeDescription::And(variants), span))
     }
 
-    fn parse_type_postfix(&mut self) -> Option<TypeExpr> {
+    fn parse_type_postfix(&mut self) -> Option<TypeExpr<Parsed>> {
         let mut ty = self.parse_type_atom()?;
         // T[IndexType] — indexed type
         while matches!(self.peek_kind(), Some(Token::Ctrl('['))) {
@@ -1071,7 +1072,7 @@ impl Parser {
         Some(ty)
     }
 
-    fn parse_type_atom(&mut self) -> Option<TypeExpr> {
+    fn parse_type_atom(&mut self) -> Option<TypeExpr<Parsed>> {
         let start = self.current_span();
 
         // &mut T
@@ -1207,9 +1208,8 @@ impl Parser {
             let type_params = self.try_parse_type_angle_params();
             let span = start.to(self.prev_span());
 
-            return if path.len() == 1 && !is_global {
-                let name = path.remove(0);
-                let desc = match name.as_str() {
+            let desc = if path.len() == 1 && !is_global {
+                match path[0].as_str() {
                     "Int"       => TypeDescription::Int,
                     "UInt"      => TypeDescription::UInt,
                     "Float"     => TypeDescription::Float,
@@ -1220,18 +1220,24 @@ impl Parser {
                     "Any" | "any"             => TypeDescription::Any,
                     "Html" | "html"           => TypeDescription::Html,
                     "Statement" | "statement" => TypeDescription::Statement,
-                    _ => TypeDescription::TypeName { is_global: false, name, type_params },
-                };
-                Some(TypeExpr::new(desc, span))
+                    _ => TypeDescription::TypeName {
+                        type_ref: UnresolvedTypeRef { path, is_global: false },
+                        type_params,
+                    },
+                }
             } else {
-                Some(TypeExpr::new(TypeDescription::RawTypeName { is_global, path, type_params }, span))
+                TypeDescription::TypeName {
+                    type_ref: UnresolvedTypeRef { path, is_global },
+                    type_params,
+                }
             };
+            return Some(TypeExpr::new(desc, span));
         }
 
         None
     }
 
-    fn parse_fun_type_params(&mut self) -> Vec<FunTypeParam> {
+    fn parse_fun_type_params(&mut self) -> Vec<FunTypeParam<Parsed>> {
         let mut out = Vec::new();
         loop {
             if matches!(self.peek_kind(), Some(Token::Ctrl(')'))) || self.at_end() { break; }
@@ -1251,7 +1257,7 @@ impl Parser {
     }
 
     // Try to parse <T, U> as type params, restoring position on failure.
-    fn try_parse_type_angle_params(&mut self) -> Vec<TypeExpr> {
+    fn try_parse_type_angle_params(&mut self) -> Vec<TypeExpr<Parsed>> {
         if !matches!(self.peek_kind(), Some(Token::Ctrl('<'))) { return Vec::new(); }
         let saved = self.pos;
         self.advance(); // eat '<'
