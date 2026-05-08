@@ -5,10 +5,40 @@ use super::parser::{Span, WithSpan};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     // Keywords
-    Fn, Let, Const, Type, Struct, Use, Impl, Extend, With, Mut,
-    Static, Return, If, Else, While, For, In, Break, Continue,
-    Match, As, And, Or, Duck, Go, Schema, Module,
-    Typeof, Keyof, Test, Component, Template, Async, Defer,
+    Fn,
+    Let,
+    Const,
+    Type,
+    Struct,
+    Use,
+    Impl,
+    Extend,
+    With,
+    Mut,
+    Static,
+    Return,
+    If,
+    Else,
+    While,
+    For,
+    In,
+    Break,
+    Continue,
+    Match,
+    As,
+    And,
+    Or,
+    Duck,
+    Go,
+    Schema,
+    Module,
+    Typeof,
+    Keyof,
+    Test,
+    Component,
+    Template,
+    Async,
+    Defer,
 
     // Literals
     Int(u64),
@@ -54,14 +84,14 @@ pub enum Token {
     ThinArrow,  // ->
     ThickArrow, // =>
 
-    RefMut,     // &mut
-    PlusEq,     // +=
-    SubEq,      // -=
-    MulEq,      // *=
-    DivEq,      // /=
-    ModEq,      // %=
-    ShrEq,      // >>=
-    ShlEq,      // <<=
+    RefMut, // &mut
+    PlusEq, // +=
+    SubEq,  // -=
+    MulEq,  // *=
+    DivEq,  // /=
+    ModEq,  // %=
+    ShrEq,  // >>=
+    ShlEq,  // <<=
 
     InlineGo(String),
     InlineJsx(String),
@@ -90,117 +120,125 @@ pub enum HtmlPart {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Token::Fn        => write!(f, "fn"),
-            Token::Let       => write!(f, "let"),
-            Token::Const     => write!(f, "const"),
-            Token::Type      => write!(f, "type"),
-            Token::Struct    => write!(f, "struct"),
-            Token::Use       => write!(f, "use"),
-            Token::Impl      => write!(f, "impl"),
-            Token::Extend    => write!(f, "extend"),
-            Token::With      => write!(f, "with"),
-            Token::Mut       => write!(f, "mut"),
-            Token::Static    => write!(f, "static"),
-            Token::Return    => write!(f, "return"),
-            Token::If        => write!(f, "if"),
-            Token::Else      => write!(f, "else"),
-            Token::While     => write!(f, "while"),
-            Token::For       => write!(f, "for"),
-            Token::In        => write!(f, "in"),
-            Token::Break     => write!(f, "break"),
-            Token::Continue  => write!(f, "continue"),
-            Token::Match     => write!(f, "match"),
-            Token::As        => write!(f, "as"),
-            Token::And       => write!(f, "and"),
-            Token::Or        => write!(f, "or"),
-            Token::Duck      => write!(f, "duck"),
-            Token::Go        => write!(f, "go"),
-            Token::Schema    => write!(f, "schema"),
-            Token::Module    => write!(f, "module"),
-            Token::Typeof    => write!(f, "typeof"),
-            Token::Keyof     => write!(f, "keyof"),
-            Token::Test      => write!(f, "test"),
+            Token::Fn => write!(f, "fn"),
+            Token::Let => write!(f, "let"),
+            Token::Const => write!(f, "const"),
+            Token::Type => write!(f, "type"),
+            Token::Struct => write!(f, "struct"),
+            Token::Use => write!(f, "use"),
+            Token::Impl => write!(f, "impl"),
+            Token::Extend => write!(f, "extend"),
+            Token::With => write!(f, "with"),
+            Token::Mut => write!(f, "mut"),
+            Token::Static => write!(f, "static"),
+            Token::Return => write!(f, "return"),
+            Token::If => write!(f, "if"),
+            Token::Else => write!(f, "else"),
+            Token::While => write!(f, "while"),
+            Token::For => write!(f, "for"),
+            Token::In => write!(f, "in"),
+            Token::Break => write!(f, "break"),
+            Token::Continue => write!(f, "continue"),
+            Token::Match => write!(f, "match"),
+            Token::As => write!(f, "as"),
+            Token::And => write!(f, "and"),
+            Token::Or => write!(f, "or"),
+            Token::Duck => write!(f, "duck"),
+            Token::Go => write!(f, "go"),
+            Token::Schema => write!(f, "schema"),
+            Token::Module => write!(f, "module"),
+            Token::Typeof => write!(f, "typeof"),
+            Token::Keyof => write!(f, "keyof"),
+            Token::Test => write!(f, "test"),
             Token::Component => write!(f, "component"),
-            Token::Template  => write!(f, "template"),
-            Token::Async     => write!(f, "async"),
-            Token::Defer     => write!(f, "defer"),
-            Token::Int(_)    => write!(f, "int"),
-            Token::Bool(b)   => write!(f, "{b}"),
-            Token::Char(c)   => write!(f, "'{c}'"),
+            Token::Template => write!(f, "template"),
+            Token::Async => write!(f, "async"),
+            Token::Defer => write!(f, "defer"),
+            Token::Int(_) => write!(f, "int"),
+            Token::Bool(b) => write!(f, "{b}"),
+            Token::Char(c) => write!(f, "'{c}'"),
             Token::String(s) => write!(f, "\"{s}\""),
-            Token::FmtString(_)   => write!(f, "f-string"),
-            Token::Ident(s)   => write!(f, "{s}"),
-            Token::Bang       => write!(f, "!"),
-            Token::Percent    => write!(f, "%"),
-            Token::Amp        => write!(f, "&"),
-            Token::LParen     => write!(f, "("),
-            Token::RParen     => write!(f, ")"),
-            Token::Star       => write!(f, "*"),
-            Token::Plus       => write!(f, "+"),
-            Token::Comma      => write!(f, ","),
-            Token::Minus      => write!(f, "-"),
-            Token::Dot        => write!(f, "."),
-            Token::Slash      => write!(f, "/"),
-            Token::Colon      => write!(f, ":"),
-            Token::Semi       => write!(f, ";"),
-            Token::Lt         => write!(f, "<"),
-            Token::Eq         => write!(f, "="),
-            Token::Gt         => write!(f, ">"),
-            Token::At         => write!(f, "@"),
-            Token::LBracket   => write!(f, "["),
-            Token::RBracket   => write!(f, "]"),
-            Token::Caret      => write!(f, "^"),
-            Token::LBrace     => write!(f, "{{"),
-            Token::Pipe       => write!(f, "|"),
-            Token::RBrace     => write!(f, "}}"),
-            Token::Tilde      => write!(f, "~"),
-            Token::EqEq       => write!(f, "=="),
-            Token::BangEq         => write!(f, "!="),
-            Token::LtEq           => write!(f, "<="),
-            Token::GtEq           => write!(f, ">="),
-            Token::ScopeRes       => write!(f, "::"),
-            Token::ThinArrow      => write!(f, "->"),
-            Token::ThickArrow     => write!(f, "=>"),
-            Token::RefMut         => write!(f, "&mut"),
-            Token::PlusEq         => write!(f, "+="),
-            Token::SubEq          => write!(f, "-="),
-            Token::MulEq          => write!(f, "*="),
-            Token::DivEq          => write!(f, "/="),
-            Token::ModEq          => write!(f, "%="),
-            Token::ShrEq          => write!(f, ">>="),
-            Token::ShlEq          => write!(f, "<<="),
-            Token::InlineGo(_)    => write!(f, "go {{...}}"),
-            Token::InlineJsx(_)   => write!(f, "jsx {{...}}"),
+            Token::FmtString(_) => write!(f, "f-string"),
+            Token::Ident(s) => write!(f, "{s}"),
+            Token::Bang => write!(f, "!"),
+            Token::Percent => write!(f, "%"),
+            Token::Amp => write!(f, "&"),
+            Token::LParen => write!(f, "("),
+            Token::RParen => write!(f, ")"),
+            Token::Star => write!(f, "*"),
+            Token::Plus => write!(f, "+"),
+            Token::Comma => write!(f, ","),
+            Token::Minus => write!(f, "-"),
+            Token::Dot => write!(f, "."),
+            Token::Slash => write!(f, "/"),
+            Token::Colon => write!(f, ":"),
+            Token::Semi => write!(f, ";"),
+            Token::Lt => write!(f, "<"),
+            Token::Eq => write!(f, "="),
+            Token::Gt => write!(f, ">"),
+            Token::At => write!(f, "@"),
+            Token::LBracket => write!(f, "["),
+            Token::RBracket => write!(f, "]"),
+            Token::Caret => write!(f, "^"),
+            Token::LBrace => write!(f, "{{"),
+            Token::Pipe => write!(f, "|"),
+            Token::RBrace => write!(f, "}}"),
+            Token::Tilde => write!(f, "~"),
+            Token::EqEq => write!(f, "=="),
+            Token::BangEq => write!(f, "!="),
+            Token::LtEq => write!(f, "<="),
+            Token::GtEq => write!(f, ">="),
+            Token::ScopeRes => write!(f, "::"),
+            Token::ThinArrow => write!(f, "->"),
+            Token::ThickArrow => write!(f, "=>"),
+            Token::RefMut => write!(f, "&mut"),
+            Token::PlusEq => write!(f, "+="),
+            Token::SubEq => write!(f, "-="),
+            Token::MulEq => write!(f, "*="),
+            Token::DivEq => write!(f, "/="),
+            Token::ModEq => write!(f, "%="),
+            Token::ShrEq => write!(f, ">>="),
+            Token::ShlEq => write!(f, "<<="),
+            Token::InlineGo(_) => write!(f, "go {{...}}"),
+            Token::InlineJsx(_) => write!(f, "jsx {{...}}"),
             Token::InlineDuckx(_) => write!(f, "duckx {{...}}"),
-            Token::HtmlString(_)  => write!(f, "<html>"),
-            Token::Comment(s)     => write!(f, "// {s}"),
-            Token::DocComment(s)  => write!(f, "/// {s}"),
+            Token::HtmlString(_) => write!(f, "<html>"),
+            Token::Comment(s) => write!(f, "// {s}"),
+            Token::DocComment(s) => write!(f, "/// {s}"),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LexError {
-    pub msg:  String,
+    pub msg: String,
     pub span: Span,
 }
 
 impl LexError {
     fn new(msg: impl Into<String>, span: Span) -> Self {
-        Self { msg: msg.into(), span }
+        Self {
+            msg: msg.into(),
+            span,
+        }
     }
 }
 
 struct Tokenizer<'src> {
-    src:     &'src str,
-    pos:     usize,
+    src: &'src str,
+    pos: usize,
     file_id: u16,
-    errors:  Vec<LexError>,
+    errors: Vec<LexError>,
 }
 
 impl<'src> Tokenizer<'src> {
     fn new(src: &'src str, file_id: u16) -> Self {
-        Self { src, pos: 0, file_id, errors: Vec::new() }
+        Self {
+            src,
+            pos: 0,
+            file_id,
+            errors: Vec::new(),
+        }
     }
 
     fn at_end(&self) -> bool {
@@ -255,20 +293,32 @@ impl<'src> Tokenizer<'src> {
 
     fn next_token(&mut self) -> Option<WithSpan<Token>> {
         self.skip_whitespace();
-        if self.at_end() { return None; }
+        if self.at_end() {
+            return None;
+        }
         let start = self.pos;
 
-        if self.starts_with("///") { return Some(self.lex_doc_comment(start)); }
-        if self.starts_with("//")  { return Some(self.lex_comment(start)); }
+        if self.starts_with("///") {
+            return Some(self.lex_doc_comment(start));
+        }
+        if self.starts_with("//") {
+            return Some(self.lex_comment(start));
+        }
 
-        if self.starts_with(">>=") { self.pos += 3; return Some(self.spanned(Token::ShrEq, start)); }
-        if self.starts_with("<<=") { self.pos += 3; return Some(self.spanned(Token::ShlEq, start)); }
+        if self.starts_with(">>=") {
+            self.pos += 3;
+            return Some(self.spanned(Token::ShrEq, start));
+        }
+        if self.starts_with("<<=") {
+            self.pos += 3;
+            return Some(self.spanned(Token::ShlEq, start));
+        }
 
         macro_rules! two {
             ($s:literal, $t:expr) => {
                 if self.starts_with($s) {
                     self.pos += 2;
-                    return Some(self.spanned($t, start)); 
+                    return Some(self.spanned($t, start));
                 }
             };
         }
@@ -302,10 +352,18 @@ impl<'src> Tokenizer<'src> {
 
         let c = self.peek().unwrap();
 
-        if c == '_' || c.is_alphabetic() { return Some(self.lex_word(start)); }
-        if c == '"'  { return self.lex_string(start); }
-        if c == '\'' { return self.lex_char(start); }
-        if c.is_ascii_digit() { return Some(self.lex_int(start)); }
+        if c == '_' || c.is_alphabetic() {
+            return Some(self.lex_word(start));
+        }
+        if c == '"' {
+            return self.lex_string(start);
+        }
+        if c == '\'' {
+            return self.lex_char(start);
+        }
+        if c.is_ascii_digit() {
+            return Some(self.lex_int(start));
+        }
 
         self.advance();
         let tok = match c {
@@ -348,9 +406,7 @@ impl<'src> Tokenizer<'src> {
         let word = self.eat_while(|c| c == '_' || c.is_alphanumeric());
 
         // go/jsx/duckx are only block-prefixes when the next non-whitespace char is '{'
-        let followed_by_brace = || {
-            self.remaining().trim_start().starts_with('{')
-        };
+        let followed_by_brace = || self.remaining().trim_start().starts_with('{');
 
         match word {
             "go" if followed_by_brace() => {
@@ -374,42 +430,42 @@ impl<'src> Tokenizer<'src> {
                 }
                 self.spanned(Token::Ident("duckx".into()), start)
             }
-            "fn"        => self.spanned(Token::Fn,        start),
-            "let"       => self.spanned(Token::Let,       start),
-            "const"     => self.spanned(Token::Const,     start),
-            "type"      => self.spanned(Token::Type,      start),
-            "struct"    => self.spanned(Token::Struct,    start),
-            "use"       => self.spanned(Token::Use,       start),
-            "impl"      => self.spanned(Token::Impl,      start),
-            "extend"    => self.spanned(Token::Extend,    start),
-            "with"      => self.spanned(Token::With,      start),
-            "mut"       => self.spanned(Token::Mut,       start),
-            "static"    => self.spanned(Token::Static,    start),
-            "return"    => self.spanned(Token::Return,    start),
-            "if"        => self.spanned(Token::If,        start),
-            "else"      => self.spanned(Token::Else,      start),
-            "while"     => self.spanned(Token::While,     start),
-            "for"       => self.spanned(Token::For,       start),
-            "in"        => self.spanned(Token::In,        start),
-            "break"     => self.spanned(Token::Break,     start),
-            "continue"  => self.spanned(Token::Continue,  start),
-            "match"     => self.spanned(Token::Match,     start),
-            "as"        => self.spanned(Token::As,        start),
-            "and"       => self.spanned(Token::And,       start),
-            "or"        => self.spanned(Token::Or,        start),
-            "duck"      => self.spanned(Token::Duck,      start),
-            "schema"    => self.spanned(Token::Schema,    start),
-            "module"    => self.spanned(Token::Module,    start),
-            "typeof"    => self.spanned(Token::Typeof,    start),
-            "keyof"     => self.spanned(Token::Keyof,     start),
-            "test"      => self.spanned(Token::Test,      start),
+            "fn" => self.spanned(Token::Fn, start),
+            "let" => self.spanned(Token::Let, start),
+            "const" => self.spanned(Token::Const, start),
+            "type" => self.spanned(Token::Type, start),
+            "struct" => self.spanned(Token::Struct, start),
+            "use" => self.spanned(Token::Use, start),
+            "impl" => self.spanned(Token::Impl, start),
+            "extend" => self.spanned(Token::Extend, start),
+            "with" => self.spanned(Token::With, start),
+            "mut" => self.spanned(Token::Mut, start),
+            "static" => self.spanned(Token::Static, start),
+            "return" => self.spanned(Token::Return, start),
+            "if" => self.spanned(Token::If, start),
+            "else" => self.spanned(Token::Else, start),
+            "while" => self.spanned(Token::While, start),
+            "for" => self.spanned(Token::For, start),
+            "in" => self.spanned(Token::In, start),
+            "break" => self.spanned(Token::Break, start),
+            "continue" => self.spanned(Token::Continue, start),
+            "match" => self.spanned(Token::Match, start),
+            "as" => self.spanned(Token::As, start),
+            "and" => self.spanned(Token::And, start),
+            "or" => self.spanned(Token::Or, start),
+            "duck" => self.spanned(Token::Duck, start),
+            "schema" => self.spanned(Token::Schema, start),
+            "module" => self.spanned(Token::Module, start),
+            "typeof" => self.spanned(Token::Typeof, start),
+            "keyof" => self.spanned(Token::Keyof, start),
+            "test" => self.spanned(Token::Test, start),
             "component" => self.spanned(Token::Component, start),
-            "template"  => self.spanned(Token::Template,  start),
-            "async"     => self.spanned(Token::Async,     start),
-            "defer"     => self.spanned(Token::Defer,     start),
-            "true"      => self.spanned(Token::Bool(true),  start),
-            "false"     => self.spanned(Token::Bool(false), start),
-            other       => self.spanned(Token::Ident(other.to_owned()), start),
+            "template" => self.spanned(Token::Template, start),
+            "async" => self.spanned(Token::Async, start),
+            "defer" => self.spanned(Token::Defer, start),
+            "true" => self.spanned(Token::Bool(true), start),
+            "false" => self.spanned(Token::Bool(false), start),
+            other => self.spanned(Token::Ident(other.to_owned()), start),
         }
     }
 
@@ -418,15 +474,18 @@ impl<'src> Tokenizer<'src> {
         let mut buf = String::new();
         loop {
             match self.advance() {
-                None => { self.push_error("unterminated string literal", start); return None; }
+                None => {
+                    self.push_error("unterminated string literal", start);
+                    return None;
+                }
                 Some('"') => break,
                 Some('\\') => match self.advance() {
-                    Some('n')  => buf.push('\n'),
-                    Some('t')  => buf.push('\t'),
+                    Some('n') => buf.push('\n'),
+                    Some('t') => buf.push('\t'),
                     Some('\\') => buf.push('\\'),
-                    Some('"')  => buf.push('"'),
-                    Some('0')  => buf.push('\0'),
-                    Some('o')  => {
+                    Some('"') => buf.push('"'),
+                    Some('0') => buf.push('\0'),
+                    Some('o') => {
                         let a = self.advance().unwrap_or('0');
                         let b = self.advance().unwrap_or('0');
                         let c = self.advance().unwrap_or('0');
@@ -434,7 +493,10 @@ impl<'src> Tokenizer<'src> {
                         buf.push(v as char);
                     }
                     Some(o) => buf.push(o),
-                    None    => { self.push_error("unterminated escape", start); return None; }
+                    None => {
+                        self.push_error("unterminated escape", start);
+                        return None;
+                    }
                 },
                 Some(c) => buf.push(c),
             }
@@ -449,8 +511,14 @@ impl<'src> Tokenizer<'src> {
 
         loop {
             match self.peek() {
-                None => { self.push_error("unterminated format string", start); return None; }
-                Some('"') => { self.advance(); break; }
+                None => {
+                    self.push_error("unterminated format string", start);
+                    return None;
+                }
+                Some('"') => {
+                    self.advance();
+                    break;
+                }
                 Some('{') => {
                     if lit.ends_with('\\') {
                         lit.pop();
@@ -467,20 +535,22 @@ impl<'src> Tokenizer<'src> {
                 Some('\\') => {
                     self.advance();
                     match self.advance() {
-                        Some('n')  => lit.push('\n'),
-                        Some('t')  => lit.push('\t'),
+                        Some('n') => lit.push('\n'),
+                        Some('t') => lit.push('\t'),
                         Some('\\') => lit.push('\\'),
-                        Some('"')  => lit.push('"'),
-                        Some('0')  => lit.push('\0'),
-                        Some('{')  => lit.push('{'),
-                        Some(o)    => lit.push(o),
+                        Some('"') => lit.push('"'),
+                        Some('0') => lit.push('\0'),
+                        Some('{') => lit.push('{'),
+                        Some(o) => lit.push(o),
                         None => {}
                     }
                 }
                 Some(_) => lit.push(self.advance().unwrap()),
             }
         }
-        if !lit.is_empty() { parts.push(FmtStringPart::Literal(lit)); }
+        if !lit.is_empty() {
+            parts.push(FmtStringPart::Literal(lit));
+        }
         Some(self.spanned(Token::FmtString(parts), start))
     }
 
@@ -497,7 +567,10 @@ impl<'src> Tokenizer<'src> {
         loop {
             self.skip_whitespace();
             match self.peek() {
-                None => { self.push_error("unterminated brace block", brace_start); return None; }
+                None => {
+                    self.push_error("unterminated brace block", brace_start);
+                    return None;
+                }
                 Some('{') => out.extend(self.lex_tokens_in_braces()?),
                 Some('}') => {
                     let cs = self.pos;
@@ -509,7 +582,9 @@ impl<'src> Tokenizer<'src> {
                     break;
                 }
                 _ => {
-                    if let Some(tok) = self.next_token() { out.push(tok); }
+                    if let Some(tok) = self.next_token() {
+                        out.push(tok);
+                    }
                 }
             }
         }
@@ -519,15 +594,21 @@ impl<'src> Tokenizer<'src> {
     fn lex_char(&mut self, start: usize) -> Option<WithSpan<Token>> {
         self.advance(); // opening '
         let c = match self.advance() {
-            None => { self.push_error("unterminated char literal", start); return None; }
+            None => {
+                self.push_error("unterminated char literal", start);
+                return None;
+            }
             Some('\\') => match self.advance() {
-                Some('n')  => '\n',
-                Some('t')  => '\t',
+                Some('n') => '\n',
+                Some('t') => '\t',
                 Some('\\') => '\\',
                 Some('\'') => '\'',
-                Some('0')  => '\0',
-                Some(o)    => o,
-                None => { self.push_error("unterminated char escape", start); return None; }
+                Some('0') => '\0',
+                Some(o) => o,
+                None => {
+                    self.push_error("unterminated char escape", start);
+                    return None;
+                }
             },
             Some(c) => c,
         };
@@ -570,11 +651,19 @@ impl<'src> Tokenizer<'src> {
         let mut depth: usize = 1;
         loop {
             match self.advance() {
-                None => { self.push_error("unterminated block", start); return None; }
-                Some('{') => { depth += 1; buf.push('{'); }
+                None => {
+                    self.push_error("unterminated block", start);
+                    return None;
+                }
+                Some('{') => {
+                    depth += 1;
+                    buf.push('{');
+                }
                 Some('}') => {
                     depth -= 1;
-                    if depth == 0 { break; }
+                    if depth == 0 {
+                        break;
+                    }
                     buf.push('}');
                 }
                 Some(c) => buf.push(c),
@@ -594,7 +683,10 @@ impl<'src> Tokenizer<'src> {
         loop {
             self.skip_whitespace();
             match self.peek() {
-                None => { self.push_error("unterminated duckx block", open); return None; }
+                None => {
+                    self.push_error("unterminated duckx block", open);
+                    return None;
+                }
                 Some('}') => {
                     let cs = self.pos;
                     self.advance();
@@ -605,7 +697,9 @@ impl<'src> Tokenizer<'src> {
                     break;
                 }
                 Some('{') => {
-                    if let Some(nested) = self.lex_duckx_block() { out.extend(nested); }
+                    if let Some(nested) = self.lex_duckx_block() {
+                        out.extend(nested);
+                    }
                 }
                 Some('<') if !self.starts_with("</") => {
                     let hs = self.pos;
@@ -618,7 +712,9 @@ impl<'src> Tokenizer<'src> {
                     }
                 }
                 _ => {
-                    if let Some(tok) = self.next_token() { out.push(tok); }
+                    if let Some(tok) = self.next_token() {
+                        out.push(tok);
+                    }
                 }
             }
         }
@@ -632,17 +728,26 @@ impl<'src> Tokenizer<'src> {
         if self.peek() == Some('!') {
             let raw = self.eat_while(|c| c != '>');
             self.advance(); // '>'
-            return Some(Token::HtmlString(vec![HtmlPart::Literal(format!("<!{raw}>"))]));
+            return Some(Token::HtmlString(vec![HtmlPart::Literal(format!(
+                "<!{raw}>"
+            ))]));
         }
 
-        let tag_name = self.eat_while(|c| !c.is_whitespace() && c != '>' && c != '/').to_owned();
-        if tag_name.is_empty() { return None; }
+        let tag_name = self
+            .eat_while(|c| !c.is_whitespace() && c != '>' && c != '/')
+            .to_owned();
+        if tag_name.is_empty() {
+            return None;
+        }
 
         let mut attrs = String::new();
         loop {
             match self.peek() {
                 None => {
-                    self.push_error(format!("unterminated opening tag '<{tag_name}'"), elem_start);
+                    self.push_error(
+                        format!("unterminated opening tag '<{tag_name}'"),
+                        elem_start,
+                    );
                     return None;
                 }
                 Some('/') if self.starts_with("/>") => break,
@@ -653,9 +758,9 @@ impl<'src> Tokenizer<'src> {
 
         if self.starts_with("/>") {
             self.pos += 2;
-            return Some(Token::HtmlString(vec![
-                HtmlPart::Literal(format!("<{tag_name}{attrs}/>")),
-            ]));
+            return Some(Token::HtmlString(vec![HtmlPart::Literal(format!(
+                "<{tag_name}{attrs}/>"
+            ))]));
         }
 
         self.advance(); // '>'
@@ -710,7 +815,9 @@ impl<'src> Tokenizer<'src> {
             lit_buf.push(self.advance().unwrap());
         }
 
-        if !lit_buf.is_empty() { parts.push(HtmlPart::Literal(lit_buf)); }
+        if !lit_buf.is_empty() {
+            parts.push(HtmlPart::Literal(lit_buf));
+        }
         Some(Token::HtmlString(merge_html_parts(parts)))
     }
 }

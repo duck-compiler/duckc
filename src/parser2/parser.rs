@@ -1,4 +1,4 @@
-﻿use std::fmt;
+use std::fmt;
 
 use super::tokenizer::{FmtStringPart, Token};
 
@@ -39,8 +39,8 @@ pub struct Parsed;
 impl sealed::Sealed for Parsed {}
 impl Phase for Parsed {
     type ExprType = ();
-    type Ident    = UnresolvedIdent;
-    type TypeRef  = UnresolvedTypeRef;
+    type Ident = UnresolvedIdent;
+    type TypeRef = UnresolvedTypeRef;
 }
 
 /// Phase 2 - output of the resolver + type inferencer.
@@ -50,13 +50,13 @@ pub struct Typed;
 impl sealed::Sealed for Typed {}
 impl Phase for Typed {
     type ExprType = TypeExpr<Typed>;
-    type Ident    = DefId;
-    type TypeRef  = DefId;
+    type Ident = DefId;
+    type TypeRef = DefId;
 }
 
 /// An opaque index into a `SymbolTable`
 ///
-/// copyable, 4 bytes 
+/// copyable, 4 bytes
 /// The actual name, kind, and type live in the table - looked up on demand
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DefId(pub u32);
@@ -64,23 +64,29 @@ pub struct DefId(pub u32);
 /// A name reference as it appears in source before resolution
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnresolvedIdent {
-    pub segments:  Vec<WithSpan<String>>,
+    pub segments: Vec<WithSpan<String>>,
     /// True when the path starts with `::` (rooted at the crate root)
     pub is_global: bool,
 }
 
 impl UnresolvedIdent {
     pub fn simple(name: WithSpan<String>) -> Self {
-        Self { segments: vec![name], is_global: false }
+        Self {
+            segments: vec![name],
+            is_global: false,
+        }
     }
 
     pub fn path(segments: Vec<WithSpan<String>>, is_global: bool) -> Self {
-        Self { segments, is_global }
+        Self {
+            segments,
+            is_global,
+        }
     }
 
     pub fn span(&self) -> Span {
         let first = self.segments.first().expect("empty ident").span;
-        let last  = self.segments.last().expect("empty ident").span;
+        let last = self.segments.last().expect("empty ident").span;
         first.to(last)
     }
 }
@@ -91,15 +97,15 @@ impl UnresolvedIdent {
 /// After resolution the resolver replaces this with a `DefId` (`Typed::TypeRef`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnresolvedTypeRef {
-    pub path:      Vec<String>,
+    pub path: Vec<String>,
     pub is_global: bool,
 }
 
 /// What kind of binding a `DefId` refers to
 #[derive(Debug, Clone, PartialEq)]
 pub enum DefKind {
-    Local   { is_mut: bool },
-    Param   { is_mut: bool },
+    Local { is_mut: bool },
+    Param { is_mut: bool },
     Function { is_static: bool },
     Struct,
     TypeAlias,
@@ -156,19 +162,27 @@ impl SymbolTable {
 /// Layout: 4 + 4 + 2 = 10 bytes, padded to 12. `Copy`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
-    pub start:   u32,
-    pub end:     u32,
+    pub start: u32,
+    pub end: u32,
     pub file_id: u16,
 }
 
 impl Span {
     pub fn new(start: u32, end: u32, file_id: u16) -> Self {
-        Self { start, end, file_id }
+        Self {
+            start,
+            end,
+            file_id,
+        }
     }
 
     /// utility for synthesized nodes with no real source location.
     pub fn dummy() -> Self {
-        Self { start: 0, end: 0, file_id: u16::MAX }
+        Self {
+            start: 0,
+            end: 0,
+            file_id: u16::MAX,
+        }
     }
 
     pub fn is_dummy(self) -> bool {
@@ -179,8 +193,8 @@ impl Span {
     pub fn to(self, other: Span) -> Span {
         debug_assert_eq!(self.file_id, other.file_id);
         Span {
-            start:   self.start.min(other.start),
-            end:     self.end.max(other.end),
+            start: self.start.min(other.start),
+            end: self.end.max(other.end),
             file_id: self.file_id,
         }
     }
@@ -194,7 +208,7 @@ impl Span {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WithSpan<T> {
     pub value: T,
-    pub span:  Span,
+    pub span: Span,
 }
 
 impl<T: Copy> Copy for WithSpan<T> {}
@@ -205,7 +219,10 @@ impl<T> WithSpan<T> {
     }
 
     pub fn dummy(value: T) -> Self {
-        Self { value, span: Span::dummy() }
+        Self {
+            value,
+            span: Span::dummy(),
+        }
     }
 
     pub fn span(&self) -> Span {
@@ -213,11 +230,17 @@ impl<T> WithSpan<T> {
     }
 
     pub fn as_ref(&self) -> WithSpan<&T> {
-        WithSpan { value: &self.value, span: self.span }
+        WithSpan {
+            value: &self.value,
+            span: self.span,
+        }
     }
 
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> WithSpan<U> {
-        WithSpan { value: f(self.value), span: self.span }
+        WithSpan {
+            value: f(self.value),
+            span: self.span,
+        }
     }
 }
 
@@ -227,7 +250,7 @@ impl<T> WithSpan<T> {
 /// or the type separately.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Field<P: Phase> {
-    pub name:      WithSpan<String>,
+    pub name: WithSpan<String>,
     pub type_expr: TypeExpr<P>,
 }
 
@@ -238,14 +261,14 @@ pub struct Field<P: Phase> {
 /// the resolver and do not get a `DefId`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Generic<P: Phase> {
-    pub name:       WithSpan<String>,
+    pub name: WithSpan<String>,
     pub constraint: Option<TypeExpr<P>>,
 }
 
 /// A parameter slot inside a `fun(…)` type, e.g. `label: SomeType`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunTypeParam<P: Phase> {
-    pub label:     Option<WithSpan<String>>,
+    pub label: Option<WithSpan<String>>,
     pub type_expr: TypeExpr<P>,
 }
 
@@ -276,16 +299,16 @@ pub enum TypeDescription<P: Phase> {
     Int,
     UInt,
     Float,
-    Bool(Option<bool>),     // bare `Bool`, or a constant true/false singleton
+    Bool(Option<bool>), // bare `Bool`, or a constant true/false singleton
     Char,
     Byte,
     String(Option<String>), // bare `String`, or a constant string singleton
 
     // Built-in special
-    Statement,  // unit type for statement positions
-    Never,      // bottom type `!`
-    Html,       // JSX-style HTML value
-    Any,        // dynamic / escape-hatch
+    Statement, // unit type for statement positions
+    Never,     // bottom type `!`
+    Html,      // JSX-style HTML value
+    Any,       // dynamic / escape-hatch
 
     // tag types - nominal unit types like `.ok` or `.err`
     Tag(String),
@@ -297,17 +320,20 @@ pub enum TypeDescription<P: Phase> {
     // composite
     Tuple(Vec<TypeExpr<P>>),
     Array(Box<TypeExpr<P>>),
-    Indexed { base: Box<TypeExpr<P>>, index: Box<TypeExpr<P>> },
+    Indexed {
+        base: Box<TypeExpr<P>>,
+        index: Box<TypeExpr<P>>,
+    },
 
     // algebraic
-    Or(Vec<TypeExpr<P>>),   // union        T1 | T2 | ..
-    And(Vec<TypeExpr<P>>),  // intersection T1 & T2 & ..
+    Or(Vec<TypeExpr<P>>),  // union        T1 | T2 | ..
+    And(Vec<TypeExpr<P>>), // intersection T1 & T2 & ..
 
     // fn type
     Fun {
-        params:      Vec<FunTypeParam<P>>,
+        params: Vec<FunTypeParam<P>>,
         return_type: Box<TypeExpr<P>>,
-        is_mut:      bool,
+        is_mut: bool,
     },
 
     // References
@@ -318,7 +344,7 @@ pub enum TypeDescription<P: Phase> {
     // `Parsed`:  `type_ref` is an `UnresolvedTypeRef` (raw string path from source).
     // `Typed`:   `type_ref` is a `DefId` pointing into the `SymbolTable`.
     TypeName {
-        type_ref:    P::TypeRef,
+        type_ref: P::TypeRef,
         type_params: Vec<TypeExpr<P>>,
     },
 
@@ -329,8 +355,14 @@ pub enum TypeDescription<P: Phase> {
 
     // Structural duck types
     Duck(DuckType<P>),
-    NamedDuck { name: String, type_params: Vec<TypeExpr<P>> },
-    Struct     { name: String, type_params: Vec<TypeExpr<P>> },
+    NamedDuck {
+        name: String,
+        type_params: Vec<TypeExpr<P>>,
+    },
+    Struct {
+        name: String,
+        type_params: Vec<TypeExpr<P>>,
+    },
 
     // Inline Go - escape hatch
     Go(String),
@@ -339,19 +371,19 @@ pub enum TypeDescription<P: Phase> {
 /// `type <name>[<generics>] = <type_expr>`
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeAliasDecl<P: Phase> {
-    pub name:      WithSpan<String>,
-    pub generics:  Vec<WithSpan<Generic<P>>>,
+    pub name: WithSpan<String>,
+    pub generics: Vec<WithSpan<Generic<P>>>,
     pub type_expr: TypeExpr<P>,
-    pub span:      Span,
+    pub span: Span,
 }
 
 /// `struct <name>[<generics>] { <fields> }`
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructDecl<P: Phase> {
-    pub name:     WithSpan<String>,
+    pub name: WithSpan<String>,
     pub generics: Vec<WithSpan<Generic<P>>>,
-    pub fields:   Vec<Field<P>>,
-    pub span:     Span,
+    pub fields: Vec<Field<P>>,
+    pub span: Span,
 }
 
 /// A named, typed function parameter - used in both definitions and lambdas.
@@ -361,9 +393,9 @@ pub struct StructDecl<P: Phase> {
 /// `SymbolTable` during name resolution, but the AST node itself doesn't change.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Param<P: Phase> {
-    pub name:      WithSpan<String>,
+    pub name: WithSpan<String>,
     pub type_expr: TypeExpr<P>,
-    pub is_mut:    bool,
+    pub is_mut: bool,
 }
 
 /// `fn <name>[<generics>](<params>) [--> <return_type>] { <body> }`
@@ -373,13 +405,13 @@ pub struct Param<P: Phase> {
 /// fully-typed body where every sub-expression carries a `TypeExpr<Typed>`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDecl<P: Phase> {
-    pub name:        WithSpan<String>,
-    pub generics:    Vec<WithSpan<Generic<P>>>,
-    pub params:      Vec<Param<P>>,
+    pub name: WithSpan<String>,
+    pub generics: Vec<WithSpan<Generic<P>>>,
+    pub params: Vec<Param<P>>,
     pub return_type: Option<TypeExpr<P>>,
-    pub body:        Expr<P>,
-    pub is_static:   bool,
-    pub span:        Span,
+    pub body: Expr<P>,
+    pub is_static: bool,
+    pub span: Span,
 }
 
 /// An expression node. Carries its phase-dependent payload and its source span.
@@ -392,7 +424,7 @@ pub struct FunctionDecl<P: Phase> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expr<P: Phase> {
     pub kind: ExprKind<P>,
-    pub ty:   P::ExprType,
+    pub ty: P::ExprType,
     pub span: Span,
 }
 
@@ -413,7 +445,7 @@ impl Expr<Typed> {
 /// All expression forms. Generic over `P` only because it contains `Expr<P>` children.
 ///
 /// The `Ident` variant uses `P::Ident` to encode the pre/post-resolution distinction
-/// without duplicate variants. In `Parsed` it holds an `UnresolvedIdent` (one or more raw path segments); in `Typed` it holds a `DefId`. 
+/// without duplicate variants. In `Parsed` it holds an `UnresolvedIdent` (one or more raw path segments); in `Typed` it holds a `DefId`.
 /// This replaces the old `RawVariable(bool, Vec<String>)` + `Variable(…)` pair and the separate `Path` variant.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprKind<P: Phase> {
@@ -431,113 +463,137 @@ pub enum ExprKind<P: Phase> {
     /// becomes a bare `DefId` after name resolution in `Typed`.
     Ident(P::Ident),
 
-    // block 
+    // block
     /// A sequence of expression/ the value of the block is the last element.
     Block(Vec<Expr<P>>),
 
     // Let / const declarations (expression-level)
     Let {
-        is_mut:   bool,
-        name:     WithSpan<String>,
+        is_mut: bool,
+        name: WithSpan<String>,
         type_ann: Option<TypeExpr<P>>,
-        value:    Box<Expr<P>>,
+        value: Box<Expr<P>>,
     },
     Const {
-        name:     WithSpan<String>,
+        name: WithSpan<String>,
         type_ann: Option<TypeExpr<P>>,
-        value:    Box<Expr<P>>,
+        value: Box<Expr<P>>,
     },
 
-    // Assignment operators 
-    Assign    { target: Box<Expr<P>>, value: Box<Expr<P>> },
-    AddAssign { target: Box<Expr<P>>, value: Box<Expr<P>> },
-    SubAssign { target: Box<Expr<P>>, value: Box<Expr<P>> },
-    MulAssign { target: Box<Expr<P>>, value: Box<Expr<P>> },
-    DivAssign { target: Box<Expr<P>>, value: Box<Expr<P>> },
-    ModAssign { target: Box<Expr<P>>, value: Box<Expr<P>> },
-    ShrAssign { target: Box<Expr<P>>, value: Box<Expr<P>> },
-    ShlAssign { target: Box<Expr<P>>, value: Box<Expr<P>> },
+    // Assignment operators
+    Assign {
+        target: Box<Expr<P>>,
+        value: Box<Expr<P>>,
+    },
+    AddAssign {
+        target: Box<Expr<P>>,
+        value: Box<Expr<P>>,
+    },
+    SubAssign {
+        target: Box<Expr<P>>,
+        value: Box<Expr<P>>,
+    },
+    MulAssign {
+        target: Box<Expr<P>>,
+        value: Box<Expr<P>>,
+    },
+    DivAssign {
+        target: Box<Expr<P>>,
+        value: Box<Expr<P>>,
+    },
+    ModAssign {
+        target: Box<Expr<P>>,
+        value: Box<Expr<P>>,
+    },
+    ShrAssign {
+        target: Box<Expr<P>>,
+        value: Box<Expr<P>>,
+    },
+    ShlAssign {
+        target: Box<Expr<P>>,
+        value: Box<Expr<P>>,
+    },
 
-    // aritmetic 
+    // aritmetic
     Add(Box<Expr<P>>, Box<Expr<P>>),
     Sub(Box<Expr<P>>, Box<Expr<P>>),
     Mul(Box<Expr<P>>, Box<Expr<P>>),
     Div(Box<Expr<P>>, Box<Expr<P>>),
     Mod(Box<Expr<P>>, Box<Expr<P>>),
 
-    // bitwise 
+    // bitwise
     BitAnd(Box<Expr<P>>, Box<Expr<P>>),
-    BitOr (Box<Expr<P>>, Box<Expr<P>>),
+    BitOr(Box<Expr<P>>, Box<Expr<P>>),
     BitXor(Box<Expr<P>>, Box<Expr<P>>),
     BitNot(Box<Expr<P>>),
     Shl(Box<Expr<P>>, Box<Expr<P>>),
     Shr(Box<Expr<P>>, Box<Expr<P>>),
 
     // comparison
-    Eq (Box<Expr<P>>, Box<Expr<P>>),
+    Eq(Box<Expr<P>>, Box<Expr<P>>),
     Neq(Box<Expr<P>>, Box<Expr<P>>),
-    Lt (Box<Expr<P>>, Box<Expr<P>>),
+    Lt(Box<Expr<P>>, Box<Expr<P>>),
     Lte(Box<Expr<P>>, Box<Expr<P>>),
-    Gt (Box<Expr<P>>, Box<Expr<P>>),
+    Gt(Box<Expr<P>>, Box<Expr<P>>),
     Gte(Box<Expr<P>>, Box<Expr<P>>),
 
-    // logical 
+    // logical
     And(Box<Expr<P>>, Box<Expr<P>>),
-    Or (Box<Expr<P>>, Box<Expr<P>>),
+    Or(Box<Expr<P>>, Box<Expr<P>>),
     Not(Box<Expr<P>>),
 
     // unary
-    Neg   (Box<Expr<P>>),
-    Ref   (Box<Expr<P>>),
+    Neg(Box<Expr<P>>),
+    Ref(Box<Expr<P>>),
     RefMut(Box<Expr<P>>),
-    Deref (Box<Expr<P>>),
+    Deref(Box<Expr<P>>),
 
     // access
     Field {
-        base:  Box<Expr<P>>,
+        base: Box<Expr<P>>,
         /// Field names are structural labels, not binding references, so they
         /// stay as strings in both phases and do not go through the resolver.
         field: WithSpan<String>,
     },
     Index {
-        base:  Box<Expr<P>>,
+        base: Box<Expr<P>>,
         index: Box<Expr<P>>,
     },
     /// `base::member` - scope resolution. Only valid in `Parsed`; the resolver
     /// either rewrites it into `Ident(DefId)` or keeps it as a qualified access.
     ScopeRes {
-        base:   Box<Expr<P>>,
+        base: Box<Expr<P>>,
         member: WithSpan<String>,
     },
 
     // Function calls
     Call {
-        callee:      Box<Expr<P>>,
+        callee: Box<Expr<P>>,
         type_params: Vec<TypeExpr<P>>,
-        args:        Vec<Expr<P>>,
+        args: Vec<Expr<P>>,
     },
 
     // Type cast
     As {
-        value:     Box<Expr<P>>,
+        value: Box<Expr<P>>,
         type_expr: TypeExpr<P>,
     },
 
-    // Control flow 
+    // Control flow
     If {
-        condition:   Box<Expr<P>>,
+        condition: Box<Expr<P>>,
         then_branch: Box<Expr<P>>,
         else_branch: Option<Box<Expr<P>>>,
     },
     While {
         condition: Box<Expr<P>>,
-        body:      Box<Expr<P>>,
+        body: Box<Expr<P>>,
     },
     For {
-        binding:  WithSpan<String>,
-        is_mut:   bool,
+        binding: WithSpan<String>,
+        is_mut: bool,
         iterable: Box<Expr<P>>,
-        body:     Box<Expr<P>>,
+        body: Box<Expr<P>>,
     },
     Return(Option<Box<Expr<P>>>),
     Break,
@@ -545,17 +601,17 @@ pub enum ExprKind<P: Phase> {
 
     // Match
     Match {
-        value:    Box<Expr<P>>,
-        arms:     Vec<MatchArm<P>>,
+        value: Box<Expr<P>>,
+        arms: Vec<MatchArm<P>>,
         else_arm: Option<Box<Expr<P>>>,
     },
 
     // "constructors"
     StructLit {
-        name:        P::Ident,
+        name: P::Ident,
         type_params: Vec<TypeExpr<P>>,
         /// Field labels are structural, not resolved - `WithSpan<String>` in both phases.
-        fields:      Vec<(WithSpan<String>, Expr<P>)>,
+        fields: Vec<(WithSpan<String>, Expr<P>)>,
     },
     DuckLit(Vec<(WithSpan<String>, Expr<P>)>),
     Array(Vec<Expr<P>>),
@@ -563,10 +619,10 @@ pub enum ExprKind<P: Phase> {
 
     // lambda
     Lambda {
-        is_mut:      bool,
-        params:      Vec<Param<P>>,
+        is_mut: bool,
+        params: Vec<Param<P>>,
         return_type: Option<TypeExpr<P>>,
-        body:        Box<Expr<P>>,
+        body: Box<Expr<P>>,
     },
 
     // async / defer
@@ -588,18 +644,18 @@ pub enum FmtPart<P: Phase> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm<P: Phase> {
     pub pattern: TypeExpr<P>,
-    pub base:    Option<TypeExpr<P>>,
+    pub base: Option<TypeExpr<P>>,
     pub binding: Option<WithSpan<String>>,
-    pub guard:   Option<Box<Expr<P>>>,
-    pub body:    Expr<P>,
-    pub span:    Span,
+    pub guard: Option<Box<Expr<P>>>,
+    pub body: Expr<P>,
+    pub span: Span,
 }
 
 /// `use duck::path::to::item` or `use go "pkg/path"`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum UseDecl {
     Duck(Vec<WithSpan<String>>, Span),
-    Go  (Vec<WithSpan<String>>, Span),
+    Go(Vec<WithSpan<String>>, Span),
 }
 
 impl UseDecl {
@@ -613,28 +669,28 @@ impl UseDecl {
 /// `extend <type_expr> with impl { <methods> }`
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExtensionDecl<P: Phase> {
-    pub target:  TypeExpr<P>,
+    pub target: TypeExpr<P>,
     pub methods: Vec<FunctionDecl<P>>,
-    pub span:    Span,
+    pub span: Span,
 }
 
 // top level items
 #[derive(Debug, Clone, PartialEq)]
 pub enum Item<P: Phase> {
-    Function (FunctionDecl<P>),
+    Function(FunctionDecl<P>),
     TypeAlias(TypeAliasDecl<P>),
-    Struct   (StructDecl<P>),
-    Use      (UseDecl),
+    Struct(StructDecl<P>),
+    Use(UseDecl),
     Extension(ExtensionDecl<P>),
 }
 
 impl<P: Phase> Item<P> {
     pub fn span(&self) -> Span {
         match self {
-            Item::Function(f)  => f.span,
+            Item::Function(f) => f.span,
             Item::TypeAlias(t) => t.span,
-            Item::Struct(s)    => s.span,
-            Item::Use(u)       => u.span(),
+            Item::Struct(s) => s.span,
+            Item::Use(u) => u.span(),
             Item::Extension(e) => e.span,
         }
     }
@@ -664,14 +720,11 @@ impl<P: Phase> Default for SourceFile<P> {
 
 #[derive(Debug, Clone)]
 pub struct ParseError {
-    pub msg:  String,
+    pub msg: String,
     pub span: Span,
 }
 
-pub fn parse(
-    tokens: Vec<WithSpan<Token>>,
-    file_id: u16,
-) -> (SourceFile<Parsed>, Vec<ParseError>) {
+pub fn parse(tokens: Vec<WithSpan<Token>>, file_id: u16) -> (SourceFile<Parsed>, Vec<ParseError>) {
     let mut p = Parser::new(tokens, file_id);
     let sf = p.parse_source_file();
     (sf, p.errors)
@@ -688,49 +741,58 @@ pub(crate) fn parse_single_expr(
 }
 
 struct Parser {
-    tokens:  Vec<WithSpan<Token>>,
-    pos:     usize,
+    tokens: Vec<WithSpan<Token>>,
+    pos: usize,
     file_id: u16,
-    errors:  Vec<ParseError>,
+    errors: Vec<ParseError>,
 }
 
 impl Parser {
     fn new(tokens: Vec<WithSpan<Token>>, file_id: u16) -> Self {
-        Self { tokens, pos: 0, file_id, errors: Vec::new() }
+        Self {
+            tokens,
+            pos: 0,
+            file_id,
+            errors: Vec::new(),
+        }
     }
 
     fn at_end(&self) -> bool {
-         self.pos >= self.tokens.len() 
+        self.pos >= self.tokens.len()
     }
 
     fn peek(&self) -> Option<&WithSpan<Token>> {
-        self.tokens.get(self.pos) 
+        self.tokens.get(self.pos)
     }
 
     fn peek2(&self) -> Option<&WithSpan<Token>> {
-        self.tokens.get(self.pos + 1) 
+        self.tokens.get(self.pos + 1)
     }
 
     fn peek_at(&self, offset: usize) -> Option<&Token> {
-        self.tokens.get(self.pos + offset)
-            .map(|t| &t.value)
+        self.tokens.get(self.pos + offset).map(|t| &t.value)
     }
 
     fn peek_kind(&self) -> Option<&Token> {
-        self.peek().map(|t| &t.value) 
+        self.peek().map(|t| &t.value)
     }
 
     fn peek2_kind(&self) -> Option<&Token> {
-        self.peek2().map(|t| &t.value) 
+        self.peek2().map(|t| &t.value)
     }
 
     fn current_span(&self) -> Span {
-        self.peek().map(|t| t.span).unwrap_or(Span::new(0, 0, self.file_id))
+        self.peek()
+            .map(|t| t.span)
+            .unwrap_or(Span::new(0, 0, self.file_id))
     }
 
     fn prev_span(&self) -> Span {
-        if self.pos > 0 { self.tokens[self.pos - 1].span }
-        else { Span::new(0, 0, self.file_id) }
+        if self.pos > 0 {
+            self.tokens[self.pos - 1].span
+        } else {
+            Span::new(0, 0, self.file_id)
+        }
     }
 
     fn advance(&mut self) -> Option<WithSpan<Token>> {
@@ -765,21 +827,28 @@ impl Parser {
                 let tok = self.advance().unwrap();
                 if let Token::Ident(s) = tok.value {
                     Some(WithSpan::new(s, tok.span))
-                } else { unreachable!() }
+                } else {
+                    unreachable!()
+                }
             }
             _ => None,
         }
     }
 
     fn expect_ident(&mut self) -> WithSpan<String> {
-        if let Some(id) = self.eat_ident() { return id; }
+        if let Some(id) = self.eat_ident() {
+            return id;
+        }
         self.error("expected identifier");
         WithSpan::new(String::new(), self.prev_span())
     }
 
     fn error(&mut self, msg: impl Into<String>) {
         let span = self.current_span();
-        self.errors.push(ParseError { msg: msg.into(), span });
+        self.errors.push(ParseError {
+            msg: msg.into(),
+            span,
+        });
     }
 
     // skip doc-comment tokens (kept by tokenize_no_comments).
@@ -793,11 +862,16 @@ impl Parser {
         let mut sf = SourceFile::new();
         while !self.at_end() {
             self.skip_doc_comments();
-            if self.at_end() { break; }
+            if self.at_end() {
+                break;
+            }
             if let Some(item) = self.parse_item() {
                 sf.push(item);
             } else {
-                self.error(format!("unexpected token at top level: {:?}", self.peek_kind()));
+                self.error(format!(
+                    "unexpected token at top level: {:?}",
+                    self.peek_kind()
+                ));
                 self.advance();
             }
         }
@@ -806,7 +880,7 @@ impl Parser {
 
     fn parse_item(&mut self) -> Option<Item<Parsed>> {
         match self.peek_kind()? {
-            Token::Fn     => self.parse_function_decl(false).map(Item::Function),
+            Token::Fn => self.parse_function_decl(false).map(Item::Function),
             Token::Static => {
                 self.advance();
                 if matches!(self.peek_kind(), Some(Token::Fn)) {
@@ -816,9 +890,9 @@ impl Parser {
                     None
                 }
             }
-            Token::Type   => self.parse_type_alias_decl().map(Item::TypeAlias),
+            Token::Type => self.parse_type_alias_decl().map(Item::TypeAlias),
             Token::Struct => self.parse_struct_decl().map(Item::Struct),
-            Token::Use    => self.parse_use_decl().map(Item::Use),
+            Token::Use => self.parse_use_decl().map(Item::Use),
             Token::Extend => self.parse_extension_decl().map(Item::Extension),
             _ => None,
         }
@@ -839,21 +913,39 @@ impl Parser {
         };
         let body = self.parse_block()?;
         let span = start.to(body.span);
-        Some(FunctionDecl { name, generics, params, return_type, body, is_static, span })
+        Some(FunctionDecl {
+            name,
+            generics,
+            params,
+            return_type,
+            body,
+            is_static,
+            span,
+        })
     }
 
     fn parse_generics(&mut self) -> Vec<WithSpan<Generic<Parsed>>> {
-        if !matches!(self.peek_kind(), Some(Token::Lt)) { return Vec::new(); }
+        if !matches!(self.peek_kind(), Some(Token::Lt)) {
+            return Vec::new();
+        }
         self.advance(); // eat '<'
         let mut out = Vec::new();
         loop {
-            if matches!(self.peek_kind(), Some(Token::Gt)) || self.at_end() { break; }
+            if matches!(self.peek_kind(), Some(Token::Gt)) || self.at_end() {
+                break;
+            }
             let name = self.expect_ident();
             let gs = name.span;
-            let constraint = if self.eat_kw(&Token::Colon).is_some() { self.parse_type_expr() } else { None };
+            let constraint = if self.eat_kw(&Token::Colon).is_some() {
+                self.parse_type_expr()
+            } else {
+                None
+            };
             let end = constraint.as_ref().map(|t| t.span).unwrap_or(gs);
             out.push(WithSpan::new(Generic { name, constraint }, gs.to(end)));
-            if self.eat_kw(&Token::Comma).is_none() { break; }
+            if self.eat_kw(&Token::Comma).is_none() {
+                break;
+            }
         }
         self.expect_tok(&Token::Gt);
         out
@@ -862,7 +954,9 @@ impl Parser {
     fn parse_params(&mut self) -> Vec<Param<Parsed>> {
         let mut out = Vec::new();
         loop {
-            if matches!(self.peek_kind(), Some(Token::RParen)) || self.at_end() { break; }
+            if matches!(self.peek_kind(), Some(Token::RParen)) || self.at_end() {
+                break;
+            }
             let is_mut = self.eat_kw(&Token::Mut).is_some();
             let name = self.expect_ident();
             self.expect_tok(&Token::Colon);
@@ -870,8 +964,14 @@ impl Parser {
                 Some(t) => t,
                 None => break,
             };
-            out.push(Param { name, type_expr, is_mut });
-            if self.eat_kw(&Token::Comma).is_none() { break; }
+            out.push(Param {
+                name,
+                type_expr,
+                is_mut,
+            });
+            if self.eat_kw(&Token::Comma).is_none() {
+                break;
+            }
         }
         out
     }
@@ -885,9 +985,13 @@ impl Parser {
         let type_expr = self.parse_type_expr()?;
         let end = type_expr.span;
         self.eat_kw(&Token::Semi);
-        Some(TypeAliasDecl { name, generics, type_expr, span: start.to(end) })
+        Some(TypeAliasDecl {
+            name,
+            generics,
+            type_expr,
+            span: start.to(end),
+        })
     }
-
 
     fn parse_struct_decl(&mut self) -> Option<StructDecl<Parsed>> {
         let start = self.current_span();
@@ -898,13 +1002,20 @@ impl Parser {
         let fields = self.parse_named_fields();
         self.expect_tok(&Token::RBrace);
         let span = start.to(self.prev_span());
-        Some(StructDecl { name, generics, fields, span })
+        Some(StructDecl {
+            name,
+            generics,
+            fields,
+            span,
+        })
     }
 
     fn parse_named_fields(&mut self) -> Vec<Field<Parsed>> {
         let mut out = Vec::new();
         loop {
-            if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() { break; }
+            if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() {
+                break;
+            }
             let name = self.expect_ident();
             self.expect_tok(&Token::Colon);
             let type_expr = match self.parse_type_expr() {
@@ -912,7 +1023,9 @@ impl Parser {
                 None => break,
             };
             out.push(Field { name, type_expr });
-            if self.eat_kw(&Token::Comma).is_none() { break; }
+            if self.eat_kw(&Token::Comma).is_none() {
+                break;
+            }
         }
         out
     }
@@ -937,7 +1050,9 @@ impl Parser {
                 let end = alias.as_ref().map(|a| a.span).unwrap_or(path_tok.span);
                 self.eat_kw(&Token::Semi);
                 let mut segs = vec![WithSpan::new(path, path_tok.span)];
-                if let Some(a) = alias { segs.push(a); }
+                if let Some(a) = alias {
+                    segs.push(a);
+                }
                 return Some(UseDecl::Go(segs, start.to(end)));
             }
             self.error("expected string literal after 'use go'");
@@ -954,9 +1069,13 @@ impl Parser {
                 self.advance();
                 let mut group = Vec::new();
                 loop {
-                    if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() { break; }
+                    if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() {
+                        break;
+                    }
                     group.push(self.expect_ident());
-                    if self.eat_kw(&Token::Comma).is_none() { break; }
+                    if self.eat_kw(&Token::Comma).is_none() {
+                        break;
+                    }
                 }
                 self.expect_tok(&Token::RBrace);
                 // Each item gets its own UseDecl — return first and leave rest for caller.
@@ -970,7 +1089,9 @@ impl Parser {
                 Some(seg) => segs.push(seg),
                 None => break,
             }
-            if self.eat_kw(&Token::ScopeRes).is_none() { break; }
+            if self.eat_kw(&Token::ScopeRes).is_none() {
+                break;
+            }
         }
 
         if segs.is_empty() {
@@ -982,7 +1103,7 @@ impl Parser {
         Some(UseDecl::Duck(segs, start.to(end)))
     }
 
-    // Extension declaration 
+    // Extension declaration
 
     fn parse_extension_decl(&mut self) -> Option<ExtensionDecl<Parsed>> {
         let start = self.current_span();
@@ -994,7 +1115,9 @@ impl Parser {
         let mut methods = Vec::new();
         loop {
             self.skip_doc_comments();
-            if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() { break; }
+            if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() {
+                break;
+            }
             let is_static = self.eat_kw(&Token::Static).is_some();
             if matches!(self.peek_kind(), Some(Token::Fn)) {
                 if let Some(f) = self.parse_function_decl(is_static) {
@@ -1007,7 +1130,11 @@ impl Parser {
         }
         self.expect_tok(&Token::RBrace);
         let span = start.to(self.prev_span());
-        Some(ExtensionDecl { target, methods, span })
+        Some(ExtensionDecl {
+            target,
+            methods,
+            span,
+        })
     }
 
     // type expressions
@@ -1023,9 +1150,17 @@ impl Parser {
         }
         let mut variants = vec![first];
         while self.eat_kw(&Token::Pipe).is_some() {
-            if let Some(t) = self.parse_type_and() { variants.push(t); } else { break; }
+            if let Some(t) = self.parse_type_and() {
+                variants.push(t);
+            } else {
+                break;
+            }
         }
-        let span = variants.first().unwrap().span.to(variants.last().unwrap().span);
+        let span = variants
+            .first()
+            .unwrap()
+            .span
+            .to(variants.last().unwrap().span);
         Some(TypeExpr::new(TypeDescription::Or(variants), span))
     }
 
@@ -1036,9 +1171,17 @@ impl Parser {
         }
         let mut variants = vec![first];
         while self.eat_kw(&Token::Amp).is_some() {
-            if let Some(t) = self.parse_type_postfix() { variants.push(t); } else { break; }
+            if let Some(t) = self.parse_type_postfix() {
+                variants.push(t);
+            } else {
+                break;
+            }
         }
-        let span = variants.first().unwrap().span.to(variants.last().unwrap().span);
+        let span = variants
+            .first()
+            .unwrap()
+            .span
+            .to(variants.last().unwrap().span);
         Some(TypeExpr::new(TypeDescription::And(variants), span))
     }
 
@@ -1051,10 +1194,13 @@ impl Parser {
             if let Some(index) = self.parse_type_expr() {
                 self.expect_tok(&Token::RBracket);
                 let span = ty.span.to(self.prev_span());
-                ty = TypeExpr::new(TypeDescription::Indexed {
-                    base:  Box::new(ty),
-                    index: Box::new(index),
-                }, span);
+                ty = TypeExpr::new(
+                    TypeDescription::Indexed {
+                        base: Box::new(ty),
+                        index: Box::new(index),
+                    },
+                    span,
+                );
             } else {
                 self.expect_tok(&Token::RBracket);
                 let span = ty.span.to(open);
@@ -1071,13 +1217,19 @@ impl Parser {
         if let Some(sp) = self.eat_kw(&Token::RefMut) {
             let inner = self.parse_type_atom()?;
             let span = sp.to(inner.span);
-            return Some(TypeExpr::new(TypeDescription::RefMut(Box::new(inner)), span));
+            return Some(TypeExpr::new(
+                TypeDescription::RefMut(Box::new(inner)),
+                span,
+            ));
         }
         // &T
         if self.eat_kw(&Token::Amp).is_some() {
             let inner = self.parse_type_atom()?;
             let end = inner.span;
-            return Some(TypeExpr::new(TypeDescription::Ref(Box::new(inner)), start.to(end)));
+            return Some(TypeExpr::new(
+                TypeDescription::Ref(Box::new(inner)),
+                start.to(end),
+            ));
         }
         // ! → Never
         if self.eat_kw(&Token::Bang).is_some() {
@@ -1087,12 +1239,18 @@ impl Parser {
         if self.eat_kw(&Token::LBracket).is_some() {
             let inner = self.parse_type_expr()?;
             self.expect_tok(&Token::RBracket);
-            return Some(TypeExpr::new(TypeDescription::Array(Box::new(inner)), start.to(self.prev_span())));
+            return Some(TypeExpr::new(
+                TypeDescription::Array(Box::new(inner)),
+                start.to(self.prev_span()),
+            ));
         }
         // (T, U) → Tuple, or () → unit
         if self.eat_kw(&Token::LParen).is_some() {
             if self.eat_kw(&Token::RParen).is_some() {
-                return Some(TypeExpr::new(TypeDescription::Tuple(vec![]), start.to(self.prev_span())));
+                return Some(TypeExpr::new(
+                    TypeDescription::Tuple(vec![]),
+                    start.to(self.prev_span()),
+                ));
             }
             let first = self.parse_type_expr()?;
             if self.eat_kw(&Token::RParen).is_some() {
@@ -1101,33 +1259,54 @@ impl Parser {
             self.expect_tok(&Token::Comma);
             let mut elems = vec![first];
             loop {
-                if matches!(self.peek_kind(), Some(Token::RParen)) || self.at_end() { break; }
-                if let Some(t) = self.parse_type_expr() { elems.push(t); } else { break; }
-                if self.eat_kw(&Token::Comma).is_none() { break; }
+                if matches!(self.peek_kind(), Some(Token::RParen)) || self.at_end() {
+                    break;
+                }
+                if let Some(t) = self.parse_type_expr() {
+                    elems.push(t);
+                } else {
+                    break;
+                }
+                if self.eat_kw(&Token::Comma).is_none() {
+                    break;
+                }
             }
             self.expect_tok(&Token::RParen);
-            return Some(TypeExpr::new(TypeDescription::Tuple(elems), start.to(self.prev_span())));
+            return Some(TypeExpr::new(
+                TypeDescription::Tuple(elems),
+                start.to(self.prev_span()),
+            ));
         }
         // typeof name
         if self.eat_kw(&Token::Typeof).is_some() {
             let name = self.expect_ident();
-            return Some(TypeExpr::new(TypeDescription::TypeOf(name.value), start.to(name.span)));
+            return Some(TypeExpr::new(
+                TypeDescription::TypeOf(name.value),
+                start.to(name.span),
+            ));
         }
         // keyof T
         if self.eat_kw(&Token::Keyof).is_some() {
             let inner = self.parse_type_atom()?;
             let end = inner.span;
-            return Some(TypeExpr::new(TypeDescription::KeyOf(Box::new(inner)), start.to(end)));
+            return Some(TypeExpr::new(
+                TypeDescription::KeyOf(Box::new(inner)),
+                start.to(end),
+            ));
         }
         // duck { fields } or { fields } (duck type, not block)
         if matches!(self.peek_kind(), Some(Token::Duck))
-            && matches!(self.peek2_kind(), Some(Token::LBrace)) {
+            && matches!(self.peek2_kind(), Some(Token::LBrace))
+        {
             self.advance(); // eat 'duck'
             self.advance(); // eat '{'
             let fields = self.parse_named_fields();
             self.expect_tok(&Token::RBrace);
             let span = start.to(self.prev_span());
-            return Some(TypeExpr::new(TypeDescription::Duck(DuckType { fields }), span));
+            return Some(TypeExpr::new(
+                TypeDescription::Duck(DuckType { fields }),
+                span,
+            ));
         }
         // { fields } as duck type (anonymous structural type) - only if followed by ident:
         if matches!(self.peek_kind(), Some(Token::LBrace)) {
@@ -1138,33 +1317,46 @@ impl Parser {
                 self.advance(); // eat '{'
                 if is_empty_any {
                     self.advance(); // eat '}'
-                    return Some(TypeExpr::new(TypeDescription::Any, start.to(self.prev_span())));
+                    return Some(TypeExpr::new(
+                        TypeDescription::Any,
+                        start.to(self.prev_span()),
+                    ));
                 }
                 let fields = self.parse_named_fields();
                 self.expect_tok(&Token::RBrace);
                 let span = start.to(self.prev_span());
-                return Some(TypeExpr::new(TypeDescription::Duck(DuckType { fields }), span));
+                return Some(TypeExpr::new(
+                    TypeDescription::Duck(DuckType { fields }),
+                    span,
+                ));
             }
         }
         // mut? fn(params) -> RetType — function type
         if matches!(self.peek_kind(), Some(Token::Fn))
             || (matches!(self.peek_kind(), Some(Token::Mut))
-                && matches!(self.peek2_kind(), Some(Token::Fn))) {
+                && matches!(self.peek2_kind(), Some(Token::Fn)))
+        {
             let is_mut = self.eat_kw(&Token::Mut).is_some();
             self.advance(); // eat 'fn'
             self.expect_tok(&Token::LParen);
             let params = self.parse_fun_type_params();
             self.expect_tok(&Token::RParen);
             let return_type = if self.eat_kw(&Token::ThinArrow).is_some() {
-                self.parse_type_expr()
-                    .unwrap_or_else(|| TypeExpr::new(TypeDescription::Tuple(vec![]), self.current_span()))
+                self.parse_type_expr().unwrap_or_else(|| {
+                    TypeExpr::new(TypeDescription::Tuple(vec![]), self.current_span())
+                })
             } else {
                 TypeExpr::new(TypeDescription::Tuple(vec![]), self.current_span())
             };
             let span = start.to(return_type.span);
-            return Some(TypeExpr::new(TypeDescription::Fun {
-                params, return_type: Box::new(return_type), is_mut,
-            }, span));
+            return Some(TypeExpr::new(
+                TypeDescription::Fun {
+                    params,
+                    return_type: Box::new(return_type),
+                    is_mut,
+                },
+                span,
+            ));
         }
         // go "GoTypeName" - 'go' is Ident("go") when not followed by '{'
         let is_go_type = matches!(self.peek_kind(), Some(Token::Go))
@@ -1184,7 +1376,10 @@ impl Parser {
         // .name - tag type
         if self.eat_kw(&Token::Dot).is_some() {
             let name = self.expect_ident();
-            return Some(TypeExpr::new(TypeDescription::Tag(name.value), start.to(name.span)));
+            return Some(TypeExpr::new(
+                TypeDescription::Tag(name.value),
+                start.to(name.span),
+            ));
         }
 
         // ::? ident (:: ident)* (<T>)? - named type or path
@@ -1193,7 +1388,8 @@ impl Parser {
             let mut path = vec![first.value.clone()];
             // Check for :: ident continuation
             while matches!(self.peek_kind(), Some(Token::ScopeRes))
-                && matches!(self.peek2_kind(), Some(Token::Ident(_))) {
+                && matches!(self.peek2_kind(), Some(Token::Ident(_)))
+            {
                 self.advance(); // eat '::'
                 path.push(self.eat_ident().unwrap().value);
             }
@@ -1202,18 +1398,21 @@ impl Parser {
 
             let desc = if path.len() == 1 && !is_global {
                 match path[0].as_str() {
-                    "Int"       => TypeDescription::Int,
-                    "UInt"      => TypeDescription::UInt,
-                    "Float"     => TypeDescription::Float,
-                    "Bool"      => TypeDescription::Bool(None),
-                    "Char"      => TypeDescription::Char,
-                    "Byte"      => TypeDescription::Byte,
-                    "String"    => TypeDescription::String(None),
-                    "Any" | "any"             => TypeDescription::Any,
-                    "Html" | "html"           => TypeDescription::Html,
+                    "Int" => TypeDescription::Int,
+                    "UInt" => TypeDescription::UInt,
+                    "Float" => TypeDescription::Float,
+                    "Bool" => TypeDescription::Bool(None),
+                    "Char" => TypeDescription::Char,
+                    "Byte" => TypeDescription::Byte,
+                    "String" => TypeDescription::String(None),
+                    "Any" | "any" => TypeDescription::Any,
+                    "Html" | "html" => TypeDescription::Html,
                     "Statement" | "statement" => TypeDescription::Statement,
                     _ => TypeDescription::TypeName {
-                        type_ref: UnresolvedTypeRef { path, is_global: false },
+                        type_ref: UnresolvedTypeRef {
+                            path,
+                            is_global: false,
+                        },
                         type_params,
                     },
                 }
@@ -1232,35 +1431,51 @@ impl Parser {
     fn parse_fun_type_params(&mut self) -> Vec<FunTypeParam<Parsed>> {
         let mut out = Vec::new();
         loop {
-            if matches!(self.peek_kind(), Some(Token::RParen)) || self.at_end() { break; }
+            if matches!(self.peek_kind(), Some(Token::RParen)) || self.at_end() {
+                break;
+            }
             let label = if matches!(self.peek_kind(), Some(Token::Ident(_)))
-                && matches!(self.peek2_kind(), Some(Token::Colon)) {
+                && matches!(self.peek2_kind(), Some(Token::Colon))
+            {
                 let id = self.eat_ident().unwrap();
                 self.advance(); // eat ':'
                 Some(id)
             } else {
                 None
             };
-            let type_expr = match self.parse_type_expr() { Some(t) => t, None => break };
+            let type_expr = match self.parse_type_expr() {
+                Some(t) => t,
+                None => break,
+            };
             out.push(FunTypeParam { label, type_expr });
-            if self.eat_kw(&Token::Comma).is_none() { break; }
+            if self.eat_kw(&Token::Comma).is_none() {
+                break;
+            }
         }
         out
     }
 
     // Try to parse <T, U> as type params, restoring position on failure.
     fn try_parse_type_angle_params(&mut self) -> Vec<TypeExpr<Parsed>> {
-        if !matches!(self.peek_kind(), Some(Token::Lt)) { return Vec::new(); }
+        if !matches!(self.peek_kind(), Some(Token::Lt)) {
+            return Vec::new();
+        }
         let saved = self.pos;
         self.advance(); // eat '<'
         let mut params = Vec::new();
         loop {
-            if matches!(self.peek_kind(), Some(Token::Gt)) || self.at_end() { break; }
-            if let Some(t) = self.parse_type_expr() { params.push(t); } else {
+            if matches!(self.peek_kind(), Some(Token::Gt)) || self.at_end() {
+                break;
+            }
+            if let Some(t) = self.parse_type_expr() {
+                params.push(t);
+            } else {
                 self.pos = saved;
                 return Vec::new();
             }
-            if self.eat_kw(&Token::Comma).is_none() { break; }
+            if self.eat_kw(&Token::Comma).is_none() {
+                break;
+            }
         }
         if self.eat_kw(&Token::Gt).is_none() {
             self.pos = saved;
@@ -1296,7 +1511,13 @@ impl Parser {
             let start = expr.span;
             let type_expr = self.parse_type_expr()?;
             let span = start.to(type_expr.span);
-            return Some(Expr::parsed(ExprKind::As { value: Box::new(expr), type_expr }, span));
+            return Some(Expr::parsed(
+                ExprKind::As {
+                    value: Box::new(expr),
+                    type_expr,
+                },
+                span,
+            ));
         }
         Some(expr)
     }
@@ -1308,51 +1529,77 @@ impl Parser {
             self.advance();
             let is_mut = self.eat_kw(&Token::Mut).is_some();
             let name = self.expect_ident();
-            let type_ann = if self.eat_kw(&Token::Colon).is_some() { self.parse_type_expr() } else { None };
+            let type_ann = if self.eat_kw(&Token::Colon).is_some() {
+                self.parse_type_expr()
+            } else {
+                None
+            };
             self.expect_tok(&Token::Eq);
             let value = self.parse_expr()?;
             let span = start.to(value.span);
-            return Some(Expr::parsed(ExprKind::Let { is_mut, name, type_ann, value: Box::new(value) }, span));
+            return Some(Expr::parsed(
+                ExprKind::Let {
+                    is_mut,
+                    name,
+                    type_ann,
+                    value: Box::new(value),
+                },
+                span,
+            ));
         }
         if matches!(self.peek_kind(), Some(Token::Const)) {
             self.advance();
             let name = self.expect_ident();
-            let type_ann = if self.eat_kw(&Token::Colon).is_some() { self.parse_type_expr() } else { None };
+            let type_ann = if self.eat_kw(&Token::Colon).is_some() {
+                self.parse_type_expr()
+            } else {
+                None
+            };
             self.expect_tok(&Token::Eq);
             let value = self.parse_expr()?;
             let span = start.to(value.span);
-            return Some(Expr::parsed(ExprKind::Const { name, type_ann, value: Box::new(value) }, span));
+            return Some(Expr::parsed(
+                ExprKind::Const {
+                    name,
+                    type_ann,
+                    value: Box::new(value),
+                },
+                span,
+            ));
         }
 
         let lhs = self.parse_or_expr()?;
 
         let kind: u8 = match self.peek_kind() {
             Some(Token::Eq) => 0,
-            Some(Token::PlusEq)   => 1,
-            Some(Token::SubEq)    => 2,
-            Some(Token::MulEq)    => 3,
-            Some(Token::DivEq)    => 4,
-            Some(Token::ModEq)    => 5,
-            Some(Token::ShrEq)    => 6,
-            Some(Token::ShlEq)    => 7,
+            Some(Token::PlusEq) => 1,
+            Some(Token::SubEq) => 2,
+            Some(Token::MulEq) => 3,
+            Some(Token::DivEq) => 4,
+            Some(Token::ModEq) => 5,
+            Some(Token::ShrEq) => 6,
+            Some(Token::ShlEq) => 7,
             _ => return Some(lhs),
         };
         self.advance();
         let rhs = self.parse_expr()?;
         let span = lhs.span.to(rhs.span);
         let target = Box::new(lhs);
-        let value  = Box::new(rhs);
-        Some(Expr::parsed(match kind {
-            0 => ExprKind::Assign    { target, value },
-            1 => ExprKind::AddAssign { target, value },
-            2 => ExprKind::SubAssign { target, value },
-            3 => ExprKind::MulAssign { target, value },
-            4 => ExprKind::DivAssign { target, value },
-            5 => ExprKind::ModAssign { target, value },
-            6 => ExprKind::ShrAssign { target, value },
-            7 => ExprKind::ShlAssign { target, value },
-            _ => unreachable!(),
-        }, span))
+        let value = Box::new(rhs);
+        Some(Expr::parsed(
+            match kind {
+                0 => ExprKind::Assign { target, value },
+                1 => ExprKind::AddAssign { target, value },
+                2 => ExprKind::SubAssign { target, value },
+                3 => ExprKind::MulAssign { target, value },
+                4 => ExprKind::DivAssign { target, value },
+                5 => ExprKind::ModAssign { target, value },
+                6 => ExprKind::ShrAssign { target, value },
+                7 => ExprKind::ShlAssign { target, value },
+                _ => unreachable!(),
+            },
+            span,
+        ))
     }
 
     fn parse_or_expr(&mut self) -> Option<Expr<Parsed>> {
@@ -1461,20 +1708,54 @@ impl Parser {
         let mut lhs = self.parse_pipeline_expr()?;
         loop {
             match self.peek_kind() {
-                Some(Token::Star) => { self.advance(); let r = self.parse_pipeline_expr()?; let s = lhs.span.to(r.span); lhs = Expr::parsed(ExprKind::Mul   (Box::new(lhs), Box::new(r)), s); }
-                Some(Token::Slash) => { self.advance(); let r = self.parse_pipeline_expr()?; let s = lhs.span.to(r.span); lhs = Expr::parsed(ExprKind::Div   (Box::new(lhs), Box::new(r)), s); }
-                Some(Token::Percent) => { self.advance(); let r = self.parse_pipeline_expr()?; let s = lhs.span.to(r.span); lhs = Expr::parsed(ExprKind::Mod   (Box::new(lhs), Box::new(r)), s); }
-                Some(Token::Amp) => { self.advance(); let r = self.parse_pipeline_expr()?; let s = lhs.span.to(r.span); lhs = Expr::parsed(ExprKind::BitAnd(Box::new(lhs), Box::new(r)), s); }
-                Some(Token::Pipe) => { self.advance(); let r = self.parse_pipeline_expr()?; let s = lhs.span.to(r.span); lhs = Expr::parsed(ExprKind::BitOr (Box::new(lhs), Box::new(r)), s); }
-                Some(Token::Caret) => { self.advance(); let r = self.parse_pipeline_expr()?; let s = lhs.span.to(r.span); lhs = Expr::parsed(ExprKind::BitXor(Box::new(lhs), Box::new(r)), s); }
+                Some(Token::Star) => {
+                    self.advance();
+                    let r = self.parse_pipeline_expr()?;
+                    let s = lhs.span.to(r.span);
+                    lhs = Expr::parsed(ExprKind::Mul(Box::new(lhs), Box::new(r)), s);
+                }
+                Some(Token::Slash) => {
+                    self.advance();
+                    let r = self.parse_pipeline_expr()?;
+                    let s = lhs.span.to(r.span);
+                    lhs = Expr::parsed(ExprKind::Div(Box::new(lhs), Box::new(r)), s);
+                }
+                Some(Token::Percent) => {
+                    self.advance();
+                    let r = self.parse_pipeline_expr()?;
+                    let s = lhs.span.to(r.span);
+                    lhs = Expr::parsed(ExprKind::Mod(Box::new(lhs), Box::new(r)), s);
+                }
+                Some(Token::Amp) => {
+                    self.advance();
+                    let r = self.parse_pipeline_expr()?;
+                    let s = lhs.span.to(r.span);
+                    lhs = Expr::parsed(ExprKind::BitAnd(Box::new(lhs), Box::new(r)), s);
+                }
+                Some(Token::Pipe) => {
+                    self.advance();
+                    let r = self.parse_pipeline_expr()?;
+                    let s = lhs.span.to(r.span);
+                    lhs = Expr::parsed(ExprKind::BitOr(Box::new(lhs), Box::new(r)), s);
+                }
+                Some(Token::Caret) => {
+                    self.advance();
+                    let r = self.parse_pipeline_expr()?;
+                    let s = lhs.span.to(r.span);
+                    lhs = Expr::parsed(ExprKind::BitXor(Box::new(lhs), Box::new(r)), s);
+                }
                 Some(Token::Lt) if matches!(self.peek2_kind(), Some(Token::Lt)) => {
-                    self.advance(); self.advance();
-                    let r = self.parse_pipeline_expr()?; let s = lhs.span.to(r.span);
+                    self.advance();
+                    self.advance();
+                    let r = self.parse_pipeline_expr()?;
+                    let s = lhs.span.to(r.span);
                     lhs = Expr::parsed(ExprKind::Shl(Box::new(lhs), Box::new(r)), s);
                 }
                 Some(Token::Gt) if matches!(self.peek2_kind(), Some(Token::Gt)) => {
-                    self.advance(); self.advance();
-                    let r = self.parse_pipeline_expr()?; let s = lhs.span.to(r.span);
+                    self.advance();
+                    self.advance();
+                    let r = self.parse_pipeline_expr()?;
+                    let s = lhs.span.to(r.span);
                     lhs = Expr::parsed(ExprKind::Shr(Box::new(lhs), Box::new(r)), s);
                 }
                 _ => break,
@@ -1491,13 +1772,29 @@ impl Parser {
             let rhs = self.parse_postfix_expr()?;
             let span = lhs.span.to(rhs.span);
             lhs = match rhs.kind {
-                ExprKind::Call { callee, type_params, mut args } => {
+                ExprKind::Call {
+                    callee,
+                    type_params,
+                    mut args,
+                } => {
                     args.insert(0, lhs);
-                    Expr::parsed(ExprKind::Call { callee, type_params, args }, span)
+                    Expr::parsed(
+                        ExprKind::Call {
+                            callee,
+                            type_params,
+                            args,
+                        },
+                        span,
+                    )
                 }
-                _ => Expr::parsed(ExprKind::Call {
-                    callee: Box::new(rhs), type_params: Vec::new(), args: vec![lhs],
-                }, span),
+                _ => Expr::parsed(
+                    ExprKind::Call {
+                        callee: Box::new(rhs),
+                        type_params: Vec::new(),
+                        args: vec![lhs],
+                    },
+                    span,
+                ),
             };
         }
         Some(lhs)
@@ -1506,12 +1803,42 @@ impl Parser {
     fn parse_unary_expr(&mut self) -> Option<Expr<Parsed>> {
         let start = self.current_span();
         match self.peek_kind() {
-            Some(Token::Bang) => { self.advance(); let i = self.parse_unary_expr()?; let s = start.to(i.span); return Some(Expr::parsed(ExprKind::Not   (Box::new(i)), s)); }
-            Some(Token::Minus) => { self.advance(); let i = self.parse_unary_expr()?; let s = start.to(i.span); return Some(Expr::parsed(ExprKind::Neg   (Box::new(i)), s)); }
-            Some(Token::Tilde) => { self.advance(); let i = self.parse_unary_expr()?; let s = start.to(i.span); return Some(Expr::parsed(ExprKind::BitNot(Box::new(i)), s)); }
-            Some(Token::Star) => { self.advance(); let i = self.parse_unary_expr()?; let s = start.to(i.span); return Some(Expr::parsed(ExprKind::Deref (Box::new(i)), s)); }
-            Some(Token::RefMut)    => { self.advance(); let i = self.parse_unary_expr()?; let s = start.to(i.span); return Some(Expr::parsed(ExprKind::RefMut(Box::new(i)), s)); }
-            Some(Token::Amp) => { self.advance(); let i = self.parse_unary_expr()?; let s = start.to(i.span); return Some(Expr::parsed(ExprKind::Ref   (Box::new(i)), s)); }
+            Some(Token::Bang) => {
+                self.advance();
+                let i = self.parse_unary_expr()?;
+                let s = start.to(i.span);
+                return Some(Expr::parsed(ExprKind::Not(Box::new(i)), s));
+            }
+            Some(Token::Minus) => {
+                self.advance();
+                let i = self.parse_unary_expr()?;
+                let s = start.to(i.span);
+                return Some(Expr::parsed(ExprKind::Neg(Box::new(i)), s));
+            }
+            Some(Token::Tilde) => {
+                self.advance();
+                let i = self.parse_unary_expr()?;
+                let s = start.to(i.span);
+                return Some(Expr::parsed(ExprKind::BitNot(Box::new(i)), s));
+            }
+            Some(Token::Star) => {
+                self.advance();
+                let i = self.parse_unary_expr()?;
+                let s = start.to(i.span);
+                return Some(Expr::parsed(ExprKind::Deref(Box::new(i)), s));
+            }
+            Some(Token::RefMut) => {
+                self.advance();
+                let i = self.parse_unary_expr()?;
+                let s = start.to(i.span);
+                return Some(Expr::parsed(ExprKind::RefMut(Box::new(i)), s));
+            }
+            Some(Token::Amp) => {
+                self.advance();
+                let i = self.parse_unary_expr()?;
+                let s = start.to(i.span);
+                return Some(Expr::parsed(ExprKind::Ref(Box::new(i)), s));
+            }
             _ => {}
         }
         self.parse_postfix_expr()
@@ -1528,19 +1855,33 @@ impl Parser {
                         let tok = self.advance().unwrap();
                         if let Token::Int(n) = tok.value {
                             WithSpan::new(n.to_string(), tok.span)
-                        } else { unreachable!() }
+                        } else {
+                            unreachable!()
+                        }
                     } else {
                         self.expect_ident()
                     };
                     let span = expr.span.to(field.span);
-                    expr = Expr::parsed(ExprKind::Field { base: Box::new(expr), field }, span);
+                    expr = Expr::parsed(
+                        ExprKind::Field {
+                            base: Box::new(expr),
+                            field,
+                        },
+                        span,
+                    );
                 }
                 Some(Token::LBracket) => {
                     self.advance();
                     let index = self.parse_expr()?;
                     self.expect_tok(&Token::RBracket);
                     let span = expr.span.to(self.prev_span());
-                    expr = Expr::parsed(ExprKind::Index { base: Box::new(expr), index: Box::new(index) }, span);
+                    expr = Expr::parsed(
+                        ExprKind::Index {
+                            base: Box::new(expr),
+                            index: Box::new(index),
+                        },
+                        span,
+                    );
                 }
                 Some(Token::LParen) | Some(Token::Lt) => {
                     // Try type params first if '<'
@@ -1550,11 +1891,23 @@ impl Parser {
                         let mut tp = Vec::new();
                         let mut ok = true;
                         loop {
-                            if matches!(self.peek_kind(), Some(Token::Gt)) || self.at_end() { break; }
-                            if let Some(t) = self.parse_type_expr() { tp.push(t); } else { ok = false; break; }
-                            if self.eat_kw(&Token::Comma).is_none() { break; }
+                            if matches!(self.peek_kind(), Some(Token::Gt)) || self.at_end() {
+                                break;
+                            }
+                            if let Some(t) = self.parse_type_expr() {
+                                tp.push(t);
+                            } else {
+                                ok = false;
+                                break;
+                            }
+                            if self.eat_kw(&Token::Comma).is_none() {
+                                break;
+                            }
                         }
-                        if ok && self.eat_kw(&Token::Gt).is_some() && matches!(self.peek_kind(), Some(Token::LParen)) {
+                        if ok
+                            && self.eat_kw(&Token::Gt).is_some()
+                            && matches!(self.peek_kind(), Some(Token::LParen))
+                        {
                             tp
                         } else {
                             self.pos = saved;
@@ -1563,23 +1916,46 @@ impl Parser {
                     } else {
                         Vec::new()
                     };
-                    if !matches!(self.peek_kind(), Some(Token::LParen)) { break; }
+                    if !matches!(self.peek_kind(), Some(Token::LParen)) {
+                        break;
+                    }
                     self.advance(); // eat '('
                     let mut args = Vec::new();
                     loop {
-                        if matches!(self.peek_kind(), Some(Token::RParen)) || self.at_end() { break; }
-                        if let Some(a) = self.parse_expr() { args.push(a); } else { break; }
-                        if self.eat_kw(&Token::Comma).is_none() { break; }
+                        if matches!(self.peek_kind(), Some(Token::RParen)) || self.at_end() {
+                            break;
+                        }
+                        if let Some(a) = self.parse_expr() {
+                            args.push(a);
+                        } else {
+                            break;
+                        }
+                        if self.eat_kw(&Token::Comma).is_none() {
+                            break;
+                        }
                     }
                     self.expect_tok(&Token::RParen);
                     let span = expr.span.to(self.prev_span());
-                    expr = Expr::parsed(ExprKind::Call { callee: Box::new(expr), type_params, args }, span);
+                    expr = Expr::parsed(
+                        ExprKind::Call {
+                            callee: Box::new(expr),
+                            type_params,
+                            args,
+                        },
+                        span,
+                    );
                 }
                 Some(Token::ScopeRes) => {
                     self.advance();
                     let member = self.expect_ident();
                     let span = expr.span.to(member.span);
-                    expr = Expr::parsed(ExprKind::ScopeRes { base: Box::new(expr), member }, span);
+                    expr = Expr::parsed(
+                        ExprKind::ScopeRes {
+                            base: Box::new(expr),
+                            member,
+                        },
+                        span,
+                    );
                 }
                 _ => break,
             }
@@ -1592,13 +1968,18 @@ impl Parser {
         match self.peek_kind()? {
             Token::Int(_) => {
                 let tok = self.advance().unwrap();
-                let Token::Int(n) = tok.value else { unreachable!() };
+                let Token::Int(n) = tok.value else {
+                    unreachable!()
+                };
                 // Float: int.int
                 if matches!(self.peek_kind(), Some(Token::Dot))
-                    && matches!(self.peek2_kind(), Some(Token::Int(_))) {
+                    && matches!(self.peek2_kind(), Some(Token::Int(_)))
+                {
                     self.advance(); // eat '.'
                     let frac = self.advance().unwrap();
-                    let Token::Int(f) = frac.value else { unreachable!() };
+                    let Token::Int(f) = frac.value else {
+                        unreachable!()
+                    };
                     let v = format!("{n}.{f}").parse::<f64>().unwrap_or(0.0);
                     return Some(Expr::parsed(ExprKind::Float(v), start.to(frac.span)));
                 }
@@ -1606,39 +1987,54 @@ impl Parser {
             }
             Token::Bool(_) => {
                 let tok = self.advance().unwrap();
-                let Token::Bool(b) = tok.value else { unreachable!() };
+                let Token::Bool(b) = tok.value else {
+                    unreachable!()
+                };
                 Some(Expr::parsed(ExprKind::Bool(b), tok.span))
             }
             Token::Char(_) => {
                 let tok = self.advance().unwrap();
-                let Token::Char(c) = tok.value else { unreachable!() };
+                let Token::Char(c) = tok.value else {
+                    unreachable!()
+                };
                 Some(Expr::parsed(ExprKind::Char(c), tok.span))
             }
             Token::String(_) => {
                 let tok = self.advance().unwrap();
-                let Token::String(s) = tok.value else { unreachable!() };
+                let Token::String(s) = tok.value else {
+                    unreachable!()
+                };
                 Some(Expr::parsed(ExprKind::String(s), tok.span))
             }
             Token::FmtString(_) => {
                 let tok = self.advance().unwrap();
-                let Token::FmtString(parts) = tok.value else { unreachable!() };
+                let Token::FmtString(parts) = tok.value else {
+                    unreachable!()
+                };
                 let fmt_parts = self.convert_fmt_string(parts);
                 Some(Expr::parsed(ExprKind::FmtString(fmt_parts), tok.span))
             }
             Token::InlineGo(_) => {
                 let tok = self.advance().unwrap();
-                let Token::InlineGo(s) = tok.value else { unreachable!() };
+                let Token::InlineGo(s) = tok.value else {
+                    unreachable!()
+                };
                 Some(Expr::parsed(ExprKind::InlineGo(s), tok.span))
             }
             // .name — tag literal
             Token::Dot => {
                 self.advance();
                 let name = self.expect_ident();
-                Some(Expr::parsed(ExprKind::Tag(name.value.clone()), start.to(name.span)))
+                Some(Expr::parsed(
+                    ExprKind::Tag(name.value.clone()),
+                    start.to(name.span),
+                ))
             }
             Token::Return => {
                 self.advance();
-                let value = if matches!(self.peek_kind(), Some(Token::Semi | Token::RBrace)) || self.at_end() {
+                let value = if matches!(self.peek_kind(), Some(Token::Semi | Token::RBrace))
+                    || self.at_end()
+                {
                     None
                 } else {
                     self.parse_expr().map(Box::new)
@@ -1646,29 +2042,49 @@ impl Parser {
                 let span = value.as_ref().map(|e| start.to(e.span)).unwrap_or(start);
                 Some(Expr::parsed(ExprKind::Return(value), span))
             }
-            Token::Break    => { self.advance(); Some(Expr::parsed(ExprKind::Break,    start)) }
-            Token::Continue => { self.advance(); Some(Expr::parsed(ExprKind::Continue, start)) }
+            Token::Break => {
+                self.advance();
+                Some(Expr::parsed(ExprKind::Break, start))
+            }
+            Token::Continue => {
+                self.advance();
+                Some(Expr::parsed(ExprKind::Continue, start))
+            }
             Token::LBrace => self.parse_block_or_duck_lit(),
             Token::LBracket => {
                 self.advance();
                 let mut elems = Vec::new();
                 loop {
-                    if matches!(self.peek_kind(), Some(Token::RBracket)) || self.at_end() { break; }
-                    if let Some(e) = self.parse_expr() { elems.push(e); } else { break; }
-                    if self.eat_kw(&Token::Comma).is_none() { break; }
+                    if matches!(self.peek_kind(), Some(Token::RBracket)) || self.at_end() {
+                        break;
+                    }
+                    if let Some(e) = self.parse_expr() {
+                        elems.push(e);
+                    } else {
+                        break;
+                    }
+                    if self.eat_kw(&Token::Comma).is_none() {
+                        break;
+                    }
                 }
                 self.expect_tok(&Token::RBracket);
-                Some(Expr::parsed(ExprKind::Array(elems), start.to(self.prev_span())))
+                Some(Expr::parsed(
+                    ExprKind::Array(elems),
+                    start.to(self.prev_span()),
+                ))
             }
             Token::LParen => self.parse_paren_or_tuple(start),
-            Token::If       => self.parse_if_expr(),
-            Token::While    => self.parse_while_expr(),
-            Token::For      => self.parse_for_expr(),
-            Token::Match    => self.parse_match_expr(),
+            Token::If => self.parse_if_expr(),
+            Token::While => self.parse_while_expr(),
+            Token::For => self.parse_for_expr(),
+            Token::Match => self.parse_match_expr(),
             Token::Fn | Token::Mut => self.parse_lambda_expr(),
             Token::Ident(_) | Token::ScopeRes => self.parse_ident_or_struct_lit(),
             _ => {
-                self.error(format!("unexpected token in expression: {:?}", self.peek_kind()));
+                self.error(format!(
+                    "unexpected token in expression: {:?}",
+                    self.peek_kind()
+                ));
                 None
             }
         }
@@ -1683,15 +2099,22 @@ impl Parser {
             self.advance(); // eat '{'
             let mut fields = Vec::new();
             loop {
-                if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() { break; }
+                if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() {
+                    break;
+                }
                 let name = self.expect_ident();
                 self.expect_tok(&Token::Colon);
                 let val = self.parse_expr()?;
                 fields.push((name, val));
-                if self.eat_kw(&Token::Comma).is_none() { break; }
+                if self.eat_kw(&Token::Comma).is_none() {
+                    break;
+                }
             }
             self.expect_tok(&Token::RBrace);
-            Some(Expr::parsed(ExprKind::DuckLit(fields), start.to(self.prev_span())))
+            Some(Expr::parsed(
+                ExprKind::DuckLit(fields),
+                start.to(self.prev_span()),
+            ))
         } else {
             self.parse_block()
         }
@@ -1702,7 +2125,9 @@ impl Parser {
         self.expect_tok(&Token::LBrace);
         let mut stmts: Vec<Expr<Parsed>> = Vec::new();
         loop {
-            if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() { break; }
+            if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() {
+                break;
+            }
             let expr = self.parse_expr()?;
             stmts.push(expr);
             let has_semi = self.eat_kw(&Token::Semi).is_some();
@@ -1719,7 +2144,10 @@ impl Parser {
             }
         }
         self.expect_tok(&Token::RBrace);
-        Some(Expr::parsed(ExprKind::Block(stmts), start.to(self.prev_span())))
+        Some(Expr::parsed(
+            ExprKind::Block(stmts),
+            start.to(self.prev_span()),
+        ))
     }
 
     fn parse_if_expr(&mut self) -> Option<Expr<Parsed>> {
@@ -1735,13 +2163,21 @@ impl Parser {
             } else {
                 Some(Box::new(self.parse_block()?))
             }
-        } else { None };
-        let end = else_branch.as_ref().map(|e| e.span).unwrap_or(then_branch.span);
-        Some(Expr::parsed(ExprKind::If {
-            condition: Box::new(condition),
-            then_branch: Box::new(then_branch),
-            else_branch,
-        }, start.to(end)))
+        } else {
+            None
+        };
+        let end = else_branch
+            .as_ref()
+            .map(|e| e.span)
+            .unwrap_or(then_branch.span);
+        Some(Expr::parsed(
+            ExprKind::If {
+                condition: Box::new(condition),
+                then_branch: Box::new(then_branch),
+                else_branch,
+            },
+            start.to(end),
+        ))
     }
 
     fn parse_while_expr(&mut self) -> Option<Expr<Parsed>> {
@@ -1752,9 +2188,13 @@ impl Parser {
         self.expect_tok(&Token::RParen);
         let body = self.parse_block()?;
         let body_span = body.span;
-        Some(Expr::parsed(ExprKind::While {
-            condition: Box::new(condition), body: Box::new(body),
-        }, start.to(body_span)))
+        Some(Expr::parsed(
+            ExprKind::While {
+                condition: Box::new(condition),
+                body: Box::new(body),
+            },
+            start.to(body_span),
+        ))
     }
 
     fn parse_for_expr(&mut self) -> Option<Expr<Parsed>> {
@@ -1768,9 +2208,15 @@ impl Parser {
         self.expect_tok(&Token::RParen);
         let body = self.parse_block()?;
         let body_span = body.span;
-        Some(Expr::parsed(ExprKind::For {
-            binding, is_mut, iterable: Box::new(iterable), body: Box::new(body),
-        }, start.to(body_span)))
+        Some(Expr::parsed(
+            ExprKind::For {
+                binding,
+                is_mut,
+                iterable: Box::new(iterable),
+                body: Box::new(body),
+            },
+            start.to(body_span),
+        ))
     }
 
     fn parse_match_expr(&mut self) -> Option<Expr<Parsed>> {
@@ -1781,12 +2227,18 @@ impl Parser {
         let mut arms = Vec::new();
         let mut else_arm: Option<Box<Expr<Parsed>>> = None;
         loop {
-            if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() { break; }
+            if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() {
+                break;
+            }
             if matches!(self.peek_kind(), Some(Token::Else)) {
                 self.advance();
                 // Consume optional @ binding and if guard on else arm (binding unused at this level).
-                if self.eat_kw(&Token::At).is_some() { self.expect_ident(); }
-                if self.eat_kw(&Token::If).is_some() { self.parse_expr()?; }
+                if self.eat_kw(&Token::At).is_some() {
+                    self.expect_ident();
+                }
+                if self.eat_kw(&Token::If).is_some() {
+                    self.parse_expr()?;
+                }
                 self.eat_kw(&Token::ThickArrow);
                 let body = self.parse_expr()?;
                 self.eat_kw(&Token::Comma);
@@ -1796,32 +2248,58 @@ impl Parser {
             let arm_start = self.current_span();
             let pattern = self.parse_type_expr()?;
             let base = if matches!(self.peek_kind(), Some(Token::Ident(_)))
-                && matches!(self.peek2_kind(), Some(Token::At | Token::If | Token::ThickArrow)) {
+                && matches!(
+                    self.peek2_kind(),
+                    Some(Token::At | Token::If | Token::ThickArrow)
+                ) {
                 // 'base' keyword followed by binding or guard or arrow
                 // Old parser: TypeExpr base? @ binding if guard => body
                 // 'base' is actually another TypeExpr for the narrowing base
                 None // skip for now; base is rarely used
-            } else { None };
-            let binding = if self.eat_kw(&Token::At).is_some() { Some(self.expect_ident()) } else { None };
+            } else {
+                None
+            };
+            let binding = if self.eat_kw(&Token::At).is_some() {
+                Some(self.expect_ident())
+            } else {
+                None
+            };
             let guard = if self.eat_kw(&Token::If).is_some() {
                 Some(Box::new(self.parse_expr()?))
-            } else { None };
+            } else {
+                None
+            };
             self.eat_kw(&Token::ThickArrow);
             let body = self.parse_expr()?;
             let arm_span = arm_start.to(body.span);
             self.eat_kw(&Token::Comma);
-            arms.push(MatchArm { pattern, base, binding, guard, body, span: arm_span });
+            arms.push(MatchArm {
+                pattern,
+                base,
+                binding,
+                guard,
+                body,
+                span: arm_span,
+            });
         }
         self.expect_tok(&Token::RBrace);
-        Some(Expr::parsed(ExprKind::Match {
-            value: Box::new(value), arms, else_arm,
-        }, start.to(self.prev_span())))
+        Some(Expr::parsed(
+            ExprKind::Match {
+                value: Box::new(value),
+                arms,
+                else_arm,
+            },
+            start.to(self.prev_span()),
+        ))
     }
 
     fn parse_paren_or_tuple(&mut self, start: Span) -> Option<Expr<Parsed>> {
         self.advance(); // eat '('
         if self.eat_kw(&Token::RParen).is_some() {
-            return Some(Expr::parsed(ExprKind::Tuple(vec![]), start.to(self.prev_span())));
+            return Some(Expr::parsed(
+                ExprKind::Tuple(vec![]),
+                start.to(self.prev_span()),
+            ));
         }
         let first = self.parse_expr()?;
         if self.eat_kw(&Token::RParen).is_some() {
@@ -1830,12 +2308,23 @@ impl Parser {
         self.expect_tok(&Token::Comma);
         let mut elems = vec![first];
         loop {
-            if matches!(self.peek_kind(), Some(Token::RParen)) || self.at_end() { break; }
-            if let Some(e) = self.parse_expr() { elems.push(e); } else { break; }
-            if self.eat_kw(&Token::Comma).is_none() { break; }
+            if matches!(self.peek_kind(), Some(Token::RParen)) || self.at_end() {
+                break;
+            }
+            if let Some(e) = self.parse_expr() {
+                elems.push(e);
+            } else {
+                break;
+            }
+            if self.eat_kw(&Token::Comma).is_none() {
+                break;
+            }
         }
         self.expect_tok(&Token::RParen);
-        Some(Expr::parsed(ExprKind::Tuple(elems), start.to(self.prev_span())))
+        Some(Expr::parsed(
+            ExprKind::Tuple(elems),
+            start.to(self.prev_span()),
+        ))
     }
 
     fn parse_lambda_expr(&mut self) -> Option<Expr<Parsed>> {
@@ -1845,7 +2334,9 @@ impl Parser {
         self.expect_tok(&Token::LParen);
         let mut params = Vec::new();
         loop {
-            if matches!(self.peek_kind(), Some(Token::RParen)) || self.at_end() { break; }
+            if matches!(self.peek_kind(), Some(Token::RParen)) || self.at_end() {
+                break;
+            }
             let name = self.expect_ident();
             let type_expr = if self.eat_kw(&Token::Colon).is_some() {
                 self.parse_type_expr()
@@ -1853,28 +2344,47 @@ impl Parser {
             } else {
                 TypeExpr::new(TypeDescription::Any, name.span)
             };
-            params.push(Param { name, type_expr, is_mut: false });
-            if self.eat_kw(&Token::Comma).is_none() { break; }
+            params.push(Param {
+                name,
+                type_expr,
+                is_mut: false,
+            });
+            if self.eat_kw(&Token::Comma).is_none() {
+                break;
+            }
         }
         self.expect_tok(&Token::RParen);
         let return_type = if self.eat_kw(&Token::ThinArrow).is_some() {
             self.parse_type_expr()
-        } else { None };
+        } else {
+            None
+        };
         let body = self.parse_block()?;
         let body_span = body.span;
-        Some(Expr::parsed(ExprKind::Lambda {
-            is_mut, params, return_type, body: Box::new(body),
-        }, start.to(body_span)))
+        Some(Expr::parsed(
+            ExprKind::Lambda {
+                is_mut,
+                params,
+                return_type,
+                body: Box::new(body),
+            },
+            start.to(body_span),
+        ))
     }
 
     fn parse_ident_or_struct_lit(&mut self) -> Option<Expr<Parsed>> {
         let start = self.current_span();
         let is_global = self.eat_kw(&Token::ScopeRes).is_some();
-        let first = if is_global { self.expect_ident() } else { self.eat_ident()? };
+        let first = if is_global {
+            self.expect_ident()
+        } else {
+            self.eat_ident()?
+        };
         let mut segments = vec![first];
         // Collect path: ident :: ident :: ...
         while matches!(self.peek_kind(), Some(Token::ScopeRes))
-            && matches!(self.peek2_kind(), Some(Token::Ident(_))) {
+            && matches!(self.peek2_kind(), Some(Token::Ident(_)))
+        {
             self.advance(); // eat '::'
             segments.push(self.eat_ident().unwrap());
         }
@@ -1887,43 +2397,66 @@ impl Parser {
             && matches!(self.peek_at(2), Some(Token::Colon));
         if !is_struct {
             // Restore type params tokens if no struct follows
-            if !type_params.is_empty() { self.pos = saved; }
+            if !type_params.is_empty() {
+                self.pos = saved;
+            }
             let span = start.to(segments.last().unwrap().span);
-            return Some(Expr::parsed(ExprKind::Ident(UnresolvedIdent { segments, is_global }), span));
+            return Some(Expr::parsed(
+                ExprKind::Ident(UnresolvedIdent {
+                    segments,
+                    is_global,
+                }),
+                span,
+            ));
         }
 
         // Struct literal
         self.advance(); // eat '{'
         let mut fields = Vec::new();
         loop {
-            if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() { break; }
+            if matches!(self.peek_kind(), Some(Token::RBrace)) || self.at_end() {
+                break;
+            }
             let fname = self.expect_ident();
             self.expect_tok(&Token::Colon);
             let fval = self.parse_expr()?;
             fields.push((fname, fval));
-            if self.eat_kw(&Token::Comma).is_none() { break; }
+            if self.eat_kw(&Token::Comma).is_none() {
+                break;
+            }
         }
         self.expect_tok(&Token::RBrace);
-        let name = UnresolvedIdent { segments, is_global };
-        Some(Expr::parsed(ExprKind::StructLit { name, type_params, fields }, start.to(self.prev_span())))
+        let name = UnresolvedIdent {
+            segments,
+            is_global,
+        };
+        Some(Expr::parsed(
+            ExprKind::StructLit {
+                name,
+                type_params,
+                fields,
+            },
+            start.to(self.prev_span()),
+        ))
     }
 
     fn convert_fmt_string(&mut self, parts: Vec<FmtStringPart>) -> Vec<FmtPart<Parsed>> {
-        parts.into_iter().map(|p| match p {
-            FmtStringPart::Literal(s) => FmtPart::Literal(s),
-            FmtStringPart::Tokens(toks) => {
-                // Strip surrounding { and } delimiters, then parse as expression.
-                let inner: Vec<WithSpan<Token>> = toks.into_iter()
-                    .skip(1)
-                    .rev().skip(1).rev()
-                    .collect();
-                let mut sub = Parser::new(inner, self.file_id);
-                let expr = sub.parse_expr()
-                    .unwrap_or_else(|| Expr::parsed(ExprKind::Tuple(vec![]), Span::dummy()));
-                self.errors.extend(sub.errors);
-                FmtPart::Expr(expr)
-            }
-        }).collect()
+        parts
+            .into_iter()
+            .map(|p| match p {
+                FmtStringPart::Literal(s) => FmtPart::Literal(s),
+                FmtStringPart::Tokens(toks) => {
+                    // Strip surrounding { and } delimiters, then parse as expression.
+                    let inner: Vec<WithSpan<Token>> =
+                        toks.into_iter().skip(1).rev().skip(1).rev().collect();
+                    let mut sub = Parser::new(inner, self.file_id);
+                    let expr = sub
+                        .parse_expr()
+                        .unwrap_or_else(|| Expr::parsed(ExprKind::Tuple(vec![]), Span::dummy()));
+                    self.errors.extend(sub.errors);
+                    FmtPart::Expr(expr)
+                }
+            })
+            .collect()
     }
 }
-

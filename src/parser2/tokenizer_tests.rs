@@ -1,5 +1,5 @@
-use super::tokenizer::{FmtStringPart, tokenize, tokenize_no_comments, Token};
 use super::parser::Span;
+use super::tokenizer::{tokenize, tokenize_no_comments, FmtStringPart, Token};
 
 fn lex(src: &str) -> Vec<Token> {
     let (toks, errs) = tokenize(src, 0);
@@ -16,18 +16,39 @@ fn lex_no_comments(src: &str) -> Vec<Token> {
 #[test]
 fn keywords() {
     let cases = [
-        ("fn", Token::Fn), ("let", Token::Let), ("const", Token::Const),
-        ("type", Token::Type), ("struct", Token::Struct), ("use", Token::Use),
-        ("impl", Token::Impl), ("extend", Token::Extend), ("with", Token::With),
-        ("mut", Token::Mut), ("static", Token::Static), ("return", Token::Return),
-        ("if", Token::If), ("else", Token::Else), ("while", Token::While),
-        ("for", Token::For), ("in", Token::In), ("break", Token::Break),
-        ("continue", Token::Continue), ("match", Token::Match), ("as", Token::As),
-        ("and", Token::And), ("or", Token::Or), ("duck", Token::Duck),
-        ("schema", Token::Schema), ("module", Token::Module),
-        ("typeof", Token::Typeof), ("keyof", Token::Keyof),
-        ("test", Token::Test), ("component", Token::Component),
-        ("template", Token::Template), ("async", Token::Async), ("defer", Token::Defer),
+        ("fn", Token::Fn),
+        ("let", Token::Let),
+        ("const", Token::Const),
+        ("type", Token::Type),
+        ("struct", Token::Struct),
+        ("use", Token::Use),
+        ("impl", Token::Impl),
+        ("extend", Token::Extend),
+        ("with", Token::With),
+        ("mut", Token::Mut),
+        ("static", Token::Static),
+        ("return", Token::Return),
+        ("if", Token::If),
+        ("else", Token::Else),
+        ("while", Token::While),
+        ("for", Token::For),
+        ("in", Token::In),
+        ("break", Token::Break),
+        ("continue", Token::Continue),
+        ("match", Token::Match),
+        ("as", Token::As),
+        ("and", Token::And),
+        ("or", Token::Or),
+        ("duck", Token::Duck),
+        ("schema", Token::Schema),
+        ("module", Token::Module),
+        ("typeof", Token::Typeof),
+        ("keyof", Token::Keyof),
+        ("test", Token::Test),
+        ("component", Token::Component),
+        ("template", Token::Template),
+        ("async", Token::Async),
+        ("defer", Token::Defer),
     ];
     for (src, expected) in cases {
         assert_eq!(lex(src), vec![expected], "keyword {src:?}");
@@ -36,43 +57,51 @@ fn keywords() {
 
 #[test]
 fn bool_literals() {
-    assert_eq!(lex("true"),   vec![Token::Bool(true)]);
-    assert_eq!(lex("false"),  vec![Token::Bool(false)]);
-    assert_eq!(lex("truex"),  vec![Token::Ident("truex".into())]);
+    assert_eq!(lex("true"), vec![Token::Bool(true)]);
+    assert_eq!(lex("false"), vec![Token::Bool(false)]);
+    assert_eq!(lex("truex"), vec![Token::Ident("truex".into())]);
     assert_eq!(lex("ifelse"), vec![Token::Ident("ifelse".into())]);
 }
 
 #[test]
 fn integers() {
-    assert_eq!(lex("1"),     vec![Token::Int(1)]);
-    assert_eq!(lex("2003"),  vec![Token::Int(2003)]);
-    assert_eq!(lex("-1"),    vec![Token::Minus, Token::Int(1)]);
+    assert_eq!(lex("1"), vec![Token::Int(1)]);
+    assert_eq!(lex("2003"), vec![Token::Int(2003)]);
+    assert_eq!(lex("-1"), vec![Token::Minus, Token::Int(1)]);
     assert_eq!(lex("-2003"), vec![Token::Minus, Token::Int(2003)]);
 }
 
 #[test]
 fn strings() {
-    assert_eq!(lex("\"\""),        vec![Token::String("".into())]);
-    assert_eq!(lex("\"XX\""),      vec![Token::String("XX".into())]);
-    assert_eq!(lex("\"X\\\"X\""),  vec![Token::String("X\"X".into())]);
-    assert_eq!(lex("\"\\n\\n\""),  vec![Token::String("\n\n".into())]);
-    assert_eq!(lex("\"\\0\""),     vec![Token::String("\0".into())]);
+    assert_eq!(lex("\"\""), vec![Token::String("".into())]);
+    assert_eq!(lex("\"XX\""), vec![Token::String("XX".into())]);
+    assert_eq!(lex("\"X\\\"X\""), vec![Token::String("X\"X".into())]);
+    assert_eq!(lex("\"\\n\\n\""), vec![Token::String("\n\n".into())]);
+    assert_eq!(lex("\"\\0\""), vec![Token::String("\0".into())]);
 }
 
 #[test]
 fn char_literals() {
-    assert_eq!(lex("'c'"),    vec![Token::Char('c')]);
-    assert_eq!(lex("'\\n'"),  vec![Token::Char('\n')]);
+    assert_eq!(lex("'c'"), vec![Token::Char('c')]);
+    assert_eq!(lex("'\\n'"), vec![Token::Char('\n')]);
     assert_eq!(lex("'\\\\'"), vec![Token::Char('\\')]);
 }
 
 #[test]
 fn operators_two_char() {
     let cases = [
-        ("==", Token::EqEq), ("!=", Token::BangEq), ("<=", Token::LtEq),
-        (">=", Token::GtEq), ("::", Token::ScopeRes), ("->", Token::ThinArrow),
-        ("=>", Token::ThickArrow), ("+=", Token::PlusEq), ("-=", Token::SubEq),
-        ("*=", Token::MulEq), ("/=", Token::DivEq), ("%=", Token::ModEq),
+        ("==", Token::EqEq),
+        ("!=", Token::BangEq),
+        ("<=", Token::LtEq),
+        (">=", Token::GtEq),
+        ("::", Token::ScopeRes),
+        ("->", Token::ThinArrow),
+        ("=>", Token::ThickArrow),
+        ("+=", Token::PlusEq),
+        ("-=", Token::SubEq),
+        ("*=", Token::MulEq),
+        ("/=", Token::DivEq),
+        ("%=", Token::ModEq),
     ];
     for (src, expected) in cases {
         assert_eq!(lex(src), vec![expected], "op {src:?}");
@@ -84,29 +113,39 @@ fn operators_two_char() {
 #[test]
 fn ref_mut_token() {
     assert_eq!(lex("&mut x"), vec![Token::RefMut, Token::Ident("x".into())]);
-    assert_eq!(lex("&mut"),   vec![Token::Amp, Token::Mut]);
+    assert_eq!(lex("&mut"), vec![Token::Amp, Token::Mut]);
 }
 
 #[test]
 fn comments_and_doc_comments() {
-    assert_eq!(lex("// hello"),  vec![Token::Comment("hello".into())]);
+    assert_eq!(lex("// hello"), vec![Token::Comment("hello".into())]);
     assert_eq!(lex("/// hello"), vec![Token::DocComment("hello".into())]);
-    assert_eq!(lex("//"),        vec![Token::Comment("".into())]);
-    assert_eq!(lex("///"),       vec![Token::DocComment("".into())]);
-    assert_eq!(lex("//  trim  "),vec![Token::Comment("trim".into())]);
-    assert_eq!(lex("// first\n// second"), vec![
-        Token::Comment("first".into()),
-        Token::Comment("second".into()),
-    ]);
+    assert_eq!(lex("//"), vec![Token::Comment("".into())]);
+    assert_eq!(lex("///"), vec![Token::DocComment("".into())]);
+    assert_eq!(lex("//  trim  "), vec![Token::Comment("trim".into())]);
+    assert_eq!(
+        lex("// first\n// second"),
+        vec![
+            Token::Comment("first".into()),
+            Token::Comment("second".into()),
+        ]
+    );
     assert_eq!(lex_no_comments("type // comment"), vec![Token::Type]);
     assert_eq!(lex_no_comments("// only"), vec![]);
 }
 
 #[test]
 fn unicode_ident() {
-    assert_eq!(lex("let π = 3;"), vec![
-        Token::Let, Token::Ident("π".into()), Token::Eq, Token::Int(3), Token::Semi,
-    ]);
+    assert_eq!(
+        lex("let π = 3;"),
+        vec![
+            Token::Let,
+            Token::Ident("π".into()),
+            Token::Eq,
+            Token::Int(3),
+            Token::Semi,
+        ]
+    );
 }
 
 #[test]
@@ -119,7 +158,9 @@ fn fmt_string_simple() {
     assert_eq!(lex("f\"\""), vec![Token::FmtString(vec![])]);
 
     let toks = lex("f\"{1}\"");
-    let Token::FmtString(parts) = &toks[0] else { panic!() };
+    let Token::FmtString(parts) = &toks[0] else {
+        panic!()
+    };
     assert!(matches!(&parts[0], FmtStringPart::Tokens(ts) if {
         matches!(ts[0].value, Token::LBrace) &&
         matches!(ts[1].value, Token::Int(1)) &&
@@ -130,7 +171,9 @@ fn fmt_string_simple() {
 #[test]
 fn fmt_string_mixed() {
     let toks = lex("f\"FMT {var}\"");
-    let Token::FmtString(parts) = &toks[0] else { panic!() };
+    let Token::FmtString(parts) = &toks[0] else {
+        panic!()
+    };
     assert!(matches!(&parts[0], FmtStringPart::Literal(s) if s == "FMT "));
     assert!(matches!(&parts[1], FmtStringPart::Tokens(_)));
 }
@@ -138,18 +181,22 @@ fn fmt_string_mixed() {
 #[test]
 fn fmt_string_nested_fstring() {
     let toks = lex("f\"outer {f\"inner {y}\"} end\"");
-    let Token::FmtString(parts) = &toks[0] else { panic!() };
+    let Token::FmtString(parts) = &toks[0] else {
+        panic!()
+    };
     assert!(matches!(&parts[0], FmtStringPart::Literal(s) if s == "outer "));
-    let FmtStringPart::Tokens(inner_toks) = &parts[1] else { panic!() };
+    let FmtStringPart::Tokens(inner_toks) = &parts[1] else {
+        panic!()
+    };
     assert!(matches!(&inner_toks[1].value, Token::FmtString(_)));
     assert!(matches!(&parts[2], FmtStringPart::Literal(s) if s == " end"));
 }
 
 #[test]
 fn inline_go() {
-    assert_eq!(lex("go {}"),       vec![Token::InlineGo("".into())]);
-    assert_eq!(lex("go { xx }"),   vec![Token::InlineGo(" xx ".into())]);
-    assert_eq!(lex("go { {} }"),   vec![Token::InlineGo(" {} ".into())]);
+    assert_eq!(lex("go {}"), vec![Token::InlineGo("".into())]);
+    assert_eq!(lex("go { xx }"), vec![Token::InlineGo(" xx ".into())]);
+    assert_eq!(lex("go { {} }"), vec![Token::InlineGo(" {} ".into())]);
     assert_eq!(lex("go {{}{}{}}"), vec![Token::InlineGo("{}{}{}".into())]);
 }
 
@@ -174,11 +221,21 @@ fn spans_file_id_propagated() {
 #[test]
 fn type_duck_statement() {
     let toks = lex_no_comments("type Y = duck { x: String };");
-    assert_eq!(toks, vec![
-        Token::Type, Token::Ident("Y".into()), Token::Eq, Token::Duck,
-        Token::LBrace, Token::Ident("x".into()), Token::Colon,
-        Token::Ident("String".into()), Token::RBrace, Token::Semi,
-    ]);
+    assert_eq!(
+        toks,
+        vec![
+            Token::Type,
+            Token::Ident("Y".into()),
+            Token::Eq,
+            Token::Duck,
+            Token::LBrace,
+            Token::Ident("x".into()),
+            Token::Colon,
+            Token::Ident("String".into()),
+            Token::RBrace,
+            Token::Semi,
+        ]
+    );
 }
 
 #[test]
@@ -191,5 +248,8 @@ fn adjacent_literals() {
 
 #[test]
 fn number_then_ident() {
-    assert_eq!(lex("123testing"), vec![Token::Int(123), Token::Ident("testing".into())]);
+    assert_eq!(
+        lex("123testing"),
+        vec![Token::Int(123), Token::Ident("testing".into())]
+    );
 }
