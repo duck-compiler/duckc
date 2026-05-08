@@ -13,8 +13,6 @@ fn lex_no_comments(src: &str) -> Vec<Token> {
     toks.into_iter().map(|t| t.value).collect()
 }
 
-fn ctrl(c: char) -> Token { Token::Ctrl(c) }
-
 #[test]
 fn keywords() {
     let cases = [
@@ -48,8 +46,8 @@ fn bool_literals() {
 fn integers() {
     assert_eq!(lex("1"),     vec![Token::Int(1)]);
     assert_eq!(lex("2003"),  vec![Token::Int(2003)]);
-    assert_eq!(lex("-1"),    vec![ctrl('-'), Token::Int(1)]);
-    assert_eq!(lex("-2003"), vec![ctrl('-'), Token::Int(2003)]);
+    assert_eq!(lex("-1"),    vec![Token::Minus, Token::Int(1)]);
+    assert_eq!(lex("-2003"), vec![Token::Minus, Token::Int(2003)]);
 }
 
 #[test]
@@ -86,7 +84,7 @@ fn operators_two_char() {
 #[test]
 fn ref_mut_token() {
     assert_eq!(lex("&mut x"), vec![Token::RefMut, Token::Ident("x".into())]);
-    assert_eq!(lex("&mut"),   vec![ctrl('&'), Token::Mut]);
+    assert_eq!(lex("&mut"),   vec![Token::Amp, Token::Mut]);
 }
 
 #[test]
@@ -107,13 +105,13 @@ fn comments_and_doc_comments() {
 #[test]
 fn unicode_ident() {
     assert_eq!(lex("let π = 3;"), vec![
-        Token::Let, Token::Ident("π".into()), ctrl('='), Token::Int(3), ctrl(';'),
+        Token::Let, Token::Ident("π".into()), Token::Eq, Token::Int(3), Token::Semi,
     ]);
 }
 
 #[test]
 fn float_is_int_dot_int() {
-    assert_eq!(lex("1.1"), vec![Token::Int(1), ctrl('.'), Token::Int(1)]);
+    assert_eq!(lex("1.1"), vec![Token::Int(1), Token::Dot, Token::Int(1)]);
 }
 
 #[test]
@@ -123,9 +121,9 @@ fn fmt_string_simple() {
     let toks = lex("f\"{1}\"");
     let Token::FmtString(parts) = &toks[0] else { panic!() };
     assert!(matches!(&parts[0], FmtStringPart::Tokens(ts) if {
-        matches!(ts[0].value, Token::Ctrl('{')) &&
+        matches!(ts[0].value, Token::LBrace) &&
         matches!(ts[1].value, Token::Int(1)) &&
-        matches!(ts[2].value, Token::Ctrl('}'))
+        matches!(ts[2].value, Token::RBrace)
     }));
 }
 
@@ -177,9 +175,9 @@ fn spans_file_id_propagated() {
 fn type_duck_statement() {
     let toks = lex_no_comments("type Y = duck { x: String };");
     assert_eq!(toks, vec![
-        Token::Type, Token::Ident("Y".into()), ctrl('='), Token::Duck,
-        ctrl('{'), Token::Ident("x".into()), ctrl(':'),
-        Token::Ident("String".into()), ctrl('}'), ctrl(';'),
+        Token::Type, Token::Ident("Y".into()), Token::Eq, Token::Duck,
+        Token::LBrace, Token::Ident("x".into()), Token::Colon,
+        Token::Ident("String".into()), Token::RBrace, Token::Semi,
     ]);
 }
 

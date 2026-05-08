@@ -19,8 +19,31 @@ pub enum Token {
     FmtString(Vec<FmtStringPart>),
     Ident(String),
 
-    /// Every single-char symbol that is not the start of a multi-char operator.
-    Ctrl(char),
+    // Single-character punctuation and operators
+    Bang,     // !
+    Percent,  // %
+    Amp,      // &
+    LParen,   // (
+    RParen,   // )
+    Star,     // *
+    Plus,     // +
+    Comma,    // ,
+    Minus,    // -
+    Dot,      // .
+    Slash,    // /
+    Colon,    // :
+    Semi,     // ;
+    Lt,       // <
+    Eq,       // =
+    Gt,       // >
+    At,       // @
+    LBracket, // [
+    RBracket, // ]
+    Caret,    // ^
+    LBrace,   // {
+    Pipe,     // |
+    RBrace,   // }
+    Tilde,    // ~
 
     // Multi-character operators
     EqEq,       // ==
@@ -106,9 +129,32 @@ impl fmt::Display for Token {
             Token::Char(c)   => write!(f, "'{c}'"),
             Token::String(s) => write!(f, "\"{s}\""),
             Token::FmtString(_)   => write!(f, "f-string"),
-            Token::Ident(s)       => write!(f, "{s}"),
-            Token::Ctrl(c)        => write!(f, "{c}"),
-            Token::EqEq           => write!(f, "=="),
+            Token::Ident(s)   => write!(f, "{s}"),
+            Token::Bang       => write!(f, "!"),
+            Token::Percent    => write!(f, "%"),
+            Token::Amp        => write!(f, "&"),
+            Token::LParen     => write!(f, "("),
+            Token::RParen     => write!(f, ")"),
+            Token::Star       => write!(f, "*"),
+            Token::Plus       => write!(f, "+"),
+            Token::Comma      => write!(f, ","),
+            Token::Minus      => write!(f, "-"),
+            Token::Dot        => write!(f, "."),
+            Token::Slash      => write!(f, "/"),
+            Token::Colon      => write!(f, ":"),
+            Token::Semi       => write!(f, ";"),
+            Token::Lt         => write!(f, "<"),
+            Token::Eq         => write!(f, "="),
+            Token::Gt         => write!(f, ">"),
+            Token::At         => write!(f, "@"),
+            Token::LBracket   => write!(f, "["),
+            Token::RBracket   => write!(f, "]"),
+            Token::Caret      => write!(f, "^"),
+            Token::LBrace     => write!(f, "{{"),
+            Token::Pipe       => write!(f, "|"),
+            Token::RBrace     => write!(f, "}}"),
+            Token::Tilde      => write!(f, "~"),
+            Token::EqEq       => write!(f, "=="),
             Token::BangEq         => write!(f, "!="),
             Token::LtEq           => write!(f, "<="),
             Token::GtEq           => write!(f, ">="),
@@ -262,7 +308,40 @@ impl<'src> Tokenizer<'src> {
         if c.is_ascii_digit() { return Some(self.lex_int(start)); }
 
         self.advance();
-        Some(self.spanned(Token::Ctrl(c), start))
+        let tok = match c {
+            '!' => Token::Bang,
+            '%' => Token::Percent,
+            '&' => Token::Amp,
+            '(' => Token::LParen,
+            ')' => Token::RParen,
+            '*' => Token::Star,
+            '+' => Token::Plus,
+            ',' => Token::Comma,
+            '-' => Token::Minus,
+            '.' => Token::Dot,
+            '/' => Token::Slash,
+            ':' => Token::Colon,
+            ';' => Token::Semi,
+            '<' => Token::Lt,
+            '=' => Token::Eq,
+            '>' => Token::Gt,
+            '@' => Token::At,
+            '[' => Token::LBracket,
+            ']' => Token::RBracket,
+            '^' => Token::Caret,
+            '{' => Token::LBrace,
+            '|' => Token::Pipe,
+            '}' => Token::RBrace,
+            '~' => Token::Tilde,
+            other => {
+                self.errors.push(LexError::new(
+                    format!("unexpected character '{other}'"),
+                    self.span_from(start),
+                ));
+                return None;
+            }
+        };
+        Some(self.spanned(tok, start))
     }
 
     fn lex_word(&mut self, start: usize) -> WithSpan<Token> {
@@ -411,7 +490,7 @@ impl<'src> Tokenizer<'src> {
         let brace_start = self.pos;
         self.advance(); // '{'
         let mut out = vec![WithSpan::new(
-            Token::Ctrl('{'),
+            Token::LBrace,
             Span::new(brace_start as u32, self.pos as u32, self.file_id),
         )];
 
@@ -424,7 +503,7 @@ impl<'src> Tokenizer<'src> {
                     let cs = self.pos;
                     self.advance();
                     out.push(WithSpan::new(
-                        Token::Ctrl('}'),
+                        Token::RBrace,
                         Span::new(cs as u32, self.pos as u32, self.file_id),
                     ));
                     break;
@@ -508,7 +587,7 @@ impl<'src> Tokenizer<'src> {
         let open = self.pos;
         self.advance(); // '{'
         let mut out = vec![WithSpan::new(
-            Token::Ctrl('{'),
+            Token::LBrace,
             Span::new(open as u32, self.pos as u32, self.file_id),
         )];
 
@@ -520,7 +599,7 @@ impl<'src> Tokenizer<'src> {
                     let cs = self.pos;
                     self.advance();
                     out.push(WithSpan::new(
-                        Token::Ctrl('}'),
+                        Token::RBrace,
                         Span::new(cs as u32, self.pos as u32, self.file_id),
                     ));
                     break;
@@ -535,7 +614,7 @@ impl<'src> Tokenizer<'src> {
                     } else {
                         let cs = self.pos;
                         self.advance();
-                        out.push(self.spanned(Token::Ctrl('<'), cs));
+                        out.push(self.spanned(Token::Lt, cs));
                     }
                 }
                 _ => {
