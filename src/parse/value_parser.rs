@@ -1472,23 +1472,23 @@ mod tests {
     fn test_value_expression_parser() {
         let test_cases = vec![
             // (
-            //     r#"
-            //     {
-            //     for i in a {}
-            //     for i in a {}
-            //     for i in a {}
-            //     for i in a {}
-            //     const x = 10;
-            //     const x = 10;
-            //     for i in a {}
-            //     const x = 10;
-            //     for i in a {}
-            //     for i in a {}
-            //     const x = 10;
-            //     }
+            // r#"
+            // {
+            // for i in a {}
+            // for i in a {}
+            // for i in a {}
+            // for i in a {}
+            // const x = 10;
+            // const x = 10;
+            // for i in a {}
+            // const x = 10;
+            // for i in a {}
+            // for i in a {}
+            // const x = 10;
+            // }
 
-            //     "#,
-            //     ValueExpr::Break,
+            // "#,
+            // ValueExpr::Break,
             // ),
             (
                 "duckx {5;<h1>{<p></p>}</h1>}",

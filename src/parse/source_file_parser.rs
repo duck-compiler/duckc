@@ -1665,332 +1665,332 @@ mod tests {
             ),
             // todo(@Apfelfrosch): respect the new way to create structs
             // (
-            //     SourceFile {
-            //         type_definitions: vec![TypeDefinition {
-            //             name: mangle(&["abc", "TestStruct"]),
-            //             type_expression: TypeExpr::Struct(StructDefinition {
-            //                 name: "TestStruct",
-            //                 fields: vec![Field {
-            //                     name: "recv".into(),
-            //                     type_expr: TypeExpr::TypeName(
-            //                         false,
-            //                         mangle(&["abc", "TestStruct"]),
-            //                         None,
-            //                     )
-            //                     .into_empty_span(),
-            //                 }],
-            //                 methods: vec![],
-            //                 generics: None,
-            //             })
-            //             .into_empty_span(),
-            //             generics: None,
-            //         }],
-            //         use_statements: vec![UseStatement::Go("fmt".into(), None)],
-            //         function_definitions: vec![
-            //             FunctionDefintion {
-            //                 name: mangle(&["abc", "lol", "im_a_func"]),
-            //                 value_expr: ValueExpr::Block(vec![
-            //                     ValueExpr::FunctionCall {
-            //                         target: ValueExpr::Variable(
-            //                             true,
-            //                             mangle(&["abc", "lol", "called"]),
-            //                             None,
-            //                         )
-            //                         .into_empty_span()
-            //                         .into(),
-            //                         params: vec![],
-            //                         type_params: None,
-            //                     }
-            //                     .into_empty_span(),
-            //                 ])
-            //                 .into_empty_span(),
-            //                 ..Default::default()
-            //             },
-            //             FunctionDefintion {
-            //                 name: mangle(&["abc", "im_calling_a_sub_module"]),
-            //                 value_expr: ValueExpr::Block(vec![
-            //                     ValueExpr::Variable(true, mangle(&["abc", "lol", "called"]), None)
-            //                         .into_empty_span(),
-            //                 ])
-            //                 .into_empty_span(),
-            //                 ..Default::default()
-            //             },
-            //             FunctionDefintion {
-            //                 name: mangle(&["abc", "lol", "called"]),
-            //                 value_expr: ValueExpr::Block(vec![
-            //                     ValueExpr::FunctionCall {
-            //                         target: ValueExpr::Variable(
-            //                             true,
-            //                             mangle(&["abc", "lol", "called"]),
-            //                             None,
-            //                         )
-            //                         .into_empty_span()
-            //                         .into(),
-            //                         params: vec![],
-            //                         type_params: None,
-            //                     }
-            //                     .into_empty_span(),
-            //                 ])
-            //                 .into_empty_span(),
-            //                 ..Default::default()
-            //             },
-            //         ],
-            //         ..Default::default()
-            //     },
-            //     SourceFile {
-            //         sub_modules: vec![
-            //             (
-            //                 "abc".into(),
-            //                 SourceFile {
-            //                     use_statements: vec![UseStatement::Regular(
-            //                         false,
-            //                         vec![
-            //                             Indicator::Module("lol".into()),
-            //                             Indicator::Symbols(vec!["called".into()]),
-            //                         ],
-            //                     )],
-            //                     type_definitions: vec![TypeDefinition {
-            //                         name: "TestStruct".into(),
-            //                         type_expression: TypeExpr::Struct(StructDefinition {
-            //                             fields: vec![Field {
+            // SourceFile {
+            // type_definitions: vec![TypeDefinition {
+            // name: mangle(&["abc", "TestStruct"]),
+            // type_expression: TypeExpr::Struct(StructDefinition {
+            // name: "TestStruct",
+            // fields: vec![Field {
+            // name: "recv".into(),
+            // type_expr: TypeExpr::TypeName(
+            // false,
+            // mangle(&["abc", "TestStruct"]),
+            // None,
+            // )
+            // .into_empty_span(),
+            // }],
+            // methods: vec![],
+            // generics: None,
+            // })
+            // .into_empty_span(),
+            // generics: None,
+            // }],
+            // use_statements: vec![UseStatement::Go("fmt".into(), None)],
+            // function_definitions: vec![
+            // FunctionDefintion {
+            // name: mangle(&["abc", "lol", "im_a_func"]),
+            // value_expr: ValueExpr::Block(vec![
+            // ValueExpr::FunctionCall {
+            // target: ValueExpr::Variable(
+            // true,
+            // mangle(&["abc", "lol", "called"]),
+            // None,
+            // )
+            // .into_empty_span()
+            // .into(),
+            // params: vec![],
+            // type_params: None,
+            // }
+            // .into_empty_span(),
+            // ])
+            // .into_empty_span(),
+            // ..Default::default()
+            // },
+            // FunctionDefintion {
+            // name: mangle(&["abc", "im_calling_a_sub_module"]),
+            // value_expr: ValueExpr::Block(vec![
+            // ValueExpr::Variable(true, mangle(&["abc", "lol", "called"]), None)
+            // .into_empty_span(),
+            // ])
+            // .into_empty_span(),
+            // ..Default::default()
+            // },
+            // FunctionDefintion {
+            // name: mangle(&["abc", "lol", "called"]),
+            // value_expr: ValueExpr::Block(vec![
+            // ValueExpr::FunctionCall {
+            // target: ValueExpr::Variable(
+            // true,
+            // mangle(&["abc", "lol", "called"]),
+            // None,
+            // )
+            // .into_empty_span()
+            // .into(),
+            // params: vec![],
+            // type_params: None,
+            // }
+            // .into_empty_span(),
+            // ])
+            // .into_empty_span(),
+            // ..Default::default()
+            // },
+            // ],
+            // ..Default::default()
+            // },
+            // SourceFile {
+            // sub_modules: vec![
+            // (
+            // "abc".into(),
+            // SourceFile {
+            // use_statements: vec![UseStatement::Regular(
+            // false,
+            // vec![
+            // Indicator::Module("lol".into()),
+            // Indicator::Symbols(vec!["called".into()]),
+            // ],
+            // )],
+            // type_definitions: vec![TypeDefinition {
+            // name: "TestStruct".into(),
+            // type_expression: TypeExpr::Struct(StructDefinition {
+            // fields: vec![Field {
             //
-            //                                 name: "recv".into(),
-            //                                 type_expr: TypeExpr::RawTypeName(
-            //                                     false,
-            //                                     vec!["TestStruct".into()],
-            //                                     None,
-            //                                 )
-            //                                 .into_empty_span(),
-            //                             }],
-            //                         })
-            //                         .into_empty_span(),
-            //                         generics: None,
-            //                     }],
-            //                     function_definitions: vec![FunctionDefintion {
-            //                         name: "im_calling_a_sub_module".into(),
-            //                         value_expr: ValueExpr::Block(vec![
-            //                             ValueExpr::RawVariable(false, vec!["called".into()])
-            //                                 .into_empty_span(),
-            //                         ])
-            //                         .into_empty_span(),
-            //                         ..Default::default()
-            //                     }],
-            //                     sub_modules: vec![(
-            //                         "lol".into(),
-            //                         SourceFile {
-            //                             use_statements: vec![UseStatement::Go("fmt".into(), None)],
-            //                             function_definitions: vec![
-            //                                 FunctionDefintion {
-            //                                     name: "im_a_func".into(),
-            //                                     value_expr: ValueExpr::Block(vec![
-            //                                         ValueExpr::FunctionCall {
-            //                                             target: ValueExpr::RawVariable(
-            //                                                 false,
-            //                                                 vec!["called".into()],
-            //                                             )
-            //                                             .into_empty_span()
-            //                                             .into(),
-            //                                             params: vec![],
-            //                                             type_params: None,
-            //                                         }
-            //                                         .into_empty_span(),
-            //                                     ])
-            //                                     .into_empty_span(),
-            //                                     ..Default::default()
-            //                                 },
-            //                                 FunctionDefintion {
-            //                                     name: "called".into(),
-            //                                     value_expr: ValueExpr::Block(vec![
-            //                                         ValueExpr::FunctionCall {
-            //                                             target: ValueExpr::RawVariable(
-            //                                                 false,
-            //                                                 vec!["called".into()],
-            //                                             )
-            //                                             .into_empty_span()
-            //                                             .into(),
-            //                                             params: vec![],
-            //                                             type_params: None,
-            //                                         }
-            //                                         .into_empty_span(),
-            //                                     ])
-            //                                     .into_empty_span(),
-            //                                     ..Default::default()
-            //                                 },
-            //                             ],
-            //                             ..SourceFile::default()
-            //                         },
-            //                     )],
-            //                     ..SourceFile::default()
-            //                 },
-            //             ),
-            //             (
-            //                 "xyz".into(),
-            //                 SourceFile {
-            //                     sub_modules: vec![("foo".into(), SourceFile::default())],
-            //                     ..SourceFile::default()
-            //                 },
-            //             ),
-            //         ],
-            //         ..Default::default()
-            //     },
+            // name: "recv".into(),
+            // type_expr: TypeExpr::RawTypeName(
+            // false,
+            // vec!["TestStruct".into()],
+            // None,
+            // )
+            // .into_empty_span(),
+            // }],
+            // })
+            // .into_empty_span(),
+            // generics: None,
+            // }],
+            // function_definitions: vec![FunctionDefintion {
+            // name: "im_calling_a_sub_module".into(),
+            // value_expr: ValueExpr::Block(vec![
+            // ValueExpr::RawVariable(false, vec!["called".into()])
+            // .into_empty_span(),
+            // ])
+            // .into_empty_span(),
+            // ..Default::default()
+            // }],
+            // sub_modules: vec![(
+            // "lol".into(),
+            // SourceFile {
+            // use_statements: vec![UseStatement::Go("fmt".into(), None)],
+            // function_definitions: vec![
+            // FunctionDefintion {
+            // name: "im_a_func".into(),
+            // value_expr: ValueExpr::Block(vec![
+            // ValueExpr::FunctionCall {
+            // target: ValueExpr::RawVariable(
+            // false,
+            // vec!["called".into()],
+            // )
+            // .into_empty_span()
+            // .into(),
+            // params: vec![],
+            // type_params: None,
+            // }
+            // .into_empty_span(),
+            // ])
+            // .into_empty_span(),
+            // ..Default::default()
+            // },
+            // FunctionDefintion {
+            // name: "called".into(),
+            // value_expr: ValueExpr::Block(vec![
+            // ValueExpr::FunctionCall {
+            // target: ValueExpr::RawVariable(
+            // false,
+            // vec!["called".into()],
+            // )
+            // .into_empty_span()
+            // .into(),
+            // params: vec![],
+            // type_params: None,
+            // }
+            // .into_empty_span(),
+            // ])
+            // .into_empty_span(),
+            // ..Default::default()
+            // },
+            // ],
+            // ..SourceFile::default()
+            // },
+            // )],
+            // ..SourceFile::default()
+            // },
             // ),
             // (
-            //     SourceFile::default(),
-            //     SourceFile {
-            //         sub_modules: vec![("empty".into(), SourceFile::default())],
-            //         ..Default::default()
-            //     },
+            // "xyz".into(),
+            // SourceFile {
+            // sub_modules: vec![("foo".into(), SourceFile::default())],
+            // ..SourceFile::default()
+            // },
+            // ),
+            // ],
+            // ..Default::default()
+            // },
             // ),
             // (
-            //     SourceFile {
-            //         function_definitions: vec![FunctionDefintion {
-            //             name: "single_my_single_fun".into(),
-            //             ..Default::default()
-            //         }],
-            //         ..Default::default()
-            //     },
-            //     SourceFile {
-            //         sub_modules: vec![
-            //             ("empty".into(), SourceFile::default()),
-            //             (
-            //                 "single".into(),
-            //                 SourceFile {
-            //                     function_definitions: vec![FunctionDefintion {
-            //                         name: "my_single_fun".into(),
-            //                         ..Default::default()
-            //                     }],
-            //                     ..Default::default()
-            //                 },
-            //             ),
-            //         ],
-            //         ..Default::default()
-            //     },
+            // SourceFile::default(),
+            // SourceFile {
+            // sub_modules: vec![("empty".into(), SourceFile::default())],
+            // ..Default::default()
+            // },
             // ),
             // (
-            //     SourceFile {
-            //         function_definitions: vec![
-            //             FunctionDefintion {
-            //                 name: "multiple_some_abc_func".into(),
-            //                 value_expr: ValueExpr::String("Hello from module".into())
-            //                     .into_empty_span_and_block(),
-            //                 ..Default::default()
-            //             },
-            //             FunctionDefintion {
-            //                 name: "multiple_some_xyz_func".into(),
-            //                 value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
-            //                 ..Default::default()
-            //             },
-            //         ],
-            //         ..Default::default()
-            //     },
-            //     SourceFile {
-            //         sub_modules: vec![(
-            //             "multiple".into(),
-            //             SourceFile {
-            //                 function_definitions: vec![
-            //                     FunctionDefintion {
-            //                         name: "some_abc_func".into(),
-            //                         value_expr: ValueExpr::String("Hello from module".into())
-            //                             .into_empty_span_and_block(),
-            //                         ..Default::default()
-            //                     },
-            //                     FunctionDefintion {
-            //                         name: "some_xyz_func".into(),
-            //                         value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
-            //                         ..Default::default()
-            //                     },
-            //                 ],
-            //                 ..Default::default()
-            //             },
-            //         )],
-            //         ..Default::default()
-            //     },
+            // SourceFile {
+            // function_definitions: vec![FunctionDefintion {
+            // name: "single_my_single_fun".into(),
+            // ..Default::default()
+            // }],
+            // ..Default::default()
+            // },
+            // SourceFile {
+            // sub_modules: vec![
+            // ("empty".into(), SourceFile::default()),
+            // (
+            // "single".into(),
+            // SourceFile {
+            // function_definitions: vec![FunctionDefintion {
+            // name: "my_single_fun".into(),
+            // ..Default::default()
+            // }],
+            // ..Default::default()
+            // },
+            // ),
+            // ],
+            // ..Default::default()
+            // },
             // ),
             // (
-            //     SourceFile {
-            //         function_definitions: vec![
-            //             FunctionDefintion {
-            //                 name: "multiple_some_abc_func".into(),
-            //                 value_expr: ValueExpr::String("Hello from module".into())
-            //                     .into_empty_span_and_block(),
-            //                 ..Default::default()
-            //             },
-            //             FunctionDefintion {
-            //                 name: "multiple_some_xyz_func".into(),
-            //                 value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
-            //                 ..Default::default()
-            //             },
-            //             FunctionDefintion {
-            //                 name: "nested_hello_from_x".into(),
-            //                 ..Default::default()
-            //             },
-            //             FunctionDefintion {
-            //                 name: "nested_level1_hello_from_y".into(),
-            //                 ..Default::default()
-            //             },
-            //             FunctionDefintion {
-            //                 name: "nested_level1_level2_hello_from_z".into(),
-            //                 ..Default::default()
-            //             },
-            //         ],
-            //         ..Default::default()
-            //     },
-            //     SourceFile {
-            //         sub_modules: vec![
-            //             (
-            //                 "multiple".into(),
-            //                 SourceFile {
-            //                     function_definitions: vec![
-            //                         FunctionDefintion {
-            //                             name: "some_abc_func".into(),
-            //                             value_expr: ValueExpr::String("Hello from module".into())
-            //                                 .into_empty_span_and_block(),
-            //                             ..Default::default()
-            //                         },
-            //                         FunctionDefintion {
-            //                             name: "some_xyz_func".into(),
-            //                             value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
-            //                             ..Default::default()
-            //                         },
-            //                     ],
-            //                     ..Default::default()
-            //                 },
-            //             ),
-            //             (
-            //                 "nested".into(),
-            //                 SourceFile {
-            //                     function_definitions: vec![FunctionDefintion {
-            //                         name: "hello_from_x".into(),
-            //                         ..Default::default()
-            //                     }],
-            //                     sub_modules: vec![(
-            //                         "level1".into(),
-            //                         SourceFile {
-            //                             function_definitions: vec![FunctionDefintion {
-            //                                 name: "hello_from_y".into(),
-            //                                 ..Default::default()
-            //                             }],
-            //                             sub_modules: vec![(
-            //                                 "level2".into(),
-            //                                 SourceFile {
-            //                                     function_definitions: vec![FunctionDefintion {
-            //                                         name: "hello_from_z".into(),
-            //                                         ..Default::default()
-            //                                     }],
-            //                                     ..Default::default()
-            //                                 },
-            //                             )],
-            //                             ..Default::default()
-            //                         },
-            //                     )],
-            //                     ..Default::default()
-            //                 },
-            //             ),
-            //             ("empty".into(), SourceFile::default()),
-            //             ("another_mod".into(), SourceFile::default()),
-            //         ],
-            //         ..Default::default()
-            //     },
+            // SourceFile {
+            // function_definitions: vec![
+            // FunctionDefintion {
+            // name: "multiple_some_abc_func".into(),
+            // value_expr: ValueExpr::String("Hello from module".into())
+            // .into_empty_span_and_block(),
+            // ..Default::default()
+            // },
+            // FunctionDefintion {
+            // name: "multiple_some_xyz_func".into(),
+            // value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
+            // ..Default::default()
+            // },
+            // ],
+            // ..Default::default()
+            // },
+            // SourceFile {
+            // sub_modules: vec![(
+            // "multiple".into(),
+            // SourceFile {
+            // function_definitions: vec![
+            // FunctionDefintion {
+            // name: "some_abc_func".into(),
+            // value_expr: ValueExpr::String("Hello from module".into())
+            // .into_empty_span_and_block(),
+            // ..Default::default()
+            // },
+            // FunctionDefintion {
+            // name: "some_xyz_func".into(),
+            // value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
+            // ..Default::default()
+            // },
+            // ],
+            // ..Default::default()
+            // },
+            // )],
+            // ..Default::default()
+            // },
+            // ),
+            // (
+            // SourceFile {
+            // function_definitions: vec![
+            // FunctionDefintion {
+            // name: "multiple_some_abc_func".into(),
+            // value_expr: ValueExpr::String("Hello from module".into())
+            // .into_empty_span_and_block(),
+            // ..Default::default()
+            // },
+            // FunctionDefintion {
+            // name: "multiple_some_xyz_func".into(),
+            // value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
+            // ..Default::default()
+            // },
+            // FunctionDefintion {
+            // name: "nested_hello_from_x".into(),
+            // ..Default::default()
+            // },
+            // FunctionDefintion {
+            // name: "nested_level1_hello_from_y".into(),
+            // ..Default::default()
+            // },
+            // FunctionDefintion {
+            // name: "nested_level1_level2_hello_from_z".into(),
+            // ..Default::default()
+            // },
+            // ],
+            // ..Default::default()
+            // },
+            // SourceFile {
+            // sub_modules: vec![
+            // (
+            // "multiple".into(),
+            // SourceFile {
+            // function_definitions: vec![
+            // FunctionDefintion {
+            // name: "some_abc_func".into(),
+            // value_expr: ValueExpr::String("Hello from module".into())
+            // .into_empty_span_and_block(),
+            // ..Default::default()
+            // },
+            // FunctionDefintion {
+            // name: "some_xyz_func".into(),
+            // value_expr: ValueExpr::Int(1).into_empty_span_and_block(),
+            // ..Default::default()
+            // },
+            // ],
+            // ..Default::default()
+            // },
+            // ),
+            // (
+            // "nested".into(),
+            // SourceFile {
+            // function_definitions: vec![FunctionDefintion {
+            // name: "hello_from_x".into(),
+            // ..Default::default()
+            // }],
+            // sub_modules: vec![(
+            // "level1".into(),
+            // SourceFile {
+            // function_definitions: vec![FunctionDefintion {
+            // name: "hello_from_y".into(),
+            // ..Default::default()
+            // }],
+            // sub_modules: vec![(
+            // "level2".into(),
+            // SourceFile {
+            // function_definitions: vec![FunctionDefintion {
+            // name: "hello_from_z".into(),
+            // ..Default::default()
+            // }],
+            // ..Default::default()
+            // },
+            // )],
+            // ..Default::default()
+            // },
+            // )],
+            // ..Default::default()
+            // },
+            // ),
+            // ("empty".into(), SourceFile::default()),
+            // ("another_mod".into(), SourceFile::default()),
+            // ],
+            // ..Default::default()
+            // },
             // ),
         ];
 

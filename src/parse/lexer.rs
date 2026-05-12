@@ -1356,7 +1356,7 @@ mod tests {
                 ],
             ),
             (
-                // todo: discuss if π should be an valid identifier
+                // todo: discuss if should be an valid identifier
                 "let π = -3;",
                 vec![
                     Token::Let,

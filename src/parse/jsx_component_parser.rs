@@ -114,7 +114,7 @@ where
     I: BorrowInput<'src, Token = Token, Span = SS>,
 {
     // component Name {
-    //   %javascript source
+    // %javascript source
     // }
     just(Token::Component)
         .ignore_then(

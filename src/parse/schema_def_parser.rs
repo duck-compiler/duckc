@@ -95,9 +95,9 @@ where
         .map_with(|((doc_comments, identifier), mut fields), ctx| {
             // todo: do a check if all fields if's value_exprs have a block for the value expr
             // value_expr = match value_expr {
-            //     (ValueExpr::Duck(x), loc) if x.is_empty() => (ValueExpr::Block(vec![]), loc),
-            //     x @ (ValueExpr::Block(_), _) => x,
-            //     _ => panic!("Function must be block"),
+            // (ValueExpr::Duck(x), loc) if x.is_empty() => (ValueExpr::Block(vec![]), loc),
+            // x @ (ValueExpr::Block(_), _) => x,
+            // _ => panic!("Function must be block"),
 
             fields.sort_by_key(|x| x.name.clone());
             SchemaDefinition {
@@ -166,119 +166,119 @@ pub mod tests {
 
     // #[test]
     // fn test_detailed_function_definitions() {
-    //     let test_cases = vec![
-    //         (
-    //             "fn y<TYPENAME>() {}",
-    //             SchemaDefinition {
-    //                 name: "y".to_string(),
-    //                 params: Some(vec![]),
-    //                 out_type: None,
-    //                 generics: Some(vec![(
-    //                     Generic {
-    //                         name: "TYPENAME".to_string(),
-    //                         constraint: None,
-    //                     },
-    //                     empty_range(),
-    //                 )]),
-    //                 value_expr: ValueExpr::Block(vec![]).into_empty_span(),
-    //                 span: empty_range(),
-    //                 comments: Vec::new(),
-    //             },
-    //         ),
-    //         (
-    //             "fn y<TYPENAME, TYPENAME2>() {}",
-    //             SchemaDefinition {
-    //                 name: "y".to_string(),
-    //                 params: Some(vec![]),
-    //                 out_type: None,
-    //                 generics: Some(vec![
-    //                     (
-    //                         Generic {
-    //                             name: "TYPENAME".to_string(),
-    //                             constraint: None,
-    //                         },
-    //                         empty_range(),
-    //                     ),
-    //                     (
-    //                         Generic {
-    //                             name: "TYPENAME2".to_string(),
-    //                             constraint: None,
-    //                         },
-    //                         empty_range(),
-    //                     ),
-    //                 ]),
-    //                 value_expr: ValueExpr::Block(vec![]).into_empty_span(),
-    //                 span: empty_range(),
-    //                 comments: Vec::new(),
-    //             },
-    //         ),
-    //         (
-    //             "fn y<TYPENAME, TYPENAME2, TYPENAME3>() {}",
-    //             SchemaDefinition {
-    //                 name: "y".to_string(),
-    //                 params: Some(vec![]),
-    //                 out_type: None,
-    //                 generics: Some(vec![
-    //                     (
-    //                         Generic {
-    //                             name: "TYPENAME".to_string(),
-    //                             constraint: None,
-    //                         },
-    //                         empty_range(),
-    //                     ),
-    //                     (
-    //                         Generic {
-    //                             name: "TYPENAME2".to_string(),
-    //                             constraint: None,
-    //                         },
-    //                         empty_range(),
-    //                     ),
-    //                     (
-    //                         Generic {
-    //                             name: "TYPENAME3".to_string(),
-    //                             constraint: None,
-    //                         },
-    //                         empty_range(),
-    //                     ),
-    //                 ]),
-    //                 value_expr: ValueExpr::Block(vec![]).into_empty_span(),
-    //                 span: empty_range(),
-    //                 comments: Vec::new(),
-    //             },
-    //         ),
-    //     ];
+    // let test_cases = vec![
+    // (
+    // "fn y<TYPENAME>() {}",
+    // SchemaDefinition {
+    // name: "y".to_string(),
+    // params: Some(vec![]),
+    // out_type: None,
+    // generics: Some(vec![(
+    // Generic {
+    // name: "TYPENAME".to_string(),
+    // constraint: None,
+    // },
+    // empty_range(),
+    // )]),
+    // value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+    // span: empty_range(),
+    // comments: Vec::new(),
+    // },
+    // ),
+    // (
+    // "fn y<TYPENAME, TYPENAME2>() {}",
+    // SchemaDefinition {
+    // name: "y".to_string(),
+    // params: Some(vec![]),
+    // out_type: None,
+    // generics: Some(vec![
+    // (
+    // Generic {
+    // name: "TYPENAME".to_string(),
+    // constraint: None,
+    // },
+    // empty_range(),
+    // ),
+    // (
+    // Generic {
+    // name: "TYPENAME2".to_string(),
+    // constraint: None,
+    // },
+    // empty_range(),
+    // ),
+    // ]),
+    // value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+    // span: empty_range(),
+    // comments: Vec::new(),
+    // },
+    // ),
+    // (
+    // "fn y<TYPENAME, TYPENAME2, TYPENAME3>() {}",
+    // SchemaDefinition {
+    // name: "y".to_string(),
+    // params: Some(vec![]),
+    // out_type: None,
+    // generics: Some(vec![
+    // (
+    // Generic {
+    // name: "TYPENAME".to_string(),
+    // constraint: None,
+    // },
+    // empty_range(),
+    // ),
+    // (
+    // Generic {
+    // name: "TYPENAME2".to_string(),
+    // constraint: None,
+    // },
+    // empty_range(),
+    // ),
+    // (
+    // Generic {
+    // name: "TYPENAME3".to_string(),
+    // constraint: None,
+    // },
+    // empty_range(),
+    // ),
+    // ]),
+    // value_expr: ValueExpr::Block(vec![]).into_empty_span(),
+    // span: empty_range(),
+    // comments: Vec::new(),
+    // },
+    // ),
+    // ];
 
-    //     for (i, (src, expected_fns)) in test_cases.into_iter().enumerate() {
-    //         let lex_result = lex_parser("test", "").parse(src).into_result().expect(&src);
-    //         let parse_result = schema_definition_parser(make_input)
-    //             .parse(make_input(empty_range(), &lex_result));
+    // for (i, (src, expected_fns)) in test_cases.into_iter().enumerate() {
+    // let lex_result = lex_parser("test", "").parse(src).into_result().expect(&src);
+    // let parse_result = schema_definition_parser(make_input)
+    // .parse(make_input(empty_range(), &lex_result));
 
-    //         assert_eq!(
-    //             parse_result.has_errors(),
-    //             false,
-    //             "{i}: {} {:?} {:?}",
-    //             src,
-    //             lex_result,
-    //             parse_result
-    //         );
+    // assert_eq!(
+    // parse_result.has_errors(),
+    // false,
+    // "{i}: {} {:?} {:?}",
+    // src,
+    // lex_result,
+    // parse_result
+    // );
 
-    //         assert_eq!(parse_result.has_output(), true, "{i}: {}", src);
+    // assert_eq!(parse_result.has_output(), true, "{i}: {}", src);
 
-    //         let mut output = parse_result.into_result().expect(&src);
+    // let mut output = parse_result.into_result().expect(&src);
 
-    //         output
-    //             .generics
-    //             .as_mut()
-    //             .unwrap()
-    //             .iter_mut()
-    //             .for_each(|generic| {
-    //                 *generic = (generic.0.clone(), empty_range());
-    //             });
+    // output
+    // .generics
+    // .as_mut()
+    // .unwrap()
+    // .iter_mut()
+    // .for_each(|generic| {
+    // *generic = (generic.0.clone(), empty_range());
+    // });
 
-    //         output.span = empty_range();
-    //         output.value_expr = ValueExpr::Block(vec![]).into_empty_span();
+    // output.span = empty_range();
+    // output.value_expr = ValueExpr::Block(vec![]).into_empty_span();
 
-    //         assert_eq!(output, expected_fns, "{i}: {}", src);
-    //     }
+    // assert_eq!(output, expected_fns, "{i}: {}", src);
+    // }
     // }
 }

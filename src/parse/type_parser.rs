@@ -6,9 +6,11 @@ use chumsky::prelude::*;
 
 use crate::{
     parse::{
-        Field, SS, Spanned, failure_with_occurence, generics_parser::{Generic, generics_parser}, value_parser::{TypeParam, empty_range}
+        Field, SS, Spanned, failure_with_occurence,
+        generics_parser::{Generic, generics_parser},
+        value_parser::{TypeParam, empty_range},
     },
-    semantics::{ident_mangler::mangle, type_resolve::TypeEnv}
+    semantics::{ident_mangler::mangle, type_resolve::TypeEnv},
 };
 
 use super::lexer::Token;
@@ -705,8 +707,8 @@ impl TypeExpr {
             TypeExpr::Duck(Duck { fields: _ }) => {
                 false
                 // && fields
-                //     .iter()
-                //     .all(|f| f.type_expr.0.implements_hash(type_env))
+                // .iter()
+                // .all(|f| f.type_expr.0.implements_hash(type_env))
             }
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_hash(type_env)),
             TypeExpr::Struct { name, type_params } => {
@@ -738,8 +740,8 @@ impl TypeExpr {
             TypeExpr::Duck(Duck { fields: _ }) => {
                 false
                 // && fields
-                //     .iter()
-                //     .all(|f| f.type_expr.0.implements_clone(type_env))
+                // .iter()
+                // .all(|f| f.type_expr.0.implements_clone(type_env))
             }
             TypeExpr::Tuple(t) | TypeExpr::Or(t) => {
                 t.iter().all(|t| t.0.implements_clone(type_env))
@@ -774,9 +776,9 @@ impl TypeExpr {
             TypeExpr::Duck(Duck { fields: _ }) => {
                 false
                 // false
-                //     && fields
-                //         .iter()
-                //         .all(|f| f.type_expr.0.implements_ord(type_env))
+                // && fields
+                // .iter()
+                // .all(|f| f.type_expr.0.implements_ord(type_env))
             }
             TypeExpr::Tuple(t) => t.iter().all(|t| t.0.implements_ord(type_env)),
             TypeExpr::Struct { name, type_params } => {
@@ -1356,21 +1358,22 @@ where
                     prefixes.into_iter().fold(base, |acc, inner| {
                         let span = acc.1;
                         match inner {
-                            Some(index_type) => {
-                                match &index_type.0 {
-                                    TypeExpr::Tag(_) | TypeExpr::Int => {
-                                        (TypeExpr::Indexed(Box::new(acc), Box::new(index_type)), span)
-                                    }
-                                    _ => failure_with_occurence(
-                                        "Invalid Type Index",
-                                        index_type.1,
-                                        [(
-                                            format!("Type Index must be Int or Tag. You've provided {}", index_type.0.as_clean_user_faced_type_name()),
-                                            index_type.1
-                                        )]
-                                    ),
+                            Some(index_type) => match &index_type.0 {
+                                TypeExpr::Tag(_) | TypeExpr::Int => {
+                                    (TypeExpr::Indexed(Box::new(acc), Box::new(index_type)), span)
                                 }
-                            }
+                                _ => failure_with_occurence(
+                                    "Invalid Type Index",
+                                    index_type.1,
+                                    [(
+                                        format!(
+                                            "Type Index must be Int or Tag. You've provided {}",
+                                            index_type.0.as_clean_user_faced_type_name()
+                                        ),
+                                        index_type.1,
+                                    )],
+                                ),
+                            },
                             None => (TypeExpr::Array(Box::new(acc)), span),
                         }
                     })
@@ -1475,7 +1478,9 @@ where
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            TypeExpr::Indexed(target, index) => write!(f, "{}[{}]", target.as_ref().0, index.as_ref().0),
+            TypeExpr::Indexed(target, index) => {
+                write!(f, "{}[{}]", target.as_ref().0, index.as_ref().0)
+            }
             TypeExpr::Byte => write!(f, "Byte"),
             TypeExpr::Statement => write!(f, "Statement"),
             TypeExpr::Never => write!(f, "never"),
@@ -1777,26 +1782,26 @@ pub mod tests {
         // assert_type_expression("false", TypeExpr::Bool(Some(false)));
 
         // assert_type_expression(
-        //     "true | false",
-        //     TypeExpr::Or(vec![
-        //         TypeExpr::Bool(Some(true)).into_empty_span(),
-        //         TypeExpr::Bool(Some(false)).into_empty_span(),
-        //     ]),
+        // "true | false",
+        // TypeExpr::Or(vec![
+        // TypeExpr::Bool(Some(true)).into_empty_span(),
+        // TypeExpr::Bool(Some(false)).into_empty_span(),
+        // ]),
         // );
 
         // assert_type_expression("\"str\"", TypeExpr::String(Some("str".to_string())));
 
         // assert_type_expression(
-        //     "\"other_str\"",
-        //     TypeExpr::String(Some("other_str".to_string())),
+        // "\"other_str\"",
+        // TypeExpr::String(Some("other_str".to_string())),
         // );
 
         // assert_type_expression(
-        //     "\"str\" | \"other_str\"",
-        //     TypeExpr::Or(vec![
-        //         TypeExpr::String(Some("str".to_string())).into_empty_span(),
-        //         TypeExpr::String(Some("other_str".to_string())).into_empty_span(),
-        //     ]),
+        // "\"str\" | \"other_str\"",
+        // TypeExpr::Or(vec![
+        // TypeExpr::String(Some("str".to_string())).into_empty_span(),
+        // TypeExpr::String(Some("other_str".to_string())).into_empty_span(),
+        // ]),
         // );
 
         assert_type_expression(
@@ -2061,7 +2066,7 @@ pub mod tests {
         );
 
         // TODO: discuss unnamed paramters in fn typeexpr
-        //      fn (String) -> Int
+        // fn (String) -> Int
         // without the x:
         // There's an example of this right below this issue.
         // It shows that you have to declare the parameter name
@@ -2555,23 +2560,23 @@ pub mod tests {
         );
 
         // assert_type_expression(
-        //     "{ x: \"hallo\" } | { x: \"bye\" }",
-        //     TypeExpr::Or(vec![
-        //         TypeExpr::Duck(Duck {
-        //             fields: vec![Field::new(
-        //                 "x".to_string(),
-        //                 TypeExpr::String(Some("hallo".to_string())).into_empty_span(),
-        //             )],
-        //         })
-        //         .into_empty_span(),
-        //         TypeExpr::Duck(Duck {
-        //             fields: vec![Field::new(
-        //                 "x".to_string(),
-        //                 TypeExpr::String(Some("bye".to_string())).into_empty_span(),
-        //             )],
-        //         })
-        //         .into_empty_span(),
-        //     ]),
+        // "{ x: \"hallo\" } | { x: \"bye\" }",
+        // TypeExpr::Or(vec![
+        // TypeExpr::Duck(Duck {
+        // fields: vec![Field::new(
+        // "x".to_string(),
+        // TypeExpr::String(Some("hallo".to_string())).into_empty_span(),
+        // )],
+        // })
+        // .into_empty_span(),
+        // TypeExpr::Duck(Duck {
+        // fields: vec![Field::new(
+        // "x".to_string(),
+        // TypeExpr::String(Some("bye".to_string())).into_empty_span(),
+        // )],
+        // })
+        // .into_empty_span(),
+        // ]),
         // );
 
         assert_type_expression(
@@ -2721,9 +2726,7 @@ pub mod tests {
         assert_type_expression(
             "String[.username]",
             TypeExpr::Indexed(
-                TypeExpr::String(None)
-                    .into_empty_span()
-                    .into(),
+                TypeExpr::String(None).into_empty_span().into(),
                 TypeExpr::Tag("username".to_string())
                     .into_empty_span()
                     .into(),
@@ -2733,12 +2736,8 @@ pub mod tests {
         assert_type_expression(
             "String[Int]",
             TypeExpr::Indexed(
-                TypeExpr::String(None)
-                    .into_empty_span()
-                    .into(),
-                TypeExpr::Int
-                    .into_empty_span()
-                    .into(),
+                TypeExpr::String(None).into_empty_span().into(),
+                TypeExpr::Int.into_empty_span().into(),
             ),
         );
     }
