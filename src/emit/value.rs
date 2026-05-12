@@ -1213,7 +1213,7 @@ fn walk_access_raw(
                 }
                 break;
                 // } else {
-                //     panic!("need var, got {current_obj:?}")
+                // panic!("need var, got {current_obj:?}")
                 // }
             }
         }
