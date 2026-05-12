@@ -1,0 +1,9 @@
+﻿use go "fmt"
+
+client fn Counter() {
+    return jsx { <div>Hello from client</div> }
+}
+
+fn main() {
+    fmt.Println("compiled ok")
+}

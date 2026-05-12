@@ -1,34 +1,34 @@
-use std::io::println;
+use go "fmt"
+use go "log"
+use go "net/http"
+use ts "preact"
+use ts "preact/hooks"
+
+client fn Counter() {
+    let (count, setCount) = hooks.useState(0);
+
+    return jsx {
+        <div>
+            <p>Count: {count}</p>
+            <button onClick={fn() { setCount(count + 1) }}>+1</button>
+        </div>
+    }
+}
+
+fn page_html() -> String {
+    return jsx {
+        <html>
+            <body>
+                <Counter />
+                <script src="/client.js"></script>
+            </body>
+        </html>
+    }
+}
 
 fn main() {
-
-    print("Navigation: ");
-    Symbols::arrow_up()->print();
-    Symbols::arrow_down()->print();
-    Symbols::arrow_left()->print();
-    Symbols::arrow_right()->print();
-
-    print("Status:     ");
-    Symbols::success()->print();
-    Symbols::error()->print();
-    Symbols::warning()->print();
-    Symbols::info()->print();
-
-    print("Box/Tee:    ");
-    Symbols::corner_tl()->print();
-    Symbols::line_h()->print();
-    Symbols::tee_top()->print();
-    Symbols::line_h()->print();
-    Symbols::corner_tr()->print();
-
-
-    if (UNICODE_SUPPORTED) {
-        assert(Symbols::success() == UnicodeSymbols::success(), "Proxy failed to return Unicode success");
-        assert(Symbols::pointer() == UnicodeSymbols::pointer(), "Proxy failed to return Unicode pointer");
-        assert(Symbols::tee_left() == UnicodeSymbols::tee_left(), "Proxy failed to return Unicode tee");
-    } else {
-        assert(Symbols::success() == AsciiSymbols::success(), "Proxy failed to return Ascii success");
-        assert(Symbols::pointer() == AsciiSymbols::pointer(), "Proxy failed to return Ascii pointer");
-        assert(Symbols::tee_left() == AsciiSymbols::tee_left(), "Proxy failed to return Ascii tee");
-    }
+    http.HandleFunc("/", go { func(w http.ResponseWriter, r *http.Request) { fmt.Fprintln(w, page_html()) } });
+    http.Handle("/client.js", go { DuckServeClientBundle() });
+    fmt.Println("Listening on :8080");
+    go { log.Fatal(http.ListenAndServe(":8080", nil)) }
 }

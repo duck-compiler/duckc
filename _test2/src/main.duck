@@ -1,0 +1,31 @@
+use go "fmt"
+use go "net/http"
+use ts "preact"
+use ts "preact/hooks"
+
+client fn Counter() {
+    let (count, setCount) = hooks.useState(0);
+
+    return jsx {
+        <div>
+            <p>Count: {count}</p>
+            <button onClick={|| setCount(count + 1)}>+1</button>
+        </div>
+    }
+}
+
+fn page_html() -> String {
+    let island = go { DuckIsland_Counter("{}") };
+    "<!doctype html><html><body>" + island + "<script src=\"/client.js\"></script></body></html>"
+}
+
+fn main() {
+    http.HandleFunc("/", fn(w, r) {
+        fmt.Fprintln(w, page_html())
+    });
+
+    http.HandleFunc("/client.js", go { DuckServeClientBundle() });
+
+    fmt.Println("Listening on :8080");
+    http.ListenAndServe(":8080", go { nil })
+}
