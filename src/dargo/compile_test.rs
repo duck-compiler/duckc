@@ -138,6 +138,23 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
             None,
         ));
 
+    let external_go_imports: Vec<String> = src_file_ast
+        .use_statements
+        .iter()
+        .filter_map(|s| {
+            if let crate::parse::use_statement_parser::UseStatement::Go(path, _) = s {
+                let first_segment = path.split('/').next().unwrap_or("");
+                if first_segment.contains('.') {
+                    Some(path.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+
     let (tailwind_worker_send, tailwind_worker_receive) = mpsc::channel::<String>();
     let (tailwind_result_send, tailwind_result_receive) = mpsc::channel::<String>();
 
@@ -314,6 +331,7 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
             .unwrap_or(OsString::from("duck_out"))
             .as_os_str(),
         &go_output_file,
+        &external_go_imports,
     )
     .map_err(|err| {
         (
