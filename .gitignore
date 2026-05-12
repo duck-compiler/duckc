@@ -12,3 +12,11 @@ tests/dargo
 tests/dargo.exe
 cleanup_expected.txt
 cleanup_result.txt
+node_modules/
+.claude/
+CLAUDE.md
+clean_comments.py
+check_unicode.py
+unicode_remaining.txt
+package.json
+bun.lock
