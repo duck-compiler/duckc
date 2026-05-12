@@ -1,11 +1,13 @@
 use clap::{Parser as CliParser, Subcommand};
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 
 use crate::{
     dargo::{
         self, compile::CompileErrKind, docs::DocsErrKind, init::InitErrKind, new::NewErrKind,
         run::RunErrKind, test::TestErrKind,
     },
+    parser2::{parser::parse, tokenizer::tokenize},
+    semantics2::resolver::resolve,
     tags::Tag,
 };
 
@@ -33,6 +35,8 @@ pub enum Commands {
     Run(RunArgs),
     Test(TestArgs),
     Docs(DocsGenerateArgs),
+    Parse,
+    Playground,
 }
 
 #[derive(clap::Args, Debug)]
@@ -169,9 +173,23 @@ pub fn run_cli() -> Result<(), (String, CliErrKind)> {
                 )
             })?;
         }
+        Commands::Parse => {
+            println!("new parser test");
+            let tokens = tokenize(dbg!(&fs::read_to_string("./main.duck").unwrap()), 1);
+            let parsed = parse(tokens.0, 1);
+            let out = resolve(parsed.0);
+
+            println!("{:#?}", out.source_file);
+            println!("{}", out.symbols.len());
+
+            return Ok(());
+        }
         Commands::New(new_args) => {
             dargo::new::new_project(None, new_args)
                 .map_err(|err| (format!("{}{}", Tag::Dargo, err.0,), CliErrKind::New(err.1)))?;
+        }
+        Commands::Playground => {
+            dargo::playground::serve();
         }
     }
 

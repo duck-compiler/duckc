@@ -7,5 +7,6 @@ pub mod docs;
 pub mod init;
 pub mod loader;
 pub mod new;
+pub mod playground;
 pub mod run;
 pub mod test;

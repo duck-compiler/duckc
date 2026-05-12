@@ -82,6 +82,7 @@ pub fn build(
     dot_dir: &Path,
     designated_binary_name: &OsStr,
     go_output_file: &Path,
+    external_go_imports: &[String],
 ) -> Result<PathBuf, (String, GoCliErrKind)> {
     let mut dot_dir_buf = dot_dir.to_owned();
     let go_bin = resolve_go_bin();
@@ -151,6 +152,13 @@ pub fn build(
     ]);
 
     run_command(&mut mod_init_cmd, true)?;
+
+    for pkg in external_go_imports {
+        let mut get_cmd = Command::new(&go_bin);
+        get_cmd.args([OsString::from("get"), OsString::from(pkg)]);
+        run_command(&mut get_cmd, false)?;
+    }
+
     run_command(&mut tidy_cmd, false)?;
     run_command(&mut build_command, false)?;
 

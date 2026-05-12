@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    DARGO_DOT_DIR,
+    DARGO_DOT_DIR, bundle,
     cli::go_cli::{self, GoCliErrKind},
     dargo::cli::CompileArgs,
     emit::{ir::join_ir, types::escape_string_for_go},
@@ -115,6 +115,19 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         .to_string()
         .leak();
 
+    // Use the new parser2/emit2 pipeline when the source has `client fn` or `use ts`.
+    let uses_new_pipeline =
+        src_file_file_contents.contains("client fn") || src_file_file_contents.contains("use ts ");
+
+    if uses_new_pipeline {
+        return compile_new_pipeline(
+            src_file_file_contents,
+            src_file_name,
+            binary_output_name,
+            compile_args.optimize_go,
+        );
+    }
+
     let parse_start = Instant::now();
     let tokens = lex(src_file_name, src_file_file_contents);
     let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
@@ -137,6 +150,24 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
 
         let _ = tailwind_result_send.send(emit_env.to_css_stylesheet(true));
     });
+    let external_go_imports: Vec<String> = src_file_ast
+        .use_statements
+        .iter()
+        .filter_map(|s| {
+            if let crate::parse::use_statement_parser::UseStatement::Go(path, _) = s {
+                // External packages have a domain in the first path segment (e.g. "github.com/...")
+                let first_segment = path.split('/').next().unwrap_or("");
+                if first_segment.contains('.') {
+                    Some(path.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+
     let typecheck_start = Instant::now();
     let mut type_env = typecheck(&mut src_file_ast, &tailwind_worker_send);
     let typecheck_elapsed = typecheck_start.elapsed();
@@ -175,6 +206,7 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
             .unwrap_or(OsString::from("duck_out"))
             .as_os_str(),
         Path::new(&go_file_name),
+        &external_go_imports,
     )
     .map_err(|err| {
         (
@@ -192,7 +224,10 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         println!("    emit:      {:?}", emit_elapsed);
         println!("    duckwind:  {:?}", duckwind_elapsed);
         println!("    go build:  {:?}", go_build_elapsed);
-        println!("    total:     {:?}", parse_elapsed + typecheck_elapsed + emit_elapsed + duckwind_elapsed + go_build_elapsed);
+        println!(
+            "    total:     {:?}",
+            parse_elapsed + typecheck_elapsed + emit_elapsed + duckwind_elapsed + go_build_elapsed
+        );
         println!();
     }
 
@@ -206,4 +241,176 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
     return Ok(CompileOutput {
         binary_path: executable_path,
     });
+}
+
+fn compile_new_pipeline(
+    src: &'static str,
+    src_file_name: &'static str,
+    binary_output_name: Option<String>,
+    optimize_go: bool,
+) -> Result<CompileOutput, (String, CompileErrKind)> {
+    use crate::emit2::{lower, lower_js, render, render_js};
+    use crate::parser2::parser::{Item, UseDecl, parse};
+    use crate::parser2::tokenizer::tokenize_no_comments;
+    use crate::semantics2::mono::monomorphize;
+    use crate::semantics2::resolver::resolve;
+    use crate::semantics2::type_infer::infer;
+
+    use crate::parser2::errors::render_errors;
+
+    let (tokens, lex_errors) = tokenize_no_comments(src, 0);
+    if !lex_errors.is_empty() {
+        let msg = format!(
+            "{}{} Lex errors:\n{}",
+            *COMPILE_TAG,
+            Tag::Err,
+            render_errors(
+                src,
+                src_file_name,
+                lex_errors.iter().map(|e| ("lex", e.msg.as_str(), e.span)),
+                true
+            ),
+        );
+        return Err((msg, CompileErrKind::CannotReadFile));
+    }
+
+    let (ast, parse_errors) = parse(tokens, 0);
+    if !parse_errors.is_empty() {
+        let msg = format!(
+            "{}{} Parse errors:\n{}",
+            *COMPILE_TAG,
+            Tag::Err,
+            render_errors(
+                src,
+                src_file_name,
+                parse_errors
+                    .iter()
+                    .map(|e| ("parse", e.msg.as_str(), e.span)),
+                true
+            ),
+        );
+        return Err((msg, CompileErrKind::CannotReadFile));
+    }
+
+    let resolve_out = resolve(ast);
+    if !resolve_out.errors.is_empty() {
+        let msg = format!(
+            "{}{} Resolve errors:\n{}",
+            *COMPILE_TAG,
+            Tag::Err,
+            render_errors(
+                src,
+                src_file_name,
+                resolve_out
+                    .errors
+                    .iter()
+                    .map(|e| ("resolve", e.msg.as_str(), e.span)),
+                true
+            ),
+        );
+        return Err((msg, CompileErrKind::CannotReadFile));
+    }
+
+    // Load TS type info for type inference.
+    {
+        let node_modules_candidates = [std::env::current_dir()
+            .unwrap_or_default()
+            .join("node_modules")];
+        for item in &resolve_out.source_file.items {
+            if let Item::Use(UseDecl::Ts(pkg_name, _)) = item {
+                for nm in &node_modules_candidates {
+                    if crate::ts_interop::scan_package(pkg_name, nm) {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    let infer_out = monomorphize(infer(resolve_out));
+
+    if !infer_out.errors.is_empty() {
+        let errors_text = render_errors(
+            src,
+            src_file_name,
+            infer_out
+                .errors
+                .iter()
+                .map(|e| ("type", e.msg.as_str(), e.span)),
+            true,
+        );
+        let msg = format!("{}{} Type errors:\n{}", *COMPILE_TAG, Tag::Err, errors_text);
+        return Err((msg, CompileErrKind::CannotReadFile));
+    }
+
+    // Compile Go output.
+    // Keep exported symbols (DuckIsland_*, DuckServeClientBundle) by not removing exported decls.
+    let go_file = lower(infer_out.clone(), "main");
+    let go_src =
+        crate::go_fixup::remove_unused_imports::cleanup_go_source(&render(&go_file), false);
+
+    // Compile JS output and bundle it.
+    let js_file = lower_js(infer_out);
+    let client_js = render_js(&js_file);
+
+    if !js_file.client_fn_names.is_empty() || !js_file.ts_packages.is_empty() {
+        let bundled = bundle::bundle(bundle::BundleInput {
+            ts_packages: js_file.ts_packages.clone(),
+            client_js,
+            client_fn_names: js_file.client_fn_names.clone(),
+            node_modules: None,
+        });
+
+        let bundle_path = {
+            let mut p = DARGO_DOT_DIR.clone();
+            p.push("client.js");
+            p
+        };
+        fs::write(&bundle_path, &bundled).map_err(|e| {
+            (
+                format!("{}{} couldn't write client.js: {e}", *COMPILE_TAG, Tag::Err),
+                CompileErrKind::CannotReadFile,
+            )
+        })?;
+    }
+
+    let go_file_name = format!("{src_file_name}.gen.go");
+    let go_output_file = write_in_duck_dotdir(&go_file_name, &go_src);
+
+    if optimize_go {
+        let _ = go_cli::format(go_output_file.as_path());
+    }
+
+    let external_go_imports: Vec<String> = {
+        // Collect external Go imports (needed for `go mod tidy`).
+        // The new pipeline doesn't use std lib so no external deps by default.
+        vec![]
+    };
+
+    let executable_path = go_cli::build(
+        &DARGO_DOT_DIR,
+        binary_output_name
+            .map(OsString::from)
+            .unwrap_or(OsString::from("duck_out"))
+            .as_os_str(),
+        Path::new(&go_file_name),
+        &external_go_imports,
+    )
+    .map_err(|err| {
+        (
+            format!("{}{}", *COMPILE_TAG, err.0),
+            CompileErrKind::GoCli(err.1),
+        )
+    })?;
+
+    println!(
+        "{}{}{} Successfully compiled binary",
+        Tag::Dargo,
+        *COMPILE_TAG,
+        Tag::Check,
+    );
+
+    Ok(CompileOutput {
+        binary_path: executable_path,
+    })
 }

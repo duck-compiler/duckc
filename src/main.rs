@@ -39,15 +39,21 @@ use crate::{
 
 use lazy_static::lazy_static;
 
+pub mod bundle;
 pub mod cli;
 pub mod dargo;
 pub mod emit;
+pub mod emit2;
 pub mod go_fixup;
+pub mod go_interop;
 pub mod multi_map;
 pub mod parse;
+pub mod parser2;
 pub mod reports;
 pub mod semantics;
+pub mod semantics2;
 pub mod tags;
+pub mod ts_interop;
 
 lazy_static! {
     static ref DUCK_STD_PATH: PathBuf = {
@@ -98,9 +104,9 @@ lazy_static! {
 }
 
 // todo(@Mvmo): code doc generation, using doc comments
-//      we already have the function lex_with_comments, right below this issue.
-//      now the only thing we have to do is lex the code with comments and then generate some kind of report, maybe in json, which can be interpreted by some docs generator.
-//      or maybe just generate the html docs directly
+// we already have the function lex_with_comments, right below this issue.
+// now the only thing we have to do is lex the code with comments and then generate some kind of report, maybe in json, which can be interpreted by some docs generator.
+// or maybe just generate the html docs directly
 #[allow(dead_code)]
 fn lex_with_comments(file_name: &'static str, file_contents: &'static str) -> Vec<Spanned<Token>> {
     let (lex, lex_errors) = lex_parser(file_name, file_contents)
