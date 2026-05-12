@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Duck Playground</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-mono/style.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      --font-mono: 'Geist Mono', ui-monospace, 'Courier New', monospace;
+    }
+    body { font-family: var(--font-sans); }
+    .font-mono, pre, code, textarea { font-family: var(--font-mono); }
+
+    /* Retro 3D button — matches duck-lang.dev primary CTA */
+    .btn-primary {
+      outline: 1.5px solid rgb(251 191 36);
+      box-shadow: 3px 3px 0 0 rgb(251 191 36);
+      transition: box-shadow 80ms ease, transform 80ms ease;
+    }
+    .btn-primary:hover {
+      box-shadow: 1px 1px 0 0 rgb(251 191 36);
+      transform: translate(2px, 2px);
+    }
+    .btn-primary:active {
+      box-shadow: none;
+      transform: translate(3px, 3px);
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200 h-screen flex flex-col overflow-hidden">
+
+  <header class="flex items-center gap-3 px-5 py-2.5 bg-zinc-900 border-b border-zinc-800 shrink-0">
+    <span class="text-amber-400 font-bold tracking-tight">duck</span>
+    <span class="text-zinc-600 text-sm">playground</span>
+    <span id="status" class="ml-auto text-xs text-zinc-500"></span>
+  </header>
+
+  <div class="flex flex-1 overflow-hidden">
+
+    <div class="flex flex-col w-2/5 p-3 gap-2 border-r border-zinc-800 shrink-0 min-h-0">
+      <textarea
+        id="src"
+        spellcheck="false"
+        class="flex-1 min-h-0 bg-zinc-900 rounded border border-zinc-700 p-3 font-mono text-sm resize-none focus:outline-none focus:border-amber-500 text-zinc-100 leading-relaxed"
+        placeholder="fn main() { }"></textarea>
+      <div class="flex gap-2 shrink-0">
+        <button
+          onclick="run()"
+          class="btn-primary flex-1 bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold py-1.5 rounded text-sm">
+          Analyze <kbd class="opacity-50 font-normal text-xs">Ctrl+Enter</kbd>
+        </button>
+        <button
+          onclick="exec()"
+          id="exec-btn"
+          class="flex-1 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-900 border border-zinc-700 text-zinc-200 font-bold py-1.5 rounded text-sm transition-colors">
+          Execute <kbd class="opacity-50 font-normal text-xs">Ctrl+Shift+Enter</kbd>
+        </button>
+      </div>
+
+      <div class="flex gap-2 shrink-0 items-center">
+        <span class="text-zinc-600 text-xs font-mono shrink-0">bun add</span>
+        <input
+          id="pkg-input"
+          type="text"
+          placeholder="preact @types/react …"
+          class="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs font-mono text-zinc-200 focus:outline-none focus:border-amber-500 placeholder-zinc-600"
+          onkeydown="if(event.key==='Enter') installPkgs()"
+        />
+        <button
+          onclick="installPkgs()"
+          id="install-btn"
+          class="shrink-0 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 font-bold px-3 py-1 rounded text-xs transition-colors">
+          Install
+        </button>
+      </div>
+      <pre id="install-output" class="hidden bg-zinc-900 border border-zinc-700 text-zinc-300 rounded p-2 text-xs overflow-y-auto max-h-24 font-mono whitespace-pre-wrap shrink-0"></pre>
+
+      <pre id="run-errors" class="hidden bg-red-950 border border-red-800 text-red-300 rounded p-2 text-xs overflow-y-auto max-h-28 font-mono whitespace-pre-wrap shrink-0"></pre>
+      <div id="exec-output" class="hidden flex flex-col gap-1 shrink-0">
+        <div class="text-xs text-zinc-500 font-semibold tracking-widest uppercase">Output</div>
+        <pre id="exec-stdout" class="bg-zinc-900 border border-zinc-700 text-zinc-200 rounded p-2 text-xs overflow-y-auto max-h-32 font-mono whitespace-pre-wrap"></pre>
+        <pre id="exec-stderr" class="hidden bg-red-950 border border-red-800 text-red-300 rounded p-2 text-xs overflow-y-auto max-h-24 font-mono whitespace-pre-wrap"></pre>
+      </div>
+    </div>
+
+    <div class="flex flex-col flex-1 overflow-hidden">
+
+      <div class="flex border-b border-zinc-800 bg-zinc-900 shrink-0 overflow-x-auto">
+        <button onclick="showTab('tokens')"        id="tab-tokens"        class="tab-btn px-4 py-2 text-xs font-semibold text-amber-400   border-b-2 border-amber-400   whitespace-nowrap">Tokens</button>
+        <button onclick="showTab('ast')"           id="tab-ast"           class="tab-btn px-4 py-2 text-xs font-semibold text-zinc-500   border-b-2 border-transparent hover:text-zinc-300 whitespace-nowrap">Parse Tree</button>
+        <button onclick="showTab('resolved')"      id="tab-resolved"      class="tab-btn px-4 py-2 text-xs font-semibold text-zinc-500   border-b-2 border-transparent hover:text-zinc-300 whitespace-nowrap">Resolved AST</button>
+        <button onclick="showTab('symbols')"       id="tab-symbols"       class="tab-btn px-4 py-2 text-xs font-semibold text-zinc-500   border-b-2 border-transparent hover:text-zinc-300 whitespace-nowrap">Symbol Table</button>
+        <button onclick="showTab('scopes')"        id="tab-scopes"        class="tab-btn px-4 py-2 text-xs font-semibold text-zinc-500   border-b-2 border-transparent hover:text-zinc-300 whitespace-nowrap">Scopes</button>
+        <button onclick="showTab('typed')"         id="tab-typed"         class="tab-btn px-4 py-2 text-xs font-semibold text-zinc-500   border-b-2 border-transparent hover:text-zinc-300 whitespace-nowrap">Typed AST</button>
+        <button onclick="showTab('typed-symbols')" id="tab-typed-symbols" class="tab-btn px-4 py-2 text-xs font-semibold text-zinc-500   border-b-2 border-transparent hover:text-zinc-300 whitespace-nowrap">Typed Symbols</button>
+        <button onclick="showTab('go-ir')"         id="tab-go-ir"         class="tab-btn px-4 py-2 text-xs font-semibold text-zinc-500   border-b-2 border-transparent hover:text-zinc-300 whitespace-nowrap">Go IR</button>
+        <button onclick="showTab('go-src')"        id="tab-go-src"        class="tab-btn px-4 py-2 text-xs font-semibold text-zinc-500   border-b-2 border-transparent hover:text-zinc-300 whitespace-nowrap">Go Source</button>
+        <button onclick="showTab('js-src')"        id="tab-js-src"        class="tab-btn px-4 py-2 text-xs font-semibold text-zinc-500   border-b-2 border-transparent hover:text-zinc-300 whitespace-nowrap">JS Source</button>
+        <span id="token-count" class="ml-auto px-3 py-2 text-xs text-zinc-600 self-center whitespace-nowrap"></span>
+      </div>
+      <div id="timings" class="hidden flex items-center gap-0 px-3 py-1 bg-zinc-900 border-b border-zinc-800 shrink-0 overflow-x-auto">
+        <span class="text-zinc-600 text-xs mr-3 font-mono">timings</span>
+        <span id="t-lex"     class="timing-chip mr-2 px-2 py-0.5 rounded text-xs font-mono bg-zinc-800 text-amber-400/70  whitespace-nowrap"></span>
+        <span id="t-parse"   class="timing-chip mr-2 px-2 py-0.5 rounded text-xs font-mono bg-zinc-800 text-emerald-400/70 whitespace-nowrap"></span>
+        <span id="t-resolve" class="timing-chip mr-2 px-2 py-0.5 rounded text-xs font-mono bg-zinc-800 text-sky-400/70    whitespace-nowrap"></span>
+        <span id="t-infer"   class="timing-chip mr-2 px-2 py-0.5 rounded text-xs font-mono bg-zinc-800 text-orange-400/70 whitespace-nowrap"></span>
+        <span id="t-mono"    class="timing-chip mr-2 px-2 py-0.5 rounded text-xs font-mono bg-zinc-800 text-violet-400/70 whitespace-nowrap"></span>
+        <span id="t-lower"   class="timing-chip mr-2 px-2 py-0.5 rounded text-xs font-mono bg-zinc-800 text-green-400/70  whitespace-nowrap"></span>
+      </div>
+
+      <div class="flex-1 overflow-hidden relative">
+        <pre id="pane-tokens"        class="pane absolute inset-0 p-4 overflow-auto font-mono text-xs text-zinc-300 leading-5 bg-zinc-950"></pre>
+        <pre id="pane-ast"           class="pane absolute inset-0 p-4 overflow-auto font-mono text-xs text-zinc-300 leading-5 bg-zinc-950 hidden"></pre>
+        <pre id="pane-resolved"      class="pane absolute inset-0 p-4 overflow-auto font-mono text-xs text-zinc-300 leading-5 bg-zinc-950 hidden"></pre>
+        <pre id="pane-symbols"       class="pane absolute inset-0 p-4 overflow-auto font-mono text-xs text-zinc-300 leading-5 bg-zinc-950 hidden"></pre>
+        <pre id="pane-scopes"        class="pane absolute inset-0 p-4 overflow-auto font-mono text-xs text-zinc-300 leading-5 bg-zinc-950 hidden"></pre>
+        <pre id="pane-typed"         class="pane absolute inset-0 p-4 overflow-auto font-mono text-xs text-zinc-300 leading-5 bg-zinc-950 hidden"></pre>
+        <pre id="pane-typed-symbols" class="pane absolute inset-0 p-4 overflow-auto font-mono text-xs text-zinc-300 leading-5 bg-zinc-950 hidden"></pre>
+        <pre id="pane-go-ir"         class="pane absolute inset-0 p-4 overflow-auto font-mono text-xs text-zinc-300 leading-5 bg-zinc-950 hidden"></pre>
+        <pre id="pane-go-src"        class="pane absolute inset-0 p-4 overflow-auto font-mono text-xs text-green-300  leading-5 bg-zinc-950 hidden"></pre>
+        <pre id="pane-js-src"        class="pane absolute inset-0 p-4 overflow-auto font-mono text-xs text-yellow-300  leading-5 bg-zinc-950 hidden"></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const TABS = ['tokens', 'ast', 'resolved', 'symbols', 'scopes', 'typed', 'typed-symbols', 'go-ir', 'go-src', 'js-src'];
+    const TAB_COLORS = {
+      'tokens':        'text-amber-400   border-amber-400',
+      'ast':           'text-emerald-400 border-emerald-400',
+      'resolved':      'text-sky-400     border-sky-400',
+      'symbols':       'text-violet-400  border-violet-400',
+      'scopes':        'text-rose-400    border-rose-400',
+      'typed':         'text-orange-400  border-orange-400',
+      'typed-symbols': 'text-indigo-400  border-indigo-400',
+      'go-ir':         'text-teal-400    border-teal-400',
+      'go-src':        'text-green-400   border-green-400',
+      'js-src':        'text-yellow-400  border-yellow-400',
+    };
+
+    function showTab(name) {
+      TABS.forEach(t => {
+        const btn  = document.getElementById('tab-' + t);
+        const pane = document.getElementById('pane-' + t);
+        if (t === name) {
+          pane.classList.remove('hidden');
+          btn.className = 'tab-btn px-4 py-2 text-xs font-semibold border-b-2 whitespace-nowrap ' + TAB_COLORS[t];
+        } else {
+          pane.classList.add('hidden');
+          btn.className = 'tab-btn px-4 py-2 text-xs font-semibold text-zinc-500 border-b-2 border-transparent hover:text-zinc-300 whitespace-nowrap';
+        }
+      });
+    }
+
+    function fmtUs(us) {
+      if (us === undefined || us === null) return '';
+      return us < 1000 ? `${us}μs` : `${(us / 1000).toFixed(1)}ms`;
+    }
+
+    function populatePanes(data) {
+      document.getElementById('pane-tokens').textContent        = data.tokens        || '(empty)';
+      document.getElementById('pane-ast').textContent           = data.ast           || '(empty)';
+      document.getElementById('pane-resolved').textContent      = data.resolved      || '(empty)';
+      document.getElementById('pane-symbols').textContent       = data.symbol_table  || '(empty)';
+      document.getElementById('pane-scopes').textContent        = data.scopes        || '(empty)';
+      document.getElementById('pane-typed').textContent         = data.typed         || '(empty)';
+      document.getElementById('pane-typed-symbols').textContent = data.typed_symbols || '(empty)';
+      document.getElementById('pane-go-ir').textContent         = data.go_ir         || '(empty)';
+      document.getElementById('pane-go-src').textContent        = data.go_src        || '(empty)';
+      document.getElementById('pane-js-src').textContent        = data.js_src        || '(empty)';
+      document.getElementById('token-count').textContent        = data.token_count   || '';
+
+      if (data.t_lex !== undefined) {
+        document.getElementById('t-lex').textContent     = `lex ${fmtUs(data.t_lex)}`;
+        document.getElementById('t-parse').textContent   = `parse ${fmtUs(data.t_parse)}`;
+        document.getElementById('t-resolve').textContent = `resolve ${fmtUs(data.t_resolve)}`;
+        document.getElementById('t-infer').textContent   = `infer ${fmtUs(data.t_infer)}`;
+        document.getElementById('t-mono').textContent    = `mono ${fmtUs(data.t_mono)}`;
+        document.getElementById('t-lower').textContent   = `lower ${fmtUs(data.t_lower)}`;
+        document.getElementById('timings').classList.remove('hidden');
+      }
+    }
+
+    function showErrors(data) {
+      const errEl = document.getElementById('run-errors');
+      const errors = [data.token_errors, data.parse_errors, data.resolve_errors, data.infer_errors]
+        .filter(s => s && s.length > 0).join('\n');
+      if (errors) {
+        errEl.textContent = errors;
+        errEl.classList.remove('hidden');
+      } else {
+        errEl.classList.add('hidden');
+      }
+    }
+
+    async function run() {
+      const src    = document.getElementById('src').value;
+      const status = document.getElementById('status');
+      status.textContent = 'analyzing…';
+      document.getElementById('exec-output').classList.add('hidden');
+
+      try {
+        const res  = await fetch('/run', { method: 'POST', body: src });
+        const data = await res.json();
+        populatePanes(data);
+        showErrors(data);
+        status.textContent = '';
+      } catch (e) {
+        status.textContent = 'error: ' + e.message;
+      }
+    }
+
+    async function exec() {
+      const src    = document.getElementById('src').value;
+      const status = document.getElementById('status');
+      const outEl  = document.getElementById('exec-output');
+      const stdoutEl = document.getElementById('exec-stdout');
+      const stderrEl = document.getElementById('exec-stderr');
+      status.textContent = 'executing…';
+
+      try {
+        const res  = await fetch('/exec', { method: 'POST', body: src });
+        const data = await res.json();
+        populatePanes(data);
+        showErrors(data);
+
+        stdoutEl.textContent = data.exec_stdout || '';
+        if (data.exec_stderr && data.exec_stderr.length > 0) {
+          stderrEl.textContent = data.exec_stderr;
+          stderrEl.classList.remove('hidden');
+        } else {
+          stderrEl.classList.add('hidden');
+        }
+        outEl.classList.remove('hidden');
+        status.textContent = '';
+      } catch (e) {
+        status.textContent = 'error: ' + e.message;
+      }
+    }
+
+    async function installPkgs() {
+      const input   = document.getElementById('pkg-input');
+      const outEl   = document.getElementById('install-output');
+      const btn     = document.getElementById('install-btn');
+      const status  = document.getElementById('status');
+      const pkgs    = input.value.trim();
+      if (!pkgs) return;
+
+      btn.textContent = 'Installing…';
+      btn.disabled = true;
+      status.textContent = `bun add ${pkgs}…`;
+      outEl.classList.remove('hidden');
+      outEl.textContent = '';
+
+      try {
+        const res  = await fetch('/install', { method: 'POST', body: pkgs });
+        const data = await res.json();
+        outEl.textContent = data.output || data.error || '';
+        outEl.style.color = data.ok ? '' : '#f87171';
+        if (data.ok) {
+          input.value = '';
+          status.textContent = 'installed — re-analyzing…';
+          await run();
+        } else {
+          status.textContent = 'install failed';
+        }
+      } catch (e) {
+        outEl.textContent = 'error: ' + e.message;
+        outEl.style.color = '#f87171';
+        status.textContent = '';
+      } finally {
+        btn.textContent = 'Install';
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById('src').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          exec();
+        } else {
+          run();
+        }
+      }
+    });
+  </script>
+</body>
+</html>
