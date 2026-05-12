@@ -1,0 +1,1855 @@
+use std::collections::{HashMap, HashSet};
+
+use crate::parser2::parser::{
+    DefId, DefKind, DuckType, Expr, ExprKind, ExtensionDecl, Field, FmtPart, FunTypeParam,
+    FunctionDecl, Generic, Item, JsxAttr, JsxAttrValue, JsxNode, MatchArm, Param, Resolved,
+    SourceFile, Span, StructDecl, SymbolTable, TypeAliasDecl, TypeDescription, TypeExpr, Typed,
+    WithSpan,
+};
+use crate::semantics2::resolver::{ResolveOutput, type_expr_to_typed};
+
+#[derive(Debug, Clone)]
+pub struct TypeError {
+    pub msg: String,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct InferOutput {
+    pub source_file: SourceFile<Typed>,
+    pub symbols: SymbolTable,
+    pub errors: Vec<TypeError>,
+}
+
+struct Inferencer {
+    symbols: SymbolTable,
+    errors: Vec<TypeError>,
+    current_return_type: Option<TypeExpr<Typed>>,
+    /// Local DefIds grouped by name, in definition order.
+    local_queues: HashMap<String, Vec<DefId>>,
+    used_locals: HashSet<DefId>,
+    /// Struct field types keyed by the struct's DefId, populated during collect_signatures.
+    struct_fields: HashMap<DefId, Vec<Field<Typed>>>,
+    /// Extension method types keyed by struct DefId then method name to Fun type.
+    extension_methods: HashMap<DefId, HashMap<String, TypeExpr<Typed>>>,
+}
+
+fn any(span: Span) -> TypeExpr<Typed> {
+    TypeExpr::new(TypeDescription::Any, span)
+}
+
+fn stmt(span: Span) -> TypeExpr<Typed> {
+    TypeExpr::new(TypeDescription::Statement, span)
+}
+
+fn bool_ty(span: Span) -> TypeExpr<Typed> {
+    TypeExpr::new(TypeDescription::Bool(None), span)
+}
+
+fn never(span: Span) -> TypeExpr<Typed> {
+    TypeExpr::new(TypeDescription::Never, span)
+}
+
+/// Human-readable name for a type, used in error messages.
+fn type_name(te: &TypeExpr<Typed>) -> String {
+    match &te.desc {
+        TypeDescription::Int => "Int".into(),
+        TypeDescription::UInt => "UInt".into(),
+        TypeDescription::Float => "Float".into(),
+        TypeDescription::Bool(_) => "Bool".into(),
+        TypeDescription::Char => "Char".into(),
+        TypeDescription::Byte => "Byte".into(),
+        TypeDescription::String(_) => "String".into(),
+        TypeDescription::Any => "Any".into(),
+        TypeDescription::Never => "Never".into(),
+        TypeDescription::Statement => "()".into(),
+        TypeDescription::Tag(t) => format!(".{t}"),
+        TypeDescription::Array(e) => format!("[]{}", type_name(e)),
+        TypeDescription::Ref(e) => format!("&{}", type_name(e)),
+        TypeDescription::RefMut(e) => format!("&mut {}", type_name(e)),
+        TypeDescription::Tuple(es) => {
+            let inner = es.iter().map(type_name).collect::<Vec<_>>().join(", ");
+            format!("({inner})")
+        }
+        TypeDescription::Fun {
+            params,
+            return_type,
+            ..
+        } => {
+            let ps = params
+                .iter()
+                .map(|p| type_name(&p.type_expr))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("fn({ps}) -> {}", type_name(return_type))
+        }
+        TypeDescription::Or(vs) => vs.iter().map(type_name).collect::<Vec<_>>().join(" | "),
+        TypeDescription::Duck(_) => "{ ... }".into(),
+        TypeDescription::GoPackage(n) => format!("package {n}"),
+        TypeDescription::GoNamed(s) => s.clone(),
+        TypeDescription::TypeName { type_ref, .. } => format!("#{}", type_ref.0),
+        _ => "?".into(),
+    }
+}
+
+/// Whether a type is numeric (valid for arithmetic and negation).
+fn is_numeric(te: &TypeExpr<Typed>) -> bool {
+    matches!(
+        te.desc,
+        TypeDescription::Int
+            | TypeDescription::UInt
+            | TypeDescription::Float
+            | TypeDescription::Byte
+            | TypeDescription::Any
+    )
+}
+
+/// Whether a type is an integer (valid for bitwise ops and shifts).
+fn is_int(te: &TypeExpr<Typed>) -> bool {
+    matches!(
+        te.desc,
+        TypeDescription::Int | TypeDescription::UInt | TypeDescription::Byte | TypeDescription::Any
+    )
+}
+
+/// Structural type compatibility. Returns `true` when a value of type `got` can be
+/// used where `expected` is required. `Any` on either side silences the check.
+fn types_compatible(expected: &TypeDescription<Typed>, got: &TypeDescription<Typed>) -> bool {
+    // Any is a universal escape hatch.
+    if matches!(expected, TypeDescription::Any) || matches!(got, TypeDescription::Any) {
+        return true;
+    }
+    // Never and Statement propagate without error.
+    if matches!(
+        expected,
+        TypeDescription::Statement | TypeDescription::Never
+    ) || matches!(got, TypeDescription::Statement | TypeDescription::Never)
+    {
+        return true;
+    }
+    // Go packages are opaque silence compat errors against them.
+    if matches!(expected, TypeDescription::GoPackage(_))
+        || matches!(got, TypeDescription::GoPackage(_))
+    {
+        return true;
+    }
+    // GoNamed types: check interface satisfaction when both sides are Go named types.
+    // Primitives are never compatible with GoNamed (e.g. int does not implement io.Writer).
+    // For other combinations (structs, arrays, unknown types) stay permissive - Go catches them.
+    let is_primitive = |t: &TypeDescription<Typed>| {
+        matches!(
+            t,
+            TypeDescription::Int
+                | TypeDescription::UInt
+                | TypeDescription::Byte
+                | TypeDescription::Float
+                | TypeDescription::Char
+                | TypeDescription::Bool(_)
+                | TypeDescription::String(_)
+        )
+    };
+    match (expected, got) {
+        (TypeDescription::GoNamed(a), TypeDescription::GoNamed(b)) => {
+            return a == b || go_named_implements(b, a);
+        }
+        (TypeDescription::GoNamed(_), got) if is_primitive(got) => return false,
+        (expected, TypeDescription::GoNamed(_)) if is_primitive(expected) => return false,
+        (TypeDescription::GoNamed(_), _) | (_, TypeDescription::GoNamed(_)) => return true,
+        _ => {}
+    }
+    match (expected, got) {
+        // Primitives exact match, with Int/UInt interchangeable.
+        (
+            TypeDescription::Int,
+            TypeDescription::Int | TypeDescription::UInt | TypeDescription::Byte,
+        )
+        | (
+            TypeDescription::UInt,
+            TypeDescription::UInt | TypeDescription::Int | TypeDescription::Byte,
+        )
+        | (
+            TypeDescription::Byte,
+            TypeDescription::Byte | TypeDescription::Int | TypeDescription::UInt,
+        )
+        | (TypeDescription::Float, TypeDescription::Float)
+        | (TypeDescription::Char, TypeDescription::Char)
+        | (TypeDescription::Bool(_), TypeDescription::Bool(_))
+        | (TypeDescription::String(_), TypeDescription::String(_)) => true,
+        // Nominal types same DefId.
+        (
+            TypeDescription::TypeName { type_ref: a, .. },
+            TypeDescription::TypeName { type_ref: b, .. },
+        ) => a == b,
+        // Tags same label.
+        (TypeDescription::Tag(a), TypeDescription::Tag(b)) => a == b,
+        // Composite.
+        (TypeDescription::Array(a), TypeDescription::Array(b)) => {
+            types_compatible(&a.desc, &b.desc)
+        }
+        (TypeDescription::Ref(a), TypeDescription::Ref(b))
+        | (TypeDescription::RefMut(a), TypeDescription::RefMut(b))
+        | (TypeDescription::Ref(a), TypeDescription::RefMut(b)) => {
+            types_compatible(&a.desc, &b.desc)
+        }
+        (TypeDescription::Tuple(a_elems), TypeDescription::Tuple(b_elems)) => {
+            a_elems.len() == b_elems.len()
+                && a_elems
+                    .iter()
+                    .zip(b_elems.iter())
+                    .all(|(a, b)| types_compatible(&a.desc, &b.desc))
+        }
+        (
+            TypeDescription::Fun {
+                params: pa,
+                return_type: ra,
+                ..
+            },
+            TypeDescription::Fun {
+                params: pb,
+                return_type: rb,
+                ..
+            },
+        ) => {
+            pa.len() == pb.len()
+                && pa
+                    .iter()
+                    .zip(pb.iter())
+                    .all(|(a, b)| types_compatible(&a.type_expr.desc, &b.type_expr.desc))
+                && types_compatible(&ra.desc, &rb.desc)
+        }
+        // Union types compatible if `got` matches any variant, or if `expected` has
+        // a variant that is compatible with `got`.
+        (TypeDescription::Or(variants), got) => {
+            variants.iter().any(|v| types_compatible(&v.desc, got))
+        }
+        (expected, TypeDescription::Or(variants)) => {
+            variants.iter().any(|v| types_compatible(expected, &v.desc))
+        }
+        // Duck structural subtyping: every field required by `expected` must exist in
+        // `got` with a compatible type.
+        (TypeDescription::Duck(exp_duck), TypeDescription::Duck(got_duck)) => {
+            exp_duck.fields.iter().all(|ef| {
+                got_duck.fields.iter().any(|gf| {
+                    gf.name.value == ef.name.value
+                        && types_compatible(&ef.type_expr.desc, &gf.type_expr.desc)
+                })
+            })
+        }
+        _ => false,
+    }
+}
+
+// Go type string helpers
+
+/// Convert a Go type string (as produced by go/types) to a Duck TypeDescription.
+fn go_type_str_to_type_desc(s: &str, span: Span) -> TypeDescription<Typed> {
+    let s = s.trim();
+    match s {
+        "string" => TypeDescription::String(None),
+        "int" | "int8" | "int16" | "int32" | "int64" | "rune" => TypeDescription::Int,
+        "uint" | "uint16" | "uint32" | "uint64" | "uintptr" => TypeDescription::UInt,
+        "uint8" | "byte" => TypeDescription::Byte,
+        "float32" | "float64" => TypeDescription::Float,
+        "bool" => TypeDescription::Bool(None),
+        "any" | "interface{}" => TypeDescription::Any,
+        _ => {
+            if let Some(inner) = s.strip_prefix("[]") {
+                return TypeDescription::Array(Box::new(TypeExpr::new(
+                    go_type_str_to_type_desc(inner, span),
+                    span,
+                )));
+            }
+            TypeDescription::GoNamed(s.to_string())
+        }
+    }
+}
+
+fn go_type_str_to_expr(s: &str, span: Span) -> TypeExpr<Typed> {
+    TypeExpr::new(go_type_str_to_type_desc(s, span), span)
+}
+
+/// Convert a TypeScript type string to a Duck TypeDescription.
+fn ts_type_str_to_type_desc(s: &str, span: Span) -> TypeDescription<Typed> {
+    let s = s.trim();
+    // Handle union: `A | B | C` - split on top-level `|`.
+    // Fast path: if no `|` at top level, skip the union check.
+    let variants = split_ts_union(s);
+    if variants.len() > 1 {
+        let filtered: Vec<&str> = variants
+            .iter()
+            .map(|v| v.trim())
+            .filter(|v| !matches!(*v, "null" | "undefined"))
+            .collect();
+        if filtered.len() == 1 {
+            return ts_type_str_to_type_desc(filtered[0], span);
+        }
+        let or_variants: Vec<TypeExpr<Typed>> = filtered
+            .iter()
+            .map(|v| TypeExpr::new(ts_type_str_to_type_desc(v, span), span))
+            .collect();
+        if !or_variants.is_empty() {
+            return TypeDescription::Or(or_variants);
+        }
+    }
+    // Strip trailing `[]` for arrays.
+    if s.ends_with("[]") {
+        let inner = &s[..s.len() - 2];
+        return TypeDescription::Array(Box::new(TypeExpr::new(
+            ts_type_str_to_type_desc(inner, span),
+            span,
+        )));
+    }
+    // `Array<T>` or `ReadonlyArray<T>`
+    if let Some(inner) = s
+        .strip_prefix("Array<")
+        .and_then(|s| s.strip_suffix('>'))
+        .or_else(|| {
+            s.strip_prefix("ReadonlyArray<")
+                .and_then(|s| s.strip_suffix('>'))
+        })
+    {
+        return TypeDescription::Array(Box::new(TypeExpr::new(
+            ts_type_str_to_type_desc(inner, span),
+            span,
+        )));
+    }
+    match s {
+        "string" => TypeDescription::String(None),
+        "number" | "bigint" => TypeDescription::Float,
+        "boolean" => TypeDescription::Bool(None),
+        "void" | "undefined" | "never" => TypeDescription::Statement,
+        "null" | "any" | "unknown" | "object" => TypeDescription::Any,
+        _ => TypeDescription::GoNamed(s.to_string()),
+    }
+}
+
+fn ts_type_str_to_expr(s: &str, span: Span) -> TypeExpr<Typed> {
+    TypeExpr::new(ts_type_str_to_type_desc(s, span), span)
+}
+
+/// Split a TypeScript type string on top-level `|` separators.
+fn split_ts_union(s: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0;
+    for (i, c) in s.char_indices() {
+        match c {
+            '<' | '(' | '[' | '{' => depth += 1,
+            '>' | ')' | ']' | '}' => depth -= 1,
+            '|' if depth == 0 => {
+                parts.push(s[start..i].trim());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(s[start..].trim());
+    parts
+}
+
+/// Build a Fun TypeExpr from a GoFuncInfo (required params only; variadic flag propagated).
+fn go_func_info_to_fun_type(
+    func_info: &crate::go_interop::GoFuncInfo,
+    span: Span,
+) -> TypeExpr<Typed> {
+    let is_variadic = func_info.is_variadic();
+    let min = func_info.min_args();
+    let params: Vec<FunTypeParam<Typed>> = func_info.params[..min]
+        .iter()
+        .map(|p| FunTypeParam {
+            label: None,
+            type_expr: go_type_str_to_expr(&p.type_str, span),
+        })
+        .collect();
+    let return_ty = match func_info.results.len() {
+        0 => TypeExpr::new(TypeDescription::Statement, span),
+        1 => go_type_str_to_expr(&func_info.results[0], span),
+        _ => TypeExpr::new(
+            TypeDescription::Tuple(
+                func_info
+                    .results
+                    .iter()
+                    .map(|r| go_type_str_to_expr(r, span))
+                    .collect(),
+            ),
+            span,
+        ),
+    };
+    TypeExpr::new(
+        TypeDescription::Fun {
+            params,
+            return_type: Box::new(return_ty),
+            is_mut: false,
+            is_variadic,
+        },
+        span,
+    )
+}
+
+/// Check whether concrete Go type `concrete_str` satisfies interface `interface_str`.
+/// Uses the method sets loaded from the package data. Permissive on failure.
+fn go_named_implements(concrete_str: &str, interface_str: &str) -> bool {
+    let iface = interface_str.trim_start_matches('*').trim();
+    let Some(idot) = iface.rfind('.') else {
+        return true;
+    };
+    let iface_pkg = crate::go_interop::resolve_short_name(&iface[..idot]);
+    let iface_type = &iface[idot + 1..];
+
+    let Some(iface_data) = crate::go_interop::scan_package(&iface_pkg) else {
+        return true;
+    };
+    let Some(iface_info) = iface_data.types.get(iface_type) else {
+        return true;
+    };
+    if iface_info.kind != "interface" {
+        return true;
+    }
+    if iface_info.methods.is_empty() {
+        return true;
+    }
+
+    let concrete = concrete_str.trim_start_matches('*').trim();
+    let Some(cdot) = concrete.rfind('.') else {
+        return true;
+    };
+    let concrete_pkg = crate::go_interop::resolve_short_name(&concrete[..cdot]);
+    let concrete_type = &concrete[cdot + 1..];
+
+    let Some(concrete_data) = crate::go_interop::scan_package(&concrete_pkg) else {
+        return true;
+    };
+    let Some(concrete_info) = concrete_data.types.get(concrete_type) else {
+        return true;
+    };
+
+    iface_info
+        .methods
+        .keys()
+        .all(|m| concrete_info.methods.contains_key(m))
+}
+
+impl Inferencer {
+    fn new(symbols: SymbolTable) -> Self {
+        let mut local_queues: HashMap<String, Vec<DefId>> = HashMap::new();
+        for (id, def) in symbols.iter() {
+            if matches!(def.kind, DefKind::Local { .. } | DefKind::Param { .. }) {
+                local_queues.entry(def.name.clone()).or_default().push(id);
+            }
+        }
+        Self {
+            symbols,
+            errors: Vec::new(),
+            current_return_type: None,
+            local_queues,
+            used_locals: HashSet::new(),
+            struct_fields: HashMap::new(),
+            extension_methods: HashMap::new(),
+        }
+    }
+
+    fn claim_local(&mut self, name: &str) -> Option<DefId> {
+        let queue = self.local_queues.get(name)?;
+        let id = *queue.iter().find(|id| !self.used_locals.contains(id))?;
+        self.used_locals.insert(id);
+        Some(id)
+    }
+
+    fn error(&mut self, msg: impl Into<String>, span: Span) {
+        self.errors.push(TypeError {
+            msg: msg.into(),
+            span,
+        });
+    }
+
+    /// Emit a type error if `got` is not compatible with `expected`.
+    /// `ctx` names what is being checked (e.g. "argument", "return value").
+    fn check_compat(
+        &mut self,
+        expected: &TypeExpr<Typed>,
+        got: &TypeExpr<Typed>,
+        span: Span,
+        ctx: &str,
+    ) {
+        if !types_compatible(&expected.desc, &got.desc) {
+            self.error(
+                format!(
+                    "type mismatch in {ctx}: expected `{}`, got `{}`",
+                    type_name(expected),
+                    type_name(got)
+                ),
+                span,
+            );
+        }
+    }
+
+    fn sym_ty(&self, id: DefId, span: Span) -> TypeExpr<Typed> {
+        self.symbols.get(id).ty.clone().unwrap_or_else(|| any(span))
+    }
+
+    fn collect_signatures(
+        &mut self,
+        items: &[Item<Resolved>],
+        global_scope: &HashMap<String, DefId>,
+    ) {
+        for item in items {
+            match item {
+                Item::Function(f) => {
+                    let Some(&fn_id) = global_scope.get(&f.name.value) else {
+                        continue;
+                    };
+
+                    let param_types: Vec<FunTypeParam<Typed>> = f
+                        .params
+                        .iter()
+                        .map(|p| FunTypeParam {
+                            label: Some(p.name.clone()),
+                            type_expr: type_expr_to_typed(p.type_expr.clone()),
+                        })
+                        .collect();
+
+                    let return_type = f
+                        .return_type
+                        .as_ref()
+                        .map(|te| type_expr_to_typed(te.clone()))
+                        .unwrap_or_else(|| stmt(f.span));
+
+                    let fn_ty = TypeExpr::new(
+                        TypeDescription::Fun {
+                            params: param_types,
+                            return_type: Box::new(return_type),
+                            is_mut: false,
+                            is_variadic: false,
+                        },
+                        f.span,
+                    );
+
+                    self.symbols.get_mut(fn_id).ty = Some(fn_ty);
+                }
+                Item::Struct(s) => {
+                    let Some(&struct_id) = global_scope.get(&s.name.value) else {
+                        continue;
+                    };
+                    let fields = s
+                        .fields
+                        .iter()
+                        .map(|f| Field {
+                            name: f.name.clone(),
+                            type_expr: type_expr_to_typed(f.type_expr.clone()),
+                        })
+                        .collect();
+                    self.struct_fields.insert(struct_id, fields);
+                }
+                Item::Extension(ext) => {
+                    // Resolve the target type to a struct DefId so we can index by it.
+                    let target_typed = type_expr_to_typed(ext.target.clone());
+                    let struct_id = match &target_typed.desc {
+                        TypeDescription::TypeName { type_ref, .. } => *type_ref,
+                        _ => continue,
+                    };
+                    let map = self.extension_methods.entry(struct_id).or_default();
+                    for m in &ext.methods {
+                        let param_types: Vec<FunTypeParam<Typed>> = m
+                            .params
+                            .iter()
+                            .map(|p| FunTypeParam {
+                                label: Some(p.name.clone()),
+                                type_expr: type_expr_to_typed(p.type_expr.clone()),
+                            })
+                            .collect();
+                        let return_type = m
+                            .return_type
+                            .as_ref()
+                            .map(|te| type_expr_to_typed(te.clone()))
+                            .unwrap_or_else(|| stmt(m.span));
+                        let fn_ty = TypeExpr::new(
+                            TypeDescription::Fun {
+                                params: param_types,
+                                return_type: Box::new(return_type),
+                                is_mut: false,
+                                is_variadic: false,
+                            },
+                            m.span,
+                        );
+                        map.insert(m.name.value.clone(), fn_ty);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn lookup_field_type(&self, ty: &TypeExpr<Typed>, field_name: &str) -> Option<TypeExpr<Typed>> {
+        match &ty.desc {
+            TypeDescription::TypeName { type_ref, .. } => {
+                if let Some(fields) = self.struct_fields.get(type_ref) {
+                    if let Some(field) = fields.iter().find(|f| f.name.value == field_name) {
+                        return Some(field.type_expr.clone());
+                    }
+                }
+                self.extension_methods
+                    .get(type_ref)
+                    .and_then(|m| m.get(field_name))
+                    .cloned()
+            }
+            TypeDescription::Tuple(elems) => field_name
+                .parse::<usize>()
+                .ok()
+                .and_then(|i| elems.get(i))
+                .cloned(),
+            TypeDescription::Duck(duck) => duck
+                .fields
+                .iter()
+                .find(|f| f.name.value == field_name)
+                .map(|f| f.type_expr.clone()),
+            TypeDescription::GoPackage(import_path) => {
+                let span = ty.span;
+                // TypeScript package: import_path starts with "ts:".
+                if let Some(ts_pkg) = import_path.strip_prefix("ts:") {
+                    if let Some(data) = crate::ts_interop::get_package(ts_pkg) {
+                        use crate::go_interop::GoMember;
+                        return match data.lookup_member(field_name) {
+                            GoMember::Func(f) => Some(go_func_info_to_fun_type(f, span)),
+                            GoMember::Var(type_str) => Some(ts_type_str_to_expr(type_str, span)),
+                            GoMember::Type => Some(any(span)),
+                            GoMember::Unknown => None,
+                        };
+                    }
+                    return None; // Package not found - strict: let the Field handler report the error.
+                }
+                match crate::go_interop::scan_package(import_path) {
+                    Some(data) => {
+                        use crate::go_interop::GoMember;
+                        match data.lookup_member(field_name) {
+                            GoMember::Func(f) => Some(go_func_info_to_fun_type(f, span)),
+                            GoMember::Var(type_str) => Some(go_type_str_to_expr(type_str, span)),
+                            GoMember::Type => Some(any(span)),
+                            GoMember::Unknown => None, // Field handler will emit an error.
+                        }
+                    }
+                    // Extractor unavailable be permissive.
+                    None => Some(any(span)),
+                }
+            }
+            TypeDescription::GoNamed(type_str) => {
+                let span = ty.span;
+                // Parse "*pkg.TypeName" or "pkg.TypeName" to find struct fields / methods.
+                let inner = type_str.trim_start_matches('*').trim();
+                if let Some(dot) = inner.rfind('.') {
+                    let pkg_short = &inner[..dot];
+                    let type_name_str = &inner[dot + 1..];
+                    let import_path = crate::go_interop::resolve_short_name(pkg_short);
+                    if let Some(data) = crate::go_interop::scan_package(&import_path) {
+                        if let Some(type_info) = data.types.get(type_name_str) {
+                            if let Some(field) = type_info.fields.get(field_name) {
+                                return Some(go_type_str_to_expr(&field.type_str, span));
+                            }
+                            if let Some(method) = type_info.methods.get(field_name) {
+                                return Some(go_func_info_to_fun_type(method, span));
+                            }
+                            // Known type, unknown member - return None so the Field handler reports an error.
+                            return None;
+                        }
+                    }
+                }
+                // Type not resolved be permissive.
+                Some(any(span))
+            }
+            TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
+                self.lookup_field_type(inner, field_name)
+            }
+            _ => None,
+        }
+    }
+
+    fn infer_source_file(
+        &mut self,
+        sf: SourceFile<Resolved>,
+        global_scope: &HashMap<String, DefId>,
+    ) -> SourceFile<Typed> {
+        self.collect_signatures(&sf.items, global_scope);
+        let items = sf
+            .items
+            .into_iter()
+            .map(|item| self.infer_item(item))
+            .collect();
+        SourceFile { items }
+    }
+
+    fn infer_item(&mut self, item: Item<Resolved>) -> Item<Typed> {
+        match item {
+            Item::Function(f) => Item::Function(self.infer_function(f)),
+            Item::TypeAlias(a) => Item::TypeAlias(TypeAliasDecl {
+                name: a.name,
+                generics: infer_generics(a.generics),
+                type_expr: type_expr_to_typed(a.type_expr),
+                span: a.span,
+            }),
+            Item::Struct(s) => Item::Struct(StructDecl {
+                name: s.name,
+                generics: infer_generics(s.generics),
+                fields: s
+                    .fields
+                    .into_iter()
+                    .map(|f| Field {
+                        name: f.name,
+                        type_expr: type_expr_to_typed(f.type_expr),
+                    })
+                    .collect(),
+                span: s.span,
+            }),
+            Item::Use(u) => Item::Use(u),
+            Item::Extension(e) => Item::Extension(self.infer_extension(e)),
+        }
+    }
+
+    fn infer_function(&mut self, f: FunctionDecl<Resolved>) -> FunctionDecl<Typed> {
+        let saved = self.current_return_type.take();
+        self.current_return_type = f
+            .return_type
+            .as_ref()
+            .map(|te| type_expr_to_typed(te.clone()));
+
+        let generics = infer_generics(f.generics);
+        let params: Vec<Param<Typed>> = f
+            .params
+            .into_iter()
+            .map(|p| Param {
+                name: p.name,
+                type_expr: type_expr_to_typed(p.type_expr),
+                is_mut: p.is_mut,
+            })
+            .collect();
+        // Consume param slots so nested lambdas with same-named params claim the right DefIds.
+        for p in &params {
+            self.claim_local(&p.name.value);
+        }
+        let return_type = f.return_type.map(type_expr_to_typed);
+        let body = self.infer_expr(f.body);
+
+        // Check body expression type against declared return type.
+        // Only check non-statement bodies (expression-returning functions).
+        if let Some(ret_ty) = &return_type {
+            let ret_ty = ret_ty.clone();
+            if !matches!(
+                body.ty.desc,
+                TypeDescription::Statement | TypeDescription::Never
+            ) {
+                self.check_compat(&ret_ty, &body.ty, body.span, "function body");
+            }
+        }
+
+        self.current_return_type = saved;
+
+        FunctionDecl {
+            name: f.name,
+            generics,
+            params,
+            return_type,
+            body,
+            is_static: f.is_static,
+            is_client: f.is_client,
+            span: f.span,
+        }
+    }
+
+    fn infer_extension(&mut self, ext: ExtensionDecl<Resolved>) -> ExtensionDecl<Typed> {
+        ExtensionDecl {
+            target: type_expr_to_typed(ext.target),
+            methods: ext
+                .methods
+                .into_iter()
+                .map(|m| self.infer_function(m))
+                .collect(),
+            span: ext.span,
+        }
+    }
+
+    fn infer_jsx_node(&mut self, node: JsxNode<Resolved>) -> JsxNode<Typed> {
+        match node {
+            JsxNode::Text(s) => JsxNode::Text(s),
+            JsxNode::Expr(e) => JsxNode::Expr(Box::new(self.infer_expr(*e))),
+            JsxNode::Element {
+                tag,
+                attrs,
+                children,
+            } => JsxNode::Element {
+                tag,
+                attrs: attrs
+                    .into_iter()
+                    .map(|a| JsxAttr {
+                        name: a.name,
+                        value: match a.value {
+                            JsxAttrValue::Bool => JsxAttrValue::Bool,
+                            JsxAttrValue::Str(s) => JsxAttrValue::Str(s),
+                            JsxAttrValue::Expr(e) => {
+                                JsxAttrValue::Expr(Box::new(self.infer_expr(*e)))
+                            }
+                        },
+                    })
+                    .collect(),
+                children: children
+                    .into_iter()
+                    .map(|c| self.infer_jsx_node(c))
+                    .collect(),
+            },
+        }
+    }
+
+    fn infer_expr(&mut self, e: Expr<Resolved>) -> Expr<Typed> {
+        let span = e.span;
+        let (kind, ty) = self.infer_expr_kind(e.kind, span);
+        Expr { kind, ty, span }
+    }
+
+    fn infer_expr_kind(
+        &mut self,
+        kind: ExprKind<Resolved>,
+        span: Span,
+    ) -> (ExprKind<Typed>, TypeExpr<Typed>) {
+        match kind {
+            ExprKind::Int(v) => (ExprKind::Int(v), TypeExpr::new(TypeDescription::Int, span)),
+            ExprKind::Float(v) => (
+                ExprKind::Float(v),
+                TypeExpr::new(TypeDescription::Float, span),
+            ),
+            ExprKind::Bool(v) => (ExprKind::Bool(v), bool_ty(span)),
+            ExprKind::Char(v) => (
+                ExprKind::Char(v),
+                TypeExpr::new(TypeDescription::Char, span),
+            ),
+            ExprKind::String(v) => (
+                ExprKind::String(v),
+                TypeExpr::new(TypeDescription::String(None), span),
+            ),
+            ExprKind::Tag(v) => (
+                ExprKind::Tag(v.clone()),
+                TypeExpr::new(TypeDescription::Tag(v), span),
+            ),
+            ExprKind::InlineGo(v) => (ExprKind::InlineGo(v), any(span)),
+            ExprKind::Jsx(node) => (
+                ExprKind::Jsx(Box::new(self.infer_jsx_node(*node))),
+                any(span),
+            ),
+            ExprKind::Break => (ExprKind::Break, never(span)),
+            ExprKind::Continue => (ExprKind::Continue, never(span)),
+
+            ExprKind::FmtString(parts) => {
+                let parts = parts
+                    .into_iter()
+                    .map(|p| match p {
+                        FmtPart::Literal(s) => FmtPart::Literal(s),
+                        FmtPart::Expr(e) => FmtPart::Expr(self.infer_expr(e)),
+                    })
+                    .collect();
+                (
+                    ExprKind::FmtString(parts),
+                    TypeExpr::new(TypeDescription::String(None), span),
+                )
+            }
+
+            ExprKind::Ident(id) => {
+                let ty = self.sym_ty(id, span);
+                (ExprKind::Ident(id), ty)
+            }
+
+            ExprKind::Block(stmts) => {
+                let stmts: Vec<Expr<Typed>> =
+                    stmts.into_iter().map(|s| self.infer_expr(s)).collect();
+                let ty = stmts
+                    .last()
+                    .map(|e| e.ty.clone())
+                    .unwrap_or_else(|| stmt(span));
+                (ExprKind::Block(stmts), ty)
+            }
+
+            ExprKind::Let {
+                is_mut,
+                name,
+                type_ann,
+                value,
+            } => {
+                let type_ann = type_ann.map(type_expr_to_typed);
+                // Use the annotation as a hint when inferring lambdas.
+                let value = Box::new(self.infer_expr_with_expected(*value, type_ann.as_ref()));
+                // Check annotation against actual inferred type.
+                if let Some(ann) = &type_ann {
+                    self.check_compat(ann, &value.ty, value.span, "variable declaration");
+                }
+                let inferred = type_ann.clone().unwrap_or_else(|| value.ty.clone());
+                if let Some(id) = self.claim_local(&name.value) {
+                    self.symbols.get_mut(id).ty = Some(inferred);
+                }
+                (
+                    ExprKind::Let {
+                        is_mut,
+                        name,
+                        type_ann,
+                        value,
+                    },
+                    stmt(span),
+                )
+            }
+
+            ExprKind::LetTuple { names, value } => {
+                let value = Box::new(self.infer_expr(*value));
+                if let TypeDescription::Tuple(elems) = &value.ty.desc {
+                    for (name, elem_ty) in names.iter().zip(elems.iter()) {
+                        if let Some(id) = self.claim_local(&name.value) {
+                            self.symbols.get_mut(id).ty = Some(elem_ty.clone());
+                        }
+                    }
+                } else {
+                    // fallback: assign Any to each name
+                    for name in &names {
+                        if let Some(id) = self.claim_local(&name.value) {
+                            self.symbols.get_mut(id).ty = Some(any(span));
+                        }
+                    }
+                }
+                (ExprKind::LetTuple { names, value }, stmt(span))
+            }
+
+            ExprKind::Const {
+                name,
+                type_ann,
+                value,
+            } => {
+                let value = Box::new(self.infer_expr(*value));
+                let type_ann = type_ann.map(type_expr_to_typed);
+                let inferred = type_ann.clone().unwrap_or_else(|| value.ty.clone());
+                if let Some(id) = self.claim_local(&name.value) {
+                    self.symbols.get_mut(id).ty = Some(inferred);
+                }
+                (
+                    ExprKind::Const {
+                        name,
+                        type_ann,
+                        value,
+                    },
+                    stmt(span),
+                )
+            }
+
+            ExprKind::Assign { target, value } => {
+                let target = Box::new(self.infer_expr(*target));
+                let value = Box::new(self.infer_expr(*value));
+                self.check_compat(&target.ty, &value.ty, value.span, "assignment");
+                (ExprKind::Assign { target, value }, stmt(span))
+            }
+            ExprKind::AddAssign { target, value } => (
+                ExprKind::AddAssign {
+                    target: Box::new(self.infer_expr(*target)),
+                    value: Box::new(self.infer_expr(*value)),
+                },
+                stmt(span),
+            ),
+            ExprKind::SubAssign { target, value } => (
+                ExprKind::SubAssign {
+                    target: Box::new(self.infer_expr(*target)),
+                    value: Box::new(self.infer_expr(*value)),
+                },
+                stmt(span),
+            ),
+            ExprKind::MulAssign { target, value } => (
+                ExprKind::MulAssign {
+                    target: Box::new(self.infer_expr(*target)),
+                    value: Box::new(self.infer_expr(*value)),
+                },
+                stmt(span),
+            ),
+            ExprKind::DivAssign { target, value } => (
+                ExprKind::DivAssign {
+                    target: Box::new(self.infer_expr(*target)),
+                    value: Box::new(self.infer_expr(*value)),
+                },
+                stmt(span),
+            ),
+            ExprKind::ModAssign { target, value } => (
+                ExprKind::ModAssign {
+                    target: Box::new(self.infer_expr(*target)),
+                    value: Box::new(self.infer_expr(*value)),
+                },
+                stmt(span),
+            ),
+            ExprKind::ShrAssign { target, value } => (
+                ExprKind::ShrAssign {
+                    target: Box::new(self.infer_expr(*target)),
+                    value: Box::new(self.infer_expr(*value)),
+                },
+                stmt(span),
+            ),
+            ExprKind::ShlAssign { target, value } => (
+                ExprKind::ShlAssign {
+                    target: Box::new(self.infer_expr(*target)),
+                    value: Box::new(self.infer_expr(*value)),
+                },
+                stmt(span),
+            ),
+
+            ExprKind::Add(a, b) => {
+                let a = self.infer_expr(*a);
+                let b = self.infer_expr(*b);
+                // Allow numeric + numeric, or String + String (concatenation).
+                let is_addable = |te: &TypeExpr<Typed>| {
+                    is_numeric(te) || matches!(te.desc, TypeDescription::String(_))
+                };
+                if !is_addable(&a.ty) {
+                    self.error(
+                        format!(
+                            "`+` requires a numeric type or String, got `{}`",
+                            type_name(&a.ty)
+                        ),
+                        a.span,
+                    );
+                }
+                if !is_addable(&b.ty) {
+                    self.error(
+                        format!(
+                            "`+` requires a numeric type or String, got `{}`",
+                            type_name(&b.ty)
+                        ),
+                        b.span,
+                    );
+                }
+                let ty = a.ty.clone();
+                (ExprKind::Add(Box::new(a), Box::new(b)), ty)
+            }
+            ExprKind::Sub(a, b) => {
+                let a = self.infer_expr(*a);
+                let b = self.infer_expr(*b);
+                if !is_numeric(&a.ty) {
+                    self.error(
+                        format!("`-` requires a numeric type, got `{}`", type_name(&a.ty)),
+                        a.span,
+                    );
+                }
+                if !is_numeric(&b.ty) {
+                    self.error(
+                        format!("`-` requires a numeric type, got `{}`", type_name(&b.ty)),
+                        b.span,
+                    );
+                }
+                let ty = a.ty.clone();
+                (ExprKind::Sub(Box::new(a), Box::new(b)), ty)
+            }
+            ExprKind::Mul(a, b) => {
+                let a = self.infer_expr(*a);
+                let b = self.infer_expr(*b);
+                if !is_numeric(&a.ty) {
+                    self.error(
+                        format!("`*` requires a numeric type, got `{}`", type_name(&a.ty)),
+                        a.span,
+                    );
+                }
+                if !is_numeric(&b.ty) {
+                    self.error(
+                        format!("`*` requires a numeric type, got `{}`", type_name(&b.ty)),
+                        b.span,
+                    );
+                }
+                let ty = a.ty.clone();
+                (ExprKind::Mul(Box::new(a), Box::new(b)), ty)
+            }
+            ExprKind::Div(a, b) => {
+                let a = self.infer_expr(*a);
+                let b = self.infer_expr(*b);
+                if !is_numeric(&a.ty) {
+                    self.error(
+                        format!("`/` requires a numeric type, got `{}`", type_name(&a.ty)),
+                        a.span,
+                    );
+                }
+                if !is_numeric(&b.ty) {
+                    self.error(
+                        format!("`/` requires a numeric type, got `{}`", type_name(&b.ty)),
+                        b.span,
+                    );
+                }
+                let ty = a.ty.clone();
+                (ExprKind::Div(Box::new(a), Box::new(b)), ty)
+            }
+            ExprKind::Mod(a, b) => {
+                let a = self.infer_expr(*a);
+                let b = self.infer_expr(*b);
+                if !is_numeric(&a.ty) {
+                    self.error(
+                        format!("`%` requires a numeric type, got `{}`", type_name(&a.ty)),
+                        a.span,
+                    );
+                }
+                if !is_numeric(&b.ty) {
+                    self.error(
+                        format!("`%` requires a numeric type, got `{}`", type_name(&b.ty)),
+                        b.span,
+                    );
+                }
+                let ty = a.ty.clone();
+                (ExprKind::Mod(Box::new(a), Box::new(b)), ty)
+            }
+
+            ExprKind::BitAnd(a, b) => {
+                let a = self.infer_expr(*a);
+                let b = self.infer_expr(*b);
+                if !is_int(&a.ty) {
+                    self.error("bitwise `&` requires Int or UInt", a.span);
+                }
+                if !is_int(&b.ty) {
+                    self.error("bitwise `&` requires Int or UInt", b.span);
+                }
+                let ty = a.ty.clone();
+                (ExprKind::BitAnd(Box::new(a), Box::new(b)), ty)
+            }
+            ExprKind::BitOr(a, b) => {
+                let a = self.infer_expr(*a);
+                let b = self.infer_expr(*b);
+                if !is_int(&a.ty) {
+                    self.error("bitwise `|` requires Int or UInt", a.span);
+                }
+                if !is_int(&b.ty) {
+                    self.error("bitwise `|` requires Int or UInt", b.span);
+                }
+                let ty = a.ty.clone();
+                (ExprKind::BitOr(Box::new(a), Box::new(b)), ty)
+            }
+            ExprKind::BitXor(a, b) => {
+                let a = self.infer_expr(*a);
+                let b = self.infer_expr(*b);
+                if !is_int(&a.ty) {
+                    self.error("bitwise `^` requires Int or UInt", a.span);
+                }
+                if !is_int(&b.ty) {
+                    self.error("bitwise `^` requires Int or UInt", b.span);
+                }
+                let ty = a.ty.clone();
+                (ExprKind::BitXor(Box::new(a), Box::new(b)), ty)
+            }
+            ExprKind::BitNot(a) => {
+                let a = self.infer_expr(*a);
+                if !is_int(&a.ty) {
+                    self.error("bitwise `~` requires Int or UInt", a.span);
+                }
+                let ty = a.ty.clone();
+                (ExprKind::BitNot(Box::new(a)), ty)
+            }
+            ExprKind::Shl(a, b) => {
+                let a = self.infer_expr(*a);
+                let b = self.infer_expr(*b);
+                if !is_int(&a.ty) {
+                    self.error("shift `<<` requires Int or UInt", a.span);
+                }
+                if !is_int(&b.ty) {
+                    self.error("shift amount must be Int or UInt", b.span);
+                }
+                let ty = a.ty.clone();
+                (ExprKind::Shl(Box::new(a), Box::new(b)), ty)
+            }
+            ExprKind::Shr(a, b) => {
+                let a = self.infer_expr(*a);
+                let b = self.infer_expr(*b);
+                if !is_int(&a.ty) {
+                    self.error("shift `>>` requires Int or UInt", a.span);
+                }
+                if !is_int(&b.ty) {
+                    self.error("shift amount must be Int or UInt", b.span);
+                }
+                let ty = a.ty.clone();
+                (ExprKind::Shr(Box::new(a), Box::new(b)), ty)
+            }
+
+            ExprKind::Eq(a, b) => (
+                ExprKind::Eq(Box::new(self.infer_expr(*a)), Box::new(self.infer_expr(*b))),
+                bool_ty(span),
+            ),
+            ExprKind::Neq(a, b) => (
+                ExprKind::Neq(Box::new(self.infer_expr(*a)), Box::new(self.infer_expr(*b))),
+                bool_ty(span),
+            ),
+            ExprKind::Lt(a, b) => (
+                ExprKind::Lt(Box::new(self.infer_expr(*a)), Box::new(self.infer_expr(*b))),
+                bool_ty(span),
+            ),
+            ExprKind::Lte(a, b) => (
+                ExprKind::Lte(Box::new(self.infer_expr(*a)), Box::new(self.infer_expr(*b))),
+                bool_ty(span),
+            ),
+            ExprKind::Gt(a, b) => (
+                ExprKind::Gt(Box::new(self.infer_expr(*a)), Box::new(self.infer_expr(*b))),
+                bool_ty(span),
+            ),
+            ExprKind::Gte(a, b) => (
+                ExprKind::Gte(Box::new(self.infer_expr(*a)), Box::new(self.infer_expr(*b))),
+                bool_ty(span),
+            ),
+
+            ExprKind::And(a, b) => (
+                ExprKind::And(Box::new(self.infer_expr(*a)), Box::new(self.infer_expr(*b))),
+                bool_ty(span),
+            ),
+            ExprKind::Or(a, b) => (
+                ExprKind::Or(Box::new(self.infer_expr(*a)), Box::new(self.infer_expr(*b))),
+                bool_ty(span),
+            ),
+            ExprKind::Not(a) => (ExprKind::Not(Box::new(self.infer_expr(*a))), bool_ty(span)),
+
+            ExprKind::Neg(a) => {
+                let a = self.infer_expr(*a);
+                if !is_numeric(&a.ty) {
+                    self.error(
+                        format!(
+                            "cannot negate `{}`: expected Int, UInt, or Float",
+                            type_name(&a.ty)
+                        ),
+                        a.span,
+                    );
+                }
+                let ty = a.ty.clone();
+                (ExprKind::Neg(Box::new(a)), ty)
+            }
+            ExprKind::Ref(a) => {
+                let a = self.infer_expr(*a);
+                let ty = TypeExpr::new(TypeDescription::Ref(Box::new(a.ty.clone())), span);
+                (ExprKind::Ref(Box::new(a)), ty)
+            }
+            ExprKind::RefMut(a) => {
+                let a = self.infer_expr(*a);
+                let ty = TypeExpr::new(TypeDescription::RefMut(Box::new(a.ty.clone())), span);
+                (ExprKind::RefMut(Box::new(a)), ty)
+            }
+            ExprKind::Deref(a) => {
+                let a = self.infer_expr(*a);
+                let ty = match &a.ty.desc {
+                    TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => *inner.clone(),
+                    _ => any(span),
+                };
+                (ExprKind::Deref(Box::new(a)), ty)
+            }
+
+            ExprKind::Field { base, field } => {
+                let base = Box::new(self.infer_expr(*base));
+                let field_ty = match self.lookup_field_type(&base.ty, &field.value) {
+                    Some(ty) => ty,
+                    None => {
+                        // Suppress only for fully-opaque types (no package data available).
+                        // GoNamed stays in the error path when we have package data (lookup returns None).
+                        if !matches!(
+                            base.ty.desc,
+                            TypeDescription::Any | TypeDescription::Statement
+                        ) {
+                            let msg = match &base.ty.desc {
+                                TypeDescription::GoPackage(pkg) => {
+                                    if let Some(ts_pkg) = pkg.strip_prefix("ts:") {
+                                        if crate::ts_interop::get_package(ts_pkg).is_none() {
+                                            format!(
+                                                "TypeScript package `{ts_pkg}` has no type info loaded — is it installed in node_modules?"
+                                            )
+                                        } else {
+                                            format!(
+                                                "TypeScript package `{ts_pkg}` has no exported member `{}`",
+                                                field.value
+                                            )
+                                        }
+                                    } else {
+                                        format!(
+                                            "package `{pkg}` has no exported member `{}`",
+                                            field.value
+                                        )
+                                    }
+                                }
+                                _ => format!(
+                                    "type `{}` has no field `{}`",
+                                    type_name(&base.ty),
+                                    field.value
+                                ),
+                            };
+                            self.error(msg, field.span);
+                        }
+                        any(span)
+                    }
+                };
+                (ExprKind::Field { base, field }, field_ty)
+            }
+            ExprKind::Index { base, index } => {
+                let base = Box::new(self.infer_expr(*base));
+                let ty = match &base.ty.desc {
+                    TypeDescription::Array(elem) => *elem.clone(),
+                    _ => any(span),
+                };
+                let index = Box::new(self.infer_expr(*index));
+                (ExprKind::Index { base, index }, ty)
+            }
+            ExprKind::ScopeRes { base, member } => {
+                let base = Box::new(self.infer_expr(*base));
+                (ExprKind::ScopeRes { base, member }, any(span))
+            }
+
+            ExprKind::Call {
+                callee,
+                type_params,
+                args,
+            } => {
+                let callee = Box::new(self.infer_expr(*callee));
+                let mut is_variadic_call = false;
+                let (return_ty, callee_param_tys) = match &callee.ty.desc {
+                    TypeDescription::Fun {
+                        return_type,
+                        params,
+                        is_variadic,
+                        ..
+                    } => {
+                        is_variadic_call = *is_variadic;
+                        let param_tys = params.iter().map(|p| p.type_expr.clone()).collect();
+                        (*return_type.clone(), param_tys)
+                    }
+                    // Any and GoPackage are opaque allow calls without validation.
+                    TypeDescription::Any | TypeDescription::GoPackage(_) => (any(span), vec![]),
+                    other => {
+                        self.error(
+                            format!(
+                                "type `{}` is not callable",
+                                type_name(&TypeExpr::new(other.clone(), span))
+                            ),
+                            callee.span,
+                        );
+                        (any(span), vec![])
+                    }
+                };
+                // Arg count check (only when we know the expected count).
+                let n_expected = callee_param_tys.len();
+                let n_got = args.len();
+                if !callee_param_tys.is_empty() {
+                    if is_variadic_call {
+                        if n_got < n_expected {
+                            self.error(
+                                format!("expected at least {n_expected} argument(s), got {n_got}"),
+                                span,
+                            );
+                        }
+                    } else if n_got != n_expected {
+                        self.error(
+                            format!("expected {n_expected} argument(s), got {n_got}"),
+                            span,
+                        );
+                    }
+                }
+                let type_params = type_params.into_iter().map(type_expr_to_typed).collect();
+                let args: Vec<Expr<Typed>> = args
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, a)| {
+                        let inferred = self.infer_expr_with_expected(a, callee_param_tys.get(i));
+                        if let Some(expected_ty) = callee_param_tys.get(i) {
+                            let expected_ty = expected_ty.clone();
+                            self.check_compat(
+                                &expected_ty,
+                                &inferred.ty,
+                                inferred.span,
+                                "argument",
+                            );
+                        }
+                        inferred
+                    })
+                    .collect();
+                (
+                    ExprKind::Call {
+                        callee,
+                        type_params,
+                        args,
+                    },
+                    return_ty,
+                )
+            }
+
+            ExprKind::As { value, type_expr } => {
+                let value = Box::new(self.infer_expr(*value));
+                let type_expr = type_expr_to_typed(type_expr);
+                let ty = type_expr.clone();
+                (ExprKind::As { value, type_expr }, ty)
+            }
+
+            ExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let condition = Box::new(self.infer_expr(*condition));
+                let then_branch = Box::new(self.infer_expr(*then_branch));
+                let ty = then_branch.ty.clone();
+                let else_branch = else_branch.map(|e| Box::new(self.infer_expr(*e)));
+                (
+                    ExprKind::If {
+                        condition,
+                        then_branch,
+                        else_branch,
+                    },
+                    ty,
+                )
+            }
+
+            ExprKind::While { condition, body } => {
+                let condition = Box::new(self.infer_expr(*condition));
+                let body = Box::new(self.infer_expr(*body));
+                (ExprKind::While { condition, body }, stmt(span))
+            }
+
+            ExprKind::For {
+                binding,
+                is_mut,
+                iterable,
+                body,
+            } => {
+                let iterable = Box::new(self.infer_expr(*iterable));
+                let body = Box::new(self.infer_expr(*body));
+                (
+                    ExprKind::For {
+                        binding,
+                        is_mut,
+                        iterable,
+                        body,
+                    },
+                    stmt(span),
+                )
+            }
+
+            ExprKind::Return(v) => {
+                let v = v.map(|e| Box::new(self.infer_expr(*e)));
+                if let (Some(val), Some(ret_ty)) = (&v, self.current_return_type.clone()) {
+                    self.check_compat(&ret_ty, &val.ty, val.span, "return value");
+                }
+                (ExprKind::Return(v), never(span))
+            }
+
+            ExprKind::Match {
+                value,
+                arms,
+                else_arm,
+            } => {
+                let value = Box::new(self.infer_expr(*value));
+                let arms: Vec<MatchArm<Typed>> = arms
+                    .into_iter()
+                    .map(|arm| self.infer_match_arm(arm))
+                    .collect();
+                let ty = arms
+                    .first()
+                    .map(|a| a.body.ty.clone())
+                    .unwrap_or_else(|| any(span));
+                let else_arm = else_arm.map(|e| Box::new(self.infer_expr(*e)));
+                (
+                    ExprKind::Match {
+                        value,
+                        arms,
+                        else_arm,
+                    },
+                    ty,
+                )
+            }
+
+            ExprKind::StructLit {
+                name,
+                type_params,
+                fields,
+            } => {
+                let type_params: Vec<TypeExpr<Typed>> =
+                    type_params.into_iter().map(type_expr_to_typed).collect();
+                // Snapshot struct field definitions before mutable borrows for inference.
+                let def_fields: Option<Vec<Field<Typed>>> = self.struct_fields.get(&name).cloned();
+                let fields: Vec<(WithSpan<String>, Expr<Typed>)> = fields
+                    .into_iter()
+                    .map(|(label, val)| (label, self.infer_expr(val)))
+                    .collect();
+                if let Some(def_fields) = &def_fields {
+                    let expected = def_fields.len();
+                    let got = fields.len();
+                    if expected != got {
+                        self.error(format!("struct has {expected} field(s), got {got}"), span);
+                    }
+                    for (label, val) in &fields {
+                        match def_fields.iter().find(|f| f.name.value == label.value) {
+                            Some(def_field) => {
+                                let def_ty = def_field.type_expr.clone();
+                                self.check_compat(
+                                    &def_ty,
+                                    &val.ty,
+                                    val.span,
+                                    &format!("field `{}`", label.value),
+                                );
+                            }
+                            None => {
+                                self.error(format!("unknown field `{}`", label.value), label.span);
+                            }
+                        }
+                    }
+                }
+                let ty = TypeExpr::new(
+                    TypeDescription::TypeName {
+                        type_ref: name,
+                        type_params: type_params.clone(),
+                    },
+                    span,
+                );
+                (
+                    ExprKind::StructLit {
+                        name,
+                        type_params,
+                        fields,
+                    },
+                    ty,
+                )
+            }
+
+            ExprKind::DuckLit(fields) => {
+                let inferred: Vec<(WithSpan<String>, Expr<Typed>)> = fields
+                    .into_iter()
+                    .map(|(label, val)| (label, self.infer_expr(val)))
+                    .collect();
+                // Build the Duck type from actual inferred field types, sorted alphabetically
+                // so that two structurally identical duck literals produce the same type.
+                let mut duck_fields: Vec<Field<Typed>> = inferred
+                    .iter()
+                    .map(|(label, val)| Field {
+                        name: label.clone(),
+                        type_expr: val.ty.clone(),
+                    })
+                    .collect();
+                duck_fields.sort_by(|a, b| a.name.value.cmp(&b.name.value));
+                let ty = TypeExpr::new(
+                    TypeDescription::Duck(DuckType {
+                        fields: duck_fields,
+                    }),
+                    span,
+                );
+                (ExprKind::DuckLit(inferred), ty)
+            }
+
+            ExprKind::Array(elems) => {
+                let elems: Vec<Expr<Typed>> =
+                    elems.into_iter().map(|e| self.infer_expr(e)).collect();
+                let elem_ty = elems
+                    .first()
+                    .map(|e| e.ty.clone())
+                    .unwrap_or_else(|| any(span));
+                let ty = TypeExpr::new(TypeDescription::Array(Box::new(elem_ty)), span);
+                (ExprKind::Array(elems), ty)
+            }
+
+            ExprKind::Tuple(elems) => {
+                let elems: Vec<Expr<Typed>> =
+                    elems.into_iter().map(|e| self.infer_expr(e)).collect();
+                let elem_tys = elems.iter().map(|e| e.ty.clone()).collect();
+                let ty = TypeExpr::new(TypeDescription::Tuple(elem_tys), span);
+                (ExprKind::Tuple(elems), ty)
+            }
+
+            ExprKind::Lambda {
+                is_mut,
+                params,
+                return_type,
+                body,
+            } => {
+                let params: Vec<Param<Typed>> = params
+                    .into_iter()
+                    .map(|p| Param {
+                        name: p.name,
+                        type_expr: type_expr_to_typed(p.type_expr),
+                        is_mut: p.is_mut,
+                    })
+                    .collect();
+                // Consume param slots so any nested lambdas claim the right DefIds.
+                for p in &params {
+                    self.claim_local(&p.name.value);
+                }
+                let return_type = return_type.map(type_expr_to_typed);
+                let body = Box::new(self.infer_expr(*body));
+
+                let param_types: Vec<FunTypeParam<Typed>> = params
+                    .iter()
+                    .map(|p| FunTypeParam {
+                        label: Some(p.name.clone()),
+                        type_expr: p.type_expr.clone(),
+                    })
+                    .collect();
+                let ret = return_type.clone().unwrap_or_else(|| body.ty.clone());
+                let ty = TypeExpr::new(
+                    TypeDescription::Fun {
+                        params: param_types,
+                        return_type: Box::new(ret),
+                        is_mut,
+                        is_variadic: false,
+                    },
+                    span,
+                );
+                (
+                    ExprKind::Lambda {
+                        is_mut,
+                        params,
+                        return_type,
+                        body,
+                    },
+                    ty,
+                )
+            }
+
+            ExprKind::Async(e) => {
+                let e = self.infer_expr(*e);
+                let ty = e.ty.clone();
+                (ExprKind::Async(Box::new(e)), ty)
+            }
+            ExprKind::Defer(e) => (ExprKind::Defer(Box::new(self.infer_expr(*e))), stmt(span)),
+        }
+    }
+
+    fn infer_expr_with_expected(
+        &mut self,
+        e: Expr<Resolved>,
+        expected: Option<&TypeExpr<Typed>>,
+    ) -> Expr<Typed> {
+        let span = e.span;
+        match e.kind {
+            ExprKind::Lambda {
+                is_mut,
+                params,
+                return_type,
+                body,
+            } => {
+                let expected_params = expected.and_then(|te| match &te.desc {
+                    TypeDescription::Fun { params, .. } => Some(params),
+                    _ => None,
+                });
+                let mut typed_params: Vec<Param<Typed>> = Vec::with_capacity(params.len());
+                for (i, p) in params.into_iter().enumerate() {
+                    let te = type_expr_to_typed(p.type_expr);
+                    let type_expr = if matches!(te.desc, TypeDescription::Any) {
+                        expected_params
+                            .and_then(|fps| fps.get(i))
+                            .map(|fp| fp.type_expr.clone())
+                            .unwrap_or(te)
+                    } else {
+                        te
+                    };
+
+                    // Claim the slot and write the resolved type back so body Ident lookups
+                    // (sym_ty) see String/Int/etc. instead of Any.
+                    if let Some(id) = self.claim_local(&p.name.value) {
+                        self.symbols.get_mut(id).ty = Some(type_expr.clone());
+                    }
+                    typed_params.push(Param {
+                        name: p.name,
+                        type_expr,
+                        is_mut: p.is_mut,
+                    });
+                }
+                let params = typed_params;
+                let return_type = return_type.map(type_expr_to_typed);
+                let body = Box::new(self.infer_expr(*body));
+                let param_types: Vec<FunTypeParam<Typed>> = params
+                    .iter()
+                    .map(|p| FunTypeParam {
+                        label: Some(p.name.clone()),
+                        type_expr: p.type_expr.clone(),
+                    })
+                    .collect();
+                let ret = return_type.clone().unwrap_or_else(|| body.ty.clone());
+                let ty = TypeExpr::new(
+                    TypeDescription::Fun {
+                        params: param_types,
+                        return_type: Box::new(ret),
+                        is_mut,
+                        is_variadic: false,
+                    },
+                    span,
+                );
+                Expr {
+                    kind: ExprKind::Lambda {
+                        is_mut,
+                        params,
+                        return_type,
+                        body,
+                    },
+                    ty,
+                    span,
+                }
+            }
+            kind => self.infer_expr(Expr { kind, ty: (), span }),
+        }
+    }
+
+    fn infer_match_arm(&mut self, arm: MatchArm<Resolved>) -> MatchArm<Typed> {
+        let pattern = type_expr_to_typed(arm.pattern);
+        let base = arm.base.map(type_expr_to_typed);
+        let guard = arm.guard.map(|g| Box::new(self.infer_expr(*g)));
+        let body = self.infer_expr(arm.body);
+        MatchArm {
+            pattern,
+            base,
+            binding: arm.binding,
+            guard,
+            body,
+            span: arm.span,
+        }
+    }
+}
+
+fn infer_generics(generics: Vec<WithSpan<Generic<Resolved>>>) -> Vec<WithSpan<Generic<Typed>>> {
+    generics
+        .into_iter()
+        .map(|g| {
+            WithSpan::new(
+                Generic {
+                    name: g.value.name,
+                    constraint: g.value.constraint.map(type_expr_to_typed),
+                },
+                g.span,
+            )
+        })
+        .collect()
+}
+
+pub fn infer(resolve_output: ResolveOutput) -> InferOutput {
+    let mut inferencer = Inferencer::new(resolve_output.symbols);
+    let source_file =
+        inferencer.infer_source_file(resolve_output.source_file, &resolve_output.global_scope);
+    InferOutput {
+        source_file,
+        symbols: inferencer.symbols,
+        errors: inferencer.errors,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::infer;
+    use crate::parser2::parser::parse;
+    use crate::parser2::tokenizer::tokenize;
+    use crate::semantics2::resolver::resolve;
+
+    fn type_errors(src: &str) -> Vec<String> {
+        let (tokens, _) = tokenize(src, 1);
+        let (ast, _) = parse(tokens, 1);
+        let resolve_out = resolve(ast);
+        let infer_out = infer(resolve_out);
+        infer_out.errors.into_iter().map(|e| e.msg).collect()
+    }
+
+    fn extractor_ok() -> bool {
+        crate::go_interop::ensure_extractor().is_some()
+    }
+
+    #[test]
+    fn errorf_zero_args_fails() {
+        if !extractor_ok() {
+            return;
+        }
+        let errs = type_errors(r#"use go "fmt"; fn main() { fmt.Errorf() }"#);
+        assert!(
+            !errs.is_empty(),
+            "expected a type error for fmt.Errorf() with 0 args, got none"
+        );
+        assert!(
+            errs.iter().any(|e| e.contains("at least")),
+            "expected 'at least' in error, got: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn errorf_int_arg_fails() {
+        if !extractor_ok() {
+            return;
+        }
+        let errs = type_errors(r#"use go "fmt"; fn main() { fmt.Errorf(1) }"#);
+        assert!(
+            !errs.is_empty(),
+            "expected a type error for fmt.Errorf(1), got none"
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("String") || e.contains("string")),
+            "expected String mismatch, got: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn errorf_one_arg_passes() {
+        if !extractor_ok() {
+            return;
+        }
+        let errs = type_errors(r#"use go "fmt"; fn main() { fmt.Errorf("oops") }"#);
+        assert!(errs.is_empty(), "expected no type errors, got: {errs:?}");
+    }
+
+    #[test]
+    fn println_zero_args_passes() {
+        if !extractor_ok() {
+            return;
+        }
+        let errs = type_errors(r#"use go "fmt"; fn main() { fmt.Println() }"#);
+        assert!(
+            errs.is_empty(),
+            "expected no type errors for variadic fmt.Println(), got: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn unknown_member_fails() {
+        if !extractor_ok() {
+            return;
+        }
+        let errs = type_errors(r#"use go "fmt"; fn main() { fmt.Pr() }"#);
+        assert!(
+            !errs.is_empty(),
+            "expected a type error for unknown fmt.Pr, got none"
+        );
+    }
+
+    #[test]
+    fn os_stdout_is_recognized() {
+        if !extractor_ok() {
+            return;
+        }
+        let errs = type_errors(r#"use go "os"; fn main() { let _ = os.Stdout }"#);
+        assert!(
+            errs.is_empty(),
+            "expected os.Stdout to be a known member, got: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn struct_field_access_typed() {
+        if !extractor_ok() {
+            return;
+        }
+        // http.Request.Method is a string field passing it to Errorf should work
+        let errs = type_errors(
+            r#"use go "net/http"; use go "fmt"; fn main(r: http.Request) { fmt.Errorf(r.Method) }"#,
+        );
+        assert!(
+            errs.is_empty(),
+            "expected no errors for r.Method as string, got: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn fprintf_int_as_writer_fails() {
+        if !extractor_ok() {
+            return;
+        }
+        let errs = type_errors(r#"use go "fmt"; fn main() { fmt.Fprintf(1, "hi") }"#);
+        assert!(
+            !errs.is_empty(),
+            "expected a type error for int passed as io.Writer, got none"
+        );
+    }
+
+    #[test]
+    fn fprintf_stdout_passes() {
+        if !extractor_ok() {
+            return;
+        }
+        let errs = type_errors(
+            r#"use go "fmt"; use go "os"; fn main() { fmt.Fprintf(os.Stdout, "hi\n") }"#,
+        );
+        assert!(
+            errs.is_empty(),
+            "expected no errors for os.Stdout as io.Writer, got: {errs:?}"
+        );
+    }
+}
