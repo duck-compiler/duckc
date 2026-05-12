@@ -345,7 +345,7 @@ impl TypeExpr {
                         .map(|value_expr| {
                             // todo: check if we really want to unconst tuple values
                             // maybe we need a way to tell that it should be consted here. e.g.
-                            //  `(5,"hallo")`
+                            // `(5,"hallo")`
                             (
                                 match TypeExpr::from_value_expr(value_expr, type_env).0 {
                                     TypeExpr::Never => {
@@ -792,23 +792,21 @@ impl TypeExpr {
 
                     ty
                 }
-                ValueExpr::Variable(_, ident, type_expr, _, _) => {
-                    type_expr
-                        .as_ref()
-                        .cloned()
-                        .or(type_env.get_identifier_type(ident))
-                        .unwrap_or_else(|| {
-                            failure_with_occurence(
-                                "Unknown Identifier",
+                ValueExpr::Variable(_, ident, type_expr, _, _) => type_expr
+                    .as_ref()
+                    .cloned()
+                    .or(type_env.get_identifier_type(ident))
+                    .unwrap_or_else(|| {
+                        failure_with_occurence(
+                            "Unknown Identifier",
+                            *complete_span,
+                            [(
+                                format!("couldn't resolve type for identifier {ident}"),
                                 *complete_span,
-                                [(
-                                    format!("couldn't resolve type for identifier {ident}"),
-                                    *complete_span
-                                )],
-                            );
-                        })
-                        .clone()
-                }
+                            )],
+                        );
+                    })
+                    .clone(),
                 ValueExpr::BoolNegate(bool_expr) => {
                     let t = TypeExpr::from_value_expr(bool_expr, type_env);
                     if t.0.is_never() {
@@ -1167,8 +1165,8 @@ impl TypeExpr {
                     if fields.is_empty() {
                         // i disabled this because it messed up auto_traits.duck test
                         // println!(
-                        //     "{} it could be that the function you're trying to call is missing it's return, maybe that's why it's an empty tuple",
-                        //     Tag::Note
+                        // "{} it could be that the function you're trying to call is missing it's return, maybe that's why it's an empty tuple",
+                        // Tag::Note
                         // )
                     }
                     false
@@ -2129,8 +2127,11 @@ pub fn check_type_compatability_full(
                 .enumerate()
             {
                 if let TypeExpr::Or(req_variants) = &req_param.0
-                    && req_variants.iter().any(|variant| variant.0.type_id(type_env) == given_param.0.type_id(type_env)) {
-                        return
+                    && req_variants.iter().any(|variant| {
+                        variant.0.type_id(type_env) == given_param.0.type_id(type_env)
+                    })
+                {
+                    return;
                 }
 
                 if req_param.0.type_id(type_env) != given_param.0.type_id(type_env) {
