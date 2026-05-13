@@ -6,6 +6,7 @@ pub mod compile_test;
 pub mod docs;
 pub mod init;
 pub mod loader;
+pub mod module_loader;
 pub mod new;
 pub mod playground;
 pub mod run;

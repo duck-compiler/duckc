@@ -1,15 +1,11 @@
-use go "os";
-
 fn panic(m: {}) -> ! {
     go {
-        fmt.Println("panic:", m)
-        os.Exit(1)
+        panic(m)
     } as !
 }
 
 fn unreachable(s: String) -> ! {
-    std::io::println(f"logic error [unreachable reached]: {s}");
     go {
-        os.Exit(1)
+        panic(s)
     } as !
 }

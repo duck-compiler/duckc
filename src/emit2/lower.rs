@@ -1,9 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::parser2::parser::{
-    DefId, DefKind, Expr, ExprKind, ExtensionDecl, Field, FmtPart, FunctionDecl, Item, JsxAttr,
-    JsxAttrValue, JsxNode, MatchArm, Param, SourceFile, StructDecl, SymbolDef, SymbolTable,
-    TypeAliasDecl, TypeDescription, TypeExpr, Typed, UseDecl, WithSpan,
+    DefId, DefKind, Expr, ExprKind, ExtensionDecl, FmtPart, FunctionDecl, Item, JsxAttr,
+    JsxAttrValue, JsxNode, MatchArm, StructDecl, SymbolTable, TypeAliasDecl, TypeDescription,
+    TypeExpr, Typed, UseDecl,
 };
 use crate::semantics2::type_infer::InferOutput;
 
@@ -46,6 +46,34 @@ fn escape(name: &str) -> String {
     }
 }
 
+fn lower_type_param_name(desc: &TypeDescription<Typed>) -> String {
+    match desc {
+        TypeDescription::Int => "Int".into(),
+        TypeDescription::UInt => "UInt".into(),
+        TypeDescription::Float => "Float".into(),
+        TypeDescription::Bool(_) => "Bool".into(),
+        TypeDescription::Char => "Char".into(),
+        TypeDescription::Byte => "Byte".into(),
+        TypeDescription::String(_) => "String".into(),
+        TypeDescription::Any => "Any".into(),
+        TypeDescription::TypeName {
+            type_ref,
+            type_params,
+        } => {
+            if type_params.is_empty() {
+                format!("N{}", type_ref.0)
+            } else {
+                let inner: Vec<String> = type_params
+                    .iter()
+                    .map(|tp| lower_type_param_name(&tp.desc))
+                    .collect();
+                format!("N{}_{}", type_ref.0, inner.join("_"))
+            }
+        }
+        _ => "Any".into(),
+    }
+}
+
 fn capitalize(s: &str) -> String {
     let mut c = s.chars();
     match c.next() {
@@ -58,7 +86,6 @@ fn has_interface_name(field_name: &str) -> String {
     format!("Has{}", capitalize(field_name))
 }
 
-/// Canonical mangled name for a GoType - used to generate stable duck struct names.
 fn go_type_mangled(ty: &GoType) -> String {
     match ty {
         GoType::Int64 => "int64".into(),
@@ -77,8 +104,6 @@ fn go_type_mangled(ty: &GoType) -> String {
     }
 }
 
-/// Stable struct name for an anonymous duck literal: `Duck_FieldA_typeA_FieldB_typeB`.
-/// `fields` must be sorted alphabetically by capitalized name before calling.
 fn duck_struct_name(fields: &[(String, GoType)]) -> String {
     let parts: Vec<String> = fields
         .iter()
@@ -87,7 +112,6 @@ fn duck_struct_name(fields: &[(String, GoType)]) -> String {
     format!("Duck_{}", parts.join("_"))
 }
 
-/// Stable struct name for a tuple type: `Tup_type0_type1_...`.
 fn tuple_struct_name(types: &[GoType]) -> String {
     let parts: Vec<String> = types.iter().map(go_type_mangled).collect();
     format!("Tup_{}", parts.join("_"))
@@ -100,12 +124,10 @@ struct Lowerer<'a> {
     used_locals: HashSet<DefId>,
     tmp: u32,
     imports: HashSet<String>,
-    /// Anonymous duck literal structs collected during lowering, keyed by name to fields.
     duck_structs: HashMap<String, Vec<GoField>>,
-    /// Capitalized field names introduced by duck literals (may need new HasField interfaces).
     new_duck_field_names: std::collections::BTreeSet<String>,
-    /// Tuple structs collected during lowering, keyed by mangled name to fields.
     tuple_structs: HashMap<String, Vec<GoField>>,
+    used_tags: std::collections::BTreeSet<String>,
 }
 
 impl<'a> Lowerer<'a> {
@@ -121,7 +143,7 @@ impl<'a> Lowerer<'a> {
             let go_name = match &def.kind {
                 DefKind::Local { .. } => {
                     local_queues.entry(def.name.clone()).or_default().push(id);
-                    format!("{}_{}", escape(&def.name), id.0)
+                    escape(&def.name)
                 }
                 _ => escape(&def.name),
             };
@@ -139,6 +161,7 @@ impl<'a> Lowerer<'a> {
             duck_structs: HashMap::new(),
             new_duck_field_names: std::collections::BTreeSet::new(),
             tuple_structs: HashMap::new(),
+            used_tags: std::collections::BTreeSet::new(),
         }
     }
 
@@ -170,9 +193,12 @@ impl<'a> Lowerer<'a> {
         self.lower_type_desc(&te.desc)
     }
 
-    /// Like lower_type but wraps named struct types in a pointer, matching how Duck
-    /// struct values are actually stored inside an `any` interface for type switch arms.
-    fn lower_type_for_switch_arm(&self, te: &TypeExpr<Typed>) -> GoType {
+    fn lower_type_for_switch_arm(&mut self, te: &TypeExpr<Typed>) -> GoType {
+        // tag patterns use *__DuckTag_X so type switches never collide with plain `string`
+        if let TypeDescription::Tag(name) = &te.desc {
+            self.used_tags.insert(name.clone());
+            return GoType::Ptr(Box::new(GoType::Named(format!("__DuckTag_{name}"))));
+        }
         let go_ty = self.lower_type(te);
         match go_ty {
             GoType::Named(name) => GoType::Ptr(Box::new(GoType::Named(name))),
@@ -191,7 +217,13 @@ impl<'a> Lowerer<'a> {
             TypeDescription::String(_) => GoType::String,
             TypeDescription::Array(elem) => GoType::Slice(Box::new(self.lower_type(elem))),
             TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
-                GoType::Ptr(Box::new(self.lower_type(inner)))
+                // Don't double-wrap: struct TypeNames with type_params already lower
+                // to Ptr(Named(...)), so adding another Ptr here would give **Type.
+                let lowered = self.lower_type(inner);
+                match lowered {
+                    GoType::Ptr(_) => lowered,
+                    other => GoType::Ptr(Box::new(other)),
+                }
             }
             TypeDescription::Fun {
                 params,
@@ -202,15 +234,33 @@ impl<'a> Lowerer<'a> {
                     .iter()
                     .map(|p| self.lower_type(&p.type_expr))
                     .collect(),
-                ret: {
-                    let rt = self.lower_type(return_type);
-                    match rt {
-                        GoType::Any => None,
-                        t => Some(Box::new(t)),
-                    }
+                ret: if Self::is_void(return_type) {
+                    None
+                } else {
+                    Some(Box::new(self.lower_type(return_type)))
                 },
             },
-            TypeDescription::TypeName { type_ref, .. } => GoType::Named(self.name(*type_ref)),
+            TypeDescription::TypeName {
+                type_ref,
+                type_params,
+            } => {
+                if type_params.is_empty() {
+                    // bare GenericParam TypeName becomes `any`
+                    if matches!(self.symbols.get(*type_ref).kind, DefKind::GenericParam) {
+                        GoType::Any
+                    } else {
+                        GoType::Named(self.name(*type_ref))
+                    }
+                } else {
+                    let base = self.name(*type_ref);
+                    let parts: Vec<String> = type_params
+                        .iter()
+                        .map(|tp| lower_type_param_name(&tp.desc))
+                        .collect();
+                    let mangled = format!("{}__{}", base, parts.join("__"));
+                    GoType::Ptr(Box::new(GoType::Named(mangled)))
+                }
+            }
             TypeDescription::NamedDuck { name, .. } => GoType::Named(format!("Interface_{name}")),
             TypeDescription::Duck(duck) => {
                 let mut constraints: Vec<(String, GoType)> = duck
@@ -242,10 +292,11 @@ impl<'a> Lowerer<'a> {
     }
 
     fn is_void(te: &TypeExpr<Typed>) -> bool {
-        matches!(
-            te.desc,
-            TypeDescription::Statement | TypeDescription::Never | TypeDescription::Any
-        )
+        match &te.desc {
+            TypeDescription::Tuple(v) => v.is_empty(),
+            TypeDescription::Statement | TypeDescription::Never | TypeDescription::Any => true,
+            _ => false,
+        }
     }
 
     fn lower_as_value(&mut self, expr: Expr<Typed>, out: &mut Vec<GoStmt>) -> GoExpr {
@@ -256,7 +307,10 @@ impl<'a> Lowerer<'a> {
             ExprKind::Bool(v) => GoExpr::Bool(v),
             ExprKind::Char(v) => GoExpr::Char(v),
             ExprKind::String(v) => GoExpr::Str(v),
-            ExprKind::Tag(v) => GoExpr::Str(v),
+            ExprKind::Tag(v) => {
+                self.used_tags.insert(v.clone());
+                GoExpr::Raw(format!("&__DuckTag_{}{{}}", v))
+            }
             ExprKind::InlineGo(v) => GoExpr::Raw(v),
             ExprKind::Jsx(node) => self.lower_server_jsx(*node, out),
             ExprKind::Break => {
@@ -430,9 +484,10 @@ impl<'a> Lowerer<'a> {
                         field: escape(&field_name),
                     }
                 } else {
+                    // Struct fields are lowercase (unexported) in the new pipeline.
                     GoExpr::Field {
                         base: Box::new(go_base),
-                        field: capitalize(&field_name),
+                        field: escape(&field_name),
                     }
                 }
             }
@@ -445,19 +500,85 @@ impl<'a> Lowerer<'a> {
                 field: member.value,
             },
 
-            ExprKind::Call { callee, args, .. } => {
-                let callee = Box::new(self.lower_as_value(*callee, out));
+            ExprKind::Call {
+                callee,
+                args,
+                type_params,
+            } => {
+                let lowered_callee = self.lower_as_value(*callee, out);
                 let args = args
                     .into_iter()
                     .map(|a| self.lower_as_value(a, out))
                     .collect();
-                GoExpr::Call { callee, args }
+                let callee = if !type_params.is_empty() {
+                    let parts: Vec<String> = type_params
+                        .iter()
+                        .map(|tp| lower_type_param_name(&tp.desc))
+                        .collect();
+                    let suffix = parts.join("__");
+                    match lowered_callee {
+                        GoExpr::Ident(name) => GoExpr::Ident(format!("{name}__{suffix}")),
+                        GoExpr::Field { base, field } => GoExpr::Field {
+                            base,
+                            field: format!("{field}__{suffix}"),
+                        },
+                        other => other,
+                    }
+                } else {
+                    lowered_callee
+                };
+                GoExpr::Call {
+                    callee: Box::new(callee),
+                    args,
+                }
             }
 
-            ExprKind::As { value, type_expr } => GoExpr::Cast {
-                ty: self.lower_type(&type_expr),
-                value: Box::new(self.lower_as_value(*value, out)),
-            },
+            ExprKind::As { value, type_expr } => {
+                if let ExprKind::InlineGo(s) = value.kind {
+                    // when target type is Never, emit statements only - no temp var
+                    if Self::is_void(&type_expr) {
+                        for line in s.lines() {
+                            let trimmed = line.trim();
+                            if !trimmed.is_empty() {
+                                out.push(GoStmt::Expr(GoExpr::Raw(trimmed.to_string())));
+                            }
+                        }
+                        return GoExpr::Nil;
+                    }
+                    let tmp = self.fresh();
+                    let go_ty = self.lower_type(&type_expr);
+                    out.push(GoStmt::Declare {
+                        name: tmp.clone(),
+                        ty: go_ty,
+                    });
+                    let replaced = s.replace('$', &tmp);
+                    for line in replaced.lines() {
+                        let trimmed = line.trim();
+                        if !trimmed.is_empty() {
+                            out.push(GoStmt::Expr(GoExpr::Raw(trimmed.to_string())));
+                        }
+                    }
+                    GoExpr::Ident(tmp)
+                } else {
+                    let lowered_ty = self.lower_type(&type_expr);
+                    let lowered_val = self.lower_as_value(*value, out);
+                    // `[] as T[]` - Go can't cast []any{} to []T directly
+                    if let GoType::Slice(ref elem_ty) = lowered_ty {
+                        if let GoExpr::SliceLit { ref elems, .. } = lowered_val {
+                            if elems.is_empty() {
+                                return GoExpr::SliceLit {
+                                    ty: *elem_ty.clone(),
+                                    elems: vec![],
+                                };
+                            }
+                        }
+                    }
+                    GoExpr::Cast {
+                        ty: lowered_ty,
+                        value: Box::new(lowered_val),
+                    }
+                }
+            }
 
             ExprKind::Array(elems) => {
                 let elem_ty = match &span_ty.desc {
@@ -508,11 +629,24 @@ impl<'a> Lowerer<'a> {
                 }))
             }
 
-            ExprKind::StructLit { name, fields, .. } => {
-                let ty_name = self.name(name);
+            ExprKind::StructLit {
+                name,
+                type_params,
+                fields,
+            } => {
+                let ty_name = if type_params.is_empty() {
+                    self.name(name)
+                } else {
+                    let base = self.name(name);
+                    let parts: Vec<String> = type_params
+                        .iter()
+                        .map(|tp| lower_type_param_name(&tp.desc))
+                        .collect();
+                    format!("{}__{}", base, parts.join("__"))
+                };
                 let fields = fields
                     .into_iter()
-                    .map(|(label, val)| (capitalize(&label.value), self.lower_as_value(val, out)))
+                    .map(|(label, val)| (escape(&label.value), self.lower_as_value(val, out)))
                     .collect();
                 GoExpr::Ref(Box::new(GoExpr::StructLit {
                     ty: ty_name,
@@ -578,20 +712,21 @@ impl<'a> Lowerer<'a> {
                         ty: self.lower_type(&p.type_expr),
                     })
                     .collect();
-                let ret = return_type
-                    .as_ref()
-                    .map(|t| self.lower_type(t))
-                    .and_then(|t| {
-                        if matches!(t, GoType::Any) {
-                            None
-                        } else {
-                            Some(t)
-                        }
-                    });
-                let is_void = return_type
-                    .as_ref()
-                    .map(|t| Self::is_void(t))
-                    .unwrap_or(true);
+                let effective_ret: Option<&TypeExpr<Typed>> = return_type.as_ref().or_else(|| {
+                    if let TypeDescription::Fun { return_type, .. } = &span_ty.desc {
+                        Some(return_type.as_ref())
+                    } else {
+                        None
+                    }
+                });
+                let is_void = effective_ret.map(|t| Self::is_void(t)).unwrap_or(true);
+                let ret = effective_ret.and_then(|t| {
+                    if Self::is_void(t) {
+                        None
+                    } else {
+                        Some(self.lower_type(t))
+                    }
+                });
                 let body_stmts = self.lower_fn_body(*body, is_void);
                 GoExpr::Closure {
                     params: go_params,
@@ -686,7 +821,6 @@ impl<'a> Lowerer<'a> {
         let switch_arms: Vec<TypeSwitchArm> = arms
             .into_iter()
             .map(|arm| {
-                // Use claim_local so the binding name matches the mangled name the body uses.
                 let binding = if let Some(b) = &arm.binding {
                     self.claim_local(&b.value)
                         .map(|id| self.names[&id].clone())
@@ -694,25 +828,34 @@ impl<'a> Lowerer<'a> {
                 } else {
                     String::new()
                 };
-                // Named struct types are stored as *T in any, so the case must use *T.
                 let ty = self.lower_type_for_switch_arm(&arm.pattern);
                 let mut body = Vec::new();
-                let val = self.lower_as_value(arm.body, &mut body);
-                body.push(GoStmt::Assign {
-                    target: GoExpr::Ident(tmp.clone()),
-                    value: val,
-                });
+                let arm_is_never = Self::is_void(&arm.body.ty);
+                if arm_is_never {
+                    self.lower_as_stmts(arm.body, &mut body);
+                } else {
+                    let val = self.lower_as_value(arm.body, &mut body);
+                    body.push(GoStmt::Assign {
+                        target: GoExpr::Ident(tmp.clone()),
+                        value: val,
+                    });
+                }
                 TypeSwitchArm { binding, ty, body }
             })
             .collect();
 
         let default = else_arm.map(|e| {
             let mut body = Vec::new();
-            let val = self.lower_as_value(*e, &mut body);
-            body.push(GoStmt::Assign {
-                target: GoExpr::Ident(tmp.clone()),
-                value: val,
-            });
+            let else_is_never = Self::is_void(&e.ty);
+            if else_is_never {
+                self.lower_as_stmts(*e, &mut body);
+            } else {
+                let val = self.lower_as_value(*e, &mut body);
+                body.push(GoStmt::Assign {
+                    target: GoExpr::Ident(tmp.clone()),
+                    value: val,
+                });
+            }
             body
         });
 
@@ -1037,9 +1180,6 @@ impl<'a> Lowerer<'a> {
         stmts
     }
 
-    /// Render a JSX tree to a Go `string` expression for server-side use.
-    /// Uppercase tags are treated as islands: `<Counter />` -> `DuckIsland_Counter("{}")`.
-    /// Lowercase tags render as raw HTML strings.
     fn lower_server_jsx(&mut self, node: JsxNode<Typed>, out: &mut Vec<GoStmt>) -> GoExpr {
         match node {
             JsxNode::Text(s) => GoExpr::Str(s),
@@ -1107,8 +1247,52 @@ impl<'a> Lowerer<'a> {
         }
     }
 
+    fn type_has_generic_param(&self, te: &TypeExpr<Typed>) -> bool {
+        match &te.desc {
+            TypeDescription::TypeName {
+                type_ref,
+                type_params,
+            } => {
+                matches!(self.symbols.get(*type_ref).kind, DefKind::GenericParam)
+                    || type_params.iter().any(|tp| self.type_has_generic_param(tp))
+            }
+            TypeDescription::Array(elem) => self.type_has_generic_param(elem),
+            TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
+                self.type_has_generic_param(inner)
+            }
+            TypeDescription::Fun {
+                params,
+                return_type,
+                ..
+            } => {
+                self.type_has_generic_param(return_type)
+                    || params
+                        .iter()
+                        .any(|p| self.type_has_generic_param(&p.type_expr))
+            }
+            TypeDescription::Or(vs) | TypeDescription::And(vs) => {
+                vs.iter().any(|v| self.type_has_generic_param(v))
+            }
+            TypeDescription::Tuple(elems) => elems.iter().any(|e| self.type_has_generic_param(e)),
+            _ => false,
+        }
+    }
+
     fn lower_extension(&mut self, ext: ExtensionDecl<Typed>) -> Vec<GoDecl> {
-        let receiver_ty = self.lower_type(&ext.target);
+        let target_generic = self.type_has_generic_param(&ext.target);
+        let methods_generic = ext.methods.iter().any(|m| {
+            m.return_type
+                .as_ref()
+                .map_or(false, |rt| self.type_has_generic_param(rt))
+                || m.params
+                    .iter()
+                    .any(|p| self.type_has_generic_param(&p.type_expr))
+        });
+        if target_generic || methods_generic {
+            return vec![];
+        }
+
+        let receiver_ty = GoType::Ptr(Box::new(self.lower_type(&ext.target)));
         ext.methods
             .into_iter()
             .filter(|m| m.generics.is_empty())
@@ -1128,7 +1312,7 @@ impl<'a> Lowerer<'a> {
             .fields
             .iter()
             .map(|f| GoField {
-                name: capitalize(&f.name.value),
+                name: escape(&f.name.value),
                 ty: self.lower_type(&f.type_expr),
             })
             .collect();
@@ -1140,14 +1324,14 @@ impl<'a> Lowerer<'a> {
         let recv_ty = GoType::Ptr(Box::new(GoType::Named(struct_name.clone())));
 
         for go_field in &go_fields {
-            let cap = &go_field.name;
+            let cap = capitalize(&go_field.name);
             let recv = GoParam {
                 name: "self".into(),
                 ty: recv_ty.clone(),
             };
             let self_field = GoExpr::Field {
                 base: Box::new(GoExpr::Ident("self".into())),
-                field: cap.clone(),
+                field: go_field.name.clone(),
             };
 
             decls.push(GoDecl::Func {
@@ -1294,17 +1478,238 @@ fn build_props_json(
     go_str_concat(parts)
 }
 
+/// BFS from non-module items outward: returns DefIds of module items that are reachable.
+fn collect_used_module_defs(
+    items: &[Item<Typed>],
+    module_def_ids: &HashSet<DefId>,
+    global_scope: &HashMap<String, DefId>,
+) -> HashSet<DefId> {
+    // build lookup: DefId -> item reference for module items only
+    let module_items: HashMap<DefId, &Item<Typed>> = items
+        .iter()
+        .filter_map(|item| {
+            let name = item_top_name(item)?;
+            let id = global_scope.get(name)?;
+            if module_def_ids.contains(id) {
+                Some((*id, item))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let mut used: HashSet<DefId> = HashSet::new();
+    let mut queue: Vec<DefId> = Vec::new();
+
+    // seed from user items; extensions have no name so always emit - seed their deps too
+    for item in items {
+        let name = match item_top_name(item) {
+            Some(n) => n,
+            None => {
+                if matches!(item, Item::Extension(_)) {
+                    collect_idents_in_item(item, &mut queue);
+                }
+                continue;
+            }
+        };
+        let id = match global_scope.get(name) {
+            Some(&id) => id,
+            None => continue,
+        };
+        if !module_def_ids.contains(&id) {
+            collect_idents_in_item(item, &mut queue);
+        }
+    }
+
+    // BFS
+    while let Some(id) = queue.pop() {
+        if !used.insert(id) {
+            continue;
+        }
+        if let Some(&item) = module_items.get(&id) {
+            collect_idents_in_item(item, &mut queue);
+        }
+    }
+
+    used
+}
+
+fn item_top_name(item: &Item<Typed>) -> Option<&str> {
+    match item {
+        Item::Function(f) => Some(&f.name.value),
+        Item::Struct(s) => Some(&s.name.value),
+        Item::TypeAlias(a) => Some(&a.name.value),
+        _ => None,
+    }
+}
+
+fn collect_idents_in_item(item: &Item<Typed>, out: &mut Vec<DefId>) {
+    match item {
+        Item::Function(f) => collect_idents_in_expr(&f.body, out),
+        Item::Extension(e) => {
+            for m in &e.methods {
+                collect_idents_in_expr(&m.body, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_idents_in_expr(expr: &Expr<Typed>, out: &mut Vec<DefId>) {
+    match &expr.kind {
+        ExprKind::Ident(id) => out.push(*id),
+        ExprKind::Block(stmts) => stmts.iter().for_each(|s| collect_idents_in_expr(s, out)),
+        ExprKind::Let { value, .. }
+        | ExprKind::Const { value, .. }
+        | ExprKind::Return(Some(value))
+        | ExprKind::Not(value)
+        | ExprKind::Neg(value)
+        | ExprKind::Ref(value)
+        | ExprKind::RefMut(value)
+        | ExprKind::Deref(value)
+        | ExprKind::BitNot(value)
+        | ExprKind::Field { base: value, .. }
+        | ExprKind::ScopeRes { base: value, .. }
+        | ExprKind::Async(value)
+        | ExprKind::Defer(value) => collect_idents_in_expr(value, out),
+        ExprKind::Return(None) | ExprKind::Break | ExprKind::Continue => {}
+        ExprKind::Assign { target, value }
+        | ExprKind::AddAssign { target, value }
+        | ExprKind::SubAssign { target, value }
+        | ExprKind::MulAssign { target, value }
+        | ExprKind::DivAssign { target, value }
+        | ExprKind::ModAssign { target, value }
+        | ExprKind::ShrAssign { target, value }
+        | ExprKind::ShlAssign { target, value }
+        | ExprKind::Add(target, value)
+        | ExprKind::Sub(target, value)
+        | ExprKind::Mul(target, value)
+        | ExprKind::Div(target, value)
+        | ExprKind::Mod(target, value)
+        | ExprKind::BitAnd(target, value)
+        | ExprKind::BitOr(target, value)
+        | ExprKind::BitXor(target, value)
+        | ExprKind::Shl(target, value)
+        | ExprKind::Shr(target, value)
+        | ExprKind::Eq(target, value)
+        | ExprKind::Neq(target, value)
+        | ExprKind::Lt(target, value)
+        | ExprKind::Lte(target, value)
+        | ExprKind::Gt(target, value)
+        | ExprKind::Gte(target, value)
+        | ExprKind::And(target, value)
+        | ExprKind::Or(target, value)
+        | ExprKind::Index {
+            base: target,
+            index: value,
+        } => {
+            collect_idents_in_expr(target, out);
+            collect_idents_in_expr(value, out);
+        }
+        ExprKind::Call { callee, args, .. } => {
+            collect_idents_in_expr(callee, out);
+            args.iter().for_each(|a| collect_idents_in_expr(a, out));
+        }
+        ExprKind::As { value, .. } => collect_idents_in_expr(value, out),
+        ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            collect_idents_in_expr(condition, out);
+            collect_idents_in_expr(then_branch, out);
+            if let Some(e) = else_branch {
+                collect_idents_in_expr(e, out);
+            }
+        }
+        ExprKind::While { condition, body } => {
+            collect_idents_in_expr(condition, out);
+            collect_idents_in_expr(body, out);
+        }
+        ExprKind::For { iterable, body, .. } => {
+            collect_idents_in_expr(iterable, out);
+            collect_idents_in_expr(body, out);
+        }
+        ExprKind::Match {
+            value,
+            arms,
+            else_arm,
+        } => {
+            collect_idents_in_expr(value, out);
+            for arm in arms {
+                if let Some(g) = &arm.guard {
+                    collect_idents_in_expr(g, out);
+                }
+                collect_idents_in_expr(&arm.body, out);
+            }
+            if let Some(e) = else_arm {
+                collect_idents_in_expr(e, out);
+            }
+        }
+        ExprKind::StructLit { fields, .. } | ExprKind::DuckLit(fields) => {
+            fields
+                .iter()
+                .for_each(|(_, v)| collect_idents_in_expr(v, out));
+        }
+        ExprKind::Array(elems) | ExprKind::Tuple(elems) => {
+            elems.iter().for_each(|e| collect_idents_in_expr(e, out));
+        }
+        ExprKind::Lambda { body, .. } => collect_idents_in_expr(body, out),
+        ExprKind::FmtString(parts) => {
+            for p in parts {
+                if let FmtPart::Expr(e) = p {
+                    collect_idents_in_expr(e, out);
+                }
+            }
+        }
+        ExprKind::Jsx(node) => collect_idents_in_jsx(node, out),
+        ExprKind::LetTuple { value, .. } => collect_idents_in_expr(value, out),
+        _ => {}
+    }
+}
+
+fn collect_idents_in_jsx(node: &JsxNode<Typed>, out: &mut Vec<DefId>) {
+    match node {
+        JsxNode::Text(_) => {}
+        JsxNode::Expr(e) => collect_idents_in_expr(e, out),
+        JsxNode::Element {
+            attrs, children, ..
+        } => {
+            for attr in attrs {
+                if let JsxAttrValue::Expr(e) = &attr.value {
+                    collect_idents_in_expr(e, out);
+                }
+            }
+            children.iter().for_each(|c| collect_idents_in_jsx(c, out));
+        }
+    }
+}
+
 pub fn lower(out: InferOutput, package: &str) -> GoFile {
+    let used_module_defs = if out.module_def_ids.is_empty() {
+        HashSet::new()
+    } else {
+        collect_used_module_defs(
+            &out.source_file.items,
+            &out.module_def_ids,
+            &out.global_scope,
+        )
+    };
+
     let mut l = Lowerer::new(&out.symbols);
     let mut decls: Vec<GoDecl> = Vec::new();
     let mut go_imports: Vec<String> = Vec::new();
     let mut client_fn_names: Vec<String> = Vec::new();
 
-    // Pre-pass: collect all struct field names and emit HasField[T any] interfaces first.
-    // These must come before struct declarations because the struct methods satisfy them.
     let mut field_names: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for item in &out.source_file.items {
         if let Item::Struct(s) = item {
+            // skip unreachable module structs
+            if let Some(&id) = out.global_scope.get(s.name.value.as_str()) {
+                if out.module_def_ids.contains(&id) && !used_module_defs.contains(&id) {
+                    continue;
+                }
+            }
             for f in &s.fields {
                 field_names.insert(capitalize(&f.name.value));
             }
@@ -1339,6 +1744,15 @@ pub fn lower(out: InferOutput, package: &str) -> GoFile {
     }
 
     for item in out.source_file.items {
+        // skip module items that are not reachable from user code
+        if let Some(name) = item_top_name(&item) {
+            if let Some(&id) = out.global_scope.get(name) {
+                if out.module_def_ids.contains(&id) && !used_module_defs.contains(&id) {
+                    continue;
+                }
+            }
+        }
+
         match item {
             Item::Function(f) => {
                 if f.is_client {
@@ -1352,9 +1766,12 @@ pub fn lower(out: InferOutput, package: &str) -> GoFile {
             Item::Extension(e) => decls.extend(l.lower_extension(e)),
             Item::Use(UseDecl::Go(path, _)) => {
                 // path[0] is always the full Go import path; path[1] (optional) is the alias
-                go_imports.push(path[0].value.clone());
+                let import = path[0].value.clone();
+                if !go_imports.contains(&import) {
+                    go_imports.push(import);
+                }
             }
-            Item::Use(UseDecl::Duck(_, _)) | Item::Use(UseDecl::Ts(_, _)) => {}
+            Item::Use(UseDecl::Duck(_, _, _)) | Item::Use(UseDecl::Ts(_, _)) => {}
         }
     }
 
@@ -1486,6 +1903,17 @@ pub fn lower(out: InferOutput, package: &str) -> GoFile {
     }
 
     imports.sort();
+
+    let mut tag_decls: Vec<GoDecl> = l
+        .used_tags
+        .iter()
+        .map(|name| GoDecl::Struct {
+            name: format!("__DuckTag_{name}"),
+            fields: vec![],
+        })
+        .collect();
+    tag_decls.extend(decls);
+    let decls = tag_decls;
 
     GoFile {
         package: package.to_string(),

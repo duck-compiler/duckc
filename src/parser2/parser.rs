@@ -93,15 +93,29 @@ pub struct UnresolvedTypeRef {
 /// What kind of binding a `DefId` refers to
 #[derive(Debug, Clone, PartialEq)]
 pub enum DefKind {
-    Local { is_mut: bool },
-    Param { is_mut: bool },
-    Function { is_static: bool, is_client: bool },
+    Local {
+        is_mut: bool,
+    },
+    Param {
+        is_mut: bool,
+    },
+    Function {
+        is_static: bool,
+        is_client: bool,
+    },
     Struct,
     TypeAlias,
     Const,
     GlobalVar,
     GenericParam,
-    GoPackage { import_path: String },
+    GoPackage {
+        import_path: String,
+    },
+    /// A loaded Duck module namespace. Members map the short name to the DefId of the
+    /// mangled item (e.g. "println" -> DefId of io__println).
+    Module {
+        members: std::collections::HashMap<String, DefId>,
+    },
     Poison,
 }
 
@@ -651,7 +665,8 @@ pub struct MatchArm<P: Phase> {
 /// `use duck::path::to::item`, `use go "pkg/path"`, or `use ts "pkg-name"`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum UseDecl {
-    Duck(Vec<WithSpan<String>>, Span),
+    /// is_global=true when the source had a leading `::` (e.g. `use ::opt::{Opt}`).
+    Duck(Vec<WithSpan<String>>, bool, Span),
     Go(Vec<WithSpan<String>>, Span),
     /// `use ts "package-name"` - load TypeScript declaration types.
     Ts(String, Span),
@@ -660,7 +675,7 @@ pub enum UseDecl {
 impl UseDecl {
     pub fn span(&self) -> Span {
         match self {
-            UseDecl::Duck(_, s) | UseDecl::Go(_, s) | UseDecl::Ts(_, s) => *s,
+            UseDecl::Duck(_, _, s) | UseDecl::Go(_, s) | UseDecl::Ts(_, s) => *s,
         }
     }
 }
@@ -777,7 +792,7 @@ fn jsx_read_braces(src: &[u8], start: usize) -> (String, usize) {
 /// Parse a Duck expression from a raw string slice (for JSX `{expr}` slots).
 fn jsx_parse_expr(content: &str, file_id: u16) -> Expr<Parsed> {
     use super::tokenizer::tokenize_no_comments;
-    let (tokens, _) = tokenize_no_comments(content, 0);
+    let (tokens, _) = tokenize_no_comments(content, file_id);
     let (expr, _) = parse_single_expr(tokens, file_id);
     expr.unwrap_or_else(|| Expr::parsed(ExprKind::InlineGo(content.to_string()), Span::dummy()))
 }
@@ -1370,7 +1385,7 @@ impl Parser {
         }
 
         // use ::? ident :: ident :: ... ;
-        let _is_global = self.eat_kw(&Token::ScopeRes).is_some();
+        let is_global = self.eat_kw(&Token::ScopeRes).is_some();
         let mut segs: Vec<WithSpan<String>> = Vec::new();
 
         // handle brace groups: use std::{a, b};
@@ -1410,7 +1425,7 @@ impl Parser {
         }
         let end = segs.last().unwrap().span;
         self.eat_kw(&Token::Semi);
-        Some(UseDecl::Duck(segs, start.to(end)))
+        Some(UseDecl::Duck(segs, is_global, start.to(end)))
     }
 
     // Extension declaration
@@ -1684,8 +1699,14 @@ impl Parser {
             return None;
         }
 
-        // .name - tag type
+        // .name - tag type, or .. which is the DOT tag
         if self.eat_kw(&Token::Dot).is_some() {
+            if self.eat_kw(&Token::Dot).is_some() {
+                return Some(TypeExpr::new(
+                    TypeDescription::Tag("DOT".to_string()),
+                    start.to(self.prev_span()),
+                ));
+            }
             let name = self.expect_ident();
             return Some(TypeExpr::new(
                 TypeDescription::Tag(name.value),
@@ -2366,9 +2387,15 @@ impl Parser {
                 let (node, _) = parse_jsx_node(src.as_bytes(), 0, self.file_id);
                 Some(Expr::parsed(ExprKind::Jsx(Box::new(node)), tok.span))
             }
-            // .name - tag literal
+            // .name - tag literal, or .. which is the DOT tag
             Token::Dot => {
                 self.advance();
+                if self.eat_kw(&Token::Dot).is_some() {
+                    return Some(Expr::parsed(
+                        ExprKind::Tag("DOT".to_string()),
+                        start.to(self.prev_span()),
+                    ));
+                }
                 let name = self.expect_ident();
                 Some(Expr::parsed(
                     ExprKind::Tag(name.value.clone()),

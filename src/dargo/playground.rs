@@ -98,6 +98,7 @@ fn pipeline(src: &str) -> (serde_json::Value, String) {
     let token_errors_text = render_errors(
         src,
         "<source>",
+        None,
         lex_errors.iter().map(|e| ("lex", e.msg.as_str(), e.span)),
         false,
     );
@@ -109,6 +110,7 @@ fn pipeline(src: &str) -> (serde_json::Value, String) {
     let parse_errors_text = render_errors(
         src,
         "<source>",
+        None,
         parse_errors
             .iter()
             .map(|e| ("parse", e.msg.as_str(), e.span)),
@@ -122,6 +124,7 @@ fn pipeline(src: &str) -> (serde_json::Value, String) {
     let resolve_errors_text = render_errors(
         src,
         "<source>",
+        None,
         resolve_out
             .errors
             .iter()
@@ -182,6 +185,7 @@ fn pipeline(src: &str) -> (serde_json::Value, String) {
     let infer_errors_text = render_errors(
         src,
         "<source>",
+        None,
         infer_out
             .errors
             .iter()
@@ -465,6 +469,7 @@ fn fmt_kind(kind: &DefKind) -> String {
         DefKind::GlobalVar => "GlobalVar".into(),
         DefKind::GenericParam => "GenericParam".into(),
         DefKind::GoPackage { import_path } => format!("GoPackage({import_path})"),
+        DefKind::Module { members } => format!("Module({} members)", members.len()),
         DefKind::Poison => "Poison".into(),
     }
 }

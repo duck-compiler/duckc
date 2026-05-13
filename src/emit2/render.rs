@@ -262,9 +262,16 @@ fn render_stmt(out: &mut String, stmt: &GoStmt, depth: usize) {
             default,
         } => {
             out.push_str(&pad);
-            out.push_str("switch _sw := (");
-            render_expr(out, value);
-            out.push_str(").(type) {\n");
+            let has_binding = arms.iter().any(|a| !a.binding.is_empty());
+            if has_binding {
+                out.push_str("switch _sw := (");
+                render_expr(out, value);
+                out.push_str(").(type) {\n");
+            } else {
+                out.push_str("switch (");
+                render_expr(out, value);
+                out.push_str(").(type) {\n");
+            }
             for arm in arms {
                 out.push_str(&pad);
                 out.push_str("case ");
@@ -431,7 +438,7 @@ fn render_expr(out: &mut String, expr: &GoExpr) {
 
 fn render_type(out: &mut String, ty: &GoType) {
     match ty {
-        GoType::Int64 => out.push_str("int64"),
+        GoType::Int64 => out.push_str("int"),
         GoType::Uint64 => out.push_str("uint64"),
         GoType::Float64 => out.push_str("float64"),
         GoType::Bool => out.push_str("bool"),

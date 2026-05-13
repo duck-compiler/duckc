@@ -71,7 +71,7 @@ fn struct_decl() {
 #[test]
 fn use_duck() {
     let source_file = parse_ok("use std::io;");
-    let Item::Use(UseDecl::Duck(segs, _)) = &source_file.items[0] else {
+    let Item::Use(UseDecl::Duck(segs, _, _)) = &source_file.items[0] else {
         panic!()
     };
     assert_eq!(segs[0].value, "std");

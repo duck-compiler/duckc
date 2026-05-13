@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+use crate::dargo::module_loader::ModuleStore;
 use crate::parser2::parser::{
     DefId, DefKind, DuckType, Expr, ExprKind, ExtensionDecl, Field, FmtPart, FunTypeParam,
     FunctionDecl, Generic, Item, JsxAttr, JsxAttrValue, JsxNode, MatchArm, Param, Parsed, Resolved,
@@ -16,15 +17,49 @@ pub struct ResolveError {
 // DefId(0) is reserved as the poison sentinel - inserted once at init.
 const POISON: DefId = DefId(0);
 
-struct Resolver {
+/// Try to flatten a nested ScopeRes + member into a path vec.
+/// `std::io` base + "println" member -> `["std", "io", "println"]`
+fn collect_scope_res_path(base: &Expr<Parsed>, final_member: &str) -> Option<Vec<String>> {
+    fn collect(expr: &Expr<Parsed>, out: &mut Vec<String>) -> bool {
+        match &expr.kind {
+            ExprKind::ScopeRes { base, member } => {
+                if !collect(base, out) {
+                    return false;
+                }
+                out.push(member.value.clone());
+                true
+            }
+            ExprKind::Ident(ident) if ident.segments.len() == 1 => {
+                out.push(ident.segments[0].value.clone());
+                true
+            }
+            _ => false,
+        }
+    }
+    let mut path = Vec::new();
+    if collect(base, &mut path) {
+        path.push(final_member.to_string());
+        Some(path)
+    } else {
+        None
+    }
+}
+
+struct Resolver<'a> {
     symbols: SymbolTable,
     // innermost scope is last; each scope maps name -> DefId
     scopes: Vec<HashMap<String, DefId>>,
     errors: Vec<ResolveError>,
+    // set of DefIds that came from loaded module items (used for selective emit)
+    module_def_ids: HashSet<DefId>,
+    // names of all mangled module items, set before collect_top_level runs
+    module_item_names: &'a HashSet<String>,
+    // module store for building Module namespace bindings
+    module_store: &'a ModuleStore,
 }
 
-impl Resolver {
-    fn new() -> Self {
+impl<'a> Resolver<'a> {
+    fn new(module_item_names: &'a HashSet<String>, module_store: &'a ModuleStore) -> Self {
         let mut symbols = SymbolTable::default();
         symbols.insert(SymbolDef {
             kind: DefKind::Poison,
@@ -37,6 +72,9 @@ impl Resolver {
             symbols,
             scopes: vec![HashMap::new()],
             errors: Vec::new(),
+            module_def_ids: HashSet::new(),
+            module_item_names,
+            module_store,
         }
     }
 
@@ -61,6 +99,10 @@ impl Resolver {
             .last_mut()
             .unwrap()
             .insert(name.value.clone(), id);
+        // track which DefIds come from module-loaded items
+        if self.module_item_names.contains(&name.value) {
+            self.module_def_ids.insert(id);
+        }
         id
     }
 
@@ -86,6 +128,9 @@ impl Resolver {
     }
 
     fn collect_top_level(&mut self, items: &[Item<Parsed>]) {
+        // Pass 1: define all named items (functions, structs, type aliases, Go/Ts packages).
+        // This must complete before pass 2 so that UseDecl::Duck bindings can look up any
+        // already-mangled name regardless of declaration order.
         for item in items {
             match item {
                 Item::Function(f) => {
@@ -104,8 +149,6 @@ impl Resolver {
                     self.define(&s.name, DefKind::Struct);
                 }
                 Item::Use(crate::parser2::parser::UseDecl::Ts(pkg_name_str, span)) => {
-                    // `use ts "preact"` - register as GoPackage with a "ts:" prefix so the
-                    // type inferencer knows to query ts_interop instead of go_interop.
                     let short_name = pkg_name_str
                         .split('/')
                         .next_back()
@@ -127,8 +170,6 @@ impl Resolver {
                     }
                 }
                 Item::Use(crate::parser2::parser::UseDecl::Go(path, span)) => {
-                    // path[0] is always the full Go import path (e.g. "go.mongodb.org/mongo-driver/v2/mongo")
-                    // path[1], if present, is the alias
                     let import_path = path[0].value.clone();
                     let pkg_name = if path.len() >= 2 {
                         path[1].value.clone()
@@ -153,7 +194,75 @@ impl Resolver {
                         });
                     }
                 }
-                Item::Use(_) | Item::Extension(_) => {}
+                Item::Use(crate::parser2::parser::UseDecl::Duck(_, _, _)) | Item::Extension(_) => {}
+            }
+        }
+
+        // Pass 2: process UseDecl::Duck imports now that all names are defined.
+        for item in items {
+            if let Item::Use(crate::parser2::parser::UseDecl::Duck(segs, _, span)) = item {
+                self.register_duck_import(segs, *span);
+            }
+        }
+    }
+
+    /// Handle a `use path::to::thing;` import by building a Module binding or
+    /// a direct alias depending on whether the path identifies a module dir or a member.
+    fn register_duck_import(&mut self, segs: &[WithSpan<String>], span: Span) {
+        if segs.len() < 2 {
+            return;
+        }
+        let path: Vec<String> = segs.iter().map(|s| s.value.clone()).collect();
+        let (mod_path, member_opt) = self.module_store.split_path(&path);
+
+        if mod_path.is_empty() {
+            // no matching module on disk - report when we fail to resolve references
+            return;
+        }
+
+        let mod_key = mod_path.join("::");
+        let Some(loaded) = self.module_store.modules.get(&mod_key) else {
+            return;
+        };
+
+        // prefix used during loading, e.g. "io" for std::io
+        let prefix = mod_path[1..].join("__");
+
+        match member_opt {
+            None => {
+                // namespace import - `use std::io;` -> bind `io` as Module
+                let mut members = HashMap::new();
+                for (short_name, _) in &loaded.members {
+                    let mangled = format!("{}__{}", prefix, short_name);
+                    if let Some(&def_id) = self.scopes[0].get(&mangled) {
+                        members.insert(short_name.clone(), def_id);
+                    }
+                }
+                let binding_name = segs.last().unwrap();
+                self.define(binding_name, DefKind::Module { members });
+            }
+            Some(member_name) => {
+                // direct import - `use std::io::{println}` -> bind `println` directly.
+                // `member_name` may contain "__" when the source used brace-expansion like
+                // `use ::opt::{Opt, Some}` which the parser flattens into one path and
+                // split_path joins trailing segments with "__". In that case split and
+                // register each name individually.
+                let names: Vec<&str> = if member_name.contains("__") {
+                    member_name.split("__").collect()
+                } else {
+                    vec![member_name.as_str()]
+                };
+                for name in names {
+                    let mangled = format!("{}__{}", prefix, name);
+                    if let Some(&def_id) = self.scopes[0].get(&mangled) {
+                        self.scopes
+                            .last_mut()
+                            .unwrap()
+                            .insert(name.to_string(), def_id);
+                    }
+                    // Silently skip names not found; they come from brace-expansion and the
+                    // module's own self-imports will create the bindings separately.
+                }
             }
         }
     }
@@ -271,12 +380,35 @@ impl Resolver {
     }
 
     fn resolve_extension(&mut self, ext: ExtensionDecl<Parsed>) -> ExtensionDecl<Resolved> {
+        self.push_scope();
+
+        // Bring the struct's generic type parameters (T, U, …) into scope so that
+        // method signatures and bodies can reference them.
+        // The target type is e.g. `ArrayList<T>` where T is stored as TemplParam.
+        if let TypeDescription::TypeName {
+            ref type_params, ..
+        } = ext.target.desc
+        {
+            for tp in type_params {
+                if let TypeDescription::TemplParam(ref name) = tp.desc {
+                    let ws = WithSpan::new(name.clone(), tp.span);
+                    self.define(&ws, DefKind::GenericParam);
+                }
+            }
+        }
+
+        // `self` is the implicit receiver in extension instance methods.
+        let self_ws = WithSpan::new("self".to_string(), ext.target.span);
+        self.define(&self_ws, DefKind::Local { is_mut: true });
+
         let target = self.resolve_type_expr(ext.target);
         let methods = ext
             .methods
             .into_iter()
             .map(|m| self.resolve_function(m))
             .collect();
+
+        self.pop_scope();
         ExtensionDecl {
             target,
             methods,
@@ -428,15 +560,44 @@ impl Resolver {
     }
 
     fn resolve_type_ref(&mut self, type_ref: &UnresolvedTypeRef, span: Span) -> DefId {
-        if type_ref.path.len() == 1 {
-            let name = &type_ref.path[0];
-            match self.lookup(name) {
-                Some(id) => id,
-                None => self.poison(format!("undefined type `{name}`"), span),
+        match type_ref.path.len() {
+            0 => self.poison("empty type path", span),
+            1 => {
+                let name = &type_ref.path[0];
+                match self.lookup(name) {
+                    Some(id) => id,
+                    None => self.poison(format!("undefined type `{name}`"), span),
+                }
             }
-        } else {
-            let path = type_ref.path.join("::");
-            self.poison(format!("unresolved module path `{path}`"), span)
+            _ => {
+                // Global paths (is_global=true, e.g. `::col::Iter`) are relative to the
+                // std root; look them up directly in the module store.
+                if type_ref.is_global && type_ref.path.len() >= 2 {
+                    let std_mod_key = format!("std::{}", type_ref.path[0]);
+                    let member = &type_ref.path[1];
+                    if self.module_store.modules.contains_key(&std_mod_key) {
+                        let mangled = format!("{}__{}", type_ref.path[0], member);
+                        if let Some(def_id) = self.lookup(&mangled) {
+                            return def_id;
+                        }
+                    }
+                }
+
+                // two-segment: treat first as module namespace binding, second as member
+                let ns = &type_ref.path[0];
+                let member = &type_ref.path[1];
+                if let Some(ns_id) = self.lookup(ns) {
+                    if let DefKind::Module { members } = self.symbols.get(ns_id).kind.clone() {
+                        if let Some(&def_id) = members.get(member.as_str()) {
+                            return def_id;
+                        }
+                        return self
+                            .poison(format!("no type `{}` in module `{}`", member, ns), span);
+                    }
+                }
+                let path = type_ref.path.join("::");
+                self.poison(format!("unresolved module path `{path}`"), span)
+            }
         }
     }
 
@@ -447,13 +608,91 @@ impl Resolver {
                 Some(id) => id,
                 None => self.poison(format!("undefined name `{name}`"), span),
             }
+        } else if ident.segments.len() >= 3 {
+            let segs: Vec<&str> = ident.segments.iter().map(|s| s.value.as_str()).collect();
+
+            // Global `::mod::Struct::method` paths (is_global=true, first seg is std module).
+            // E.g. `::col::Iter::from` → module "std::col", composite key "Iter__from".
+            if ident.is_global {
+                let std_mod_key = format!("std::{}", segs[0]);
+                if let Some(module) = self.module_store.modules.get(&std_mod_key) {
+                    let composite = segs[1..].join("__");
+                    if let Some(&idx) = module.members.get(&composite) {
+                        if let Item::Function(f) = &module.items[idx] {
+                            if let Some(def_id) = self.lookup(&f.name.value) {
+                                return def_id;
+                            }
+                        }
+                    }
+                    // Also try last segment as a plain function in the module.
+                    let prefix = segs[0];
+                    let mangled = format!("{}__{}", prefix, segs[segs.len() - 1]);
+                    if let Some(def_id) = self.lookup(&mangled) {
+                        return def_id;
+                    }
+                }
+                return self.poison(format!("unresolved path `::{}`", segs.join("::")), span);
+            }
+
+            // Non-global 3+ segment path like `std::io::println`.
+            let mod_key = segs[..segs.len() - 1].join("::");
+            let member_name = segs[segs.len() - 1];
+            if let Some(_module) = self.module_store.modules.get(&mod_key) {
+                let prefix = segs[1..segs.len() - 1].join("__");
+                let mangled = format!("{}__{}", prefix, member_name);
+                if let Some(def_id) = self.lookup(&mangled) {
+                    return def_id;
+                }
+                self.poison(
+                    format!("no member `{}` in module `{}`", member_name, mod_key),
+                    span,
+                )
+            } else {
+                let path = segs.join("::");
+                self.poison(format!("unresolved path `{}`", path), span)
+            }
         } else {
-            let path = ident
-                .segments
-                .iter()
-                .map(|s| s.value.as_str())
-                .collect::<Vec<_>>()
-                .join("::");
+            let first = ident.segments[0].value.as_str();
+            let second = ident.segments[1].value.as_str();
+
+            // Global 2-segment path: `::module::member` (is_global=true, e.g. `::error::panic`).
+            // These are std-root-relative; look up "std::{first}" module directly.
+            if ident.is_global {
+                let std_mod_key = format!("std::{}", first);
+                if self.module_store.modules.contains_key(&std_mod_key) {
+                    let mangled = format!("{}__{}", first, second);
+                    if let Some(def_id) = self.lookup(&mangled) {
+                        return def_id;
+                    }
+                    // Also check composite keys for static methods.
+                    if let Some(module) = self.module_store.modules.get(&std_mod_key) {
+                        let composite = format!("{}__{}", first, second);
+                        if let Some(&idx) = module.members.get(&composite) {
+                            if let Item::Function(f) = &module.items[idx] {
+                                if let Some(def_id) = self.lookup(&f.name.value) {
+                                    return def_id;
+                                }
+                            }
+                        }
+                    }
+                }
+                return self.poison(format!("unresolved path `::{first}::{second}`"), span);
+            }
+
+            // Non-global 2-segment: try as `StructName::static_method` dispatch.
+            // Static methods are registered in the module store with composite keys
+            // like "Opt__some" → mangled function name "opt__Opt__some".
+            let composite = format!("{}__{}", first, second);
+            for module in self.module_store.modules.values() {
+                if let Some(&idx) = module.members.get(&composite) {
+                    if let Item::Function(f) = &module.items[idx] {
+                        if let Some(def_id) = self.lookup(&f.name.value) {
+                            return def_id;
+                        }
+                    }
+                }
+            }
+            let path = format!("{}::{}", first, second);
             self.poison(format!("unresolved path `{path}`"), span)
         }
     }
@@ -651,10 +890,70 @@ impl Resolver {
                 base: b!(self.resolve_expr(*base)),
                 index: b!(self.resolve_expr(*index)),
             },
-            ExprKind::ScopeRes { base, member } => ExprKind::ScopeRes {
-                base: b!(self.resolve_expr(*base)),
-                member,
-            },
+
+            // Desugar `module::member` into a direct Ident when the base is a Module binding.
+            // This removes the need for type inference to understand module namespaces.
+            ExprKind::ScopeRes { base, member } => {
+                // 2-segment: `io::member` where `io` is a bound Module namespace
+                if let ExprKind::Ident(ref ident) = base.kind {
+                    if ident.segments.len() == 1 {
+                        let ns_name = &ident.segments[0].value;
+                        if let Some(ns_id) = self.lookup(ns_name) {
+                            if let DefKind::Module { members } =
+                                self.symbols.get(ns_id).kind.clone()
+                            {
+                                return if let Some(&fn_id) = members.get(member.value.as_str()) {
+                                    ExprKind::Ident(fn_id)
+                                } else {
+                                    ExprKind::Ident(self.poison(
+                                        format!(
+                                            "no member `{}` in module `{}`",
+                                            member.value, ns_name
+                                        ),
+                                        member.span,
+                                    ))
+                                };
+                            }
+                        }
+                    }
+                }
+
+                // multi-segment: `std::io::member` - collect the full path then look up
+                if let Some(path) = collect_scope_res_path(&base, &member.value) {
+                    if path.len() >= 3 {
+                        let mod_key = path[..path.len() - 1].join("::");
+                        let member_name = path.last().unwrap().as_str();
+                        if let Some(module) = self.module_store.modules.get(&mod_key) {
+                            let prefix = path[1..path.len() - 1].join("__");
+                            let mangled = format!("{}__{}", prefix, member_name);
+                            return if let Some(def_id) = self.lookup(&mangled) {
+                                ExprKind::Ident(def_id)
+                            } else if module.members.contains_key(member_name) {
+                                ExprKind::Ident(self.poison(
+                                    format!("no member `{}` in module `{}`", member_name, mod_key),
+                                    member.span,
+                                ))
+                            } else {
+                                ExprKind::Ident(self.poison(
+                                    format!("no member `{}` in module `{}`", member_name, mod_key),
+                                    member.span,
+                                ))
+                            };
+                        } else {
+                            // module not loaded - clear error instead of "undefined name std"
+                            return ExprKind::Ident(self.poison(
+                                format!("unresolved path `{}`", path.join("::")),
+                                member.span,
+                            ));
+                        }
+                    }
+                }
+
+                ExprKind::ScopeRes {
+                    base: b!(self.resolve_expr(*base)),
+                    member,
+                }
+            }
 
             ExprKind::Call {
                 callee,
@@ -912,16 +1211,37 @@ pub struct ResolveOutput {
     pub symbols: SymbolTable,
     pub global_scope: HashMap<String, DefId>,
     pub errors: Vec<ResolveError>,
+    /// DefIds of items that were loaded from Duck modules (not user code).
+    pub module_def_ids: HashSet<DefId>,
 }
 
+/// Empty store used in tests and any context without module loading.
+static EMPTY_STORE: std::sync::OnceLock<ModuleStore> = std::sync::OnceLock::new();
+
+fn empty_store() -> &'static ModuleStore {
+    EMPTY_STORE.get_or_init(|| ModuleStore::new(PathBuf::new()))
+}
+
+use std::path::PathBuf;
+
 pub fn resolve(source_file: SourceFile<Parsed>) -> ResolveOutput {
-    let mut r = Resolver::new();
+    resolve_with_modules(source_file, &Default::default(), empty_store())
+}
+
+pub fn resolve_with_modules(
+    source_file: SourceFile<Parsed>,
+    module_item_names: &HashSet<String>,
+    module_store: &ModuleStore,
+) -> ResolveOutput {
+    let mut r = Resolver::new(module_item_names, module_store);
     let resolved = r.resolve_source_file(source_file);
     let global_scope = r.scopes.into_iter().next().unwrap_or_default();
+    let module_def_ids = r.module_def_ids;
     ResolveOutput {
         source_file: resolved,
         symbols: r.symbols,
         global_scope,
         errors: r.errors,
+        module_def_ids,
     }
 }

@@ -560,6 +560,25 @@ fn calculate_live_set(
         perform_reachability_analysis(&mut live_set, &mut worklist, declarations);
     }
 
+    // When keeping exported symbols, ensure struct defs aren't deleted while
+    // their exported methods are kept (exported methods are never removed when
+    // remove_exported=false, but the receiver type might not be reachable from main).
+    if !_remove_exported {
+        for (name, decl) in declarations.iter_flat() {
+            if matches!(decl.kind, DeclKind::Method) && decl.is_exported {
+                if let Some(dot_pos) = name.find('.') {
+                    let receiver_type = &name[..dot_pos];
+                    if live_set.insert(receiver_type.to_string()) {
+                        worklist.push_back(receiver_type.to_string());
+                    }
+                }
+            }
+        }
+        if !worklist.is_empty() {
+            perform_reachability_analysis(&mut live_set, &mut worklist, declarations);
+        }
+    }
+
     live_set
 }
 

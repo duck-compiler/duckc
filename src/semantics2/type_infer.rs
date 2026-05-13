@@ -6,7 +6,7 @@ use crate::parser2::parser::{
     SourceFile, Span, StructDecl, SymbolTable, TypeAliasDecl, TypeDescription, TypeExpr, Typed,
     WithSpan,
 };
-use crate::semantics2::resolver::{ResolveOutput, type_expr_to_typed};
+use crate::semantics2::resolver::{type_expr_to_typed, ResolveOutput};
 
 #[derive(Debug, Clone)]
 pub struct TypeError {
@@ -19,6 +19,10 @@ pub struct InferOutput {
     pub source_file: SourceFile<Typed>,
     pub symbols: SymbolTable,
     pub errors: Vec<TypeError>,
+    /// Forwarded from ResolveOutput - DefIds of items loaded from Duck modules.
+    pub module_def_ids: std::collections::HashSet<crate::parser2::parser::DefId>,
+    /// Global name->DefId map forwarded from the resolver, used by selective emit.
+    pub global_scope: std::collections::HashMap<String, crate::parser2::parser::DefId>,
 }
 
 struct Inferencer {
@@ -32,6 +36,14 @@ struct Inferencer {
     struct_fields: HashMap<DefId, Vec<Field<Typed>>>,
     /// Extension method types keyed by struct DefId then method name to Fun type.
     extension_methods: HashMap<DefId, HashMap<String, TypeExpr<Typed>>>,
+    /// Ordered generic param names per struct DefId (extracted from extension targets).
+    struct_generic_params: HashMap<DefId, Vec<String>>,
+    /// DefIds of items that came from loaded Duck modules - suppress type errors for these.
+    module_def_ids: HashSet<DefId>,
+    /// Global name→DefId map, used to identify module items in infer_item.
+    global_scope: HashMap<String, DefId>,
+    /// When true, calls to error() are silently dropped (used while inferring module bodies).
+    suppress_errors: bool,
 }
 
 fn any(span: Span) -> TypeExpr<Typed> {
@@ -89,6 +101,116 @@ fn type_name(te: &TypeExpr<Typed>) -> String {
         TypeDescription::GoNamed(s) => s.clone(),
         TypeDescription::TypeName { type_ref, .. } => format!("#{}", type_ref.0),
         _ => "?".into(),
+    }
+}
+
+// TypeExpr::PartialEq includes spans, so structurally equal types at different positions
+// compare unequal - compare descriptions only
+fn type_desc_eq(a: &TypeDescription<Typed>, b: &TypeDescription<Typed>) -> bool {
+    match (a, b) {
+        (
+            TypeDescription::TypeName {
+                type_ref: ra,
+                type_params: tpa,
+            },
+            TypeDescription::TypeName {
+                type_ref: rb,
+                type_params: tpb,
+            },
+        ) => {
+            ra == rb
+                && tpa.len() == tpb.len()
+                && tpa
+                    .iter()
+                    .zip(tpb.iter())
+                    .all(|(ta, tb)| type_desc_eq(&ta.desc, &tb.desc))
+        }
+        (TypeDescription::Or(va), TypeDescription::Or(vb))
+        | (TypeDescription::And(va), TypeDescription::And(vb)) => {
+            va.len() == vb.len()
+                && va
+                    .iter()
+                    .zip(vb.iter())
+                    .all(|(ta, tb)| type_desc_eq(&ta.desc, &tb.desc))
+        }
+        (TypeDescription::Ref(ia), TypeDescription::Ref(ib))
+        | (TypeDescription::RefMut(ia), TypeDescription::RefMut(ib))
+        | (TypeDescription::Array(ia), TypeDescription::Array(ib)) => {
+            type_desc_eq(&ia.desc, &ib.desc)
+        }
+        (
+            TypeDescription::Fun {
+                params: pa,
+                return_type: ra,
+                ..
+            },
+            TypeDescription::Fun {
+                params: pb,
+                return_type: rb,
+                ..
+            },
+        ) => {
+            type_desc_eq(&ra.desc, &rb.desc)
+                && pa.len() == pb.len()
+                && pa
+                    .iter()
+                    .zip(pb.iter())
+                    .all(|(a, b)| type_desc_eq(&a.type_expr.desc, &b.type_expr.desc))
+        }
+        (TypeDescription::Tuple(va), TypeDescription::Tuple(vb)) => {
+            va.len() == vb.len()
+                && va
+                    .iter()
+                    .zip(vb.iter())
+                    .all(|(a, b)| type_desc_eq(&a.desc, &b.desc))
+        }
+        // Primitives and unit-like variants: just compare directly (they have no TypeExpr children)
+        _ => a == b,
+    }
+}
+
+/// Collect all free GenericParam DefIds from a type in order of first appearance.
+/// Used to match call-site type_params to the function's generic parameters.
+fn collect_free_generic_params(te: &TypeExpr<Typed>, symbols: &SymbolTable, out: &mut Vec<DefId>) {
+    match &te.desc {
+        TypeDescription::TypeName {
+            type_ref,
+            type_params,
+        } => {
+            if matches!(symbols.get(*type_ref).kind, DefKind::GenericParam)
+                && !out.contains(type_ref)
+            {
+                out.push(*type_ref);
+            }
+            for tp in type_params {
+                collect_free_generic_params(tp, symbols, out);
+            }
+        }
+        TypeDescription::Fun {
+            params,
+            return_type,
+            ..
+        } => {
+            for p in params {
+                collect_free_generic_params(&p.type_expr, symbols, out);
+            }
+            collect_free_generic_params(return_type, symbols, out);
+        }
+        TypeDescription::Array(e) => collect_free_generic_params(e, symbols, out),
+        TypeDescription::Ref(e) | TypeDescription::RefMut(e) => {
+            collect_free_generic_params(e, symbols, out)
+        }
+        TypeDescription::Or(vs) | TypeDescription::And(vs) => {
+            for v in vs {
+                collect_free_generic_params(v, symbols, out);
+            }
+        }
+        TypeDescription::Tuple(es) => {
+            for e in es {
+                collect_free_generic_params(e, symbols, out);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -430,7 +552,11 @@ fn go_named_implements(concrete_str: &str, interface_str: &str) -> bool {
 }
 
 impl Inferencer {
-    fn new(symbols: SymbolTable) -> Self {
+    fn new(
+        symbols: SymbolTable,
+        module_def_ids: HashSet<DefId>,
+        global_scope: HashMap<String, DefId>,
+    ) -> Self {
         let mut local_queues: HashMap<String, Vec<DefId>> = HashMap::new();
         for (id, def) in symbols.iter() {
             if matches!(def.kind, DefKind::Local { .. } | DefKind::Param { .. }) {
@@ -445,6 +571,10 @@ impl Inferencer {
             used_locals: HashSet::new(),
             struct_fields: HashMap::new(),
             extension_methods: HashMap::new(),
+            struct_generic_params: HashMap::new(),
+            module_def_ids,
+            global_scope,
+            suppress_errors: false,
         }
     }
 
@@ -456,10 +586,44 @@ impl Inferencer {
     }
 
     fn error(&mut self, msg: impl Into<String>, span: Span) {
+        if self.suppress_errors {
+            return;
+        }
         self.errors.push(TypeError {
             msg: msg.into(),
             span,
         });
+    }
+
+    /// Returns true if the type contains a generic type parameter (`DefKind::GenericParam`).
+    /// Used to suppress compat checks involving unsubstituted generic type variables.
+    fn type_contains_generic_param(&self, te: &TypeExpr<Typed>) -> bool {
+        match &te.desc {
+            TypeDescription::TypeName { type_ref, .. } => {
+                matches!(self.symbols.get(*type_ref).kind, DefKind::GenericParam)
+            }
+            TypeDescription::Array(inner) => self.type_contains_generic_param(inner),
+            TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
+                self.type_contains_generic_param(inner)
+            }
+            TypeDescription::Or(variants) => {
+                variants.iter().any(|v| self.type_contains_generic_param(v))
+            }
+            TypeDescription::Tuple(elems) => {
+                elems.iter().any(|e| self.type_contains_generic_param(e))
+            }
+            TypeDescription::Fun {
+                params,
+                return_type,
+                ..
+            } => {
+                self.type_contains_generic_param(return_type)
+                    || params
+                        .iter()
+                        .any(|p| self.type_contains_generic_param(&p.type_expr))
+            }
+            _ => false,
+        }
     }
 
     /// Emit a type error if `got` is not compatible with `expected`.
@@ -471,6 +635,11 @@ impl Inferencer {
         span: Span,
         ctx: &str,
     ) {
+        // The inferencer doesn't substitute type params, so skip checks where either
+        // side contains an unresolved generic type variable.
+        if self.type_contains_generic_param(expected) || self.type_contains_generic_param(got) {
+            return;
+        }
         if !types_compatible(&expected.desc, &got.desc) {
             self.error(
                 format!(
@@ -543,10 +712,41 @@ impl Inferencer {
                 Item::Extension(ext) => {
                     // Resolve the target type to a struct DefId so we can index by it.
                     let target_typed = type_expr_to_typed(ext.target.clone());
-                    let struct_id = match &target_typed.desc {
-                        TypeDescription::TypeName { type_ref, .. } => *type_ref,
+                    let (struct_id, target_type_params) = match &target_typed.desc {
+                        TypeDescription::TypeName {
+                            type_ref,
+                            type_params,
+                        } => (*type_ref, type_params.clone()),
                         _ => continue,
                     };
+                    // Record ordered generic param names so lookup_field_type can substitute.
+                    if !target_type_params.is_empty() {
+                        let param_names: Vec<String> = target_type_params
+                            .iter()
+                            .filter_map(|tp| match &tp.desc {
+                                // After resolution the target type_params are still TemplParam("T").
+                                TypeDescription::TemplParam(name) => Some(name.clone()),
+                                // Fallback: if already resolved to a GenericParam TypeName.
+                                TypeDescription::TypeName {
+                                    type_ref,
+                                    type_params,
+                                } if type_params.is_empty() => {
+                                    if matches!(
+                                        self.symbols.get(*type_ref).kind,
+                                        DefKind::GenericParam
+                                    ) {
+                                        Some(self.symbols.get(*type_ref).name.clone())
+                                    } else {
+                                        None
+                                    }
+                                }
+                                _ => None,
+                            })
+                            .collect();
+                        self.struct_generic_params
+                            .entry(struct_id)
+                            .or_insert(param_names);
+                    }
                     let map = self.extension_methods.entry(struct_id).or_default();
                     for m in &ext.methods {
                         let param_types: Vec<FunTypeParam<Typed>> = m
@@ -581,16 +781,36 @@ impl Inferencer {
 
     fn lookup_field_type(&self, ty: &TypeExpr<Typed>, field_name: &str) -> Option<TypeExpr<Typed>> {
         match &ty.desc {
-            TypeDescription::TypeName { type_ref, .. } => {
+            TypeDescription::TypeName {
+                type_ref,
+                type_params,
+            } => {
                 if let Some(fields) = self.struct_fields.get(type_ref) {
                     if let Some(field) = fields.iter().find(|f| f.name.value == field_name) {
                         return Some(field.type_expr.clone());
                     }
                 }
-                self.extension_methods
+                let method_ty = self
+                    .extension_methods
                     .get(type_ref)
                     .and_then(|m| m.get(field_name))
-                    .cloned()
+                    .cloned();
+                if let Some(ty) = method_ty {
+                    if !type_params.is_empty() {
+                        if let Some(param_names) = self.struct_generic_params.get(type_ref).cloned()
+                        {
+                            let subs: HashMap<String, TypeExpr<Typed>> = param_names
+                                .iter()
+                                .zip(type_params.iter())
+                                .map(|(name, concrete)| (name.clone(), concrete.clone()))
+                                .collect();
+                            return Some(super::mono::subst_type(&ty, &subs, &self.symbols));
+                        }
+                    }
+                    Some(ty)
+                } else {
+                    None
+                }
             }
             TypeDescription::Tuple(elems) => field_name
                 .parse::<usize>()
@@ -676,7 +896,37 @@ impl Inferencer {
         SourceFile { items }
     }
 
+    fn is_module_item(&self, item: &Item<Resolved>) -> bool {
+        match item {
+            Item::Function(f) => self
+                .global_scope
+                .get(&f.name.value)
+                .map_or(false, |id| self.module_def_ids.contains(id)),
+            Item::Extension(e) => {
+                let target_typed =
+                    crate::semantics2::resolver::type_expr_to_typed(e.target.clone());
+                match &target_typed.desc {
+                    TypeDescription::TypeName { type_ref, .. } => {
+                        self.module_def_ids.contains(type_ref)
+                    }
+                    _ => false,
+                }
+            }
+            _ => false,
+        }
+    }
+
     fn infer_item(&mut self, item: Item<Resolved>) -> Item<Typed> {
+        let was_suppressed = self.suppress_errors;
+        if self.is_module_item(&item) {
+            self.suppress_errors = true;
+        }
+        let result = self.infer_item_inner(item);
+        self.suppress_errors = was_suppressed;
+        result
+    }
+
+    fn infer_item_inner(&mut self, item: Item<Resolved>) -> Item<Typed> {
         match item {
             Item::Function(f) => Item::Function(self.infer_function(f)),
             Item::TypeAlias(a) => Item::TypeAlias(TypeAliasDecl {
@@ -849,7 +1099,17 @@ impl Inferencer {
             }
 
             ExprKind::Ident(id) => {
-                let ty = self.sym_ty(id, span);
+                let ty = if matches!(self.symbols.get(id).kind, DefKind::Struct) {
+                    TypeExpr::new(
+                        TypeDescription::TypeName {
+                            type_ref: id,
+                            type_params: vec![],
+                        },
+                        span,
+                    )
+                } else {
+                    self.sym_ty(id, span)
+                };
                 (ExprKind::Ident(id), ty)
             }
 
@@ -1280,7 +1540,10 @@ impl Inferencer {
             }
             ExprKind::ScopeRes { base, member } => {
                 let base = Box::new(self.infer_expr(*base));
-                (ExprKind::ScopeRes { base, member }, any(span))
+                let member_ty = self
+                    .lookup_field_type(&base.ty, &member.value)
+                    .unwrap_or_else(|| any(span));
+                (ExprKind::ScopeRes { base, member }, member_ty)
             }
 
             ExprKind::Call {
@@ -1289,8 +1552,10 @@ impl Inferencer {
                 args,
             } => {
                 let callee = Box::new(self.infer_expr(*callee));
+                let type_params: Vec<TypeExpr<Typed>> =
+                    type_params.into_iter().map(type_expr_to_typed).collect();
                 let mut is_variadic_call = false;
-                let (return_ty, callee_param_tys) = match &callee.ty.desc {
+                let (mut return_ty, mut callee_param_tys) = match &callee.ty.desc {
                     TypeDescription::Fun {
                         return_type,
                         params,
@@ -1314,6 +1579,24 @@ impl Inferencer {
                         (any(span), vec![])
                     }
                 };
+                // If the callee is a generic function (has free GenericParam DefIds) and
+                // call-site type_params are provided, substitute them in the return and param types.
+                if !type_params.is_empty() {
+                    let mut generic_ids: Vec<DefId> = Vec::new();
+                    collect_free_generic_params(&callee.ty, &self.symbols, &mut generic_ids);
+                    if generic_ids.len() == type_params.len() {
+                        let subs: HashMap<String, TypeExpr<Typed>> = generic_ids
+                            .iter()
+                            .zip(type_params.iter())
+                            .map(|(id, tp)| (self.symbols.get(*id).name.clone(), tp.clone()))
+                            .collect();
+                        return_ty = super::mono::subst_type(&return_ty, &subs, &self.symbols);
+                        callee_param_tys = callee_param_tys
+                            .iter()
+                            .map(|p| super::mono::subst_type(p, &subs, &self.symbols))
+                            .collect();
+                    }
+                }
                 // Arg count check (only when we know the expected count).
                 let n_expected = callee_param_tys.len();
                 let n_got = args.len();
@@ -1332,7 +1615,6 @@ impl Inferencer {
                         );
                     }
                 }
-                let type_params = type_params.into_iter().map(type_expr_to_typed).collect();
                 let args: Vec<Expr<Typed>> = args
                     .into_iter()
                     .enumerate()
@@ -1429,11 +1711,28 @@ impl Inferencer {
                     .into_iter()
                     .map(|arm| self.infer_match_arm(arm))
                     .collect();
-                let ty = arms
-                    .first()
-                    .map(|a| a.body.ty.clone())
-                    .unwrap_or_else(|| any(span));
                 let else_arm = else_arm.map(|e| Box::new(self.infer_expr(*e)));
+                let is_never = |ty: &TypeExpr<Typed>| {
+                    matches!(ty.desc, TypeDescription::Never | TypeDescription::Statement)
+                };
+                let non_never: Vec<TypeExpr<Typed>> = arms
+                    .iter()
+                    .map(|a| &a.body.ty)
+                    .chain(else_arm.as_ref().map(|e| &e.ty))
+                    .filter(|t| !is_never(t))
+                    .cloned()
+                    .collect();
+                let ty = match non_never.as_slice() {
+                    [] => any(span),
+                    [single] => single.clone(),
+                    [first, rest @ ..] => {
+                        if rest.iter().all(|t| type_desc_eq(&t.desc, &first.desc)) {
+                            first.clone()
+                        } else {
+                            any(span)
+                        }
+                    }
+                };
                 (
                     ExprKind::Match {
                         value,
@@ -1648,7 +1947,20 @@ impl Inferencer {
                         type_expr: p.type_expr.clone(),
                     })
                     .collect();
-                let ret = return_type.clone().unwrap_or_else(|| body.ty.clone());
+                // When no explicit return type, prefer the expected return type from
+                // the call-site context (e.g. fn() passed where fn() -> T | .tag expected).
+                let ret = return_type.clone().unwrap_or_else(|| {
+                    if let Some(exp) = expected {
+                        if let TypeDescription::Fun {
+                            return_type: exp_ret,
+                            ..
+                        } = &exp.desc
+                        {
+                            return *exp_ret.clone();
+                        }
+                    }
+                    body.ty.clone()
+                });
                 let ty = TypeExpr::new(
                     TypeDescription::Fun {
                         params: param_types,
@@ -1676,6 +1988,11 @@ impl Inferencer {
     fn infer_match_arm(&mut self, arm: MatchArm<Resolved>) -> MatchArm<Typed> {
         let pattern = type_expr_to_typed(arm.pattern);
         let base = arm.base.map(type_expr_to_typed);
+        if let Some(ref binding_name) = arm.binding {
+            if let Some(id) = self.claim_local(&binding_name.value) {
+                self.symbols.get_mut(id).ty = Some(pattern.clone());
+            }
+        }
         let guard = arm.guard.map(|g| Box::new(self.infer_expr(*g)));
         let body = self.infer_expr(arm.body);
         MatchArm {
@@ -1705,13 +2022,19 @@ fn infer_generics(generics: Vec<WithSpan<Generic<Resolved>>>) -> Vec<WithSpan<Ge
 }
 
 pub fn infer(resolve_output: ResolveOutput) -> InferOutput {
-    let mut inferencer = Inferencer::new(resolve_output.symbols);
+    let mut inferencer = Inferencer::new(
+        resolve_output.symbols,
+        resolve_output.module_def_ids.clone(),
+        resolve_output.global_scope.clone(),
+    );
     let source_file =
         inferencer.infer_source_file(resolve_output.source_file, &resolve_output.global_scope);
     InferOutput {
         source_file,
         symbols: inferencer.symbols,
         errors: inferencer.errors,
+        module_def_ids: resolve_output.module_def_ids,
+        global_scope: resolve_output.global_scope,
     }
 }
 

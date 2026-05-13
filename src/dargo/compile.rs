@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    DARGO_DOT_DIR, bundle,
+    bundle,
     cli::go_cli::{self, GoCliErrKind},
     dargo::cli::CompileArgs,
     emit::{ir::join_ir, types::escape_string_for_go},
@@ -19,7 +19,7 @@ use crate::{
     parse::value_parser::empty_range,
     parse_src_file,
     tags::Tag,
-    typecheck, write_in_duck_dotdir,
+    typecheck, write_in_duck_dotdir, DARGO_DOT_DIR,
 };
 
 #[derive(Debug)]
@@ -249,16 +249,18 @@ fn compile_new_pipeline(
     binary_output_name: Option<String>,
     optimize_go: bool,
 ) -> Result<CompileOutput, (String, CompileErrKind)> {
+    use crate::dargo::module_loader::ModuleStore;
     use crate::emit2::{lower, lower_js, render, render_js};
-    use crate::parser2::parser::{Item, UseDecl, parse};
+    use crate::parser2::parser::{parse, Item, SourceFile, UseDecl};
     use crate::parser2::tokenizer::tokenize_no_comments;
     use crate::semantics2::mono::monomorphize;
-    use crate::semantics2::resolver::resolve;
+    use crate::semantics2::resolver::resolve_with_modules;
     use crate::semantics2::type_infer::infer;
 
     use crate::parser2::errors::render_errors;
 
-    let (tokens, lex_errors) = tokenize_no_comments(src, 0);
+    // file_id=1 for user source; std module files get unique ids >= 2
+    let (tokens, lex_errors) = tokenize_no_comments(src, 1);
     if !lex_errors.is_empty() {
         let msg = format!(
             "{}{} Lex errors:\n{}",
@@ -267,6 +269,7 @@ fn compile_new_pipeline(
             render_errors(
                 src,
                 src_file_name,
+                None,
                 lex_errors.iter().map(|e| ("lex", e.msg.as_str(), e.span)),
                 true
             ),
@@ -274,7 +277,7 @@ fn compile_new_pipeline(
         return Err((msg, CompileErrKind::CannotReadFile));
     }
 
-    let (ast, parse_errors) = parse(tokens, 0);
+    let (user_ast, parse_errors) = parse(tokens, 1);
     if !parse_errors.is_empty() {
         let msg = format!(
             "{}{} Parse errors:\n{}",
@@ -283,6 +286,7 @@ fn compile_new_pipeline(
             render_errors(
                 src,
                 src_file_name,
+                None,
                 parse_errors
                     .iter()
                     .map(|e| ("parse", e.msg.as_str(), e.span)),
@@ -292,7 +296,35 @@ fn compile_new_pipeline(
         return Err((msg, CompileErrKind::CannotReadFile));
     }
 
-    let resolve_out = resolve(ast);
+    // Load Duck modules referenced by `use std::*` imports in the user source.
+    let std_root = crate::DUCK_STD_PATH
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_default();
+    let mut module_store = ModuleStore::new(std_root);
+    // non-fatal: module load errors are surfaced as resolve errors later
+    let _load_errors = module_store.load_needed(&user_ast.items);
+
+    // Build the merged SourceFile: module items first so they are registered in
+    // the global scope before the UseDecl::Duck items are processed.
+    let module_item_names = module_store.all_mangled_names();
+    let merged_ast = {
+        let mut items = Vec::new();
+        // inject go imports and items from every loaded module
+        for loaded in module_store.modules.values() {
+            for imp in &loaded.go_imports {
+                use crate::parser2::parser::{Span, WithSpan};
+                let ws = WithSpan::new(imp.clone(), Span::dummy());
+                items.push(Item::Use(UseDecl::Go(vec![ws], Span::dummy())));
+            }
+            items.extend(loaded.items.clone());
+        }
+        // user items follow (includes the UseDecl::Duck items that create Module bindings)
+        items.extend(user_ast.items);
+        SourceFile { items }
+    };
+
+    let resolve_out = resolve_with_modules(merged_ast, &module_item_names, &module_store);
     if !resolve_out.errors.is_empty() {
         let msg = format!(
             "{}{} Resolve errors:\n{}",
@@ -301,6 +333,7 @@ fn compile_new_pipeline(
             render_errors(
                 src,
                 src_file_name,
+                Some(&module_store.sources),
                 resolve_out
                     .errors
                     .iter()
@@ -333,6 +366,7 @@ fn compile_new_pipeline(
         let errors_text = render_errors(
             src,
             src_file_name,
+            Some(&module_store.sources),
             infer_out
                 .errors
                 .iter()
@@ -382,9 +416,13 @@ fn compile_new_pipeline(
     }
 
     let external_go_imports: Vec<String> = {
-        // Collect external Go imports (needed for `go mod tidy`).
-        // The new pipeline doesn't use std lib so no external deps by default.
-        vec![]
+        // collect third-party Go imports (domain-qualified) from the emitted Go file
+        go_file
+            .imports
+            .iter()
+            .filter(|p| p.split('/').next().map_or(false, |seg| seg.contains('.')))
+            .cloned()
+            .collect()
     };
 
     let executable_path = go_cli::build(

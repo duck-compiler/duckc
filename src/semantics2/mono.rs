@@ -5,6 +5,7 @@ use crate::parser2::parser::{
     Item, JsxAttr, JsxAttrValue, JsxNode, MatchArm, Param, SourceFile, StructDecl, SymbolDef,
     SymbolTable, TypeDescription, TypeExpr, Typed, WithSpan,
 };
+
 use crate::semantics2::type_infer::InferOutput;
 
 pub fn monomorphize(out: InferOutput) -> InferOutput {
@@ -14,6 +15,8 @@ pub fn monomorphize(out: InferOutput) -> InferOutput {
         source_file,
         symbols: pass.symbols,
         errors: out.errors,
+        module_def_ids: out.module_def_ids,
+        global_scope: out.global_scope,
     }
 }
 
@@ -29,6 +32,11 @@ struct MonoPass {
     ext_targets: HashMap<DefId, TypeExpr<Typed>>,
     /// Tracks which extension method specializations have already been emitted.
     ext_specializations: HashSet<(DefId, String, String)>,
+    /// Non-generic methods of generic structs; specialized when the struct is specialized.
+    non_generic_ext_methods: HashMap<DefId, Vec<FunctionDecl<Typed>>>,
+    /// Nesting depth of struct method specialization; used to cap unbounded recursion
+    /// caused by methods like `chain()` / `rev()` that instantiate other generic structs.
+    struct_method_depth: u32,
     new_items: Vec<Item<Typed>>,
 }
 
@@ -42,6 +50,8 @@ impl MonoPass {
             generic_ext_methods: HashMap::new(),
             ext_targets: HashMap::new(),
             ext_specializations: HashSet::new(),
+            non_generic_ext_methods: HashMap::new(),
+            struct_method_depth: 0,
             new_items: Vec::new(),
         }
     }
@@ -63,10 +73,11 @@ impl MonoPass {
                 Item::Extension(ext) => {
                     if let TypeDescription::TypeName {
                         type_ref: struct_id,
-                        ..
+                        type_params: target_params,
                     } = &ext.target.desc
                     {
                         let struct_id = *struct_id;
+                        let is_generic_target = !target_params.is_empty();
                         for m in &ext.methods {
                             if !m.generics.is_empty() {
                                 self.generic_ext_methods
@@ -76,6 +87,11 @@ impl MonoPass {
                                 self.ext_targets
                                     .entry(struct_id)
                                     .or_insert_with(|| ext.target.clone());
+                            } else if is_generic_target {
+                                self.non_generic_ext_methods
+                                    .entry(struct_id)
+                                    .or_default()
+                                    .push(m.clone());
                             }
                         }
                     }
@@ -144,7 +160,7 @@ impl MonoPass {
                 callee,
                 type_params,
                 args,
-            } if !type_params.is_empty() => {
+            } if !type_params.is_empty() && !any_has_generic_param(&type_params, &self.symbols) => {
                 let callee = self.transform_expr(*callee);
                 let args: Vec<_> = args.into_iter().map(|a| self.transform_expr(a)).collect();
 
@@ -248,7 +264,10 @@ impl MonoPass {
                 name,
                 type_params,
                 fields,
-            } if !type_params.is_empty() && self.generic_structs.contains_key(&name) => {
+            } if !type_params.is_empty()
+                && self.generic_structs.contains_key(&name)
+                && !any_has_generic_param(&type_params, &self.symbols) =>
+            {
                 let fields = fields
                     .into_iter()
                     .map(|(l, v)| (l, self.transform_expr(v)))
@@ -666,6 +685,62 @@ impl MonoPass {
             span: gs.span,
         }));
 
+        // Specialize non-generic extension methods (e.g. iter(), for_each() on ArrayList<T>)
+        // by substituting the struct's type params with the concrete types.
+        // A depth cap prevents infinite recursion through methods like rev()/chain() that
+        // themselves instantiate other generic structs (e.g. ArrayList<Iter<T>>).
+        const MAX_STRUCT_METHOD_DEPTH: u32 = 3;
+        let non_generic_methods = self
+            .non_generic_ext_methods
+            .get(&id)
+            .cloned()
+            .unwrap_or_default();
+        if !non_generic_methods.is_empty() && self.struct_method_depth < MAX_STRUCT_METHOD_DEPTH {
+            self.struct_method_depth += 1;
+            let target_ty = TypeExpr::new(
+                TypeDescription::TypeName {
+                    type_ref: new_id,
+                    type_params: vec![],
+                },
+                gs.span,
+            );
+            let mut specialized_methods: Vec<FunctionDecl<Typed>> = Vec::new();
+            for m in &non_generic_methods {
+                let params: Vec<Param<Typed>> = m
+                    .params
+                    .iter()
+                    .map(|p| Param {
+                        name: p.name.clone(),
+                        type_expr: subst_type(&p.type_expr, &subs, &self.symbols),
+                        is_mut: p.is_mut,
+                    })
+                    .collect();
+                let return_type = m
+                    .return_type
+                    .as_ref()
+                    .map(|t| subst_type(t, &subs, &self.symbols));
+                let body = subst_expr(m.body.clone(), &subs, &self.symbols);
+                let body = self.remap_locals(body);
+                let body = self.transform_expr(body);
+                specialized_methods.push(FunctionDecl {
+                    name: m.name.clone(),
+                    generics: vec![],
+                    params,
+                    return_type,
+                    body,
+                    is_static: m.is_static,
+                    is_client: m.is_client,
+                    span: m.span,
+                });
+            }
+            self.struct_method_depth -= 1;
+            self.new_items.push(Item::Extension(ExtensionDecl {
+                target: target_ty,
+                methods: specialized_methods,
+                span: gs.span,
+            }));
+        }
+
         new_id
     }
 
@@ -741,6 +816,11 @@ impl MonoPass {
         let mut remap: HashMap<DefId, DefId> = HashMap::new();
         for old_id in local_ids {
             let d = self.symbols.get(old_id);
+            // `self` is the receiver variable in extension methods; don't give it a new
+            // DefId because the lowerer looks it up by the original stable id.
+            if d.name == "self" {
+                continue;
+            }
             let new_def = SymbolDef {
                 kind: d.kind.clone(),
                 name: d.name.clone(),
@@ -754,6 +834,36 @@ impl MonoPass {
 
         remap_idents(body, &remap)
     }
+}
+
+/// Returns true if any of the type expressions contain a `TypeName` whose
+/// `type_ref` is a `GenericParam`. Used to skip specializations for module
+/// code that still has unresolved type variables.
+fn any_has_generic_param(type_params: &[TypeExpr<Typed>], symbols: &SymbolTable) -> bool {
+    type_params
+        .iter()
+        .any(|tp| type_has_generic_param(tp, symbols))
+}
+
+fn type_has_generic_param(te: &TypeExpr<Typed>, symbols: &SymbolTable) -> bool {
+    match &te.desc {
+        TypeDescription::TypeName {
+            type_ref,
+            type_params,
+        } => {
+            matches!(symbols.get(*type_ref).kind, DefKind::GenericParam)
+                || type_has_generic_param_slice(type_params, symbols)
+        }
+        TypeDescription::Array(elem) => type_has_generic_param(elem, symbols),
+        TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
+            type_has_generic_param(inner, symbols)
+        }
+        _ => false,
+    }
+}
+
+fn type_has_generic_param_slice(tps: &[TypeExpr<Typed>], symbols: &SymbolTable) -> bool {
+    tps.iter().any(|tp| type_has_generic_param(tp, symbols))
 }
 
 fn mangle_name(base: &str, type_params: &[TypeExpr<Typed>]) -> String {
@@ -813,7 +923,7 @@ fn make_fn_ty(
     )
 }
 
-fn subst_type(
+pub(crate) fn subst_type(
     te: &TypeExpr<Typed>,
     subs: &HashMap<String, TypeExpr<Typed>>,
     symbols: &SymbolTable,
