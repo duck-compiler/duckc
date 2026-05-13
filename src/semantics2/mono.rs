@@ -34,8 +34,7 @@ struct MonoPass {
     ext_specializations: HashSet<(DefId, String, String)>,
     /// Non-generic methods of generic structs; specialized when the struct is specialized.
     non_generic_ext_methods: HashMap<DefId, Vec<FunctionDecl<Typed>>>,
-    /// Nesting depth of struct method specialization; used to cap unbounded recursion
-    /// caused by methods like `chain()` / `rev()` that instantiate other generic structs.
+    /// depth cap to prevent unbounded recursion via chain/rev
     struct_method_depth: u32,
     new_items: Vec<Item<Typed>>,
 }
@@ -57,7 +56,6 @@ impl MonoPass {
     }
 
     fn transform_source_file(&mut self, sf: SourceFile<Typed>) -> SourceFile<Typed> {
-        // First pass: register all generic definitions before walking call sites.
         for item in &sf.items {
             match item {
                 Item::Function(f) if !f.generics.is_empty() => {
@@ -100,7 +98,6 @@ impl MonoPass {
             }
         }
 
-        // Second pass: drop generic defs, rewrite all call/struct-lit sites.
         let mut items: Vec<Item<Typed>> = sf
             .items
             .into_iter()
@@ -192,13 +189,12 @@ impl MonoPass {
                 }
 
                 // Case 2: field access generic extension method
-                // Compute the (struct_id, method_name, mangled) tuple while only borrowing callee,
-                // then destructure callee by value after the borrow is released.
-                let ext_info: Option<(DefId, String, String)> =
+                // borrow callee before taking ownership below
+                let ext_info: Option<(DefId, String, String, Vec<TypeExpr<Typed>>)> =
                     if let ExprKind::Field { base, field } = &callee.kind {
                         if let TypeDescription::TypeName {
                             type_ref: struct_id,
-                            ..
+                            type_params: struct_type_params,
                         } = &base.ty.desc
                         {
                             if self
@@ -210,6 +206,7 @@ impl MonoPass {
                                     *struct_id,
                                     field.value.clone(),
                                     mangle_name(&field.value, &type_params),
+                                    struct_type_params.clone(),
                                 ))
                             } else {
                                 None
@@ -221,8 +218,13 @@ impl MonoPass {
                         None
                     };
 
-                if let Some((struct_id, method_name, mangled)) = ext_info {
-                    self.specialize_ext_method(struct_id, &method_name, type_params);
+                if let Some((struct_id, method_name, mangled, struct_type_params)) = ext_info {
+                    self.specialize_ext_method(
+                        struct_id,
+                        &method_name,
+                        type_params,
+                        struct_type_params,
+                    );
                     let (base, field_span, callee_span, callee_ty) = match callee.kind {
                         ExprKind::Field { base, field } => {
                             (*base, field.span, callee.span, callee.ty)
@@ -621,14 +623,10 @@ impl MonoPass {
             ty: Some(fn_ty),
         });
 
-        // Register early so recursive generic calls inside this body resolve correctly.
+        // register early so recursive calls inside the body resolve correctly
         self.specializations.insert(key, new_id);
 
-        // Give every local in the body its own fresh DefId so multiple specializations
-        // don't compete for the same entry in the lowerer's claim_local queue.
         let body = self.remap_locals(body);
-
-        // Walk the substituted body to handle nested generic calls.
         let body = self.transform_expr(body);
 
         self.new_items.push(Item::Function(FunctionDecl {
@@ -685,10 +683,7 @@ impl MonoPass {
             span: gs.span,
         }));
 
-        // Specialize non-generic extension methods (e.g. iter(), for_each() on ArrayList<T>)
-        // by substituting the struct's type params with the concrete types.
-        // A depth cap prevents infinite recursion through methods like rev()/chain() that
-        // themselves instantiate other generic structs (e.g. ArrayList<Iter<T>>).
+        // depth cap prevents infinite recursion via rev/chain
         const MAX_STRUCT_METHOD_DEPTH: u32 = 3;
         let non_generic_methods = self
             .non_generic_ext_methods
@@ -751,9 +746,11 @@ impl MonoPass {
         struct_id: DefId,
         method_name: &str,
         type_params: Vec<TypeExpr<Typed>>,
+        struct_type_params: Vec<TypeExpr<Typed>>,
     ) {
         let mangled = mangle_name(method_name, &type_params);
-        let key = (struct_id, method_name.to_string(), mangled.clone());
+        let struct_mangled = mangle_name("", &struct_type_params);
+        let key = (struct_id, struct_mangled, mangled.clone());
         if !self.ext_specializations.insert(key) {
             return;
         }
@@ -761,12 +758,46 @@ impl MonoPass {
         let gm = self.generic_ext_methods[&struct_id][method_name].clone();
         let target = self.ext_targets[&struct_id].clone();
 
-        let subs: HashMap<String, TypeExpr<Typed>> = gm
+        let struct_subs: HashMap<String, TypeExpr<Typed>> = self
+            .generic_structs
+            .get(&struct_id)
+            .map(|gs| {
+                gs.generics
+                    .iter()
+                    .zip(struct_type_params.iter())
+                    .map(|(g, t)| (g.value.name.value.clone(), t.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let method_subs: HashMap<String, TypeExpr<Typed>> = gm
             .generics
             .iter()
             .zip(type_params.iter())
             .map(|(g, t)| (g.value.name.value.clone(), t.clone()))
             .collect();
+
+        // method params take precedence if names collide
+        let mut subs = struct_subs;
+        subs.extend(method_subs);
+
+        // use the concrete specialized struct DefId so lower_extension doesn't drop this
+        let concrete_target = if !struct_type_params.is_empty() {
+            let cache_key = (struct_id, mangle_name("", &struct_type_params));
+            if let Some(&specialized_id) = self.specializations.get(&cache_key) {
+                TypeExpr::new(
+                    TypeDescription::TypeName {
+                        type_ref: specialized_id,
+                        type_params: vec![],
+                    },
+                    target.span,
+                )
+            } else {
+                subst_type(&target, &subs, &self.symbols)
+            }
+        } else {
+            target
+        };
 
         let params: Vec<Param<Typed>> = gm
             .params
@@ -797,15 +828,13 @@ impl MonoPass {
         };
 
         self.new_items.push(Item::Extension(ExtensionDecl {
-            target,
+            target: concrete_target,
             methods: vec![specialized],
             span: gm.span,
         }));
     }
 
-    /// Creates fresh DefIds for every `Local` referenced in `body`, then remaps
-    /// all `Ident` nodes so the lowerer's claim_local queues stay consistent across
-    /// multiple specializations of the same generic function.
+    /// fresh DefIds per specialization so lowerer claim_local queues don't collide
     fn remap_locals(&mut self, body: Expr<Typed>) -> Expr<Typed> {
         let mut local_ids: Vec<DefId> = Vec::new();
         collect_local_idents(&body, &self.symbols, &mut local_ids);
@@ -816,8 +845,7 @@ impl MonoPass {
         let mut remap: HashMap<DefId, DefId> = HashMap::new();
         for old_id in local_ids {
             let d = self.symbols.get(old_id);
-            // `self` is the receiver variable in extension methods; don't give it a new
-            // DefId because the lowerer looks it up by the original stable id.
+            // skip self - lowerer resolves it by stable id
             if d.name == "self" {
                 continue;
             }
@@ -836,9 +864,7 @@ impl MonoPass {
     }
 }
 
-/// Returns true if any of the type expressions contain a `TypeName` whose
-/// `type_ref` is a `GenericParam`. Used to skip specializations for module
-/// code that still has unresolved type variables.
+/// true if any type expr still contains an unresolved GenericParam
 fn any_has_generic_param(type_params: &[TypeExpr<Typed>], symbols: &SymbolTable) -> bool {
     type_params
         .iter()
@@ -935,8 +961,7 @@ pub(crate) fn subst_type(
             }
             TypeDescription::TemplParam(name.clone())
         }
-        // A bare TypeName with no type params may point to a GenericParam DefId
-        // that is how the resolver encodes `T` in `fn foo<T>(a: T)`.
+        // bare TypeName with no params may be a GenericParam (how resolver encodes T)
         TypeDescription::TypeName {
             type_ref,
             type_params,
