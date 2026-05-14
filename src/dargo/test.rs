@@ -6,7 +6,7 @@ use std::process::Command;
 use crate::dargo::cli::{CompileArgs, TestArgs};
 use crate::dargo::compile_test::{self, CompileTestErrKind};
 use crate::{
-    dargo::build::{build, BuildErrKind},
+    dargo::build::{BuildErrKind, build},
     tags::Tag,
 };
 

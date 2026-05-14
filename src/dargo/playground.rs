@@ -9,12 +9,12 @@ use crate::emit2::go_ir::GoFile;
 use crate::emit2::{lower, lower_js, render, render_js};
 use crate::parser2::errors::render_errors;
 use crate::parser2::parser::{
-    parse, DefId, DefKind, SymbolTable, TypeDescription, TypeExpr, Typed, WithSpan,
+    DefId, DefKind, SymbolTable, TypeDescription, TypeExpr, Typed, WithSpan, parse,
 };
-use crate::parser2::tokenizer::{tokenize_no_comments, Token};
+use crate::parser2::tokenizer::{Token, tokenize_no_comments};
 use crate::semantics2::mono::monomorphize;
-use crate::semantics2::resolver::{resolve, ResolveOutput};
-use crate::semantics2::type_infer::{infer, InferOutput};
+use crate::semantics2::resolver::{ResolveOutput, resolve};
+use crate::semantics2::type_infer::{InferOutput, infer};
 
 static HTML: &str = include_str!("../../playground/index.html");
 

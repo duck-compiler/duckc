@@ -7,11 +7,11 @@ use std::{
 };
 
 use crate::{
-    bundle,
+    DARGO_DOT_DIR, bundle,
     cli::go_cli::{self, GoCliErrKind},
     dargo::cli::CompileArgs,
     tags::Tag,
-    write_in_duck_dotdir, DARGO_DOT_DIR,
+    write_in_duck_dotdir,
 };
 
 #[derive(Debug)]
@@ -123,7 +123,7 @@ fn compile_new_pipeline(
 ) -> Result<CompileOutput, (String, CompileErrKind)> {
     use crate::dargo::module_loader::ModuleStore;
     use crate::emit2::{lower, lower_js, render, render_js};
-    use crate::parser2::parser::{parse, Item, SourceFile, UseDecl};
+    use crate::parser2::parser::{Item, SourceFile, UseDecl, parse};
     use crate::parser2::tokenizer::tokenize_no_comments;
     use crate::semantics2::mono::monomorphize;
     use crate::semantics2::resolver::resolve_with_modules;

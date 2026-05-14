@@ -4,9 +4,9 @@ use std::io::ErrorKind as IOErrKind;
 use std::process::Command;
 
 use crate::dargo::cli::{CompileArgs, RunArgs};
-use crate::dargo::compile::{compile, CompileErrKind};
+use crate::dargo::compile::{CompileErrKind, compile};
 use crate::{
-    dargo::build::{build, BuildErrKind},
+    dargo::build::{BuildErrKind, build},
     tags::Tag,
 };
 

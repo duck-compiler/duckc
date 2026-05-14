@@ -619,6 +619,21 @@ pub enum ExprKind<P: Phase> {
     Jsx(Box<JsxNode<P>>),
 }
 
+impl<P: Phase> ExprKind<P> {
+    pub fn needs_semicolon(&self) -> bool {
+        !matches!(
+            self,
+            ExprKind::Block(_)
+                | ExprKind::If { .. }
+                | ExprKind::While { .. }
+                | ExprKind::For { .. }
+                | ExprKind::Match { .. }
+                | ExprKind::InlineGo(_)
+                | ExprKind::Lambda { .. }
+        )
+    }
+}
+
 /// A JSX element tree with Duck expressions in expression slots.
 #[derive(Debug, Clone, PartialEq)]
 pub enum JsxNode<P: Phase> {
@@ -2501,6 +2516,7 @@ impl Parser {
                 break;
             }
             let expr = self.parse_expr()?;
+            let needs_semi = expr.kind.needs_semicolon();
             stmts.push(expr);
             let has_semi = self.eat_kw(&Token::Semi).is_some();
             if matches!(self.peek_kind(), Some(Token::RBrace)) {
@@ -2511,7 +2527,7 @@ impl Parser {
                 }
                 break;
             }
-            if !has_semi {
+            if !has_semi && needs_semi {
                 self.error("expected ';' between statements in block");
             }
         }

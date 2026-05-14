@@ -6,7 +6,7 @@ use crate::parser2::parser::{
     SourceFile, Span, StructDecl, SymbolTable, TypeAliasDecl, TypeDescription, TypeExpr, Typed,
     WithSpan,
 };
-use crate::semantics2::resolver::{type_expr_to_typed, ResolveOutput};
+use crate::semantics2::resolver::{ResolveOutput, type_expr_to_typed};
 
 #[derive(Debug, Clone)]
 pub struct TypeError {
