@@ -505,6 +505,50 @@ impl<'a> Lowerer<'a> {
                 args,
                 type_params,
             } => {
+                fn peel_ref(desc: &TypeDescription<Typed>) -> &TypeDescription<Typed> {
+                    match desc {
+                        TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
+                            peel_ref(&inner.desc)
+                        }
+                        other => other,
+                    }
+                }
+                let is_prim_intrinsic = match &callee.kind {
+                    ExprKind::Field { base, field } => {
+                        let m = field.value.as_str();
+                        match peel_ref(&base.ty.desc) {
+                            TypeDescription::Array(_) => m == "len",
+                            TypeDescription::Int
+                            | TypeDescription::UInt
+                            | TypeDescription::Float
+                            | TypeDescription::Bool(_)
+                            | TypeDescription::String(_)
+                            | TypeDescription::Char
+                            | TypeDescription::Byte => matches!(m, "to_string" | "to_json"),
+                            _ => false,
+                        }
+                    }
+                    _ => false,
+                };
+                if is_prim_intrinsic {
+                    let Expr {
+                        kind: ExprKind::Field { base, field },
+                        ..
+                    } = *callee
+                    else {
+                        unreachable!()
+                    };
+                    let base_ty = peel_ref(&base.ty.desc).clone();
+                    let needs_deref = matches!(
+                        &base.ty.desc,
+                        TypeDescription::Ref(_) | TypeDescription::RefMut(_)
+                    );
+                    let mut go_base = self.lower_as_value(*base, out);
+                    if needs_deref {
+                        go_base = GoExpr::Deref(Box::new(go_base));
+                    }
+                    return self.lower_intrinsic_call(&field.value, &base_ty, go_base);
+                }
                 let lowered_callee = self.lower_as_value(*callee, out);
                 let args = args
                     .into_iter()
@@ -1374,6 +1418,122 @@ impl<'a> Lowerer<'a> {
         GoDecl::TypeAlias {
             name: escape(&a.name.value),
             ty: self.lower_type(&a.type_expr),
+        }
+    }
+
+    fn lower_intrinsic_call(
+        &mut self,
+        method: &str,
+        base_ty: &TypeDescription<Typed>,
+        go_base: GoExpr,
+    ) -> GoExpr {
+        match (base_ty, method) {
+            (TypeDescription::Array(_), "len") => GoExpr::Call {
+                callee: Box::new(GoExpr::Ident("len".into())),
+                args: vec![go_base],
+            },
+            (_, "to_string") => self.lower_to_string(base_ty, go_base),
+            (_, "to_json") => self.lower_to_json(base_ty, go_base),
+            _ => unreachable!("unregistered intrinsic {method}"),
+        }
+    }
+
+    fn lower_to_string(&mut self, ty: &TypeDescription<Typed>, val: GoExpr) -> GoExpr {
+        match ty {
+            TypeDescription::String(_) => val,
+            TypeDescription::Char => GoExpr::Cast {
+                ty: GoType::String,
+                value: Box::new(val),
+            },
+            TypeDescription::Int => {
+                self.imports.insert("strconv".into());
+                GoExpr::Call {
+                    callee: Box::new(GoExpr::Field {
+                        base: Box::new(GoExpr::Ident("strconv".into())),
+                        field: "Itoa".into(),
+                    }),
+                    args: vec![val],
+                }
+            }
+            TypeDescription::UInt => {
+                self.imports.insert("strconv".into());
+                GoExpr::Call {
+                    callee: Box::new(GoExpr::Field {
+                        base: Box::new(GoExpr::Ident("strconv".into())),
+                        field: "FormatUint".into(),
+                    }),
+                    args: vec![val, GoExpr::Int(10)],
+                }
+            }
+            TypeDescription::Byte => {
+                self.imports.insert("strconv".into());
+                GoExpr::Call {
+                    callee: Box::new(GoExpr::Field {
+                        base: Box::new(GoExpr::Ident("strconv".into())),
+                        field: "FormatUint".into(),
+                    }),
+                    args: vec![
+                        GoExpr::Cast {
+                            ty: GoType::Uint64,
+                            value: Box::new(val),
+                        },
+                        GoExpr::Int(10),
+                    ],
+                }
+            }
+            TypeDescription::Float => {
+                self.imports.insert("strconv".into());
+                GoExpr::Call {
+                    callee: Box::new(GoExpr::Field {
+                        base: Box::new(GoExpr::Ident("strconv".into())),
+                        field: "FormatFloat".into(),
+                    }),
+                    args: vec![val, GoExpr::Char('f'), GoExpr::Int(-1), GoExpr::Int(64)],
+                }
+            }
+            TypeDescription::Bool(_) => {
+                self.imports.insert("strconv".into());
+                GoExpr::Call {
+                    callee: Box::new(GoExpr::Field {
+                        base: Box::new(GoExpr::Ident("strconv".into())),
+                        field: "FormatBool".into(),
+                    }),
+                    args: vec![val],
+                }
+            }
+            _ => unreachable!("to_string on unsupported type"),
+        }
+    }
+
+    fn lower_to_json(&mut self, ty: &TypeDescription<Typed>, val: GoExpr) -> GoExpr {
+        match ty {
+            TypeDescription::String(_) => {
+                self.imports.insert("fmt".into());
+                GoExpr::Call {
+                    callee: Box::new(GoExpr::Field {
+                        base: Box::new(GoExpr::Ident("fmt".into())),
+                        field: "Sprintf".into(),
+                    }),
+                    args: vec![GoExpr::Str("%q".into()), val],
+                }
+            }
+            TypeDescription::Char => {
+                self.imports.insert("fmt".into());
+                GoExpr::Call {
+                    callee: Box::new(GoExpr::Field {
+                        base: Box::new(GoExpr::Ident("fmt".into())),
+                        field: "Sprintf".into(),
+                    }),
+                    args: vec![
+                        GoExpr::Str("%q".into()),
+                        GoExpr::Cast {
+                            ty: GoType::String,
+                            value: Box::new(val),
+                        },
+                    ],
+                }
+            }
+            _ => self.lower_to_string(ty, val),
         }
     }
 }

@@ -1,25 +1,17 @@
 use colored::Colorize;
-use duckwind::EmitEnv;
 use lazy_static::lazy_static;
 use std::{
     ffi::OsString,
     fs,
     path::{Path, PathBuf},
-    sync::mpsc,
-    time::{Duration, Instant},
 };
 
 use crate::{
     bundle,
     cli::go_cli::{self, GoCliErrKind},
     dargo::cli::CompileArgs,
-    emit::{ir::join_ir, types::escape_string_for_go},
-    go_fixup::remove_unused_imports::cleanup_go_source,
-    lex,
-    parse::value_parser::empty_range,
-    parse_src_file,
     tags::Tag,
-    typecheck, write_in_duck_dotdir, DARGO_DOT_DIR,
+    write_in_duck_dotdir, DARGO_DOT_DIR,
 };
 
 #[derive(Debug)]
@@ -115,132 +107,12 @@ pub fn compile(compile_args: CompileArgs) -> Result<CompileOutput, (String, Comp
         .to_string()
         .leak();
 
-    // Use the new parser2/emit2 pipeline when the source has `client fn` or `use ts`.
-    let uses_new_pipeline =
-        src_file_file_contents.contains("client fn") || src_file_file_contents.contains("use ts ");
-
-    if uses_new_pipeline {
-        return compile_new_pipeline(
-            src_file_file_contents,
-            src_file_name,
-            binary_output_name,
-            compile_args.optimize_go,
-        );
-    }
-
-    let parse_start = Instant::now();
-    let tokens = lex(src_file_name, src_file_file_contents);
-    let mut src_file_ast = parse_src_file(&src_file, src_file_name, src_file_file_contents, tokens);
-    let parse_elapsed = parse_start.elapsed();
-
-    let (tailwind_worker_send, tailwind_worker_receive) = mpsc::channel::<String>();
-    let (tailwind_result_send, tailwind_result_receive) = mpsc::channel::<String>();
-
-    let tailwind_prefix: Option<String> = None;
-
-    std::thread::spawn(move || {
-        let mut emit_env = EmitEnv::new_with_default_config();
-        loop {
-            let s = tailwind_worker_receive.recv();
-            match s {
-                Ok(s) => emit_env.parse_full_string(tailwind_prefix.as_deref(), s.as_str()),
-                Err(_) => break,
-            }
-        }
-
-        let _ = tailwind_result_send.send(emit_env.to_css_stylesheet(true));
-    });
-    let external_go_imports: Vec<String> = src_file_ast
-        .use_statements
-        .iter()
-        .filter_map(|s| {
-            if let crate::parse::use_statement_parser::UseStatement::Go(path, _) = s {
-                // External packages have a domain in the first path segment (e.g. "github.com/...")
-                let first_segment = path.split('/').next().unwrap_or("");
-                if first_segment.contains('.') {
-                    Some(path.clone())
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let typecheck_start = Instant::now();
-    let mut type_env = typecheck(&mut src_file_ast, &tailwind_worker_send);
-    let typecheck_elapsed = typecheck_start.elapsed();
-
-    let emit_start = Instant::now();
-    let mut go_code = join_ir(&src_file_ast.emit("main".into(), &mut type_env, empty_range()));
-    let emit_elapsed = emit_start.elapsed();
-
-    // drop the sender here so that the thread knows it should emit the final tailwind
-    drop(tailwind_worker_send);
-
-    let duckwind_start = Instant::now();
-    let css = tailwind_result_receive
-        .recv_timeout(Duration::from_secs(30))
-        .expect("tailwind timed out");
-    let duckwind_elapsed = duckwind_start.elapsed();
-
-    go_code = cleanup_go_source(&go_code, true);
-    go_code = format!(
-        "{go_code}\nconst TAILWIND_STR = \"{}\"",
-        escape_string_for_go(css.as_str())
-    );
-
-    let go_file_name = format!("{src_file_name}.gen.go");
-    let go_output_file = write_in_duck_dotdir(&go_file_name, &go_code);
-
-    if compile_args.optimize_go {
-        let _ = go_cli::format(go_output_file.as_path());
-    }
-
-    let go_build_start = Instant::now();
-    let executable_path = go_cli::build(
-        &DARGO_DOT_DIR,
-        binary_output_name
-            .map(OsString::from)
-            .unwrap_or(OsString::from("duck_out"))
-            .as_os_str(),
-        Path::new(&go_file_name),
-        &external_go_imports,
+    compile_new_pipeline(
+        src_file_file_contents,
+        src_file_name,
+        binary_output_name,
+        compile_args.optimize_go,
     )
-    .map_err(|err| {
-        (
-            format!("{}{}", *COMPILE_TAG, err.0),
-            CompileErrKind::GoCli(err.1),
-        )
-    })?;
-    let go_build_elapsed = go_build_start.elapsed();
-
-    if compile_args.timing {
-        println!();
-        println!("  timing:");
-        println!("    parse:     {:?}", parse_elapsed);
-        println!("    typecheck: {:?}", typecheck_elapsed);
-        println!("    emit:      {:?}", emit_elapsed);
-        println!("    duckwind:  {:?}", duckwind_elapsed);
-        println!("    go build:  {:?}", go_build_elapsed);
-        println!(
-            "    total:     {:?}",
-            parse_elapsed + typecheck_elapsed + emit_elapsed + duckwind_elapsed + go_build_elapsed
-        );
-        println!();
-    }
-
-    println!(
-        "{}{}{} Successfully compiled binary",
-        Tag::Dargo,
-        *COMPILE_TAG,
-        Tag::Check,
-    );
-
-    return Ok(CompileOutput {
-        binary_path: executable_path,
-    });
 }
 
 fn compile_new_pipeline(
@@ -305,8 +177,7 @@ fn compile_new_pipeline(
     // non-fatal: module load errors are surfaced as resolve errors later
     let _load_errors = module_store.load_needed(&user_ast.items);
 
-    // Build the merged SourceFile: module items first so they are registered in
-    // the global scope before the UseDecl::Duck items are processed.
+    // module items first so UseDecl::Duck bindings can resolve against them
     let module_item_names = module_store.all_mangled_names();
     let merged_ast = {
         let mut items = Vec::new();
@@ -319,7 +190,6 @@ fn compile_new_pipeline(
             }
             items.extend(loaded.items.clone());
         }
-        // user items follow (includes the UseDecl::Duck items that create Module bindings)
         items.extend(user_ast.items);
         SourceFile { items }
     };
@@ -377,8 +247,6 @@ fn compile_new_pipeline(
         return Err((msg, CompileErrKind::CannotReadFile));
     }
 
-    // Compile Go output.
-    // Keep exported symbols (DuckIsland_*, DuckServeClientBundle) by not removing exported decls.
     let go_file = lower(infer_out.clone(), "main");
     let go_src =
         crate::go_fixup::remove_unused_imports::cleanup_go_source(&render(&go_file), false);
@@ -416,7 +284,6 @@ fn compile_new_pipeline(
     }
 
     let external_go_imports: Vec<String> = {
-        // collect third-party Go imports (domain-qualified) from the emitted Go file
         go_file
             .imports
             .iter()

@@ -580,7 +580,19 @@ impl Inferencer {
 
     fn claim_local(&mut self, name: &str) -> Option<DefId> {
         let queue = self.local_queues.get(name)?;
-        let id = *queue.iter().find(|id| !self.used_locals.contains(id))?;
+        // module pass only claims module-origin slots (file_id != 1) to avoid
+        // clobbering user-code DefIds with stdlib function bodies
+        let id = *queue.iter().find(|id| {
+            if self.used_locals.contains(id) {
+                return false;
+            }
+            let is_user = self.symbols.get(**id).span.file_id == 1;
+            if self.suppress_errors {
+                !is_user
+            } else {
+                is_user
+            }
+        })?;
         self.used_locals.insert(id);
         Some(id)
     }
@@ -877,6 +889,45 @@ impl Inferencer {
             }
             TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
                 self.lookup_field_type(inner, field_name)
+            }
+            TypeDescription::Array(_) => match field_name {
+                "len" => {
+                    let span = ty.span;
+                    Some(TypeExpr::new(
+                        TypeDescription::Fun {
+                            params: vec![],
+                            return_type: Box::new(TypeExpr::new(TypeDescription::Int, span)),
+                            is_mut: false,
+                            is_variadic: false,
+                        },
+                        span,
+                    ))
+                }
+                _ => None,
+            },
+            TypeDescription::Int
+            | TypeDescription::UInt
+            | TypeDescription::Float
+            | TypeDescription::Bool(_)
+            | TypeDescription::String(_)
+            | TypeDescription::Char
+            | TypeDescription::Byte => {
+                let span = ty.span;
+                match field_name {
+                    "to_string" | "to_json" => Some(TypeExpr::new(
+                        TypeDescription::Fun {
+                            params: vec![],
+                            return_type: Box::new(TypeExpr::new(
+                                TypeDescription::String(None),
+                                span,
+                            )),
+                            is_mut: false,
+                            is_variadic: false,
+                        },
+                        span,
+                    )),
+                    _ => None,
+                }
             }
             _ => None,
         }
@@ -1501,7 +1552,7 @@ impl Inferencer {
                                     if let Some(ts_pkg) = pkg.strip_prefix("ts:") {
                                         if crate::ts_interop::get_package(ts_pkg).is_none() {
                                             format!(
-                                                "TypeScript package `{ts_pkg}` has no type info loaded — is it installed in node_modules?"
+                                                "TypeScript package `{ts_pkg}` has no type info loaded - is it installed in node_modules?"
                                             )
                                         } else {
                                             format!(
@@ -1926,8 +1977,6 @@ impl Inferencer {
                         te
                     };
 
-                    // Claim the slot and write the resolved type back so body Ident lookups
-                    // (sym_ty) see String/Int/etc. instead of Any.
                     if let Some(id) = self.claim_local(&p.name.value) {
                         self.symbols.get_mut(id).ty = Some(type_expr.clone());
                     }
