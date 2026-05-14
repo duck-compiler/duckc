@@ -1,6 +1,6 @@
 use std::{fs, io::ErrorKind as IOErrKind};
 
-use crate::{DARGO_DOT_DIR, tags::Tag};
+use crate::{tags::Tag, DARGO_DOT_DIR};
 
 #[derive(Debug)]
 pub enum CleanErrKind {

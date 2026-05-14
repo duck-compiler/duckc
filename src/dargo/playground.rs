@@ -9,12 +9,12 @@ use crate::emit2::go_ir::GoFile;
 use crate::emit2::{lower, lower_js, render, render_js};
 use crate::parser2::errors::render_errors;
 use crate::parser2::parser::{
-    DefId, DefKind, SymbolTable, TypeDescription, TypeExpr, Typed, WithSpan, parse,
+    parse, DefId, DefKind, SymbolTable, TypeDescription, TypeExpr, Typed, WithSpan,
 };
-use crate::parser2::tokenizer::{Token, tokenize_no_comments};
+use crate::parser2::tokenizer::{tokenize_no_comments, Token};
 use crate::semantics2::mono::monomorphize;
-use crate::semantics2::resolver::{ResolveOutput, resolve};
-use crate::semantics2::type_infer::{InferOutput, infer};
+use crate::semantics2::resolver::{resolve, ResolveOutput};
+use crate::semantics2::type_infer::{infer, InferOutput};
 
 static HTML: &str = include_str!("../../playground/index.html");
 
@@ -203,7 +203,7 @@ fn pipeline(src: &str) -> (serde_json::Value, String) {
     let js_src = {
         let rendered = render_js(&js_file);
         if rendered.trim().is_empty() {
-            "(no client code — use `client fn` to mark functions for the browser)".to_string()
+            "(no client code - use `client fn` to mark functions for the browser)".to_string()
         } else {
             rendered
         }

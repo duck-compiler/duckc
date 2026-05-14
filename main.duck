@@ -1,34 +1,7 @@
-use go "fmt"
-use go "log"
-use go "net/http"
-use ts "preact"
-use ts "preact/hooks"
-
-client fn Counter() {
-    let (count, setCount) = hooks.useState(0);
-
-    return jsx {
-        <div>
-            <p>Count: {count}</p>
-            <button onClick={fn() { setCount(count + 1) }}>+1</button>
-        </div>
-    }
-}
-
-fn page_html() -> String {
-    return jsx {
-        <html>
-            <body>
-                <Counter />
-                <script src="/client.js"></script>
-            </body>
-        </html>
-    }
-}
+use std::io::{println};
 
 fn main() {
-    http.HandleFunc("/", go { func(w http.ResponseWriter, r *http.Request) { fmt.Fprintln(w, page_html()) } });
-    http.Handle("/client.js", go { DuckServeClientBundle() });
-    fmt.Println("Listening on :8080");
-    go { log.Fatal(http.ListenAndServe(":8080", nil)) }
+    let arr = [1, 2, 3, 4, 5];
+    let n = arr.len();
+    println(n.to_string());
 }

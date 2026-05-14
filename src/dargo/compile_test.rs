@@ -4,7 +4,6 @@ use lazy_static::lazy_static;
 use std::{ffi::OsString, fs, path::PathBuf, sync::mpsc, time::Duration};
 
 use crate::{
-    DARGO_DOT_DIR,
     cli::go_cli::{self, GoCliErrKind},
     dargo::cli::CompileArgs,
     emit::{ir::join_ir, types::escape_string_for_go},
@@ -12,7 +11,7 @@ use crate::{
     parse::value_parser::empty_range,
     parse_src_file,
     tags::Tag,
-    typecheck, write_in_duck_dotdir,
+    typecheck, write_in_duck_dotdir, DARGO_DOT_DIR,
 };
 
 #[derive(Debug)]

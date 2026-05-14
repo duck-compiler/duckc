@@ -2,14 +2,14 @@ use std::io::{self, ErrorKind as IOErrKind};
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
-use crate::DARGO_DOT_DIR;
 use crate::cli::git_cli::{self, GitCliErrKind};
 use crate::dargo::cli::CompileArgs;
 use crate::tags::Tag;
+use crate::DARGO_DOT_DIR;
 
 use super::cli::BuildArgs;
 use super::compile::{self, CompileErrKind};
-use super::loader::{ProjectLoadErrKind, load_dargo_config};
+use super::loader::{load_dargo_config, ProjectLoadErrKind};
 
 #[derive(Debug)]
 pub enum BuildErrKind {

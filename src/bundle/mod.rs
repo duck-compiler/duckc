@@ -66,7 +66,7 @@ pub fn bundle(input: BundleInput) -> String {
             }
         } else {
             out.push_str(&format!(
-                "// WARNING: node_modules not found — {pkg_name} unavailable\nvar {binding} = {{}};\n\n"
+                "// WARNING: node_modules not found - {pkg_name} unavailable\nvar {binding} = {{}};\n\n"
             ));
         }
     }

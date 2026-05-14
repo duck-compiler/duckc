@@ -1,5 +1,16 @@
+use std::col::ArrayList;
 use std::io::{println};
 
+client fn x() {
+}
+
 fn main() {
-    println("Hello, World!");
+    let list = ArrayList::from_array<String>(["Yo", "I", "am", "in", "the", "list"]);
+    list.iter()
+        .map<String>(fn (item) {
+            return item
+        })
+        .for_each(fn (item) {
+            println(item) 
+        });
 }

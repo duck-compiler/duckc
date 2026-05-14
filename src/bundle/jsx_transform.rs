@@ -47,18 +47,32 @@ fn read_braces(src: &[u8], start: usize) -> (String, usize) {
     let content_start = i;
     while i < src.len() && depth > 0 {
         match src[i] {
-            b'{' => { depth += 1; i += 1; }
-            b'}' => { depth -= 1; i += 1; }
+            b'{' => {
+                depth += 1;
+                i += 1;
+            }
+            b'}' => {
+                depth -= 1;
+                i += 1;
+            }
             b'"' | b'\'' => {
                 let q = src[i];
                 i += 1;
                 while i < src.len() && src[i] != q {
-                    if src[i] == b'\\' { i += 1; }
-                    if i < src.len() { i += 1; }
+                    if src[i] == b'\\' {
+                        i += 1;
+                    }
+                    if i < src.len() {
+                        i += 1;
+                    }
                 }
-                if i < src.len() { i += 1; }
+                if i < src.len() {
+                    i += 1;
+                }
             }
-            _ => { i += 1; }
+            _ => {
+                i += 1;
+            }
         }
     }
     let end = if depth == 0 { i - 1 } else { i };
@@ -86,7 +100,9 @@ fn parse_element(src: &[u8], start: usize) -> (Node, usize) {
 
     // Tag name
     let tag_start = i;
-    while i < src.len() && (src[i].is_ascii_alphanumeric() || src[i] == b'-' || src[i] == b'_' || src[i] == b'.') {
+    while i < src.len()
+        && (src[i].is_ascii_alphanumeric() || src[i] == b'-' || src[i] == b'_' || src[i] == b'.')
+    {
         i += 1;
     }
     let tag = String::from_utf8_lossy(&src[tag_start..i]).to_string();
@@ -95,7 +111,10 @@ fn parse_element(src: &[u8], start: usize) -> (Node, usize) {
     let mut attrs = Vec::new();
     loop {
         i = skip_ws(src, i);
-        if i >= src.len() || src[i] == b'>' || (src[i] == b'/' && i + 1 < src.len() && src[i + 1] == b'>') {
+        if i >= src.len()
+            || src[i] == b'>'
+            || (src[i] == b'/' && i + 1 < src.len() && src[i + 1] == b'>')
+        {
             break;
         }
         // Attribute name
@@ -104,7 +123,9 @@ fn parse_element(src: &[u8], start: usize) -> (Node, usize) {
             i += 1;
         }
         let name = String::from_utf8_lossy(&src[name_start..i]).to_string();
-        if name.is_empty() { break; }
+        if name.is_empty() {
+            break;
+        }
 
         // Attribute value
         let value = if i < src.len() && src[i] == b'=' {
@@ -112,16 +133,24 @@ fn parse_element(src: &[u8], start: usize) -> (Node, usize) {
             if i < src.len() && src[i] == b'"' {
                 i += 1;
                 let vs = i;
-                while i < src.len() && src[i] != b'"' { i += 1; }
+                while i < src.len() && src[i] != b'"' {
+                    i += 1;
+                }
                 let s = String::from_utf8_lossy(&src[vs..i]).to_string();
-                if i < src.len() { i += 1; }
+                if i < src.len() {
+                    i += 1;
+                }
                 AttrValue::Str(s)
             } else if i < src.len() && src[i] == b'\'' {
                 i += 1;
                 let vs = i;
-                while i < src.len() && src[i] != b'\'' { i += 1; }
+                while i < src.len() && src[i] != b'\'' {
+                    i += 1;
+                }
                 let s = String::from_utf8_lossy(&src[vs..i]).to_string();
-                if i < src.len() { i += 1; }
+                if i < src.len() {
+                    i += 1;
+                }
                 AttrValue::Str(s)
             } else if i < src.len() && src[i] == b'{' {
                 let (expr, end) = read_braces(src, i);
@@ -139,7 +168,14 @@ fn parse_element(src: &[u8], start: usize) -> (Node, usize) {
     // Self-closing?
     if i < src.len() && src[i] == b'/' {
         i += 2; // skip '/>'
-        return (Node::Element { tag, attrs, children: vec![] }, i);
+        return (
+            Node::Element {
+                tag,
+                attrs,
+                children: vec![],
+            },
+            i,
+        );
     }
     if i < src.len() && src[i] == b'>' {
         i += 1;
@@ -149,12 +185,18 @@ fn parse_element(src: &[u8], start: usize) -> (Node, usize) {
     let mut children = Vec::new();
     loop {
         i = skip_ws(src, i);
-        if i >= src.len() { break; }
+        if i >= src.len() {
+            break;
+        }
 
         // Closing tag?
         if src[i] == b'<' && i + 1 < src.len() && src[i + 1] == b'/' {
-            while i < src.len() && src[i] != b'>' { i += 1; }
-            if i < src.len() { i += 1; }
+            while i < src.len() && src[i] != b'>' {
+                i += 1;
+            }
+            if i < src.len() {
+                i += 1;
+            }
             break;
         }
 
@@ -171,7 +213,9 @@ fn parse_element(src: &[u8], start: usize) -> (Node, usize) {
         } else {
             // Text content
             let ts = i;
-            while i < src.len() && src[i] != b'<' && src[i] != b'{' { i += 1; }
+            while i < src.len() && src[i] != b'<' && src[i] != b'{' {
+                i += 1;
+            }
             let text = String::from_utf8_lossy(&src[ts..i]).to_string();
             let text = text.trim().to_string();
             if !text.is_empty() {
@@ -180,13 +224,25 @@ fn parse_element(src: &[u8], start: usize) -> (Node, usize) {
         }
     }
 
-    (Node::Element { tag, attrs, children }, i)
+    (
+        Node::Element {
+            tag,
+            attrs,
+            children,
+        },
+        i,
+    )
 }
 
 fn parse_text(src: &[u8], start: usize) -> (Node, usize) {
     let mut i = start;
-    while i < src.len() && src[i] != b'<' && src[i] != b'{' { i += 1; }
-    let text = String::from_utf8_lossy(&src[start..i]).to_string().trim().to_string();
+    while i < src.len() && src[i] != b'<' && src[i] != b'{' {
+        i += 1;
+    }
+    let text = String::from_utf8_lossy(&src[start..i])
+        .to_string()
+        .trim()
+        .to_string();
     (Node::Text(text), i)
 }
 
@@ -194,11 +250,17 @@ fn render_node(node: &Node) -> String {
     match node {
         Node::Text(s) => {
             let s = s.trim();
-            if s.is_empty() { return String::new(); }
+            if s.is_empty() {
+                return String::new();
+            }
             format!("{s:?}")
         }
         Node::Expr(s) => transform_expr(s.trim()),
-        Node::Element { tag, attrs, children } => {
+        Node::Element {
+            tag,
+            attrs,
+            children,
+        } => {
             let tag_arg = if tag.chars().next().map_or(false, |c| c.is_uppercase()) {
                 tag.clone()
             } else {
@@ -208,19 +270,27 @@ fn render_node(node: &Node) -> String {
             let attrs_arg = if attrs.is_empty() {
                 "null".to_string()
             } else {
-                let pairs: Vec<String> = attrs.iter().map(|a| {
-                    let key = if a.name == "class" { "className".to_string() } else { a.name.clone() };
-                    let val = match &a.value {
-                        AttrValue::Bool => "true".to_string(),
-                        AttrValue::Str(s) => format!("{s:?}"),
-                        AttrValue::Expr(s) => transform_expr(s.trim()),
-                    };
-                    format!("{key}: {val}")
-                }).collect();
+                let pairs: Vec<String> = attrs
+                    .iter()
+                    .map(|a| {
+                        let key = if a.name == "class" {
+                            "className".to_string()
+                        } else {
+                            a.name.clone()
+                        };
+                        let val = match &a.value {
+                            AttrValue::Bool => "true".to_string(),
+                            AttrValue::Str(s) => format!("{s:?}"),
+                            AttrValue::Expr(s) => transform_expr(s.trim()),
+                        };
+                        format!("{key}: {val}")
+                    })
+                    .collect();
                 format!("{{{}}}", pairs.join(", "))
             };
 
-            let child_args: Vec<String> = children.iter()
+            let child_args: Vec<String> = children
+                .iter()
                 .map(render_node)
                 .filter(|s| !s.is_empty())
                 .collect();
