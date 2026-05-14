@@ -74,6 +74,14 @@ fn lower_type_param_name(desc: &TypeDescription<Typed>) -> String {
     }
 }
 
+fn is_go_addressable(e: &GoExpr) -> bool {
+    match e {
+        GoExpr::Ident(_) | GoExpr::Deref(_) | GoExpr::Index { .. } => true,
+        GoExpr::Field { base, .. } => is_go_addressable(base),
+        _ => false,
+    }
+}
+
 fn capitalize(s: &str) -> String {
     let mut c = s.chars();
     match c.next() {
@@ -171,6 +179,79 @@ impl<'a> Lowerer<'a> {
         self.tmp += 1;
 
         format!("_t{n}")
+    }
+
+    // spill non-addressable exprs (e.g. call results) into a fresh local
+    fn ensure_addressable(&mut self, expr: Expr<Typed>, out: &mut Vec<GoStmt>) -> GoExpr {
+        let go = self.lower_as_value(expr, out);
+        if is_go_addressable(&go) {
+            go
+        } else {
+            let tmp = self.fresh();
+            out.push(GoStmt::DeclareAssign {
+                name: tmp.clone(),
+                value: go,
+            });
+            GoExpr::Ident(tmp)
+        }
+    }
+
+    // lower lvalue: duck fields use GetX/GetPtrX depending on whether the field
+    // type is a pointer in Go (tuple/duck) or a plain value (primitives)
+    fn lower_as_lvalue(&mut self, expr: Expr<Typed>, out: &mut Vec<GoStmt>) -> GoExpr {
+        let field_ty_desc = expr.ty.desc.clone();
+        match expr.kind {
+            ExprKind::Field { base, field } => {
+                let field_name = field.value;
+                let is_duck_base = matches!(
+                    &base.ty.desc,
+                    TypeDescription::Duck(_) | TypeDescription::NamedDuck { .. }
+                );
+                let is_tuple_idx = matches!(&base.ty.desc, TypeDescription::Tuple(_))
+                    && field_name.parse::<usize>().is_ok();
+
+                if is_duck_base {
+                    let go_base = self.ensure_addressable(*base, out);
+                    let field_is_ptr = matches!(
+                        field_ty_desc,
+                        TypeDescription::Tuple(_)
+                            | TypeDescription::Duck(_)
+                            | TypeDescription::NamedDuck { .. }
+                    );
+                    if field_is_ptr {
+                        GoExpr::Call {
+                            callee: Box::new(GoExpr::Field {
+                                base: Box::new(go_base),
+                                field: format!("Get{}", capitalize(&field_name)),
+                            }),
+                            args: vec![],
+                        }
+                    } else {
+                        GoExpr::Deref(Box::new(GoExpr::Call {
+                            callee: Box::new(GoExpr::Field {
+                                base: Box::new(go_base),
+                                field: format!("GetPtr{}", capitalize(&field_name)),
+                            }),
+                            args: vec![],
+                        }))
+                    }
+                } else if is_tuple_idx {
+                    let idx: usize = field_name.parse().unwrap();
+                    let go_base = self.lower_as_lvalue(*base, out);
+                    GoExpr::Field {
+                        base: Box::new(go_base),
+                        field: format!("field_{idx}"),
+                    }
+                } else {
+                    let go_base = self.lower_as_value(*base, out);
+                    GoExpr::Field {
+                        base: Box::new(go_base),
+                        field: escape(&field_name),
+                    }
+                }
+            }
+            _ => self.lower_as_value(expr, out),
+        }
     }
 
     fn name(&self, id: DefId) -> String {
@@ -1001,7 +1082,7 @@ impl<'a> Lowerer<'a> {
             }
 
             ExprKind::Assign { target, value } => {
-                let t = self.lower_as_value(*target, out);
+                let t = self.lower_as_lvalue(*target, out);
                 let v = self.lower_as_value(*value, out);
                 out.push(GoStmt::Assign {
                     target: t,

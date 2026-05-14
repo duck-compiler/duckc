@@ -1167,10 +1167,18 @@ impl Inferencer {
             ExprKind::Block(stmts) => {
                 let stmts: Vec<Expr<Typed>> =
                     stmts.into_iter().map(|s| self.infer_expr(s)).collect();
-                let ty = stmts
-                    .last()
-                    .map(|e| e.ty.clone())
-                    .unwrap_or_else(|| stmt(span));
+                // propagate Never if any stmt diverges - trailing unit sentinel is dead code
+                let ty = if stmts
+                    .iter()
+                    .any(|e| matches!(e.ty.desc, TypeDescription::Never))
+                {
+                    never(span)
+                } else {
+                    stmts
+                        .last()
+                        .map(|e| e.ty.clone())
+                        .unwrap_or_else(|| stmt(span))
+                };
                 (ExprKind::Block(stmts), ty)
             }
 
