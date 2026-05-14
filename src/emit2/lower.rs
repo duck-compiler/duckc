@@ -1072,11 +1072,75 @@ impl<'a> Lowerer<'a> {
                 value,
                 ..
             } => {
-                let go_val = self.lower_as_value(*value, out);
+                let value = *value;
                 let go_name = self
                     .claim_local(&name.value)
                     .map(|id| self.names[&id].clone())
                     .unwrap_or_else(|| escape(&name.value));
+
+                // use annotation field types so the struct satisfies the declared HasField[T] interface
+                let go_val = match (type_ann.as_ref(), value.kind) {
+                    (Some(ann), ExprKind::DuckLit(fields))
+                        if matches!(&ann.desc, TypeDescription::Duck(_)) =>
+                    {
+                        let target_types: Vec<(String, TypeExpr<Typed>)> = match &ann.desc {
+                            TypeDescription::Duck(d) => d
+                                .fields
+                                .iter()
+                                .map(|f| (f.name.value.clone(), f.type_expr.clone()))
+                                .collect(),
+                            _ => unreachable!(),
+                        };
+                        let mut lowered: Vec<(String, GoExpr, GoType)> = fields
+                            .into_iter()
+                            .map(|(label, val)| {
+                                let go_ty = target_types
+                                    .iter()
+                                    .find(|(n, _)| *n == label.value)
+                                    .map(|(_, ty)| self.lower_type(ty))
+                                    .unwrap_or_else(|| self.lower_type(&val.ty));
+                                let cap = capitalize(&label.value);
+                                let go_val = self.lower_as_value(val, out);
+                                (cap, go_val, go_ty)
+                            })
+                            .collect();
+                        lowered.sort_by(|a, b| a.0.cmp(&b.0));
+                        let name_fields: Vec<(String, GoType)> = lowered
+                            .iter()
+                            .map(|(n, _, t)| (n.clone(), t.clone()))
+                            .collect();
+                        let struct_name = duck_struct_name(&name_fields);
+                        self.duck_structs
+                            .entry(struct_name.clone())
+                            .or_insert_with(|| {
+                                let go_fields: Vec<GoField> = lowered
+                                    .iter()
+                                    .map(|(n, _, t)| GoField {
+                                        name: n.clone(),
+                                        ty: t.clone(),
+                                    })
+                                    .collect();
+                                for (n, _) in &name_fields {
+                                    self.new_duck_field_names.insert(n.clone());
+                                }
+                                go_fields
+                            });
+                        let struct_fields: Vec<(String, GoExpr)> =
+                            lowered.into_iter().map(|(n, v, _)| (n, v)).collect();
+                        GoExpr::Ref(Box::new(GoExpr::StructLit {
+                            ty: struct_name,
+                            fields: struct_fields,
+                        }))
+                    }
+                    (_, kind) => self.lower_as_value(
+                        Expr {
+                            kind,
+                            ty: value.ty,
+                            span: value.span,
+                        },
+                        out,
+                    ),
+                };
 
                 match type_ann {
                     Some(ann) => {
