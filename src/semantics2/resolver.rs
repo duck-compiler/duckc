@@ -116,6 +116,9 @@ impl<'a> Resolver<'a> {
     }
 
     fn error(&mut self, msg: impl Into<String>, span: Span) {
+        if span.file_id != 1 {
+            return;
+        }
         self.errors.push(ResolveError {
             msg: msg.into(),
             span,
@@ -243,10 +246,17 @@ impl<'a> Resolver<'a> {
             }
             Some(member_name) => {
                 // direct import - `use std::io::{println}` -> bind `println` directly.
-                // `member_name` may contain "__" when the source used brace-expansion like
-                // `use ::opt::{Opt, Some}` which the parser flattens into one path and
-                // split_path joins trailing segments with "__". In that case split and
-                // register each name individually.
+                // Try exact mangled name first to handle names with leading "__" (e.g.
+                // `__print_backtrack`). Fall back to splitting on "__" for brace-expanded
+                // paths like `use ::opt::{Opt, Some}` where the parser joins segments.
+                let direct = format!("{}__{}", prefix, member_name);
+                if let Some(&def_id) = self.scopes[0].get(&direct) {
+                    self.scopes
+                        .last_mut()
+                        .unwrap()
+                        .insert(member_name.to_string(), def_id);
+                    return;
+                }
                 let names: Vec<&str> = if member_name.contains("__") {
                     member_name.split("__").collect()
                 } else {
@@ -260,8 +270,6 @@ impl<'a> Resolver<'a> {
                             .unwrap()
                             .insert(name.to_string(), def_id);
                     }
-                    // Silently skip names not found; they come from brace-expansion and the
-                    // module's own self-imports will create the bindings separately.
                 }
             }
         }
@@ -397,15 +405,23 @@ impl<'a> Resolver<'a> {
             }
         }
 
-        // `self` is the implicit receiver in extension instance methods.
-        let self_ws = WithSpan::new("self".to_string(), ext.target.span);
-        self.define(&self_ws, DefKind::Local { is_mut: true });
-
+        let receiver_span = ext.target.span;
         let target = self.resolve_type_expr(ext.target);
         let methods = ext
             .methods
             .into_iter()
-            .map(|m| self.resolve_function(m))
+            .map(|m| {
+                if !m.is_static {
+                    self.push_scope();
+                    let ws = WithSpan::new("self".to_string(), receiver_span);
+                    self.define(&ws, DefKind::Local { is_mut: true });
+                    let result = self.resolve_function(m);
+                    self.pop_scope();
+                    result
+                } else {
+                    self.resolve_function(m)
+                }
+            })
             .collect();
 
         self.pop_scope();
@@ -634,23 +650,25 @@ impl<'a> Resolver<'a> {
                 return self.poison(format!("unresolved path `::{}`", segs.join("::")), span);
             }
 
-            // Non-global 3+ segment path like `std::io::println`.
-            let mod_key = segs[..segs.len() - 1].join("::");
-            let member_name = segs[segs.len() - 1];
-            if let Some(_module) = self.module_store.modules.get(&mod_key) {
-                let prefix = segs[1..segs.len() - 1].join("__");
-                let mangled = format!("{}__{}", prefix, member_name);
-                if let Some(def_id) = self.lookup(&mangled) {
-                    return def_id;
+            // Non-global 3+ segment path like `std::io::println` or `std::col::Iter::from`.
+            // Try splits from longest module key down to find the right module boundary.
+            for split in (1..segs.len()).rev() {
+                let mod_key = segs[..split].join("::");
+                if self.module_store.modules.contains_key(&mod_key) {
+                    let prefix = segs[1..split].join("__");
+                    let composite = segs[split..].join("__");
+                    let mangled = if prefix.is_empty() {
+                        composite
+                    } else {
+                        format!("{}__{}", prefix, composite)
+                    };
+                    if let Some(def_id) = self.lookup(&mangled) {
+                        return def_id;
+                    }
+                    return self.poison(format!("unresolved path `{}`", segs.join("::")), span);
                 }
-                self.poison(
-                    format!("no member `{}` in module `{}`", member_name, mod_key),
-                    span,
-                )
-            } else {
-                let path = segs.join("::");
-                self.poison(format!("unresolved path `{}`", path), span)
             }
+            self.poison(format!("unresolved path `{}`", segs.join("::")), span)
         } else {
             let first = ident.segments[0].value.as_str();
             let second = ident.segments[1].value.as_str();
@@ -679,9 +697,19 @@ impl<'a> Resolver<'a> {
                 return self.poison(format!("unresolved path `::{first}::{second}`"), span);
             }
 
-            // Non-global 2-segment: try as `StructName::static_method` dispatch.
-            // Static methods are registered in the module store with composite keys
-            // like "Opt__some" → mangled function name "opt__Opt__some".
+            // Non-global 2-segment: check if first segment is a Module namespace binding.
+            let mod_member = self.lookup(first).and_then(|id| {
+                if let DefKind::Module { members } = &self.symbols.get(id).kind {
+                    members.get(second).copied()
+                } else {
+                    None
+                }
+            });
+            if let Some(def_id) = mod_member {
+                return def_id;
+            }
+
+            // Fall through: try as `StructName::static_method` dispatch.
             let composite = format!("{}__{}", first, second);
             for module in self.module_store.modules.values() {
                 if let Some(&idx) = module.members.get(&composite) {

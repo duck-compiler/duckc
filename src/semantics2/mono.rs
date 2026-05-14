@@ -919,6 +919,10 @@ fn type_param_name(te: &TypeExpr<Typed>) -> String {
             }
         }
         TypeDescription::TemplParam(name) => name.clone(),
+        TypeDescription::Tuple(elems) if !elems.is_empty() => {
+            let parts: Vec<String> = elems.iter().map(type_param_name).collect();
+            format!("Tup_{}", parts.join("_"))
+        }
         _ => "Any".into(),
     }
 }

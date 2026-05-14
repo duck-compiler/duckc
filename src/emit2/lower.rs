@@ -56,6 +56,13 @@ fn lower_type_param_name(desc: &TypeDescription<Typed>) -> String {
         TypeDescription::Byte => "Byte".into(),
         TypeDescription::String(_) => "String".into(),
         TypeDescription::Any => "Any".into(),
+        TypeDescription::Tuple(elems) if !elems.is_empty() => {
+            let parts: Vec<String> = elems
+                .iter()
+                .map(|e| lower_type_param_name(&e.desc))
+                .collect();
+            format!("Tup_{}", parts.join("_"))
+        }
         TypeDescription::TypeName {
             type_ref,
             type_params,
@@ -71,6 +78,19 @@ fn lower_type_param_name(desc: &TypeDescription<Typed>) -> String {
             }
         }
         _ => "Any".into(),
+    }
+}
+
+fn prim_ext_prefix(desc: &TypeDescription<Typed>) -> Option<&'static str> {
+    match desc {
+        TypeDescription::String(_) => Some("string"),
+        TypeDescription::Int => Some("int"),
+        TypeDescription::UInt => Some("uint"),
+        TypeDescription::Float => Some("float"),
+        TypeDescription::Bool(_) => Some("bool"),
+        TypeDescription::Char => Some("char"),
+        TypeDescription::Byte => Some("byte"),
+        _ => None,
     }
 }
 
@@ -270,8 +290,8 @@ impl<'a> Lowerer<'a> {
         Some(id)
     }
 
-    fn lower_type(&self, te: &TypeExpr<Typed>) -> GoType {
-        self.lower_type_desc(&te.desc)
+    fn lower_type(&mut self, te: &TypeExpr<Typed>) -> GoType {
+        self.lower_type_desc(&te.desc.clone())
     }
 
     fn lower_type_for_switch_arm(&mut self, te: &TypeExpr<Typed>) -> GoType {
@@ -287,7 +307,7 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn lower_type_desc(&self, desc: &TypeDescription<Typed>) -> GoType {
+    fn lower_type_desc(&mut self, desc: &TypeDescription<Typed>) -> GoType {
         match desc {
             TypeDescription::Int => GoType::Int64,
             TypeDescription::UInt => GoType::Uint64,
@@ -361,8 +381,21 @@ impl<'a> Lowerer<'a> {
                 if elems.is_empty() {
                     return GoType::Any;
                 }
-                let elem_tys: Vec<GoType> = elems.iter().map(|e| self.lower_type(e)).collect();
-                GoType::Ptr(Box::new(GoType::Named(tuple_struct_name(&elem_tys))))
+                let elems_cloned: Vec<TypeExpr<Typed>> = elems.to_vec();
+                let elem_tys: Vec<GoType> =
+                    elems_cloned.iter().map(|e| self.lower_type(e)).collect();
+                let sname = tuple_struct_name(&elem_tys);
+                self.tuple_structs.entry(sname.clone()).or_insert_with(|| {
+                    elem_tys
+                        .iter()
+                        .enumerate()
+                        .map(|(i, t)| GoField {
+                            name: format!("field_{i}"),
+                            ty: t.clone(),
+                        })
+                        .collect()
+                });
+                GoType::Ptr(Box::new(GoType::Named(sname)))
             }
             TypeDescription::Or(_) | TypeDescription::And(_) => GoType::Any,
             TypeDescription::GoPackage(_) => GoType::Any,
@@ -629,6 +662,39 @@ impl<'a> Lowerer<'a> {
                         go_base = GoExpr::Deref(Box::new(go_base));
                     }
                     return self.lower_intrinsic_call(&field.value, &base_ty, go_base);
+                }
+                let is_prim_ext = match &callee.kind {
+                    ExprKind::Field { base, field } => {
+                        let m = field.value.as_str();
+                        prim_ext_prefix(peel_ref(&base.ty.desc)).is_some()
+                            && !matches!(m, "to_string" | "to_json")
+                    }
+                    _ => false,
+                };
+                if is_prim_ext {
+                    let Expr {
+                        kind: ExprKind::Field { base, field },
+                        ..
+                    } = *callee
+                    else {
+                        unreachable!()
+                    };
+                    let prefix = prim_ext_prefix(peel_ref(&base.ty.desc)).unwrap();
+                    let fn_name = format!("{}__{}", prefix, field.value);
+                    let needs_deref = matches!(
+                        &base.ty.desc,
+                        TypeDescription::Ref(_) | TypeDescription::RefMut(_)
+                    );
+                    let mut go_base = self.lower_as_value(*base, out);
+                    if needs_deref {
+                        go_base = GoExpr::Deref(Box::new(go_base));
+                    }
+                    let mut call_args = vec![go_base];
+                    call_args.extend(args.into_iter().map(|a| self.lower_as_value(a, out)));
+                    return GoExpr::Call {
+                        callee: Box::new(GoExpr::Ident(fn_name)),
+                        args: call_args,
+                    };
                 }
                 let lowered_callee = self.lower_as_value(*callee, out);
                 let args = args
@@ -1417,6 +1483,38 @@ impl<'a> Lowerer<'a> {
             return vec![];
         }
 
+        if let Some(prefix) = prim_ext_prefix(&ext.target.desc) {
+            let self_ty = self.lower_type(&ext.target);
+            return ext
+                .methods
+                .into_iter()
+                .filter(|m| m.generics.is_empty() && !m.is_static)
+                .map(|m| {
+                    let free_name = format!("{}__{}", prefix, escape(&m.name.value));
+                    let decl = self.lower_function(m, None);
+                    if let GoDecl::Func {
+                        params, ret, body, ..
+                    } = decl
+                    {
+                        let mut all_params = vec![GoParam {
+                            name: "self".into(),
+                            ty: self_ty.clone(),
+                        }];
+                        all_params.extend(params);
+                        GoDecl::Func {
+                            name: free_name,
+                            receiver: None,
+                            params: all_params,
+                            ret,
+                            body,
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                })
+                .collect();
+        }
+
         let receiver_ty = GoType::Ptr(Box::new(self.lower_type(&ext.target)));
         ext.methods
             .into_iter()
@@ -1431,7 +1529,7 @@ impl<'a> Lowerer<'a> {
             .collect()
     }
 
-    fn lower_struct(&self, s: StructDecl<Typed>) -> Vec<GoDecl> {
+    fn lower_struct(&mut self, s: StructDecl<Typed>) -> Vec<GoDecl> {
         let struct_name = escape(&s.name.value);
         let go_fields: Vec<GoField> = s
             .fields
@@ -1495,7 +1593,7 @@ impl<'a> Lowerer<'a> {
         decls
     }
 
-    fn lower_type_alias(&self, a: TypeAliasDecl<Typed>) -> GoDecl {
+    fn lower_type_alias(&mut self, a: TypeAliasDecl<Typed>) -> GoDecl {
         GoDecl::TypeAlias {
             name: escape(&a.name.value),
             ty: self.lower_type(&a.type_expr),
