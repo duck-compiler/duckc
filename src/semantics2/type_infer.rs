@@ -104,6 +104,29 @@ fn type_name(te: &TypeExpr<Typed>) -> String {
     }
 }
 
+/// Like type_name but resolves TypeName to the actual struct name via the symbol table.
+fn type_name_sym(te: &TypeExpr<Typed>, symbols: &SymbolTable) -> String {
+    match &te.desc {
+        TypeDescription::TypeName {
+            type_ref,
+            type_params,
+        } => {
+            let name = symbols.get(*type_ref).name.clone();
+            if type_params.is_empty() {
+                name
+            } else {
+                let params = type_params
+                    .iter()
+                    .map(|tp| type_name_sym(tp, symbols))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{name}<{params}>")
+            }
+        }
+        _ => type_name(te),
+    }
+}
+
 // TypeExpr::PartialEq includes spans, so structurally equal types at different positions
 // compare unequal - compare descriptions only
 fn type_desc_eq(a: &TypeDescription<Typed>, b: &TypeDescription<Typed>) -> bool {
@@ -638,6 +661,31 @@ impl Inferencer {
         }
     }
 
+    /// Extends types_compatible with duck-structural checks for named struct types.
+    fn is_compatible(
+        &self,
+        expected: &TypeDescription<Typed>,
+        got: &TypeDescription<Typed>,
+    ) -> bool {
+        if let TypeDescription::Duck(exp_duck) = expected {
+            // empty duck {} is the any type
+            if exp_duck.fields.is_empty() {
+                return true;
+            }
+            if let TypeDescription::TypeName { type_ref, .. } = got {
+                if let Some(struct_fields) = self.struct_fields.get(type_ref) {
+                    return exp_duck.fields.iter().all(|ef| {
+                        struct_fields.iter().any(|gf| {
+                            gf.name.value == ef.name.value
+                                && types_compatible(&ef.type_expr.desc, &gf.type_expr.desc)
+                        })
+                    });
+                }
+            }
+        }
+        types_compatible(expected, got)
+    }
+
     /// Emit a type error if `got` is not compatible with `expected`.
     /// `ctx` names what is being checked (e.g. "argument", "return value").
     fn check_compat(
@@ -652,12 +700,13 @@ impl Inferencer {
         if self.type_contains_generic_param(expected) || self.type_contains_generic_param(got) {
             return;
         }
-        if !types_compatible(&expected.desc, &got.desc) {
+        let compatible = self.is_compatible(&expected.desc, &got.desc);
+        if !compatible {
             self.error(
                 format!(
                     "type mismatch in {ctx}: expected `{}`, got `{}`",
-                    type_name(expected),
-                    type_name(got)
+                    type_name_sym(expected, &self.symbols),
+                    type_name_sym(got, &self.symbols)
                 ),
                 span,
             );
