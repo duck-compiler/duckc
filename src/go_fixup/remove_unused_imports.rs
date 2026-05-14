@@ -579,6 +579,17 @@ fn calculate_live_set(
         }
     }
 
+    // re-run after exported receiver types step - new types may have been added
+    let type_methods_2 = find_type_methods(&live_set, declarations);
+    for method_name in type_methods_2 {
+        if live_set.insert(method_name.clone()) {
+            worklist.push_back(method_name);
+        }
+    }
+    if !worklist.is_empty() {
+        perform_reachability_analysis(&mut live_set, &mut worklist, declarations);
+    }
+
     live_set
 }
 

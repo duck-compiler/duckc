@@ -480,12 +480,72 @@ fn collect_scope_res_paths(expr: &Expr<Parsed>, out: &mut Vec<Vec<String>>) {
         ExprKind::Lambda { body, .. } => {
             collect_scope_res_paths(body, out);
         }
+        ExprKind::Array(elems) | ExprKind::Tuple(elems) => {
+            for e in elems {
+                collect_scope_res_paths(e, out);
+            }
+        }
+        ExprKind::DuckLit(fields) => {
+            for (_, e) in fields {
+                collect_scope_res_paths(e, out);
+            }
+        }
+        ExprKind::StructLit { fields, .. } => {
+            for (_, e) in fields {
+                collect_scope_res_paths(e, out);
+            }
+        }
+        ExprKind::Index { base, index } => {
+            collect_scope_res_paths(base, out);
+            collect_scope_res_paths(index, out);
+        }
+        ExprKind::Field { base, .. } => {
+            collect_scope_res_paths(base, out);
+        }
+        ExprKind::As { value, .. } => {
+            collect_scope_res_paths(value, out);
+        }
+        ExprKind::Async(e) | ExprKind::Defer(e) => {
+            collect_scope_res_paths(e, out);
+        }
+        ExprKind::Not(e)
+        | ExprKind::Neg(e)
+        | ExprKind::Ref(e)
+        | ExprKind::RefMut(e)
+        | ExprKind::Deref(e)
+        | ExprKind::BitNot(e) => {
+            collect_scope_res_paths(e, out);
+        }
+        ExprKind::Assign { target, value }
+        | ExprKind::AddAssign { target, value }
+        | ExprKind::SubAssign { target, value }
+        | ExprKind::MulAssign { target, value }
+        | ExprKind::DivAssign { target, value }
+        | ExprKind::ModAssign { target, value }
+        | ExprKind::ShrAssign { target, value }
+        | ExprKind::ShlAssign { target, value } => {
+            collect_scope_res_paths(target, out);
+            collect_scope_res_paths(value, out);
+        }
+        ExprKind::LetTuple { value, .. } => {
+            collect_scope_res_paths(value, out);
+        }
         ExprKind::Add(a, b)
         | ExprKind::Sub(a, b)
         | ExprKind::Mul(a, b)
         | ExprKind::Div(a, b)
+        | ExprKind::Mod(a, b)
+        | ExprKind::BitAnd(a, b)
+        | ExprKind::BitOr(a, b)
+        | ExprKind::BitXor(a, b)
+        | ExprKind::Shl(a, b)
+        | ExprKind::Shr(a, b)
         | ExprKind::Eq(a, b)
         | ExprKind::Neq(a, b)
+        | ExprKind::Lt(a, b)
+        | ExprKind::Lte(a, b)
+        | ExprKind::Gt(a, b)
+        | ExprKind::Gte(a, b)
         | ExprKind::And(a, b)
         | ExprKind::Or(a, b) => {
             collect_scope_res_paths(a, out);
