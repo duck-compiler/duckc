@@ -6,7 +6,7 @@ use crate::parser2::parser::{
     SourceFile, Span, StructDecl, SymbolTable, TypeAliasDecl, TypeDescription, TypeExpr, Typed,
     WithSpan,
 };
-use crate::semantics2::resolver::{ResolveOutput, type_expr_to_typed};
+use crate::semantics2::resolver::{type_expr_to_typed, ResolveOutput};
 
 #[derive(Debug, Clone)]
 pub struct TypeError {
@@ -44,6 +44,8 @@ struct Inferencer {
     global_scope: HashMap<String, DefId>,
     /// When true, calls to error() are silently dropped (used while inferring module bodies).
     suppress_errors: bool,
+    /// Derived traits per struct DefId, populated during collect_signatures.
+    struct_derived: HashMap<DefId, HashSet<crate::parse::struct_parser::DerivableInterface>>,
 }
 
 fn any(span: Span) -> TypeExpr<Typed> {
@@ -598,6 +600,7 @@ impl Inferencer {
             module_def_ids,
             global_scope,
             suppress_errors: false,
+            struct_derived: HashMap::new(),
         }
     }
 
@@ -769,6 +772,7 @@ impl Inferencer {
                         })
                         .collect();
                     self.struct_fields.insert(struct_id, fields);
+                    self.struct_derived.insert(struct_id, s.derived.clone());
                 }
                 Item::Extension(ext) => {
                     // Resolve the target type to a struct DefId so we can index by it.
@@ -868,10 +872,65 @@ impl Inferencer {
                             return Some(super::mono::subst_type(&ty, &subs, &self.symbols));
                         }
                     }
-                    Some(ty)
-                } else {
-                    None
+                    return Some(ty);
                 }
+                if let Some(derived) = self.struct_derived.get(type_ref) {
+                    use crate::parse::struct_parser::DerivableInterface;
+                    let span = ty.span;
+                    let self_ty = TypeExpr::new(
+                        TypeDescription::TypeName {
+                            type_ref: *type_ref,
+                            type_params: type_params.clone(),
+                        },
+                        span,
+                    );
+                    let fun = |params: Vec<FunTypeParam<Typed>>, ret: TypeExpr<Typed>| {
+                        TypeExpr::new(
+                            TypeDescription::Fun {
+                                params,
+                                return_type: Box::new(ret),
+                                is_mut: false,
+                                is_variadic: false,
+                            },
+                            span,
+                        )
+                    };
+                    let other_param = || FunTypeParam {
+                        label: Some(WithSpan::new("other".into(), span)),
+                        type_expr: any(span),
+                    };
+                    match field_name {
+                        "clone" if derived.contains(&DerivableInterface::Clone) => {
+                            return Some(fun(vec![], self_ty));
+                        }
+                        "to_string" if derived.contains(&DerivableInterface::ToString) => {
+                            return Some(fun(
+                                vec![],
+                                TypeExpr::new(TypeDescription::String(None), span),
+                            ));
+                        }
+                        "to_json" if derived.contains(&DerivableInterface::ToJson) => {
+                            return Some(fun(
+                                vec![],
+                                TypeExpr::new(TypeDescription::String(None), span),
+                            ));
+                        }
+                        "eq" if derived.contains(&DerivableInterface::Eq) => {
+                            return Some(fun(
+                                vec![other_param()],
+                                TypeExpr::new(TypeDescription::Bool(None), span),
+                            ));
+                        }
+                        "hash" if derived.contains(&DerivableInterface::Hash) => {
+                            return Some(fun(vec![], TypeExpr::new(TypeDescription::Int, span)));
+                        }
+                        "ord" if derived.contains(&DerivableInterface::Ord) => {
+                            return Some(fun(vec![other_param()], any(span)));
+                        }
+                        _ => {}
+                    }
+                }
+                None
             }
             TypeDescription::Tuple(elems) => field_name
                 .parse::<usize>()
@@ -1046,6 +1105,7 @@ impl Inferencer {
                         type_expr: type_expr_to_typed(f.type_expr),
                     })
                     .collect(),
+                derived: s.derived,
                 span: s.span,
             }),
             Item::Use(u) => Item::Use(u),

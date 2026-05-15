@@ -680,6 +680,7 @@ impl MonoPass {
             name: WithSpan::new(mangled, gs.span),
             generics: vec![],
             fields,
+            derived: gs.derived.clone(),
             span: gs.span,
         }));
 

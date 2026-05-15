@@ -1,6 +1,8 @@
+use std::collections::HashSet;
 use std::fmt;
 
 use super::tokenizer::{FmtStringPart, Token};
+use crate::parse::struct_parser::DerivableInterface;
 
 mod sealed {
     pub trait Sealed {}
@@ -383,6 +385,7 @@ pub struct StructDecl<P: Phase> {
     pub name: WithSpan<String>,
     pub generics: Vec<WithSpan<Generic<P>>>,
     pub fields: Vec<Field<P>>,
+    pub derived: HashSet<DerivableInterface>,
     pub span: Span,
 }
 
@@ -1155,11 +1158,68 @@ impl Parser {
                 }
             }
             Token::Type => self.parse_type_alias_decl().map(Item::TypeAlias),
-            Token::Struct => self.parse_struct_decl().map(Item::Struct),
+            Token::Struct => self.parse_struct_decl(HashSet::new()).map(Item::Struct),
+            Token::LBracket => {
+                let derived = self.parse_struct_attrs();
+                if matches!(self.peek_kind(), Some(Token::Struct)) {
+                    self.parse_struct_decl(derived).map(Item::Struct)
+                } else {
+                    self.error("expected 'struct' after attribute list");
+                    None
+                }
+            }
             Token::Use => self.parse_use_decl().map(Item::Use),
             Token::Extend => self.parse_extension_decl().map(Item::Extension),
             _ => None,
         }
+    }
+
+    fn parse_struct_attrs(&mut self) -> HashSet<DerivableInterface> {
+        let mut derived = HashSet::new();
+        while matches!(self.peek_kind(), Some(Token::LBracket)) {
+            self.advance(); // eat '['
+            match self.eat_ident() {
+                Some(id) if id.value == "auto" => {}
+                _ => {
+                    self.error("expected 'auto' in struct attribute");
+                    while !matches!(self.peek_kind(), Some(Token::RBracket) | None) {
+                        self.advance();
+                    }
+                    let _ = self.eat_kw(&Token::RBracket);
+                    continue;
+                }
+            }
+            self.expect_tok(&Token::LParen);
+            loop {
+                if matches!(self.peek_kind(), Some(Token::RParen)) || self.at_end() {
+                    break;
+                }
+                let ident = self.expect_ident();
+                let d = match ident.value.as_str() {
+                    "Eq" => Some(DerivableInterface::Eq),
+                    "ToString" => Some(DerivableInterface::ToString),
+                    "Ord" => Some(DerivableInterface::Ord),
+                    "Clone" => Some(DerivableInterface::Clone),
+                    "Hash" => Some(DerivableInterface::Hash),
+                    "ToJson" => Some(DerivableInterface::ToJson),
+                    "FromJson" => Some(DerivableInterface::FromJson),
+                    "EmitJs" => Some(DerivableInterface::EmitJs),
+                    _ => {
+                        self.error(format!("unknown auto trait '{}'", ident.value));
+                        None
+                    }
+                };
+                if let Some(d) = d {
+                    derived.insert(d);
+                }
+                if self.eat_kw(&Token::Comma).is_none() {
+                    break;
+                }
+            }
+            self.expect_tok(&Token::RParen);
+            self.expect_tok(&Token::RBracket);
+        }
+        derived
     }
 
     fn parse_function_decl(
@@ -1262,7 +1322,10 @@ impl Parser {
         })
     }
 
-    fn parse_struct_decl(&mut self) -> Option<StructDecl<Parsed>> {
+    fn parse_struct_decl(
+        &mut self,
+        derived: HashSet<DerivableInterface>,
+    ) -> Option<StructDecl<Parsed>> {
         let start = self.current_span();
         self.advance(); // eat 'struct'
         let name = self.expect_ident();
@@ -1275,6 +1338,7 @@ impl Parser {
             name: name.clone(),
             generics: generics.clone(),
             fields,
+            derived,
             span,
         };
 

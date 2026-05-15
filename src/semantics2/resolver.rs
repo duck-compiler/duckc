@@ -383,6 +383,7 @@ impl<'a> Resolver<'a> {
             name: s.name,
             generics,
             fields,
+            derived: s.derived,
             span: s.span,
         }
     }

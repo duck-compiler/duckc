@@ -1,5 +1,54 @@
 use std::collections::{HashMap, HashSet};
 
+const JSON_SCAN_UTILS: &str = include_str!("../emit/json_util.go");
+
+const PRIMITIVE_FROM_JSON: &str = r#"
+func int_FromJson(json_str string) (int, error) {
+    var b int
+    err := json.Unmarshal([]byte(json_str), &b)
+    if err != nil { return 0, err }
+    return b, nil
+}
+func uint_FromJson(json_str string) (uint, error) {
+    var b uint
+    err := json.Unmarshal([]byte(json_str), &b)
+    if err != nil { return 0, err }
+    return b, nil
+}
+func byte_FromJson(json_str string) (byte, error) {
+    var b byte
+    err := json.Unmarshal([]byte(json_str), &b)
+    if err != nil { return 0, err }
+    return b, nil
+}
+func float64_FromJson(json_str string) (float64, error) {
+    var b float64
+    err := json.Unmarshal([]byte(json_str), &b)
+    if err != nil { return 0, err }
+    return b, nil
+}
+func bool_FromJson(json_str string) (bool, error) {
+    var b bool
+    err := json.Unmarshal([]byte(json_str), &b)
+    if err != nil { return false, err }
+    return b, nil
+}
+func string_FromJson(json_str string) (string, error) {
+    var b string
+    err := json.Unmarshal([]byte(json_str), &b)
+    if err != nil { return "", err }
+    return b, nil
+}
+func rune_FromJson(json_str string) (rune, error) {
+    var b string
+    err := json.Unmarshal([]byte(json_str), &b)
+    if err != nil { return 0, err }
+    r := []rune(b)
+    if len(r) == 0 { return 0, errors.New("empty rune") }
+    return r[0], nil
+}
+"#;
+
 use crate::parser2::parser::{
     DefId, DefKind, Expr, ExprKind, ExtensionDecl, FmtPart, FunctionDecl, Item, JsxAttr,
     JsxAttrValue, JsxNode, MatchArm, StructDecl, SymbolTable, TypeAliasDecl, TypeDescription,
@@ -1654,6 +1703,143 @@ impl<'a> Lowerer<'a> {
             });
         }
 
+        use crate::parse::struct_parser::DerivableInterface;
+
+        if s.derived.contains(&DerivableInterface::ToJson) {
+            self.imports.insert("fmt".into());
+            let mut parts: Vec<String> = Vec::new();
+            for (f, gf) in s.fields.iter().zip(go_fields.iter()) {
+                let val = format!("self.{}", gf.name);
+                let json_expr = self.field_to_json_code(&f.type_expr.desc, &val);
+                parts.push(format!("\"\\\"{}\\\":\"+({json_expr})", gf.name));
+            }
+            let body = if parts.is_empty() {
+                "return \"{}\"".to_string()
+            } else {
+                format!("return fmt.Sprintf(\"{{%s}}\", {})", parts.join("+\",\"+"))
+            };
+            decls.push(GoDecl::Raw(format!(
+                "func (self *{struct_name}) to_json() string {{ {body} }}"
+            )));
+        }
+
+        if s.derived.contains(&DerivableInterface::ToString)
+            || s.derived.contains(&DerivableInterface::EmitJs)
+        {
+            self.imports.insert("fmt".into());
+            let mut parts: Vec<String> = Vec::new();
+            for (f, gf) in s.fields.iter().zip(go_fields.iter()) {
+                let val = format!("self.{}", gf.name);
+                let str_expr = self.field_to_string_code(&f.type_expr.desc, &val);
+                parts.push(format!("\"{}: \"+({str_expr})", gf.name));
+            }
+            let inner = if parts.is_empty() {
+                String::new()
+            } else {
+                parts.join("+\", \"+")
+            };
+            let body = format!("return fmt.Sprintf(\"{struct_name}{{%s}}\", {inner})");
+            decls.push(GoDecl::Raw(format!(
+                "func (self *{struct_name}) to_string() string {{ {body} }}"
+            )));
+        }
+
+        if s.derived.contains(&DerivableInterface::Eq) {
+            let mut comparisons: Vec<String> = s
+                .fields
+                .iter()
+                .zip(go_fields.iter())
+                .map(|(f, gf)| {
+                    let a = format!("self.{}", gf.name);
+                    let b = format!("(*other).{}", gf.name);
+                    self.field_eq_code(&f.type_expr.desc, &a, &b)
+                })
+                .collect();
+            if comparisons.is_empty() {
+                comparisons.push("true".to_string());
+            }
+            let body = format!("return {}", comparisons.join(" && "));
+            decls.push(GoDecl::Raw(format!(
+                "func (self *{struct_name}) eq(other **{struct_name}) bool {{ {body} }}"
+            )));
+        }
+
+        if s.derived.contains(&DerivableInterface::Clone) {
+            let field_clones: Vec<String> = s
+                .fields
+                .iter()
+                .zip(go_fields.iter())
+                .map(|(f, gf)| {
+                    let val = format!("self.{}", gf.name);
+                    let clone_expr = self.field_clone_code(&f.type_expr.desc, &val);
+                    format!("{}: {clone_expr}", gf.name)
+                })
+                .collect();
+            let fields_str = field_clones.join(", ");
+            decls.push(GoDecl::Raw(format!(
+                "func (self *{struct_name}) clone() *{struct_name} {{ return &{struct_name}{{{fields_str}}} }}"
+            )));
+        }
+
+        if s.derived.contains(&DerivableInterface::Hash) {
+            let mut go_code = String::from("var _res int\n_res = 1\n");
+            for (f, gf) in s.fields.iter().zip(go_fields.iter()) {
+                let val = format!("self.{}", gf.name);
+                let hash_expr = self.field_hash_code(&f.type_expr.desc, &val);
+                go_code.push_str(&format!("_res = (31 * _res) + ({hash_expr})\n"));
+            }
+            go_code.push_str("return _res");
+            decls.push(GoDecl::Raw(format!(
+                "func (self *{struct_name}) hash() int {{ {go_code} }}"
+            )));
+        }
+
+        if s.derived.contains(&DerivableInterface::Ord) {
+            self.used_tags.insert("equal".into());
+            self.used_tags.insert("greater".into());
+            self.used_tags.insert("smaller".into());
+            let mut go_code = String::from("var _r any\n_r = &__DuckTag_equal{}\n");
+            for (f, gf) in s.fields.iter().zip(go_fields.iter()) {
+                let a = format!("self.{}", gf.name);
+                let b = format!("(*other).{}", gf.name);
+                let ord_expr = self.field_ord_code(&f.type_expr.desc, &a, &b);
+                go_code.push_str(&format!(
+                    "_r = {ord_expr}\nswitch _r.(type) {{\ncase *__DuckTag_greater: return &__DuckTag_greater{{}}\ncase *__DuckTag_smaller: return &__DuckTag_smaller{{}}\n}}\n"
+                ));
+            }
+            go_code.push_str("return _r");
+            decls.push(GoDecl::Raw(format!(
+                "func (self *{struct_name}) ord(other **{struct_name}) any {{ {go_code} }}"
+            )));
+        }
+
+        if s.derived.contains(&DerivableInterface::FromJson) {
+            self.imports.insert("errors".into());
+            let mut go_code = format!(
+                "var _res *{struct_name}\n_obj, _, _err := scan_json_struct_parts(_json_str)\nif _err != nil {{ return _res, _err }}\n"
+            );
+            let mut all_vars: Vec<(String, String)> = Vec::new();
+            for (f, gf) in s.fields.iter().zip(go_fields.iter()) {
+                let key = &gf.name;
+                let var = format!("_field_{key}");
+                let call =
+                    self.field_from_json_code(&f.type_expr.desc, &format!("_obj[\"{key}\"]"));
+                go_code.push_str(&format!(
+                    "{var}, _err := {call}\n_ = {var}\nif _err != nil {{ return _res, _err }}\n"
+                ));
+                all_vars.push((key.clone(), var));
+            }
+            let field_inits: String = all_vars
+                .iter()
+                .map(|(k, v)| format!("{k}: {v}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            go_code.push_str(&format!("return &{struct_name}{{{field_inits}}}, nil"));
+            decls.push(GoDecl::Raw(format!(
+                "func {struct_name}_FromJson(_json_str string) (*{struct_name}, error) {{ {go_code} }}"
+            )));
+        }
+
         decls
     }
 
@@ -1777,6 +1963,189 @@ impl<'a> Lowerer<'a> {
                 }
             }
             _ => self.lower_to_string(ty, val),
+        }
+    }
+
+    fn field_to_json_code(&mut self, ty: &TypeDescription<Typed>, val: &str) -> String {
+        match ty {
+            TypeDescription::String(_) => {
+                self.imports.insert("fmt".into());
+                format!("fmt.Sprintf(\"%q\", ({val}))")
+            }
+            TypeDescription::Char => {
+                self.imports.insert("fmt".into());
+                format!("fmt.Sprintf(\"%q\", string({val}))")
+            }
+            TypeDescription::Int => {
+                self.imports.insert("strconv".into());
+                format!("strconv.Itoa({val})")
+            }
+            TypeDescription::UInt => {
+                self.imports.insert("fmt".into());
+                format!("fmt.Sprintf(\"%d\", ({val}))")
+            }
+            TypeDescription::Byte => {
+                self.imports.insert("strconv".into());
+                format!("strconv.Itoa(int({val}))")
+            }
+            TypeDescription::Float => {
+                self.imports.insert("fmt".into());
+                format!("fmt.Sprintf(\"%g\", ({val}))")
+            }
+            TypeDescription::Bool(_) => {
+                self.imports.insert("fmt".into());
+                format!("fmt.Sprintf(\"%t\", ({val}))")
+            }
+            TypeDescription::Tag(t) => format!("\"\\\"{}\\\"\"", t),
+            TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
+                self.field_to_json_code(&inner.desc, &format!("(*{val})"))
+            }
+            _ => format!("({val}).to_json()"),
+        }
+    }
+
+    fn field_to_string_code(&mut self, ty: &TypeDescription<Typed>, val: &str) -> String {
+        match ty {
+            TypeDescription::String(_) => format!("({val})"),
+            TypeDescription::Int => {
+                self.imports.insert("strconv".into());
+                format!("strconv.Itoa({val})")
+            }
+            TypeDescription::UInt => {
+                self.imports.insert("fmt".into());
+                format!("fmt.Sprintf(\"%d\", ({val}))")
+            }
+            TypeDescription::Byte => {
+                self.imports.insert("strconv".into());
+                format!("strconv.Itoa(int({val}))")
+            }
+            TypeDescription::Float => {
+                self.imports.insert("fmt".into());
+                format!("fmt.Sprintf(\"%g\", ({val}))")
+            }
+            TypeDescription::Bool(_) => {
+                self.imports.insert("strconv".into());
+                format!("strconv.FormatBool({val})")
+            }
+            TypeDescription::Char => {
+                self.imports.insert("fmt".into());
+                format!("fmt.Sprintf(\"%c\", ({val}))")
+            }
+            TypeDescription::Tag(t) => format!("\"{}\"", t),
+            TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
+                self.field_to_string_code(&inner.desc, &format!("(*{val})"))
+            }
+            _ => format!("({val}).to_string()"),
+        }
+    }
+
+    fn field_eq_code(&self, ty: &TypeDescription<Typed>, a: &str, b: &str) -> String {
+        match ty {
+            TypeDescription::Int
+            | TypeDescription::UInt
+            | TypeDescription::Float
+            | TypeDescription::Bool(_)
+            | TypeDescription::Char
+            | TypeDescription::Byte
+            | TypeDescription::String(_)
+            | TypeDescription::Tag(_) => format!("({a}) == ({b})"),
+            TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
+                self.field_eq_code(&inner.desc, &format!("(*{a})"), &format!("(*{b})"))
+            }
+            _ => format!("({a}).eq(&({b}))"),
+        }
+    }
+
+    fn field_hash_code(&mut self, ty: &TypeDescription<Typed>, val: &str) -> String {
+        match ty {
+            TypeDescription::Int | TypeDescription::Char => format!("({val})"),
+            TypeDescription::UInt | TypeDescription::Byte => format!("int({val})"),
+            TypeDescription::Float => {
+                self.imports.insert("math".into());
+                format!("int(math.Float64bits({val}))")
+            }
+            TypeDescription::Bool(_) => {
+                format!("func() int {{ if {val} {{ return 1 }}; return 0 }}()")
+            }
+            TypeDescription::String(_) => {
+                self.imports.insert("hash/maphash".into());
+                format!("func() int {{ var _h maphash.Hash; _h.WriteString({val}); return int(_h.Sum64()) }}()")
+            }
+            TypeDescription::Tag(_) => "1".to_string(),
+            TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
+                self.field_hash_code(&inner.desc, &format!("(*{val})"))
+            }
+            _ => format!("({val}).hash()"),
+        }
+    }
+
+    fn field_clone_code(&self, ty: &TypeDescription<Typed>, val: &str) -> String {
+        match ty {
+            TypeDescription::Int
+            | TypeDescription::UInt
+            | TypeDescription::Float
+            | TypeDescription::Bool(_)
+            | TypeDescription::Char
+            | TypeDescription::Byte
+            | TypeDescription::String(_)
+            | TypeDescription::Tag(_) => format!("({val})"),
+            TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
+                self.field_clone_code(&inner.desc, &format!("(*{val})"))
+            }
+            _ => format!("*({val}).clone()"),
+        }
+    }
+
+    fn field_ord_code(&mut self, ty: &TypeDescription<Typed>, a: &str, b: &str) -> String {
+        self.used_tags.insert("equal".into());
+        self.used_tags.insert("greater".into());
+        self.used_tags.insert("smaller".into());
+        match ty {
+            TypeDescription::Int
+            | TypeDescription::UInt
+            | TypeDescription::Float
+            | TypeDescription::Char
+            | TypeDescription::Byte => format!(
+                "func() any {{ if ({a}) < ({b}) {{ return &__DuckTag_smaller{{}} }} else if ({a}) > ({b}) {{ return &__DuckTag_greater{{}} }}; return &__DuckTag_equal{{}} }}()"
+            ),
+            TypeDescription::String(_) => {
+                self.imports.insert("strings".into());
+                format!(
+                    "func() any {{ _cmp := strings.Compare({a}, {b}); if _cmp < 0 {{ return &__DuckTag_smaller{{}} }} else if _cmp > 0 {{ return &__DuckTag_greater{{}} }}; return &__DuckTag_equal{{}} }}()"
+                )
+            }
+            TypeDescription::Bool(_) => format!(
+                "func() any {{ if !({a}) && ({b}) {{ return &__DuckTag_smaller{{}} }} else if ({a}) && !({b}) {{ return &__DuckTag_greater{{}} }}; return &__DuckTag_equal{{}} }}()"
+            ),
+            TypeDescription::Tag(_) => "(&__DuckTag_equal{})".to_string(),
+            TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
+                self.field_ord_code(&inner.desc, &format!("(*{a})"), &format!("(*{b})"))
+            }
+            _ => format!("({a}).ord(&({b}))"),
+        }
+    }
+
+    fn field_from_json_code(&mut self, ty: &TypeDescription<Typed>, val: &str) -> String {
+        match ty {
+            TypeDescription::Int => format!("int_FromJson({val})"),
+            TypeDescription::UInt => format!("uint_FromJson({val})"),
+            TypeDescription::Byte => format!("byte_FromJson({val})"),
+            TypeDescription::Float => format!("float64_FromJson({val})"),
+            TypeDescription::Bool(_) => format!("bool_FromJson({val})"),
+            TypeDescription::String(_) => format!("string_FromJson({val})"),
+            TypeDescription::Char => format!("rune_FromJson({val})"),
+            TypeDescription::TypeName {
+                type_ref,
+                type_params,
+            } if type_params.is_empty() => {
+                let name = self.name(*type_ref);
+                format!("{name}_FromJson({val})")
+            }
+            TypeDescription::Struct { name, .. } => format!("{name}_FromJson({val})"),
+            TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
+                self.field_from_json_code(&inner.desc, val)
+            }
+            _ => format!("/*unsupported_FromJson*/ (nil, errors.New(\"unsupported type\"))"),
         }
     }
 }
@@ -2099,6 +2468,15 @@ pub fn lower(out: InferOutput, package: &str) -> GoFile {
         )
     };
 
+    let needs_json_utils = out.source_file.items.iter().any(|item| {
+        if let Item::Struct(s) = item {
+            s.derived
+                .contains(&crate::parse::struct_parser::DerivableInterface::FromJson)
+        } else {
+            false
+        }
+    });
+
     let mut l = Lowerer::new(&out.symbols);
     let mut decls: Vec<GoDecl> = Vec::new();
     let mut go_imports: Vec<String> = Vec::new();
@@ -2303,6 +2681,16 @@ pub fn lower(out: InferOutput, package: &str) -> GoFile {
                 imports.push(pkg.to_string());
             }
         }
+    }
+
+    if needs_json_utils {
+        for pkg in &["errors", "encoding/json", "unicode/utf8", "strings"] {
+            if !imports.contains(&pkg.to_string()) {
+                imports.push(pkg.to_string());
+            }
+        }
+        decls.push(GoDecl::Raw(JSON_SCAN_UTILS.to_string()));
+        decls.push(GoDecl::Raw(PRIMITIVE_FROM_JSON.to_string()));
     }
 
     imports.sort();
