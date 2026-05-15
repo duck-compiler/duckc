@@ -6,7 +6,7 @@ use crate::parser2::parser::{
     SourceFile, Span, StructDecl, SymbolTable, TypeAliasDecl, TypeDescription, TypeExpr, Typed,
     WithSpan,
 };
-use crate::semantics2::resolver::{type_expr_to_typed, ResolveOutput};
+use crate::semantics2::resolver::{ResolveOutput, type_expr_to_typed};
 
 #[derive(Debug, Clone)]
 pub struct TypeError {
@@ -46,6 +46,8 @@ struct Inferencer {
     suppress_errors: bool,
     /// Derived traits per struct DefId, populated during collect_signatures.
     struct_derived: HashMap<DefId, HashSet<crate::parse::struct_parser::DerivableInterface>>,
+    /// TypeAlias target types keyed by DefId, populated during collect_signatures.
+    type_aliases: HashMap<DefId, TypeExpr<Typed>>,
 }
 
 fn any(span: Span) -> TypeExpr<Typed> {
@@ -584,7 +586,10 @@ impl Inferencer {
     ) -> Self {
         let mut local_queues: HashMap<String, Vec<DefId>> = HashMap::new();
         for (id, def) in symbols.iter() {
-            if matches!(def.kind, DefKind::Local { .. } | DefKind::Param { .. }) {
+            if matches!(
+                def.kind,
+                DefKind::Local { .. } | DefKind::Param { .. } | DefKind::Const
+            ) {
                 local_queues.entry(def.name.clone()).or_default().push(id);
             }
         }
@@ -601,6 +606,7 @@ impl Inferencer {
             global_scope,
             suppress_errors: false,
             struct_derived: HashMap::new(),
+            type_aliases: HashMap::new(),
         }
     }
 
@@ -670,6 +676,25 @@ impl Inferencer {
         expected: &TypeDescription<Typed>,
         got: &TypeDescription<Typed>,
     ) -> bool {
+        // Expand type aliases on both sides before checking.
+        if let TypeDescription::TypeName { type_ref, .. } = expected {
+            if matches!(self.symbols.get(*type_ref).kind, DefKind::TypeAlias) {
+                if let Some(expanded) = self.type_aliases.get(type_ref) {
+                    return self.is_compatible(&expanded.desc.clone(), got);
+                }
+            }
+        }
+        if let TypeDescription::TypeName { type_ref, .. } = got {
+            if matches!(self.symbols.get(*type_ref).kind, DefKind::TypeAlias) {
+                if let Some(expanded) = self.type_aliases.get(type_ref) {
+                    return self.is_compatible(expected, &expanded.desc.clone());
+                }
+            }
+        }
+        // And type: got must satisfy all intersection members.
+        if let TypeDescription::And(variants) = expected {
+            return variants.iter().all(|v| self.is_compatible(&v.desc, got));
+        }
         if let TypeDescription::Duck(exp_duck) = expected {
             // empty duck {} is the any type
             if exp_duck.fields.is_empty() {
@@ -684,6 +709,15 @@ impl Inferencer {
                         })
                     });
                 }
+            }
+            // Duck vs Duck: check that got has all required fields.
+            if let TypeDescription::Duck(got_duck) = got {
+                return exp_duck.fields.iter().all(|ef| {
+                    got_duck.fields.iter().any(|gf| {
+                        gf.name.value == ef.name.value
+                            && self.is_compatible(&ef.type_expr.desc, &gf.type_expr.desc)
+                    })
+                });
             }
         }
         types_compatible(expected, got)
@@ -839,6 +873,12 @@ impl Inferencer {
                         map.insert(m.name.value.clone(), fn_ty);
                     }
                 }
+                Item::TypeAlias(a) => {
+                    if let Some(&alias_id) = global_scope.get(&a.name.value) {
+                        self.type_aliases
+                            .insert(alias_id, type_expr_to_typed(a.type_expr.clone()));
+                    }
+                }
                 _ => {}
             }
         }
@@ -930,18 +970,77 @@ impl Inferencer {
                         _ => {}
                     }
                 }
+                // Unresolved generic param: to_json/to_string are always available.
+                if matches!(self.symbols.get(*type_ref).kind, DefKind::GenericParam) {
+                    let span = ty.span;
+                    return match field_name {
+                        "to_string" | "to_json" => Some(TypeExpr::new(
+                            TypeDescription::Fun {
+                                params: vec![],
+                                return_type: Box::new(TypeExpr::new(
+                                    TypeDescription::String(None),
+                                    span,
+                                )),
+                                is_mut: false,
+                                is_variadic: false,
+                            },
+                            span,
+                        )),
+                        _ => None,
+                    };
+                }
+                // Type alias: expand and recurse.
+                if matches!(self.symbols.get(*type_ref).kind, DefKind::TypeAlias) {
+                    if let Some(expanded) = self.type_aliases.get(type_ref).cloned() {
+                        return self.lookup_field_type(&expanded, field_name);
+                    }
+                }
                 None
             }
-            TypeDescription::Tuple(elems) => field_name
-                .parse::<usize>()
-                .ok()
-                .and_then(|i| elems.get(i))
-                .cloned(),
-            TypeDescription::Duck(duck) => duck
-                .fields
-                .iter()
-                .find(|f| f.name.value == field_name)
-                .map(|f| f.type_expr.clone()),
+            TypeDescription::Tuple(elems) => {
+                let span = ty.span;
+                match field_name {
+                    "to_string" | "to_json" => Some(TypeExpr::new(
+                        TypeDescription::Fun {
+                            params: vec![],
+                            return_type: Box::new(TypeExpr::new(
+                                TypeDescription::String(None),
+                                span,
+                            )),
+                            is_mut: false,
+                            is_variadic: false,
+                        },
+                        span,
+                    )),
+                    _ => field_name
+                        .parse::<usize>()
+                        .ok()
+                        .and_then(|i| elems.get(i))
+                        .cloned(),
+                }
+            }
+            TypeDescription::Duck(duck) => {
+                let span = ty.span;
+                match field_name {
+                    "to_string" | "to_json" => Some(TypeExpr::new(
+                        TypeDescription::Fun {
+                            params: vec![],
+                            return_type: Box::new(TypeExpr::new(
+                                TypeDescription::String(None),
+                                span,
+                            )),
+                            is_mut: false,
+                            is_variadic: false,
+                        },
+                        span,
+                    )),
+                    _ => duck
+                        .fields
+                        .iter()
+                        .find(|f| f.name.value == field_name)
+                        .map(|f| f.type_expr.clone()),
+                }
+            }
             TypeDescription::GoPackage(import_path) => {
                 let span = ty.span;
                 // TypeScript package: import_path starts with "ts:".
@@ -998,10 +1097,10 @@ impl Inferencer {
             TypeDescription::Ref(inner) | TypeDescription::RefMut(inner) => {
                 self.lookup_field_type(inner, field_name)
             }
-            TypeDescription::Array(_) => match field_name {
-                "len" => {
-                    let span = ty.span;
-                    Some(TypeExpr::new(
+            TypeDescription::Array(_) => {
+                let span = ty.span;
+                match field_name {
+                    "len" => Some(TypeExpr::new(
                         TypeDescription::Fun {
                             params: vec![],
                             return_type: Box::new(TypeExpr::new(TypeDescription::Int, span)),
@@ -1009,10 +1108,22 @@ impl Inferencer {
                             is_variadic: false,
                         },
                         span,
-                    ))
+                    )),
+                    "to_string" | "to_json" => Some(TypeExpr::new(
+                        TypeDescription::Fun {
+                            params: vec![],
+                            return_type: Box::new(TypeExpr::new(
+                                TypeDescription::String(None),
+                                span,
+                            )),
+                            is_mut: false,
+                            is_variadic: false,
+                        },
+                        span,
+                    )),
+                    _ => None,
                 }
-                _ => None,
-            },
+            }
             TypeDescription::Int
             | TypeDescription::UInt
             | TypeDescription::Float
@@ -1020,6 +1131,24 @@ impl Inferencer {
             | TypeDescription::String(_)
             | TypeDescription::Char
             | TypeDescription::Byte => {
+                let span = ty.span;
+                match field_name {
+                    "to_string" | "to_json" => Some(TypeExpr::new(
+                        TypeDescription::Fun {
+                            params: vec![],
+                            return_type: Box::new(TypeExpr::new(
+                                TypeDescription::String(None),
+                                span,
+                            )),
+                            is_mut: false,
+                            is_variadic: false,
+                        },
+                        span,
+                    )),
+                    _ => None,
+                }
+            }
+            TypeDescription::Or(_) | TypeDescription::And(_) => {
                 let span = ty.span;
                 match field_name {
                     "to_string" | "to_json" => Some(TypeExpr::new(

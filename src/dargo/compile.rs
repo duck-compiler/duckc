@@ -191,6 +191,55 @@ fn compile_new_pipeline(
             items.extend(loaded.items.clone());
         }
         items.extend(user_ast.items);
+
+        // inject built-in generics with no .duck source
+        {
+            use crate::parser2::parser::{
+                Expr, ExprKind, FunctionDecl, Generic, Param, Span, TypeDescription, TypeExpr,
+                UnresolvedTypeRef, WithSpan,
+            };
+            let s = Span::dummy();
+            // parse_json<T> - body is a placeholder, monomorphization injects real code
+            items.insert(
+                0,
+                Item::Function(FunctionDecl {
+                    name: WithSpan::new("parse_json".to_string(), s),
+                    generics: vec![WithSpan::new(
+                        Generic {
+                            name: WithSpan::new("T".to_string(), s),
+                            constraint: None,
+                        },
+                        s,
+                    )],
+                    params: vec![Param {
+                        name: WithSpan::new("json_str".to_string(), s),
+                        type_expr: TypeExpr::new(TypeDescription::String(None), s),
+                        is_mut: false,
+                    }],
+                    return_type: Some(TypeExpr::new(
+                        TypeDescription::Or(vec![
+                            TypeExpr::new(
+                                TypeDescription::TypeName {
+                                    type_ref: UnresolvedTypeRef {
+                                        path: vec!["T".to_string()],
+                                        is_global: false,
+                                    },
+                                    type_params: vec![],
+                                },
+                                s,
+                            ),
+                            TypeExpr::new(TypeDescription::Tag("err".to_string()), s),
+                        ]),
+                        s,
+                    )),
+                    body: Expr::parsed(ExprKind::InlineGo(String::new()), s),
+                    is_static: false,
+                    is_client: false,
+                    span: s,
+                }),
+            );
+        }
+
         SourceFile { items }
     };
 

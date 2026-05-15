@@ -8,6 +8,218 @@ use crate::parser2::parser::{
 
 use crate::semantics2::type_infer::InferOutput;
 
+// mirrors go_type_mangled from lower.rs
+fn type_to_go_mangled_elem(desc: &TypeDescription<Typed>, symbols: &SymbolTable) -> String {
+    match desc {
+        TypeDescription::Int => "int64".into(),
+        TypeDescription::UInt => "uint64".into(),
+        TypeDescription::Float => "float64".into(),
+        TypeDescription::Bool(_) => "bool".into(),
+        TypeDescription::Char => "rune".into(),
+        TypeDescription::Byte => "byte".into(),
+        TypeDescription::String(_) => "string".into(),
+        TypeDescription::Array(inner) => {
+            format!("Slice_{}", type_to_go_mangled_elem(&inner.desc, symbols))
+        }
+        TypeDescription::TypeName {
+            type_ref,
+            type_params,
+        } if type_params.is_empty() => {
+            let sym = symbols.get(*type_ref);
+            if matches!(sym.kind, DefKind::Struct) {
+                format!("Ptr_{}", sym.name)
+            } else {
+                sym.name.clone()
+            }
+        }
+        TypeDescription::Tuple(elems) if elems.is_empty() => "any".into(),
+        TypeDescription::Tuple(elems) => {
+            format!("Ptr_{}", tuple_struct_name_from_elems(elems, symbols))
+        }
+        TypeDescription::Tag(name) => format!("Ptr___DuckTag_{name}"),
+        TypeDescription::Duck(duck) => {
+            let mut pairs: Vec<String> = duck
+                .fields
+                .iter()
+                .map(|f| {
+                    let cap = {
+                        let s = &f.name.value;
+                        let mut c = s.chars();
+                        match c.next() {
+                            None => String::new(),
+                            Some(fc) => fc.to_uppercase().collect::<String>() + c.as_str(),
+                        }
+                    };
+                    let inner = type_to_go_mangled_elem(&f.type_expr.desc, symbols);
+                    format!("Has{}_{}", cap, inner)
+                })
+                .collect();
+            pairs.sort();
+            format!("Duck_{}", pairs.join("_"))
+        }
+        _ => "any".into(),
+    }
+}
+
+fn tuple_struct_name_from_elems(elems: &[TypeExpr<Typed>], symbols: &SymbolTable) -> String {
+    let parts: Vec<String> = elems
+        .iter()
+        .map(|e| type_to_go_mangled_elem(&e.desc, symbols))
+        .collect();
+    format!("Tup_{}", parts.join("_"))
+}
+
+// mirrors go_type_str from lower.rs
+fn type_to_go_str(desc: &TypeDescription<Typed>, symbols: &SymbolTable) -> String {
+    match desc {
+        TypeDescription::Int => "int".into(),
+        TypeDescription::UInt => "uint64".into(),
+        TypeDescription::Float => "float64".into(),
+        TypeDescription::Bool(_) => "bool".into(),
+        TypeDescription::Char => "rune".into(),
+        TypeDescription::Byte => "byte".into(),
+        TypeDescription::String(_) => "string".into(),
+        TypeDescription::Array(inner) => format!("[]{}", type_to_go_str(&inner.desc, symbols)),
+        TypeDescription::TypeName {
+            type_ref,
+            type_params,
+        } if type_params.is_empty() => {
+            let sym = symbols.get(*type_ref);
+            if matches!(sym.kind, DefKind::Struct) {
+                format!("*{}", sym.name)
+            } else {
+                sym.name.clone()
+            }
+        }
+        TypeDescription::Tuple(elems) if elems.is_empty() => "any".into(),
+        TypeDescription::Tuple(elems) => {
+            format!("*{}", tuple_struct_name_from_elems(elems, symbols))
+        }
+        TypeDescription::Tag(name) => format!("*__DuckTag_{name}"),
+        _ => "any".into(),
+    }
+}
+
+fn duck_struct_name_from_desc(
+    fields: &[crate::parser2::parser::Field<Typed>],
+    symbols: &SymbolTable,
+) -> String {
+    let mut parts: Vec<(String, String)> = fields
+        .iter()
+        .map(|f| {
+            let cap = {
+                let s = &f.name.value;
+                let mut c = s.chars();
+                match c.next() {
+                    None => String::new(),
+                    Some(fc) => fc.to_uppercase().to_string() + c.as_str(),
+                }
+            };
+            // Duck-typed fields are stored as `any` in Go structs (same as lower_duck_lit).
+            let mangled = match &f.type_expr.desc {
+                TypeDescription::Duck(_) => "any".into(),
+                other => type_to_go_mangled_elem(other, symbols),
+            };
+            (cap, mangled)
+        })
+        .collect();
+    parts.sort_by(|a, b| a.0.cmp(&b.0));
+    let flat: Vec<String> = parts.into_iter().flat_map(|(n, t)| [n, t]).collect();
+    format!("Duck_{}", flat.join("_"))
+}
+
+fn call_from_json(
+    desc: &TypeDescription<Typed>,
+    symbols: &SymbolTable,
+    val: &str,
+    depth: usize,
+) -> String {
+    match desc {
+        TypeDescription::Int => format!("int_FromJson({val})"),
+        TypeDescription::UInt => format!(
+            "func() (uint64, error) {{ _v, _e := uint_FromJson({val}); return uint64(_v), _e }}()"
+        ),
+        TypeDescription::Float => format!("float64_FromJson({val})"),
+        TypeDescription::Bool(_) => format!("bool_FromJson({val})"),
+        TypeDescription::Char => format!("rune_FromJson({val})"),
+        TypeDescription::Byte => format!("byte_FromJson({val})"),
+        TypeDescription::String(_) => format!("string_FromJson({val})"),
+        TypeDescription::TypeName {
+            type_ref,
+            type_params,
+        } if type_params.is_empty() => {
+            let name = symbols.get(*type_ref).name.clone();
+            format!("{name}_FromJson({val})")
+        }
+        TypeDescription::Or(variants) | TypeDescription::And(variants) => {
+            let variants_cloned: Vec<TypeExpr<Typed>> = variants.iter().cloned().collect();
+            let mut code = String::new();
+            for v in &variants_cloned {
+                let b_type = from_json_go_type(v, symbols);
+                let inner_call = call_from_json(&v.desc, symbols, val, depth + 1);
+                code.push_str(&format!(
+                    "{{\nvar _b {b_type}\n_b, _err := {inner_call}\n_ = _b\nif _err == nil {{\nreturn _b, nil\n}}\n}}\n"
+                ));
+            }
+            code.push_str("return nil, errors.New(\"union parsing failed\")");
+            format!("func() (any, error) {{\n{code}\n}}()")
+        }
+        TypeDescription::Tag(name) => format!("__DuckTag_{name}_FromJson({val})"),
+        TypeDescription::Tuple(elems) if elems.is_empty() => {
+            "func() (any, error) { return nil, nil }()".into()
+        }
+        TypeDescription::Tuple(elems) => {
+            let struct_name = tuple_struct_name_from_elems(elems, symbols);
+            format!("{struct_name}_FromJson({val})")
+        }
+        TypeDescription::Array(inner) => {
+            let inner_go_type = type_to_go_str(&inner.desc, symbols);
+            let r = format!("_jafr{depth}");
+            let p = format!("_jafp{depth}");
+            let e = format!("_jafe{depth}");
+            let i = format!("_jafi{depth}");
+            let inner_val = format!("{p}[{i}]");
+            let inner_call = call_from_json(&inner.desc, symbols, &inner_val, depth + 1);
+            format!(
+                "func() ([]{inner_go_type}, error) {{ var {r} []{inner_go_type}; {p}, _, {e} := scan_json_array_parts({val}); if {e} != nil {{ return {r}, {e} }}; {r} = make([]{inner_go_type}, len({p})); for {i} := range {r} {{ _tmp{depth}, {e}2 := {inner_call}; if {e}2 != nil {{ return {r}, {e}2 }}; {r}[{i}] = _tmp{depth} }}; return {r}, nil }}()"
+            )
+        }
+        TypeDescription::Duck(duck) => {
+            let struct_name = duck_struct_name_from_desc(&duck.fields, symbols);
+            format!("{struct_name}_FromJson({val})")
+        }
+        _ => "func() (any, error) { return nil, errors.New(\"parse_json: unsupported type\") }()"
+            .into(),
+    }
+}
+
+fn from_json_go_type(te: &TypeExpr<Typed>, symbols: &SymbolTable) -> String {
+    match &te.desc {
+        TypeDescription::Int => "int".into(),
+        TypeDescription::UInt => "uint64".into(),
+        TypeDescription::Float => "float64".into(),
+        TypeDescription::Bool(_) => "bool".into(),
+        TypeDescription::Char => "rune".into(),
+        TypeDescription::Byte => "byte".into(),
+        TypeDescription::String(_) => "string".into(),
+        TypeDescription::Array(inner) => format!("[]{}", from_json_go_type(inner, symbols)),
+        TypeDescription::TypeName { type_ref, .. } => {
+            format!("*{}", symbols.get(*type_ref).name)
+        }
+        TypeDescription::Or(_) | TypeDescription::And(_) => "any".into(),
+        TypeDescription::Tag(name) => format!("*__DuckTag_{name}"),
+        TypeDescription::Tuple(elems) if elems.is_empty() => "any".into(),
+        TypeDescription::Tuple(elems) => {
+            format!("*{}", tuple_struct_name_from_elems(elems, symbols))
+        }
+        TypeDescription::Duck(duck) => {
+            let struct_name = duck_struct_name_from_desc(&duck.fields, symbols);
+            format!("*{struct_name}")
+        }
+        _ => "any".into(),
+    }
+}
+
 pub fn monomorphize(out: InferOutput) -> InferOutput {
     let mut pass = MonoPass::new(out.symbols);
     let source_file = pass.transform_source_file(out.source_file);
@@ -250,6 +462,59 @@ impl MonoPass {
                     );
                 }
 
+                Expr::typed(
+                    ExprKind::Call {
+                        callee: Box::new(callee),
+                        type_params,
+                        args,
+                    },
+                    ty,
+                    span,
+                )
+            }
+
+            // Calls with INFERRED type params: detect and specialize generic functions.
+            ExprKind::Call {
+                callee,
+                type_params,
+                args,
+            } if type_params.is_empty() => {
+                let callee_span = callee.span;
+                let callee = self.transform_expr(*callee);
+                let args: Vec<_> = args.into_iter().map(|a| self.transform_expr(a)).collect();
+
+                if let ExprKind::Ident(callee_id) = &callee.kind {
+                    let callee_id = *callee_id;
+                    if let Some(gfn) = self.generic_fns.get(&callee_id).cloned() {
+                        let inferred = find_generic_bindings(&gfn, &args, &self.symbols);
+                        if inferred.len() == gfn.generics.len()
+                            && !any_has_generic_param(&inferred, &self.symbols)
+                        {
+                            let new_id = self.specialize_fn(callee_id, inferred);
+                            let fn_ty = self
+                                .symbols
+                                .get(new_id)
+                                .ty
+                                .clone()
+                                .unwrap_or_else(|| callee.ty.clone());
+                            let ret_ty = match &fn_ty.desc {
+                                TypeDescription::Fun { return_type, .. } => *return_type.clone(),
+                                _ => ty.clone(),
+                            };
+                            let new_callee =
+                                Expr::typed(ExprKind::Ident(new_id), fn_ty, callee_span);
+                            return Expr::typed(
+                                ExprKind::Call {
+                                    callee: Box::new(new_callee),
+                                    type_params: vec![],
+                                    args,
+                                },
+                                ret_ty,
+                                span,
+                            );
+                        }
+                    }
+                }
                 Expr::typed(
                     ExprKind::Call {
                         callee: Box::new(callee),
@@ -611,6 +876,18 @@ impl MonoPass {
             .map(|t| subst_type(t, &subs, &self.symbols));
         let body = subst_expr(gfn.body.clone(), &subs, &self.symbols);
 
+        // Special-case: inject the Go deserialization body for parse_json<T>.
+        let body = if gfn.name.value == "parse_json" && type_params.len() == 1 {
+            let t = &type_params[0];
+            let call = call_from_json(&t.desc, &self.symbols, "json_str", 0);
+            let go_code = format!(
+                "obj, _err := ({call})\nif _err != nil {{\nreturn &__DuckTag_err{{}}\n}}\nreturn obj"
+            );
+            Expr::typed(ExprKind::InlineGo(go_code), body.ty.clone(), body.span)
+        } else {
+            body
+        };
+
         let fn_ty = make_fn_ty(&params, &return_type, gfn.span);
         let new_id = self.symbols.insert(SymbolDef {
             kind: DefKind::Function {
@@ -865,6 +1142,60 @@ impl MonoPass {
     }
 }
 
+fn find_generic_bindings(
+    fn_decl: &crate::parser2::parser::FunctionDecl<Typed>,
+    args: &[crate::parser2::parser::Expr<Typed>],
+    symbols: &SymbolTable,
+) -> Vec<TypeExpr<Typed>> {
+    let n = fn_decl.generics.len();
+    let mut bindings: Vec<Option<TypeExpr<Typed>>> = vec![None; n];
+    for (param, arg) in fn_decl.params.iter().zip(args.iter()) {
+        unify_generic(&param.type_expr, &arg.ty, fn_decl, symbols, &mut bindings);
+    }
+    bindings.into_iter().flatten().collect()
+}
+
+fn unify_generic(
+    param: &TypeExpr<Typed>,
+    arg: &TypeExpr<Typed>,
+    fn_decl: &crate::parser2::parser::FunctionDecl<Typed>,
+    symbols: &SymbolTable,
+    bindings: &mut Vec<Option<TypeExpr<Typed>>>,
+) {
+    match &param.desc {
+        TypeDescription::TypeName {
+            type_ref,
+            type_params,
+        } if type_params.is_empty() => {
+            if matches!(symbols.get(*type_ref).kind, DefKind::GenericParam) {
+                let name = symbols.get(*type_ref).name.clone();
+                if let Some(idx) = fn_decl
+                    .generics
+                    .iter()
+                    .position(|g| g.value.name.value == name)
+                {
+                    if bindings[idx].is_none() {
+                        bindings[idx] = Some(arg.clone());
+                    }
+                }
+            }
+        }
+        TypeDescription::Array(inner) => {
+            if let TypeDescription::Array(arg_inner) = &arg.desc {
+                unify_generic(inner, arg_inner, fn_decl, symbols, bindings);
+            }
+        }
+        TypeDescription::Tuple(elems) => {
+            if let TypeDescription::Tuple(arg_elems) = &arg.desc {
+                for (e, a) in elems.iter().zip(arg_elems.iter()) {
+                    unify_generic(e, a, fn_decl, symbols, bindings);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 /// true if any type expr still contains an unresolved GenericParam
 fn any_has_generic_param(type_params: &[TypeExpr<Typed>], symbols: &SymbolTable) -> bool {
     type_params
@@ -920,9 +1251,29 @@ fn type_param_name(te: &TypeExpr<Typed>) -> String {
             }
         }
         TypeDescription::TemplParam(name) => name.clone(),
-        TypeDescription::Tuple(elems) if !elems.is_empty() => {
+        TypeDescription::Tuple(elems) if elems.is_empty() => "EmptyTup".into(),
+        TypeDescription::Tuple(elems) => {
             let parts: Vec<String> = elems.iter().map(type_param_name).collect();
             format!("Tup_{}", parts.join("_"))
+        }
+        TypeDescription::Array(inner) => format!("Slice_{}", type_param_name(inner)),
+        TypeDescription::Tag(name) => format!("Tag_{name}"),
+        TypeDescription::Or(variants) => {
+            let parts: Vec<String> = variants.iter().map(type_param_name).collect();
+            format!("Union_{}", parts.join("_"))
+        }
+        TypeDescription::And(variants) => {
+            let parts: Vec<String> = variants.iter().map(type_param_name).collect();
+            format!("Inter_{}", parts.join("_"))
+        }
+        TypeDescription::Duck(duck) => {
+            let mut parts: Vec<String> = duck
+                .fields
+                .iter()
+                .map(|f| format!("{}_{}", f.name.value, type_param_name(&f.type_expr)))
+                .collect();
+            parts.sort();
+            format!("Duck_{}", parts.join("_"))
         }
         _ => "Any".into(),
     }

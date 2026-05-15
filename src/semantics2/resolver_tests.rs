@@ -3,7 +3,7 @@ use crate::parser2::parser::{DefId, DefKind, Parsed, SourceFile, parse};
 use crate::parser2::tokenizer::tokenize_no_comments;
 
 fn parse_src(src: &str) -> SourceFile<Parsed> {
-    let (toks, lex_errs) = tokenize_no_comments(src, 0);
+    let (toks, lex_errs) = tokenize_no_comments(src, 1);
     assert!(lex_errs.is_empty(), "lex errors: {:?}", lex_errs);
     let (sf, parse_errs) = parse(toks, 0);
     assert!(parse_errs.is_empty(), "parse errors: {:?}", parse_errs);

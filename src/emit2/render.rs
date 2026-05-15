@@ -272,25 +272,45 @@ fn render_stmt(out: &mut String, stmt: &GoStmt, depth: usize) {
                 render_expr(out, value);
                 out.push_str(").(type) {\n");
             }
+            // Render regular arms; collect `case any:` arms to merge into `default:`
+            // so that nil values (empty tuple) are also caught.
+            let mut any_arm: Option<&TypeSwitchArm> = None;
             for arm in arms {
-                out.push_str(&pad);
-                out.push_str("case ");
-                render_type(out, &arm.ty);
-                out.push_str(":\n");
-                if !arm.binding.is_empty() {
-                    out.push_str(&"\t".repeat(depth + 1));
-                    out.push_str(&arm.binding);
-                    out.push_str(" := _sw\n");
-                }
-                for s in &arm.body {
-                    render_stmt(out, s, depth + 1);
+                if matches!(arm.ty, GoType::Any) {
+                    any_arm = Some(arm);
+                } else {
+                    out.push_str(&pad);
+                    out.push_str("case ");
+                    render_type(out, &arm.ty);
+                    out.push_str(":\n");
+                    if !arm.binding.is_empty() {
+                        out.push_str(&"\t".repeat(depth + 1));
+                        out.push_str(&arm.binding);
+                        out.push_str(" := _sw\n");
+                    }
+                    for s in &arm.body {
+                        render_stmt(out, s, depth + 1);
+                    }
                 }
             }
-            if let Some(def) = default {
+            let has_default = default.is_some() || any_arm.is_some();
+            if has_default {
                 out.push_str(&pad);
                 out.push_str("default:\n");
-                for s in def {
-                    render_stmt(out, s, depth + 1);
+                if let Some(arm) = any_arm {
+                    if !arm.binding.is_empty() {
+                        out.push_str(&"\t".repeat(depth + 1));
+                        out.push_str(&arm.binding);
+                        out.push_str(" := _sw\n");
+                    }
+                    for s in &arm.body {
+                        render_stmt(out, s, depth + 1);
+                    }
+                }
+                if let Some(def) = default {
+                    for s in def {
+                        render_stmt(out, s, depth + 1);
+                    }
                 }
             }
             out.push_str(&pad);
@@ -418,8 +438,10 @@ fn render_expr(out: &mut String, expr: &GoExpr) {
         }
 
         GoExpr::Ref(inner) => {
+            out.push('(');
             out.push('&');
             render_expr(out, inner);
+            out.push(')');
         }
 
         GoExpr::Deref(inner) => {
