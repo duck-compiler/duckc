@@ -23,6 +23,8 @@ pub struct InferOutput {
     pub module_def_ids: std::collections::HashSet<crate::parser2::parser::DefId>,
     /// Global name->DefId map forwarded from the resolver, used by selective emit.
     pub global_scope: std::collections::HashMap<String, crate::parser2::parser::DefId>,
+    // generic type aliases keyed by DefId, populated by monomorphize
+    pub generic_type_aliases: HashMap<DefId, TypeAliasDecl<Typed>>,
 }
 
 struct Inferencer {
@@ -47,11 +49,32 @@ struct Inferencer {
     /// Derived traits per struct DefId, populated during collect_signatures.
     struct_derived: HashMap<DefId, HashSet<crate::parse::struct_parser::DerivableInterface>>,
     /// TypeAlias target types keyed by DefId, populated during collect_signatures.
-    type_aliases: HashMap<DefId, TypeExpr<Typed>>,
+    /// Tuple: (ordered generic param names, unexpanded RHS type expression).
+    type_aliases: HashMap<DefId, (Vec<String>, TypeExpr<Typed>)>,
 }
 
 fn any(span: Span) -> TypeExpr<Typed> {
     TypeExpr::new(TypeDescription::Any, span)
+}
+
+/// Expand a stored type alias by substituting its generic params with the provided type args.
+/// If the alias has no generics or the arg count doesn't match, returns the stored body unchanged.
+fn expand_alias_desc(
+    expanded: &TypeExpr<Typed>,
+    generic_names: &[String],
+    type_params: &[TypeExpr<Typed>],
+    symbols: &SymbolTable,
+) -> TypeDescription<Typed> {
+    if !generic_names.is_empty() && type_params.len() == generic_names.len() {
+        let subs: HashMap<String, TypeExpr<Typed>> = generic_names
+            .iter()
+            .zip(type_params.iter())
+            .map(|(n, t)| (n.clone(), t.clone()))
+            .collect();
+        super::mono::subst_type(expanded, &subs, symbols).desc
+    } else {
+        expanded.desc.clone()
+    }
 }
 
 fn stmt(span: Span) -> TypeExpr<Typed> {
@@ -677,17 +700,29 @@ impl Inferencer {
         got: &TypeDescription<Typed>,
     ) -> bool {
         // Expand type aliases on both sides before checking.
-        if let TypeDescription::TypeName { type_ref, .. } = expected {
+        if let TypeDescription::TypeName {
+            type_ref,
+            type_params,
+        } = expected
+        {
             if matches!(self.symbols.get(*type_ref).kind, DefKind::TypeAlias) {
-                if let Some(expanded) = self.type_aliases.get(type_ref) {
-                    return self.is_compatible(&expanded.desc.clone(), got);
+                if let Some((generic_names, expanded)) = self.type_aliases.get(type_ref) {
+                    let expanded_desc =
+                        expand_alias_desc(expanded, generic_names, type_params, &self.symbols);
+                    return self.is_compatible(&expanded_desc, got);
                 }
             }
         }
-        if let TypeDescription::TypeName { type_ref, .. } = got {
+        if let TypeDescription::TypeName {
+            type_ref,
+            type_params,
+        } = got
+        {
             if matches!(self.symbols.get(*type_ref).kind, DefKind::TypeAlias) {
-                if let Some(expanded) = self.type_aliases.get(type_ref) {
-                    return self.is_compatible(expected, &expanded.desc.clone());
+                if let Some((generic_names, expanded)) = self.type_aliases.get(type_ref) {
+                    let expanded_desc =
+                        expand_alias_desc(expanded, generic_names, type_params, &self.symbols);
+                    return self.is_compatible(expected, &expanded_desc);
                 }
             }
         }
@@ -875,8 +910,15 @@ impl Inferencer {
                 }
                 Item::TypeAlias(a) => {
                     if let Some(&alias_id) = global_scope.get(&a.name.value) {
-                        self.type_aliases
-                            .insert(alias_id, type_expr_to_typed(a.type_expr.clone()));
+                        let generic_names: Vec<String> = a
+                            .generics
+                            .iter()
+                            .map(|g| g.value.name.value.clone())
+                            .collect();
+                        self.type_aliases.insert(
+                            alias_id,
+                            (generic_names, type_expr_to_typed(a.type_expr.clone())),
+                        );
                     }
                 }
                 _ => {}
@@ -991,8 +1033,11 @@ impl Inferencer {
                 }
                 // Type alias: expand and recurse.
                 if matches!(self.symbols.get(*type_ref).kind, DefKind::TypeAlias) {
-                    if let Some(expanded) = self.type_aliases.get(type_ref).cloned() {
-                        return self.lookup_field_type(&expanded, field_name);
+                    if let Some((generic_names, expanded)) = self.type_aliases.get(type_ref) {
+                        let expanded_desc =
+                            expand_alias_desc(expanded, generic_names, type_params, &self.symbols);
+                        let expanded_te = TypeExpr::new(expanded_desc, ty.span);
+                        return self.lookup_field_type(&expanded_te, field_name);
                     }
                 }
                 None
@@ -1191,6 +1236,12 @@ impl Inferencer {
                 .get(&f.name.value)
                 .map_or(false, |id| self.module_def_ids.contains(id)),
             Item::Extension(e) => {
+                // Extensions from module files are always module items regardless of
+                // what their target type resolves to (which may differ if a user-defined
+                // symbol shadowed the module name).
+                if e.span.file_id != 1 {
+                    return true;
+                }
                 let target_typed =
                     crate::semantics2::resolver::type_expr_to_typed(e.target.clone());
                 match &target_typed.desc {
@@ -2330,6 +2381,7 @@ pub fn infer(resolve_output: ResolveOutput) -> InferOutput {
         errors: inferencer.errors,
         module_def_ids: resolve_output.module_def_ids,
         global_scope: resolve_output.global_scope,
+        generic_type_aliases: HashMap::new(),
     }
 }
 

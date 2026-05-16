@@ -12,7 +12,7 @@ fn list_of<ElementType>(elements: ElementType[]) -> ArrayList<ElementType> {
 
 fn insert<ElementType>(list: ArrayList<ElementType>, element: ElementType) {
     go {
-        list.Setelements(append(list.Getelements(), element));
+        list.SetElements(append(list.GetElements(), element));
     }
 }
 
@@ -21,7 +21,7 @@ fn join(
     seperator: String,
 ) -> String {
     go {
-        strs := str_list.Getelements()
+        strs := str_list.GetElements()
         var final_str string
         for index, str := range strs {
             if index != 0 {

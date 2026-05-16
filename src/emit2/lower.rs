@@ -279,6 +279,8 @@ struct Lowerer<'a> {
     duck_struct_typed_fields: HashMap<String, Vec<(String, TypeExpr<Typed>)>>,
     // DefId -> expanded TypeDescription for type aliases
     type_alias_expansions: HashMap<DefId, TypeDescription<Typed>>,
+    // DefId -> ordered generic param names for generic type aliases
+    type_alias_param_names: HashMap<DefId, Vec<String>>,
 }
 
 impl<'a> Lowerer<'a> {
@@ -316,6 +318,7 @@ impl<'a> Lowerer<'a> {
             tuple_struct_typed_elems: HashMap::new(),
             duck_struct_typed_fields: HashMap::new(),
             type_alias_expansions: HashMap::new(),
+            type_alias_param_names: HashMap::new(),
         }
     }
 
@@ -352,7 +355,21 @@ impl<'a> Lowerer<'a> {
                 let is_duck_base = matches!(
                     &base.ty.desc,
                     TypeDescription::Duck(_) | TypeDescription::NamedDuck { .. }
-                );
+                ) || if let TypeDescription::TypeName {
+                    type_ref,
+                    type_params,
+                } = &base.ty.desc
+                {
+                    type_params.is_empty()
+                        && self
+                            .type_alias_expansions
+                            .get(type_ref)
+                            .map_or(false, |exp| {
+                                matches!(exp, TypeDescription::Duck(_) | TypeDescription::And(_))
+                            })
+                } else {
+                    false
+                };
                 let is_tuple_idx = matches!(&base.ty.desc, TypeDescription::Tuple(_))
                     && field_name.parse::<usize>().is_ok();
 
@@ -506,6 +523,37 @@ impl<'a> Lowerer<'a> {
                         }
                         _ => GoType::Named(self.name(*type_ref)),
                     }
+                } else if matches!(self.symbols.get(*type_ref).kind, DefKind::TypeAlias) {
+                    // expand generic type alias with substituted params
+                    if let (Some(body), Some(param_names)) = (
+                        self.type_alias_expansions.get(type_ref).cloned(),
+                        self.type_alias_param_names.get(type_ref).cloned(),
+                    ) {
+                        if param_names.len() == type_params.len() {
+                            let subs: std::collections::HashMap<String, TypeExpr<Typed>> =
+                                param_names
+                                    .iter()
+                                    .zip(type_params.iter())
+                                    .map(|(n, t)| (n.clone(), t.clone()))
+                                    .collect();
+                            use crate::parser2::parser::Span;
+                            let expanded_body = TypeExpr::new(body, Span::dummy());
+                            let expanded = crate::semantics2::mono::subst_type(
+                                &expanded_body,
+                                &subs,
+                                self.symbols,
+                            );
+                            return self.lower_type(&expanded);
+                        }
+                    }
+                    // Fallback: treat as opaque (same as struct case).
+                    let base = self.name(*type_ref);
+                    let parts: Vec<String> = type_params
+                        .iter()
+                        .map(|tp| lower_type_param_name(&tp.desc))
+                        .collect();
+                    let mangled = format!("{}__{}", base, parts.join("__"));
+                    GoType::Ptr(Box::new(GoType::Named(mangled)))
                 } else {
                     let base = self.name(*type_ref);
                     let parts: Vec<String> = type_params
@@ -739,7 +787,21 @@ impl<'a> Lowerer<'a> {
                 let is_duck = matches!(
                     &base.ty.desc,
                     TypeDescription::Duck(_) | TypeDescription::NamedDuck { .. }
-                );
+                ) || if let TypeDescription::TypeName {
+                    type_ref,
+                    type_params,
+                } = &base.ty.desc
+                {
+                    type_params.is_empty()
+                        && self
+                            .type_alias_expansions
+                            .get(type_ref)
+                            .map_or(false, |exp| {
+                                matches!(exp, TypeDescription::Duck(_) | TypeDescription::And(_))
+                            })
+                } else {
+                    false
+                };
                 // Extension methods are emitted with their original lowercase Go name.
                 let is_method = matches!(&span_ty.desc, TypeDescription::Fun { .. });
                 let go_base = self.lower_as_value(*base, out);
@@ -3706,8 +3768,28 @@ pub fn lower(out: InferOutput, package: &str) -> GoFile {
         if let Item::TypeAlias(a) = item {
             if let Some(&id) = out.global_scope.get(a.name.value.as_str()) {
                 l.type_alias_expansions.insert(id, a.type_expr.desc.clone());
+                if !a.generics.is_empty() {
+                    let param_names: Vec<String> = a
+                        .generics
+                        .iter()
+                        .map(|g| g.value.name.value.clone())
+                        .collect();
+                    l.type_alias_param_names.insert(id, param_names);
+                }
             }
             type_aliases_for_from_json.push((escape(&a.name.value), a.type_expr.clone()));
+        }
+    }
+    // generic aliases are filtered from source_file.items by monomorphize - use the dedicated map
+    for (&id, a) in &out.generic_type_aliases {
+        if !a.generics.is_empty() {
+            l.type_alias_expansions.insert(id, a.type_expr.desc.clone());
+            let param_names: Vec<String> = a
+                .generics
+                .iter()
+                .map(|g| g.value.name.value.clone())
+                .collect();
+            l.type_alias_param_names.insert(id, param_names);
         }
     }
 
@@ -3787,7 +3869,18 @@ pub fn lower(out: InferOutput, package: &str) -> GoFile {
             }
             Item::Struct(s) => decls.extend(l.lower_struct(s)),
             Item::TypeAlias(a) => decls.push(l.lower_type_alias(a)),
-            Item::Extension(e) => decls.extend(l.lower_extension(e)),
+            Item::Extension(e) => {
+                // If the target is a module-origin struct that was DCE'd, its type definition
+                // won't be in the output — skip to avoid generating methods on undefined types.
+                let skip = if let TypeDescription::TypeName { ref type_ref, .. } = e.target.desc {
+                    out.module_def_ids.contains(type_ref) && !used_module_defs.contains(type_ref)
+                } else {
+                    false
+                };
+                if !skip {
+                    decls.extend(l.lower_extension(e));
+                }
+            }
             Item::Use(UseDecl::Go(path, _)) => {
                 // path[0] is always the full Go import path; path[1] (optional) is the alias
                 let import = path[0].value.clone();

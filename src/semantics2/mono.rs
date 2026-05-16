@@ -1,9 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::parser2::parser::{
-    DefId, DefKind, Expr, ExprKind, ExtensionDecl, Field, FmtPart, FunTypeParam, FunctionDecl,
-    Item, JsxAttr, JsxAttrValue, JsxNode, MatchArm, Param, SourceFile, StructDecl, SymbolDef,
-    SymbolTable, TypeDescription, TypeExpr, Typed, WithSpan,
+    DefId, DefKind, DuckType, Expr, ExprKind, ExtensionDecl, Field, FmtPart, FunTypeParam,
+    FunctionDecl, Item, JsxAttr, JsxAttrValue, JsxNode, MatchArm, Param, SourceFile, StructDecl,
+    SymbolDef, SymbolTable, TypeAliasDecl, TypeDescription, TypeExpr, Typed, WithSpan,
 };
 
 use crate::semantics2::type_infer::InferOutput;
@@ -229,6 +229,7 @@ pub fn monomorphize(out: InferOutput) -> InferOutput {
         errors: out.errors,
         module_def_ids: out.module_def_ids,
         global_scope: out.global_scope,
+        generic_type_aliases: pass.generic_type_aliases,
     }
 }
 
@@ -249,6 +250,12 @@ struct MonoPass {
     /// depth cap to prevent unbounded recursion via chain/rev
     struct_method_depth: u32,
     new_items: Vec<Item<Typed>>,
+    /// Generic type aliases (those with one or more type params), keyed by DefId.
+    generic_type_aliases: HashMap<DefId, TypeAliasDecl<Typed>>,
+    /// When inside a specialized extension method body, holds the receiver struct's info
+    /// so that `self.method<T>()` calls can be specialized even when `self.ty = Any`.
+    current_receiver_struct: Option<DefId>,
+    current_receiver_type_params: Vec<TypeExpr<Typed>>,
 }
 
 impl MonoPass {
@@ -264,6 +271,9 @@ impl MonoPass {
             non_generic_ext_methods: HashMap::new(),
             struct_method_depth: 0,
             new_items: Vec::new(),
+            generic_type_aliases: HashMap::new(),
+            current_receiver_struct: None,
+            current_receiver_type_params: Vec::new(),
         }
     }
 
@@ -306,6 +316,11 @@ impl MonoPass {
                         }
                     }
                 }
+                Item::TypeAlias(a) => {
+                    if let Some(id) = self.find_type_alias(&a.name.value) {
+                        self.generic_type_aliases.insert(id, a.clone());
+                    }
+                }
                 _ => {}
             }
         }
@@ -316,6 +331,16 @@ impl MonoPass {
             .filter_map(|item| match item {
                 Item::Function(f) if !f.generics.is_empty() => None,
                 Item::Struct(s) if !s.generics.is_empty() => None,
+                Item::TypeAlias(a) if !a.generics.is_empty() => None,
+                Item::TypeAlias(a) => {
+                    // Fully expand the RHS so the lowerer sees a concrete type (not a reference
+                    // to a generic alias that was just erased above).
+                    let expanded = self.expand_alias_type(a.type_expr.clone());
+                    Some(Item::TypeAlias(TypeAliasDecl {
+                        type_expr: expanded,
+                        ..a
+                    }))
+                }
                 Item::Function(f) => Some(Item::Function(self.transform_fn(f))),
                 Item::Extension(e) => Some(Item::Extension(self.transform_ext(e))),
                 other => Some(other),
@@ -338,6 +363,48 @@ impl MonoPass {
             .iter()
             .find(|(_, d)| d.name == name && matches!(d.kind, DefKind::Struct))
             .map(|(id, _)| id)
+    }
+
+    fn find_type_alias(&self, name: &str) -> Option<DefId> {
+        self.symbols
+            .iter()
+            .find(|(_, d)| d.name == name && matches!(d.kind, DefKind::TypeAlias))
+            .map(|(id, _)| id)
+    }
+
+    /// Expand a generic type alias instantiation. Returns `None` if `alias_id` is not a
+    /// registered generic alias or the param counts don't match.
+    fn expand_generic_type_alias(
+        &self,
+        alias_id: DefId,
+        alias_params: &[TypeExpr<Typed>],
+    ) -> Option<TypeExpr<Typed>> {
+        let alias = self.generic_type_aliases.get(&alias_id)?;
+        if alias.generics.len() != alias_params.len() {
+            return None;
+        }
+        let subs: HashMap<String, TypeExpr<Typed>> = alias
+            .generics
+            .iter()
+            .zip(alias_params.iter())
+            .map(|(g, t)| (g.value.name.value.clone(), t.clone()))
+            .collect();
+        Some(subst_type(&alias.type_expr, &subs, &self.symbols))
+    }
+
+    /// Expand a type alias reference (generic or non-generic) to its underlying type,
+    /// recursively until no more alias layers remain.
+    fn expand_alias_type(&self, te: TypeExpr<Typed>) -> TypeExpr<Typed> {
+        if let TypeDescription::TypeName {
+            type_ref,
+            ref type_params,
+        } = te.desc
+        {
+            if let Some(expanded) = self.expand_generic_type_alias(type_ref, type_params) {
+                return self.expand_alias_type(expanded);
+            }
+        }
+        te
     }
 
     fn transform_fn(&mut self, f: FunctionDecl<Typed>) -> FunctionDecl<Typed> {
@@ -420,6 +487,58 @@ impl MonoPass {
                                     mangle_name(&field.value, &type_params),
                                     struct_type_params.clone(),
                                 ))
+                            } else if let Some(expanded) =
+                                self.expand_generic_type_alias(*struct_id, struct_type_params)
+                            {
+                                // Receiver is a generic type alias — expand to find the underlying struct.
+                                if let TypeDescription::TypeName {
+                                    type_ref: real_struct_id,
+                                    type_params: real_struct_tps,
+                                } = expanded.desc
+                                {
+                                    if self
+                                        .generic_ext_methods
+                                        .get(&real_struct_id)
+                                        .map_or(false, |m| m.contains_key(field.value.as_str()))
+                                    {
+                                        Some((
+                                            real_struct_id,
+                                            field.value.clone(),
+                                            mangle_name(&field.value, &type_params),
+                                            real_struct_tps,
+                                        ))
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        } else if let ExprKind::Ident(ident_id) = &base.kind {
+                            // `self.method<T>()` inside a specialized extension method body:
+                            // self.ty == Any because the receiver is never typed by inference.
+                            // Use the saved receiver context to find the right ext method.
+                            if self.symbols.get(*ident_id).name == "self" {
+                                if let Some(recv_struct_id) = self.current_receiver_struct {
+                                    if self
+                                        .generic_ext_methods
+                                        .get(&recv_struct_id)
+                                        .map_or(false, |m| m.contains_key(field.value.as_str()))
+                                    {
+                                        Some((
+                                            recv_struct_id,
+                                            field.value.clone(),
+                                            mangle_name(&field.value, &type_params),
+                                            self.current_receiver_type_params.clone(),
+                                        ))
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
                             } else {
                                 None
                             }
@@ -558,6 +677,64 @@ impl MonoPass {
                 )
             }
 
+            // Struct literal whose name is a generic type alias: expand the alias and
+            // specialize the underlying struct, keeping the expression type as the original
+            // concrete struct with its type params so that generic method lookup still works.
+            ExprKind::StructLit {
+                name,
+                type_params,
+                fields,
+            } if !type_params.is_empty()
+                && self.generic_type_aliases.contains_key(&name)
+                && !any_has_generic_param(&type_params, &self.symbols) =>
+            {
+                let fields = fields
+                    .into_iter()
+                    .map(|(l, v)| (l, self.transform_expr(v)))
+                    .collect();
+                if let Some(expanded) = self.expand_generic_type_alias(name, &type_params) {
+                    if let TypeDescription::TypeName {
+                        type_ref: struct_id,
+                        type_params: struct_tps,
+                    } = expanded.desc
+                    {
+                        if self.generic_structs.contains_key(&struct_id)
+                            && !any_has_generic_param(&struct_tps, &self.symbols)
+                        {
+                            let new_id = self.specialize_struct(struct_id, struct_tps.clone());
+                            // Keep expression type as the underlying concrete generic instantiation
+                            // (not the specialized DefId) so method-call lookup via generic_ext_methods
+                            // still finds the right entry.
+                            let new_ty = TypeExpr::new(
+                                TypeDescription::TypeName {
+                                    type_ref: struct_id,
+                                    type_params: struct_tps,
+                                },
+                                span,
+                            );
+                            return Expr::typed(
+                                ExprKind::StructLit {
+                                    name: new_id,
+                                    type_params: vec![],
+                                    fields,
+                                },
+                                new_ty,
+                                span,
+                            );
+                        }
+                    }
+                }
+                Expr::typed(
+                    self.transform_children(ExprKind::StructLit {
+                        name,
+                        type_params,
+                        fields,
+                    }),
+                    ty,
+                    span,
+                )
+            }
+
             kind => Expr::typed(self.transform_children(kind), ty, span),
         }
     }
@@ -575,7 +752,7 @@ impl MonoPass {
             } => ExprKind::Let {
                 is_mut,
                 name,
-                type_ann,
+                type_ann: type_ann.map(|ann| self.expand_alias_type(ann)),
                 value: Box::new(self.transform_expr(*value)),
             },
             ExprKind::Const {
@@ -584,7 +761,7 @@ impl MonoPass {
                 value,
             } => ExprKind::Const {
                 name,
-                type_ann,
+                type_ann: type_ann.map(|ann| self.expand_alias_type(ann)),
                 value: Box::new(self.transform_expr(*value)),
             },
             ExprKind::Assign { target, value } => ExprKind::Assign {
@@ -1028,7 +1205,7 @@ impl MonoPass {
     ) {
         let mangled = mangle_name(method_name, &type_params);
         let struct_mangled = mangle_name("", &struct_type_params);
-        let key = (struct_id, struct_mangled, mangled.clone());
+        let key = (struct_id, struct_mangled.clone(), mangled.clone());
         if !self.ext_specializations.insert(key) {
             return;
         }
@@ -1062,17 +1239,22 @@ impl MonoPass {
         // use the concrete specialized struct DefId so lower_extension doesn't drop this
         let concrete_target = if !struct_type_params.is_empty() {
             let cache_key = (struct_id, mangle_name("", &struct_type_params));
-            if let Some(&specialized_id) = self.specializations.get(&cache_key) {
-                TypeExpr::new(
-                    TypeDescription::TypeName {
-                        type_ref: specialized_id,
-                        type_params: vec![],
-                    },
-                    target.span,
-                )
+            let specialized_id = if let Some(&id) = self.specializations.get(&cache_key) {
+                id
+            } else if self.generic_structs.contains_key(&struct_id) {
+                self.specialize_struct(struct_id, struct_type_params.clone())
             } else {
-                subst_type(&target, &subs, &self.symbols)
-            }
+                // Cannot specialize: fall back to substituting the target type expression.
+                // lower_extension will emit the method on the concrete (non-generic) target.
+                return;
+            };
+            TypeExpr::new(
+                TypeDescription::TypeName {
+                    type_ref: specialized_id,
+                    type_params: vec![],
+                },
+                target.span,
+            )
         } else {
             target
         };
@@ -1092,7 +1274,13 @@ impl MonoPass {
             .map(|t| subst_type(t, &subs, &self.symbols));
         let body = subst_expr(gm.body.clone(), &subs, &self.symbols);
         let body = self.remap_locals(body);
+        let prev_recv_struct = self.current_receiver_struct;
+        let prev_recv_tps = std::mem::take(&mut self.current_receiver_type_params);
+        self.current_receiver_struct = Some(struct_id);
+        self.current_receiver_type_params = struct_type_params.clone();
         let body = self.transform_expr(body);
+        self.current_receiver_struct = prev_recv_struct;
+        self.current_receiver_type_params = prev_recv_tps;
 
         let specialized = FunctionDecl {
             name: WithSpan::new(mangled, gm.span),
@@ -1378,6 +1566,16 @@ pub(crate) fn subst_type(
         TypeDescription::And(ps) => {
             TypeDescription::And(ps.iter().map(|p| subst_type(p, subs, symbols)).collect())
         }
+        TypeDescription::Duck(duck) => TypeDescription::Duck(DuckType {
+            fields: duck
+                .fields
+                .iter()
+                .map(|f| Field {
+                    name: f.name.clone(),
+                    type_expr: subst_type(&f.type_expr, subs, symbols),
+                })
+                .collect(),
+        }),
         other => other.clone(),
     };
     TypeExpr::new(desc, te.span)

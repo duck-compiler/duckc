@@ -56,6 +56,8 @@ struct Resolver<'a> {
     module_item_names: &'a HashSet<String>,
     // module store for building Module namespace bindings
     module_store: &'a ModuleStore,
+    // user-defined names snapshot taken before pass-2 use-decl bindings run
+    user_name_snapshot: HashMap<String, DefId>,
 }
 
 impl<'a> Resolver<'a> {
@@ -75,6 +77,7 @@ impl<'a> Resolver<'a> {
             module_def_ids: HashSet::new(),
             module_item_names,
             module_store,
+            user_name_snapshot: HashMap::new(),
         }
     }
 
@@ -113,6 +116,11 @@ impl<'a> Resolver<'a> {
             }
         }
         None
+    }
+
+    fn bind_module_import(&mut self, name: &str, def_id: DefId) {
+        let scope = self.scopes.last_mut().unwrap();
+        scope.insert(name.to_string(), def_id);
     }
 
     fn error(&mut self, msg: impl Into<String>, span: Span) {
@@ -201,6 +209,13 @@ impl<'a> Resolver<'a> {
             }
         }
 
+        // save user names before pass 2 overwrites them with module-import bindings
+        self.user_name_snapshot = self.scopes[0]
+            .iter()
+            .filter(|(name, _)| !self.module_item_names.contains(name.as_str()))
+            .map(|(n, &id)| (n.clone(), id))
+            .collect();
+
         // Pass 2: process UseDecl::Duck imports now that all names are defined.
         for item in items {
             if let Item::Use(crate::parser2::parser::UseDecl::Duck(segs, _, span)) = item {
@@ -251,10 +266,7 @@ impl<'a> Resolver<'a> {
                 // paths like `use ::opt::{Opt, Some}` where the parser joins segments.
                 let direct = format!("{}__{}", prefix, member_name);
                 if let Some(&def_id) = self.scopes[0].get(&direct) {
-                    self.scopes
-                        .last_mut()
-                        .unwrap()
-                        .insert(member_name.to_string(), def_id);
+                    self.bind_module_import(&member_name, def_id);
                     return;
                 }
                 let names: Vec<&str> = if member_name.contains("__") {
@@ -265,10 +277,7 @@ impl<'a> Resolver<'a> {
                 for name in names {
                     let mangled = format!("{}__{}", prefix, name);
                     if let Some(&def_id) = self.scopes[0].get(&mangled) {
-                        self.scopes
-                            .last_mut()
-                            .unwrap()
-                            .insert(name.to_string(), def_id);
+                        self.bind_module_import(name, def_id);
                     }
                 }
             }
@@ -277,12 +286,26 @@ impl<'a> Resolver<'a> {
 
     fn resolve_source_file(&mut self, sf: SourceFile<Parsed>) -> SourceFile<Resolved> {
         self.collect_top_level(&sf.items);
-        let items = sf
+
+        // resolve module items first, then restore user names and resolve user items
+        let (module_items, user_items): (Vec<_>, Vec<_>) = sf
             .items
+            .into_iter()
+            .partition(|item| item.span().file_id != 1);
+
+        let mut resolved: Vec<Item<Resolved>> = module_items
             .into_iter()
             .map(|item| self.resolve_item(item))
             .collect();
-        SourceFile { items }
+
+        // Restore user-defined names, overwriting any module-import bindings.
+        let snapshot = self.user_name_snapshot.clone();
+        for (name, id) in snapshot {
+            self.scopes[0].insert(name, id);
+        }
+
+        resolved.extend(user_items.into_iter().map(|item| self.resolve_item(item)));
+        SourceFile { items: resolved }
     }
 
     fn resolve_item(&mut self, item: Item<Parsed>) -> Item<Resolved> {
