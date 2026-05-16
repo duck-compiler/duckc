@@ -1835,6 +1835,7 @@ impl<'a> Lowerer<'a> {
 
     fn type_has_generic_param(&self, te: &TypeExpr<Typed>) -> bool {
         match &te.desc {
+            TypeDescription::TemplParam(_) => true,
             TypeDescription::TypeName {
                 type_ref,
                 type_params,

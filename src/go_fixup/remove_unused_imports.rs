@@ -314,7 +314,6 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
                 if let Some(package_node) = node.child(0)
                     && let Some(package_name) =
                         extract_package_name_from_node(&package_node, go_source)
-                    && !local_variables.contains(&package_name)
                 {
                     used_imports.insert(package_name);
                 }
@@ -325,7 +324,6 @@ fn find_used_imports(tree: &tree_sitter::Tree, go_source: &str) -> HashSet<Strin
                     && let Some(package_node) = function_node.child(0)
                     && let Some(package_name) =
                         extract_package_name_from_node(&package_node, go_source)
-                    && !local_variables.contains(&package_name)
                 {
                     used_imports.insert(package_name);
                 }
