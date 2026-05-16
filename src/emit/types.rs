@@ -6,13 +6,13 @@ use crate::{
         value::{IrInstruction, IrValue, ToIr},
     },
     parse::{
-        Field,
         source_file_parser::SourceFile,
         struct_parser::StructDefinition,
         type_parser::{Duck, TypeExpr},
+        Field,
     },
     semantics::{
-        ident_mangler::{MANGLE_SEP, mangle},
+        ident_mangler::{mangle, MANGLE_SEP},
         type_resolve::{NeedsSearchResult, TypeEnv},
     },
 };
@@ -1111,7 +1111,7 @@ pub fn emit_type_definitions(
                     .map(|param| format!(
                         "{} {}",
                         param.0,
-                        param.1.0.as_go_type_annotation(type_env)
+                        param.1 .0.as_go_type_annotation(type_env)
                     ))
                     .collect::<Vec<_>>()
                     .join(","),
@@ -1133,7 +1133,10 @@ pub fn emit_type_definitions(
                                     .params
                                     .iter()
                                     .map(|param| {
-                                        (param.0.clone(), param.1.0.as_go_type_annotation(type_env))
+                                        (
+                                            param.0.clone(),
+                                            param.1 .0.as_go_type_annotation(type_env),
+                                        )
                                     })
                                     .collect::<Vec<_>>(),
                                 Some(method.return_type.0.as_go_type_annotation(type_env)),
@@ -1946,18 +1949,36 @@ impl TypeExpr {
                 let mut fields = duck.fields.clone();
                 fields.sort_by_key(|field| field.name.clone());
 
-                format!(
-                    "interface {{\n{}\n}}",
-                    fields
-                        .iter()
-                        .map(|field| format!(
+                let parts: Vec<String> = fields
+                    .iter()
+                    .map(|field| match &field.type_expr.0 {
+                        TypeExpr::Fun(params, return_type, _) => format!(
+                            "   {}({}) {}",
+                            field.name,
+                            params
+                                .iter()
+                                .map(|(name, type_expr)| match name {
+                                    Some(n) => {
+                                        format!(
+                                            "{n} {}",
+                                            type_expr.0.as_go_type_annotation(type_env)
+                                        )
+                                    }
+                                    None => type_expr.0.as_go_type_annotation(type_env),
+                                })
+                                .collect::<Vec<_>>()
+                                .join(","),
+                            return_type.0.as_go_type_annotation(type_env),
+                        ),
+                        _ => format!(
                             "   Has{}[{}]",
                             field.name,
                             field.type_expr.0.as_go_type_annotation(type_env)
-                        ))
-                        .collect::<Vec<_>>()
-                        .join("\n"),
-                )
+                        ),
+                    })
+                    .collect();
+
+                format!("interface {{\n{}\n}}", parts.join("\n"))
             }
             TypeExpr::Tuple(_fields) => self.as_clean_go_type_name(type_env),
             TypeExpr::Or(_variants) => "any".to_string(),

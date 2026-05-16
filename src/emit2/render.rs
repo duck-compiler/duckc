@@ -495,10 +495,37 @@ fn render_type(out: &mut String, ty: &GoType) {
             out.push_str("interface {");
             for (iface_name, ty) in constraints {
                 out.push_str("\n\t");
-                out.push_str(iface_name);
-                out.push('[');
-                render_type(out, ty);
-                out.push(']');
+                if let GoType::Func { params, ret } = ty {
+                    // iface_name is HasFoo - strip the prefix to get the actual method name
+                    let method_name = iface_name
+                        .strip_prefix("Has")
+                        .map(|s| {
+                            let mut chars = s.chars();
+                            match chars.next() {
+                                None => String::new(),
+                                Some(c) => c.to_lowercase().to_string() + chars.as_str(),
+                            }
+                        })
+                        .unwrap_or_else(|| iface_name.clone());
+                    out.push_str(&method_name);
+                    out.push('(');
+                    for (i, p) in params.iter().enumerate() {
+                        if i > 0 {
+                            out.push_str(", ");
+                        }
+                        render_type(out, p);
+                    }
+                    out.push(')');
+                    if let Some(r) = ret {
+                        out.push(' ');
+                        render_type(out, r);
+                    }
+                } else {
+                    out.push_str(iface_name);
+                    out.push('[');
+                    render_type(out, ty);
+                    out.push(']');
+                }
             }
             out.push_str("\n}");
         }

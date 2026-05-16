@@ -6,7 +6,7 @@ use crate::parser2::parser::{
     SourceFile, Span, StructDecl, SymbolTable, TypeAliasDecl, TypeDescription, TypeExpr, Typed,
     WithSpan,
 };
-use crate::semantics2::resolver::{ResolveOutput, type_expr_to_typed};
+use crate::semantics2::resolver::{type_expr_to_typed, ResolveOutput};
 
 #[derive(Debug, Clone)]
 pub struct TypeError {
@@ -735,15 +735,40 @@ impl Inferencer {
             if exp_duck.fields.is_empty() {
                 return true;
             }
-            if let TypeDescription::TypeName { type_ref, .. } = got {
-                if let Some(struct_fields) = self.struct_fields.get(type_ref) {
-                    return exp_duck.fields.iter().all(|ef| {
-                        struct_fields.iter().any(|gf| {
-                            gf.name.value == ef.name.value
-                                && types_compatible(&ef.type_expr.desc, &gf.type_expr.desc)
-                        })
-                    });
-                }
+            if let TypeDescription::TypeName {
+                type_ref,
+                type_params,
+            } = got
+            {
+                return exp_duck.fields.iter().all(|ef| {
+                    if let Some(fields) = self.struct_fields.get(type_ref) {
+                        if let Some(gf) = fields.iter().find(|gf| gf.name.value == ef.name.value) {
+                            return self.is_compatible(&ef.type_expr.desc, &gf.type_expr.desc);
+                        }
+                    }
+                    if let Some(mut method_ty) = self
+                        .extension_methods
+                        .get(type_ref)
+                        .and_then(|m| m.get(&ef.name.value))
+                        .cloned()
+                    {
+                        if !type_params.is_empty() {
+                            if let Some(param_names) =
+                                self.struct_generic_params.get(type_ref).cloned()
+                            {
+                                let subs: HashMap<String, TypeExpr<Typed>> = param_names
+                                    .iter()
+                                    .zip(type_params.iter())
+                                    .map(|(name, concrete)| (name.clone(), concrete.clone()))
+                                    .collect();
+                                method_ty =
+                                    super::mono::subst_type(&method_ty, &subs, &self.symbols);
+                            }
+                        }
+                        return self.is_compatible(&ef.type_expr.desc, &method_ty.desc);
+                    }
+                    false
+                });
             }
             // Duck vs Duck: check that got has all required fields.
             if let TypeDescription::Duck(got_duck) = got {
