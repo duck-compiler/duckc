@@ -1,7 +1,7 @@
 use crate::{
     emit::{types::escape_string_for_go, value::IrInstruction},
     parse::jsx_component_parser::JsxComponent,
-    semantics::type_resolve::TypeEnv,
+    semantics::type_env::TypeEnv,
 };
 
 impl JsxComponent {

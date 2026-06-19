@@ -18,7 +18,7 @@ use crate::{
     },
     semantics::{
         ident_mangler::{MANGLE_SEP, mangle},
-        type_resolve::TypeEnv,
+        type_env::TypeEnv,
     },
 };
 
@@ -3584,7 +3584,7 @@ mod tests {
             type_parser::TypeExpr,
             value_parser::{empty_range, value_expr_into_empty_range, value_expr_parser},
         },
-        semantics::type_resolve::TypeEnv,
+        semantics::type_env::TypeEnv,
     };
 
     fn decl(name: impl Into<String>, t: impl Into<String>) -> IrInstruction {

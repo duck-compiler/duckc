@@ -13,7 +13,9 @@ use crate::parse::{
     value_parser::{ValFmtStringContents, ValueExpr},
 };
 use crate::semantics::ident_mangler::{MANGLE_SEP, mangle};
-use crate::semantics::type_resolve::{TypeEnv, is_const_var, merge_all_or_type_expr};
+
+pub use crate::semantics::type_env::{FunHeader, TypeEnv};
+use crate::semantics::type_resolve::{is_const_var, merge_all_or_type_expr};
 
 impl TypeExpr {
     pub fn as_clean_user_faced_type_name(&self) -> String {
@@ -792,23 +794,21 @@ impl TypeExpr {
 
                     ty
                 }
-                ValueExpr::Variable(_, ident, type_expr, _, _) => {
-                    type_expr
-                        .as_ref()
-                        .cloned()
-                        .or(type_env.get_identifier_type(ident))
-                        .unwrap_or_else(|| {
-                            failure_with_occurence(
-                                "Unknown Identifier",
+                ValueExpr::Variable(_, ident, type_expr, _, _) => type_expr
+                    .as_ref()
+                    .cloned()
+                    .or(type_env.get_identifier_type(ident))
+                    .unwrap_or_else(|| {
+                        failure_with_occurence(
+                            "Unknown Identifier",
+                            *complete_span,
+                            [(
+                                format!("couldn't resolve type for identifier {ident}"),
                                 *complete_span,
-                                [(
-                                    format!("couldn't resolve type for identifier {ident}"),
-                                    *complete_span
-                                )],
-                            );
-                        })
-                        .clone()
-                }
+                            )],
+                        );
+                    })
+                    .clone(),
                 ValueExpr::BoolNegate(bool_expr) => {
                     let t = TypeExpr::from_value_expr(bool_expr, type_env);
                     if t.0.is_never() {
@@ -2129,8 +2129,11 @@ pub fn check_type_compatability_full(
                 .enumerate()
             {
                 if let TypeExpr::Or(req_variants) = &req_param.0
-                    && req_variants.iter().any(|variant| variant.0.type_id(type_env) == given_param.0.type_id(type_env)) {
-                        return
+                    && req_variants.iter().any(|variant| {
+                        variant.0.type_id(type_env) == given_param.0.type_id(type_env)
+                    })
+                {
+                    return;
                 }
 
                 if req_param.0.type_id(type_env) != given_param.0.type_id(type_env) {

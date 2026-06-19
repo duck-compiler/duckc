@@ -1,7 +1,7 @@
 use crate::{
     emit::value::{IrInstruction, ToIr},
     parse::{SS, duckx_component_parser::DuckxComponent},
-    semantics::type_resolve::TypeEnv,
+    semantics::type_env::TypeEnv,
 };
 
 impl DuckxComponent {
