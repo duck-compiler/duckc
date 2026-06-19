@@ -7,7 +7,8 @@ use crate::{
         type_parser::{Duck, TypeExpr},
         value_parser::ValueExpr,
     },
-    semantics::type_resolve::{TypeEnv, trav_type_expr, trav_value_expr},
+    semantics::type_env::TypeEnv,
+    semantics::type_resolve::{trav_type_expr, trav_value_expr},
 };
 
 pub mod duckx_component;

@@ -8,7 +8,7 @@ use crate::{
         type_parser::TypeExpr,
         value_parser::{Assignment, ValueExpr},
     },
-    semantics::type_resolve::TypeEnv,
+    semantics::type_env::TypeEnv,
 };
 
 impl SchemaDefinition {

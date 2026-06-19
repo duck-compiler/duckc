@@ -9,7 +9,7 @@ use crate::{
         type_parser::{Duck, TypeExpr, type_expression_parser},
         value_parser::{ValHtmlStringContents, ValueExpr, value_expr_parser},
     },
-    semantics::type_resolve::TypeEnv,
+    semantics::type_env::TypeEnv,
 };
 
 use super::lexer::Token;

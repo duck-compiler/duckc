@@ -6,7 +6,7 @@ use crate::{
         generics_parser::{Generic, generics_parser},
         value_parser::empty_range,
     },
-    semantics::type_resolve::FunHeader,
+    semantics::type_env::FunHeader,
 };
 
 use super::{

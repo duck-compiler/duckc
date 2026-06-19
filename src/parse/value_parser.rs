@@ -8,7 +8,7 @@ use crate::{
         type_parser::type_expression_parser,
     },
     parse_failure,
-    semantics::type_resolve::TypeEnv,
+    semantics::type_env::TypeEnv,
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};

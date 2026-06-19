@@ -6,7 +6,7 @@ use crate::{
         type_parser::TypeExpr,
         value_parser::{ValueExpr, empty_range},
     },
-    semantics::type_resolve::TypeEnv,
+    semantics::type_env::TypeEnv,
 };
 
 pub fn function_epilogue_2(t: &str) -> IrInstruction {

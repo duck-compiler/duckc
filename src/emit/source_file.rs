@@ -7,7 +7,7 @@ use crate::{
         value::{IrInstruction, IrValue, ToIr},
     },
     parse::{SS, source_file_parser::SourceFile, use_statement_parser::UseStatement},
-    semantics::type_resolve::TypeEnv,
+    semantics::type_env::TypeEnv,
 };
 
 const JSON_UTILITIES: &str = include_str!("json_util.go");

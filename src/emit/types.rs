@@ -13,7 +13,8 @@ use crate::{
     },
     semantics::{
         ident_mangler::{MANGLE_SEP, mangle},
-        type_resolve::{NeedsSearchResult, TypeEnv},
+        type_env::TypeEnv,
+        type_resolve::NeedsSearchResult,
     },
 };
 
