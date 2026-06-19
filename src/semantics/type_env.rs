@@ -1,3 +1,15 @@
+//! The compiler's symbol table, threaded and mutable through type resolution and emit
+//!
+//! `TypeEnv` holds every definition in scope (functions, structs, ducks, schemas, components - from both std and user code) + the state needed to resolve and monomorphize them
+//!
+//! Key things to know before touching this:
+//! - **Scopes are stacks** `identifier_types` and `type_aliases` are `Vec<HashMap<..>>`; `push_*`/`pop_*` open and close a lexical scope,
+//!   and lookups walk the stack from the top
+//!
+//! - **Generics are memoized** `generic_*_generated` caches monomorphized instances; `prevent_generic_generation` guards against generateing the same instance twice
+//!
+//! - **The `'a` lifetime** ties the env to the `tailwind_sender` channel used to stream css to the duckwind worker dring resolve/emit
+//!
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -204,8 +216,8 @@ impl TypeEnv<'_> {
             {
                 replace_generics_in_named_duck_def(&mut cloned_def, &generic_arguments, self);
                 cloned_def.name = new_duck_name.clone();
-                for f in &mut cloned_def.fields {
-                    resolve_all_aliases_type_expr(&mut f.type_expr, self);
+                for field in &mut cloned_def.fields {
+                    resolve_all_aliases_type_expr(&mut field.type_expr, self);
                 }
                 self.generic_ducks_generated.push(cloned_def.clone());
             }
