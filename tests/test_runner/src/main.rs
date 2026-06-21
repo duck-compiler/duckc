@@ -1,15 +1,15 @@
 use clap::Parser;
 use colored::Colorize;
 use rayon::prelude::*;
-use similar::{ChangeTag, TextDiff};
 use serde::{Deserialize, Serialize};
+use similar::{ChangeTag, TextDiff};
 use std::fs;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
+use std::time::Instant;
 use walkdir::WalkDir;
 
 struct CompileLimiter(Arc<(Mutex<usize>, Condvar)>);
@@ -84,7 +84,9 @@ struct TestCase {
 #[derive(Clone)]
 enum TestOutcome {
     Passed,
-    Failed { message: String },
+    Failed {
+        message: String,
+    },
     SnapshotMismatch {
         snapshot_path: PathBuf,
         expected_stdout: String,
@@ -92,7 +94,9 @@ enum TestOutcome {
         actual_stdout: String,
         actual_stderr: String,
     },
-    Skipped { reason: String },
+    Skipped {
+        reason: String,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -192,10 +196,7 @@ fn build_dargo(project_root: &Path, release: bool, verbose: bool, cicd: bool) ->
     }
 
     let exe = if cfg!(windows) { "dargo.exe" } else { "dargo" };
-    let binary_src = project_root
-        .join("target")
-        .join(build_type)
-        .join(exe);
+    let binary_src = project_root.join("target").join(build_type).join(exe);
     let binary_dst = project_root.join("tests").join(exe);
 
     if !binary_src.exists() {
@@ -207,7 +208,11 @@ fn build_dargo(project_root: &Path, release: bool, verbose: bool, cicd: bool) ->
     }
 
     fs::copy(&binary_src, &binary_dst).ok()?;
-    eprintln!("{} Cargo build successful, binary at {}", "✔".green(), binary_dst.display());
+    eprintln!(
+        "{} Cargo build successful, binary at {}",
+        "✔".green(),
+        binary_dst.display()
+    );
     Some(binary_dst)
 }
 
@@ -303,6 +308,16 @@ fn run_test(
         TestType::Valid => {
             let rel_path = path.strip_prefix(tests_dir).unwrap_or(path.as_path());
             let output_name = path_to_filename(rel_path);
+
+            let binary_candidates = [
+                tests_dir.join(".dargo").join(&output_name),
+                tests_dir.join(".dargo").join(format!("{output_name}.exe")),
+            ];
+
+            for stale_binary in &binary_candidates {
+                let _ = std::fs::remove_file(stale_binary);
+            }
+
             let compile_output = Command::new(compiler_path)
                 .arg("compile")
                 .arg("--output-name")
@@ -333,42 +348,25 @@ fn run_test(
                 };
             }
 
-            let executable_path = tests_dir.join(".dargo").join(&output_name);
-            let exec_path = if cfg!(windows) {
-                let exe = executable_path.parent().unwrap().join(format!("{}.exe", output_name));
-                if exe.exists() {
-                    exe
-                } else if executable_path.exists() {
-                    executable_path.clone()
-                } else {
+            let exec_path = match binary_candidates
+                .iter()
+                .find(|candidate| candidate.exists())
+            {
+                Some(fresh_binary) => fresh_binary.clone(),
+                None => {
                     return TestResult {
                         path: path.clone(),
                         outcome: TestOutcome::Failed {
                             message: format!(
                                 "compiled output not found at {}",
-                                executable_path.display()
+                                binary_candidates[0].display()
                             ),
                         },
                     };
                 }
-            } else if executable_path.exists() {
-                executable_path.clone()
-            } else {
-                return TestResult {
-                    path: path.clone(),
-                    outcome: TestOutcome::Failed {
-                        message: format!(
-                            "compiled output not found at {}",
-                            executable_path.display()
-                        ),
-                    },
-                };
             };
 
-            let run_output = match Command::new(&exec_path)
-                .current_dir(tests_dir)
-                .output()
-            {
+            let run_output = match Command::new(&exec_path).current_dir(tests_dir).output() {
                 Ok(o) => o,
                 Err(e) => {
                     return TestResult {
@@ -428,8 +426,7 @@ fn verify_snapshot_result(
         Err(_) => {
             let message = format!(
                 "No snapshot found. Use --update to create. Actual stdout: {:?}, stderr: {:?}",
-                actual_stdout,
-                actual_stderr
+                actual_stdout, actual_stderr
             );
             if interactive {
                 return TestResult {
@@ -525,10 +522,16 @@ fn main() {
         eprintln!("{}", "Running in CICD Mode.".yellow());
     }
     if args.update {
-        eprintln!("{}", "Snapshot Update Mode. All snapshots will be overwritten.".yellow());
+        eprintln!(
+            "{}",
+            "Snapshot Update Mode. All snapshots will be overwritten.".yellow()
+        );
     }
     if args.interactive {
-        eprintln!("{}", "Interactive mode: will prompt on snapshot mismatch to update.".yellow());
+        eprintln!(
+            "{}",
+            "Interactive mode: will prompt on snapshot mismatch to update.".yellow()
+        );
     }
     if args.errors_only {
         eprintln!("{}", "Errors only mode.".yellow());
@@ -557,7 +560,10 @@ fn main() {
                 p.clone()
             }
             None => {
-                eprintln!("{} No dargo binary found. Run without --no-build first.", "✗".red());
+                eprintln!(
+                    "{} No dargo binary found. Run without --no-build first.",
+                    "✗".red()
+                );
                 std::process::exit(-1);
             }
         }
@@ -708,9 +714,20 @@ fn main() {
                         "test".yellow(),
                         rel_path
                     );
-                    print_snapshot_diff("stdout (expected → actual)", expected_stdout, actual_stdout);
-                    print_snapshot_diff("stderr (expected → actual)", expected_stderr, actual_stderr);
-                    eprintln!("  {} (use -i/--interactive to prompt to update)", "Snapshot mismatch.".bright_black());
+                    print_snapshot_diff(
+                        "stdout (expected → actual)",
+                        expected_stdout,
+                        actual_stdout,
+                    );
+                    print_snapshot_diff(
+                        "stderr (expected → actual)",
+                        expected_stderr,
+                        actual_stderr,
+                    );
+                    eprintln!(
+                        "  {} (use -i/--interactive to prompt to update)",
+                        "Snapshot mismatch.".bright_black()
+                    );
                 }
                 TestOutcome::Skipped { reason } => {
                     println!(
@@ -777,27 +794,31 @@ fn main() {
         }
     }
 
-    let (total, passed, failed_count, skipped) = results.iter().fold(
-        (0u64, 0u64, 0u64, 0u64),
-        |(t, p, f, s), r| {
-            (
-                t + 1,
-                p + matches!(&r.outcome, TestOutcome::Passed) as u64,
-                f + matches!(
-                    &r.outcome,
-                    TestOutcome::Failed { .. } | TestOutcome::SnapshotMismatch { .. }
-                ) as u64,
-                s + matches!(&r.outcome, TestOutcome::Skipped { .. }) as u64,
-            )
-        },
-    );
+    let (total, passed, failed_count, skipped) =
+        results
+            .iter()
+            .fold((0u64, 0u64, 0u64, 0u64), |(t, p, f, s), r| {
+                (
+                    t + 1,
+                    p + matches!(&r.outcome, TestOutcome::Passed) as u64,
+                    f + matches!(
+                        &r.outcome,
+                        TestOutcome::Failed { .. } | TestOutcome::SnapshotMismatch { .. }
+                    ) as u64,
+                    s + matches!(&r.outcome, TestOutcome::Skipped { .. }) as u64,
+                )
+            });
 
     println!("\n{}", "--- Test Summary ---".cyan());
     println!("Total tests: {}", total);
     println!("{} Passed:      {}", "".green(), passed);
     println!("{} Failed:      {}", "".red(), failed_count);
     println!("{} Skipped:     {}", "".yellow(), skipped);
-    println!("{} Duration:    {:.2}s", "".bright_black(), test_elapsed.as_secs_f64());
+    println!(
+        "{} Duration:    {:.2}s",
+        "".bright_black(),
+        test_elapsed.as_secs_f64()
+    );
     println!("{}", "--------------------".cyan());
 
     if failed_count > 0 {
