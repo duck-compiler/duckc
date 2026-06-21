@@ -43,6 +43,13 @@ impl Drop for CompilePermit {
     }
 }
 
+fn isolated_build_dir(tests_dir: &Path, rel_path: &Path) -> PathBuf {
+    let build_dir = tests_dir.join(".dargo").join(path_to_filename(rel_path));
+    let _ = fs::remove_dir_all(&build_dir);
+    let _ = fs::create_dir_all(&build_dir);
+    build_dir
+}
+
 #[derive(Parser, Debug)]
 #[command(about = "Parallel test runner for the duck compiler")]
 struct Args {
@@ -231,10 +238,15 @@ fn run_test(
 
     match test.test_type {
         TestType::Invalid => {
+            let build_dir = isolated_build_dir(
+                tests_dir,
+                path.strip_prefix(tests_dir).unwrap_or(path.as_path()),
+            );
+
             let output = match Command::new(compiler_path)
                 .arg("compile")
                 .arg(path)
-                .current_dir(tests_dir)
+                .current_dir(&build_dir)
                 .output()
             {
                 Ok(o) => o,
@@ -262,10 +274,15 @@ fn run_test(
             }
         }
         TestType::Error => {
+            let build_dir = isolated_build_dir(
+                tests_dir,
+                path.strip_prefix(tests_dir).unwrap_or(path.as_path()),
+            );
+
             let output = match Command::new(compiler_path)
                 .arg("compile")
                 .arg(path)
-                .current_dir(tests_dir)
+                .current_dir(&build_dir)
                 .output()
             {
                 Ok(o) => o,
@@ -308,22 +325,21 @@ fn run_test(
         TestType::Valid => {
             let rel_path = path.strip_prefix(tests_dir).unwrap_or(path.as_path());
             let output_name = path_to_filename(rel_path);
+            let build_dir = isolated_build_dir(tests_dir, rel_path);
+
+            let dargo_output_dir = build_dir.join(".dargo");
 
             let binary_candidates = [
-                tests_dir.join(".dargo").join(&output_name),
-                tests_dir.join(".dargo").join(format!("{output_name}.exe")),
+                dargo_output_dir.join(&output_name),
+                dargo_output_dir.join(format!("{output_name}.exe")),
             ];
-
-            for stale_binary in &binary_candidates {
-                let _ = std::fs::remove_file(stale_binary);
-            }
 
             let compile_output = Command::new(compiler_path)
                 .arg("compile")
                 .arg("--output-name")
                 .arg(&output_name)
                 .arg(path)
-                .current_dir(tests_dir)
+                .current_dir(&build_dir)
                 .output();
 
             let compile_output = match compile_output {
