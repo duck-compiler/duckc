@@ -16,11 +16,26 @@ use crate::parse::{
 };
 use crate::semantics::ident_mangler::{MANGLE_SEP, mangle};
 
+/// std def's the compiler directly references / lowers to
+/// e.g.: `async` lowers to `std::sync::Channel`, `for` lowers to `std::col::Iter`.
+fn compiler_injected_roots() -> [String; 4] {
+    [
+        mangle(&["std", "sync", "Channel"]),
+        mangle(&["std", "sync", "Channel", "new"]),
+        mangle(&["std", "col", "Iter"]),
+        mangle(&["std", "col", "Iter", "from"]),
+    ]
+}
+
 pub fn retain_reachable_std(user_source: &SourceFile, mut std_source: SourceFile) -> SourceFile {
     let mut pending = PendingReferences::default();
 
     collect_source_file_references(user_source, &mut pending);
     collect_always_kept_std_references(&std_source, &mut pending);
+
+    for injected_root in compiler_injected_roots() {
+        pending.add(&injected_root);
+    }
 
     let mut function_definitions_by_name = index_by_name(
         std::mem::take(&mut std_source.function_definitions),
