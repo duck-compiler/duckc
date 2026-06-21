@@ -34,7 +34,7 @@ use crate::{
             Assignment, Declaration, ValFmtStringContents, ValHtmlStringContents, ValueExpr,
         },
     },
-    semantics::{type_env::TypeEnv, type_resolve},
+    semantics::{std_reachability::retain_reachable_std, type_env::TypeEnv, type_resolve},
 };
 
 use lazy_static::lazy_static;
@@ -484,6 +484,7 @@ fn parse_src_file(
     #[allow(clippy::nonminimal_bool)]
     if true {
         // <- use this if you want to test without std
+        let std_src_file = retain_reachable_std(&result, std_src_file);
         for s in &std_src_file.function_definitions {
             result.function_definitions.push(s.clone());
         }

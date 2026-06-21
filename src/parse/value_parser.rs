@@ -1,14 +1,15 @@
 use crate::{
-    Tag,
     parse::{
-        Context, SS, Spanned, failure_with_occurence,
+        failure_with_occurence,
         function_parser::LambdaFunctionExpr,
         lexer::{FmtStringContents, HtmlStringContents},
         source_file_parser::SourceFile,
         type_parser::type_expression_parser,
+        Context, Spanned, SS,
     },
     parse_failure,
     semantics::type_env::TypeEnv,
+    Tag,
 };
 
 use super::{lexer::Token, type_parser::TypeExpr};
@@ -336,8 +337,8 @@ impl ValueExpr {
 pub fn block_expr_parser<'src, I, M>(
     _make_input: M,
     value_expr_parser: impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>>
-    + Clone
-    + 'src,
+        + Clone
+        + 'src,
 ) -> impl Parser<'src, I, Spanned<ValueExpr>, extra::Err<Rich<'src, Token, SS>>> + Clone + 'src
 where
     I: BorrowInput<'src, Token = Token, Span = SS>,
@@ -366,7 +367,7 @@ where
             }
 
             if !exprs.is_empty() && exprs.last().unwrap().1.is_some() {
-                exprs.push(((empty_tuple(), exprs.last().unwrap().0.1), None));
+                exprs.push(((empty_tuple(), exprs.last().unwrap().0 .1), None));
             }
 
             (
