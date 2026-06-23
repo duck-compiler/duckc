@@ -30,7 +30,6 @@ use crate::{
         type_env::{FunHeader, TypeEnv},
         typechecker::{check_type_compatability, check_type_compatability_full},
     },
-    tags::Tag,
 };
 
 fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
@@ -1929,15 +1928,13 @@ pub fn typeresolve_schema_def(schema_def: &mut SchemaDefinition, type_env: &mut 
 pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut TypeEnv) {
     type_env.push_type_aliases();
 
-    println!("{} sort fields", Tag::TypeResolve);
-
+    // Step 1: Sort fields
     source_file.schema_defs.iter_mut().for_each(|schema_def| {
         for field in &mut schema_def.fields {
             sort_fields_type_expr(&mut field.type_expr.0);
         }
     });
 
-    // Step 1: Sort fields
     source_file
         .type_definitions
         .iter_mut()
@@ -2006,8 +2003,7 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         .iter_mut()
         .for_each(|test_case| sort_fields_value_expr(&mut test_case.body.0));
 
-    println!("{} insert type definitions", Tag::TypeResolve);
-
+    // Step 2: Insert type definitions
     let mut to_remove_from_type_defs = Vec::new();
 
     source_file
@@ -2056,7 +2052,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
             type_env.type_definitions.push(type_def.clone());
         });
 
-    // Step 2: Insert type definitions
     source_file
         .struct_definitions
         .iter_mut()
@@ -2243,11 +2238,6 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
         }
     }
 
-    println!(
-        "{} resolve aliases in function signatures and prepare function types",
-        Tag::TypeResolve,
-    );
-
     // Step 3: Resolve aliases in function signatures and prepare function types
     source_file
         .function_definitions
@@ -2308,9 +2298,8 @@ pub fn typeresolve_source_file(source_file: &mut SourceFile, type_env: &mut Type
                 .function_definitions
                 .push(function_definition.clone());
         });
-    println!("{} typeresolve functions", Tag::TypeResolve);
-    println!("{} final resolve of all functions", Tag::TypeResolve);
 
+    // type resolve final
     for global in &mut source_file.global_var_decls {
         resolve_all_aliases_type_expr(&mut global.type_expr, type_env);
         resolve_all_aliases_value_expr(&mut global.initializer, type_env);
