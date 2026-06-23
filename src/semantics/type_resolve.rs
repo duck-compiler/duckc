@@ -30,7 +30,6 @@ use crate::{
         type_env::{FunHeader, TypeEnv},
         typechecker::{check_type_compatability, check_type_compatability_full},
     },
-    tags::Tag,
 };
 
 fn typeresolve_duckx_component(c: &mut DuckxComponent, type_env: &mut TypeEnv) {
