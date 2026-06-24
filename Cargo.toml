@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "tests/test_runner"]
+members = [".", "tests/test_runner", "macros"]
 
 [package]
 name = "dargo"
@@ -7,6 +7,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+duckc-macros = { path = "macros" }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0"
 

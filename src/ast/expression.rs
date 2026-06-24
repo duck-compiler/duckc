@@ -1,46 +1,45 @@
-use crate::ast::{Identifier, Span};
-use crate::ast_derives;
+use crate::ast::{Identifier, MemoryTarget, Span};
 
-ast_derives! {
-    pub enum Operator {
-        Add,
-        Sub,
-        Mul,
-        Div,
-    }
+use duckc_macros::ast_derive;
+use serde::{Deserialize, Serialize};
+
+#[ast_derive]
+pub enum BinaryOperator {
+    Add,
+    Sub,
+    Mul,
+    Div,
 }
 
-ast_derives! {
-    pub enum UnaryOperator {
-        /// !
-        Bang,
-        /// -
-        Neg,
-    }
+#[ast_derive]
+pub enum UnaryOperator {
+    /// !
+    Bang,
+    /// -
+    Neg,
 }
 
-ast_derives! {
-    pub enum Expr<'src> {
-        Identifier(Identifier<'src>),
-        StringLiteral(&'src str),
-        IntLiteral(u64),
-        FloatLiteral(f64),
-        BoolLiteral(bool),
-        Binary {
-            left: Box<Expression<'src>>,
-            op: Operator,
-            right: Box<Expression<'src>>,
-        },
-        Unary {
-            op: Operator,
-            expr: Box<Expression<'src>>,
-        },
-    }
+#[ast_derive]
+pub enum Expr<'src> {
+    StringLiteral(&'src str),
+    IntLiteral(u64),
+    FloatLiteral(f64),
+    BoolLiteral(bool),
+    Binary {
+        left: Box<Expression<'src>>,
+        op: BinaryOperator,
+        right: Box<Expression<'src>>,
+    },
+    Unary {
+        op: UnaryOperator,
+        expr: Box<Expression<'src>>,
+    },
+    MemoryTarget(MemoryTarget<'src>),
 }
 
-ast_derives! {
-    pub struct Expression<'src> {
-        pub variant: Expr<'src>,
-        pub span: Span<'src>,
-    }
+#[ast_derive]
+pub struct Expression<'src> {
+    #[serde(borrow)]
+    pub variant: Expr<'src>,
+    pub span: Span<'src>,
 }
