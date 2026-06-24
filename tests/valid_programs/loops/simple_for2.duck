@@ -1,5 +1,0 @@
-fn main() {
-    for (i in (&([2] as Int[])).iter()) {
-        std::io::println(std::string::from_int(*i));
-    }
-}

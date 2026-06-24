@@ -1,4 +1,0 @@
-fn main() {
-    let x: String = "hallo";
-    let y = x.field;
-}

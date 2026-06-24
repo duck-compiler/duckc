@@ -1,4 +1,0 @@
-{
-    "stdout": " type resolve  sort fields\n type resolve  insert type definitions\n type resolve  resolve aliases in function signatures and prepare function types\n type resolve  typeresolve functions\n type resolve  final resolve of all functions\n dargo  compile  \u2713  Successfully compiled binary\n",
-    "stderr": ""
-}

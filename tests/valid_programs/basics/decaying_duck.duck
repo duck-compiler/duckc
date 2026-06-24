@@ -1,3 +1,0 @@
-fn main() {
-    let x: {x: Int | String} = {x: 100};
-}

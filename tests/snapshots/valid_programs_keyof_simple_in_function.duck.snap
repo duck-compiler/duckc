@@ -1,4 +1,0 @@
-{
-    "stdout": "success: let x: keyof { username: String } = .username;\n",
-    "stderr": ""
-}

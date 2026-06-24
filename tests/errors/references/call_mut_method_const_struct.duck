@@ -1,9 +1,0 @@
-struct S {}
-impl {
-    mut fn m() {}
-}
-
-fn main() {
-    const s = S {};
-    s.m();
-}

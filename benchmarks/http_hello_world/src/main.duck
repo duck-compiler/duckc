@@ -1,8 +1,0 @@
-use std::web;
-use std::io::println;
-
-fn main() {
-    web::serve_string("/", "hello, world");
-    println("duck listening on port 3000");
-    web::listen(3000);
-}

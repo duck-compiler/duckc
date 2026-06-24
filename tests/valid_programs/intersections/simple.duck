@@ -1,5 +1,0 @@
-type And = { x: Int } & { y: Int };
-
-fn main() {
-    let a: And = { x: 5, y: 5 };
-}

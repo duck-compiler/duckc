@@ -1,4 +1,0 @@
-{
-    "stdout": "Testing function composition\nComposing: multiply_by_two(add_one(x))\nInput: 5\nExpected: 12 ((5 + 1) * 2)\nActual result:\n12\n",
-    "stderr": ""
-}

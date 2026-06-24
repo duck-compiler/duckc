@@ -1,4 +1,0 @@
-{
-    "stdout": "Testing unsafe casting with pattern matching\nTesting union type Int | String with value 'hello'\nExpected result: 'hello'\nActual result:\nhello\nTesting union type Int | String with value 42\nExpected result: 42\nActual result:\n42\n",
-    "stderr": ""
-}

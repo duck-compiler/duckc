@@ -1,7 +1,0 @@
-module abc {
-    module lol {}
-}
-
-module xyz {
-    module foo {}
-}

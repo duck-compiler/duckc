@@ -1,9 +1,0 @@
-use go "time";
-
-use ::time::{Duration};
-
-fn sleep(duration: Duration) {
-	go {
-		time.Sleep(duration.raw_duration)
-	}
-}

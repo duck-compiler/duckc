@@ -1,3 +1,0 @@
-fn some_abc_func() {
-    "Hello from module"
-}

@@ -1,4 +1,0 @@
-{
-    "stdout": "true\nYo\nempty\n100\nfalse\ntrue\n(Yo, 200)\ntrue\ntrue\npanic: empty optional\n",
-    "stderr": ""
-}

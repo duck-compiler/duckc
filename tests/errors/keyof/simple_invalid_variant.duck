@@ -1,5 +1,0 @@
-use std::io::{println};
-
-fn main() {
-    let x: keyof { username: String } = .u;
-}

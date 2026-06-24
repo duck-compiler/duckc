@@ -1,6 +1,0 @@
-fn main() {
-    let a = 100;
-    const f = fn () {
-        a = 200;
-    };
-}

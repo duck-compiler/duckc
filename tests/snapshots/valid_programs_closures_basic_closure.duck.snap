@@ -1,4 +1,0 @@
-{
-    "stdout": "Testing basic closure creation\nCreating multiplier with factor 3\nCalling multiply_by_3(5)\nExpected result: 15 (5 * 3)\nActual result:\n15\n",
-    "stderr": ""
-}

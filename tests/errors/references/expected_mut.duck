@@ -1,3 +1,0 @@
-fn main() {
-    const a: &mut Int = &100;
-}

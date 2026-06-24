@@ -1,4 +1,0 @@
-{
-    "stdout": "not defered\ndefer 2\ndefer 1\ni am being closed. (defer 0)\n",
-    "stderr": ""
-}

@@ -1,8 +1,0 @@
-fn main() {
-    let x: () = ();
-    let y: (String,) = ("Tuple",);
-    let z: (String, Int) = ("tuple 2", 10);
-
-    std::io::println(y.0);
-    std::io::println(z.0);
-}

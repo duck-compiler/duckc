@@ -1,8 +1,0 @@
-fn main() {
-    const a = 100;
-    const f = mut fn () {
-        const inner_f = mut fn() {
-            a = 200;
-        };
-    };
-}

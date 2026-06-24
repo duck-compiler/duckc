@@ -7,21 +7,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ariadne = "0.5.1"
-chumsky = { version = "0.10.1", features = ["nightly", "default"] }
-tempfile = "3.20.0"
-clap = { version = "4.5.38", features = ["derive"] }
-lazy_static = "1.5.0"
 serde = { version = "1.0.219", features = ["derive"] }
-toml = "0.8.23"
-colored = "3.0.0"
-tree-sitter = "0.25.6"
-tree-sitter-go = "0.23.4"
-tree-sitter-typescript = "0.23.2"
-tree-sitter-javascript = "0.25.0"
-tree-sitter-html = "0.23.2"
-duckwind = { git = "https://github.com/duck-compiler/duckwind.git" }
-indexmap = "2.12.0"
 serde_json = "1.0"
 
 [profile.release]

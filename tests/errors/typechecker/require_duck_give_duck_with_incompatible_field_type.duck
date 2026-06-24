@@ -1,5 +1,0 @@
-fn myfn(x: { abc: Int }) {}
-
-fn main() {
-    myfn({ abc: "H" });
-}

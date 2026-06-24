@@ -1,4 +1,0 @@
-{
-    "stdout": "Testing type casting\nOriginal int value: 42\nInt to string:\n42\nExpected: '42'\nString back to int:\n42\nExpected: 42\nOriginal bool value: true\nBool to string:\ntrue\nExpected: 'true'\n",
-    "stderr": ""
-}

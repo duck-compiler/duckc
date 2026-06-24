@@ -1,3 +1,0 @@
-module level2;
-
-fn hello_from_y() {}

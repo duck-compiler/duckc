@@ -1,8 +1,0 @@
-use std::io::{println};
-
-fn main() {
-    let x: String | Int = "Stringbert";
-    match x {
-        Int => println(""),
-    }
-}

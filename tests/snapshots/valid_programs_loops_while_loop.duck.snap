@@ -1,4 +1,0 @@
-{
-    "stdout": "Testing while loop from 0 to 4\nExpected output: 0, 1, 2, 3, 4, then 'Loop finished'\nActual output:\n0\n1\n2\n3\n4\nLoop finished\n",
-    "stderr": ""
-}
