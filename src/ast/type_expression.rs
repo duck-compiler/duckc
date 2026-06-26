@@ -1,23 +1,23 @@
 use duckc_macros::ast_derive;
-use serde::{Deserialize, Serialize};
 
 use crate::ast::{Identifier, Span};
 
 #[ast_derive]
-pub enum TyExpr<'src> {
+pub enum TypeExpression<'src> {
     #[serde(borrow)]
     Ident(Identifier<'src>),
     Int,
     Float,
     Bool,
+    String,
     Array {
-        inner: Box<TyExpr<'src>>,
+        inner: Box<TypeExpression<'src>>,
     },
 }
 
 #[ast_derive]
-pub struct TypeExpression<'src> {
+pub struct TypeAnnotation<'src> {
     #[serde(borrow)]
-    type_expr: TyExpr<'src>,
-    span: Span<'src>,
+    pub annotation: Option<TypeExpression<'src>>,
+    pub span: Span<'src>,
 }
