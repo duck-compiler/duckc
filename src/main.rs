@@ -1,10 +1,11 @@
-use crate::type_resolve::{ModuleId, ModuleTables, TypeEnv};
+use crate::semantics::{context::TypeEnv, module::{ModuleId, ModuleTables}};
 
 mod ast;
 mod backend;
-mod type_resolve;
 mod frontend;
 mod mimic;
+mod semantics;
+
 
 fn main() {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -33,8 +34,8 @@ fn main() {
     let root = type_env.new_scope(None);
     type_env.modules.push(ModuleTables::new(ast, count, root));
 
-    type_resolve::collect_module(module, &mut type_env);
-    type_resolve::resolve_scopes(module, &mut type_env);
+    semantics::passes::collect_module(module, &mut type_env);
+    semantics::passes::resolve_module(module, &mut type_env);
 
     let ast = std::mem::replace(
         &mut type_env.modules[module.0 as usize].ast,

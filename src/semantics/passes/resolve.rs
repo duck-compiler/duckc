@@ -1,8 +1,8 @@
 //! this compiler pass let's every named reference point to its declaration
 
-use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Statement, expression::Expr, memory_target::{self, MemTar}, statement::Stmt}, type_resolve::type_env::{ModuleId, Origin, ScopeId, SymbolData, SymbolId, SymbolKind, TypeEnv}};
+use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Statement, expression::Expr, memory_target::MemTar, statement::Stmt}, semantics::{context::TypeEnv, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
 
-pub fn resolve_scopes<'src>(
+pub fn resolve_module<'src>(
     module: ModuleId,
     type_env: &mut TypeEnv<'src>
 ) {
@@ -77,7 +77,7 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                 self.resolve_block(&body);
                 self.scope = prev;
             }
-            Stmt::VariableDeclaration { name, type_, init_expression } => {
+            Stmt::VariableDeclaration { name, type_: _, init_expression } => {
                 if let Some(init_expression) = init_expression {
                     self.resolve_expression(init_expression);
                 }
@@ -150,9 +150,10 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                 self.resolve_expression(&expr);
             }
             MemTar::ArrayAccess { target, index_expression } => {
-                self.resolve_memory_target(memory_target);
+                self.resolve_memory_target(target);
+                self.resolve_expression(index_expression);
             }
-            MemTar::FieldAccess { target, field_name } => {
+            MemTar::FieldAccess { target, field_name: _ } => {
                 self.resolve_memory_target(target);
             }
         }

@@ -1,4 +1,7 @@
-use crate::type_resolve::type_env::{SymbolId, TypeId};
+use crate::semantics::symbol::SymbolId;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TypeId(pub u32);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {

@@ -1,4 +1,4 @@
-use crate::{ast::{AstRoot, statement::Stmt}, type_resolve::type_env::{ModuleId, Origin, ScopeId, SymbolData, SymbolKind, TypeEnv}};
+use crate::{ast::{AstRoot, Stmt}, semantics::{context::TypeEnv, module::ModuleId, symbol::{Origin, SymbolData, SymbolKind}}};
 
 pub fn collect_module<'src>(
     module: ModuleId,
