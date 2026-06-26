@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
-use crate::backend::semantics::{module::ModuleTables, symbol::{Scope, ScopeId, SymbolData, SymbolId}, r#type::{Type, TypeId}};
+use crate::backend::semantics::{diagnostic::Diagnostic, module::ModuleTables, symbol::{Scope, ScopeId, SymbolData, SymbolId}, r#type::{Type, TypeId}};
 
 pub struct SemanticsContext<'src> {
     pub modules: Vec<ModuleTables<'src>>,
     pub symbols: Vec<SymbolData<'src>>,
     pub scopes: Vec<Scope>,
     pub types: Vec<Type>,
-    type_dedup:  HashMap<Type, TypeId>
+    type_dedup:  HashMap<Type, TypeId>,
+    pub diagnostics: Vec<Diagnostic<'src>>,
 }
 
 impl<'src> SemanticsContext<'src> {
@@ -18,7 +19,12 @@ impl<'src> SemanticsContext<'src> {
             scopes: Vec::new(),
             types: Vec::new(),
             type_dedup: HashMap::new(),
+            diagnostics: Vec::new()
         }
+    }
+
+    pub fn report(&mut self, diagnostic: Diagnostic<'src>) {
+        self.diagnostics.push(diagnostic);
     }
 
     pub fn intern(&mut self, type_: Type) -> TypeId {

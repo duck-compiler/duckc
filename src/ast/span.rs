@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub struct Span<'fp> {
     pub file_path: &'fp str,
     pub start: usize,

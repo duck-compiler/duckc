@@ -1,4 +1,4 @@
-use crate::backend::{gost, semantics::{self, context::SemanticsContext, module::{ModuleId, ModuleTables}}};
+use crate::backend::{gost, semantics::{self, context::SemanticsContext, diagnostic::DiagnosticKind, module::{ModuleId, ModuleTables}}};
 
 mod ast;
 mod backend;
@@ -34,6 +34,15 @@ fn main() {
 
     semantics::passes::collect_module(module, &mut context);
     semantics::passes::resolve_module(module, &mut context);
+
+    if !context.diagnostics.is_empty() {
+        for diagnostic in &context.diagnostics {
+            println!("{:?}", diagnostic);
+            if let DiagnosticKind::Error = diagnostic.kind {
+                return;
+            }
+        }
+    }
 
     let gost = gost::translate(&context, module);
     let go_src = gost::emit_gost(gost);

@@ -1,6 +1,6 @@
 //! this compiler pass let's every named reference point to its declaration
 
-use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Statement, expression::Expr, memory_target::MemTar, statement::Stmt}, backend::semantics::{context::SemanticsContext, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
+use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Statement, expression::Expr, memory_target::MemTar, statement::Stmt}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
 
 pub fn resolve_module<'src>(
     module: ModuleId,
@@ -100,7 +100,13 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                 if let Some(sym) = self.context.lookup(self.scope, name.ident) {
                     self.set_resolved(expr.id, sym);
                 } else {
-                    todo!("diagnostic")
+                    self.context.report(
+                        Diagnostic::symbol_not_found(
+                            SymbolKind::Function,
+                            name.ident,
+                            name.span
+                        )
+                    );
                 }
 
                 for arg in &args.list {
