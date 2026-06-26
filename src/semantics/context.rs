@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::semantics::{module::ModuleTables, symbol::{Scope, ScopeId, SymbolData, SymbolId}, r#type::{Type, TypeId}};
 
-pub struct TypeEnv<'src> {
+pub struct SemanticsContext<'src> {
     pub modules: Vec<ModuleTables<'src>>,
     pub symbols: Vec<SymbolData<'src>>,
     pub scopes: Vec<Scope>,
@@ -10,7 +10,7 @@ pub struct TypeEnv<'src> {
     type_dedup:  HashMap<Type, TypeId>
 }
 
-impl<'src> TypeEnv<'src> {
+impl<'src> SemanticsContext<'src> {
     pub fn new() -> Self {
         Self {
             modules: Vec::new(),

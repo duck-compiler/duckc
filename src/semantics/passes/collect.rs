@@ -1,19 +1,19 @@
-use crate::{ast::{AstRoot, Stmt}, semantics::{context::TypeEnv, module::ModuleId, symbol::{Origin, SymbolData, SymbolKind}}};
+use crate::{ast::{AstRoot, Stmt}, semantics::{context::SemanticsContext, module::ModuleId, symbol::{Origin, SymbolData, SymbolKind}}};
 
 pub fn collect_module<'src>(
     module: ModuleId,
-    type_env: &mut TypeEnv<'src>,
+    context: &mut SemanticsContext<'src>,
 ) {
-    let root = type_env.modules[module.0 as usize].root_scope;
+    let root = context.modules[module.0 as usize].root_scope;
 
     let ast = std::mem::replace(
-        &mut type_env.modules[module.0 as usize].ast,
+        &mut context.modules[module.0 as usize].ast,
         AstRoot { statements: Vec::new() },
     );
 
     for stmt in &ast.statements {
         if let Stmt::FunctionDefinition { name, .. } = &stmt.variant {
-            let sym = type_env.add_symbol(SymbolData {
+            let sym = context.add_symbol(SymbolData {
                 name: name.ident,
                 kind: SymbolKind::Function,
                 type_: None,
@@ -23,10 +23,10 @@ pub fn collect_module<'src>(
                 },
             });
 
-            type_env.define(root, name.ident, sym);
-            type_env.modules[module.0 as usize].definitions[name.id.0 as usize] = Some(sym);
+            context.define(root, name.ident, sym);
+            context.modules[module.0 as usize].definitions[name.id.0 as usize] = Some(sym);
         }
     }
 
-    type_env.modules[module.0 as usize].ast = ast;
+    context.modules[module.0 as usize].ast = ast;
 }

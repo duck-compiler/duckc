@@ -1,20 +1,20 @@
 //! this compiler pass let's every named reference point to its declaration
 
-use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Statement, expression::Expr, memory_target::MemTar, statement::Stmt}, semantics::{context::TypeEnv, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
+use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Statement, expression::Expr, memory_target::MemTar, statement::Stmt}, semantics::{context::SemanticsContext, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
 
 pub fn resolve_module<'src>(
     module: ModuleId,
-    type_env: &mut TypeEnv<'src>
+    context: &mut SemanticsContext<'src>
 ) {
-    let root_scope = type_env.modules[module.0 as usize].root_scope;
+    let root_scope = context.modules[module.0 as usize].root_scope;
 
     let ast = std::mem::replace(
-        &mut type_env.modules[module.0 as usize].ast,
+        &mut context.modules[module.0 as usize].ast,
         AstRoot { statements: Vec::new() }
     );
 
     let mut scope_resolver = ScopeResolver {
-        type_env,
+        context,
         module,
         scope: root_scope
     };
@@ -23,26 +23,26 @@ pub fn resolve_module<'src>(
         scope_resolver.resolve_statement(statement);
     }
 
-    type_env.modules[module.0 as usize].ast = ast;
+    context.modules[module.0 as usize].ast = ast;
 }
 
 struct ScopeResolver<'a, 'src> {
-    type_env: &'a mut TypeEnv<'src>,
+    context: &'a mut SemanticsContext<'src>,
     module: ModuleId,
     scope: ScopeId
 }
 
 impl<'a, 'src> ScopeResolver<'a, 'src> {
     fn set_resolved(&mut self, node: NodeId, sym: SymbolId) {
-        self.type_env.modules[self.module.0 as usize].resolutions[node.0 as usize] = Some(sym);
+        self.context.modules[self.module.0 as usize].resolutions[node.0 as usize] = Some(sym);
     }
 
     fn set_definition(&mut self, node: NodeId, sym: SymbolId) {
-        self.type_env.modules[self.module.0 as usize].definitions[node.0 as usize] = Some(sym);
+        self.context.modules[self.module.0 as usize].definitions[node.0 as usize] = Some(sym);
     }
 
     fn declare(&mut self, name: &'src str, kind: SymbolKind, declaration: NodeId) -> SymbolId {
-        let sym = self.type_env.add_symbol(SymbolData {
+        let sym = self.context.add_symbol(SymbolData {
             name,
             kind,
             type_: None,
@@ -52,7 +52,7 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
             }
         });
 
-        self.type_env.define(self.scope, name, sym);
+        self.context.define(self.scope, name, sym);
         self.set_definition(declaration, sym);
 
         sym
@@ -61,7 +61,7 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
     fn resolve_statement(&mut self, statement: &Statement<'src>) {
         match &statement.variant {
             Stmt::FunctionDefinition { name: _, params, body, return_type: _ } => {
-                let fn_scope = self.type_env.new_scope(Some(self.scope));
+                let fn_scope = self.context.new_scope(Some(self.scope));
                 let prev = self.scope;
 
                 self.scope = fn_scope;
@@ -97,7 +97,7 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
     fn resolve_expression(&mut self, expr: &Expression<'src>) {
         match &*expr.variant {
             Expr::FunctionCall { name, args } => {
-                if let Some(sym) = self.type_env.lookup(self.scope, name.ident) {
+                if let Some(sym) = self.context.lookup(self.scope, name.ident) {
                     self.set_resolved(expr.id, sym);
                 } else {
                     todo!("diagnostic")
@@ -140,7 +140,7 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
     fn resolve_memory_target(&mut self, memory_target: &MemoryTarget<'src>) {
         match &memory_target.variant {
             MemTar::Name(identifier) => {
-                if let Some(sym) = self.type_env.lookup(self.scope, identifier.ident) {
+                if let Some(sym) = self.context.lookup(self.scope, identifier.ident) {
                     self.set_resolved(identifier.id, sym);
                 } else {
                     todo!("diagnostic")

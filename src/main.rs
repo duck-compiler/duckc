@@ -1,4 +1,4 @@
-use crate::semantics::{context::TypeEnv, module::{ModuleId, ModuleTables}};
+use crate::semantics::{context::SemanticsContext, module::{ModuleId, ModuleTables}};
 
 mod ast;
 mod backend;
@@ -28,17 +28,17 @@ fn main() {
 
     let count = ast::assign_generate_node_ids(&mut ast);
 
-    let mut type_env = TypeEnv::new();
+    let mut context = SemanticsContext::new();
     let module = ModuleId(0);
 
-    let root = type_env.new_scope(None);
-    type_env.modules.push(ModuleTables::new(ast, count, root));
+    let root = context.new_scope(None);
+    context.modules.push(ModuleTables::new(ast, count, root));
 
-    semantics::passes::collect_module(module, &mut type_env);
-    semantics::passes::resolve_module(module, &mut type_env);
+    semantics::passes::collect_module(module, &mut context);
+    semantics::passes::resolve_module(module, &mut context);
 
     let ast = std::mem::replace(
-        &mut type_env.modules[module.0 as usize].ast,
+        &mut context.modules[module.0 as usize].ast,
         ast::AstRoot { statements: Vec::new() }
     );
 
