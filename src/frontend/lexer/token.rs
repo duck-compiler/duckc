@@ -1,7 +1,6 @@
 use duckc_macros::ast_derive;
 
-use crate::ast::{Identifier, Span};
-use serde::{Deserialize, Serialize};
+use crate::ast::Span;
 
 #[ast_derive]
 pub enum StrPart<'src> {
@@ -23,7 +22,7 @@ pub enum Tok<'src> {
     // Keywords
     Let,
     Const,
-    Func,
+    Fun,
     As,
     Return,
     If,
@@ -75,6 +74,8 @@ pub enum Tok<'src> {
     AmpersandAssign,
     BarAssign,
 
+    Comma,
+    Colon,
     Semicolon,
     Ampersand,
     Bang,
@@ -83,11 +84,11 @@ pub enum Tok<'src> {
 
     // Stateful
     #[serde(borrow)]
-    Identifier(Identifier<'src>),
+    Identifier(&'src str),
     IntLiteral(u64),
     FloatLiteral(f64),
     BoolLiteral(bool),
-    StringLiteral(Vec<StringPart<'src>>),
+    StringLiteral(Box<[StringPart<'src>]>),
     Comment(&'src str),
 
     EOF,

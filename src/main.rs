@@ -1,4 +1,12 @@
-use crate::backend::{gost, semantics::{self, context::SemanticsContext, diagnostic::DiagnosticKind, module::{ModuleId, ModuleTables}}};
+use crate::backend::{
+    gost,
+    semantics::{
+        self,
+        context::SemanticsContext,
+        diagnostic::DiagnosticKind,
+        module::{ModuleId, ModuleTables},
+    },
+};
 
 mod ast;
 mod backend;
@@ -8,7 +16,7 @@ mod mimic;
 fn main() {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
 
-    if args.len() != 1 {
+    if args.len() == 1 {
         println!("Usage: duckc <filename>");
         return;
     }
@@ -22,6 +30,20 @@ fn main() {
         }
     };
 
+    if std::env::args().any(|f| f == "--lex") {
+        use std::io::{self, Read};
+        let src = &_src;
+        let mut s = frontend::lexer::LexState::init(file_name, src);
+    
+        loop {
+            dbg!(s.lex_single());
+            let mut buf = [0; 8192];
+            io::stdin().read(&mut buf).unwrap();
+        }
+        
+        std::process::exit(0);
+    } 
+    
     let mut ast = mimic::hello_world_program();
 
     let count = ast::assign_generate_node_ids(&mut ast);

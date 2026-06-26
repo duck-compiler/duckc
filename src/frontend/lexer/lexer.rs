@@ -3,11 +3,8 @@ use std::collections::HashMap;
 use duckc_macros::ast_derive;
 
 use crate::{
-    ast::Span,
-    frontend::lexer::{StrPart, StringPart, Tok, Token},
+    ast::Span, frontend::lexer::{StrPart, StringPart, Tok, Token},
 };
-
-use serde::{Deserialize, Serialize};
 
 #[ast_derive]
 pub struct LexState<'src> {
@@ -26,7 +23,26 @@ pub enum LexDiag {
     UnclosedString,
     NewlineInString,
     InvalidEscapeSequence,
+    InvalidRawIdentifier,
+    OutOfRangeLiteral,
     EOF,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Radix {
+    Binary,
+    Decimal,
+    Hex,
+}
+
+impl Radix {
+    fn is_in_radix(self, c: char) -> bool {
+        match self {
+            Radix::Binary => c == '0' || c == '1',
+            Radix::Decimal => c.is_ascii_digit(),
+            Radix::Hex => c.is_ascii_hexdigit(),
+        }
+    }
 }
 
 #[ast_derive]
@@ -39,6 +55,14 @@ pub struct LexDiagnostic {
 fn is_octal_digit(c: char) -> bool {
     let n = c as u32;
     n >= ('0' as u32) && (n <= '7' as u32)
+}
+
+fn is_valid_identifier_start(c: char) -> bool {
+    c.is_ascii_alphabetic() || c == '_'
+}
+
+fn is_valid_identifier_part(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
 }
 
 fn matching(c: char) -> Option<char> {
@@ -82,6 +106,58 @@ impl<'src> LexState<'src> {
         r
     }
 
+    fn lex_ident(&self, s: &'src str) -> Option<&'src str> {
+        let mut chars = s.chars();
+        let Some(next_char) = chars.next() else { return None; };
+        
+        let mut bytes = 0;
+        
+        if is_valid_identifier_start(next_char) {
+            bytes += next_char.len_utf8();
+            while let Some(c) = chars.next().filter(|e| is_valid_identifier_start(*e)) {
+                bytes += c.len_utf8();
+            }
+            
+            Some(&s[..bytes])
+        } else {
+            None
+        }
+    }
+
+    fn lex_int(&self, s: &'src str, radix: Radix) -> Option<(String, usize)> {
+        let mut res = String::new();
+        let mut chars = s.chars();
+        let Some(next_char) = chars.next() else { return None; };
+        
+        let mut bytes = 0;
+        
+        if radix.is_in_radix(next_char) {
+            bytes += next_char.len_utf8();
+            res.push(next_char);
+            loop {
+                let next = chars.next();
+                if let Some(next) = next {
+                    if next == '_' {
+                        bytes += next.len_utf8();
+                        continue;
+                    }
+                    if radix.is_in_radix(next) {
+                        bytes += next.len_utf8();
+                        res.push(next);
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+            
+            Some((res, bytes))
+        } else {
+            None
+        }
+    }
+
     pub fn advance_and_return(
         &mut self,
         variant: Tok<'src>,
@@ -105,6 +181,26 @@ impl<'src> LexState<'src> {
         return matching(c).is_some_and(|c| self.get_delims(c).pop().is_some());
     }
 
+    pub fn lex_all(&mut self) -> (Box<[Token<'src>]>, Box<[LexDiagnostic]>) {
+        let mut v = Vec::new();
+        let mut diagnostics = Vec::new();
+
+        loop {
+            let next = self.lex_single();
+            match next {
+                Ok(tok) => v.push(tok),
+                Err(e) => {
+                    if matches!(e.variant, LexDiag::EOF) {
+                        break;
+                    }
+                    diagnostics.push(e);
+                }
+            }
+        }
+
+        (v.into_boxed_slice(), diagnostics.into_boxed_slice())
+    }
+
     pub fn lex_single(&mut self) -> Result<Token<'src>, LexDiagnostic> {
         let s = &self.file_text[self.pos..];
 
@@ -116,12 +212,40 @@ impl<'src> LexState<'src> {
                 return self.emit_diagnostic(LexDiag::EOF, 0);
             }
         }
-
+        
         let mut chars = s.chars();
 
         let next_char = chars
             .next()
             .expect("unreachable because we already checked for empty");
+
+        if s.starts_with("r#") {
+            if let Some(lexed) = self.lex_ident(&s[2..]) {
+                return self.advance_and_return(Tok::Identifier(lexed), lexed.len() + 2);
+            } else {
+                return self.emit_diagnostic(LexDiag::InvalidRawIdentifier, 2);
+            }
+        } else if s.starts_with("0x") {
+            if let Some(lexed) = self.lex_int(&s[2..], Radix::Hex) {
+                if let Ok(parsed) = u64::from_str_radix(&lexed.0, 16) {
+                    return self.advance_and_return(Tok::IntLiteral(parsed), lexed.1 + 2);
+                } else {
+                    return self.emit_diagnostic(LexDiag::InvalidRawIdentifier, 2);
+                }
+            } else {
+                return self.emit_diagnostic(LexDiag::InvalidRawIdentifier, 2);
+            }
+        } else if s.starts_with("0b") {
+            if let Some(lexed) = self.lex_int(&s[2..], Radix::Binary) {
+                if let Ok(parsed) = u64::from_str_radix(&lexed.0, 2) {
+                    return self.advance_and_return(Tok::IntLiteral(parsed), lexed.1 + 2);
+                } else {
+                    return self.emit_diagnostic(LexDiag::InvalidRawIdentifier, 2);
+                }
+            } else {
+                return self.emit_diagnostic(LexDiag::InvalidRawIdentifier, 2);
+            }
+        }
 
         if next_char.is_ascii_whitespace() {
             self.pos += 1;
@@ -129,6 +253,10 @@ impl<'src> LexState<'src> {
         }
 
         match next_char {
+            ':' => return self.advance_and_return(Tok::Colon, 1),
+            
+            ',' => return self.advance_and_return(Tok::Comma, 1),
+            
             '(' => {
                 self.push_delim(next_char);
                 return self.advance_and_return(Tok::LeftParen, 1);
@@ -276,6 +404,14 @@ impl<'src> LexState<'src> {
                     return self.advance_and_return(Tok::Slash, 1);
                 }
             }
+            
+            '%' => {
+                if self.test_peek(1, '=') {
+                    return self.advance_and_return(Tok::PercentAssign, 2);
+                } else {
+                    return self.advance_and_return(Tok::Percent, 1);
+                }
+            }
 
             ';' => {
                 return self.advance_and_return(Tok::Semicolon, 1);
@@ -379,9 +515,7 @@ impl<'src> LexState<'src> {
                                             is_invalid = false;
 
                                             parts.push(StringPart {
-                                                variant: StrPart::Octal(
-                                                    &s[(bytes - 3)..(bytes)],
-                                                ),
+                                                variant: StrPart::Octal(&s[(bytes - 3)..(bytes)]),
                                                 span: Span {
                                                     file_path: self.file_path,
                                                     start: self.pos + bytes - 4,
@@ -436,7 +570,7 @@ impl<'src> LexState<'src> {
                 let pos = self.pos;
                 self.pos += bytes;
                 return Ok(Token::new(
-                    Tok::StringLiteral(parts),
+                    Tok::StringLiteral(parts.into_boxed_slice()),
                     self.file_path,
                     pos,
                     bytes,
@@ -444,6 +578,54 @@ impl<'src> LexState<'src> {
             }
 
             _ => {}
+        }
+
+        if let Some(lexed) = self.lex_int(s, Radix::Decimal) {
+            if let Ok(parsed) = u64::from_str_radix(&lexed.0, 10) {
+                let rest = &s[lexed.1..];
+                if rest.chars().next() == Some('.') {
+                    if let Some(other_part) = self.lex_int(&rest[1..], Radix::Decimal) {
+                        let total_len = lexed.1 + 1 + other_part.1;
+                        let float_lit = &s[..total_len];
+                        if let Ok(float) = float_lit.parse::<f64>() {
+                            return self.advance_and_return(Tok::FloatLiteral(float), lexed.1 + 1 + other_part.1)
+                        } else {
+                            return self.emit_diagnostic(LexDiag::OutOfRangeLiteral, total_len);
+                        }
+                    }
+                } else {
+                    return self.advance_and_return(Tok::IntLiteral(parsed), lexed.1);
+                }
+            } else {
+                return self.emit_diagnostic(LexDiag::OutOfRangeLiteral, lexed.1);
+            }
+        } else if is_valid_identifier_start(next_char) {
+            if let Some(ident) = self.lex_ident(s) {
+                return self.advance_and_return({
+                    use Tok::*;
+                    match ident {
+                        "true" => BoolLiteral(true),
+                        "false" => BoolLiteral(false),
+                        
+                        "let" => Let,
+                        "const" => Const,
+                        "fun" => Fun,
+                        "as" => As,
+                        "return" => Return,
+                        "if" => If,
+                        "while" => While,
+                        "continue" => Continue,
+                        "break" => Break,
+
+                        "Int" => Int,
+                        "Bool" => Bool,
+                        "Float" => Float,
+                        "String" => String,
+
+                        _ => Identifier(ident),
+                    }
+                }, ident.len());
+            }
         }
 
         self.emit_diagnostic(LexDiag::InvalidCharacter(next_char), next_char.len_utf8())
