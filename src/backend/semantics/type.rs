@@ -1,4 +1,4 @@
-use crate::semantics::symbol::SymbolId;
+use crate::backend::semantics::symbol::SymbolId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TypeId(pub u32);

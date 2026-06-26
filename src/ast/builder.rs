@@ -2,7 +2,7 @@
 //! these builders should never be used inside of parsers for constructing AST nodes
 
 use crate::ast::{
-    AstRoot, Block, Expression, Identifier, NodeId, Parameter, ParameterList, Span, Statement, TypeExpression, expression::{Expr, ExpressionList}, statement::Stmt, type_expression::TypeAnnotation
+    AstRoot, Block, Expression, Identifier, NodeId, Parameter, ParameterList, Span, Statement, TypeExpression, expression::{Expr, ExpressionList}, memory_target::{self, MemTar}, statement::Stmt, type_expression::TypeAnnotation
 };
 
 fn empty_span<'src>() -> Span<'src> {
@@ -78,6 +78,28 @@ pub fn go_imm<'src>(src: &'src str) -> Statement<'src> {
     }))
 }
 
+pub fn var_decl<'src>(
+    name: &'src str,
+    type_annotation: TypeAnnotation<'src>,
+    init_expression: Option<Expression<'src>>,
+) -> Statement<'src> {
+    stmt(Stmt::VariableDeclaration {
+        name: ident(name),
+        type_: type_annotation,
+        init_expression: init_expression,
+    })
+}
+
+pub fn assign<'src>(
+    memory_target: MemTar<'src>,
+    value: Expression<'src>,
+) -> Statement<'src> {
+    stmt(Stmt::VariableAssignment {
+        target: super::MemoryTarget { variant: memory_target, span: empty_span() },
+        assign_expression: value
+    })
+}
+
 pub fn string<'src>(str: &'src str) -> Expression<'src> {
     Expression {
         id: NodeId::DUMMY,
@@ -98,7 +120,6 @@ pub fn fn_call<'src>(
         },
     })
 }
-
 
 pub fn fn_def<'src>(
     name: &'src str,

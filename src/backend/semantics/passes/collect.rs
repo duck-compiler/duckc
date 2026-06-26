@@ -1,4 +1,4 @@
-use crate::{ast::{AstRoot, Stmt}, semantics::{context::SemanticsContext, module::ModuleId, symbol::{Origin, SymbolData, SymbolKind}}};
+use crate::{ast::{AstRoot, Stmt}, backend::semantics::{context::SemanticsContext, module::ModuleId, symbol::{Origin, SymbolData, SymbolKind}}};
 
 pub fn collect_module<'src>(
     module: ModuleId,

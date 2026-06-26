@@ -1,6 +1,6 @@
 //! this compiler pass let's every named reference point to its declaration
 
-use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Statement, expression::Expr, memory_target::MemTar, statement::Stmt}, semantics::{context::SemanticsContext, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
+use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Statement, expression::Expr, memory_target::MemTar, statement::Stmt}, backend::semantics::{context::SemanticsContext, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
 
 pub fn resolve_module<'src>(
     module: ModuleId,

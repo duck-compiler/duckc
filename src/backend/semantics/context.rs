@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::semantics::{module::ModuleTables, symbol::{Scope, ScopeId, SymbolData, SymbolId}, r#type::{Type, TypeId}};
+use crate::backend::semantics::{module::ModuleTables, symbol::{Scope, ScopeId, SymbolData, SymbolId}, r#type::{Type, TypeId}};
 
 pub struct SemanticsContext<'src> {
     pub modules: Vec<ModuleTables<'src>>,

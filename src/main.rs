@@ -1,11 +1,9 @@
-use crate::semantics::{context::SemanticsContext, module::{ModuleId, ModuleTables}};
+use crate::backend::{gost, semantics::{self, context::SemanticsContext, module::{ModuleId, ModuleTables}}};
 
 mod ast;
 mod backend;
 mod frontend;
 mod mimic;
-mod semantics;
-
 
 fn main() {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -37,8 +35,8 @@ fn main() {
     semantics::passes::collect_module(module, &mut context);
     semantics::passes::resolve_module(module, &mut context);
 
-    let gost = backend::translate(&context, module);
-    let go_src = backend::emit_gost(gost);
+    let gost = gost::translate(&context, module);
+    let go_src = gost::emit_gost(gost);
 
     println!("{go_src}");
 }

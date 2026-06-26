@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{ast::NodeId, semantics::{module::ModuleId, r#type::TypeId}};
+use crate::{ast::NodeId, backend::semantics::{module::ModuleId, r#type::TypeId}};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SymbolId(pub u32);

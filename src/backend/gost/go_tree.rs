@@ -48,7 +48,7 @@ pub enum GoType<'src> {
     Struct {
         fields: Vec<StructField<'src>>,
     },
-    TypeName(&'src str)
+    TypeName(&'src str),
 }
 
 #[derive(Debug)]

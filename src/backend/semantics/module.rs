@@ -1,4 +1,4 @@
-use crate::{ast::AstRoot, semantics::{symbol::{ScopeId, SymbolId}, r#type::TypeId}};
+use crate::{ast::AstRoot, backend::semantics::{symbol::{ScopeId, SymbolId}, r#type::TypeId}};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ModuleId(pub u32);

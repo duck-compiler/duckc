@@ -1,4 +1,4 @@
-use crate::backend::gost::{GoExpression, GoStatement, GoType, GostRoot};
+use crate::backend::gost::go_tree::{GoExpression, GoStatement, GoType, GostRoot};
 
 pub fn emit_gost<'src>(root: GostRoot<'src>) -> String {
     let mut output = String::new();
