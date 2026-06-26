@@ -8,7 +8,7 @@ pub enum StrPart<'src> {
     Text(&'src str),
     Newline,
     Tab,
-    Octal(u64),
+    Octal(&'src str),
 }
 
 #[ast_derive]

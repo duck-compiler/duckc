@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use duckc_macros::ast_derive;
 
-use crate::frontend::lexer::{Tok, Token};
+use crate::{
+    ast::Span,
+    frontend::lexer::{StrPart, StringPart, Tok, Token},
+};
 use serde::{Deserialize, Serialize};
 
 #[ast_derive]
@@ -12,18 +15,28 @@ pub struct LexState<'src> {
     pub pos: usize,
     pub emitted_eof: bool,
     pub delim_stack: HashMap<char, Vec<usize>>,
+    pub non_fail_diagnostics: Vec<LexDiagnostic>,
 }
 
 #[ast_derive]
 pub enum LexDiag {
     InvalidCharacter(char),
     UnopenedDelimiter(char),
+    UnclosedString,
+    NewlineInString,
+    InvalidEscapeSequence,
     EOF,
 }
 
 #[ast_derive]
 pub struct LexDiagnostic {
     pub variant: LexDiag,
+    pub pos: usize,
+    pub len: usize,
+}
+
+fn is_octal_digit(c: char) -> bool {
+    c.is_ascii_octdigit()
 }
 
 fn matching(c: char) -> Option<char> {
@@ -32,6 +45,7 @@ fn matching(c: char) -> Option<char> {
         '>' => '<',
         '}' => '{',
         ']' => '[',
+        '"' => '"',
         _ => return None,
     })
 }
@@ -44,6 +58,7 @@ impl<'src> LexState<'src> {
             pos: 0,
             emitted_eof: false,
             delim_stack: Default::default(),
+            non_fail_diagnostics: Default::default(),
         }
     }
 
@@ -55,8 +70,14 @@ impl<'src> LexState<'src> {
             .is_some_and(|c| c == char);
     }
 
-    fn emit_diagnostic<T>(&self, d: LexDiag) -> Result<T, LexDiagnostic> {
-        Err(LexDiagnostic { variant: d })
+    fn emit_diagnostic<T>(&mut self, d: LexDiag, len: usize) -> Result<T, LexDiagnostic> {
+        let r = Err(LexDiagnostic {
+            variant: d,
+            pos: self.pos,
+            len,
+        });
+        self.pos += len;
+        r
     }
 
     pub fn advance_and_return(
@@ -79,7 +100,7 @@ impl<'src> LexState<'src> {
     }
 
     fn pop_delim(&mut self, c: char) -> bool {
-        return matching(c).is_some_and(|c| self.get_delims(c).pop().is_some())
+        return matching(c).is_some_and(|c| self.get_delims(c).pop().is_some());
     }
 
     pub fn lex_single(&mut self) -> Result<Token<'src>, LexDiagnostic> {
@@ -90,7 +111,7 @@ impl<'src> LexState<'src> {
                 self.emitted_eof = true;
                 return Ok(Token::new(Tok::EOF, self.file_path, self.pos, 1));
             } else {
-                return self.emit_diagnostic(LexDiag::EOF);
+                return self.emit_diagnostic(LexDiag::EOF, 0);
             }
         }
 
@@ -138,16 +159,14 @@ impl<'src> LexState<'src> {
 
             ')' => {
                 if !self.pop_delim(next_char) {
-                    self.pos += 1;
-                    return self.emit_diagnostic(LexDiag::UnopenedDelimiter(next_char));
+                    return self.emit_diagnostic(LexDiag::UnopenedDelimiter(next_char), 1);
                 }
                 return self.advance_and_return(Tok::RightParen, 1);
             }
 
             ']' => {
                 if !self.pop_delim(next_char) {
-                    self.pos += 1;
-                    return self.emit_diagnostic(LexDiag::UnopenedDelimiter(next_char));
+                    return self.emit_diagnostic(LexDiag::UnopenedDelimiter(next_char), 1);
                 }
                 return self.advance_and_return(Tok::RightSquare, 1);
             }
@@ -163,8 +182,7 @@ impl<'src> LexState<'src> {
                     }
                 } else {
                     if !self.pop_delim(next_char) {
-                        self.pos += 1;
-                        return self.emit_diagnostic(LexDiag::UnopenedDelimiter(next_char));
+                        return self.emit_diagnostic(LexDiag::UnopenedDelimiter(next_char), 1);
                     }
                     return self.advance_and_return(Tok::RightAngle, 1);
                 }
@@ -172,8 +190,7 @@ impl<'src> LexState<'src> {
 
             '}' => {
                 if !self.pop_delim(next_char) {
-                    self.pos += 1;
-                    return self.emit_diagnostic(LexDiag::UnopenedDelimiter(next_char));
+                    return self.emit_diagnostic(LexDiag::UnopenedDelimiter(next_char), 1);
                 }
 
                 return self.advance_and_return(Tok::RightBrace, 1);
@@ -266,10 +283,167 @@ impl<'src> LexState<'src> {
                 return self.advance_and_return(Tok::Tilde, 1);
             }
 
+            '"' => {
+                let mut bytes = 1_usize;
+                let mut current_start = 1;
+                let mut current_bytes = 0;
+                let mut parts = Vec::new();
+                self.push_delim('"');
+
+                loop {
+                    let c = chars.next();
+                    if let Some(c) = c {
+                        if c == '\n' {
+                            let pos = self.pos + bytes;
+                            self.pos += bytes + 1;
+                            return Err(LexDiagnostic {
+                                variant: LexDiag::NewlineInString,
+                                pos: pos,
+                                len: 1,
+                            });
+                        }
+
+                        if c == '\\' {
+                            let part = &s[current_start..(current_start + current_bytes)];
+
+                            if !part.is_empty() {
+                                parts.push(StringPart {
+                                    variant: StrPart::Text(part),
+                                    span: Span {
+                                        file_path: self.file_path,
+                                        start: self.pos + current_start,
+                                        end: self.pos + current_start + current_bytes,
+                                    },
+                                });
+                            }
+
+                            current_start += current_bytes;
+                            current_start += 1;
+                            bytes += 1;
+                            current_bytes = 0;
+
+                            let next = chars.next();
+                            let mut is_invalid = true;
+                            if let Some(next) = next {
+                                match next {
+                                    't' => {
+                                        parts.push(StringPart {
+                                            variant: StrPart::Tab,
+                                            span: Span {
+                                                file_path: self.file_path,
+                                                start: self.pos + bytes,
+                                                end: self.pos + bytes + 2,
+                                            },
+                                        });
+                                        current_start += 1;
+                                        bytes += 1;
+                                        is_invalid = false;
+                                    }
+                                    'n' => {
+                                        parts.push(StringPart {
+                                            variant: StrPart::Newline,
+                                            span: Span {
+                                                file_path: self.file_path,
+                                                start: self.pos + bytes,
+                                                end: self.pos + bytes + 2,
+                                            },
+                                        });
+                                        current_start += 1;
+                                        bytes += 1;
+                                        is_invalid = false;
+                                    }
+                                    next if is_octal_digit(next) => {
+                                        current_start += 1;
+                                        bytes += 1;
+
+                                        let next2 = chars.next();
+                                        let next3 = chars.next();
+
+                                        if next2.is_some() {
+                                            current_start += 1;
+                                            bytes += 1;
+                                        }
+
+                                        if next3.is_some() {
+                                            current_start += 1;
+                                            bytes += 1;
+                                        }
+
+                                        if let Some(next2) = next2
+                                            && let Some(next3) = next3
+                                            && is_octal_digit(next2)
+                                            && is_octal_digit(next3)
+                                        {
+                                            is_invalid = false;
+
+                                            parts.push(StringPart {
+                                                variant: StrPart::Octal(
+                                                    &s[(bytes - 3)..(bytes)],
+                                                ),
+                                                span: Span {
+                                                    file_path: self.file_path,
+                                                    start: self.pos + bytes - 4,
+                                                    end: self.pos + bytes,
+                                                },
+                                            })
+                                        }
+                                    }
+                                    _ => {
+                                        current_start += 1;
+                                        bytes += 1;
+                                    }
+                                }
+                            }
+
+                            if is_invalid {
+                                self.non_fail_diagnostics.push(LexDiagnostic {
+                                    variant: LexDiag::InvalidEscapeSequence,
+                                    pos: self.pos,
+                                    len: 2,
+                                });
+                            }
+                        } else {
+                            bytes += c.len_utf8();
+                            if c == '"' {
+                                self.pop_delim('"');
+                                let part = &s[current_start..(current_start + current_bytes)];
+
+                                if !part.is_empty() {
+                                    parts.push(StringPart {
+                                        variant: StrPart::Text(part),
+                                        span: Span {
+                                            file_path: self.file_path,
+                                            start: self.pos + current_start,
+                                            end: self.pos + current_start + current_bytes,
+                                        },
+                                    });
+                                }
+                            } else {
+                                current_bytes += c.len_utf8();
+                            }
+                        }
+
+                        if c == '"' {
+                            break;
+                        }
+                    } else {
+                        return self.emit_diagnostic(LexDiag::UnclosedString, bytes);
+                    }
+                }
+
+                let pos = self.pos;
+                self.pos += bytes;
+                return Ok(Token::new(
+                    Tok::StringLiteral(parts),
+                    self.file_path,
+                    pos,
+                    bytes,
+                ));
+            }
+
             _ => {}
         }
 
-        self.pos += next_char.len_utf8();
-        self.emit_diagnostic(LexDiag::InvalidCharacter(next_char))
+        self.emit_diagnostic(LexDiag::InvalidCharacter(next_char), next_char.len_utf8())
     }
 }

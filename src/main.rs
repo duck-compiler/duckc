@@ -1,4 +1,4 @@
-#![feature(trim_prefix_suffix)]
+#![feature(trim_prefix_suffix, is_ascii_octdigit)]
 
 use std::io::{self, Read};
 
