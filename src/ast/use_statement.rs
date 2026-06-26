@@ -1,6 +1,4 @@
 use duckc_macros::ast_derive;
-use serde::{Deserialize, Serialize};
-
 use crate::ast::{Identifier, Span};
 
 #[ast_derive]

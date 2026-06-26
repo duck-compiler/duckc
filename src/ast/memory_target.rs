@@ -1,8 +1,5 @@
 use crate::ast::Span;
-
 use crate::ast::{Expression, Identifier};
-use serde::{Deserialize, Serialize};
-
 use duckc_macros::ast_derive;
 
 #[ast_derive]
