@@ -1,3 +1,7 @@
+#![feature(trim_prefix_suffix)]
+
+use std::io::{self, Read};
+
 mod ast;
 mod backend;
 mod frontend;
@@ -18,4 +22,12 @@ fn main() {
             return;
         }
     };
+
+    let mut s = frontend::lexer::LexState::init(file_name, &src);
+
+    loop {
+        dbg!(s.lex_single());
+        let mut buf = [0; 8192];
+        io::stdin().read(&mut buf).unwrap();
+    }
 }
