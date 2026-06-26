@@ -37,12 +37,7 @@ fn main() {
     semantics::passes::collect_module(module, &mut context);
     semantics::passes::resolve_module(module, &mut context);
 
-    let ast = std::mem::replace(
-        &mut context.modules[module.0 as usize].ast,
-        ast::AstRoot { statements: Vec::new() }
-    );
-
-    let gost = backend::translate(ast);
+    let gost = backend::translate(&context, module);
     let go_src = backend::emit_gost(gost);
 
     println!("{go_src}");
