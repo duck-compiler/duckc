@@ -18,7 +18,7 @@ pub fn hello_world_program<'src>() -> AstRoot<'src> {
             vec![],
             no_type(),
             vec![
-                expr_stmt(fn_call("printl", vec![string("Hello, World!")]))
+                expr_stmt(fn_call("println", vec![string("Hello, World!")]))
             ],
         )
     ])

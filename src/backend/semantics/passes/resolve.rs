@@ -149,7 +149,11 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                 if let Some(sym) = self.context.lookup(self.scope, identifier.ident) {
                     self.set_resolved(identifier.id, sym);
                 } else {
-                    todo!("diagnostic")
+                    self.context.report(Diagnostic::symbol_not_found(
+                        SymbolKind::Variable,
+                        identifier.ident,
+                        memory_target.span,
+                    ));
                 }
             },
             MemTar::Dereference(expr) => {
