@@ -1,4 +1,4 @@
-use crate::{ast::{Block, Expression, NodeId, ParameterList, Statement, TypeExpression, expression::{Expr, ExpressionList}, statement::Stmt, type_expression::TypeAnnotation}, backend::gost::go_tree::{GoExpression, GoStatement, GoType}, backend::semantics::{context::SemanticsContext, module::ModuleId, symbol::Origin}};
+use crate::{ast::{Block, Expression, MemoryTarget, NodeId, ParameterList, Statement, TypeExpression, expression::{Expr, ExpressionList}, memory_target::MemTar, statement::Stmt, type_expression::TypeAnnotation}, backend::gost::go_tree::{GoExpression, GoStatement, GoType}, backend::semantics::{context::SemanticsContext, module::ModuleId, symbol::Origin}};
 
 pub struct Translator<'a, 'src> {
     pub context: &'a SemanticsContext<'src>,
@@ -81,16 +81,28 @@ impl<'a, 'src> Translator<'a, 'src> {
             Expr::StringLiteral(str) => {
                 GoExpression::String(str)
             },
-            Expr::FunctionCall { name, args } => {
+            Expr::FunctionCall { target, args } => {
                 GoExpression::FuncCall {
-                    name: self.resolved_name(name.id, name.ident),
+                    callee: Box::new(self.translate_expression(target)),
                     args: self.translate_expression_list(args)
                 }
+            },
+            Expr::MemoryTarget(memory_target) => {
+                self.translate_memory_target(memory_target)
             },
             Expr::GoImmediateSource { source } => {
                 GoExpression::Immediate(source)
             }
             case => unimplemented!("translate_expression: {:?}", case)
+        }
+    }
+
+    fn translate_memory_target(&self, memory_target: &MemoryTarget<'src>) -> GoExpression<'src> {
+        match &memory_target.variant {
+            MemTar::Name(identifier) => {
+                GoExpression::Immediate(self.resolved_name(identifier.id, identifier.ident))
+            }
+            case => unimplemented!("translate_memory_target: {:?}", case)
         }
     }
 

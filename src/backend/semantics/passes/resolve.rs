@@ -96,18 +96,8 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
 
     fn resolve_expression(&mut self, expr: &Expression<'src>) {
         match &*expr.variant {
-            Expr::FunctionCall { name, args } => {
-                if let Some(sym) = self.context.lookup(self.scope, name.ident) {
-                    self.set_resolved(expr.id, sym);
-                } else {
-                    self.context.report(
-                        Diagnostic::symbol_not_found(
-                            SymbolKind::Function,
-                            name.ident,
-                            name.span
-                        )
-                    );
-                }
+            Expr::FunctionCall { target, args } => {
+                self.resolve_expression(target);
 
                 for arg in &args.list {
                     self.resolve_expression(arg);

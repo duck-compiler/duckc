@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use crate::backend::semantics::{diagnostic::Diagnostic, module::ModuleTables, symbol::{Scope, ScopeId, SymbolData, SymbolId}, r#type::{Type, TypeId}};
+use crate::ast::{AstRoot, assign_generate_node_ids};
+use crate::backend::semantics::{diagnostic::Diagnostic, module::{ModuleId, ModuleTables}, symbol::{Scope, ScopeId, SymbolData, SymbolId}, r#type::{Type, TypeId}};
 
 pub struct SemanticsContext<'src> {
     pub modules: Vec<ModuleTables<'src>>,
@@ -21,6 +22,16 @@ impl<'src> SemanticsContext<'src> {
             type_dedup: HashMap::new(),
             diagnostics: Vec::new()
         }
+    }
+
+    pub fn add_module(&mut self, mut ast: AstRoot<'src>) -> ModuleId {
+        let node_count = assign_generate_node_ids(&mut ast);
+        let root_scope = self.new_scope(None);
+
+        let id = ModuleId(self.modules.len() as u32);
+        self.modules.push(ModuleTables::new(ast, node_count, root_scope));
+
+        id
     }
 
     pub fn report(&mut self, diagnostic: Diagnostic<'src>) {

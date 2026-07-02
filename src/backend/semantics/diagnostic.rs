@@ -36,4 +36,39 @@ impl<'src> Diagnostic<'src> {
             kind: DiagnosticKind::Error
         }
     }
+
+    pub fn type_mismatch(
+        expected: &str,
+        found: &str,
+        location: Span<'src>,
+    ) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!("type mismatch: expected {}, found {}", expected, found).into_boxed_str(),
+            location,
+            error_code: "T0001".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn not_callable(location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: "expression is not callable".to_string().into_boxed_str(),
+            location,
+            error_code: "T0002".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn wrong_arg_count(
+        expected: usize,
+        found: usize,
+        location: Span<'src>,
+    ) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!("wrong number of arguments: expected {}, found {}", expected, found).into_boxed_str(),
+            location,
+            error_code: "T0003".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
 }

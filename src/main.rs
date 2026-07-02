@@ -1,4 +1,4 @@
-use crate::backend::{gost, semantics::{self, context::SemanticsContext, diagnostic::DiagnosticKind, module::{ModuleId, ModuleTables}}};
+use crate::backend::{gost, semantics::{self, context::SemanticsContext, diagnostic::DiagnosticKind}};
 
 mod ast;
 mod backend;
@@ -22,18 +22,10 @@ fn main() {
         }
     };
 
-    let mut ast = mimic::hello_world_program();
-
-    let count = ast::assign_generate_node_ids(&mut ast);
-
     let mut context = SemanticsContext::new();
-    let module = ModuleId(0);
 
-    let root = context.new_scope(None);
-    context.modules.push(ModuleTables::new(ast, count, root));
-
-    semantics::passes::collect_module(module, &mut context);
-    semantics::passes::resolve_module(module, &mut context);
+    let module = context.add_module(mimic::hello_world_program());
+    semantics::analyze_module(&mut context, module);
 
     if !context.diagnostics.is_empty() {
         for diagnostic in &context.diagnostics {

@@ -17,7 +17,7 @@ pub enum GoExpression<'src> {
     Float32(&'src f32),
     Float64(&'src f64),
     FuncCall {
-        name: &'src str,
+        callee: Box<GoExpression<'src>>,
         args: Vec<GoExpression<'src>>,
     },
     Immediate(&'src str)

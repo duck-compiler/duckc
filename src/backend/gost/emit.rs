@@ -115,8 +115,8 @@ fn emit_gost_statement<'src>(statement: &GoStatement<'src>) -> String {
 fn emit_expr<'src>(expr: &GoExpression) -> String {
     match expr {
         GoExpression::String(str) => format!("\"{str}\""),
-        GoExpression::FuncCall { name, args } => {
-            format!("{}({})", name, emit_arguments(args))
+        GoExpression::FuncCall { callee, args } => {
+            format!("{}({})", emit_expr(callee), emit_arguments(args))
         },
         GoExpression::Int(i) => format!("{i}"),
         GoExpression::Int8(i) => format!("int8({i})"),
