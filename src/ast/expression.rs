@@ -1,4 +1,4 @@
-use crate::ast::{Block, Identifier, MemoryTarget, NodeId, Span};
+use crate::ast::{Block, Identifier, MemoryTarget, NodeId, Span, memory_target::MemTar};
 use duckc_macros::ast_derive;
 
 #[ast_derive]
@@ -25,7 +25,7 @@ pub enum Expr<'src> {
     BoolLiteral(bool),
     FunctionCall {
         #[serde(borrow)]
-        name: Identifier<'src>,
+        target: Box<Expression<'src>>,
         args: ExpressionList<'src>,
     },
     Binary {

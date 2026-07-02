@@ -108,12 +108,19 @@ pub fn string<'src>(str: &'src str) -> Expression<'src> {
     }
 }
 
+pub fn mem_name<'src>(name: &'src str) -> Expression<'src> {
+    expr(Expr::MemoryTarget(super::MemoryTarget {
+        variant: MemTar::Name(ident(name)),
+        span: empty_span(),
+    }))
+}
+
 pub fn fn_call<'src>(
     name: &'src str,
     args: Vec<Expression<'src>>
 ) -> Expression<'src> {
     expr(Expr::FunctionCall {
-        name: ident(name),
+        target: Box::new(mem_name(name)),
         args: ExpressionList {
             list: args,
             span: empty_span(),

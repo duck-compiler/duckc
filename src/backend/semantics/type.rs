@@ -15,5 +15,7 @@ pub enum Type {
     Fn {
         params: Vec<TypeId>,
         return_type: TypeId,
-    }
+    },
+
+    TypeError,
 }

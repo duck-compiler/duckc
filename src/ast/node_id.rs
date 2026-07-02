@@ -148,8 +148,8 @@ impl NodeIdGenerator {
             Expr::MemoryTarget(memory_target) => {
                 self.generate_in_memory_target(memory_target);
             }
-            Expr::FunctionCall { name, args } => {
-                self.generate_in_identifier(name);
+            Expr::FunctionCall { target, args } => {
+                self.generate_in_expression(target);
                 self.generate_in_expression_list(args);
             }
             Expr::If { expr, body } => {
