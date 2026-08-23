@@ -1,4 +1,4 @@
-use crate::{ast::{Block, Expression, MemoryTarget, NodeId, ParameterList, Statement, TypeExpression, expression::{Expr, ExpressionList}, memory_target::MemTar, statement::Stmt, type_expression::TypeAnnotation}, backend::gost::go_tree::{GoExpression, GoStatement, GoType, StructField}, backend::semantics::{context::SemanticsContext, module::ModuleId, r#type::{Type, TypeId}}};
+use crate::{ast::{Block, Expression, MemoryTarget, NodeId, ParameterList, Statement, TypeExpression, expression::{Expr, ExpressionList}, memory_target::MemTar, statement::Stmt, type_expression::TypeAnnotation}, backend::{gost::go_tree::{GoExpression, GoStatement, GoType, StructField}, semantics::{context::SemanticsContext, module::ModuleId, r#type::{Type, TypeId}}}};
 
 pub struct Translator<'a, 'src> {
     pub context: &'a SemanticsContext<'src>,
@@ -38,6 +38,25 @@ impl<'a, 'src> Translator<'a, 'src> {
                     },
                 }
             }
+            Stmt::StructDefinition { name, fields } => {
+                GoStatement::TypeDecl {
+                    name: name.ident,
+                    type_: GoType::Struct {
+                        fields: fields
+                            .list
+                            .iter()
+                            .map(|field| StructField {
+                                name: field.name.ident,
+                                tag: None,
+                                type_: self.translate_type_expression(
+                                    field.type_.annotation.as_ref()
+                                        .expect("struct field must have a type annotation by the time typecheck has passed"),
+                                ),
+                            })
+                            .collect::<Vec<_>>()
+                    }
+                }
+            }
             case => {
                 unimplemented!("translate_statement: {:?}", case)
             }
@@ -55,7 +74,7 @@ impl<'a, 'src> Translator<'a, 'src> {
             TypeExpression::Float => GoType::Float64,
             TypeExpression::Bool => GoType::Bool,
             TypeExpression::Array { inner } => GoType::Array(Box::new(self.translate_type_expression(inner))),
-            case => unimplemented!("translate_type_expression: {:?}", case)
+            TypeExpression::Ident(identifier) => GoType::TypeName(identifier.ident),
         }
     }
 
@@ -71,6 +90,7 @@ impl<'a, 'src> Translator<'a, 'src> {
             Type::Bool => GoType::Bool,
             Type::String => GoType::String,
             Type::Array(inner) => GoType::Array(Box::new(self.go_type_from_type_id(*inner))),
+            Type::Struct(sym) => GoType::TypeName(self.context.symbols[sym.0 as usize].name),
             case => unimplemented!("go_type_from_type_id: {:?}", case),
         }
     }
@@ -118,6 +138,12 @@ impl<'a, 'src> Translator<'a, 'src> {
                     values: values_exprs.iter().map(|value| self.translate_expression(value)).collect(),
                 }
             },
+            Expr::StructInit { type_name, fields } => {
+                GoExpression::StructInit {
+                    type_name: type_name.ident,
+                    fields: fields.iter().map(|field| (field.name.ident, self.translate_expression(&field.value))).collect(),
+                }
+            },
             case => unimplemented!("translate_expression: {:?}", case)
         }
     }
@@ -134,7 +160,7 @@ impl<'a, 'src> Translator<'a, 'src> {
                 }
             }
             MemTar::ArrayAccess { target, index_expression } => {
-                GoExpression::Index {
+                GoExpression::ArrayIndex {
                     base: Box::new(self.translate_memory_target(target)),
                     index: Box::new(self.translate_expression(index_expression)),
                 }
