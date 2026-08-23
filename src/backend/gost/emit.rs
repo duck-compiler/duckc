@@ -1,11 +1,15 @@
 use crate::backend::gost::go_tree::{GoExpression, GoStatement, GoType, GostRoot};
 
 pub fn emit_gost<'src>(root: GostRoot<'src>) -> String {
-    let mut output = String::new();
+    let mut output = String::from("package main\n\n");
 
-    for statement in &root.body {
-        output.push_str(&emit_gost_statement(statement));
-    }
+    output.push_str(
+        &root.body
+            .iter()
+            .map(|statement| emit_gost_statement(statement))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
 
     output
 }
