@@ -1,4 +1,4 @@
-use crate::ast::{Block, Identifier, MemoryTarget, NodeId, Span, memory_target::MemTar};
+use crate::ast::{Block, Identifier, MemoryTarget, NodeId, Span, TypeExpression, memory_target::MemTar};
 use duckc_macros::ast_derive;
 
 #[ast_derive]
@@ -23,6 +23,9 @@ pub enum Expr<'src> {
     IntLiteral(u64),
     FloatLiteral(f64),
     BoolLiteral(bool),
+    ArrayExpression {
+        values_exprs: Vec<Box<Expression<'src>>>,
+    },
     FunctionCall {
         #[serde(borrow)]
         target: Box<Expression<'src>>,
@@ -46,9 +49,10 @@ pub enum Expr<'src> {
         expr: Box<Expression<'src>>,
         body: Block<'src>,
     },
-    GoImmediateSource {
+    StructInit {
         #[serde(borrow)]
-        source: &'src str,
+        type_name: Identifier<'src>,
+        fields: Vec<FieldInit<'src>>,
     },
 }
 
@@ -64,5 +68,13 @@ pub struct Expression<'src> {
 pub struct ExpressionList<'src> {
     #[serde(borrow)]
     pub list: Vec<Expression<'src>>,
+    pub span: Span<'src>,
+}
+
+#[ast_derive]
+pub struct FieldInit<'src> {
+    #[serde(borrow)]
+    pub name: Identifier<'src>,
+    pub value: Expression<'src>,
     pub span: Span<'src>,
 }

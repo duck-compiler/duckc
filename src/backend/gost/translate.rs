@@ -1,4 +1,4 @@
-use crate::{ast::{Block, Expression, MemoryTarget, NodeId, ParameterList, Statement, TypeExpression, expression::{Expr, ExpressionList}, memory_target::MemTar, statement::Stmt, type_expression::TypeAnnotation}, backend::gost::go_tree::{GoExpression, GoStatement, GoType}, backend::semantics::{context::SemanticsContext, module::ModuleId, symbol::Origin}};
+use crate::{ast::{Block, Expression, MemoryTarget, NodeId, ParameterList, Statement, TypeExpression, expression::{Expr, ExpressionList}, memory_target::MemTar, statement::Stmt, type_expression::TypeAnnotation}, backend::gost::go_tree::{GoExpression, GoStatement, GoType, StructField}, backend::semantics::{context::SemanticsContext, module::ModuleId, r#type::{Type, TypeId}}};
 
 pub struct Translator<'a, 'src> {
     pub context: &'a SemanticsContext<'src>,
@@ -6,14 +6,11 @@ pub struct Translator<'a, 'src> {
 }
 
 impl<'a, 'src> Translator<'a, 'src> {
-    fn resolved_name(&self, node: NodeId, fallback: &'src str) -> &'src str {
+    fn translate_name_reference(&self, node: NodeId, fallback: &'src str) -> GoExpression<'src> {
         let resolutions = &self.context.modules[self.module.0 as usize].resolutions;
         match resolutions[node.0 as usize] {
-            Some(symbol) => match &self.context.symbols[symbol.0 as usize].origin {
-                Origin::Duck { .. } => self.context.symbols[symbol.0 as usize].name,
-                Origin::Builtin => self.context.symbols[symbol.0 as usize].name
-            },
-            None => fallback,
+            Some(symbol) => GoExpression::Immediate(self.context.symbols[symbol.0 as usize].name),
+            None => GoExpression::Immediate(fallback),
         }
     }
 
@@ -54,7 +51,27 @@ impl<'a, 'src> Translator<'a, 'src> {
     fn translate_type_expression(&self, expr: &TypeExpression<'src>) -> GoType<'src> {
         match expr {
             TypeExpression::String => GoType::String,
+            TypeExpression::Int => GoType::Int,
+            TypeExpression::Float => GoType::Float64,
+            TypeExpression::Bool => GoType::Bool,
+            TypeExpression::Array { inner } => GoType::Array(Box::new(self.translate_type_expression(inner))),
             case => unimplemented!("translate_type_expression: {:?}", case)
+        }
+    }
+
+    fn node_type(&self, node: NodeId) -> TypeId {
+        self.context.modules[self.module.0 as usize].node_types[node.0 as usize]
+            .expect("expression should be typechecked before translation")
+    }
+
+    fn go_type_from_type_id(&self, type_id: TypeId) -> GoType<'src> {
+        match &self.context.types[type_id.0 as usize] {
+            Type::Int => GoType::Int,
+            Type::Float => GoType::Float64,
+            Type::Bool => GoType::Bool,
+            Type::String => GoType::String,
+            Type::Array(inner) => GoType::Array(Box::new(self.go_type_from_type_id(*inner))),
+            case => unimplemented!("go_type_from_type_id: {:?}", case),
         }
     }
 
@@ -90,9 +107,17 @@ impl<'a, 'src> Translator<'a, 'src> {
             Expr::MemoryTarget(memory_target) => {
                 self.translate_memory_target(memory_target)
             },
-            Expr::GoImmediateSource { source } => {
-                GoExpression::Immediate(source)
-            }
+            Expr::ArrayExpression { values_exprs } => {
+                let elem_type_id = match &self.context.types[self.node_type(expr.id).0 as usize] {
+                    Type::Array(inner) => *inner,
+                    case => unreachable!("array expression should have array type, found {:?}", case),
+                };
+
+                GoExpression::Array {
+                    elem_type: self.go_type_from_type_id(elem_type_id),
+                    values: values_exprs.iter().map(|value| self.translate_expression(value)).collect(),
+                }
+            },
             case => unimplemented!("translate_expression: {:?}", case)
         }
     }
@@ -100,7 +125,19 @@ impl<'a, 'src> Translator<'a, 'src> {
     fn translate_memory_target(&self, memory_target: &MemoryTarget<'src>) -> GoExpression<'src> {
         match &memory_target.variant {
             MemTar::Name(identifier) => {
-                GoExpression::Immediate(self.resolved_name(identifier.id, identifier.ident))
+                self.translate_name_reference(identifier.id, identifier.ident)
+            }
+            MemTar::FieldAccess { target, field_name } => {
+                GoExpression::Selector {
+                    base: Box::new(self.translate_memory_target(target)),
+                    field: field_name.ident,
+                }
+            }
+            MemTar::ArrayAccess { target, index_expression } => {
+                GoExpression::Index {
+                    base: Box::new(self.translate_memory_target(target)),
+                    index: Box::new(self.translate_expression(index_expression)),
+                }
             }
             case => unimplemented!("translate_memory_target: {:?}", case)
         }

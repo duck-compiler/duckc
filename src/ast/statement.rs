@@ -15,6 +15,11 @@ pub enum Stmt<'src> {
         body: Block<'src>,
         return_type: TypeAnnotation<'src>,
     },
+    StructDefinition {
+        #[serde(borrow)]
+        name: Identifier<'src>,
+        fields: ParameterList<'src>,
+    },
     VariableDeclaration {
         #[serde(borrow)]
         name: Identifier<'src>,

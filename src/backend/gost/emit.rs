@@ -111,7 +111,10 @@ fn emit_gost_statement<'src>(statement: &GoStatement<'src>) -> String {
             )
         },
         GoStatement::Assign { target, expr } => {
-            format!("{target} = {}", emit_expr(expr))
+            format!("{} = {}", emit_expr(target), emit_expr(expr))
+        },
+        GoStatement::TypeDecl { name, type_ } => {
+            format!("type {name} {}", emit_type(type_))
         },
     }
 }
@@ -121,6 +124,25 @@ fn emit_expr<'src>(expr: &GoExpression) -> String {
         GoExpression::String(str) => format!("\"{str}\""),
         GoExpression::FuncCall { callee, args } => {
             format!("{}({})", emit_expr(callee), emit_arguments(args))
+        },
+        GoExpression::Selector { base, field } => {
+            format!("{}.{field}", emit_expr(base))
+        },
+        GoExpression::Array { elem_type, values } => {
+            format!("[]{}{{{}}}", emit_type(elem_type), emit_arguments(values))
+        },
+        GoExpression::ArrayIndex { base, index } => {
+            format!("{}[{}]", emit_expr(base), emit_expr(index))
+        },
+        GoExpression::StructInit { type_name, fields } => {
+            format!(
+                "{type_name}{{{}}}",
+                fields
+                    .iter()
+                    .map(|(name, value)| format!("{name}: {}", emit_expr(value)))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
         },
         GoExpression::Int(i) => format!("{i}"),
         GoExpression::Int8(i) => format!("int8({i})"),

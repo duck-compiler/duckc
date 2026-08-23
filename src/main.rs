@@ -24,7 +24,7 @@ fn main() {
 
     let mut context = SemanticsContext::new();
 
-    let module = context.add_module(mimic::hello_world_program());
+    let module = context.add_module(mimic::test_struct_program());
     semantics::analyze_module(&mut context, module);
 
     if !context.diagnostics.is_empty() {

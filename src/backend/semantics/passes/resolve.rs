@@ -1,6 +1,6 @@
 //! this compiler pass let's every named reference point to its declaration
 
-use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Statement, expression::Expr, memory_target::MemTar, statement::Stmt}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
+use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Statement, expression::Expr, memory_target::MemTar, statement::Stmt, type_expression::{TypeAnnotation, TypeExpression}, use_statement::UseStatement}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
 
 pub fn resolve_module<'src>(
     module: ModuleId,
@@ -42,25 +42,46 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
     }
 
     fn declare(&mut self, name: &'src str, kind: SymbolKind, declaration: NodeId) -> SymbolId {
-        let sym = self.context.add_symbol(SymbolData {
+        self.declare_with_origin(
             name,
             kind,
-            type_: None,
-            origin: Origin::Duck {
+            declaration,
+            Origin::Duck {
                 module: self.module,
                 declaration: declaration
             }
+        )
+    }
+
+    fn declare_with_origin(
+        &mut self,
+        name: &'src str,
+        kind: SymbolKind,
+        declaration: NodeId,
+        origin: Origin<'src>
+    ) -> SymbolId {
+        let symbol = self.context.add_symbol(SymbolData {
+            name,
+            kind,
+            type_: None,
+            origin
         });
 
-        self.context.define(self.scope, name, sym);
-        self.set_definition(declaration, sym);
+        self.context.define(self.scope, name, symbol);
+        self.set_definition(declaration, symbol);
 
-        sym
+        symbol
     }
 
     fn resolve_statement(&mut self, statement: &Statement<'src>) {
         match &statement.variant {
-            Stmt::FunctionDefinition { name: _, params, body, return_type: _ } => {
+            Stmt::FunctionDefinition { name: _, params, body, return_type } => {
+                for param in &params.list {
+                    self.resolve_type_annotation(&param.type_);
+                }
+
+                self.resolve_type_annotation(return_type);
+
                 let fn_scope = self.context.new_scope(Some(self.scope));
                 let prev = self.scope;
 
@@ -77,7 +98,13 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                 self.resolve_block(&body);
                 self.scope = prev;
             }
-            Stmt::VariableDeclaration { name, type_: _, init_expression } => {
+            Stmt::StructDefinition { name: _, fields } => {
+                for field in &fields.list {
+                    self.resolve_type_annotation(&field.type_);
+                }
+            }
+            Stmt::VariableDeclaration { name, type_, init_expression } => {
+                self.resolve_type_annotation(type_);
                 if let Some(init_expression) = init_expression {
                     self.resolve_expression(init_expression);
                 }
@@ -90,8 +117,50 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
             Stmt::Expression { expr } => {
                 self.resolve_expression(expr);
             }
-            Stmt::Use(_) => {}
+            Stmt::Use(use_statement) => {
+                self.resolve_use_statement(use_statement);
+            }
         }
+    }
+
+    fn resolve_type_annotation(&mut self, annotation: &TypeAnnotation<'src>) {
+        if let Some(type_expr) = &annotation.annotation {
+            self.resolve_type_expr(type_expr);
+        }
+    }
+
+    fn resolve_type_expr(&mut self, type_expr: &TypeExpression<'src>) {
+        match type_expr {
+            TypeExpression::Ident(identifier) => {
+                if let Some(sym) = self.context.lookup(self.scope, identifier.ident) {
+                    self.set_resolved(identifier.id, sym);
+                } else {
+                    self.context.report(Diagnostic::symbol_not_found(
+                        SymbolKind::Struct,
+                        identifier.ident,
+                        identifier.span,
+                    ));
+                }
+            }
+            TypeExpression::Array { inner } => {
+                self.resolve_type_expr(inner);
+            }
+            TypeExpression::Int | TypeExpression::Float
+            | TypeExpression::Bool | TypeExpression::String => {}
+        }
+    }
+
+    fn resolve_use_statement(&mut self, use_statement: &UseStatement<'src>) {
+        let bound = use_statement.alias.as_ref().unwrap_or(&use_statement.path);
+
+        self.declare_with_origin(
+            bound.ident,
+            SymbolKind::Module,
+            bound.id,
+            Origin::GoPackage {
+                path: use_statement.path.ident
+            },
+        );
     }
 
     fn resolve_expression(&mut self, expr: &Expression<'src>) {
@@ -103,6 +172,11 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                     self.resolve_expression(arg);
                 }
             },
+            Expr::ArrayExpression { values_exprs } => {
+                for expr in values_exprs {
+                    self.resolve_expression(expr);
+                }
+            }
             Expr::Binary { left, op: _, right } => {
                 self.resolve_expression(left);
                 self.resolve_expression(right);
@@ -121,9 +195,23 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
             Expr::MemoryTarget(memory_target) => {
                 self.resolve_memory_target(memory_target);
             }
+            Expr::StructInit { type_name, fields } => {
+                if let Some(sym) = self.context.lookup(self.scope, type_name.ident) {
+                    self.set_resolved(type_name.id, sym);
+                } else {
+                    self.context.report(Diagnostic::symbol_not_found(
+                        SymbolKind::Struct,
+                        type_name.ident,
+                        type_name.span,
+                    ));
+                }
+
+                for field in fields {
+                    self.resolve_expression(&field.value);
+                }
+            }
             Expr::StringLiteral(..) | Expr::IntLiteral(..)
-            | Expr::BoolLiteral(..) | Expr::FloatLiteral(..)
-            | Expr::GoImmediateSource { .. } => {}
+            | Expr::BoolLiteral(..) | Expr::FloatLiteral(..) => {}
         }
     }
 

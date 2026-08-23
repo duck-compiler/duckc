@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::ast::{AstRoot, Block, Expr, Expression, Identifier, MemoryTarget, ParameterList, Statement, Stmt, TypeExpression, expression::ExpressionList, memory_target::MemTar, type_expression::TypeAnnotation};
+use crate::ast::{AstRoot, Block, Expr, Expression, Identifier, MemoryTarget, ParameterList, Statement, Stmt, TypeExpression, expression::{ExpressionList, FieldInit}, memory_target::MemTar, type_expression::TypeAnnotation};
 
 #[derive(Debug, Clone, Copy, Eq, Hash, Deserialize, Serialize)]
 pub struct NodeId(pub u32);
@@ -52,6 +52,10 @@ impl NodeIdGenerator {
                 self.generate_in_block(body);
                 self.generate_in_type_annotation(return_type);
             },
+            Stmt::StructDefinition { name, fields } => {
+                self.generate_in_identifier(name);
+                self.generate_in_parameter_list(fields);
+            },
             Stmt::Expression { expr } => {
                 self.generate_in_expression(expr);
             },
@@ -66,7 +70,12 @@ impl NodeIdGenerator {
                 self.generate_in_memory_target(target);
                 self.generate_in_expression(assign_expression);
             }
-            Stmt::Use(_use_statement) => {}
+            Stmt::Use(use_statement) => {
+                self.generate_in_identifier(&mut use_statement.path);
+                if let Some(alias) = &mut use_statement.alias {
+                    self.generate_in_identifier(alias);
+                }
+            }
         }
     }
 
@@ -156,9 +165,24 @@ impl NodeIdGenerator {
                 self.generate_in_expression(expr);
                 self.generate_in_block(body);
             }
-            Expr::GoImmediateSource { .. }
+            Expr::ArrayExpression { values_exprs } => {
+                for expr in values_exprs {
+                    self.generate_in_expression(expr);
+                }
+            }
+            Expr::StructInit { type_name, fields } => {
+                self.generate_in_identifier(type_name);
+                for field in fields {
+                    self.generate_in_field_init(field);
+                }
+            }
             | Expr::StringLiteral(..) | Expr::BoolLiteral(..)
             | Expr::IntLiteral(..) | Expr::FloatLiteral(..) => {}
         }
+    }
+
+    fn generate_in_field_init(&mut self, field: &mut FieldInit) {
+        self.generate_in_identifier(&mut field.name);
+        self.generate_in_expression(&mut field.value);
     }
 }

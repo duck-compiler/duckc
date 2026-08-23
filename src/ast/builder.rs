@@ -2,7 +2,7 @@
 //! these builders should never be used inside of parsers for constructing AST nodes
 
 use crate::ast::{
-    AstRoot, Block, Expression, Identifier, NodeId, Parameter, ParameterList, Span, Statement, TypeExpression, expression::{Expr, ExpressionList}, memory_target::{self, MemTar}, statement::Stmt, type_expression::TypeAnnotation
+    AstRoot, Block, Expression, Identifier, NodeId, Parameter, ParameterList, Span, Statement, TypeExpression, expression::{Expr, ExpressionList, FieldInit}, memory_target::{self, MemTar}, statement::Stmt, type_expression::TypeAnnotation, use_statement::UseStatement
 };
 
 fn empty_span<'src>() -> Span<'src> {
@@ -72,12 +72,6 @@ pub fn param<'src>(name: &'src str, t: TypeExpression<'src>) -> Parameter<'src> 
     }
 }
 
-pub fn go_imm<'src>(src: &'src str) -> Statement<'src> {
-    expr_stmt(expr(Expr::GoImmediateSource {
-        source: src,
-    }))
-}
-
 pub fn var_decl<'src>(
     name: &'src str,
     type_annotation: TypeAnnotation<'src>,
@@ -105,6 +99,60 @@ pub fn string<'src>(str: &'src str) -> Expression<'src> {
         id: NodeId::DUMMY,
         variant: Box::new(Expr::StringLiteral(str)),
         span: empty_span(),
+    }
+}
+
+pub fn int<'src>(i: i32) -> Expression<'src> {
+    Expression {
+        id: NodeId::DUMMY,
+        variant: Box::new(Expr::IntLiteral(i.try_into().unwrap())),
+        span: empty_span(),
+    }
+}
+
+pub fn array<'src>(values: Vec<Expression<'src>>) -> Expression<'src> {
+    expr(Expr::ArrayExpression {
+        values_exprs: values.into_iter().map(Box::new).collect(),
+    })
+}
+
+pub fn array_index<'src>(name: &'src str, index: Expression<'src>) -> Expression<'src> {
+    expr(Expr::MemoryTarget(super::MemoryTarget {
+        variant: MemTar::ArrayAccess {
+            target: Box::new(super::MemoryTarget {
+                variant: MemTar::Name(ident(name)),
+                span: empty_span(),
+            }),
+            index_expression: Box::new(index),
+        },
+        span: empty_span(),
+    }))
+}
+
+pub fn field_access<'src>(target: memory_target::MemTar<'src>, field: &'src str) -> Expression<'src> {
+    expr(Expr::MemoryTarget(super::MemoryTarget {
+        variant: MemTar::FieldAccess {
+            target: Box::new(super::MemoryTarget {
+                variant: target,
+                span: empty_span(),
+            }),
+            field_name: ident(field),
+        },
+        span: empty_span(),
+    }))
+}
+
+pub fn name_target<'src>(name: &'src str) -> memory_target::MemTar<'src> {
+    MemTar::Name(ident(name))
+}
+
+pub fn field_target<'src>(target: memory_target::MemTar<'src>, field: &'src str) -> memory_target::MemTar<'src> {
+    MemTar::FieldAccess {
+        target: Box::new(super::MemoryTarget {
+            variant: target,
+            span: empty_span(),
+        }),
+        field_name: ident(field),
     }
 }
 
@@ -145,6 +193,70 @@ pub fn fn_def<'src>(
         },
         body: block(body),
         return_type: return_type
+    })
+}
+
+pub fn struct_def<'src>(
+    name: &'src str,
+    fields: Vec<(&'src str, TypeExpression<'src>)>,
+) -> Statement<'src> {
+    stmt(Stmt::StructDefinition {
+        name: ident(name),
+        fields: ParameterList {
+            list: fields
+                .into_iter()
+                .map(|(field_name, field_type)| param(field_name, field_type))
+                .collect(),
+            span: empty_span(),
+        },
+    })
+}
+
+pub fn struct_init<'src>(
+    type_name: &'src str,
+    fields: Vec<(&'src str, Expression<'src>)>,
+) -> Expression<'src> {
+    expr(Expr::StructInit {
+        type_name: ident(type_name),
+        fields: fields
+            .into_iter()
+            .map(|(field_name, value)| FieldInit {
+                name: ident(field_name),
+                value,
+                span: empty_span(),
+            })
+            .collect(),
+    })
+}
+
+pub fn use_stmt<'src>(path: &'src str, alias: Option<&'src str>) -> Statement<'src> {
+    stmt(Stmt::Use(UseStatement {
+        path: ident(path),
+        alias: alias.map(ident),
+        span: empty_span(),
+    }))
+}
+
+pub fn field_call<'src>(
+    module: &'src str,
+    field: &'src str,
+    args: Vec<Expression<'src>>
+) -> Expression<'src> {
+    expr(Expr::FunctionCall {
+        target: Box::new(expr(Expr::MemoryTarget(super::MemoryTarget {
+            variant: MemTar::FieldAccess {
+                target: Box::new(super::MemoryTarget {
+                    variant: MemTar::Name(ident(module)),
+                    span: empty_span(),
+                }),
+                field_name: ident(field),
+            },
+            span: empty_span(),
+        }))),
+        args: ExpressionList {
+            list: args,
+            span: empty_span(),
+        },
     })
 }
 

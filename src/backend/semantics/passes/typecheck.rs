@@ -1,7 +1,7 @@
 //! this compiler pass fills node_types and symbol types, consuming resolutions/definitions.
 //! it walks no scopes. every reference/declaration lookup goes through the tables.
 
-use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Span, Statement, expression::{Expr, ExpressionList}, memory_target::MemTar, statement::Stmt, type_expression::{TypeAnnotation, TypeExpression}}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, module::ModuleId, symbol::SymbolId, r#type::{Type, TypeId}}};
+use crate::{ast::{AstRoot, Block, Expression, Identifier, MemoryTarget, NodeId, Span, Statement, expression::{Expr, ExpressionList, FieldInit}, memory_target::MemTar, statement::Stmt, type_expression::{self, TypeAnnotation, TypeExpression}}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, go_map, module::ModuleId, symbol::{Origin, SymbolId}, r#type::{Type, TypeId}}};
 
 pub fn typecheck_module<'src>(
     module: ModuleId,
@@ -79,17 +79,36 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
     }
 
     fn declare_signature(&mut self, statement: &Statement<'src>) {
-        if let Stmt::FunctionDefinition { name, params, return_type, .. } = &statement.variant {
-            let param_types = params.list
-                .iter()
-                .map(|param| self.type_id_from_type_annotation(&param.type_))
-                .collect::<Vec<_>>();
-            let return_type_id = self.type_id_from_type_annotation(return_type);
-            let fn_type = self.context.intern(Type::Fn { params: param_types, return_type: return_type_id });
+        match &statement.variant {
+            Stmt::FunctionDefinition { name, params, return_type, .. } => {
+                let param_types = params
+                    .list
+                    .iter()
+                    .map(|param| self.type_id_from_type_annotation(&param.type_))
+                    .collect::<Vec<_>>();
 
-            if let Some(sym) = self.definition_of(name.id) {
-                self.set_symbol_type(sym, fn_type);
+                let return_type_id = self.type_id_from_type_annotation(return_type);
+
+                let fn_type = self.context.intern(Type::Fn {
+                    params: param_types,
+                    return_type: return_type_id
+                });
+
+                if let Some(symbol) = self.definition_of(name.id) {
+                    self.set_symbol_type(symbol, fn_type);
+                }
             }
+            Stmt::StructDefinition { name, fields } => {
+                let field_types = fields.list
+                    .iter()
+                    .map(|field| (field.name.ident, self.type_id_from_type_annotation(&field.type_)))
+                    .collect::<Vec<_>>();
+
+                if let Some(symbol) = self.definition_of(name.id) {
+                    self.context.struct_fields.insert(symbol, field_types);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -136,6 +155,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                 self.check_expression(expr);
             }
             Stmt::Use(_) => {}
+            Stmt::StructDefinition { .. } => {}
         }
     }
 
@@ -153,6 +173,8 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             Expr::BoolLiteral(_) => self.context.intern(Type::Bool),
             Expr::MemoryTarget(memory_target) => self.check_memory_target(memory_target),
             Expr::FunctionCall { target, args } => self.check_function_call(target, args, expr.span),
+            Expr::ArrayExpression { values_exprs } => self.check_array_expression(values_exprs, expr.span),
+            Expr::StructInit { type_name, fields } => self.check_struct_init(type_name, fields, expr.span),
             Expr::Binary { left, right, .. } => {
                 let left_type = self.check_expression(left);
                 let right_type = self.check_expression(right);
@@ -172,7 +194,6 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                 self.check_block(body);
                 self.context.intern(Type::Unit)
             }
-            Expr::GoImmediateSource { .. } => self.context.intern(Type::Unit),
         };
         self.set_node_type(expr.id, type_id);
         type_id
@@ -194,8 +215,188 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                     None => self.context.intern(Type::TypeError),
                 }
             }
+            MemTar::FieldAccess { target, field_name } => {
+                self.check_field_access(target, field_name, memory_target.span)
+            }
+            MemTar::ArrayAccess { target, index_expression } => {
+                self.check_array_access(target, index_expression, memory_target.span)
+            }
             _ => self.context.intern(Type::TypeError),
         }
+    }
+
+    fn check_array_expression(
+        &mut self,
+        values_exprs: &Vec<Box<Expression<'src>>>,
+        span: Span<'src>,
+    ) -> TypeId {
+        let Some((first, remaining)) = values_exprs.split_first() else {
+            self.context.report(Diagnostic::empty_array_literal(span));
+            return self.context.intern(Type::TypeError);
+        };
+
+        let elem_type = self.check_expression(first);
+        for value in remaining {
+            let value_type = self.check_expression(value);
+            if !self.compatible(elem_type, value_type) {
+                self.report_mismatch(elem_type, value_type, value.span);
+            }
+        }
+
+        self.context.intern(Type::Array(elem_type))
+    }
+
+    fn check_array_access(
+        &mut self,
+        target: &MemoryTarget<'src>,
+        index_expression: &Expression<'src>,
+        span: Span<'src>,
+    ) -> TypeId {
+        let target_type = self.check_memory_target(target);
+        let index_type = self.check_expression(index_expression);
+
+        let int_type = self.context.intern(Type::Int);
+
+        if !self.compatible(int_type, index_type) {
+            self.report_mismatch(int_type, index_type, index_expression.span);
+        }
+
+        match &self.context.types[target_type.0 as usize] {
+            Type::Array(inner) => *inner,
+            Type::TypeError => target_type,
+            _ => {
+                self.context.report(Diagnostic::not_indexable(span));
+                self.context.intern(Type::TypeError)
+            }
+        }
+    }
+
+    fn check_field_access(
+        &mut self,
+        target: &MemoryTarget<'src>,
+        field_name: &Identifier<'src>,
+        span: Span<'src>,
+    ) -> TypeId {
+        if let MemTar::Name(identifier) = &target.variant {
+            let go_package = self.resolution_of(identifier.id).and_then(|sym| {
+                match &self.context.symbols[sym.0 as usize].origin {
+                    Origin::GoPackage { path } => Some(*path),
+                    Origin::Duck { .. } | Origin::GoType { .. } => None,
+                }
+            });
+
+            if let Some(package) = go_package {
+                let raw_func = self.context.go_resolver.lookup(package, field_name.ident).cloned();
+
+                return match raw_func {
+                    Ok(raw_func) => {
+                        let types = self.context.go_resolver.types_of(package)
+                            .expect("package must already be loaded, lookup above just succeeded against it")
+                            .clone();
+
+                        match go_map::map_go_signature(self.context, package, &raw_func, &types) {
+                            Some(fn_type_id) => fn_type_id,
+                            None => {
+                                self.context.report(Diagnostic::unknown_package_member(
+                                    package,
+                                    field_name.ident,
+                                    "its signature uses a Go type Duck cannot express",
+                                    span,
+                                ));
+                                self.context.intern(Type::TypeError)
+                            }
+                        }
+                    }
+                    Err(reason) => {
+                        self.context.report(Diagnostic::unknown_package_member(package, field_name.ident, &reason, span));
+                        self.context.intern(Type::TypeError)
+                    }
+                };
+            }
+        }
+
+        let target_type = self.check_memory_target(target);
+        match self.context.types[target_type.0 as usize].clone() {
+            Type::Struct(struct_sym) => {
+                let field_type = self.context.struct_fields.get(&struct_sym)
+                    .and_then(|fields| fields.iter().find(|(name, _)| *name == field_name.ident))
+                    .map(|(_, type_id)| *type_id);
+
+                match field_type {
+                    Some(type_id) => type_id,
+                    None => {
+                        let struct_name = self.context.symbols[struct_sym.0 as usize].name;
+                        self.context.report(Diagnostic::unknown_struct_field(struct_name, field_name.ident, span));
+                        self.context.intern(Type::TypeError)
+                    }
+                }
+            }
+            Type::TypeError => target_type,
+            _ => {
+                self.context.report(Diagnostic::not_a_struct(span));
+                self.context.intern(Type::TypeError)
+            }
+        }
+    }
+
+    fn check_struct_init(
+        &mut self,
+        type_name: &Identifier<'src>,
+        fields: &Vec<FieldInit<'src>>,
+        span: Span<'src>,
+    ) -> TypeId {
+        let Some(struct_symbol) = self.resolution_of(type_name.id) else {
+            for field in fields {
+                self.check_expression(&field.value);
+            }
+
+            return self.context.intern(Type::TypeError);
+        };
+
+        let Some(declared_fields) = self.context.struct_fields.get(&struct_symbol).cloned() else {
+            for field in fields {
+                self.check_expression(&field.value);
+            }
+
+            self.context.report(Diagnostic::not_a_struct(span));
+            return self.context.intern(Type::TypeError);
+        };
+
+        let struct_name = self.context.symbols[struct_symbol.0 as usize].name;
+
+        let mut known = Vec::with_capacity(fields.len());
+        for field in fields {
+            let value_type = self.check_expression(&field.value);
+
+            let matching_field = declared_fields
+                .iter()
+                .find(|(name, _)| *name == field.name.ident);
+
+            match matching_field {
+                Some((_, declared_type)) => {
+                    if !self.compatible(*declared_type, value_type) {
+                        self.report_mismatch(*declared_type, value_type, field.value.span);
+                    }
+
+                    known.push(field.name.ident);
+                }
+                None => {
+                    self.context.report(Diagnostic::unknown_struct_field(struct_name, field.name.ident, field.name.span));
+                }
+            }
+        }
+
+        let missing = declared_fields
+            .iter()
+            .map(|(name, _)| *name)
+            .filter(|name| !known.contains(name))
+            .collect::<Vec<_>>();
+
+        if !missing.is_empty() {
+            self.context.report(Diagnostic::missing_struct_fields(struct_name, &missing, span));
+        }
+
+        self.context.intern(Type::Struct(struct_symbol))
     }
 
     fn check_function_call(

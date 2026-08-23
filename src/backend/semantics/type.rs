@@ -16,6 +16,5 @@ pub enum Type {
         params: Vec<TypeId>,
         return_type: TypeId,
     },
-
     TypeError,
 }

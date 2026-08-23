@@ -15,15 +15,21 @@ pub enum SymbolKind {
     Param,
     Variable,
     Struct,
+    Module,
 }
 
 #[derive(Debug, Clone)]
-pub enum Origin {
+pub enum Origin<'src> {
     Duck {
         module: ModuleId,
         declaration: NodeId,
     },
-    Builtin,
+    GoPackage {
+        path: &'src str,
+    },
+    GoType {
+        package: &'src str,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -31,7 +37,7 @@ pub struct SymbolData<'src> {
     pub name: &'src str,
     pub kind: SymbolKind,
     pub type_: Option<TypeId>,
-    pub origin: Origin,
+    pub origin: Origin<'src>,
 }
 
 pub struct Scope {

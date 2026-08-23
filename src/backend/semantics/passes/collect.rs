@@ -12,19 +12,36 @@ pub fn collect_module<'src>(
     );
 
     for stmt in &ast.statements {
-        if let Stmt::FunctionDefinition { name, .. } = &stmt.variant {
-            let sym = context.add_symbol(SymbolData {
-                name: name.ident,
-                kind: SymbolKind::Function,
-                type_: None,
-                origin: Origin::Duck {
-                    module,
-                    declaration: name.id,
-                },
-            });
+        match &stmt.variant {
+            Stmt::FunctionDefinition { name, .. } => {
+                let symbol = context.add_symbol(SymbolData {
+                    name: name.ident,
+                    kind: SymbolKind::Function,
+                    type_: None,
+                    origin: Origin::Duck {
+                        module,
+                        declaration: name.id,
+                    },
+                });
 
-            context.define(root, name.ident, sym);
-            context.modules[module.0 as usize].definitions[name.id.0 as usize] = Some(sym);
+                context.define(root, name.ident, symbol);
+                context.modules[module.0 as usize].definitions[name.id.0 as usize] = Some(symbol);
+            }
+            Stmt::StructDefinition { name, .. } => {
+                let symbol = context.add_symbol(SymbolData {
+                    name: name.ident,
+                    kind: SymbolKind::Struct,
+                    type_: None,
+                    origin: Origin::Duck {
+                        module,
+                        declaration: name.id,
+                    },
+                });
+
+                context.define(root, name.ident, symbol);
+                context.modules[module.0 as usize].definitions[name.id.0 as usize] = Some(symbol);
+            }
+            _ => {}
         }
     }
 

@@ -20,6 +20,23 @@ pub enum GoExpression<'src> {
         callee: Box<GoExpression<'src>>,
         args: Vec<GoExpression<'src>>,
     },
+    // "field access"
+    Selector {
+        base: Box<GoExpression<'src>>,
+        field: &'src str,
+    },
+    Array {
+        elem_type: GoType<'src>,
+        values: Vec<GoExpression<'src>>,
+    },
+    ArrayIndex {
+        base: Box<GoExpression<'src>>,
+        index: Box<GoExpression<'src>>,
+    },
+    StructInit {
+        type_name: &'src str,
+        fields: Vec<(&'src str, GoExpression<'src>)>,
+    },
     Immediate(&'src str)
 }
 
@@ -69,10 +86,14 @@ pub enum GoStatement<'src> {
         init_expression: Option<GoExpression<'src>>,
     },
     Assign {
-        target: &'src str,
+        target: GoExpression<'src>,
         expr: GoExpression<'src>,
     },
     Expr {
         expr: GoExpression<'src>,
+    },
+    TypeDecl {
+        name: &'src str,
+        type_: GoType<'src>,
     },
 }
