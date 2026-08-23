@@ -139,4 +139,22 @@ impl<'src> Diagnostic<'src> {
             kind: DiagnosticKind::Error,
         }
     }
+
+    pub fn not_yet_supported(feature: &str, location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!("{} is not supported yet", feature).into_boxed_str(),
+            location,
+            error_code: "T0010".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn not_allowed_at_top_level(location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: "only `use`, `fn`, and `struct` declarations are allowed at the top level".to_string().into_boxed_str(),
+            location,
+            error_code: "T0011".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
 }

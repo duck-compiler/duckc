@@ -1,11 +1,28 @@
+use std::cell::Cell;
+
 use crate::{ast::{Block, Expression, MemoryTarget, NodeId, ParameterList, Statement, TypeExpression, expression::{Expr, ExpressionList}, memory_target::MemTar, statement::Stmt, type_expression::TypeAnnotation}, backend::{gost::go_tree::{GoExpression, GoStatement, GoType, StructField}, semantics::{context::SemanticsContext, module::ModuleId, r#type::{Type, TypeId}}}};
+
+fn leak<'src>(s: String) -> &'src str {
+    Box::leak(s.into_boxed_str())
+}
 
 pub struct Translator<'a, 'src> {
     pub context: &'a SemanticsContext<'src>,
-    pub module: ModuleId
+    pub module: ModuleId,
+    temp_counter: Cell<u32>,
 }
 
 impl<'a, 'src> Translator<'a, 'src> {
+    pub fn new(context: &'a SemanticsContext<'src>, module: ModuleId) -> Self {
+        Self { context, module, temp_counter: Cell::new(0) }
+    }
+
+    fn fresh_temp_name(&self) -> &'src str {
+        let id = self.temp_counter.get();
+        self.temp_counter.set(id + 1);
+        leak(format!("__duck_if_{id}"))
+    }
+
     fn translate_name_reference(&self, node: NodeId, fallback: &'src str) -> GoExpression<'src> {
         let resolutions = &self.context.modules[self.module.0 as usize].resolutions;
         match resolutions[node.0 as usize] {
@@ -14,32 +31,71 @@ impl<'a, 'src> Translator<'a, 'src> {
         }
     }
 
-    pub fn translate_statement(&self, statement: &Statement<'src>) -> GoStatement<'src> {
+    pub fn translate_statement(&self, statement: &Statement<'src>) -> Vec<GoStatement<'src>> {
         match &statement.variant {
             Stmt::FunctionDefinition { name, params, return_type, body } => {
-                GoStatement::FuncDef {
+                vec![GoStatement::FuncDef {
                     name: name.ident,
                     params: self.translate_params(params),
                     return_type: self.translate_type_annotation(return_type),
-                    body: self.translate_block(body)
-                }
+                    body: self.translate_block(body),
+                }]
             }
             Stmt::Expression { expr } => {
-                GoStatement::Expr { expr: self.translate_expression(expr) }
-            }
-            Stmt::VariableDeclaration { name, type_, init_expression } => {
-                GoStatement::VarDecl {
-                    name: name.ident,
-                    type_: self.translate_type_annotation(type_),
-                    init_expression: if init_expression.is_some() {
-                        Some(self.translate_expression(init_expression.as_ref().expect("should never be none")))
-                    } else {
-                        None
-                    },
+                match &*expr.variant {
+                    Expr::If { expr: condition, body, else_branch } => {
+                        let (mut prelude, condition_expr) = self.translate_expression(condition);
+                        prelude.push(GoStatement::If {
+                            condition: condition_expr,
+                            body: self.translate_block(body),
+                            else_body: else_branch.as_ref().map(|else_body| self.translate_block(else_body)),
+                        });
+                        prelude
+                    }
+                    Expr::While { expr: condition, body } => {
+                        let (mut prelude, condition_expr) = self.translate_expression(condition);
+                        prelude.push(GoStatement::While {
+                            condition: condition_expr,
+                            body: self.translate_block(body),
+                        });
+                        prelude
+                    }
+                    _ => {
+                        let (mut prelude, translated) = self.translate_expression(expr);
+                        prelude.push(GoStatement::Expr { expr: translated });
+                        prelude
+                    }
                 }
             }
+            Stmt::VariableAssignment { target, assign_expression } => {
+                let (mut prelude, target_expr) = self.translate_memory_target(target);
+                let (value_prelude, value_expr) = self.translate_expression(assign_expression);
+                prelude.extend(value_prelude);
+                prelude.push(GoStatement::Assign { target: target_expr, expr: value_expr });
+                prelude
+            }
+            Stmt::VariableDeclaration { name, type_, init_expression } => {
+                let mut prelude = Vec::new();
+
+                let init = match init_expression {
+                    Some(init_expr) => {
+                        let (init_prelude, translated) = self.translate_expression(init_expr);
+                        prelude.extend(init_prelude);
+                        Some(translated)
+                    }
+                    None => None,
+                };
+
+                prelude.push(GoStatement::VarDecl {
+                    name: name.ident,
+                    type_: self.translate_type_annotation(type_),
+                    init_expression: init,
+                });
+
+                prelude
+            }
             Stmt::StructDefinition { name, fields } => {
-                GoStatement::TypeDecl {
+                vec![GoStatement::TypeDecl {
                     name: name.ident,
                     type_: GoType::Struct {
                         fields: fields
@@ -55,7 +111,7 @@ impl<'a, 'src> Translator<'a, 'src> {
                             })
                             .collect::<Vec<_>>()
                     }
-                }
+                }]
             }
             case => {
                 unimplemented!("translate_statement: {:?}", case)
@@ -91,6 +147,7 @@ impl<'a, 'src> Translator<'a, 'src> {
             Type::String => GoType::String,
             Type::Array(inner) => GoType::Array(Box::new(self.go_type_from_type_id(*inner))),
             Type::Struct(sym) => GoType::TypeName(self.context.symbols[sym.0 as usize].name),
+            Type::Unit => GoType::Struct { fields: vec![] },
             case => unimplemented!("go_type_from_type_id: {:?}", case),
         }
     }
@@ -109,20 +166,75 @@ impl<'a, 'src> Translator<'a, 'src> {
         body
             .statements
             .iter()
-            .map(|stmt| self.translate_statement(&stmt))
+            .flat_map(|stmt| self.translate_statement(&stmt))
             .collect()
     }
+    fn translate_block_as_value(&self, block: &Block<'src>, target_name: &'src str) -> Vec<GoStatement<'src>> {
+        let mut go_statements = Vec::new();
 
-    fn translate_expression(&self, expr: &Expression<'src>) -> GoExpression<'src> {
+        for (index, statement) in block.statements.iter().enumerate() {
+            let is_last = index == block.statements.len() - 1;
+
+            if is_last {
+                if let Stmt::Expression { expr } = &statement.variant {
+                    let (prelude, value) = self.translate_expression(expr);
+
+                    go_statements.extend(prelude);
+                    go_statements.push(GoStatement::Assign {
+                        target: GoExpression::Immediate(target_name),
+                        expr: value,
+                    });
+
+                    continue;
+                }
+            }
+
+            go_statements.extend(self.translate_statement(statement));
+        }
+
+        go_statements
+    }
+
+    fn translate_expression(&self, expr: &Expression<'src>) -> (Vec<GoStatement<'src>>, GoExpression<'src>) {
         match &*expr.variant {
             Expr::StringLiteral(str) => {
-                GoExpression::String(str)
+                (vec![], GoExpression::String(str))
+            },
+            Expr::IntLiteral(value) => {
+                (vec![], GoExpression::Int(*value as i64))
+            },
+            Expr::FloatLiteral(value) => {
+                (vec![], GoExpression::Float64(*value))
+            },
+            Expr::BoolLiteral(value) => {
+                (vec![], GoExpression::Bool(*value))
+            },
+            Expr::Binary { left, op, right } => {
+                let (mut prelude, left_expr) = self.translate_expression(left);
+                let (right_prelude, right_expr) = self.translate_expression(right);
+
+                prelude.extend(right_prelude);
+
+                (prelude, GoExpression::BinaryOp {
+                    left: Box::new(left_expr),
+                    op: *op,
+                    right: Box::new(right_expr),
+                })
+            },
+            Expr::Unary { op, expr: inner } => {
+                let (prelude, inner_expr) = self.translate_expression(inner);
+                (prelude, GoExpression::UnaryOp { op: *op, expr: Box::new(inner_expr) })
             },
             Expr::FunctionCall { target, args } => {
-                GoExpression::FuncCall {
-                    callee: Box::new(self.translate_expression(target)),
-                    args: self.translate_expression_list(args)
-                }
+                let (mut prelude, callee_expr) = self.translate_expression(target);
+                let (args_prelude, arg_exprs) = self.translate_expression_list(args);
+
+                prelude.extend(args_prelude);
+
+                (prelude, GoExpression::FuncCall {
+                    callee: Box::new(callee_expr),
+                    args: arg_exprs,
+                })
             },
             Expr::MemoryTarget(memory_target) => {
                 self.translate_memory_target(memory_target)
@@ -133,47 +245,93 @@ impl<'a, 'src> Translator<'a, 'src> {
                     case => unreachable!("array expression should have array type, found {:?}", case),
                 };
 
-                GoExpression::Array {
-                    elem_type: self.go_type_from_type_id(elem_type_id),
-                    values: values_exprs.iter().map(|value| self.translate_expression(value)).collect(),
+                let mut prelude = Vec::new();
+
+                let mut values = Vec::new();
+                for value in values_exprs {
+                    let (value_prelude, value_expr) = self.translate_expression(value);
+                    prelude.extend(value_prelude);
+                    values.push(value_expr);
                 }
+
+                (prelude, GoExpression::Array {
+                    elem_type: self.go_type_from_type_id(elem_type_id),
+                    values,
+                })
             },
             Expr::StructInit { type_name, fields } => {
-                GoExpression::StructInit {
-                    type_name: type_name.ident,
-                    fields: fields.iter().map(|field| (field.name.ident, self.translate_expression(&field.value))).collect(),
+                let mut prelude = Vec::new();
+
+                let mut translated_fields = Vec::new();
+                for field in fields {
+                    let (field_prelude, field_expr) = self.translate_expression(&field.value);
+                    prelude.extend(field_prelude);
+                    translated_fields.push((field.name.ident, field_expr));
                 }
+
+                (prelude, GoExpression::StructInit {
+                    type_name: type_name.ident,
+                    fields: translated_fields,
+                })
+            },
+            Expr::If { expr: condition, body, else_branch } => {
+                let temp_name = self.fresh_temp_name();
+                let go_type = self.go_type_from_type_id(self.node_type(expr.id));
+
+                let (mut prelude, condition_expr) = self.translate_expression(condition);
+
+                let then_statements = self.translate_block_as_value(body, temp_name);
+                let else_statements = else_branch.as_ref()
+                    .map(|else_body| self.translate_block_as_value(else_body, temp_name));
+
+                prelude.push(GoStatement::VarDecl {
+                    name: temp_name,
+                    type_: Some(go_type),
+                    init_expression: None
+                });
+
+                prelude.push(GoStatement::If {
+                    condition: condition_expr,
+                    body: then_statements,
+                    else_body: else_statements,
+                });
+
+                (prelude, GoExpression::Immediate(temp_name))
             },
             case => unimplemented!("translate_expression: {:?}", case)
         }
     }
 
-    fn translate_memory_target(&self, memory_target: &MemoryTarget<'src>) -> GoExpression<'src> {
+    fn translate_memory_target(&self, memory_target: &MemoryTarget<'src>) -> (Vec<GoStatement<'src>>, GoExpression<'src>) {
         match &memory_target.variant {
             MemTar::Name(identifier) => {
-                self.translate_name_reference(identifier.id, identifier.ident)
+                (vec![], self.translate_name_reference(identifier.id, identifier.ident))
             }
             MemTar::FieldAccess { target, field_name } => {
-                GoExpression::Selector {
-                    base: Box::new(self.translate_memory_target(target)),
-                    field: field_name.ident,
-                }
+                let (prelude, base) = self.translate_memory_target(target);
+                (prelude, GoExpression::Selector { base: Box::new(base), field: field_name.ident })
             }
             MemTar::ArrayAccess { target, index_expression } => {
-                GoExpression::ArrayIndex {
-                    base: Box::new(self.translate_memory_target(target)),
-                    index: Box::new(self.translate_expression(index_expression)),
-                }
+                let (mut prelude, base) = self.translate_memory_target(target);
+                let (index_prelude, index) = self.translate_expression(index_expression);
+                prelude.extend(index_prelude);
+
+                (prelude, GoExpression::ArrayIndex { base: Box::new(base), index: Box::new(index) })
             }
             case => unimplemented!("translate_memory_target: {:?}", case)
         }
     }
 
-    fn translate_expression_list(&self, expr_list: &ExpressionList<'src>) -> Vec<GoExpression<'src>> {
-        expr_list
-            .list
-            .iter()
-            .map(|expr| self.translate_expression(expr))
-            .collect()
+    fn translate_expression_list(&self, expr_list: &ExpressionList<'src>) -> (Vec<GoStatement<'src>>, Vec<GoExpression<'src>>) {
+        let mut prelude = Vec::new();
+        let mut values = Vec::new();
+
+        for expr in &expr_list.list {
+            let (expr_prelude, value) = self.translate_expression(expr);
+            prelude.extend(expr_prelude);
+            values.push(value);
+        }
+
+        (prelude, values)
     }
 }

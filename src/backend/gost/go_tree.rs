@@ -1,3 +1,5 @@
+use crate::ast::expression::{BinaryOperator, UnaryOperator};
+
 #[derive(Debug)]
 pub struct GostRoot<'src> {
     pub body: Vec<GoStatement<'src>>,
@@ -6,7 +8,8 @@ pub struct GostRoot<'src> {
 #[derive(Debug)]
 pub enum GoExpression<'src> {
     String(&'src str),
-    Int(&'src i64),
+    Bool(bool),
+    Int(i64),
     Int8(&'src i8),
     Int32(&'src i32),
     Int64(&'src i64),
@@ -15,7 +18,16 @@ pub enum GoExpression<'src> {
     Uint32(&'src u32),
     Uint64(&'src u64),
     Float32(&'src f32),
-    Float64(&'src f64),
+    Float64(f64),
+    BinaryOp {
+        left: Box<GoExpression<'src>>,
+        op: BinaryOperator,
+        right: Box<GoExpression<'src>>,
+    },
+    UnaryOp {
+        op: UnaryOperator,
+        expr: Box<GoExpression<'src>>,
+    },
     FuncCall {
         callee: Box<GoExpression<'src>>,
         args: Vec<GoExpression<'src>>,
@@ -95,5 +107,14 @@ pub enum GoStatement<'src> {
     TypeDecl {
         name: &'src str,
         type_: GoType<'src>,
+    },
+    If {
+        condition: GoExpression<'src>,
+        body: Vec<GoStatement<'src>>,
+        else_body: Option<Vec<GoStatement<'src>>>,
+    },
+    While {
+        condition: GoExpression<'src>,
+        body: Vec<GoStatement<'src>>,
     },
 }

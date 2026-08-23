@@ -165,6 +165,26 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         }
     }
 
+    // returns value typeid of last item in block
+    fn check_block_value(&mut self, block: &Block<'src>) -> TypeId {
+        let mut value = self.context.intern(Type::Unit);
+
+        for (index, statement) in block.statements.iter().enumerate() {
+            let is_last = index == block.statements.len() - 1;
+
+            if is_last {
+                if let Stmt::Expression { expr } = &statement.variant {
+                    value = self.check_expression(expr);
+                    continue;
+                }
+            }
+
+            self.check_statement(statement);
+        }
+
+        value
+    }
+
     fn check_expression(&mut self, expr: &Expression<'src>) -> TypeId {
         let type_id = match &*expr.variant {
             Expr::StringLiteral(_) => self.context.intern(Type::String),
@@ -184,10 +204,20 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                 left_type
             }
             Expr::Unary { expr: inner, .. } => self.check_expression(inner),
-            Expr::If { expr: condition, body } => {
+            Expr::If { expr: condition, body, else_branch } => {
                 self.check_condition(condition);
-                self.check_block(body);
-                self.context.intern(Type::Unit)
+                let then_type = self.check_block_value(body);
+
+                match else_branch {
+                    Some(else_body) => {
+                        let else_type = self.check_block_value(else_body);
+                        if !self.compatible(then_type, else_type) {
+                            self.report_mismatch(then_type, else_type, expr.span);
+                        }
+                        then_type
+                    }
+                    None => self.context.intern(Type::Unit),
+                }
             }
             Expr::While { expr: condition, body } => {
                 self.check_condition(condition);
@@ -221,7 +251,10 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             MemTar::ArrayAccess { target, index_expression } => {
                 self.check_array_access(target, index_expression, memory_target.span)
             }
-            _ => self.context.intern(Type::TypeError),
+            MemTar::Dereference(_) => {
+                self.context.report(Diagnostic::not_yet_supported("dereferencing", memory_target.span));
+                self.context.intern(Type::TypeError)
+            }
         }
     }
 

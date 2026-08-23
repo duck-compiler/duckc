@@ -2,7 +2,7 @@
 //! these builders should never be used inside of parsers for constructing AST nodes
 
 use crate::ast::{
-    AstRoot, Block, Expression, Identifier, NodeId, Parameter, ParameterList, Span, Statement, TypeExpression, expression::{Expr, ExpressionList, FieldInit}, memory_target::{self, MemTar}, statement::Stmt, type_expression::TypeAnnotation, use_statement::UseStatement
+    AstRoot, Block, Expression, Identifier, NodeId, Parameter, ParameterList, Span, Statement, TypeExpression, expression::{BinaryOperator, Expr, ExpressionList, FieldInit, UnaryOperator}, memory_target::{self, MemTar}, statement::Stmt, type_expression::TypeAnnotation, use_statement::UseStatement
 };
 
 fn empty_span<'src>() -> Span<'src> {
@@ -110,6 +110,52 @@ pub fn int<'src>(i: i32) -> Expression<'src> {
     }
 }
 
+pub fn bool_lit<'src>(b: bool) -> Expression<'src> {
+    expr(Expr::BoolLiteral(b))
+}
+
+pub fn binary<'src>(left: Expression<'src>, op: BinaryOperator, right: Expression<'src>) -> Expression<'src> {
+    expr(Expr::Binary {
+        left: Box::new(left),
+        op,
+        right: Box::new(right),
+    })
+}
+
+pub fn unary<'src>(op: UnaryOperator, value: Expression<'src>) -> Expression<'src> {
+    expr(Expr::Unary {
+        op,
+        expr: Box::new(value),
+    })
+}
+
+pub fn if_expr<'src>(condition: Expression<'src>, body: Vec<Statement<'src>>) -> Expression<'src> {
+    expr(Expr::If {
+        expr: Box::new(condition),
+        body: block(body),
+        else_branch: None,
+    })
+}
+
+pub fn if_else_expr<'src>(
+    condition: Expression<'src>,
+    then_body: Vec<Statement<'src>>,
+    else_body: Vec<Statement<'src>>,
+) -> Expression<'src> {
+    expr(Expr::If {
+        expr: Box::new(condition),
+        body: block(then_body),
+        else_branch: Some(block(else_body)),
+    })
+}
+
+pub fn while_expr<'src>(condition: Expression<'src>, body: Vec<Statement<'src>>) -> Expression<'src> {
+    expr(Expr::While {
+        expr: Box::new(condition),
+        body: block(body),
+    })
+}
+
 pub fn array<'src>(values: Vec<Expression<'src>>) -> Expression<'src> {
     expr(Expr::ArrayExpression {
         values_exprs: values.into_iter().map(Box::new).collect(),
@@ -144,6 +190,13 @@ pub fn field_access<'src>(target: memory_target::MemTar<'src>, field: &'src str)
 
 pub fn name_target<'src>(name: &'src str) -> memory_target::MemTar<'src> {
     MemTar::Name(ident(name))
+}
+
+pub fn dereference<'src>(value: Expression<'src>) -> Expression<'src> {
+    expr(Expr::MemoryTarget(super::MemoryTarget {
+        variant: MemTar::Dereference(Box::new(value)),
+        span: empty_span(),
+    }))
 }
 
 pub fn field_target<'src>(target: memory_target::MemTar<'src>, field: &'src str) -> memory_target::MemTar<'src> {

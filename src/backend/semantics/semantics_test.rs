@@ -1,5 +1,5 @@
 use super::{analyze_module, context::SemanticsContext, r#type::Type, symbol::SymbolKind};
-use crate::ast::{AstRoot, Statement, TypeExpression, builder::{array, array_index, assign, expr_stmt, field_access, field_call, field_target, fn_call, fn_def, ident, int, name_target, no_type, program, string, struct_def, struct_init, type_, use_stmt, var_decl}};
+use crate::ast::{AstRoot, Statement, TypeExpression, builder::{array, array_index, assign, bool_lit, dereference, expr_stmt, field_access, field_call, field_target, fn_call, fn_def, ident, if_else_expr, int, mem_name, name_target, no_type, program, string, struct_def, struct_init, type_, use_stmt, var_decl}};
 
 fn analyze(program: AstRoot<'static>) -> SemanticsContext<'static> {
     let mut context = SemanticsContext::new();
@@ -293,4 +293,60 @@ fn go_stdlib_struct_unexported_field_is_reported_as_unknown() {
     ]));
 
     assert!(has_error_code(&context, "T0008"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn dereference_reports_t0010_instead_of_failing_silently() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("x", type_(TypeExpression::Int), Some(int(1))),
+            var_decl("y", no_type(), Some(dereference(mem_name("x")))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0010"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn if_else_used_as_a_value_resolves_to_the_branch_type() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
+            var_decl("x", no_type(), Some(if_else_expr(
+                mem_name("flag"),
+                vec![expr_stmt(int(1))],
+                vec![expr_stmt(int(2))],
+            ))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let x = context.symbols.iter().find(|s| s.name == "x").expect("x symbol");
+    assert_eq!(context.types[x.type_.expect("x should have a type").0 as usize], Type::Int);
+}
+
+#[test]
+fn if_with_mismatched_branch_types_reports_t0001() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
+            var_decl("x", no_type(), Some(if_else_expr(
+                mem_name("flag"),
+                vec![expr_stmt(int(1))],
+                vec![expr_stmt(string("two"))],
+            ))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0001"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn top_level_expression_statement_reports_t0011() {
+    let context = analyze(program(vec![
+        expr_stmt(int(1)),
+    ]));
+
+    assert!(has_error_code(&context, "T0011"), "diagnostics: {:?}", context.diagnostics);
 }

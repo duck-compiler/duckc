@@ -161,9 +161,12 @@ impl NodeIdGenerator {
                 self.generate_in_expression(target);
                 self.generate_in_expression_list(args);
             }
-            Expr::If { expr, body } => {
+            Expr::If { expr, body, else_branch } => {
                 self.generate_in_expression(expr);
                 self.generate_in_block(body);
+                if let Some(else_branch) = else_branch {
+                    self.generate_in_block(else_branch);
+                }
             }
             Expr::ArrayExpression { values_exprs } => {
                 for expr in values_exprs {

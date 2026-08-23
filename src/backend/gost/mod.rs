@@ -12,7 +12,7 @@ pub use emit::emit_gost;
 mod gost_test;
 
 pub fn translate<'src>(context: &SemanticsContext<'src>, module: ModuleId) -> GostRoot<'src> {
-    let translator = translate::Translator { context, module };
+    let translator = translate::Translator::new(context, module);
 
     let imports = collect_go_imports(context, module)
         .into_iter()
@@ -23,7 +23,7 @@ pub fn translate<'src>(context: &SemanticsContext<'src>, module: ModuleId) -> Go
         .statements
         .iter()
         .filter(|stmt| !matches!(stmt.variant, Stmt::Use(_)))
-        .map(|stmt| translator.translate_statement(stmt));
+        .flat_map(|stmt| translator.translate_statement(stmt));
 
     GostRoot {
         body: imports.chain(statements).collect::<Vec<_>>()

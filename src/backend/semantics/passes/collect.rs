@@ -1,4 +1,4 @@
-use crate::{ast::{AstRoot, Stmt}, backend::semantics::{context::SemanticsContext, module::ModuleId, symbol::{Origin, SymbolData, SymbolKind}}};
+use crate::{ast::{AstRoot, Stmt}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, module::ModuleId, symbol::{Origin, SymbolData, SymbolKind}}};
 
 pub fn collect_module<'src>(
     module: ModuleId,
@@ -41,7 +41,10 @@ pub fn collect_module<'src>(
                 context.define(root, name.ident, symbol);
                 context.modules[module.0 as usize].definitions[name.id.0 as usize] = Some(symbol);
             }
-            _ => {}
+            Stmt::Use(_) => {}
+            Stmt::VariableDeclaration { .. } | Stmt::VariableAssignment { .. } | Stmt::Expression { .. } => {
+                context.report(Diagnostic::not_allowed_at_top_level(stmt.span));
+            }
         }
     }
 

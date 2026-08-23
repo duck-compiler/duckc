@@ -1,6 +1,7 @@
 use crate::ast::{Block, Identifier, MemoryTarget, NodeId, Span, TypeExpression, memory_target::MemTar};
 use duckc_macros::ast_derive;
 
+#[derive(Clone, Copy)]
 #[ast_derive]
 pub enum BinaryOperator {
     Add,
@@ -9,6 +10,7 @@ pub enum BinaryOperator {
     Div,
 }
 
+#[derive(Clone, Copy)]
 #[ast_derive]
 pub enum UnaryOperator {
     /// !
@@ -44,6 +46,7 @@ pub enum Expr<'src> {
     If {
         expr: Box<Expression<'src>>,
         body: Block<'src>,
+        else_branch: Option<Block<'src>>,
     },
     While {
         expr: Box<Expression<'src>>,

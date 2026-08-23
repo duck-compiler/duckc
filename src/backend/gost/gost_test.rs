@@ -2,7 +2,8 @@ use std::io::Write;
 use std::process::Command;
 
 use crate::ast::TypeExpression;
-use crate::ast::builder::{array, array_index, expr_stmt, field_access, field_call, fn_def, mem_name, name_target, no_type, program, string, struct_def, struct_init, type_, use_stmt, var_decl};
+use crate::ast::expression::{BinaryOperator, UnaryOperator};
+use crate::ast::builder::{array, array_index, assign, binary, bool_lit, expr_stmt, field_access, field_call, fn_def, if_else_expr, if_expr, int, mem_name, name_target, no_type, program, string, struct_def, struct_init, type_, unary, use_stmt, var_decl, while_expr};
 use crate::backend::semantics::{analyze_module, context::SemanticsContext};
 use crate::backend::gost::{emit_gost, translate};
 
@@ -177,4 +178,150 @@ fn go_stdlib_struct_return_type_synthesizes_a_duck_struct_and_translates_to_vali
         String::from_utf8_lossy(&output.stderr),
     );
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ok");
+}
+
+#[test]
+fn control_flow_arithmetic_and_assignment_translate_to_valid_go() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
+                assign(name_target("flag"), bool_lit(false)),
+                expr_stmt(if_expr(mem_name("flag"), vec![
+                    expr_stmt(field_call("fmt", "Println", vec![string("if-branch")])),
+                ])),
+                var_decl("running", type_(TypeExpression::Bool), Some(bool_lit(true))),
+                expr_stmt(while_expr(mem_name("running"), vec![
+                    assign(name_target("running"), bool_lit(false)),
+                    expr_stmt(field_call("fmt", "Println", vec![string("loop-body")])),
+                ])),
+                var_decl("_", no_type(), Some(binary(int(2), BinaryOperator::Add, binary(int(3), BinaryOperator::Mul, int(4))))),
+                var_decl("_", no_type(), Some(unary(UnaryOperator::Bang, mem_name("flag")))),
+                expr_stmt(field_call("fmt", "Println", vec![string("done")])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let gost_root = translate(&context, module);
+    let go_source = emit_gost(gost_root);
+
+    assert!(go_source.contains("if flag"), "generated source: {go_source}");
+    assert!(go_source.contains("for running"), "generated source: {go_source}");
+    assert!(go_source.contains("flag = false"), "generated source: {go_source}");
+    assert!(go_source.contains("(2 + (3 * 4))"), "generated source: {go_source}");
+    assert!(go_source.contains("(!flag)"), "generated source: {go_source}");
+
+    let Ok(go_version) = Command::new("go").arg("version").output() else {
+        eprintln!("skipping go build verification: `go` not found on PATH");
+        return;
+    };
+
+    assert!(go_version.status.success());
+
+    let dir = std::env::temp_dir().join("duckc-gost-control-flow-test");
+    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
+
+    let file_path = dir.join("main.go");
+
+    let mut file = std::fs::File::create(&file_path).expect("failed to create temp go file");
+    file.write_all(go_source.as_bytes()).expect("failed to write temp go file");
+    drop(file);
+
+    let output = Command::new("go")
+        .arg("run")
+        .arg(&file_path)
+        .output()
+        .expect("failed to run `go run`");
+
+    assert!(
+        output.status.success(),
+        "go run failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "loop-body\ndone");
+}
+
+#[test]
+fn if_else_used_as_a_value_translates_and_runs_correctly() {
+    // `if`/`else` used as a value-producing expression (assigned into a
+    // variable) rather than as a bare statement. Go has no if-expression, so
+    // this must hoist a temporary, assign into it from both branches, and
+    // reference the temporary as the expression's value - this is the actual
+    // behavior under test, verified by running the real branch outcome
+    // through `go run` for both the true and false case.
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
+                var_decl("label_true", no_type(), Some(if_else_expr(
+                    mem_name("flag"),
+                    vec![expr_stmt(string("yes"))],
+                    vec![expr_stmt(string("no"))],
+                ))),
+                assign(name_target("flag"), bool_lit(false)),
+                var_decl("label_false", no_type(), Some(if_else_expr(
+                    mem_name("flag"),
+                    vec![expr_stmt(string("yes"))],
+                    vec![expr_stmt(string("no"))],
+                ))),
+                expr_stmt(field_call("fmt", "Println", vec![mem_name("label_true")])),
+                expr_stmt(field_call("fmt", "Println", vec![mem_name("label_false")])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let gost_root = translate(&context, module);
+    let go_source = emit_gost(gost_root);
+
+    assert!(go_source.contains("var __duck_if_0 string"), "generated source: {go_source}");
+    assert!(go_source.contains("__duck_if_0 = \"yes\""), "generated source: {go_source}");
+    assert!(go_source.contains("} else {"), "generated source: {go_source}");
+    assert!(go_source.contains("var label_true") && go_source.contains("= __duck_if_0"), "generated source: {go_source}");
+
+    let Ok(go_version) = Command::new("go").arg("version").output() else {
+        eprintln!("skipping go build verification: `go` not found on PATH");
+        return;
+    };
+
+    assert!(go_version.status.success());
+
+    let dir = std::env::temp_dir().join("duckc-gost-if-value-test");
+    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
+
+    let file_path = dir.join("main.go");
+
+    let mut file = std::fs::File::create(&file_path).expect("failed to create temp go file");
+    file.write_all(go_source.as_bytes()).expect("failed to write temp go file");
+    drop(file);
+
+    let output = Command::new("go")
+        .arg("run")
+        .arg(&file_path)
+        .output()
+        .expect("failed to run `go run`");
+
+    assert!(
+        output.status.success(),
+        "go run failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "yes\nno");
 }

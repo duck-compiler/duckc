@@ -188,9 +188,13 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                 self.resolve_expression(expr);
                 self.resolve_block(body);
             }
-            Expr::If { expr, body } => {
+            Expr::If { expr, body, else_branch } => {
                 self.resolve_expression(expr);
                 self.resolve_block(body);
+
+                if let Some(else_branch) = else_branch {
+                    self.resolve_block(else_branch);
+                }
             }
             Expr::MemoryTarget(memory_target) => {
                 self.resolve_memory_target(memory_target);

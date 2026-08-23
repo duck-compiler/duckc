@@ -1,3 +1,4 @@
+use crate::ast::expression::{BinaryOperator, UnaryOperator};
 use crate::backend::gost::go_tree::{GoExpression, GoStatement, GoType, GostRoot};
 
 pub fn emit_gost<'src>(root: GostRoot<'src>) -> String {
@@ -116,6 +117,33 @@ fn emit_gost_statement<'src>(statement: &GoStatement<'src>) -> String {
         GoStatement::TypeDecl { name, type_ } => {
             format!("type {name} {}", emit_type(type_))
         },
+        GoStatement::If { condition, body, else_body } => {
+            format!(
+                "if {} {}{}",
+                emit_expr(condition),
+                emit_block(body),
+                else_body.as_ref().map(|else_body| format!(" else {}", emit_block(else_body))).unwrap_or_default(),
+            )
+        },
+        GoStatement::While { condition, body } => {
+            format!("for {} {}", emit_expr(condition), emit_block(body))
+        },
+    }
+}
+
+fn emit_binary_operator(op: &BinaryOperator) -> &'static str {
+    match op {
+        BinaryOperator::Add => "+",
+        BinaryOperator::Sub => "-",
+        BinaryOperator::Mul => "*",
+        BinaryOperator::Div => "/",
+    }
+}
+
+fn emit_unary_operator(op: &UnaryOperator) -> &'static str {
+    match op {
+        UnaryOperator::Bang => "!",
+        UnaryOperator::Neg => "-",
     }
 }
 
@@ -143,6 +171,13 @@ fn emit_expr<'src>(expr: &GoExpression) -> String {
                     .collect::<Vec<_>>()
                     .join(", ")
             )
+        },
+        GoExpression::Bool(b) => format!("{b}"),
+        GoExpression::BinaryOp { left, op, right } => {
+            format!("({} {} {})", emit_expr(left), emit_binary_operator(op), emit_expr(right))
+        },
+        GoExpression::UnaryOp { op, expr } => {
+            format!("({}{})", emit_unary_operator(op), emit_expr(expr))
         },
         GoExpression::Int(i) => format!("{i}"),
         GoExpression::Int8(i) => format!("int8({i})"),
