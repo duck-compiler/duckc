@@ -16,7 +16,8 @@ pub fn resolve_module<'src>(
     let mut scope_resolver = ScopeResolver {
         context,
         module,
-        scope: root_scope
+        scope: root_scope,
+        in_function: false,
     };
 
     for statement in &ast.statements {
@@ -29,7 +30,8 @@ pub fn resolve_module<'src>(
 struct ScopeResolver<'a, 'src> {
     context: &'a mut SemanticsContext<'src>,
     module: ModuleId,
-    scope: ScopeId
+    scope: ScopeId,
+    in_function: bool,
 }
 
 impl<'a, 'src> ScopeResolver<'a, 'src> {
@@ -76,6 +78,10 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
     fn resolve_statement(&mut self, statement: &Statement<'src>) {
         match &statement.variant {
             Stmt::FunctionDefinition { name: _, params, body, return_type } => {
+                if self.in_function {
+                    self.context.report(Diagnostic::nested_declaration_not_allowed(statement.span));
+                }
+
                 for param in &params.list {
                     self.resolve_type_annotation(&param.type_);
                 }
@@ -83,11 +89,17 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                 self.resolve_type_annotation(return_type);
 
                 let fn_scope = self.context.new_scope(Some(self.scope));
-                let prev = self.scope;
+                let prev_scope = self.scope;
+                let was_in_function = self.in_function;
 
                 self.scope = fn_scope;
+                self.in_function = true;
 
                 for param in &params.list {
+                    if self.context.scopes[fn_scope.0 as usize].names.contains_key(param.name.ident) {
+                        self.context.report(Diagnostic::already_defined(param.name.ident, param.name.span));
+                    }
+
                     self.declare(
                         param.name.ident,
                         SymbolKind::Param,
@@ -96,9 +108,15 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                 }
 
                 self.resolve_block(&body);
-                self.scope = prev;
+
+                self.scope = prev_scope;
+                self.in_function = was_in_function;
             }
             Stmt::StructDefinition { name: _, fields } => {
+                if self.in_function {
+                    self.context.report(Diagnostic::nested_declaration_not_allowed(statement.span));
+                }
+
                 for field in &fields.list {
                     self.resolve_type_annotation(&field.type_);
                 }

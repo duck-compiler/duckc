@@ -78,6 +78,10 @@ pub enum GoType<'src> {
         fields: Vec<StructField<'src>>,
     },
     TypeName(&'src str),
+    Func {
+        params: Vec<GoType<'src>>,
+        return_type: Option<Box<GoType<'src>>>,
+    },
 }
 
 #[derive(Debug)]

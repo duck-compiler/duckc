@@ -166,4 +166,22 @@ impl<'src> Diagnostic<'src> {
             kind: DiagnosticKind::Error,
         }
     }
+
+    pub fn already_defined(name: &str, location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!("`{}` is already defined", name).into_boxed_str(),
+            location,
+            error_code: "T0013".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn nested_declaration_not_allowed(location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: "`fn`/`struct` declarations are only allowed at the top level, not nested inside a function".to_string().into_boxed_str(),
+            location,
+            error_code: "T0014".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
 }

@@ -1,7 +1,6 @@
-use crate::backend::{gost, semantics::{self, context::SemanticsContext, diagnostic::DiagnosticKind}};
-
 mod ast;
 mod backend;
+mod driver;
 mod frontend;
 mod mimic;
 
@@ -9,35 +8,23 @@ fn main() {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
 
     if args.len() != 1 {
-        println!("Usage: duckc <filename>");
-        return;
+        eprintln!("Usage: duckc <filename>");
+        std::process::exit(1);
     }
 
-    let file_name = &args[0];
-    let _src = match std::fs::read_to_string(file_name) {
-        Ok(src) => src,
-        Err(e) => {
-            println!("Error reading {file_name}: {e:?}");
-            return;
+    match driver::run(&args[0]) {
+        Ok(output) => {
+            println!("{}", output.go_source);
         }
-    };
-
-    let mut context = SemanticsContext::new();
-
-    let module = context.add_module(mimic::test_struct_program());
-    semantics::analyze_module(&mut context, module);
-
-    if !context.diagnostics.is_empty() {
-        for diagnostic in &context.diagnostics {
-            println!("{:?}", diagnostic);
-            if let DiagnosticKind::Error = diagnostic.kind {
-                return;
+        Err(driver::CompileError::Io(message)) => {
+            eprintln!("{message}");
+            std::process::exit(1);
+        }
+        Err(driver::CompileError::Diagnostics(messages)) => {
+            for message in &messages {
+                eprintln!("{message}");
             }
+            std::process::exit(1);
         }
     }
-
-    let gost = gost::translate(&context, module);
-    let go_src = gost::emit_gost(gost);
-
-    println!("{go_src}");
 }

@@ -159,6 +159,16 @@ impl<'a, 'src> Translator<'a, 'src> {
             Type::Array(inner) => GoType::Array(Box::new(self.go_type_from_type_id(*inner))),
             Type::Struct(sym) => GoType::TypeName(self.context.symbols[sym.0 as usize].name),
             Type::Unit | Type::Never => GoType::Struct { fields: vec![] },
+            Type::Fn { params, return_type } => {
+                let return_type = *return_type;
+                GoType::Func {
+                    params: params.iter().map(|param| self.go_type_from_type_id(*param)).collect(),
+                    return_type: match &self.context.types[return_type.0 as usize] {
+                        Type::Unit => None,
+                        _ => Some(Box::new(self.go_type_from_type_id(return_type))),
+                    },
+                }
+            }
             case => unimplemented!("go_type_from_type_id: {:?}", case),
         }
     }
@@ -317,7 +327,16 @@ impl<'a, 'src> Translator<'a, 'src> {
 
                 (prelude, GoExpression::Immediate(temp_name))
             },
-            case => unimplemented!("translate_expression: {:?}", case)
+            Expr::While { expr: condition, body } => {
+                let (mut prelude, condition_expr) = self.translate_expression(condition);
+
+                prelude.push(GoStatement::While {
+                    condition: condition_expr,
+                    body: self.translate_block(body),
+                });
+
+                (prelude, GoExpression::StructInit { type_name: "struct{}", fields: vec![] })
+            },
         }
     }
 

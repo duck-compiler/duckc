@@ -484,3 +484,127 @@ fn if_with_diverging_branch_used_as_a_value_translates_and_runs_correctly() {
 
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "non-negative\nnegative");
 }
+
+#[test]
+fn function_value_stored_in_a_variable_translates_and_runs_correctly() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        fn_def("shout", vec![("s", TypeExpression::String)], type_(TypeExpression::String), vec![
+            return_stmt(Some(binary(mem_name("s"), BinaryOperator::Add, string("!")))),
+        ]),
+        fn_def("whisper", vec![("s", TypeExpression::String)], type_(TypeExpression::String), vec![
+            return_stmt(Some(mem_name("s"))),
+        ]),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("loud", type_(TypeExpression::Bool), Some(bool_lit(true))),
+                var_decl("op", no_type(), Some(if_else_expr(
+                    mem_name("loud"),
+                    vec![expr_stmt(mem_name("shout"))],
+                    vec![expr_stmt(mem_name("whisper"))],
+                ))),
+                expr_stmt(field_call("fmt", "Println", vec![fn_call("op", vec![string("hi")])])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let gost_root = translate(&context, module);
+    let go_source = emit_gost(gost_root);
+
+    assert!(go_source.contains("func(string) string"), "generated source: {go_source}");
+
+    let Ok(go_version) = Command::new("go").arg("version").output() else {
+        eprintln!("skipping go build verification: `go` not found on PATH");
+        return;
+    };
+
+    assert!(go_version.status.success());
+
+    let dir = std::env::temp_dir().join("duckc-gost-fn-value-test");
+    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
+
+    let file_path = dir.join("main.go");
+
+    let mut file = std::fs::File::create(&file_path).expect("failed to create temp go file");
+    file.write_all(go_source.as_bytes()).expect("failed to write temp go file");
+    drop(file);
+
+    let output = Command::new("go")
+        .arg("run")
+        .arg(&file_path)
+        .output()
+        .expect("failed to run `go run`");
+
+    assert!(
+        output.status.success(),
+        "go run failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "hi!");
+}
+
+#[test]
+fn while_used_as_a_value_translates_and_runs_correctly() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("running", type_(TypeExpression::Bool), Some(bool_lit(true))),
+                var_decl("_", no_type(), Some(while_expr(mem_name("running"), vec![
+                    assign(name_target("running"), bool_lit(false)),
+                ]))),
+                expr_stmt(field_call("fmt", "Println", vec![string("done")])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let gost_root = translate(&context, module);
+    let go_source = emit_gost(gost_root);
+
+    assert!(go_source.contains("struct{}{}"), "generated source: {go_source}");
+
+    let Ok(go_version) = Command::new("go").arg("version").output() else {
+        eprintln!("skipping go build verification: `go` not found on PATH");
+        return;
+    };
+
+    assert!(go_version.status.success());
+
+    let dir = std::env::temp_dir().join("duckc-gost-while-value-test");
+    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
+
+    let file_path = dir.join("main.go");
+
+    let mut file = std::fs::File::create(&file_path).expect("failed to create temp go file");
+    file.write_all(go_source.as_bytes()).expect("failed to write temp go file");
+    drop(file);
+
+    let output = Command::new("go")
+        .arg("run")
+        .arg(&file_path)
+        .output()
+        .expect("failed to run `go run`");
+
+    assert!(
+        output.status.success(),
+        "go run failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "done");
+}

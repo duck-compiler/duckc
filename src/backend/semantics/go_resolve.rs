@@ -3,6 +3,7 @@ use std::{
     hash::{Hash, Hasher},
     path::PathBuf,
     process::Command,
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 const RESOLVER_SOURCE: &str = include_str!("../../../tools/go_resolve/main.go");
@@ -155,29 +156,45 @@ fn build_go_resolver() -> Result<PathBuf, String> {
         return Ok(target);
     }
 
-    let mut source_path = std::env::temp_dir();
-    source_path.push(format!("duckc-go-resolve-{hash:x}.go"));
-    std::fs::write(&source_path, RESOLVER_SOURCE)
-        .map_err(|err| format!("faild to write go_resolve source file: {err}"))?;
+    static UNIQUE: AtomicU64 = AtomicU64::new(0);
+    let unique = format!("{}-{}", std::process::id(), UNIQUE.fetch_add(1, Ordering::Relaxed));
 
-    let output = Command::new("go")
+    let mut source_path = std::env::temp_dir();
+    source_path.push(format!("duckc-go-resolve-{hash:x}-{unique}.go"));
+    std::fs::write(&source_path, RESOLVER_SOURCE)
+        .map_err(|err| format!("failed to write go_resolve source file: {err}"))?;
+
+    let mut tmp_target = std::env::temp_dir();
+    tmp_target.push(format!("duck-go-resolve-{hash:x}-{unique}.tmp"));
+
+    let output = Command::new(crate::driver::resolve_go_binary())
         .arg("build")
         .arg("-o")
-        .arg(&target)
+        .arg(&tmp_target)
         .arg(&source_path)
         .output();
+
+    let _ = std::fs::remove_file(&source_path);
 
     let output = match output {
         Ok(output) => output,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            todo!("go toolchain not found on PATH, this should be provided by the toolchain");
+            return Err("go not found".to_string());
         }
-        Err(err) => return Err(format!("failed to invoke `go build`: {err}")),
+        Err(err) => return Err(format!("failed to run `go build`: {err}")),
     };
 
     if !output.status.success() {
+        let _ = std::fs::remove_file(&tmp_target);
         return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
     }
 
-    Ok(target)
+    match std::fs::rename(&tmp_target, &target) {
+        Ok(()) => Ok(target),
+        Err(_) if target.exists() => {
+            let _ = std::fs::remove_file(&tmp_target);
+            Ok(target)
+        }
+        Err(err) => Err(format!("failed to install go_resolve helper binary: {err}")),
+    }
 }

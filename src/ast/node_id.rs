@@ -2,21 +2,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::ast::{AstRoot, Block, Expr, Expression, Identifier, MemoryTarget, ParameterList, Statement, Stmt, TypeExpression, expression::{ExpressionList, FieldInit}, memory_target::MemTar, type_expression::TypeAnnotation};
 
-#[derive(Debug, Clone, Copy, Eq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct NodeId(pub u32);
 
 impl NodeId {
     pub const DUMMY: NodeId = NodeId(u32::MAX);
-}
-
-impl PartialEq for NodeId {
-    fn eq(&self, other: &Self) -> bool {
-        if cfg!(test) && std::env::var("DUCKC_TEST_NODE_ID").is_err() {
-            true
-        } else {
-            self.0 == other.0
-        }
-    }
 }
 
 pub fn assign_generate_node_ids(ast: &mut AstRoot) -> usize {

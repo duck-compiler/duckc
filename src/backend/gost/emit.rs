@@ -46,6 +46,11 @@ fn emit_type<'src>(go_type: &GoType<'src>) -> String {
                 .join("\n")
         ),
         GoType::TypeName(name) => name.to_string(),
+        GoType::Func { params, return_type } => format!(
+            "func({}){}",
+            params.iter().map(emit_type).collect::<Vec<_>>().join(", "),
+            return_type.as_ref().map(|rt| format!(" {}", emit_type(rt))).unwrap_or_default(),
+        ),
     }
 }
 

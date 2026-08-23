@@ -520,3 +520,82 @@ fn if_where_both_branches_diverge_is_compatible_with_any_expected_type() {
 
     assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
 }
+
+#[test]
+fn duplicate_top_level_struct_reports_t0013() {
+    let context = analyze(program(vec![
+        struct_def("Point", vec![("x", TypeExpression::Int)]),
+        struct_def("Point", vec![("y", TypeExpression::Int)]),
+    ]));
+
+    assert!(has_error_code(&context, "T0013"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn duplicate_top_level_function_reports_t0013() {
+    let context = analyze(program(vec![
+        fn_def("helper", vec![], no_type(), vec![]),
+        fn_def("helper", vec![], no_type(), vec![]),
+    ]));
+
+    assert!(has_error_code(&context, "T0013"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn first_top_level_declaration_stays_resolvable_after_a_duplicate() {
+    let context = analyze(program(vec![
+        struct_def("Point", vec![("x", TypeExpression::Int)]),
+        struct_def("Point", vec![("y", TypeExpression::String)]),
+        main_fn(vec![
+            var_decl("p", no_type(), Some(struct_init("Point", vec![("x", int(1))]))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0013"));
+    assert!(!has_error_code(&context, "T0008"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn duplicate_function_parameter_reports_t0013() {
+    let context = analyze(program(vec![
+        fn_def("add", vec![("x", TypeExpression::Int), ("x", TypeExpression::Int)], no_type(), vec![]),
+    ]));
+
+    assert!(has_error_code(&context, "T0013"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn nested_function_definition_reports_t0014() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            fn_def("inner", vec![], no_type(), vec![]),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0014"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn nested_struct_definition_reports_t0014() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            struct_def("Inner", vec![("x", TypeExpression::Int)]),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0014"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn doubly_nested_function_definition_still_reports_t0014() {
+    let context = analyze(program(vec![
+        fn_def("outer", vec![], no_type(), vec![
+            fn_def("middle", vec![], no_type(), vec![
+                fn_def("inner", vec![], no_type(), vec![]),
+            ]),
+        ]),
+    ]));
+
+    let count = context.diagnostics.iter().filter(|d| &*d.error_code == "T0014").count();
+    assert_eq!(count, 2, "expected both nested definitions to be flagged: {:?}", context.diagnostics);
+}
