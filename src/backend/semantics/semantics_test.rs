@@ -1,5 +1,5 @@
 use super::{analyze_module, context::SemanticsContext, r#type::Type, symbol::SymbolKind};
-use crate::ast::{AstRoot, Statement, TypeExpression, builder::{array, array_index, assign, bool_lit, dereference, expr_stmt, field_access, field_call, field_target, fn_call, fn_def, ident, if_else_expr, int, mem_name, name_target, no_type, program, string, struct_def, struct_init, type_, use_stmt, var_decl}};
+use crate::ast::{AstRoot, Statement, TypeExpression, expression::BinaryOperator, builder::{array, array_index, assign, binary, bool_lit, break_stmt, continue_stmt, dereference, expr_stmt, field_access, field_call, field_target, fn_call, fn_def, ident, if_else_expr, if_expr, int, mem_name, name_target, no_type, program, return_stmt, string, struct_def, struct_init, type_, use_stmt, var_decl, while_expr}};
 
 fn analyze(program: AstRoot<'static>) -> SemanticsContext<'static> {
     let mut context = SemanticsContext::new();
@@ -349,4 +349,174 @@ fn top_level_expression_statement_reports_t0011() {
     ]));
 
     assert!(has_error_code(&context, "T0011"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn return_with_matching_type_has_no_diagnostics() {
+    let context = analyze(program(vec![
+        fn_def("get_x", vec![], type_(TypeExpression::Int), vec![
+            return_stmt(Some(int(5))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn return_with_mismatched_type_reports_t0001() {
+    let context = analyze(program(vec![
+        fn_def("get_x", vec![], type_(TypeExpression::Int), vec![
+            return_stmt(Some(string("not an int"))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0001"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn bare_return_in_unit_function_has_no_diagnostics() {
+    let context = analyze(program(vec![
+        fn_def("do_nothing", vec![], no_type(), vec![
+            return_stmt(None),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn break_outside_loop_reports_t0012() {
+    let context = analyze(program(vec![
+        main_fn(vec![break_stmt()]),
+    ]));
+
+    assert!(has_error_code(&context, "T0012"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn continue_outside_loop_reports_t0012() {
+    let context = analyze(program(vec![
+        main_fn(vec![continue_stmt()]),
+    ]));
+
+    assert!(has_error_code(&context, "T0012"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn break_and_continue_inside_while_have_no_diagnostics() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("running", type_(TypeExpression::Bool), Some(bool_lit(true))),
+            expr_stmt(while_expr(mem_name("running"), vec![
+                expr_stmt(if_expr(bool_lit(true), vec![continue_stmt()])),
+                break_stmt(),
+            ])),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn break_inside_nested_if_inside_while_is_still_in_loop() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("running", type_(TypeExpression::Bool), Some(bool_lit(true))),
+            expr_stmt(while_expr(mem_name("running"), vec![
+                expr_stmt(if_expr(bool_lit(true), vec![
+                    expr_stmt(if_expr(bool_lit(true), vec![break_stmt()])),
+                ])),
+            ])),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn comparison_operator_resolves_to_bool() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("x", no_type(), Some(binary(int(1), BinaryOperator::Less, int(2)))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let x = context.symbols.iter().find(|s| s.name == "x").expect("x symbol");
+    assert_eq!(context.types[x.type_.expect("x should have a type").0 as usize], Type::Bool);
+}
+
+#[test]
+fn comparison_result_can_drive_a_while_condition() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("i", type_(TypeExpression::Int), Some(int(0))),
+            expr_stmt(while_expr(binary(mem_name("i"), BinaryOperator::Less, int(5)), vec![
+                assign(name_target("i"), binary(mem_name("i"), BinaryOperator::Add, int(1))),
+            ])),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn logical_and_requires_bool_operands_reports_t0001() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("x", no_type(), Some(binary(int(1), BinaryOperator::And, bool_lit(true)))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0001"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn logical_and_of_two_bools_resolves_to_bool() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("x", no_type(), Some(binary(bool_lit(true), BinaryOperator::And, bool_lit(false)))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let x = context.symbols.iter().find(|s| s.name == "x").expect("x symbol");
+    assert_eq!(context.types[x.type_.expect("x should have a type").0 as usize], Type::Bool);
+}
+
+#[test]
+fn if_with_return_in_one_branch_used_as_value_has_no_diagnostics() {
+    let context = analyze(program(vec![
+        fn_def("choose", vec![("flag", TypeExpression::Bool)], type_(TypeExpression::String), vec![
+            var_decl("x", no_type(), Some(if_else_expr(
+                mem_name("flag"),
+                vec![return_stmt(Some(string("early")))],
+                vec![expr_stmt(string("late"))],
+            ))),
+            return_stmt(Some(mem_name("x"))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let x = context.symbols.iter().find(|s| s.name == "x").expect("x symbol");
+    assert_eq!(context.types[x.type_.expect("x should have a type").0 as usize], Type::String);
+}
+
+#[test]
+fn if_where_both_branches_diverge_is_compatible_with_any_expected_type() {
+    let context = analyze(program(vec![
+        fn_def("choose", vec![("flag", TypeExpression::Bool)], type_(TypeExpression::String), vec![
+            var_decl("x", type_(TypeExpression::Int), Some(if_else_expr(
+                mem_name("flag"),
+                vec![return_stmt(Some(string("a")))],
+                vec![return_stmt(Some(string("b")))],
+            ))),
+            return_stmt(Some(string("done"))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
 }

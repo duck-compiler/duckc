@@ -94,6 +94,18 @@ pub fn assign<'src>(
     })
 }
 
+pub fn return_stmt<'src>(value: Option<Expression<'src>>) -> Statement<'src> {
+    stmt(Stmt::Return { value })
+}
+
+pub fn break_stmt<'src>() -> Statement<'src> {
+    stmt(Stmt::Break)
+}
+
+pub fn continue_stmt<'src>() -> Statement<'src> {
+    stmt(Stmt::Continue)
+}
+
 pub fn string<'src>(str: &'src str) -> Expression<'src> {
     Expression {
         id: NodeId::DUMMY,

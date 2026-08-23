@@ -42,7 +42,12 @@ pub fn collect_module<'src>(
                 context.modules[module.0 as usize].definitions[name.id.0 as usize] = Some(symbol);
             }
             Stmt::Use(_) => {}
-            Stmt::VariableDeclaration { .. } | Stmt::VariableAssignment { .. } | Stmt::Expression { .. } => {
+            Stmt::VariableDeclaration { .. }
+            | Stmt::VariableAssignment { .. }
+            | Stmt::Expression { .. }
+            | Stmt::Return { .. }
+            | Stmt::Break
+            | Stmt::Continue => {
                 context.report(Diagnostic::not_allowed_at_top_level(stmt.span));
             }
         }

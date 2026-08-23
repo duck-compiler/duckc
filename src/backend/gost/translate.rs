@@ -113,9 +113,20 @@ impl<'a, 'src> Translator<'a, 'src> {
                     }
                 }]
             }
-            case => {
-                unimplemented!("translate_statement: {:?}", case)
+            Stmt::Return { value } => {
+                match value {
+                    Some(value_expr) => {
+                        let (mut prelude, translated) = self.translate_expression(value_expr);
+                        prelude.push(GoStatement::Return { value: Some(translated) });
+
+                        prelude
+                    }
+                    None => vec![GoStatement::Return { value: None }],
+                }
             }
+            Stmt::Break => vec![GoStatement::Break],
+            Stmt::Continue => vec![GoStatement::Continue],
+            Stmt::Use(_) => unreachable!("Stmt::Use should already be filtered out before translation, see gost::translate"),
         }
     }
 
@@ -147,7 +158,7 @@ impl<'a, 'src> Translator<'a, 'src> {
             Type::String => GoType::String,
             Type::Array(inner) => GoType::Array(Box::new(self.go_type_from_type_id(*inner))),
             Type::Struct(sym) => GoType::TypeName(self.context.symbols[sym.0 as usize].name),
-            Type::Unit => GoType::Struct { fields: vec![] },
+            Type::Unit | Type::Never => GoType::Struct { fields: vec![] },
             case => unimplemented!("go_type_from_type_id: {:?}", case),
         }
     }
@@ -185,6 +196,14 @@ impl<'a, 'src> Translator<'a, 'src> {
                         expr: value,
                     });
 
+                    continue;
+                }
+
+                if matches!(
+                    statement.variant,
+                    Stmt::Return { .. } | Stmt::Break | Stmt::Continue
+                ) {
+                    go_statements.extend(self.translate_statement(statement));
                     continue;
                 }
             }

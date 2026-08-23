@@ -8,6 +8,14 @@ pub enum BinaryOperator {
     Sub,
     Mul,
     Div,
+    Eq,
+    NotEq,
+    Less,
+    Greater,
+    LessEq,
+    GreaterEq,
+    And,
+    Or,
 }
 
 #[derive(Clone, Copy)]

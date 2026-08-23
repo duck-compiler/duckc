@@ -117,4 +117,9 @@ pub enum GoStatement<'src> {
         condition: GoExpression<'src>,
         body: Vec<GoStatement<'src>>,
     },
+    Return {
+        value: Option<GoExpression<'src>>,
+    },
+    Break,
+    Continue,
 }

@@ -120,6 +120,12 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
             Stmt::Use(use_statement) => {
                 self.resolve_use_statement(use_statement);
             }
+            Stmt::Return { value } => {
+                if let Some(value) = value {
+                    self.resolve_expression(value);
+                }
+            }
+            Stmt::Break | Stmt::Continue => {}
         }
     }
 

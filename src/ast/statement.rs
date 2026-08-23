@@ -34,7 +34,13 @@ pub enum Stmt<'src> {
     Expression {
         #[serde(borrow)]
         expr: Expression<'src>,
-    }
+    },
+    Return {
+        #[serde(borrow)]
+        value: Option<Expression<'src>>,
+    },
+    Break,
+    Continue,
 }
 
 #[ast_derive]

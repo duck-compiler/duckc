@@ -76,6 +76,12 @@ impl NodeIdGenerator {
                     self.generate_in_identifier(alias);
                 }
             }
+            Stmt::Return { value } => {
+                if let Some(value) = value {
+                    self.generate_in_expression(value);
+                }
+            }
+            Stmt::Break | Stmt::Continue => {}
         }
     }
 

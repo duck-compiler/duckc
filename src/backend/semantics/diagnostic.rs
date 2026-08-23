@@ -157,4 +157,13 @@ impl<'src> Diagnostic<'src> {
             kind: DiagnosticKind::Error,
         }
     }
+
+    pub fn break_or_continue_outside_loop(location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: "`break`/`continue` can only be used inside a `while` loop".to_string().into_boxed_str(),
+            location,
+            error_code: "T0012".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
 }

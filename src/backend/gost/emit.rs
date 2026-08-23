@@ -128,6 +128,11 @@ fn emit_gost_statement<'src>(statement: &GoStatement<'src>) -> String {
         GoStatement::While { condition, body } => {
             format!("for {} {}", emit_expr(condition), emit_block(body))
         },
+        GoStatement::Return { value } => {
+            format!("return{}", value.as_ref().map(|value| format!(" {}", emit_expr(value))).unwrap_or_default())
+        },
+        GoStatement::Break => "break".to_string(),
+        GoStatement::Continue => "continue".to_string(),
     }
 }
 
@@ -137,6 +142,14 @@ fn emit_binary_operator(op: &BinaryOperator) -> &'static str {
         BinaryOperator::Sub => "-",
         BinaryOperator::Mul => "*",
         BinaryOperator::Div => "/",
+        BinaryOperator::Eq => "==",
+        BinaryOperator::NotEq => "!=",
+        BinaryOperator::Less => "<",
+        BinaryOperator::Greater => ">",
+        BinaryOperator::LessEq => "<=",
+        BinaryOperator::GreaterEq => ">=",
+        BinaryOperator::And => "&&",
+        BinaryOperator::Or => "||",
     }
 }
 

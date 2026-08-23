@@ -1,7 +1,7 @@
 //! this compiler pass fills node_types and symbol types, consuming resolutions/definitions.
 //! it walks no scopes. every reference/declaration lookup goes through the tables.
 
-use crate::{ast::{AstRoot, Block, Expression, Identifier, MemoryTarget, NodeId, Span, Statement, expression::{Expr, ExpressionList, FieldInit}, memory_target::MemTar, statement::Stmt, type_expression::{self, TypeAnnotation, TypeExpression}}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, go_map, module::ModuleId, symbol::{Origin, SymbolId}, r#type::{Type, TypeId}}};
+use crate::{ast::{AstRoot, Block, Expression, Identifier, MemoryTarget, NodeId, Span, Statement, expression::{BinaryOperator, Expr, ExpressionList, FieldInit}, memory_target::MemTar, statement::Stmt, type_expression::{self, TypeAnnotation, TypeExpression}}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, go_map, module::ModuleId, symbol::{Origin, SymbolId}, r#type::{Type, TypeId}}};
 
 pub fn typecheck_module<'src>(
     module: ModuleId,
@@ -12,7 +12,12 @@ pub fn typecheck_module<'src>(
         AstRoot { statements: Vec::new() },
     );
 
-    let mut checker = TypeChecker { context, module };
+    let mut checker = TypeChecker {
+        context,
+        module,
+        current_return_type: None,
+        in_loop: false
+    };
 
     for statement in &ast.statements {
         checker.declare_signature(statement);
@@ -28,6 +33,8 @@ pub fn typecheck_module<'src>(
 struct TypeChecker<'a, 'src> {
     context: &'a mut SemanticsContext<'src>,
     module: ModuleId,
+    current_return_type: Option<TypeId>,
+    in_loop: bool,
 }
 
 impl<'a, 'src> TypeChecker<'a, 'src> {
@@ -114,14 +121,20 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
 
     fn check_statement(&mut self, statement: &Statement<'src>) {
         match &statement.variant {
-            Stmt::FunctionDefinition { params, body, .. } => {
+            Stmt::FunctionDefinition { params, body, return_type, .. } => {
                 for param in &params.list {
                     let type_id = self.type_id_from_type_annotation(&param.type_);
-                    if let Some(sym) = self.definition_of(param.name.id) {
-                        self.set_symbol_type(sym, type_id);
+                    if let Some(symbol) = self.definition_of(param.name.id) {
+                        self.set_symbol_type(symbol, type_id);
                     }
                 }
+
+                let return_type_id = self.type_id_from_type_annotation(return_type);
+                let previous_return_type = self.current_return_type.replace(return_type_id);
+
                 self.check_block(body);
+
+                self.current_return_type = previous_return_type;
             }
             Stmt::VariableDeclaration { name, type_, init_expression } => {
                 let declared = type_.annotation.as_ref().map(|_| self.type_id_from_type_annotation(type_));
@@ -156,6 +169,23 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             }
             Stmt::Use(_) => {}
             Stmt::StructDefinition { .. } => {}
+            Stmt::Return { value } => {
+                let expected = self.current_return_type.unwrap_or_else(|| self.context.intern(Type::Unit));
+
+                let found = match value {
+                    Some(expr) => self.check_expression(expr),
+                    None => self.context.intern(Type::Unit),
+                };
+
+                if !self.compatible(expected, found) {
+                    self.report_mismatch(expected, found, statement.span);
+                }
+            }
+            Stmt::Break | Stmt::Continue => {
+                if !self.in_loop {
+                    self.context.report(Diagnostic::break_or_continue_outside_loop(statement.span));
+                }
+            }
         }
     }
 
@@ -173,9 +203,17 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             let is_last = index == block.statements.len() - 1;
 
             if is_last {
-                if let Stmt::Expression { expr } = &statement.variant {
-                    value = self.check_expression(expr);
-                    continue;
+                match &statement.variant {
+                    Stmt::Expression { expr } => {
+                        value = self.check_expression(expr);
+                        continue;
+                    }
+                    Stmt::Return { .. } | Stmt::Break | Stmt::Continue => {
+                        self.check_statement(statement);
+                        value = self.context.intern(Type::Never);
+                        continue;
+                    }
+                    _ => {}
                 }
             }
 
@@ -195,13 +233,32 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             Expr::FunctionCall { target, args } => self.check_function_call(target, args, expr.span),
             Expr::ArrayExpression { values_exprs } => self.check_array_expression(values_exprs, expr.span),
             Expr::StructInit { type_name, fields } => self.check_struct_init(type_name, fields, expr.span),
-            Expr::Binary { left, right, .. } => {
+            Expr::Binary { left, op, right } => {
                 let left_type = self.check_expression(left);
                 let right_type = self.check_expression(right);
                 if !self.compatible(left_type, right_type) {
                     self.report_mismatch(left_type, right_type, expr.span);
                 }
-                left_type
+
+                match op {
+                    BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mul | BinaryOperator::Div => left_type,
+                    BinaryOperator::Eq | BinaryOperator::NotEq
+                    | BinaryOperator::Less | BinaryOperator::Greater
+                    | BinaryOperator::LessEq | BinaryOperator::GreaterEq => self.context.intern(Type::Bool),
+                    BinaryOperator::And | BinaryOperator::Or => {
+                        let bool_type = self.context.intern(Type::Bool);
+
+                        if !self.compatible(bool_type, left_type) {
+                            self.report_mismatch(bool_type, left_type, left.span);
+                        }
+
+                        if !self.compatible(bool_type, right_type) {
+                            self.report_mismatch(bool_type, right_type, right.span);
+                        }
+
+                        bool_type
+                    }
+                }
             }
             Expr::Unary { expr: inner, .. } => self.check_expression(inner),
             Expr::If { expr: condition, body, else_branch } => {
@@ -214,14 +271,24 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                         if !self.compatible(then_type, else_type) {
                             self.report_mismatch(then_type, else_type, expr.span);
                         }
-                        then_type
+
+                        if self.context.types[then_type.0 as usize] == Type::Never {
+                            else_type
+                        } else {
+                            then_type
+                        }
                     }
                     None => self.context.intern(Type::Unit),
                 }
             }
             Expr::While { expr: condition, body } => {
                 self.check_condition(condition);
+
+                let was_in_loop = self.in_loop;
+                self.in_loop = true;
                 self.check_block(body);
+                self.in_loop = was_in_loop;
+
                 self.context.intern(Type::Unit)
             }
         };
@@ -467,8 +534,8 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
 
     fn compatible(&self, a: TypeId, b: TypeId) -> bool {
         a == b
-            || self.context.types[a.0 as usize] == Type::TypeError
-            || self.context.types[b.0 as usize] == Type::TypeError
+            || matches!(self.context.types[a.0 as usize], Type::TypeError | Type::Never)
+            || matches!(self.context.types[b.0 as usize], Type::TypeError | Type::Never)
     }
 
     fn report_mismatch(&mut self, expected: TypeId, found: TypeId, span: Span<'src>) {
@@ -487,6 +554,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             Type::Array(inner) => format!("[{}]", self.type_name(*inner)),
             Type::Struct(sym) => self.context.symbols[sym.0 as usize].name.to_string(),
             Type::Fn { .. } => "function".to_string(),
+            Type::Never => "never".to_string(),
             Type::TypeError => "<error>".to_string(),
         }
     }
