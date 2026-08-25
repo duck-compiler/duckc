@@ -12,6 +12,7 @@ pub struct SemanticsContext<'src> {
     pub diagnostics: Vec<Diagnostic<'src>>,
     pub go_resolver: GoResolver,
     pub go_struct_symbols: HashMap<String, SymbolId>,
+    pub go_package_names: HashMap<String, &'src str>,
     pub struct_fields: HashMap<SymbolId, Vec<(&'src str, TypeId)>>,
 }
 
@@ -26,6 +27,7 @@ impl<'src> SemanticsContext<'src> {
             diagnostics: Vec::new(),
             go_resolver: GoResolver::new(),
             go_struct_symbols: HashMap::new(),
+            go_package_names: HashMap::new(),
             struct_fields: HashMap::new(),
         }
     }

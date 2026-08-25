@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::driver::home::duck_home_subdir;
+use crate::driver::home::{duck_home, subdir_of};
 
 pub const GO_VERSION: &str = "1.23.4";
 
-fn toolchain_dir() -> PathBuf {
-    duck_home_subdir("toolchains").join(format!("go-{GO_VERSION}"))
+fn toolchain_dir(home: &Path) -> PathBuf {
+    subdir_of(home, "toolchains").join(format!("go-{GO_VERSION}"))
 }
 
 fn go_binary_in(toolchain_dir: &Path) -> PathBuf {
@@ -15,7 +15,11 @@ fn go_binary_in(toolchain_dir: &Path) -> PathBuf {
 }
 
 pub fn resolve_go_binary() -> PathBuf {
-    let managed = go_binary_in(&toolchain_dir());
+    resolve_go_binary_in(&duck_home())
+}
+
+fn resolve_go_binary_in(home: &Path) -> PathBuf {
+    let managed = go_binary_in(&toolchain_dir(home));
     if managed.is_file() {
         managed
     } else {
@@ -24,12 +28,14 @@ pub fn resolve_go_binary() -> PathBuf {
 }
 
 pub fn ensure_go_toolchain() -> Result<PathBuf, String> {
-    let go_binary = go_binary_in(&toolchain_dir());
+    let home = duck_home();
+
+    let go_binary = go_binary_in(&toolchain_dir(&home));
     if go_binary.is_file() {
         return Ok(go_binary);
     }
 
-    match install_go_toolchain() {
+    match install_go_toolchain(&home) {
         Ok(()) => Ok(go_binary),
         Err(install_err) => match which_on_path("go") {
             Some(_) => {
@@ -53,7 +59,7 @@ fn which_on_path(program: &str) -> Option<PathBuf> {
     })
 }
 
-fn install_go_toolchain() -> Result<(), String> {
+fn install_go_toolchain(home: &Path) -> Result<(), String> {
     let (os, ext) = match std::env::consts::OS {
         "macos" => ("darwin", "tar.gz"),
         "linux" => ("linux", "tar.gz"),
@@ -71,7 +77,7 @@ fn install_go_toolchain() -> Result<(), String> {
     let archive_name = format!("go{GO_VERSION}.{os}-{arch}.{ext}");
     let url = format!("https://go.dev/dl/{archive_name}");
 
-    let staging_dir = duck_home_subdir("toolchains");
+    let staging_dir = subdir_of(home, "toolchains");
     let archive_path = staging_dir.join(&archive_name);
 
     let download_result = download(&url, &archive_path);
@@ -85,7 +91,7 @@ fn install_go_toolchain() -> Result<(), String> {
     extract_result?;
 
     let extracted = staging_dir.join("go");
-    let target = toolchain_dir();
+    let target = toolchain_dir(home);
     let _ = std::fs::remove_dir_all(&target);
 
     std::fs::rename(&extracted, &target)
@@ -135,35 +141,31 @@ fn extract(archive: &Path, dest_dir: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn resolve_go_binary_falls_back_to_path_when_no_managed_toolchain_is_installed() {
-        let scratch = std::env::temp_dir().join(format!("duckc-toolchain-test-{}", std::process::id()));
+    fn scratch_home(name: &str) -> PathBuf {
+        let scratch = std::env::temp_dir().join(format!("duckc-toolchain-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&scratch);
 
-        unsafe { std::env::set_var("DUCK_HOME", &scratch) };
-        let resolved = resolve_go_binary();
-        unsafe { std::env::remove_var("DUCK_HOME") };
+        scratch
+    }
 
-        assert_eq!(resolved, PathBuf::from("go"));
+    #[test]
+    fn resolve_go_binary_falls_back_to_path_when_no_managed_toolchain_is_installed() {
+        let scratch = scratch_home("fallback");
+
+        assert_eq!(resolve_go_binary_in(&scratch), PathBuf::from("go"));
 
         let _ = std::fs::remove_dir_all(&scratch);
     }
 
     #[test]
     fn resolve_go_binary_prefers_the_managed_toolchain_when_present() {
-        let scratch = std::env::temp_dir().join(format!("duckc-toolchain-test-managed-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&scratch);
+        let scratch = scratch_home("managed");
 
-        unsafe { std::env::set_var("DUCK_HOME", &scratch) };
-
-        let expected = go_binary_in(&toolchain_dir());
+        let expected = go_binary_in(&toolchain_dir(&scratch));
         std::fs::create_dir_all(expected.parent().unwrap()).unwrap();
         std::fs::write(&expected, "#!/bin/sh\n").unwrap();
 
-        let resolved = resolve_go_binary();
-        unsafe { std::env::remove_var("DUCK_HOME") };
-
-        assert_eq!(resolved, expected);
+        assert_eq!(resolve_go_binary_in(&scratch), expected);
 
         let _ = std::fs::remove_dir_all(&scratch);
     }

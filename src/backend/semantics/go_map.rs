@@ -11,6 +11,36 @@ fn leak<'src>(s: String) -> &'src str {
     Box::leak(s.into_boxed_str())
 }
 
+pub fn short_go_package_name(path: &str) -> &str {
+    let mut segments = path.rsplit('/');
+    let last = segments.next().unwrap_or(path);
+
+    if is_major_version_segment(last) {
+        return segments.next().unwrap_or(last);
+    }
+
+    last
+}
+
+fn is_major_version_segment(segment: &str) -> bool {
+    segment
+        .strip_prefix('v')
+        .is_some_and(|version| !version.is_empty() && version.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+fn name_in_go(context: &SemanticsContext, qualified_name: &str) -> String {
+    let Some((package_path, type_name)) = qualified_name.rsplit_once('.') else {
+        return qualified_name.to_string();
+    };
+
+    let package_name = context.go_package_names
+        .get(package_path)
+        .copied()
+        .unwrap_or_else(|| short_go_package_name(package_path));
+
+    format!("{package_name}.{type_name}")
+}
+
 pub fn map_go_type<'src>(
     context: &mut SemanticsContext<'src>,
     package: &str,
@@ -25,27 +55,25 @@ fn map_go_type_within<'src>(
     package: &str,
     raw: &RawType,
     types: &HashMap<String, RawType>,
-    reslving: &mut HashSet<String>,
+    resolving: &mut HashSet<String>,
 ) -> Option<TypeId> {
     match raw {
         RawType::Basic { basic } => map_go_basic(basic).map(|type_| context.intern(type_)),
-        RawType::Named { r#ref } => {
-            let resolved = types.get(r#ref)?;
-            if let RawType::Struct { fields } = resolved {
-                return resolve_go_struct(context, package, r#ref, fields, types, reslving);
+        RawType::Named { r#ref } => match types.get(r#ref)? {
+            RawType::Struct { fields } => resolve_go_struct(context, package, r#ref, fields, types, resolving),
+            underlying => {
+                if !resolving.insert(r#ref.clone()) {
+                    return None;
+                }
+
+                let mapped = map_go_type_within(context, package, underlying, types, resolving);
+                resolving.remove(r#ref);
+
+                mapped
             }
-
-            if !reslving.insert(r#ref.clone()) {
-                return None;
-            }
-
-            let mapped = map_go_type_within(context, package, resolved, types, reslving);
-            reslving.remove(r#ref);
-
-            mapped
-        }
+        },
         RawType::Pointer { elem } => {
-            let p = map_go_type_within(context, package, elem, types, reslving)?;
+            let p = map_go_type_within(context, package, elem, types, resolving)?;
             Some(context.intern(Type::Pointer(p)))
         }
         RawType::Slice { .. }
@@ -67,15 +95,17 @@ fn map_go_basic(name: &str) -> Option<Type> {
         "string" => Some(Type::String),
         "int" => Some(Type::Int),
         "int8" => Some(Type::Int8),
+        "int16" => Some(Type::Int16),
         "int32" | "rune" => Some(Type::Int32),
         "int64" => Some(Type::Int64),
         "uint" => Some(Type::Uint),
         "uint8" | "byte" => Some(Type::Uint8),
+        "uint16" => Some(Type::Uint16),
         "uint32" => Some(Type::Uint32),
         "uint64" => Some(Type::Uint64),
         "float32" => Some(Type::Float32),
         "float64" => Some(Type::Float),
-        // int16/uint16/uintptr/complex64/complex128/unsafe.Pointer missing
+        // uintptr/complex64/complex128/unsafe.Pointer missing
         _ => None,
     }
 }
@@ -92,8 +122,10 @@ fn resolve_go_struct<'src>(
         return Some(context.intern(Type::Struct(symbol)));
     }
 
+    let name = leak(name_in_go(context, qualified_name));
+
     let symbol = context.add_symbol(SymbolData {
-        name: leak(qualified_name.to_string()),
+        name,
         kind: SymbolKind::Struct,
         type_: None,
         origin: Origin::GoType { package: leak(package.to_string()) },
@@ -199,17 +231,18 @@ mod tests {
 
         assert_eq!(mapped(&mut context, "int"), Some(Type::Int));
         assert_eq!(mapped(&mut context, "int8"), Some(Type::Int8));
+        assert_eq!(mapped(&mut context, "int16"), Some(Type::Int16));
         assert_eq!(mapped(&mut context, "int32"), Some(Type::Int32));
         assert_eq!(mapped(&mut context, "rune"), Some(Type::Int32));
         assert_eq!(mapped(&mut context, "int64"), Some(Type::Int64));
         assert_eq!(mapped(&mut context, "uint"), Some(Type::Uint));
         assert_eq!(mapped(&mut context, "uint8"), Some(Type::Uint8));
         assert_eq!(mapped(&mut context, "byte"), Some(Type::Uint8));
+        assert_eq!(mapped(&mut context, "uint16"), Some(Type::Uint16));
         assert_eq!(mapped(&mut context, "uint32"), Some(Type::Uint32));
         assert_eq!(mapped(&mut context, "uint64"), Some(Type::Uint64));
         assert_eq!(mapped(&mut context, "float32"), Some(Type::Float32));
         assert_eq!(mapped(&mut context, "float64"), Some(Type::Float));
-        assert_eq!(mapped(&mut context, "int16"), None);
         assert_eq!(mapped(&mut context, "uintptr"), None);
     }
 
@@ -224,6 +257,8 @@ mod tests {
                 RawType::Pointer { elem: Box::new(RawType::Basic { basic: "int64".to_string() }) },
                 RawType::Pointer { elem: Box::new(RawType::Basic { basic: "uint64".to_string() }) },
                 RawType::Pointer { elem: Box::new(RawType::Basic { basic: "float32".to_string() }) },
+                RawType::Pointer { elem: Box::new(RawType::Basic { basic: "int16".to_string() }) },
+                RawType::Pointer { elem: Box::new(RawType::Basic { basic: "uint16".to_string() }) },
             ],
             results: vec![],
         };
@@ -242,6 +277,8 @@ mod tests {
         assert_eq!(poi(&context, params[1]), Type::Int64);
         assert_eq!(poi(&context, params[2]), Type::Uint64);
         assert_eq!(poi(&context, params[3]), Type::Float32);
+        assert_eq!(poi(&context, params[4]), Type::Int16);
+        assert_eq!(poi(&context, params[5]), Type::Uint16);
     }
 
     #[test]
@@ -304,6 +341,50 @@ mod tests {
         assert_eq!(fields.len(), 1, "unexported field must not be included: {:?}", fields);
         assert_eq!(fields[0].0, "X");
         assert_eq!(context.types[fields[0].1.0 as usize], Type::Int);
+    }
+
+    #[test]
+    fn a_major_version_segment_is_not_the_go_package_name() {
+        assert_eq!(short_go_package_name("image"), "image");
+        assert_eq!(short_go_package_name("container/list"), "list");
+        assert_eq!(short_go_package_name("math/rand/v2"), "rand");
+        assert_eq!(short_go_package_name("v2"), "v2");
+    }
+
+    #[test]
+    fn synthesized_struct_name_uses_the_alias_the_import_binds() {
+        let mut context = SemanticsContext::new();
+        context.go_package_names.insert("image".to_string(), "im");
+
+        let types = HashMap::from([(
+            "image.Point".to_string(),
+            RawType::Struct { fields: vec![basic_field("X", "int", true)] },
+        )]);
+
+        let resolved = map_go_type(&mut context, "image", &RawType::Named { r#ref: "image.Point".to_string() }, &types)
+            .expect("should map");
+
+        let Type::Struct(sym) = context.types[resolved.0 as usize] else { panic!("expected struct") };
+        assert_eq!(context.symbols[sym.0 as usize].name, "im.Point");
+    }
+
+    #[test]
+    fn synthesized_struct_name_shortens_a_multi_segment_import_path() {
+        let mut context = SemanticsContext::new();
+        let types = HashMap::from([(
+            "container/list.List".to_string(),
+            RawType::Struct { fields: vec![basic_field("Value", "int", true)] },
+        )]);
+
+        let resolved = map_go_type(
+            &mut context,
+            "container/list",
+            &RawType::Named { r#ref: "container/list.List".to_string() },
+            &types,
+        ).expect("should map");
+
+        let Type::Struct(sym) = context.types[resolved.0 as usize] else { panic!("expected struct") };
+        assert_eq!(context.symbols[sym.0 as usize].name, "list.List");
     }
 
     #[test]

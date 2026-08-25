@@ -3,6 +3,7 @@ use std::{
     hash::{Hash, Hasher},
     path::PathBuf,
     process::Command,
+    rc::Rc,
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -70,7 +71,7 @@ struct RawOutput {
 
 struct PackageInfo {
     functions: HashMap<String, RawFuncType>,
-    types: HashMap<String, RawType>,
+    types: Rc<HashMap<String, RawType>>,
 }
 
 pub struct GoResolver {
@@ -97,11 +98,11 @@ impl GoResolver {
         }
     }
 
-    pub fn types_of(&mut self, package: &str) -> Result<&HashMap<String, RawType>, String> {
+    pub fn types_of(&mut self, package: &str) -> Result<Rc<HashMap<String, RawType>>, String> {
         self.ensure_loaded(package);
 
         match self.cache.get(package).expect("just inserted") {
-            Ok(info) => Ok(&info.types),
+            Ok(info) => Ok(Rc::clone(&info.types)),
             Err(reason) => Err(reason.clone()),
         }
     }
@@ -128,7 +129,7 @@ impl GoResolver {
         let raw: RawOutput = serde_json::from_slice(&output.stdout)
             .map_err(|err| format!("failed to parse go_resolve output: {err}"))?;
 
-        Ok(PackageInfo { functions: raw.functions, types: raw.types })
+        Ok(PackageInfo { functions: raw.functions, types: Rc::new(raw.types) })
     }
 
     fn ensure_go_resolver(&mut self) -> Result<PathBuf, String> {

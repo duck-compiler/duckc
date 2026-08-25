@@ -57,10 +57,12 @@ pub struct StructField<'src> {
 pub enum GoType<'src> {
     Int,
     Int8,
+    Int16,
     Int32,
     Int64,
     Uint,
     Uint8,
+    Uint16,
     Uint32,
     Uint64,
     Float32,

@@ -1,6 +1,6 @@
 //! this compiler pass let's every named reference point to its declaration
 
-use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Statement, expression::Expr, memory_target::MemTar, statement::Stmt, type_expression::{TypeAnnotation, TypeExpression}, use_statement::UseStatement}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
+use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Statement, expression::Expr, memory_target::MemTar, statement::Stmt, type_expression::{TypeAnnotation, TypeExpression}, use_statement::UseStatement}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, go_map::short_go_package_name, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
 
 pub fn resolve_module<'src>(
     module: ModuleId,
@@ -170,8 +170,9 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                 self.resolve_type_expr(inner);
             }
             TypeExpression::Int | TypeExpression::Int8
-            | TypeExpression::Int32 | TypeExpression::Int64
-            | TypeExpression::Uint | TypeExpression::Uint8
+            | TypeExpression::Int16 | TypeExpression::Int32
+            | TypeExpression::Int64 | TypeExpression::Uint
+            | TypeExpression::Uint8 | TypeExpression::Uint16
             | TypeExpression::Uint32 | TypeExpression::Uint64
             | TypeExpression::Float | TypeExpression::Float32
             | TypeExpression::Bool | TypeExpression::String => {}
@@ -179,12 +180,17 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
     }
 
     fn resolve_use_statement(&mut self, use_statement: &UseStatement<'src>) {
-        let bound = use_statement.alias.as_ref().unwrap_or(&use_statement.path);
+        let (name, declaration) = match &use_statement.alias {
+            Some(alias) => (alias.ident, alias.id),
+            None => (short_go_package_name(use_statement.path.ident), use_statement.path.id),
+        };
+
+        self.context.go_package_names.insert(use_statement.path.ident.to_string(), name);
 
         self.declare_with_origin(
-            bound.ident,
+            name,
             SymbolKind::Module,
-            bound.id,
+            declaration,
             Origin::GoPackage {
                 path: use_statement.path.ident
             },

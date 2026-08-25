@@ -95,8 +95,9 @@ impl NodeIdGenerator {
             },
             TypeExpression::String | TypeExpression::Bool
             | TypeExpression::Int | TypeExpression::Int8
-            | TypeExpression::Int32 | TypeExpression::Int64
-            | TypeExpression::Uint | TypeExpression::Uint8
+            | TypeExpression::Int16 | TypeExpression::Int32
+            | TypeExpression::Int64 | TypeExpression::Uint
+            | TypeExpression::Uint8 | TypeExpression::Uint16
             | TypeExpression::Uint32 | TypeExpression::Uint64
             | TypeExpression::Float | TypeExpression::Float32 => {},
         }

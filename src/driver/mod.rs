@@ -3,7 +3,6 @@
 mod home;
 mod toolchain;
 
-pub use home::{duck_home, duck_home_subdir};
 pub use toolchain::{GO_VERSION, ensure_go_toolchain, resolve_go_binary};
 
 use crate::{

@@ -1,4 +1,4 @@
-use super::{analyze_module, context::SemanticsContext, r#type::{Type, TypeId}, symbol::SymbolKind};
+use super::{analyze_module, context::SemanticsContext, go_map::map_go_type, go_resolve::RawType, r#type::{Type, TypeId}, symbol::SymbolKind};
 use crate::ast::{AstRoot, Statement, TypeExpression, expression::{BinaryOperator, UnaryOperator}, builder::{array, array_index, assign, binary, bool_lit, break_stmt, call, continue_stmt, dereference, expr_stmt, field_access, field_call, field_target, float, fn_call, fn_def, ident, if_else_expr, if_expr, int, mem_name, name_target, no_type, pointer_type, program, reference, unary, return_stmt, string, struct_def, struct_init, type_, use_stmt, var_decl, while_expr}};
 
 fn analyze(program: AstRoot<'static>) -> SemanticsContext<'static> {
@@ -457,6 +457,7 @@ fn field_access_auto_dereferences_across_chained_pointer_fields() {
 
     let int_type = context.types.iter().position(|t| *t == Type::Int).expect("int type");
     let nested = context.symbols.iter().find(|s| s.name == "nested").expect("nested symbol");
+
     assert_eq!(
         context.types[nested.type_.expect("nested should have a type").0 as usize],
         Type::Pointer(TypeId(int_type as u32)),
@@ -546,6 +547,39 @@ fn go_pointer_to_sized_int_maps_through_the_real_toolchain() {
     assert_eq!(context.types[v.type_.expect("v should have a type").0 as usize], Type::Int64);
 }
 
+fn go_struct_field_type(
+    context: &mut SemanticsContext<'static>,
+    package: &str,
+    qualified_name: &str,
+    field: &str,
+) -> Type {
+    let types = context.go_resolver.types_of(package).expect("package should resolve through the real toolchain");
+
+    let mapped = map_go_type(context, package, &RawType::Named { r#ref: qualified_name.to_string() }, &types)
+        .expect("named struct should map");
+
+    let Type::Struct(struct_sym) = context.types[mapped.0 as usize] else {
+        panic!("expected a struct, found {:?}", context.types[mapped.0 as usize]);
+    };
+
+    let field_type = context.struct_fields.get(&struct_sym)
+        .expect("struct fields")
+        .iter()
+        .find(|(name, _)| *name == field)
+        .map(|(_, type_id)| *type_id)
+        .unwrap_or_else(|| panic!("no field `{field}` on `{qualified_name}`"));
+
+    context.types[field_type.0 as usize].clone()
+}
+
+#[test]
+fn go_sixteen_bit_fields_map_to_their_own_duck_types_through_the_real_toolchain() {
+    let mut context = SemanticsContext::new();
+
+    assert_eq!(go_struct_field_type(&mut context, "image/color", "image/color.Gray16", "Y"), Type::Uint16);
+    assert_eq!(go_struct_field_type(&mut context, "database/sql", "database/sql.NullInt16", "Int16"), Type::Int16);
+}
+
 #[test]
 fn go_time_duration_maps_to_int64_through_the_real_toolchain() {
     let context = analyze(program(vec![
@@ -578,6 +612,21 @@ fn if_else_used_as_a_value_resolves_to_the_branch_type() {
 
     let x = context.symbols.iter().find(|s| s.name == "x").expect("x symbol");
     assert_eq!(context.types[x.type_.expect("x should have a type").0 as usize], Type::Int);
+}
+
+#[test]
+fn if_without_an_else_branch_stays_unit_even_when_its_body_produces_a_value() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
+            var_decl("x", no_type(), Some(if_expr(mem_name("flag"), vec![expr_stmt(int(1))]))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let x = context.symbols.iter().find(|s| s.name == "x").expect("x symbol");
+    assert_eq!(context.types[x.type_.expect("x should have a type").0 as usize], Type::Unit);
 }
 
 #[test]
@@ -865,6 +914,25 @@ fn an_int_literal_too_large_for_its_sized_type_reports_t0018() {
 
     let count = context.diagnostics.iter().filter(|d| &*d.error_code == "T0018").count();
     assert_eq!(count, 2, "diagnostics: {:?}", context.diagnostics);
+    assert!(!has_error_code(&context, "T0001"), "range errors must not cascade: {:?}", context.diagnostics);
+}
+
+#[test]
+fn an_int_literal_out_of_range_for_a_sixteen_bit_type_reports_t0018() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("signed_max", type_(TypeExpression::Int16), Some(int(i16::MAX as u64))),
+            var_decl("signed_min", type_(TypeExpression::Int16), Some(unary(UnaryOperator::Neg, int(32768)))),
+            var_decl("unsigned_max", type_(TypeExpression::Uint16), Some(int(u16::MAX as u64))),
+            var_decl("signed_over", type_(TypeExpression::Int16), Some(int(i16::MAX as u64 + 1))),
+            var_decl("signed_under", type_(TypeExpression::Int16), Some(unary(UnaryOperator::Neg, int(32769)))),
+            var_decl("unsigned_over", type_(TypeExpression::Uint16), Some(int(u16::MAX as u64 + 1))),
+            var_decl("unsigned_negative", type_(TypeExpression::Uint16), Some(unary(UnaryOperator::Neg, int(1)))),
+        ]),
+    ]));
+
+    let count = context.diagnostics.iter().filter(|d| &*d.error_code == "T0018").count();
+    assert_eq!(count, 4, "only the out of range literals may be flagged: {:?}", context.diagnostics);
     assert!(!has_error_code(&context, "T0001"), "range errors must not cascade: {:?}", context.diagnostics);
 }
 

@@ -85,8 +85,10 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         match (&*literal.variant, &self.context.types[expected.0 as usize]) {
             (Expr::IntLiteral(value), Type::Int | Type::Int64) => Some(fits(*value, i64::MAX as u64)),
             (Expr::IntLiteral(value), Type::Int8) => Some(fits(*value, i8::MAX as u64)),
+            (Expr::IntLiteral(value), Type::Int16) => Some(fits(*value, i16::MAX as u64)),
             (Expr::IntLiteral(value), Type::Int32) => Some(fits(*value, i32::MAX as u64)),
             (Expr::IntLiteral(value), Type::Uint8) => Some(!negated && *value <= u8::MAX as u64),
+            (Expr::IntLiteral(value), Type::Uint16) => Some(!negated && *value <= u16::MAX as u64),
             (Expr::IntLiteral(value), Type::Uint32) => Some(!negated && *value <= u32::MAX as u64),
             (Expr::IntLiteral(_), Type::Uint | Type::Uint64) => Some(!negated),
             (Expr::IntLiteral(_), Type::Float) => Some(true),

@@ -72,10 +72,12 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         let type_ = match type_expr {
             TypeExpression::Int => Type::Int,
             TypeExpression::Int8 => Type::Int8,
+            TypeExpression::Int16 => Type::Int16,
             TypeExpression::Int32 => Type::Int32,
             TypeExpression::Int64 => Type::Int64,
             TypeExpression::Uint => Type::Uint,
             TypeExpression::Uint8 => Type::Uint8,
+            TypeExpression::Uint16 => Type::Uint16,
             TypeExpression::Uint32 => Type::Uint32,
             TypeExpression::Uint64 => Type::Uint64,
             TypeExpression::Float => Type::Float,
@@ -524,8 +526,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                 return match raw_func {
                     Ok(raw_func) => {
                         let types = self.context.go_resolver.types_of(package)
-                            .expect("package must already be loaded, lookup above just succeeded against it")
-                            .clone();
+                            .expect("package must already be loaded, lookup above just succeeded against it");
 
                         match go_map::map_go_signature(self.context, package, &raw_func, &types) {
                             Some(fn_type_id) => fn_type_id,
@@ -648,9 +649,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         let callee_type = self.check_expression(target);
 
         let Type::Fn { params, return_type } = self.context.types[callee_type.0 as usize].clone() else {
-            for arg in &args.list {
-                self.check_expression(arg);
-            }
+            self.check_arguments(args);
 
             if self.is_poisoned(callee_type) {
                 return callee_type;
@@ -661,9 +660,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         };
 
         if params.len() != args.list.len() {
-            for arg in &args.list {
-                self.check_expression(arg);
-            }
+            self.check_arguments(args);
 
             self.context.report(Diagnostic::wrong_arg_count(params.len(), args.list.len(), call_span));
             return return_type;
@@ -677,6 +674,12 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         }
 
         return_type
+    }
+
+    fn check_arguments(&mut self, args: &ExpressionList<'src>) {
+        for arg in &args.list {
+            self.check_expression(arg);
+        }
     }
 
     fn is_poisoned(&self, type_id: TypeId) -> bool {
@@ -698,10 +701,12 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             Type::Unit => "unit".to_string(),
             Type::Int => "int".to_string(),
             Type::Int8 => "int8".to_string(),
+            Type::Int16 => "int16".to_string(),
             Type::Int32 => "int32".to_string(),
             Type::Int64 => "int64".to_string(),
             Type::Uint => "uint".to_string(),
             Type::Uint8 => "uint8".to_string(),
+            Type::Uint16 => "uint16".to_string(),
             Type::Uint32 => "uint32".to_string(),
             Type::Uint64 => "uint64".to_string(),
             Type::Float => "float".to_string(),

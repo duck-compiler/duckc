@@ -1,4 +1,3 @@
-use std::io::Write;
 use std::process::Command;
 
 use crate::ast::TypeExpression;
@@ -15,7 +14,7 @@ fn go_run(go_source: &str, test_dir: &str) -> Option<String> {
 
     assert!(go_version.status.success());
 
-    let dir = std::env::temp_dir().join(test_dir);
+    let dir = std::env::temp_dir().join(format!("{test_dir}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("failed to create temp dir");
 
     let file_path = dir.join("main.go");
@@ -60,40 +59,13 @@ fn array_literal_and_index_translate_to_valid_go() {
     assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
 
     let gost_root = translate(&context, module);
-    let gou_source = emit_gost(gost_root);
+    let go_source = emit_gost(gost_root);
 
-    assert!(gou_source.contains(r#"[]string{"a", "b"}"#), "generated source: {gou_source}");
-    assert!(gou_source.contains("arr[i]"), "generated source: {gou_source}");
+    assert!(go_source.contains(r#"[]string{"a", "b"}"#), "generated source: {go_source}");
+    assert!(go_source.contains("arr[i]"), "generated source: {go_source}");
 
-    let Ok(go_version) = Command::new("go").arg("version").output() else {
-        eprintln!("skipping go build: `go` not found on PATH");
-        return;
-    };
-
-    assert!(go_version.status.success());
-
-    let dir = std::env::temp_dir().join("duckc-gost-array-test");
-    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
-
-    let file_path = dir.join("main.go");
-
-    let mut file = std::fs::File::create(&file_path).expect("failed to create temp go file");
-    file.write_all(gou_source.as_bytes()).expect("failed to write temp go file");
-    drop(file);
-
-    let output = Command::new("go")
-        .arg("run")
-        .arg(&file_path)
-        .output()
-        .expect("failed to run `go run`");
-
-    assert!(
-        output.status.success(),
-        "go run failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "a");
+    let Some(stdout) = go_run(&go_source, "duckc-gost-array-test") else { return };
+    assert_eq!(stdout, "a");
 }
 
 #[test]
@@ -123,35 +95,8 @@ fn struct_literal_and_field_access_translate_to_valid_go() {
     assert!(go_source.contains(r#"Point{x: "a", y: "b"}"#), "generated source: {go_source}");
     assert!(go_source.contains("p.x"), "generated source: {go_source}");
 
-    let Ok(go_version) = Command::new("go").arg("version").output() else {
-        eprintln!("skipping go build verification: `go` not found on PATH");
-        return;
-    };
-
-    assert!(go_version.status.success());
-
-    let dir = std::env::temp_dir().join("duckc-gost-struct-test");
-    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
-
-    let file_path = dir.join("main.go");
-
-    let mut file = std::fs::File::create(&file_path).expect("failed to create temp go file");
-    file.write_all(go_source.as_bytes()).expect("failed to write temp go file");
-    drop(file);
-
-    let output = Command::new("go")
-        .arg("run")
-        .arg(&file_path)
-        .output()
-        .expect("failed to run `go run`");
-
-    assert!(
-        output.status.success(),
-        "go run failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "a");
+    let Some(stdout) = go_run(&go_source, "duckc-gost-struct-test") else { return };
+    assert_eq!(stdout, "a");
 }
 
 #[test]
@@ -179,35 +124,8 @@ fn go_stdlib_struct_return_type_synthesizes_a_duck_struct_and_translates_to_vali
 
     assert!(go_source.contains("time.Now()"), "generated source: {go_source}");
 
-    let Ok(go_version) = Command::new("go").arg("version").output() else {
-        eprintln!("skipping go build verification: `go` not found on PATH");
-        return;
-    };
-
-    assert!(go_version.status.success());
-
-    let dir = std::env::temp_dir().join("duckc-gost-go-struct-test");
-    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
-
-    let file_path = dir.join("main.go");
-
-    let mut file = std::fs::File::create(&file_path).expect("failed to create temp go file");
-    file.write_all(go_source.as_bytes()).expect("failed to write temp go file");
-    drop(file);
-
-    let output = Command::new("go")
-        .arg("run")
-        .arg(&file_path)
-        .output()
-        .expect("failed to run `go run`");
-
-    assert!(
-        output.status.success(),
-        "go run failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ok");
+    let Some(stdout) = go_run(&go_source, "duckc-gost-go-struct-test") else { return };
+    assert_eq!(stdout, "ok");
 }
 
 #[test]
@@ -249,35 +167,8 @@ fn control_flow_arithmetic_and_assignment_translate_to_valid_go() {
     assert!(go_source.contains("(2 + (3 * 4))"), "generated source: {go_source}");
     assert!(go_source.contains("(!flag)"), "generated source: {go_source}");
 
-    let Ok(go_version) = Command::new("go").arg("version").output() else {
-        eprintln!("skipping go build verification: `go` not found on PATH");
-        return;
-    };
-
-    assert!(go_version.status.success());
-
-    let dir = std::env::temp_dir().join("duckc-gost-control-flow-test");
-    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
-
-    let file_path = dir.join("main.go");
-
-    let mut file = std::fs::File::create(&file_path).expect("failed to create temp go file");
-    file.write_all(go_source.as_bytes()).expect("failed to write temp go file");
-    drop(file);
-
-    let output = Command::new("go")
-        .arg("run")
-        .arg(&file_path)
-        .output()
-        .expect("failed to run `go run`");
-
-    assert!(
-        output.status.success(),
-        "go run failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "loop-body\ndone");
+    let Some(stdout) = go_run(&go_source, "duckc-gost-control-flow-test") else { return };
+    assert_eq!(stdout, "loop-body\ndone");
 }
 
 #[test]
@@ -325,35 +216,8 @@ fn if_else_used_as_a_value_translates_and_runs_correctly() {
     assert!(go_source.contains("} else {"), "generated source: {go_source}");
     assert!(go_source.contains("var label_true") && go_source.contains("= __duck_if_0"), "generated source: {go_source}");
 
-    let Ok(go_version) = Command::new("go").arg("version").output() else {
-        eprintln!("skipping go build verification: `go` not found on PATH");
-        return;
-    };
-
-    assert!(go_version.status.success());
-
-    let dir = std::env::temp_dir().join("duckc-gost-if-value-test");
-    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
-
-    let file_path = dir.join("main.go");
-
-    let mut file = std::fs::File::create(&file_path).expect("failed to create temp go file");
-    file.write_all(go_source.as_bytes()).expect("failed to write temp go file");
-    drop(file);
-
-    let output = Command::new("go")
-        .arg("run")
-        .arg(&file_path)
-        .output()
-        .expect("failed to run `go run`");
-
-    assert!(
-        output.status.success(),
-        "go run failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "yes\nno");
+    let Some(stdout) = go_run(&go_source, "duckc-gost-if-value-test") else { return };
+    assert_eq!(stdout, "yes\nno");
 }
 
 #[test]
@@ -414,35 +278,8 @@ fn return_comparison_logic_and_loop_control_translate_and_run_correctly() {
     assert!(go_source.contains("break"), "generated source: {go_source}");
     assert!(go_source.contains("continue"), "generated source: {go_source}");
 
-    let Ok(go_version) = Command::new("go").arg("version").output() else {
-        eprintln!("skipping go build verification: `go` not found on PATH");
-        return;
-    };
-
-    assert!(go_version.status.success());
-
-    let dir = std::env::temp_dir().join("duckc-gost-return-control-flow-test");
-    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
-
-    let file_path = dir.join("main.go");
-
-    let mut file = std::fs::File::create(&file_path).expect("failed to create temp go file");
-    file.write_all(go_source.as_bytes()).expect("failed to write temp go file");
-    drop(file);
-
-    let output = Command::new("go")
-        .arg("run")
-        .arg(&file_path)
-        .output()
-        .expect("failed to run `go run`");
-
-    assert!(
-        output.status.success(),
-        "go run failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "looped");
+    let Some(stdout) = go_run(&go_source, "duckc-gost-return-control-flow-test") else { return };
+    assert_eq!(stdout, "looped");
 }
 
 #[test]
@@ -483,36 +320,8 @@ fn if_with_diverging_branch_used_as_a_value_translates_and_runs_correctly() {
     assert!(go_source.contains("return \"negative\""), "generated source: {go_source}");
     assert!(!go_source.contains("= \"negative\""), "generated source: {go_source}");
 
-    let Ok(go_version) = Command::new("go").arg("version").output() else {
-        eprintln!("skipping go build verification: `go` not found on PATH");
-        return;
-    };
-
-    assert!(go_version.status.success());
-
-    let dir = std::env::temp_dir().join("duckc-gost-never-type-test");
-    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
-
-    let file_path = dir.join("main.go");
-
-    let mut file = std::fs::File::create(&file_path).expect("failed to create temp go file");
-    file.write_all(go_source.as_bytes()).expect("failed to write temp go file");
-    drop(file);
-
-    let output = Command::new("go")
-        .arg("run")
-        .arg(&file_path)
-        .output()
-        .expect("failed to run `go run`");
-
-    assert!(
-        output.status.success(),
-        "go run failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "non-negative\nnegative");
+    let Some(stdout) = go_run(&go_source, "duckc-gost-never-type-test") else { return };
+    assert_eq!(stdout, "non-negative\nnegative");
 }
 
 #[test]
@@ -550,35 +359,8 @@ fn function_value_stored_in_a_variable_translates_and_runs_correctly() {
 
     assert!(go_source.contains("func(string) string"), "generated source: {go_source}");
 
-    let Ok(go_version) = Command::new("go").arg("version").output() else {
-        eprintln!("skipping go build verification: `go` not found on PATH");
-        return;
-    };
-
-    assert!(go_version.status.success());
-
-    let dir = std::env::temp_dir().join("duckc-gost-fn-value-test");
-    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
-
-    let file_path = dir.join("main.go");
-
-    let mut file = std::fs::File::create(&file_path).expect("failed to create temp go file");
-    file.write_all(go_source.as_bytes()).expect("failed to write temp go file");
-    drop(file);
-
-    let output = Command::new("go")
-        .arg("run")
-        .arg(&file_path)
-        .output()
-        .expect("failed to run `go run`");
-
-    assert!(
-        output.status.success(),
-        "go run failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "hi!");
+    let Some(stdout) = go_run(&go_source, "duckc-gost-fn-value-test") else { return };
+    assert_eq!(stdout, "hi!");
 }
 
 #[test]
@@ -608,35 +390,8 @@ fn while_used_as_a_value_translates_and_runs_correctly() {
 
     assert!(go_source.contains("struct{}{}"), "generated source: {go_source}");
 
-    let Ok(go_version) = Command::new("go").arg("version").output() else {
-        eprintln!("skipping go build verification: `go` not found on PATH");
-        return;
-    };
-
-    assert!(go_version.status.success());
-
-    let dir = std::env::temp_dir().join("duckc-gost-while-value-test");
-    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
-
-    let file_path = dir.join("main.go");
-
-    let mut file = std::fs::File::create(&file_path).expect("failed to create temp go file");
-    file.write_all(go_source.as_bytes()).expect("failed to write temp go file");
-    drop(file);
-
-    let output = Command::new("go")
-        .arg("run")
-        .arg(&file_path)
-        .output()
-        .expect("failed to run `go run`");
-
-    assert!(
-        output.status.success(),
-        "go run failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "done");
+    let Some(stdout) = go_run(&go_source, "duckc-gost-while-value-test") else { return };
+    assert_eq!(stdout, "done");
 }
 
 #[test]
@@ -795,6 +550,43 @@ fn sized_integer_declaration_emits_valid_go() {
 }
 
 #[test]
+fn sixteen_bit_declarations_emit_valid_go() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("signed", type_(TypeExpression::Int16), Some(unary(UnaryOperator::Neg, int(32768)))),
+                var_decl("unsigned", type_(TypeExpression::Uint16), Some(int(65535))),
+                expr_stmt(if_else_expr(
+                    binary(
+                        binary(mem_name("signed"), BinaryOperator::Less, int(0)),
+                        BinaryOperator::And,
+                        binary(mem_name("unsigned"), BinaryOperator::Greater, int(0)),
+                    ),
+                    vec![expr_stmt(field_call("fmt", "Println", vec![string("sixteen-bit-ok")]))],
+                    vec![expr_stmt(field_call("fmt", "Println", vec![string("sixteen-bit-wrong")]))],
+                )),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let go_source = emit_gost(translate(&context, module));
+
+    assert!(go_source.contains("var signed int16 = (-32768)"), "generated source: {go_source}");
+    assert!(go_source.contains("var unsigned uint16 = 65535"), "generated source: {go_source}");
+
+    let Some(stdout) = go_run(&go_source, "duckc-gost-sixteen-bit-test") else { return };
+    assert_eq!(stdout, "sixteen-bit-ok");
+}
+
+#[test]
 fn go_function_taking_a_pointer_to_a_sized_int_writes_back_into_the_duck_variable() {
     let mut context = SemanticsContext::new();
     let module = context.add_module(program(vec![
@@ -830,6 +622,94 @@ fn go_function_taking_a_pointer_to_a_sized_int_writes_back_into_the_duck_variabl
 
     let Some(stdout) = go_run(&go_source, "duckc-gost-go-pointer-param-test") else { return };
     assert_eq!(stdout, "7");
+}
+
+#[test]
+fn aliased_go_import_uses_the_alias_for_the_import_and_for_synthesized_type_names() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        use_stmt("image", Some("im")),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("_", no_type(), Some(array(vec![field_call("im", "Pt", vec![int(1), int(2)])]))),
+                expr_stmt(field_call("fmt", "Println", vec![string("ok")])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let go_source = emit_gost(translate(&context, module));
+
+    assert!(go_source.contains(r#"import im "image""#), "generated source: {go_source}");
+    assert!(go_source.contains("[]im.Point{im.Pt(1, 2)}"), "generated source: {go_source}");
+    assert!(!go_source.contains("image.Point"), "generated source: {go_source}");
+
+    let Some(stdout) = go_run(&go_source, "duckc-gost-aliased-import-test") else { return };
+    assert_eq!(stdout, "ok");
+}
+
+#[test]
+fn multi_segment_go_import_is_referenced_by_its_short_package_name() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        use_stmt("container/list", None),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("_", no_type(), Some(array(vec![field_call("list", "New", vec![])]))),
+                expr_stmt(field_call("fmt", "Println", vec![string("ok")])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let go_source = emit_gost(translate(&context, module));
+
+    assert!(go_source.contains(r#"import "container/list""#), "generated source: {go_source}");
+    assert!(go_source.contains("[]*list.List{list.New()}"), "generated source: {go_source}");
+
+    let Some(stdout) = go_run(&go_source, "duckc-gost-multi-segment-import-test") else { return };
+    assert_eq!(stdout, "ok");
+}
+
+#[test]
+fn a_versioned_go_import_is_referenced_by_the_package_name_go_binds() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        use_stmt("math/rand/v2", None),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("_", no_type(), Some(field_call("rand", "IntN", vec![int(10)]))),
+                expr_stmt(field_call("fmt", "Println", vec![string("ok")])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let go_source = emit_gost(translate(&context, module));
+
+    assert!(go_source.contains(r#"import "math/rand/v2""#), "generated source: {go_source}");
+    assert!(go_source.contains("rand.IntN(10)"), "generated source: {go_source}");
+
+    let Some(stdout) = go_run(&go_source, "duckc-gost-versioned-import-test") else { return };
+    assert_eq!(stdout, "ok");
 }
 
 #[test]
