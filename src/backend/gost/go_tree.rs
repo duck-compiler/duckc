@@ -9,15 +9,7 @@ pub struct GostRoot<'src> {
 pub enum GoExpression<'src> {
     String(&'src str),
     Bool(bool),
-    Int(i64),
-    Int8(&'src i8),
-    Int32(&'src i32),
-    Int64(&'src i64),
-    Uint(&'src u64),
-    Uint8(&'src u8),
-    Uint32(&'src u32),
-    Uint64(&'src u64),
-    Float32(&'src f32),
+    Int(u64),
     Float64(f64),
     BinaryOp {
         left: Box<GoExpression<'src>>,
@@ -28,6 +20,8 @@ pub enum GoExpression<'src> {
         op: UnaryOperator,
         expr: Box<GoExpression<'src>>,
     },
+    AddressOf(Box<GoExpression<'src>>),
+    Dereference(Box<GoExpression<'src>>),
     FuncCall {
         callee: Box<GoExpression<'src>>,
         args: Vec<GoExpression<'src>>,
@@ -74,6 +68,7 @@ pub enum GoType<'src> {
     String,
     Bool,
     Array(Box<GoType<'src>>),
+    Pointer(Box<GoType<'src>>),
     Struct {
         fields: Vec<StructField<'src>>,
     },

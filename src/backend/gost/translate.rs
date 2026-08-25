@@ -138,9 +138,18 @@ impl<'a, 'src> Translator<'a, 'src> {
         match expr {
             TypeExpression::String => GoType::String,
             TypeExpression::Int => GoType::Int,
+            TypeExpression::Int8 => GoType::Int8,
+            TypeExpression::Int32 => GoType::Int32,
+            TypeExpression::Int64 => GoType::Int64,
+            TypeExpression::Uint => GoType::Uint,
+            TypeExpression::Uint8 => GoType::Uint8,
+            TypeExpression::Uint32 => GoType::Uint32,
+            TypeExpression::Uint64 => GoType::Uint64,
             TypeExpression::Float => GoType::Float64,
+            TypeExpression::Float32 => GoType::Float32,
             TypeExpression::Bool => GoType::Bool,
             TypeExpression::Array { inner } => GoType::Array(Box::new(self.translate_type_expression(inner))),
+            TypeExpression::Pointer { inner } => GoType::Pointer(Box::new(self.translate_type_expression(inner))),
             TypeExpression::Ident(identifier) => GoType::TypeName(identifier.ident),
         }
     }
@@ -153,10 +162,19 @@ impl<'a, 'src> Translator<'a, 'src> {
     fn go_type_from_type_id(&self, type_id: TypeId) -> GoType<'src> {
         match &self.context.types[type_id.0 as usize] {
             Type::Int => GoType::Int,
+            Type::Int8 => GoType::Int8,
+            Type::Int32 => GoType::Int32,
+            Type::Int64 => GoType::Int64,
+            Type::Uint => GoType::Uint,
+            Type::Uint8 => GoType::Uint8,
+            Type::Uint32 => GoType::Uint32,
+            Type::Uint64 => GoType::Uint64,
             Type::Float => GoType::Float64,
+            Type::Float32 => GoType::Float32,
             Type::Bool => GoType::Bool,
             Type::String => GoType::String,
             Type::Array(inner) => GoType::Array(Box::new(self.go_type_from_type_id(*inner))),
+            Type::Pointer(inner) => GoType::Pointer(Box::new(self.go_type_from_type_id(*inner))),
             Type::Struct(sym) => GoType::TypeName(self.context.symbols[sym.0 as usize].name),
             Type::Unit | Type::Never => GoType::Struct { fields: vec![] },
             Type::Fn { params, return_type } => {
@@ -169,7 +187,9 @@ impl<'a, 'src> Translator<'a, 'src> {
                     },
                 }
             }
-            case => unimplemented!("go_type_from_type_id: {:?}", case),
+            Type::TypeError => unreachable!(
+                "type error should always come with diagnostic and should be stopped by drivber"
+            ),
         }
     }
 
@@ -230,7 +250,7 @@ impl<'a, 'src> Translator<'a, 'src> {
                 (vec![], GoExpression::String(str))
             },
             Expr::IntLiteral(value) => {
-                (vec![], GoExpression::Int(*value as i64))
+                (vec![], GoExpression::Int(*value))
             },
             Expr::FloatLiteral(value) => {
                 (vec![], GoExpression::Float64(*value))
@@ -253,6 +273,10 @@ impl<'a, 'src> Translator<'a, 'src> {
             Expr::Unary { op, expr: inner } => {
                 let (prelude, inner_expr) = self.translate_expression(inner);
                 (prelude, GoExpression::UnaryOp { op: *op, expr: Box::new(inner_expr) })
+            },
+            Expr::Reference { expr: inner } => {
+                let (prelude, inner_expr) = self.translate_expression(inner);
+                (prelude, GoExpression::AddressOf(Box::new(inner_expr)))
             },
             Expr::FunctionCall { target, args } => {
                 let (mut prelude, callee_expr) = self.translate_expression(target);
@@ -356,7 +380,10 @@ impl<'a, 'src> Translator<'a, 'src> {
 
                 (prelude, GoExpression::ArrayIndex { base: Box::new(base), index: Box::new(index) })
             }
-            case => unimplemented!("translate_memory_target: {:?}", case)
+            MemTar::Dereference(inner) => {
+                let (prelude, inner_expr) = self.translate_expression(inner);
+                (prelude, GoExpression::Dereference(Box::new(inner_expr)))
+            }
         }
     }
 

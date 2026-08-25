@@ -7,10 +7,21 @@ pub enum TypeExpression<'src> {
     #[serde(borrow)]
     Ident(Identifier<'src>),
     Int,
+    Int8,
+    Int32,
+    Int64,
+    Uint,
+    Uint8,
+    Uint32,
+    Uint64,
     Float,
+    Float32,
     Bool,
     String,
     Array {
+        inner: Box<TypeExpression<'src>>,
+    },
+    Pointer {
         inner: Box<TypeExpression<'src>>,
     },
 }

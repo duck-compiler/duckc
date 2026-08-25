@@ -90,11 +90,15 @@ impl NodeIdGenerator {
             TypeExpression::Ident(identifier) => {
                 self.generate_in_identifier(identifier);
             },
-            TypeExpression::Array { inner } => {
+            TypeExpression::Array { inner } | TypeExpression::Pointer { inner } => {
                 self.generate_in_type_expr(inner);
             },
             TypeExpression::String | TypeExpression::Bool
-            | TypeExpression::Int | TypeExpression::Float => {},
+            | TypeExpression::Int | TypeExpression::Int8
+            | TypeExpression::Int32 | TypeExpression::Int64
+            | TypeExpression::Uint | TypeExpression::Uint8
+            | TypeExpression::Uint32 | TypeExpression::Uint64
+            | TypeExpression::Float | TypeExpression::Float32 => {},
         }
     }
 
@@ -144,6 +148,9 @@ impl NodeIdGenerator {
                 self.generate_in_expression(right);
             },
             Expr::Unary { op: _, expr } => {
+                self.generate_in_expression(expr);
+            },
+            Expr::Reference { expr } => {
                 self.generate_in_expression(expr);
             },
             Expr::While { expr, body } => {

@@ -50,6 +50,9 @@ pub enum Expr<'src> {
         op: UnaryOperator,
         expr: Box<Expression<'src>>,
     },
+    Reference {
+        expr: Box<Expression<'src>>,
+    },
     MemoryTarget(MemoryTarget<'src>),
     If {
         expr: Box<Expression<'src>>,

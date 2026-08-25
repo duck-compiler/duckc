@@ -3,6 +3,9 @@
 
 use crate::{ast::{AstRoot, Block, Expression, Identifier, MemoryTarget, NodeId, Span, Statement, expression::{BinaryOperator, Expr, ExpressionList, FieldInit}, memory_target::MemTar, statement::Stmt, type_expression::{self, TypeAnnotation, TypeExpression}}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, go_map, module::ModuleId, symbol::{Origin, SymbolId}, r#type::{Type, TypeId}}};
 
+mod literal;
+use literal::strip_literal_op;
+
 pub fn typecheck_module<'src>(
     module: ModuleId,
     context: &mut SemanticsContext<'src>,
@@ -68,12 +71,24 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
     fn type_id_from_type_expr(&mut self, type_expr: &TypeExpression) -> TypeId {
         let type_ = match type_expr {
             TypeExpression::Int => Type::Int,
+            TypeExpression::Int8 => Type::Int8,
+            TypeExpression::Int32 => Type::Int32,
+            TypeExpression::Int64 => Type::Int64,
+            TypeExpression::Uint => Type::Uint,
+            TypeExpression::Uint8 => Type::Uint8,
+            TypeExpression::Uint32 => Type::Uint32,
+            TypeExpression::Uint64 => Type::Uint64,
             TypeExpression::Float => Type::Float,
+            TypeExpression::Float32 => Type::Float32,
             TypeExpression::Bool => Type::Bool,
             TypeExpression::String => Type::String,
             TypeExpression::Array { inner } => {
                 let inner_id = self.type_id_from_type_expr(inner);
                 Type::Array(inner_id)
+            }
+            TypeExpression::Pointer { inner } => {
+                let inner_id = self.type_id_from_type_expr(inner);
+                Type::Pointer(inner_id)
             }
             TypeExpression::Ident(identifier) => {
                 match self.resolution_of(identifier.id) {
@@ -138,7 +153,10 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             }
             Stmt::VariableDeclaration { name, type_, init_expression } => {
                 let declared = type_.annotation.as_ref().map(|_| self.type_id_from_type_annotation(type_));
-                let inferred = init_expression.as_ref().map(|expr| self.check_expression(expr));
+                let inferred = init_expression.as_ref().map(|expr| match declared {
+                    Some(declared) => self.check_expected_expression_type(expr, declared),
+                    None => self.check_expression(expr),
+                });
 
                 let type_id = match (declared, inferred) {
                     (Some(declared), Some(inferred)) => {
@@ -150,7 +168,10 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                     }
                     (Some(declared), None) => declared,
                     (None, Some(inferred)) => inferred,
-                    (None, None) => self.context.intern(Type::TypeError),
+                    (None, None) => {
+                        self.context.report(Diagnostic::cannot_infer_type(name.ident, name.span));
+                        self.context.intern(Type::TypeError)
+                    }
                 };
 
                 if let Some(sym) = self.definition_of(name.id) {
@@ -159,7 +180,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             }
             Stmt::VariableAssignment { target, assign_expression } => {
                 let target_type = self.check_memory_target(target);
-                let value_type = self.check_expression(assign_expression);
+                let value_type = self.check_expected_expression_type(assign_expression, target_type);
                 if !self.compatible(target_type, value_type) {
                     self.report_mismatch(target_type, value_type, assign_expression.span);
                 }
@@ -173,7 +194,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                 let expected = self.current_return_type.unwrap_or_else(|| self.context.intern(Type::Unit));
 
                 let found = match value {
-                    Some(expr) => self.check_expression(expr),
+                    Some(expr) => self.check_expected_expression_type(expr, expected),
                     None => self.context.intern(Type::Unit),
                 };
 
@@ -196,7 +217,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
     }
 
     // returns value typeid of last item in block
-    fn check_block_value(&mut self, block: &Block<'src>) -> TypeId {
+    fn check_block_value(&mut self, block: &Block<'src>, expected: Option<TypeId>) -> TypeId {
         let mut value = self.context.intern(Type::Unit);
 
         for (index, statement) in block.statements.iter().enumerate() {
@@ -205,7 +226,10 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             if is_last {
                 match &statement.variant {
                     Stmt::Expression { expr } => {
-                        value = self.check_expression(expr);
+                        value = match expected {
+                            Some(expected) => self.check_expected_expression_type(expr, expected),
+                            None => self.check_expression(expr),
+                        };
                         continue;
                     }
                     Stmt::Return { .. } | Stmt::Break | Stmt::Continue => {
@@ -226,16 +250,24 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
     fn check_expression(&mut self, expr: &Expression<'src>) -> TypeId {
         let type_id = match &*expr.variant {
             Expr::StringLiteral(_) => self.context.intern(Type::String),
-            Expr::IntLiteral(_) => self.context.intern(Type::Int),
-            Expr::FloatLiteral(_) => self.context.intern(Type::Float),
+            Expr::IntLiteral(_) | Expr::FloatLiteral(_) => self.default_literal_type(expr, false),
             Expr::BoolLiteral(_) => self.context.intern(Type::Bool),
             Expr::MemoryTarget(memory_target) => self.check_memory_target(memory_target),
             Expr::FunctionCall { target, args } => self.check_function_call(target, args, expr.span),
-            Expr::ArrayExpression { values_exprs } => self.check_array_expression(values_exprs, expr.span),
+            Expr::ArrayExpression { values_exprs } => self.check_array_expression(values_exprs, expr.span, None),
             Expr::StructInit { type_name, fields } => self.check_struct_init(type_name, fields, expr.span),
             Expr::Binary { left, op, right } => {
-                let left_type = self.check_expression(left);
-                let right_type = self.check_expression(right);
+                let (left_type, right_type) = if strip_literal_op(left).is_some() && strip_literal_op(right).is_none() {
+                    let right_type = self.check_expression(right);
+                    let left_type = self.check_expected_expression_type(left, right_type);
+                    (left_type, right_type)
+                } else {
+                    let left_type = self.check_expression(left);
+                    let right_type = self.check_expected_expression_type(right, left_type);
+                    let left_type = self.try_represent_literal(left, right_type).unwrap_or(left_type);
+                    (left_type, right_type)
+                };
+
                 if !self.compatible(left_type, right_type) {
                     self.report_mismatch(left_type, right_type, expr.span);
                 }
@@ -260,26 +292,13 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                     }
                 }
             }
-            Expr::Unary { expr: inner, .. } => self.check_expression(inner),
+            Expr::Unary { expr: inner, .. } => match strip_literal_op(expr) {
+                Some((literal, negated)) => self.default_literal_type(literal, negated),
+                None => self.check_expression(inner),
+            },
+            Expr::Reference { expr: inner } => self.check_reference(inner, expr.span),
             Expr::If { expr: condition, body, else_branch } => {
-                self.check_condition(condition);
-                let then_type = self.check_block_value(body);
-
-                match else_branch {
-                    Some(else_body) => {
-                        let else_type = self.check_block_value(else_body);
-                        if !self.compatible(then_type, else_type) {
-                            self.report_mismatch(then_type, else_type, expr.span);
-                        }
-
-                        if self.context.types[then_type.0 as usize] == Type::Never {
-                            else_type
-                        } else {
-                            then_type
-                        }
-                    }
-                    None => self.context.intern(Type::Unit),
-                }
+                self.check_if(expr.span, condition, body, else_branch.as_ref(), None)
             }
             Expr::While { expr: condition, body } => {
                 self.check_condition(condition);
@@ -296,6 +315,69 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         type_id
     }
 
+    fn check_expected_expression_type(
+        &mut self,
+        expr: &Expression<'src>,
+        expected: TypeId
+    ) -> TypeId {
+        if let Some(type_id) = self.try_represent_literal(expr, expected) {
+            return type_id;
+        }
+
+        if let Some(type_id) = self.deep_check_expected_expression_type(expr, expected) {
+            return type_id;
+        }
+
+        self.check_expression(expr)
+    }
+
+    fn deep_check_expected_expression_type(&mut self, expr: &Expression<'src>, expected: TypeId) -> Option<TypeId> {
+        let type_id = match &*expr.variant {
+            Expr::If { expr: condition, body, else_branch } => {
+                self.check_if(expr.span, condition, body, else_branch.as_ref(), Some(expected))
+            }
+            Expr::ArrayExpression { values_exprs } => {
+                let Type::Array(elem_type) = self.context.types[expected.0 as usize] else {
+                    return None;
+                };
+
+                self.check_array_expression(values_exprs, expr.span, Some(elem_type))
+            }
+            _ => return None,
+        };
+
+        self.set_node_type(expr.id, type_id);
+        Some(type_id)
+    }
+
+    fn check_if(
+        &mut self,
+        span: Span<'src>,
+        condition: &Expression<'src>,
+        body: &Block<'src>,
+        else_branch: Option<&Block<'src>>,
+        expected: Option<TypeId>,
+    ) -> TypeId {
+        self.check_condition(condition);
+
+        let then_type = self.check_block_value(body, expected);
+
+        let Some(else_body) = else_branch else {
+            return self.context.intern(Type::Unit);
+        };
+
+        let else_type = self.check_block_value(else_body, expected);
+        if !self.compatible(then_type, else_type) {
+            self.report_mismatch(then_type, else_type, span);
+        }
+
+        if self.context.types[then_type.0 as usize] == Type::Never {
+            else_type
+        } else {
+            then_type
+        }
+    }
+
     fn check_condition(&mut self, expr: &Expression<'src>) {
         let condition_type = self.check_expression(expr);
         let bool_type = self.context.intern(Type::Bool);
@@ -307,9 +389,16 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
     fn check_memory_target(&mut self, memory_target: &MemoryTarget<'src>) -> TypeId {
         match &memory_target.variant {
             MemTar::Name(identifier) => {
-                match self.resolution_of(identifier.id).and_then(|sym| self.symbol_type(sym)) {
+                let Some(symbol) = self.resolution_of(identifier.id) else {
+                    return self.context.intern(Type::TypeError);
+                };
+
+                match self.symbol_type(symbol) {
                     Some(type_id) => type_id,
-                    None => self.context.intern(Type::TypeError),
+                    None => {
+                        self.context.report(Diagnostic::not_a_value(identifier.ident, memory_target.span));
+                        self.context.intern(Type::TypeError)
+                    }
                 }
             }
             MemTar::FieldAccess { target, field_name } => {
@@ -318,26 +407,67 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             MemTar::ArrayAccess { target, index_expression } => {
                 self.check_array_access(target, index_expression, memory_target.span)
             }
-            MemTar::Dereference(_) => {
-                self.context.report(Diagnostic::not_yet_supported("dereferencing", memory_target.span));
-                self.context.intern(Type::TypeError)
+            MemTar::Dereference(inner) => {
+                let inner_type = self.check_expression(inner);
+                if self.is_poisoned(inner_type) {
+                    return inner_type;
+                }
+
+                match &self.context.types[inner_type.0 as usize] {
+                    Type::Pointer(pointee) => *pointee,
+                    _ => {
+                        self.context.report(Diagnostic::not_a_pointer(memory_target.span));
+                        self.context.intern(Type::TypeError)
+                    }
+                }
             }
         }
+    }
+
+    fn check_reference(&mut self, inner: &Expression<'src>, span: Span<'src>) -> TypeId {
+        let inner_type = self.check_expression(inner);
+
+        if self.is_poisoned(inner_type) {
+            return inner_type;
+        }
+
+        if !self.is_addressable(inner, inner_type) {
+            self.context.report(Diagnostic::not_addressable(span));
+            return self.context.intern(Type::TypeError);
+        }
+
+        self.context.intern(Type::Pointer(inner_type))
+    }
+
+    fn is_addressable(&self, expr: &Expression<'src>, type_id: TypeId) -> bool {
+        if matches!(self.context.types[type_id.0 as usize], Type::Fn { .. }) {
+            return false;
+        }
+
+        matches!(
+            &*expr.variant,
+            Expr::MemoryTarget(_) | Expr::StructInit { .. } | Expr::ArrayExpression { .. }
+        )
     }
 
     fn check_array_expression(
         &mut self,
         values_exprs: &Vec<Box<Expression<'src>>>,
         span: Span<'src>,
+        expected_elem: Option<TypeId>,
     ) -> TypeId {
         let Some((first, remaining)) = values_exprs.split_first() else {
             self.context.report(Diagnostic::empty_array_literal(span));
             return self.context.intern(Type::TypeError);
         };
 
-        let elem_type = self.check_expression(first);
+        let elem_type = match expected_elem {
+            Some(expected) => self.check_expected_expression_type(first, expected),
+            None => self.check_expression(first),
+        };
+
         for value in remaining {
-            let value_type = self.check_expression(value);
+            let value_type = self.check_expected_expression_type(value, elem_type);
             if !self.compatible(elem_type, value_type) {
                 self.report_mismatch(elem_type, value_type, value.span);
             }
@@ -361,9 +491,12 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             self.report_mismatch(int_type, index_type, index_expression.span);
         }
 
+        if self.is_poisoned(target_type) {
+            return target_type;
+        }
+
         match &self.context.types[target_type.0 as usize] {
             Type::Array(inner) => *inner,
-            Type::TypeError => target_type,
             _ => {
                 self.context.report(Diagnostic::not_indexable(span));
                 self.context.intern(Type::TypeError)
@@ -416,6 +549,15 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         }
 
         let target_type = self.check_memory_target(target);
+        let target_type = match &self.context.types[target_type.0 as usize] {
+            Type::Pointer(p) => *p,
+            _ => target_type,
+        };
+
+        if self.is_poisoned(target_type) {
+            return target_type;
+        }
+
         match self.context.types[target_type.0 as usize].clone() {
             Type::Struct(struct_sym) => {
                 let field_type = self.context.struct_fields.get(&struct_sym)
@@ -431,7 +573,6 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                     }
                 }
             }
-            Type::TypeError => target_type,
             _ => {
                 self.context.report(Diagnostic::not_a_struct(span));
                 self.context.intern(Type::TypeError)
@@ -466,24 +607,23 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
 
         let mut known = Vec::with_capacity(fields.len());
         for field in fields {
-            let value_type = self.check_expression(&field.value);
-
             let matching_field = declared_fields
                 .iter()
-                .find(|(name, _)| *name == field.name.ident);
+                .find(|(name, _)| *name == field.name.ident)
+                .copied();
 
-            match matching_field {
-                Some((_, declared_type)) => {
-                    if !self.compatible(*declared_type, value_type) {
-                        self.report_mismatch(*declared_type, value_type, field.value.span);
-                    }
+            let Some((_, declared_type)) = matching_field else {
+                self.check_expression(&field.value);
+                self.context.report(Diagnostic::unknown_struct_field(struct_name, field.name.ident, field.name.span));
+                continue;
+            };
 
-                    known.push(field.name.ident);
-                }
-                None => {
-                    self.context.report(Diagnostic::unknown_struct_field(struct_name, field.name.ident, field.name.span));
-                }
+            let value_type = self.check_expected_expression_type(&field.value, declared_type);
+            if !self.compatible(declared_type, value_type) {
+                self.report_mismatch(declared_type, value_type, field.value.span);
             }
+
+            known.push(field.name.ident);
         }
 
         let missing = declared_fields
@@ -506,36 +646,45 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         call_span: Span<'src>,
     ) -> TypeId {
         let callee_type = self.check_expression(target);
-        let arg_types = args.list
-            .iter()
-            .map(|arg| self.check_expression(arg))
-            .collect::<Vec<_>>();
 
-        match self.context.types[callee_type.0 as usize].clone() {
-            Type::Fn { params, return_type } => {
-                if params.len() != arg_types.len() {
-                    self.context.report(Diagnostic::wrong_arg_count(params.len(), arg_types.len(), call_span));
-                } else {
-                    for (expected, found) in params.iter().zip(arg_types.iter()) {
-                        if !self.compatible(*expected, *found) {
-                            self.report_mismatch(*expected, *found, call_span);
-                        }
-                    }
-                }
-                return_type
+        let Type::Fn { params, return_type } = self.context.types[callee_type.0 as usize].clone() else {
+            for arg in &args.list {
+                self.check_expression(arg);
             }
-            Type::TypeError => callee_type,
-            _ => {
-                self.context.report(Diagnostic::not_callable(call_span));
-                self.context.intern(Type::TypeError)
+
+            if self.is_poisoned(callee_type) {
+                return callee_type;
+            }
+
+            self.context.report(Diagnostic::not_callable(call_span));
+            return self.context.intern(Type::TypeError);
+        };
+
+        if params.len() != args.list.len() {
+            for arg in &args.list {
+                self.check_expression(arg);
+            }
+
+            self.context.report(Diagnostic::wrong_arg_count(params.len(), args.list.len(), call_span));
+            return return_type;
+        }
+
+        for (expected, arg) in params.iter().zip(args.list.iter()) {
+            let found = self.check_expected_expression_type(arg, *expected);
+            if !self.compatible(*expected, found) {
+                self.report_mismatch(*expected, found, call_span);
             }
         }
+
+        return_type
+    }
+
+    fn is_poisoned(&self, type_id: TypeId) -> bool {
+        matches!(self.context.types[type_id.0 as usize], Type::TypeError | Type::Never)
     }
 
     fn compatible(&self, a: TypeId, b: TypeId) -> bool {
-        a == b
-            || matches!(self.context.types[a.0 as usize], Type::TypeError | Type::Never)
-            || matches!(self.context.types[b.0 as usize], Type::TypeError | Type::Never)
+        a == b || self.is_poisoned(a) || self.is_poisoned(b)
     }
 
     fn report_mismatch(&mut self, expected: TypeId, found: TypeId, span: Span<'src>) {
@@ -548,10 +697,19 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         match &self.context.types[type_id.0 as usize] {
             Type::Unit => "unit".to_string(),
             Type::Int => "int".to_string(),
+            Type::Int8 => "int8".to_string(),
+            Type::Int32 => "int32".to_string(),
+            Type::Int64 => "int64".to_string(),
+            Type::Uint => "uint".to_string(),
+            Type::Uint8 => "uint8".to_string(),
+            Type::Uint32 => "uint32".to_string(),
+            Type::Uint64 => "uint64".to_string(),
             Type::Float => "float".to_string(),
+            Type::Float32 => "float32".to_string(),
             Type::Bool => "bool".to_string(),
             Type::String => "string".to_string(),
             Type::Array(inner) => format!("[{}]", self.type_name(*inner)),
+            Type::Pointer(inner) => format!("*{}", self.type_name(*inner)),
             Type::Struct(sym) => self.context.symbols[sym.0 as usize].name.to_string(),
             Type::Fn { .. } => "function".to_string(),
             Type::Never => "never".to_string(),

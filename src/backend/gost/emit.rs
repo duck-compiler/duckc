@@ -30,6 +30,7 @@ fn emit_type<'src>(go_type: &GoType<'src>) -> String {
         GoType::Float32 => "float32".to_string(),
         GoType::Float64 => "float64".to_string(),
         GoType::Array(go_type_box) => format!("[]{}", emit_type(go_type_box)),
+        GoType::Pointer(go_type) => format!("*{}", emit_type(go_type)),
         GoType::Struct { fields } => format!(
             "struct {{\n{}\n}}",
             fields
@@ -197,16 +198,10 @@ fn emit_expr<'src>(expr: &GoExpression) -> String {
         GoExpression::UnaryOp { op, expr } => {
             format!("({}{})", emit_unary_operator(op), emit_expr(expr))
         },
+        GoExpression::AddressOf(expr) => format!("(&{})", emit_expr(expr)),
+        GoExpression::Dereference(expr) => format!("(*{})", emit_expr(expr)),
         GoExpression::Int(i) => format!("{i}"),
-        GoExpression::Int8(i) => format!("int8({i})"),
-        GoExpression::Int32(i) => format!("int32({i})"),
-        GoExpression::Int64(i) => format!("int64({i})"),
-        GoExpression::Uint(i) => format!("uint({i})"),
-        GoExpression::Uint8(i) => format!("uint8({i})"),
-        GoExpression::Uint32(i) => format!("uint32({i})"),
-        GoExpression::Uint64(i) => format!("uint64({i})"),
-        GoExpression::Float32(f) => format!("float32({f})"),
-        GoExpression::Float64(f) => format!("float64({f})"),
+        GoExpression::Float64(f) => format!("{f:?}"),
         GoExpression::Immediate(source) => source.to_string(),
     }
 }

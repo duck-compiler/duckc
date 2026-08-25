@@ -114,12 +114,16 @@ pub fn string<'src>(str: &'src str) -> Expression<'src> {
     }
 }
 
-pub fn int<'src>(i: i32) -> Expression<'src> {
+pub fn int<'src>(i: u64) -> Expression<'src> {
     Expression {
         id: NodeId::DUMMY,
-        variant: Box::new(Expr::IntLiteral(i.try_into().unwrap())),
+        variant: Box::new(Expr::IntLiteral(i)),
         span: empty_span(),
     }
+}
+
+pub fn float<'src>(f: f64) -> Expression<'src> {
+    expr(Expr::FloatLiteral(f))
 }
 
 pub fn bool_lit<'src>(b: bool) -> Expression<'src> {
@@ -206,9 +210,23 @@ pub fn name_target<'src>(name: &'src str) -> memory_target::MemTar<'src> {
 
 pub fn dereference<'src>(value: Expression<'src>) -> Expression<'src> {
     expr(Expr::MemoryTarget(super::MemoryTarget {
-        variant: MemTar::Dereference(Box::new(value)),
+        variant: deref_target(value),
         span: empty_span(),
     }))
+}
+
+pub fn deref_target<'src>(value: Expression<'src>) -> memory_target::MemTar<'src> {
+    MemTar::Dereference(Box::new(value))
+}
+
+pub fn reference<'src>(value: Expression<'src>) -> Expression<'src> {
+    expr(Expr::Reference {
+        expr: Box::new(value),
+    })
+}
+
+pub fn pointer_type<'src>(inner: TypeExpression<'src>) -> TypeExpression<'src> {
+    TypeExpression::Pointer { inner: Box::new(inner) }
 }
 
 pub fn field_target<'src>(target: memory_target::MemTar<'src>, field: &'src str) -> memory_target::MemTar<'src> {
@@ -228,17 +246,24 @@ pub fn mem_name<'src>(name: &'src str) -> Expression<'src> {
     }))
 }
 
-pub fn fn_call<'src>(
-    name: &'src str,
+pub fn call<'src>(
+    target: Expression<'src>,
     args: Vec<Expression<'src>>
 ) -> Expression<'src> {
     expr(Expr::FunctionCall {
-        target: Box::new(mem_name(name)),
+        target: Box::new(target),
         args: ExpressionList {
             list: args,
             span: empty_span(),
         },
     })
+}
+
+pub fn fn_call<'src>(
+    name: &'src str,
+    args: Vec<Expression<'src>>
+) -> Expression<'src> {
+    call(mem_name(name), args)
 }
 
 pub fn fn_def<'src>(

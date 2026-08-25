@@ -3,9 +3,39 @@ use std::process::Command;
 
 use crate::ast::TypeExpression;
 use crate::ast::expression::{BinaryOperator, UnaryOperator};
-use crate::ast::builder::{array, array_index, assign, binary, bool_lit, break_stmt, continue_stmt, expr_stmt, field_access, field_call, fn_call, fn_def, if_else_expr, if_expr, int, mem_name, name_target, no_type, program, return_stmt, string, struct_def, struct_init, type_, unary, use_stmt, var_decl, while_expr};
+use crate::ast::builder::{array, array_index, assign, binary, bool_lit, break_stmt, continue_stmt, deref_target, float, expr_stmt, field_access, field_call, field_target, fn_call, fn_def, ident, if_else_expr, if_expr, int, mem_name, name_target, no_type, pointer_type, program, reference, return_stmt, string, struct_def, struct_init, type_, unary, use_stmt, var_decl, while_expr};
 use crate::backend::semantics::{analyze_module, context::SemanticsContext};
 use crate::backend::gost::{emit_gost, translate};
+
+fn go_run(go_source: &str, test_dir: &str) -> Option<String> {
+    let Ok(go_version) = Command::new("go").arg("version").output() else {
+        eprintln!("skip go build: go not found in PATH");
+        return None;
+    };
+
+    assert!(go_version.status.success());
+
+    let dir = std::env::temp_dir().join(test_dir);
+    std::fs::create_dir_all(&dir).expect("failed to create temp dir");
+
+    let file_path = dir.join("main.go");
+    std::fs::write(&file_path, go_source).expect("failed to write temp go file");
+
+    let output = Command::new("go")
+        .arg("run")
+        .arg(&file_path)
+        .output()
+        .expect("failed to go run");
+
+    assert!(
+        output.status.success(),
+        "go run failed:\nstdout: {}\nstderr: {}\nsource: {go_source}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
 
 #[test]
 fn array_literal_and_index_translate_to_valid_go() {
@@ -607,4 +637,281 @@ fn while_used_as_a_value_translates_and_runs_correctly() {
         String::from_utf8_lossy(&output.stderr),
     );
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "done");
+}
+
+#[test]
+fn pointer_parameter_writes_through_to_the_callers_variable() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        use_stmt("strconv", None),
+        fn_def(
+            "set",
+            vec![("p", pointer_type(TypeExpression::Int)), ("v", TypeExpression::Int)],
+            no_type(),
+            vec![assign(deref_target(mem_name("p")), mem_name("v"))],
+        ),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("x", type_(TypeExpression::Int), Some(int(1))),
+                expr_stmt(fn_call("set", vec![reference(mem_name("x")), int(42)])),
+                expr_stmt(field_call("fmt", "Println", vec![field_call("strconv", "Itoa", vec![mem_name("x")])])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let go_source = emit_gost(translate(&context, module));
+
+    assert!(go_source.contains("func set(p *int, v int)"), "generated source: {go_source}");
+    assert!(go_source.contains("(*p) = v"), "generated source: {go_source}");
+    assert!(go_source.contains("set((&x), 42)"), "generated source: {go_source}");
+
+    let Some(stdout) = go_run(&go_source, "duckc-gost-pointer-param-test") else { return };
+    assert_eq!(stdout, "42");
+}
+
+#[test]
+fn pointer_to_struct_reads_and_writes_fields_through_auto_dereference() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        use_stmt("strconv", None),
+        struct_def("Point", vec![("x", TypeExpression::Int), ("y", TypeExpression::Int)]),
+        fn_def(
+            "shift",
+            vec![("p", pointer_type(TypeExpression::Ident(ident("Point"))))],
+            no_type(),
+            vec![assign(
+                field_target(name_target("p"), "x"),
+                binary(field_access(name_target("p"), "x"), BinaryOperator::Add, int(10)),
+            )],
+        ),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("pt", no_type(), Some(struct_init("Point", vec![("x", int(1)), ("y", int(2))]))),
+                expr_stmt(fn_call("shift", vec![reference(mem_name("pt"))])),
+                expr_stmt(field_call("fmt", "Println", vec![
+                    field_call("strconv", "Itoa", vec![field_access(name_target("pt"), "x")]),
+                ])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let go_source = emit_gost(translate(&context, module));
+
+    assert!(go_source.contains("func shift(p *Point)"), "generated source: {go_source}");
+    assert!(go_source.contains("p.x = (p.x + 10)"), "generated source: {go_source}");
+
+    let Some(stdout) = go_run(&go_source, "duckc-gost-pointer-struct-test") else { return };
+    assert_eq!(stdout, "11");
+}
+
+#[test]
+fn chained_pointer_fields_auto_dereference_and_run_correctly() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        use_stmt("strconv", None),
+        struct_def("Node", vec![
+            ("value", TypeExpression::Int),
+            ("next", pointer_type(TypeExpression::Ident(ident("Node")))),
+        ]),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("third", type_(TypeExpression::Ident(ident("Node"))), None),
+                assign(field_target(name_target("third"), "value"), int(3)),
+                var_decl("second", no_type(), Some(struct_init("Node", vec![
+                    ("value", int(2)),
+                    ("next", reference(mem_name("third"))),
+                ]))),
+                var_decl("first", no_type(), Some(struct_init("Node", vec![
+                    ("value", int(1)),
+                    ("next", reference(mem_name("second"))),
+                ]))),
+                expr_stmt(field_call("fmt", "Println", vec![
+                    field_call("strconv", "Itoa", vec![
+                        field_access(field_target(field_target(name_target("first"), "next"), "next"), "value"),
+                    ]),
+                ])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let go_source = emit_gost(translate(&context, module));
+
+    assert!(go_source.contains("next *Node"), "generated source: {go_source}");
+    assert!(go_source.contains("first.next.next.value"), "generated source: {go_source}");
+
+    let Some(stdout) = go_run(&go_source, "duckc-gost-linked-list-test") else { return };
+    assert_eq!(stdout, "3");
+}
+
+#[test]
+fn sized_integer_declaration_emits_valid_go() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        use_stmt("strconv", None),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("x", type_(TypeExpression::Int64), Some(int(5))),
+                expr_stmt(field_call("fmt", "Println", vec![
+                    field_call("strconv", "FormatInt", vec![mem_name("x"), int(10)]),
+                ])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let go_source = emit_gost(translate(&context, module));
+
+    assert!(go_source.contains("var x int64 = 5"), "generated source: {go_source}");
+
+    let Some(stdout) = go_run(&go_source, "duckc-gost-sized-int-test") else { return };
+    assert_eq!(stdout, "5");
+}
+
+#[test]
+fn go_function_taking_a_pointer_to_a_sized_int_writes_back_into_the_duck_variable() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("flag", None),
+        use_stmt("fmt", None),
+        use_stmt("strconv", None),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("count", type_(TypeExpression::Int64), Some(int(0))),
+                expr_stmt(field_call("flag", "Int64Var", vec![
+                    reference(mem_name("count")),
+                    string("n"),
+                    int(7),
+                    string("how many"),
+                ])),
+                expr_stmt(field_call("fmt", "Println", vec![
+                    field_call("strconv", "FormatInt", vec![mem_name("count"), int(10)]),
+                ])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let go_source = emit_gost(translate(&context, module));
+
+    assert!(go_source.contains("var count int64 = 0"), "generated source: {go_source}");
+    assert!(go_source.contains(r#"flag.Int64Var((&count), "n", 7, "how many")"#), "generated source: {go_source}");
+
+    let Some(stdout) = go_run(&go_source, "duckc-gost-go-pointer-param-test") else { return };
+    assert_eq!(stdout, "7");
+}
+
+#[test]
+fn float_literals_emit_as_untyped_constants_that_fit_float32_and_float64() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        use_stmt("strconv", None),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("narrow", type_(TypeExpression::Float32), Some(float(1.5))),
+                var_decl("inferred", no_type(), Some(float(2.0))),
+                expr_stmt(field_call("fmt", "Println", vec![
+                    field_call("strconv", "FormatFloat", vec![mem_name("inferred"), int(102), int(1), int(64)]),
+                ])),
+                expr_stmt(if_else_expr(
+                    binary(mem_name("narrow"), BinaryOperator::Greater, float(1.0)),
+                    vec![expr_stmt(field_call("fmt", "Println", vec![string("narrow-ok")]))],
+                    vec![expr_stmt(field_call("fmt", "Println", vec![string("narrow-wrong")]))],
+                )),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let go_source = emit_gost(translate(&context, module));
+
+    assert!(go_source.contains("var narrow float32 = 1.5"), "generated source: {go_source}");
+    assert!(go_source.contains("2.0"), "generated source: {go_source}");
+    assert!(go_source.contains("strconv.FormatFloat(inferred, 102, 1, 64)"), "generated source: {go_source}");
+
+    let Some(stdout) = go_run(&go_source, "duckc-gost-float-literal-test") else { return };
+    assert_eq!(stdout, "2.0\nnarrow-ok");
+}
+
+#[test]
+fn negative_and_branch_valued_sized_literals_emit_valid_go() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        use_stmt("strconv", None),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
+                var_decl("negative", type_(TypeExpression::Int64), Some(unary(UnaryOperator::Neg, int(5)))),
+                var_decl("branched", type_(TypeExpression::Int64), Some(if_else_expr(
+                    mem_name("flag"),
+                    vec![expr_stmt(int(7))],
+                    vec![expr_stmt(int(9))],
+                ))),
+                var_decl("widened", type_(TypeExpression::Array { inner: Box::new(TypeExpression::Int64) }), Some(array(vec![int(1), int(2)]))),
+                expr_stmt(field_call("fmt", "Println", vec![
+                    field_call("strconv", "FormatInt", vec![
+                        binary(
+                            binary(mem_name("negative"), BinaryOperator::Add, mem_name("branched")),
+                            BinaryOperator::Add,
+                            array_index("widened", int(1)),
+                        ),
+                        int(10),
+                    ]),
+                ])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let go_source = emit_gost(translate(&context, module));
+
+    assert!(go_source.contains("var negative int64 = (-5)"), "generated source: {go_source}");
+    assert!(go_source.contains("var __duck_if_0 int64"), "generated source: {go_source}");
+    assert!(go_source.contains("[]int64{1, 2}"), "generated source: {go_source}");
+
+    let Some(stdout) = go_run(&go_source, "duckc-gost-sized-literal-forms-test") else { return };
+    assert_eq!(stdout, "4");
 }

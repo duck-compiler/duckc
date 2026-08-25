@@ -166,10 +166,14 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                     ));
                 }
             }
-            TypeExpression::Array { inner } => {
+            TypeExpression::Array { inner } | TypeExpression::Pointer { inner } => {
                 self.resolve_type_expr(inner);
             }
-            TypeExpression::Int | TypeExpression::Float
+            TypeExpression::Int | TypeExpression::Int8
+            | TypeExpression::Int32 | TypeExpression::Int64
+            | TypeExpression::Uint | TypeExpression::Uint8
+            | TypeExpression::Uint32 | TypeExpression::Uint64
+            | TypeExpression::Float | TypeExpression::Float32
             | TypeExpression::Bool | TypeExpression::String => {}
         }
     }
@@ -206,6 +210,9 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                 self.resolve_expression(right);
             }
             Expr::Unary { op: _, expr } => {
+                self.resolve_expression(expr);
+            }
+            Expr::Reference { expr } => {
                 self.resolve_expression(expr);
             }
             Expr::While { expr, body } => {

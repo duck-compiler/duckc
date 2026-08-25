@@ -1,5 +1,5 @@
-use super::{analyze_module, context::SemanticsContext, r#type::Type, symbol::SymbolKind};
-use crate::ast::{AstRoot, Statement, TypeExpression, expression::BinaryOperator, builder::{array, array_index, assign, binary, bool_lit, break_stmt, continue_stmt, dereference, expr_stmt, field_access, field_call, field_target, fn_call, fn_def, ident, if_else_expr, if_expr, int, mem_name, name_target, no_type, program, return_stmt, string, struct_def, struct_init, type_, use_stmt, var_decl, while_expr}};
+use super::{analyze_module, context::SemanticsContext, r#type::{Type, TypeId}, symbol::SymbolKind};
+use crate::ast::{AstRoot, Statement, TypeExpression, expression::{BinaryOperator, UnaryOperator}, builder::{array, array_index, assign, binary, bool_lit, break_stmt, call, continue_stmt, dereference, expr_stmt, field_access, field_call, field_target, float, fn_call, fn_def, ident, if_else_expr, if_expr, int, mem_name, name_target, no_type, pointer_type, program, reference, unary, return_stmt, string, struct_def, struct_init, type_, use_stmt, var_decl, while_expr}};
 
 fn analyze(program: AstRoot<'static>) -> SemanticsContext<'static> {
     let mut context = SemanticsContext::new();
@@ -296,7 +296,30 @@ fn go_stdlib_struct_unexported_field_is_reported_as_unknown() {
 }
 
 #[test]
-fn dereference_reports_t0010_instead_of_failing_silently() {
+fn reference_then_dereference_round_trips_to_the_original_type() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("x", type_(TypeExpression::Int), Some(int(1))),
+            var_decl("p", no_type(), Some(reference(mem_name("x")))),
+            var_decl("y", no_type(), Some(dereference(mem_name("p")))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let int_type = context.types.iter().position(|t| *t == Type::Int).expect("int type");
+    let p = context.symbols.iter().find(|s| s.name == "p").expect("p symbol");
+    assert_eq!(
+        context.types[p.type_.expect("p should have a type").0 as usize],
+        Type::Pointer(TypeId(int_type as u32)),
+    );
+
+    let y = context.symbols.iter().find(|s| s.name == "y").expect("y symbol");
+    assert_eq!(context.types[y.type_.expect("y should have a type").0 as usize], Type::Int);
+}
+
+#[test]
+fn dereferencing_a_non_pointer_reports_t0015() {
     let context = analyze(program(vec![
         main_fn(vec![
             var_decl("x", type_(TypeExpression::Int), Some(int(1))),
@@ -304,7 +327,238 @@ fn dereference_reports_t0010_instead_of_failing_silently() {
         ]),
     ]));
 
-    assert!(has_error_code(&context, "T0010"), "diagnostics: {:?}", context.diagnostics);
+    assert!(has_error_code(&context, "T0015"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn dereferencing_a_diverging_expression_does_not_report_t0015() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
+            var_decl("y", no_type(), Some(dereference(if_else_expr(
+                mem_name("flag"),
+                vec![return_stmt(None)],
+                vec![return_stmt(None)],
+            )))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn taking_the_address_of_a_literal_reports_t0016() {
+    let context = analyze(program(vec![
+        main_fn(vec![var_decl("p", no_type(), Some(reference(int(1))))]),
+    ]));
+
+    assert!(has_error_code(&context, "T0016"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn taking_the_address_of_a_composite_literal_is_allowed() {
+    let context = analyze(program(vec![
+        struct_def("Point", vec![("x", TypeExpression::Int)]),
+        main_fn(vec![
+            var_decl("p", no_type(), Some(reference(struct_init("Point", vec![("x", int(1))])))),
+            var_decl("a", no_type(), Some(reference(array(vec![int(1), int(2)])))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let pointee_of = |name: &str| {
+        let symbol = context.symbols.iter().find(|s| s.name == name).expect("symbol");
+        let Type::Pointer(inner) = context.types[symbol.type_.expect("should have a type").0 as usize] else {
+            panic!("expected a pointer for `{name}`, found {:?}", context.types[symbol.type_.unwrap().0 as usize]);
+        };
+        context.types[inner.0 as usize].clone()
+    };
+
+    assert!(matches!(pointee_of("p"), Type::Struct(_)));
+    assert_eq!(pointee_of("a"), Type::Array(TypeId(context.types.iter().position(|t| *t == Type::Int).expect("int type") as u32)));
+}
+
+#[test]
+fn taking_the_address_of_a_duck_function_reports_t0016() {
+    let context = analyze(program(vec![
+        fn_def("helper", vec![], no_type(), vec![]),
+        main_fn(vec![var_decl("p", no_type(), Some(reference(mem_name("helper"))))]),
+    ]));
+
+    assert!(has_error_code(&context, "T0016"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn taking_the_address_of_a_go_package_function_reports_t0016() {
+    let context = analyze(program(vec![
+        use_stmt("fmt", None),
+        main_fn(vec![
+            var_decl("p", no_type(), Some(reference(field_access(name_target("fmt"), "Println")))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0016"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn taking_the_address_of_an_unknown_name_reports_only_s0001() {
+    let context = analyze(program(vec![
+        main_fn(vec![var_decl("p", no_type(), Some(reference(mem_name("unknown"))))]),
+    ]));
+
+    assert!(has_error_code(&context, "S0001"), "diagnostics: {:?}", context.diagnostics);
+    assert!(!has_error_code(&context, "T0016"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn field_access_through_a_pointer_auto_dereferences() {
+    let context = analyze(program(vec![
+        struct_def("Point", vec![("x", TypeExpression::Int)]),
+        main_fn(vec![
+            var_decl("p", no_type(), Some(struct_init("Point", vec![("x", int(1))]))),
+            var_decl("ptr", no_type(), Some(reference(mem_name("p")))),
+            var_decl("x", no_type(), Some(field_access(name_target("ptr"), "x"))),
+            assign(field_target(name_target("ptr"), "x"), int(2)),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let x = context.symbols.iter().find(|s| s.name == "x").expect("x symbol");
+    assert_eq!(context.types[x.type_.expect("x should have a type").0 as usize], Type::Int);
+}
+
+#[test]
+fn field_access_auto_dereferences_across_chained_pointer_fields() {
+    let context = analyze(program(vec![
+        struct_def("Node", vec![
+            ("value", TypeExpression::Int),
+            ("next", pointer_type(TypeExpression::Ident(ident("Node"))))
+        ]),
+        main_fn(vec![
+            var_decl("tail", type_(TypeExpression::Ident(ident("Node"))), None),
+            var_decl("head", no_type(), Some(struct_init("Node", vec![
+                ("value", int(1)),
+                ("next", reference(mem_name("tail"))),
+            ]))),
+            var_decl("value", no_type(), Some(field_access(field_target(name_target("head"), "next"), "value"))),
+            var_decl("nested", no_type(), Some(reference(field_access(
+                field_target(field_target(name_target("head"), "next"), "next"),
+                "value",
+            )))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let value = context.symbols.iter().find(|s| s.name == "value").expect("value symbol");
+    assert_eq!(context.types[value.type_.expect("value should have a type").0 as usize], Type::Int);
+
+    let int_type = context.types.iter().position(|t| *t == Type::Int).expect("int type");
+    let nested = context.symbols.iter().find(|s| s.name == "nested").expect("nested symbol");
+    assert_eq!(
+        context.types[nested.type_.expect("nested should have a type").0 as usize],
+        Type::Pointer(TypeId(int_type as u32)),
+    );
+}
+
+#[test]
+fn indexing_through_a_pointer_to_an_array_reports_t0006() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("arr", no_type(), Some(array(vec![int(1)]))),
+            var_decl("ptr", no_type(), Some(reference(mem_name("arr")))),
+            var_decl("elem", no_type(), Some(array_index("ptr", int(0)))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0006"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn sized_numeric_annotation_resolves_to_its_own_type() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("small", type_(TypeExpression::Int64), Some(int(5))),
+            var_decl("wide", type_(TypeExpression::Uint64), None),
+            var_decl("ratio", type_(TypeExpression::Float32), None),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let type_of = |name: &str| {
+        let symbol = context.symbols.iter().find(|s| s.name == name).expect("symbol");
+        context.types[symbol.type_.expect("should have a type").0 as usize].clone()
+    };
+
+    assert_eq!(type_of("small"), Type::Int64);
+    assert_eq!(type_of("wide"), Type::Uint64);
+    assert_eq!(type_of("ratio"), Type::Float32);
+}
+
+#[test]
+fn a_sized_integer_is_not_compatible_with_plain_int() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("wide", type_(TypeExpression::Int64), None),
+            var_decl("narrow", type_(TypeExpression::Int), Some(mem_name("wide"))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0001"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn pointers_to_differently_sized_integers_are_distinct_types() {
+    let context = analyze(program(vec![
+        fn_def("takes_int64_pointer", vec![("p", pointer_type(TypeExpression::Int64))], no_type(), vec![]),
+        main_fn(vec![
+            var_decl("plain", type_(TypeExpression::Int), None),
+            expr_stmt(fn_call("takes_int64_pointer", vec![reference(mem_name("plain"))])),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0001"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn go_pointer_to_sized_int_maps_through_the_real_toolchain() {
+    let context = analyze(program(vec![
+        use_stmt("flag", None),
+        main_fn(vec![
+            var_decl("p", no_type(), Some(field_call("flag", "Int64", vec![string("n"), int(0), string("usage")]))),
+            var_decl("v", no_type(), Some(dereference(mem_name("p")))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let int64_type = context.types.iter().position(|t| *t == Type::Int64).expect("int64 type");
+    let p = context.symbols.iter().find(|s| s.name == "p").expect("p symbol");
+    assert_eq!(
+        context.types[p.type_.expect("p should have a type").0 as usize],
+        Type::Pointer(TypeId(int64_type as u32)),
+    );
+
+    let v = context.symbols.iter().find(|s| s.name == "v").expect("v symbol");
+    assert_eq!(context.types[v.type_.expect("v should have a type").0 as usize], Type::Int64);
+}
+
+#[test]
+fn go_time_duration_maps_to_int64_through_the_real_toolchain() {
+    let context = analyze(program(vec![
+        use_stmt("time", None),
+        main_fn(vec![
+            var_decl("d", no_type(), Some(field_call("time", "Since", vec![field_call("time", "Now", vec![])]))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let d = context.symbols.iter().find(|s| s.name == "d").expect("d symbol");
+    assert_eq!(context.types[d.type_.expect("d should have a type").0 as usize], Type::Int64);
 }
 
 #[test]
@@ -598,4 +852,264 @@ fn doubly_nested_function_definition_still_reports_t0014() {
 
     let count = context.diagnostics.iter().filter(|d| &*d.error_code == "T0014").count();
     assert_eq!(count, 2, "expected both nested definitions to be flagged: {:?}", context.diagnostics);
+}
+
+#[test]
+fn an_int_literal_too_large_for_its_sized_type_reports_t0018() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("small", type_(TypeExpression::Uint8), Some(int(300))),
+            var_decl("signed", type_(TypeExpression::Int8), Some(int(200))),
+        ]),
+    ]));
+
+    let count = context.diagnostics.iter().filter(|d| &*d.error_code == "T0018").count();
+    assert_eq!(count, 2, "diagnostics: {:?}", context.diagnostics);
+    assert!(!has_error_code(&context, "T0001"), "range errors must not cascade: {:?}", context.diagnostics);
+}
+
+#[test]
+fn an_int_literal_at_the_edge_of_its_sized_type_is_accepted() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("byte_max", type_(TypeExpression::Uint8), Some(int(255))),
+            var_decl("wide_max", type_(TypeExpression::Uint64), Some(int(u64::MAX))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn arithmetic_between_a_sized_variable_and_a_literal_stays_in_the_sized_type() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("wide", type_(TypeExpression::Int64), Some(int(1))),
+            var_decl("sum", no_type(), Some(binary(mem_name("wide"), BinaryOperator::Add, int(1)))),
+            var_decl("flipped", no_type(), Some(binary(int(1), BinaryOperator::Add, mem_name("wide")))),
+            var_decl("compared", no_type(), Some(binary(mem_name("wide"), BinaryOperator::Greater, int(0)))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let type_of = |name: &str| {
+        let symbol = context.symbols.iter().find(|s| s.name == name).expect("symbol");
+        context.types[symbol.type_.expect("should have a type").0 as usize].clone()
+    };
+
+    assert_eq!(type_of("sum"), Type::Int64);
+    assert_eq!(type_of("flipped"), Type::Int64);
+    assert_eq!(type_of("compared"), Type::Bool);
+}
+
+#[test]
+fn an_int_literal_can_initialize_a_float() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("wide", type_(TypeExpression::Float), Some(int(5))),
+            var_decl("narrow", type_(TypeExpression::Float32), Some(int(5))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn using_a_go_package_as_a_value_reports_t0017_instead_of_a_silent_type_error() {
+    let context = analyze(program(vec![
+        use_stmt("fmt", None),
+        main_fn(vec![var_decl("x", no_type(), Some(mem_name("fmt")))]),
+    ]));
+
+    assert!(has_error_code(&context, "T0017"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn taking_the_address_of_a_go_package_reports_t0017_without_cascading() {
+    let context = analyze(program(vec![
+        use_stmt("fmt", None),
+        main_fn(vec![var_decl("p", no_type(), Some(reference(mem_name("fmt"))))]),
+    ]));
+
+    assert!(has_error_code(&context, "T0017"), "diagnostics: {:?}", context.diagnostics);
+    assert!(!has_error_code(&context, "T0016"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn an_int_literal_too_large_for_plain_int_reports_t0018() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("annotated", type_(TypeExpression::Int), Some(int(u64::MAX))),
+            var_decl("inferred", no_type(), Some(int(u64::MAX))),
+            expr_stmt(int(u64::MAX)),
+        ]),
+    ]));
+
+    let count = context.diagnostics.iter().filter(|d| &*d.error_code == "T0018").count();
+    assert_eq!(count, 3, "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_large_literal_represented_as_a_wider_type_is_not_also_reported_against_int() {
+    let context = analyze(program(vec![
+        fn_def("takes_uint64", vec![("v", TypeExpression::Uint64)], no_type(), vec![]),
+        main_fn(vec![
+            var_decl("wide", type_(TypeExpression::Uint64), Some(int(u64::MAX))),
+            expr_stmt(fn_call("takes_uint64", vec![int(u64::MAX)])),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_float_literal_that_overflows_float32_reports_t0018() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("narrow", type_(TypeExpression::Float32), Some(float(1e300))),
+            var_decl("wide", type_(TypeExpression::Float), Some(float(1e300))),
+        ]),
+    ]));
+
+    let count = context.diagnostics.iter().filter(|d| &*d.error_code == "T0018").count();
+    assert_eq!(count, 1, "only the float32 declaration overflows: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_declaration_without_type_or_initializer_reports_t0019() {
+    let context = analyze(program(vec![
+        main_fn(vec![var_decl("u", no_type(), None)]),
+    ]));
+
+    assert!(has_error_code(&context, "T0019"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn every_type_error_producing_path_reports_a_diagnostic() {
+    // translation assumes a `Type::TypeError` never reaches it silently, because the driver
+    // stops at the first error diagnostic. these are the paths that mint one.
+    let cases: Vec<(&str, AstRoot<'static>)> = vec![
+        ("declaration without type or initializer", program(vec![
+            main_fn(vec![var_decl("u", no_type(), None)]),
+        ])),
+        ("unknown name", program(vec![
+            main_fn(vec![var_decl("x", no_type(), Some(mem_name("nope")))]),
+        ])),
+        ("package used as a value", program(vec![
+            use_stmt("fmt", None),
+            main_fn(vec![var_decl("x", no_type(), Some(mem_name("fmt")))]),
+        ])),
+        ("struct init of an unresolved type", program(vec![
+            main_fn(vec![var_decl("x", no_type(), Some(struct_init("Nope", vec![])))]),
+        ])),
+        ("annotation naming an unresolved type", program(vec![
+            main_fn(vec![var_decl("x", type_(TypeExpression::Ident(ident("Nope"))), None)]),
+        ])),
+    ];
+
+    for (label, ast) in cases {
+        let context = analyze(ast);
+        assert!(
+            !context.diagnostics.is_empty(),
+            "`{label}` produced a type error without reporting anything",
+        );
+    }
+}
+
+#[test]
+fn a_negative_literal_can_be_represented_as_the_expected_sized_type() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("wide", type_(TypeExpression::Int64), Some(unary(UnaryOperator::Neg, int(5)))),
+            var_decl("edge", type_(TypeExpression::Int8), Some(unary(UnaryOperator::Neg, int(128)))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let wide = context.symbols.iter().find(|s| s.name == "wide").expect("wide symbol");
+    assert_eq!(context.types[wide.type_.expect("wide should have a type").0 as usize], Type::Int64);
+}
+
+#[test]
+fn a_negative_literal_out_of_range_reports_t0018() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("too_small", type_(TypeExpression::Int8), Some(unary(UnaryOperator::Neg, int(200)))),
+            var_decl("unsigned", type_(TypeExpression::Uint8), Some(unary(UnaryOperator::Neg, int(1)))),
+        ]),
+    ]));
+
+    let count = context.diagnostics.iter().filter(|d| &*d.error_code == "T0018").count();
+    assert_eq!(count, 2, "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn if_else_used_as_a_value_is_represented_as_the_expected_sized_type() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
+            var_decl("wide", type_(TypeExpression::Int64), Some(if_else_expr(
+                mem_name("flag"),
+                vec![expr_stmt(int(1))],
+                vec![expr_stmt(int(2))],
+            ))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let wide = context.symbols.iter().find(|s| s.name == "wide").expect("wide symbol");
+    assert_eq!(context.types[wide.type_.expect("wide should have a type").0 as usize], Type::Int64);
+}
+
+#[test]
+fn array_elements_are_represented_as_the_element_type() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("wide", type_(TypeExpression::Int64), Some(int(1))),
+            var_decl("from_first", no_type(), Some(array(vec![mem_name("wide"), int(5)]))),
+            var_decl("from_annotation", type_(TypeExpression::Array { inner: Box::new(TypeExpression::Int64) }), Some(array(vec![int(1), int(2)]))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let int64_type = context.types.iter().position(|t| *t == Type::Int64).expect("int64 type");
+    let from_first = context.symbols.iter().find(|s| s.name == "from_first").expect("from_first symbol");
+    assert_eq!(
+        context.types[from_first.type_.expect("from_first should have a type").0 as usize],
+        Type::Array(TypeId(int64_type as u32)),
+    );
+}
+
+#[test]
+fn a_wide_literal_on_the_left_of_a_binary_is_represented_as_the_right_hand_type() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("wide", type_(TypeExpression::Uint64), Some(int(1))),
+            var_decl("sum", no_type(), Some(binary(int(u64::MAX), BinaryOperator::Add, mem_name("wide")))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let sum = context.symbols.iter().find(|s| s.name == "sum").expect("sum symbol");
+    assert_eq!(context.types[sum.type_.expect("sum should have a type").0 as usize], Type::Uint64);
+}
+
+#[test]
+fn calling_a_diverging_expression_does_not_report_t0002() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
+            expr_stmt(call(
+                if_else_expr(mem_name("flag"), vec![return_stmt(None)], vec![return_stmt(None)]),
+                vec![],
+            )),
+        ]),
+    ]));
+
+    assert!(!has_error_code(&context, "T0002"), "diagnostics: {:?}", context.diagnostics);
 }

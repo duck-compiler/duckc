@@ -176,6 +176,51 @@ impl<'src> Diagnostic<'src> {
         }
     }
 
+    pub fn not_a_pointer(location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: "can't dereference a value that's nt a pointer".to_string().into_boxed_str(),
+            location,
+            error_code: "T0015".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn not_addressable(location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: "can't take address of this".to_string().into_boxed_str(),
+            location,
+            error_code: "T0016".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn not_a_value(name: &str, location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!("`{}` is not a value", name).into_boxed_str(),
+            location,
+            error_code: "T0017".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn literal_out_of_range(type_name: &str, location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!("literal does not fit into `{}`", type_name).into_boxed_str(),
+            location,
+            error_code: "T0018".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn cannot_infer_type(name: &str, location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!("cannot infer the type of `{}`", name).into_boxed_str(),
+            location,
+            error_code: "T0019".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
     pub fn nested_declaration_not_allowed(location: Span<'src>) -> Diagnostic<'src> {
         Diagnostic {
             message: "`fn`/`struct` declarations are only allowed at the top level, not nested inside a function".to_string().into_boxed_str(),
