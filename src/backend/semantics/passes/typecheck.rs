@@ -188,7 +188,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                 }
             }
             Stmt::Expression { expr } => {
-                self.check_expression(expr);
+                self.check_unused_expression(expr);
             }
             Stmt::Use(_) => {}
             Stmt::StructDefinition { .. } => {}
@@ -247,6 +247,27 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         }
 
         value
+    }
+
+    fn check_unused_expression(&mut self, expr: &Expression<'src>) {
+        let Expr::If {
+            expr: condition,
+            body, else_branch
+        } = &*expr.variant
+        else {
+            self.check_expression(expr);
+            return;
+        };
+
+        self.check_condition(condition);
+        self.check_block(body);
+
+        if let Some(else_body) = else_branch {
+            self.check_block(else_body);
+        }
+
+        let unit = self.context.intern(Type::Unit);
+        self.set_node_type(expr.id, unit);
     }
 
     fn check_expression(&mut self, expr: &Expression<'src>) -> TypeId {
@@ -365,6 +386,16 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         let then_type = self.check_block_value(body, expected);
 
         let Some(else_body) = else_branch else {
+            let then_produces_value = !matches!(
+                self.context.types[then_type.0 as usize],
+                Type::Unit | Type::Never | Type::TypeError,
+            );
+
+            if then_produces_value {
+                self.context.report(Diagnostic::if_without_else_as_value(span));
+                return self.context.intern(Type::TypeError);
+            }
+
             return self.context.intern(Type::Unit);
         };
 

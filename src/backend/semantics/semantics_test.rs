@@ -615,7 +615,7 @@ fn if_else_used_as_a_value_resolves_to_the_branch_type() {
 }
 
 #[test]
-fn if_without_an_else_branch_stays_unit_even_when_its_body_produces_a_value() {
+fn if_without_an_else_branch_used_as_a_value_reports_t0020() {
     let context = analyze(program(vec![
         main_fn(vec![
             var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
@@ -623,10 +623,64 @@ fn if_without_an_else_branch_stays_unit_even_when_its_body_produces_a_value() {
         ]),
     ]));
 
+    assert!(has_error_code(&context, "T0020"), "diagnostics: {:?}", context.diagnostics);
+    assert!(!has_error_code(&context, "T0001"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn if_without_an_else_branch_used_as_a_value_with_a_declared_type_reports_t0020() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
+            var_decl("x", type_(TypeExpression::Int), Some(if_expr(mem_name("flag"), vec![expr_stmt(int(1))]))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0020"), "diagnostics: {:?}", context.diagnostics);
+    assert!(!has_error_code(&context, "T0001"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn if_without_an_else_branch_whose_body_produces_no_value_stays_unit() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
+            var_decl("x", no_type(), Some(if_expr(mem_name("flag"), vec![
+                var_decl("inner", no_type(), Some(int(1))),
+            ]))),
+        ]),
+    ]));
+
     assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
 
     let x = context.symbols.iter().find(|s| s.name == "x").expect("x symbol");
     assert_eq!(context.types[x.type_.expect("x should have a type").0 as usize], Type::Unit);
+}
+
+#[test]
+fn if_without_an_else_branch_as_a_statement_may_produce_a_value() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
+            expr_stmt(if_expr(mem_name("flag"), vec![expr_stmt(int(1))])),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn nested_if_without_an_else_branch_as_a_statement_may_produce_a_value() {
+    let context = analyze(program(vec![
+        main_fn(vec![
+            var_decl("flag", type_(TypeExpression::Bool), Some(bool_lit(true))),
+            expr_stmt(if_expr(mem_name("flag"), vec![
+                expr_stmt(if_expr(mem_name("flag"), vec![expr_stmt(int(1))])),
+            ])),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
 }
 
 #[test]

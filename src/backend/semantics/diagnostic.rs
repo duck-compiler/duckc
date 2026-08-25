@@ -221,6 +221,15 @@ impl<'src> Diagnostic<'src> {
         }
     }
 
+    pub fn if_without_else_as_value(location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: "`if` without a `else` branch can't produce value".to_string().into_boxed_str(),
+            location,
+            error_code: "T0020".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
     pub fn nested_declaration_not_allowed(location: Span<'src>) -> Diagnostic<'src> {
         Diagnostic {
             message: "`fn`/`struct` declarations are only allowed at the top level, not nested inside a function".to_string().into_boxed_str(),
