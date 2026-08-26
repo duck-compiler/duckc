@@ -1,7 +1,9 @@
 //! this compiler pass fills node_types and symbol types, consuming resolutions/definitions.
 //! it walks no scopes. every reference/declaration lookup goes through the tables.
 
-use crate::{ast::{AstRoot, Block, Expression, Identifier, MemoryTarget, NodeId, Span, Statement, expression::{BinaryOperator, Expr, ExpressionList, FieldInit}, memory_target::MemTar, statement::Stmt, type_expression::{self, TypeAnnotation, TypeExpression}}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, go_map, module::ModuleId, symbol::{Origin, SymbolId}, r#type::{Type, TypeId}}};
+use std::collections::HashMap;
+
+use crate::{ast::{AstRoot, Block, Expression, Identifier, MemoryTarget, NodeId, Span, Statement, expression::{BinaryOperator, Expr, ExpressionList, FieldInit}, memory_target::MemTar, statement::Stmt, struct_definition::{ImplBlock, Method, MethodKind, Visibility}, type_expression::{self, TypeAnnotation, TypeExpression}}, backend::semantics::{context::{MethodSignature, SemanticsContext}, diagnostic::Diagnostic, go_map, module::ModuleId, symbol::{Origin, SymbolId, SymbolKind}, r#type::{Type, TypeId}}};
 
 mod literal;
 use literal::strip_literal_op;
@@ -19,6 +21,7 @@ pub fn typecheck_module<'src>(
         context,
         module,
         current_return_type: None,
+        current_impl_struct: None,
         in_loop: false
     };
 
@@ -33,10 +36,17 @@ pub fn typecheck_module<'src>(
     context.modules[module.0 as usize].ast = ast;
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum Usage {
+    Read,
+    Write,
+}
+
 struct TypeChecker<'a, 'src> {
     context: &'a mut SemanticsContext<'src>,
     module: ModuleId,
     current_return_type: Option<TypeId>,
+    current_impl_struct: Option<SymbolId>,
     in_loop: bool,
 }
 
@@ -122,18 +132,55 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                     self.set_symbol_type(symbol, fn_type);
                 }
             }
-            Stmt::StructDefinition { name, fields } => {
-                let field_types = fields.list
+            Stmt::StructDefinition { name, fields, impl_block } => {
+                let field_types = fields
                     .iter()
-                    .map(|field| (field.name.ident, self.type_id_from_type_annotation(&field.type_)))
+                    .map(|field| (field.name.ident, self.type_id_from_type_annotation(&field.type_), field.visibility))
                     .collect::<Vec<_>>();
 
-                if let Some(symbol) = self.definition_of(name.id) {
-                    self.context.struct_fields.insert(symbol, field_types);
+                let Some(symbol) = self.definition_of(name.id) else {
+                    return;
+                };
+
+                self.context.struct_fields.insert(symbol, field_types);
+
+                if let Some(impl_block) = impl_block {
+                    self.declare_method_signatures(symbol, impl_block);
                 }
             }
             _ => {}
         }
+    }
+
+    fn declare_method_signatures(&mut self, struct_symbol: SymbolId, impl_block: &ImplBlock<'src>) {
+        let mut signatures = HashMap::new();
+
+        for method in &impl_block.methods {
+            let params = method
+                .params
+                .list
+                .iter()
+                .map(|param| self.type_id_from_type_annotation(&param.type_))
+                .collect::<Vec<_>>();
+
+            let return_type = self.type_id_from_type_annotation(&method.return_type);
+
+            let name_taken = signatures.contains_key(method.name.ident)
+                || self.struct_field(struct_symbol, method.name.ident).is_some();
+
+            if name_taken {
+                self.context.report(Diagnostic::already_defined(method.name.ident, method.name.span));
+                continue;
+            }
+
+            signatures.insert(method.name.ident, MethodSignature {
+                kind: method.kind,
+                visibility: method.visibility,
+                value_type: self.context.intern(Type::Fn { params, return_type }),
+            });
+        }
+
+        self.context.struct_methods.insert(struct_symbol, signatures);
     }
 
     fn check_statement(&mut self, statement: &Statement<'src>) {
@@ -181,7 +228,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                 }
             }
             Stmt::VariableAssignment { target, assign_expression } => {
-                let target_type = self.check_memory_target(target);
+                let target_type = self.check_memory_target(target, Usage::Write);
                 let value_type = self.check_expected_expression_type(assign_expression, target_type);
                 if !self.compatible(target_type, value_type) {
                     self.report_mismatch(target_type, value_type, assign_expression.span);
@@ -191,7 +238,19 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                 self.check_unused_expression(expr);
             }
             Stmt::Use(_) => {}
-            Stmt::StructDefinition { .. } => {}
+            Stmt::StructDefinition { name, impl_block, .. } => {
+                let Some(impl_block) = impl_block else {
+                    return;
+                };
+
+                let Some(struct_symbol) = self.definition_of(name.id) else {
+                    return;
+                };
+
+                for method in &impl_block.methods {
+                    self.check_method(struct_symbol, method);
+                }
+            }
             Stmt::Return { value } => {
                 let expected = self.current_return_type.unwrap_or_else(|| self.context.intern(Type::Unit));
 
@@ -210,6 +269,34 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                 }
             }
         }
+    }
+
+    fn check_method(&mut self, struct_symbol: SymbolId, method: &Method<'src>) {
+        for param in &method.params.list {
+            let type_id = self.type_id_from_type_annotation(&param.type_);
+            if let Some(symbol) = self.definition_of(param.name.id) {
+                self.set_symbol_type(symbol, type_id);
+            }
+        }
+
+        if let Some(symbol) = self.self_symbol_of(method) {
+            let struct_type = self.context.intern(Type::Struct(struct_symbol));
+            let self_type = self.context.intern(Type::Pointer(struct_type));
+            self.set_symbol_type(symbol, self_type);
+        }
+
+        let return_type_id = self.type_id_from_type_annotation(&method.return_type);
+        let previous_return_type = self.current_return_type.replace(return_type_id);
+        let previous_impl_struct = self.current_impl_struct.replace(struct_symbol);
+
+        self.check_block(&method.body);
+
+        self.current_return_type = previous_return_type;
+        self.current_impl_struct = previous_impl_struct;
+    }
+
+    fn self_symbol_of(&self, method: &Method<'src>) -> Option<SymbolId> {
+        self.context.modules[self.module.0 as usize].self_symbols.get(&method.name.id).copied()
     }
 
     fn check_block(&mut self, block: &Block<'src>) {
@@ -275,7 +362,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             Expr::StringLiteral(_) => self.context.intern(Type::String),
             Expr::IntLiteral(_) | Expr::FloatLiteral(_) => self.default_literal_type(expr, false),
             Expr::BoolLiteral(_) => self.context.intern(Type::Bool),
-            Expr::MemoryTarget(memory_target) => self.check_memory_target(memory_target),
+            Expr::MemoryTarget(memory_target) => self.check_memory_target(memory_target, Usage::Read),
             Expr::FunctionCall { target, args } => self.check_function_call(target, args, expr.span),
             Expr::ArrayExpression { values_exprs } => self.check_array_expression(values_exprs, expr.span, None),
             Expr::StructInit { type_name, fields } => self.check_struct_init(type_name, fields, expr.span),
@@ -419,7 +506,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         }
     }
 
-    fn check_memory_target(&mut self, memory_target: &MemoryTarget<'src>) -> TypeId {
+    fn check_memory_target(&mut self, memory_target: &MemoryTarget<'src>, usage: Usage) -> TypeId {
         match &memory_target.variant {
             MemTar::Name(identifier) => {
                 let Some(symbol) = self.resolution_of(identifier.id) else {
@@ -435,10 +522,10 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                 }
             }
             MemTar::FieldAccess { target, field_name } => {
-                self.check_field_access(target, field_name, memory_target.span)
+                self.check_field_access(target, field_name, memory_target.span, usage)
             }
             MemTar::ArrayAccess { target, index_expression } => {
-                self.check_array_access(target, index_expression, memory_target.span)
+                self.check_array_access(target, index_expression, memory_target.span, usage)
             }
             MemTar::Dereference(inner) => {
                 let inner_type = self.check_expression(inner);
@@ -514,8 +601,9 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         target: &MemoryTarget<'src>,
         index_expression: &Expression<'src>,
         span: Span<'src>,
+        usage: Usage,
     ) -> TypeId {
-        let target_type = self.check_memory_target(target);
+        let target_type = self.check_memory_target(target, usage);
         let index_type = self.check_expression(index_expression);
 
         let int_type = self.context.intern(Type::Int);
@@ -542,6 +630,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         target: &MemoryTarget<'src>,
         field_name: &Identifier<'src>,
         span: Span<'src>,
+        usage: Usage,
     ) -> TypeId {
         if let MemTar::Name(identifier) = &target.variant {
             let go_package = self.resolution_of(identifier.id).and_then(|sym| {
@@ -578,9 +667,13 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                     }
                 };
             }
+
+            if let Some(struct_symbol) = self.named_struct_symbol(identifier) {
+                return self.check_static_member(struct_symbol, field_name, span, usage);
+            }
         }
 
-        let target_type = self.check_memory_target(target);
+        let target_type = self.check_memory_target(target, Usage::Read);
         let target_type = match &self.context.types[target_type.0 as usize] {
             Type::Pointer(p) => *p,
             _ => target_type,
@@ -591,25 +684,116 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         }
 
         match self.context.types[target_type.0 as usize].clone() {
-            Type::Struct(struct_sym) => {
-                let field_type = self.context.struct_fields.get(&struct_sym)
-                    .and_then(|fields| fields.iter().find(|(name, _)| *name == field_name.ident))
-                    .map(|(_, type_id)| *type_id);
-
-                match field_type {
-                    Some(type_id) => type_id,
-                    None => {
-                        let struct_name = self.context.symbols[struct_sym.0 as usize].name;
-                        self.context.report(Diagnostic::unknown_struct_field(struct_name, field_name.ident, span));
-                        self.context.intern(Type::TypeError)
-                    }
-                }
-            }
+            Type::Struct(struct_symbol) => self.check_struct_member(struct_symbol, field_name, span, usage),
             _ => {
                 self.context.report(Diagnostic::not_a_struct(span));
                 self.context.intern(Type::TypeError)
             }
         }
+    }
+
+    fn check_struct_member(
+        &mut self,
+        struct_symbol: SymbolId,
+        field_name: &Identifier<'src>,
+        span: Span<'src>,
+        usage: Usage,
+    ) -> TypeId {
+        if let Some((type_id, visibility)) = self.struct_field(struct_symbol, field_name.ident) {
+            self.check_visible(struct_symbol, field_name.ident, visibility, span);
+            return type_id;
+        }
+
+        let struct_name = self.context.symbols[struct_symbol.0 as usize].name;
+
+        let Some(signature) = self.method_signature(struct_symbol, field_name.ident) else {
+            self.context.report(Diagnostic::unknown_struct_field(struct_name, field_name.ident, span));
+            return self.context.intern(Type::TypeError);
+        };
+
+        if matches!(signature.kind, MethodKind::Static) {
+            self.context.report(Diagnostic::wrong_method_receiver(struct_name, field_name.ident, signature.kind, span));
+            return self.context.intern(Type::TypeError);
+        }
+
+        self.method_value(struct_symbol, field_name, signature, span, usage)
+    }
+
+    fn check_static_member(
+        &mut self,
+        struct_symbol: SymbolId,
+        field_name: &Identifier<'src>,
+        span: Span<'src>,
+        usage: Usage,
+    ) -> TypeId {
+        let struct_name = self.context.symbols[struct_symbol.0 as usize].name;
+
+        let Some(signature) = self.method_signature(struct_symbol, field_name.ident) else {
+            let diagnostic = match self.struct_field(struct_symbol, field_name.ident) {
+                Some(_) => Diagnostic::field_needs_instance(struct_name, field_name.ident, span),
+                None => Diagnostic::not_a_value(struct_name, span),
+            };
+
+            self.context.report(diagnostic);
+            return self.context.intern(Type::TypeError);
+        };
+
+        if matches!(signature.kind, MethodKind::Instance) {
+            self.context.report(Diagnostic::wrong_method_receiver(struct_name, field_name.ident, signature.kind, span));
+            return self.context.intern(Type::TypeError);
+        }
+
+        self.method_value(struct_symbol, field_name, signature, span, usage)
+    }
+
+    fn method_value(
+        &mut self,
+        struct_symbol: SymbolId,
+        field_name: &Identifier<'src>,
+        signature: MethodSignature,
+        span: Span<'src>,
+        usage: Usage,
+    ) -> TypeId {
+        if usage == Usage::Write {
+            let struct_name = self.context.symbols[struct_symbol.0 as usize].name;
+            self.context.report(Diagnostic::cannot_assign_to_method(struct_name, field_name.ident, span));
+            return self.context.intern(Type::TypeError);
+        }
+
+        self.check_visible(struct_symbol, field_name.ident, signature.visibility, span);
+        signature.value_type
+    }
+
+    fn check_visible(
+        &mut self,
+        struct_symbol: SymbolId,
+        member_name: &str,
+        visibility: Visibility,
+        span: Span<'src>,
+    ) {
+        if matches!(visibility, Visibility::Public) || self.current_impl_struct == Some(struct_symbol) {
+            return;
+        }
+
+        let struct_name = self.context.symbols[struct_symbol.0 as usize].name;
+        self.context.report(Diagnostic::private_member(struct_name, member_name, span));
+    }
+
+    fn struct_field(&self, struct_symbol: SymbolId, name: &str) -> Option<(TypeId, Visibility)> {
+        self.context.struct_fields
+            .get(&struct_symbol)?
+            .iter()
+            .find(|(field_name, _, _)| *field_name == name)
+            .map(|(_, type_id, visibility)| (*type_id, *visibility))
+    }
+
+    fn method_signature(&self, struct_symbol: SymbolId, name: &str) -> Option<MethodSignature> {
+        self.context.struct_methods.get(&struct_symbol)?.get(name).copied()
+    }
+
+    fn named_struct_symbol(&self, identifier: &Identifier<'src>) -> Option<SymbolId> {
+        let symbol = self.resolution_of(identifier.id)?;
+        matches!(self.context.symbols[symbol.0 as usize].kind, SymbolKind::Struct).then_some(symbol)
     }
 
     fn check_struct_init(
@@ -641,14 +825,16 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
         for field in fields {
             let matching_field = declared_fields
                 .iter()
-                .find(|(name, _)| *name == field.name.ident)
+                .find(|(name, _, _)| *name == field.name.ident)
                 .copied();
 
-            let Some((_, declared_type)) = matching_field else {
+            let Some((_, declared_type, visibility)) = matching_field else {
                 self.check_expression(&field.value);
                 self.context.report(Diagnostic::unknown_struct_field(struct_name, field.name.ident, field.name.span));
                 continue;
             };
+
+            self.check_visible(struct_symbol, field.name.ident, visibility, field.name.span);
 
             let value_type = self.check_expected_expression_type(&field.value, declared_type);
             if !self.compatible(declared_type, value_type) {
@@ -660,7 +846,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
 
         let missing = declared_fields
             .iter()
-            .map(|(name, _)| *name)
+            .map(|(name, _, _)| *name)
             .filter(|name| !known.contains(name))
             .collect::<Vec<_>>();
 

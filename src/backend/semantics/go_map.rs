@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::ast::struct_definition::Visibility;
 use crate::backend::semantics::{
     context::SemanticsContext,
     go_resolve::{RawField, RawFuncType, RawType},
@@ -138,7 +139,7 @@ fn resolve_go_struct<'src>(
         .filter(|field| field.exported)
         .filter_map(|field| {
             let field_type = map_go_type_within(context, package, &field.type_, types, resolving)?;
-            Some((leak(field.name.clone()), field_type))
+            Some((leak(field.name.clone()), field_type, Visibility::Public))
         })
         .collect::<Vec<_>>();
 
@@ -432,7 +433,7 @@ mod tests {
         let Type::Struct(inner_sym) = context.types[outer_fields[0].1.0 as usize] else { panic!("expected struct") };
         let string_type = context.intern(Type::String);
         let inner_fields = context.struct_fields.get(&inner_sym).unwrap();
-        assert_eq!(inner_fields[0], ("Value", string_type));
+        assert_eq!(inner_fields[0], ("Value", string_type, Visibility::Public));
     }
 
     #[test]

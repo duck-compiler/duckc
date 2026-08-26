@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::ast::{AstRoot, Block, Expr, Expression, Identifier, MemoryTarget, ParameterList, Statement, Stmt, TypeExpression, expression::{ExpressionList, FieldInit}, memory_target::MemTar, type_expression::TypeAnnotation};
+use crate::ast::{AstRoot, Block, Expr, Expression, Identifier, MemoryTarget, ParameterList, Statement, Stmt, TypeExpression, expression::{ExpressionList, FieldInit}, memory_target::MemTar, struct_definition::Method, type_expression::TypeAnnotation};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct NodeId(pub u32);
@@ -42,9 +42,19 @@ impl NodeIdGenerator {
                 self.generate_in_block(body);
                 self.generate_in_type_annotation(return_type);
             },
-            Stmt::StructDefinition { name, fields } => {
+            Stmt::StructDefinition { name, fields, impl_block } => {
                 self.generate_in_identifier(name);
-                self.generate_in_parameter_list(fields);
+
+                for field in fields {
+                    self.generate_in_type_annotation(&mut field.type_);
+                    self.generate_in_identifier(&mut field.name);
+                }
+
+                if let Some(impl_block) = impl_block {
+                    for method in &mut impl_block.methods {
+                        self.generate_in_method(method);
+                    }
+                }
             },
             Stmt::Expression { expr } => {
                 self.generate_in_expression(expr);
@@ -73,6 +83,13 @@ impl NodeIdGenerator {
             }
             Stmt::Break | Stmt::Continue => {}
         }
+    }
+
+    fn generate_in_method(&mut self, method: &mut Method) {
+        self.generate_in_identifier(&mut method.name);
+        self.generate_in_parameter_list(&mut method.params);
+        self.generate_in_block(&mut method.body);
+        self.generate_in_type_annotation(&mut method.return_type);
     }
 
     fn generate_in_identifier(&mut self, identifier: &mut Identifier) {

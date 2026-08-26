@@ -2,7 +2,7 @@ use std::process::Command;
 
 use crate::ast::TypeExpression;
 use crate::ast::expression::{BinaryOperator, UnaryOperator};
-use crate::ast::builder::{array, array_index, assign, binary, bool_lit, break_stmt, continue_stmt, deref_target, float, expr_stmt, field_access, field_call, field_target, fn_call, fn_def, ident, if_else_expr, if_expr, int, mem_name, name_target, no_type, pointer_type, program, reference, return_stmt, string, struct_def, struct_init, type_, unary, use_stmt, var_decl, while_expr};
+use crate::ast::builder::{array, array_index, assign, binary, bool_lit, break_stmt, continue_stmt, deref_target, float, expr_stmt, field_access, field_call, field_target, call, fn_call, fn_def, ident, if_else_expr, if_expr, int, mem_name, name_target, no_type, pointer_type, priv_field, priv_method, program, pub_method, pub_static_method, pub_struct_def, reference, return_stmt, string, struct_def_with_impl, struct_init, type_, unary, use_stmt, var_decl, while_expr};
 use crate::backend::semantics::{analyze_module, context::SemanticsContext};
 use crate::backend::gost::{emit_gost, translate};
 
@@ -73,7 +73,7 @@ fn struct_literal_and_field_access_translate_to_valid_go() {
     let mut context = SemanticsContext::new();
     let module = context.add_module(program(vec![
         use_stmt("fmt", None),
-        struct_def("Point", vec![("x", TypeExpression::String), ("y", TypeExpression::String)]),
+        pub_struct_def("Point", vec![("x", TypeExpression::String), ("y", TypeExpression::String)]),
         fn_def(
             "main",
             vec![],
@@ -437,7 +437,7 @@ fn pointer_to_struct_reads_and_writes_fields_through_auto_dereference() {
     let module = context.add_module(program(vec![
         use_stmt("fmt", None),
         use_stmt("strconv", None),
-        struct_def("Point", vec![("x", TypeExpression::Int), ("y", TypeExpression::Int)]),
+        pub_struct_def("Point", vec![("x", TypeExpression::Int), ("y", TypeExpression::Int)]),
         fn_def(
             "shift",
             vec![("p", pointer_type(TypeExpression::Ident(ident("Point"))))],
@@ -479,7 +479,7 @@ fn chained_pointer_fields_auto_dereference_and_run_correctly() {
     let module = context.add_module(program(vec![
         use_stmt("fmt", None),
         use_stmt("strconv", None),
-        struct_def("Node", vec![
+        pub_struct_def("Node", vec![
             ("value", TypeExpression::Int),
             ("next", pointer_type(TypeExpression::Ident(ident("Node")))),
         ]),
@@ -794,4 +794,118 @@ fn negative_and_branch_valued_sized_literals_emit_valid_go() {
 
     let Some(stdout) = go_run(&go_source, "duckc-gost-sized-literal-forms-test") else { return };
     assert_eq!(stdout, "4");
+}
+
+#[test]
+fn an_instance_method_writes_through_self_and_the_change_survives_the_call() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        use_stmt("strconv", None),
+        struct_def_with_impl(
+            "Counter",
+            vec![priv_field("value", TypeExpression::Int)],
+            vec![
+                priv_method("add", vec![("by", TypeExpression::Int)], no_type(), vec![
+                    assign(
+                        field_target(name_target("self"), "value"),
+                        binary(field_access(name_target("self"), "value"), BinaryOperator::Add, mem_name("by")),
+                    ),
+                ]),
+                pub_method("bump", vec![("by", TypeExpression::Int)], no_type(), vec![
+                    expr_stmt(call(field_access(name_target("self"), "add"), vec![mem_name("by")])),
+                ]),
+                pub_method("get", vec![], type_(TypeExpression::Int), vec![
+                    return_stmt(Some(field_access(name_target("self"), "value"))),
+                ]),
+            ],
+        ),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("c", type_(TypeExpression::Ident(ident("Counter"))), None),
+                expr_stmt(call(field_access(name_target("c"), "bump"), vec![int(5)])),
+                expr_stmt(call(field_access(name_target("c"), "bump"), vec![int(2)])),
+                expr_stmt(field_call("fmt", "Println", vec![
+                    field_call("strconv", "Itoa", vec![call(field_access(name_target("c"), "get"), vec![])]),
+                ])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let go_source = emit_gost(translate(&context, module));
+
+    assert!(go_source.contains("func (self *Counter) bump(by int)"), "generated source: {go_source}");
+    assert!(go_source.contains("self.value = (self.value + by)"), "generated source: {go_source}");
+    assert!(go_source.contains("self.add(by)"), "generated source: {go_source}");
+    assert!(go_source.contains("c.bump(5)"), "generated source: {go_source}");
+
+    let Some(stdout) = go_run(&go_source, "duckc-gost-instance-method-test") else { return };
+    assert_eq!(stdout, "7");
+}
+
+#[test]
+fn a_struct_with_private_state_a_static_constructor_and_public_methods_runs_correctly() {
+    let mut context = SemanticsContext::new();
+    let module = context.add_module(program(vec![
+        use_stmt("fmt", None),
+        use_stmt("strconv", None),
+        struct_def_with_impl(
+            "Point",
+            vec![priv_field("x", TypeExpression::Int), priv_field("y", TypeExpression::Int)],
+            vec![
+                pub_static_method(
+                    "new",
+                    vec![("x", TypeExpression::Int), ("y", TypeExpression::Int)],
+                    type_(TypeExpression::Ident(ident("Point"))),
+                    vec![
+                        return_stmt(Some(struct_init("Point", vec![
+                            ("x", mem_name("x")),
+                            ("y", mem_name("y")),
+                        ]))),
+                    ],
+                ),
+                pub_method("set_x", vec![("value", TypeExpression::Int)], no_type(), vec![
+                    assign(field_target(name_target("self"), "x"), mem_name("value")),
+                ]),
+                pub_method("sum", vec![], type_(TypeExpression::Int), vec![
+                    return_stmt(Some(binary(
+                        field_access(name_target("self"), "x"),
+                        BinaryOperator::Add,
+                        field_access(name_target("self"), "y"),
+                    ))),
+                ]),
+            ],
+        ),
+        fn_def(
+            "main",
+            vec![],
+            no_type(),
+            vec![
+                var_decl("p", no_type(), Some(call(field_access(name_target("Point"), "new"), vec![int(3), int(4)]))),
+                expr_stmt(call(field_access(name_target("p"), "set_x"), vec![int(10)])),
+                expr_stmt(field_call("fmt", "Println", vec![
+                    field_call("strconv", "Itoa", vec![call(field_access(name_target("p"), "sum"), vec![])]),
+                ])),
+            ],
+        ),
+    ]));
+
+    analyze_module(&mut context, module);
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let go_source = emit_gost(translate(&context, module));
+
+    assert!(go_source.contains("func Point_new(x int, y int) Point"), "generated source: {go_source}");
+    assert!(go_source.contains("func (self *Point) set_x(value int)"), "generated source: {go_source}");
+    assert!(go_source.contains("= Point_new(3, 4)"), "generated source: {go_source}");
+    assert!(go_source.contains("p.set_x(10)"), "generated source: {go_source}");
+
+    let Some(stdout) = go_run(&go_source, "duckc-gost-struct-methods-test") else { return };
+    assert_eq!(stdout, "14");
 }

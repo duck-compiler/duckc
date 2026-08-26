@@ -100,9 +100,13 @@ fn emit_gost_statement<'src>(statement: &GoStatement<'src>) -> String {
                     .unwrap_or_default()
             )
         }
-        GoStatement::FuncDef { name, params, return_type, body } => {
+        GoStatement::FuncDef { receiver, name, params, return_type, body } => {
             format!(
-                "func {name}({}) {} {}",
+                "func {}{name}({}) {} {}",
+                receiver
+                    .as_ref()
+                    .map(|(receiver_name, receiver_type)| format!("({receiver_name} {}) ", emit_type(receiver_type)))
+                    .unwrap_or_default(),
                 emit_params(params),
                 if return_type.is_some() { maybe_emit_type(return_type) } else { "".to_string() },
                 emit_block(body)

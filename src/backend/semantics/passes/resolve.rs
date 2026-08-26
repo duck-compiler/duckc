@@ -1,6 +1,6 @@
 //! this compiler pass let's every named reference point to its declaration
 
-use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, Statement, expression::Expr, memory_target::MemTar, statement::Stmt, type_expression::{TypeAnnotation, TypeExpression}, use_statement::UseStatement}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, go_map::short_go_package_name, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
+use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, ParameterList, Statement, expression::Expr, memory_target::MemTar, statement::Stmt, struct_definition::{Method, MethodKind, SELF_NAME}, type_expression::{TypeAnnotation, TypeExpression}, use_statement::UseStatement}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, go_map::short_go_package_name, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
 
 pub fn resolve_module<'src>(
     module: ModuleId,
@@ -87,38 +87,23 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                 }
 
                 self.resolve_type_annotation(return_type);
-
-                let fn_scope = self.context.new_scope(Some(self.scope));
-                let prev_scope = self.scope;
-                let was_in_function = self.in_function;
-
-                self.scope = fn_scope;
-                self.in_function = true;
-
-                for param in &params.list {
-                    if self.context.scopes[fn_scope.0 as usize].names.contains_key(param.name.ident) {
-                        self.context.report(Diagnostic::already_defined(param.name.ident, param.name.span));
-                    }
-
-                    self.declare(
-                        param.name.ident,
-                        SymbolKind::Param,
-                        param.name.id
-                    );
-                }
-
-                self.resolve_block(&body);
-
-                self.scope = prev_scope;
-                self.in_function = was_in_function;
+                self.resolve_body_in_new_scope(params, body, None);
             }
-            Stmt::StructDefinition { name: _, fields } => {
+            Stmt::StructDefinition { name: _, fields, impl_block } => {
                 if self.in_function {
                     self.context.report(Diagnostic::nested_declaration_not_allowed(statement.span));
                 }
 
-                for field in &fields.list {
+                for field in fields {
                     self.resolve_type_annotation(&field.type_);
+                }
+
+                let Some(impl_block) = impl_block else {
+                    return;
+                };
+
+                for method in &impl_block.methods {
+                    self.resolve_method(method);
                 }
             }
             Stmt::VariableDeclaration { name, type_, init_expression } => {
@@ -145,6 +130,67 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
             }
             Stmt::Break | Stmt::Continue => {}
         }
+    }
+
+    fn resolve_method(&mut self, method: &Method<'src>) {
+        for param in &method.params.list {
+            self.resolve_type_annotation(&param.type_);
+        }
+
+        self.resolve_type_annotation(&method.return_type);
+
+        let instance_method = match method.kind {
+            MethodKind::Instance => Some(method.name.id),
+            MethodKind::Static => None,
+        };
+
+        self.resolve_body_in_new_scope(&method.params, &method.body, instance_method);
+    }
+
+    fn declare_self(&mut self, method_name: NodeId) {
+        let symbol = self.context.add_symbol(SymbolData {
+            name: SELF_NAME,
+            kind: SymbolKind::Param,
+            type_: None,
+            origin: Origin::Duck {
+                module: self.module,
+                declaration: method_name,
+            },
+        });
+
+        self.context.define(self.scope, SELF_NAME, symbol);
+        self.context.modules[self.module.0 as usize].self_symbols.insert(method_name, symbol);
+    }
+
+    fn resolve_body_in_new_scope(
+        &mut self,
+        params: &ParameterList<'src>,
+        body: &Block<'src>,
+        instance_method: Option<NodeId>,
+    ) {
+        let body_scope = self.context.new_scope(Some(self.scope));
+        let previous_scope = self.scope;
+        let was_in_function = self.in_function;
+
+        self.scope = body_scope;
+        self.in_function = true;
+
+        if let Some(method_name) = instance_method {
+            self.declare_self(method_name);
+        }
+
+        for param in &params.list {
+            if self.context.scopes[body_scope.0 as usize].names.contains_key(param.name.ident) {
+                self.context.report(Diagnostic::already_defined(param.name.ident, param.name.span));
+            }
+
+            self.declare(param.name.ident, SymbolKind::Param, param.name.id);
+        }
+
+        self.resolve_block(body);
+
+        self.scope = previous_scope;
+        self.in_function = was_in_function;
     }
 
     fn resolve_type_annotation(&mut self, annotation: &TypeAnnotation<'src>) {

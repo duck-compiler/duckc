@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use crate::{ast::{Block, Expression, MemoryTarget, NodeId, ParameterList, Statement, TypeExpression, expression::{Expr, ExpressionList}, memory_target::MemTar, statement::Stmt, type_expression::TypeAnnotation}, backend::{gost::go_tree::{GoExpression, GoStatement, GoType, StructField}, semantics::{context::SemanticsContext, module::ModuleId, r#type::{Type, TypeId}}}};
+use crate::{ast::{Block, Expression, MemoryTarget, NodeId, ParameterList, Statement, TypeExpression, expression::{Expr, ExpressionList}, memory_target::MemTar, statement::Stmt, struct_definition::{Method, MethodKind, SELF_NAME}, type_expression::TypeAnnotation}, backend::{gost::go_tree::{GoExpression, GoStatement, GoType, StructField}, semantics::{context::SemanticsContext, module::ModuleId, symbol::static_method_name, r#type::{Type, TypeId}}}};
 
 fn leak<'src>(s: String) -> &'src str {
     Box::leak(s.into_boxed_str())
@@ -35,6 +35,7 @@ impl<'a, 'src> Translator<'a, 'src> {
         match &statement.variant {
             Stmt::FunctionDefinition { name, params, return_type, body } => {
                 vec![GoStatement::FuncDef {
+                    receiver: None,
                     name: name.ident,
                     params: self.translate_params(params),
                     return_type: self.translate_type_annotation(return_type),
@@ -94,12 +95,11 @@ impl<'a, 'src> Translator<'a, 'src> {
 
                 prelude
             }
-            Stmt::StructDefinition { name, fields } => {
-                vec![GoStatement::TypeDecl {
+            Stmt::StructDefinition { name, fields, impl_block } => {
+                let type_declaration = GoStatement::TypeDecl {
                     name: name.ident,
                     type_: GoType::Struct {
                         fields: fields
-                            .list
                             .iter()
                             .map(|field| StructField {
                                 name: field.name.ident,
@@ -111,7 +111,14 @@ impl<'a, 'src> Translator<'a, 'src> {
                             })
                             .collect::<Vec<_>>()
                     }
-                }]
+                };
+
+                let methods = impl_block
+                    .iter()
+                    .flat_map(|impl_block| &impl_block.methods)
+                    .map(|method| self.translate_method(name.ident, method));
+
+                std::iter::once(type_declaration).chain(methods).collect()
             }
             Stmt::Return { value } => {
                 match value {
@@ -128,6 +135,36 @@ impl<'a, 'src> Translator<'a, 'src> {
             Stmt::Continue => vec![GoStatement::Continue],
             Stmt::Use(_) => unreachable!("Stmt::Use should already be filtered out before translation, see gost::translate"),
         }
+    }
+
+    fn translate_method(&self, struct_name: &'src str, method: &Method<'src>) -> GoStatement<'src> {
+        let (receiver, name) = match method.kind {
+            MethodKind::Instance => (
+                Some((SELF_NAME, GoType::Pointer(Box::new(GoType::TypeName(struct_name))))),
+                method.name.ident,
+            ),
+            MethodKind::Static => (None, static_method_name(struct_name, method.name.ident)),
+        };
+
+        GoStatement::FuncDef {
+            receiver,
+            name,
+            params: self.translate_params(&method.params),
+            return_type: self.translate_type_annotation(&method.return_type),
+            body: self.translate_block(&method.body),
+        }
+    }
+
+    fn static_method_owner_name(&self, target: &MemoryTarget<'src>, method_name: &str) -> Option<&'src str> {
+        let MemTar::Name(identifier) = &target.variant else {
+            return None;
+        };
+
+        let resolutions = &self.context.modules[self.module.0 as usize].resolutions;
+        let symbol = resolutions[identifier.id.0 as usize]?;
+        let signature = self.context.struct_methods.get(&symbol)?.get(method_name)?;
+
+        matches!(signature.kind, MethodKind::Static).then(|| self.context.symbols[symbol.0 as usize].name)
     }
 
     fn translate_type_annotation(&self, type_annotation: &TypeAnnotation<'src>) -> Option<GoType<'src>> {
@@ -374,6 +411,10 @@ impl<'a, 'src> Translator<'a, 'src> {
                 (vec![], self.translate_name_reference(identifier.id, identifier.ident))
             }
             MemTar::FieldAccess { target, field_name } => {
+                if let Some(struct_name) = self.static_method_owner_name(target, field_name.ident) {
+                    return (vec![], GoExpression::Immediate(static_method_name(struct_name, field_name.ident)));
+                }
+
                 let (prelude, base) = self.translate_memory_target(target);
                 (prelude, GoExpression::Selector { base: Box::new(base), field: field_name.ident })
             }

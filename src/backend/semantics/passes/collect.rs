@@ -1,4 +1,4 @@
-use crate::{ast::{AstRoot, Identifier, Stmt}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolKind}}};
+use crate::{ast::{AstRoot, Identifier, Stmt, struct_definition::{ImplBlock, MethodKind}}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolKind, static_method_name}}};
 
 pub fn collect_module<'src>(
     module: ModuleId,
@@ -16,8 +16,9 @@ pub fn collect_module<'src>(
             Stmt::FunctionDefinition { name, .. } => {
                 declare_top_level(context, root, module, name, SymbolKind::Function);
             }
-            Stmt::StructDefinition { name, .. } => {
+            Stmt::StructDefinition { name, impl_block, .. } => {
                 declare_top_level(context, root, module, name, SymbolKind::Struct);
+                reserve_static_method_names(context, root, module, name.ident, impl_block);
             }
             Stmt::Use(_) => {}
             Stmt::VariableDeclaration { .. }
@@ -32,6 +33,43 @@ pub fn collect_module<'src>(
     }
 
     context.modules[module.0 as usize].ast = ast;
+}
+
+fn reserve_static_method_names<'src>(
+    context: &mut SemanticsContext<'src>,
+    root: ScopeId,
+    module: ModuleId,
+    struct_name: &'src str,
+    impl_block: &Option<ImplBlock<'src>>,
+) {
+    let Some(impl_block) = impl_block else {
+        return;
+    };
+
+    for method in &impl_block.methods {
+        if matches!(method.kind, MethodKind::Instance) {
+            continue;
+        }
+
+        let name = static_method_name(struct_name, method.name.ident);
+
+        if context.lookup(root, name).is_some() {
+            context.report(Diagnostic::already_defined(name, method.name.span));
+            continue;
+        }
+
+        let symbol = context.add_symbol(SymbolData {
+            name,
+            kind: SymbolKind::Function,
+            type_: None,
+            origin: Origin::Duck {
+                module,
+                declaration: method.name.id,
+            },
+        });
+
+        context.define(root, name, symbol);
+    }
 }
 
 fn declare_top_level<'src>(

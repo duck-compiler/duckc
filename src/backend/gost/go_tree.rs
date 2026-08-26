@@ -88,6 +88,7 @@ pub enum GoStatement<'src> {
         path: &'src str,
     },
     FuncDef {
+        receiver: Option<(&'src str, GoType<'src>)>,
         name: &'src str,
         params: Vec<(&'src str, GoType<'src>)>,
         return_type: Option<GoType<'src>>,

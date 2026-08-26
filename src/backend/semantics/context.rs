@@ -1,7 +1,15 @@
 use std::collections::HashMap;
 
+use crate::ast::struct_definition::{MethodKind, Visibility};
 use crate::ast::{AstRoot, assign_generate_node_ids};
 use crate::backend::semantics::{diagnostic::Diagnostic, go_resolve::GoResolver, module::{ModuleId, ModuleTables}, symbol::{Scope, ScopeId, SymbolData, SymbolId}, r#type::{Type, TypeId}};
+
+#[derive(Debug, Clone, Copy)]
+pub struct MethodSignature {
+    pub kind: MethodKind,
+    pub visibility: Visibility,
+    pub value_type: TypeId,
+}
 
 pub struct SemanticsContext<'src> {
     pub modules: Vec<ModuleTables<'src>>,
@@ -13,7 +21,8 @@ pub struct SemanticsContext<'src> {
     pub go_resolver: GoResolver,
     pub go_struct_symbols: HashMap<String, SymbolId>,
     pub go_package_names: HashMap<String, &'src str>,
-    pub struct_fields: HashMap<SymbolId, Vec<(&'src str, TypeId)>>,
+    pub struct_fields: HashMap<SymbolId, Vec<(&'src str, TypeId, Visibility)>>,
+    pub struct_methods: HashMap<SymbolId, HashMap<&'src str, MethodSignature>>,
 }
 
 impl<'src> SemanticsContext<'src> {
@@ -29,6 +38,7 @@ impl<'src> SemanticsContext<'src> {
             go_struct_symbols: HashMap::new(),
             go_package_names: HashMap::new(),
             struct_fields: HashMap::new(),
+            struct_methods: HashMap::new(),
         }
     }
 

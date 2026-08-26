@@ -1,4 +1,4 @@
-use crate::{ast::Span, backend::semantics::symbol::SymbolKind};
+use crate::{ast::{Span, struct_definition::MethodKind}, backend::semantics::symbol::SymbolKind};
 
 #[derive(Debug)]
 pub enum DiagnosticKind {
@@ -226,6 +226,76 @@ impl<'src> Diagnostic<'src> {
             message: "`if` without a `else` branch can't produce value".to_string().into_boxed_str(),
             location,
             error_code: "T0020".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn private_member(
+        struct_name: &str,
+        member_name: &str,
+        location: Span<'src>,
+    ) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!(
+                "`{}.{}` is private and can only be used inside the impl block of `{}`",
+                struct_name, member_name, struct_name,
+            ).into_boxed_str(),
+            location,
+            error_code: "T0021".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn cannot_assign_to_method(
+        struct_name: &str,
+        method_name: &str,
+        location: Span<'src>,
+    ) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!("cannot assign to method `{}.{}`", struct_name, method_name).into_boxed_str(),
+            location,
+            error_code: "T0023".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn field_needs_instance(
+        struct_name: &str,
+        field_name: &str,
+        location: Span<'src>,
+    ) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!(
+                "field `{}.{}` needs a instance of `{}`, it can't be called from the type itself",
+                struct_name, field_name, struct_name,
+            ).into_boxed_str(),
+            location,
+            error_code: "T0022".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn wrong_method_receiver(
+        struct_name: &str,
+        method_name: &str,
+        kind: MethodKind,
+        location: Span<'src>,
+    ) -> Diagnostic<'src> {
+        let message = match kind {
+            MethodKind::Instance => format!(
+                "instance method `{}.{}` needs a value of `{}`, it can't be called on the type itself",
+                struct_name, method_name, struct_name,
+            ),
+            MethodKind::Static => format!(
+                "static method `{}.{}` has to be called on `{}`, not on a instance",
+                struct_name, method_name, struct_name,
+            ),
+        };
+
+        Diagnostic {
+            message: message.into_boxed_str(),
+            location,
+            error_code: "T0022".to_string().into_boxed_str(),
             kind: DiagnosticKind::Error,
         }
     }

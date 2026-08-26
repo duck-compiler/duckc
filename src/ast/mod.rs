@@ -5,6 +5,7 @@ pub mod expression;
 pub mod memory_target;
 pub mod span;
 pub mod statement;
+pub mod struct_definition;
 pub mod type_expression;
 pub mod use_statement;
 

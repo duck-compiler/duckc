@@ -2,7 +2,7 @@
 //! these builders should never be used inside of parsers for constructing AST nodes
 
 use crate::ast::{
-    AstRoot, Block, Expression, Identifier, NodeId, Parameter, ParameterList, Span, Statement, TypeExpression, expression::{BinaryOperator, Expr, ExpressionList, FieldInit, UnaryOperator}, memory_target::{self, MemTar}, statement::Stmt, type_expression::TypeAnnotation, use_statement::UseStatement
+    AstRoot, Block, Expression, Identifier, NodeId, Parameter, ParameterList, Span, Statement, TypeExpression, expression::{BinaryOperator, Expr, ExpressionList, FieldInit, UnaryOperator}, memory_target::{self, MemTar}, statement::Stmt, struct_definition::{ImplBlock, Method, MethodKind, StructField, Visibility}, type_expression::TypeAnnotation, use_statement::UseStatement
 };
 
 fn empty_span<'src>() -> Span<'src> {
@@ -286,20 +286,116 @@ pub fn fn_def<'src>(
     })
 }
 
+pub fn struct_field<'src>(
+    visibility: Visibility,
+    name: &'src str,
+    field_type: TypeExpression<'src>,
+) -> StructField<'src> {
+    StructField {
+        visibility,
+        name: ident(name),
+        type_: type_(field_type),
+        span: empty_span(),
+    }
+}
+
+pub fn pub_field<'src>(name: &'src str, field_type: TypeExpression<'src>) -> StructField<'src> {
+    struct_field(Visibility::Public, name, field_type)
+}
+
+pub fn priv_field<'src>(name: &'src str, field_type: TypeExpression<'src>) -> StructField<'src> {
+    struct_field(Visibility::Private, name, field_type)
+}
+
+fn struct_fields<'src>(
+    visibility: Visibility,
+    fields: Vec<(&'src str, TypeExpression<'src>)>,
+) -> Vec<StructField<'src>> {
+    fields
+        .into_iter()
+        .map(|(field_name, field_type)| struct_field(visibility, field_name, field_type))
+        .collect()
+}
+
 pub fn struct_def<'src>(
     name: &'src str,
     fields: Vec<(&'src str, TypeExpression<'src>)>,
 ) -> Statement<'src> {
+    struct_def_with_impl(name, struct_fields(Visibility::Private, fields), vec![])
+}
+
+pub fn pub_struct_def<'src>(
+    name: &'src str,
+    fields: Vec<(&'src str, TypeExpression<'src>)>,
+) -> Statement<'src> {
+    struct_def_with_impl(name, struct_fields(Visibility::Public, fields), vec![])
+}
+
+pub fn struct_def_with_impl<'src>(
+    name: &'src str,
+    fields: Vec<StructField<'src>>,
+    methods: Vec<Method<'src>>,
+) -> Statement<'src> {
     stmt(Stmt::StructDefinition {
         name: ident(name),
-        fields: ParameterList {
-            list: fields
+        fields,
+        impl_block: match methods.is_empty() {
+            true => None,
+            false => Some(ImplBlock { methods, span: empty_span() }),
+        },
+    })
+}
+
+pub fn method<'src>(
+    visibility: Visibility,
+    kind: MethodKind,
+    name: &'src str,
+    params: Vec<(&'src str, TypeExpression<'src>)>,
+    return_type: TypeAnnotation<'src>,
+    body: Vec<Statement<'src>>,
+) -> Method<'src> {
+    Method {
+        visibility,
+        kind,
+        name: ident(name),
+        params: ParameterList {
+            list: params
                 .into_iter()
-                .map(|(field_name, field_type)| param(field_name, field_type))
+                .map(|(param_name, param_type)| param(param_name, param_type))
                 .collect(),
             span: empty_span(),
         },
-    })
+        return_type,
+        body: block(body),
+        span: empty_span(),
+    }
+}
+
+pub fn pub_method<'src>(
+    name: &'src str,
+    params: Vec<(&'src str, TypeExpression<'src>)>,
+    return_type: TypeAnnotation<'src>,
+    body: Vec<Statement<'src>>,
+) -> Method<'src> {
+    method(Visibility::Public, MethodKind::Instance, name, params, return_type, body)
+}
+
+pub fn priv_method<'src>(
+    name: &'src str,
+    params: Vec<(&'src str, TypeExpression<'src>)>,
+    return_type: TypeAnnotation<'src>,
+    body: Vec<Statement<'src>>,
+) -> Method<'src> {
+    method(Visibility::Private, MethodKind::Instance, name, params, return_type, body)
+}
+
+pub fn pub_static_method<'src>(
+    name: &'src str,
+    params: Vec<(&'src str, TypeExpression<'src>)>,
+    return_type: TypeAnnotation<'src>,
+    body: Vec<Statement<'src>>,
+) -> Method<'src> {
+    method(Visibility::Public, MethodKind::Static, name, params, return_type, body)
 }
 
 pub fn struct_init<'src>(

@@ -1,6 +1,6 @@
 use crate::ast::{
     AstRoot, Expr, TypeExpression, builder::{
-        expr, expr_stmt, field_access, field_call, fn_def, ident, int, mem_name, name_target, no_type, program, string, struct_def, struct_init, type_, use_stmt, var_decl
+        expr, expr_stmt, field_access, field_call, fn_def, ident, int, mem_name, name_target, no_type, program, pub_struct_def, string, struct_init, type_, use_stmt, var_decl
     }, type_expression::TypeAnnotation
 };
 
@@ -21,7 +21,7 @@ pub fn hello_world_program<'src>() -> AstRoot<'src> {
 pub fn test_struct_program<'src>() -> AstRoot<'src> {
     program(vec![
         use_stmt("fmt", None),
-        struct_def(
+        pub_struct_def(
             "MyStruct",
             vec![
                 ("hallo", TypeExpression::String)

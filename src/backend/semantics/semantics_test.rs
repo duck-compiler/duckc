@@ -1,5 +1,5 @@
 use super::{analyze_module, context::SemanticsContext, go_map::map_go_type, go_resolve::RawType, r#type::{Type, TypeId}, symbol::SymbolKind};
-use crate::ast::{AstRoot, Statement, TypeExpression, expression::{BinaryOperator, UnaryOperator}, builder::{array, array_index, assign, binary, bool_lit, break_stmt, call, continue_stmt, dereference, expr_stmt, field_access, field_call, field_target, float, fn_call, fn_def, ident, if_else_expr, if_expr, int, mem_name, name_target, no_type, pointer_type, program, reference, unary, return_stmt, string, struct_def, struct_init, type_, use_stmt, var_decl, while_expr}};
+use crate::ast::{AstRoot, Expression, Statement, TypeExpression, expression::{BinaryOperator, UnaryOperator}, struct_definition::{Method, MethodKind, Visibility}, builder::{array, array_index, assign, binary, bool_lit, break_stmt, call, continue_stmt, dereference, expr_stmt, field_access, field_call, field_target, float, fn_call, fn_def, ident, if_else_expr, if_expr, int, mem_name, method, name_target, no_type, pointer_type, priv_field, priv_method, program, pub_field, pub_method, pub_static_method, pub_struct_def, reference, unary, return_stmt, string, struct_def, struct_def_with_impl, struct_init, type_, use_stmt, var_decl, while_expr}};
 
 fn analyze(program: AstRoot<'static>) -> SemanticsContext<'static> {
     let mut context = SemanticsContext::new();
@@ -150,7 +150,7 @@ fn indexing_a_non_array_reports_t0006() {
 #[test]
 fn struct_literal_and_field_access_resolve_correctly() {
     let context = analyze(program(vec![
-        struct_def("Point", vec![("x", TypeExpression::Int), ("y", TypeExpression::Int)]),
+        pub_struct_def("Point", vec![("x", TypeExpression::Int), ("y", TypeExpression::Int)]),
         main_fn(vec![
             var_decl("p", no_type(), Some(struct_init("Point", vec![("x", int(1)), ("y", int(2))]))),
             var_decl("elem", no_type(), Some(field_access(name_target("p"), "x"))),
@@ -166,7 +166,7 @@ fn struct_literal_and_field_access_resolve_correctly() {
 #[test]
 fn struct_literal_with_unknown_field_reports_t0008() {
     let context = analyze(program(vec![
-        struct_def("Point", vec![("x", TypeExpression::Int)]),
+        pub_struct_def("Point", vec![("x", TypeExpression::Int)]),
         main_fn(vec![
             var_decl("p", no_type(), Some(struct_init("Point", vec![("x", int(1)), ("z", int(2))]))),
         ]),
@@ -178,7 +178,7 @@ fn struct_literal_with_unknown_field_reports_t0008() {
 #[test]
 fn struct_literal_missing_field_reports_t0009() {
     let context = analyze(program(vec![
-        struct_def("Point", vec![("x", TypeExpression::Int), ("y", TypeExpression::Int)]),
+        pub_struct_def("Point", vec![("x", TypeExpression::Int), ("y", TypeExpression::Int)]),
         main_fn(vec![
             var_decl("p", no_type(), Some(struct_init("Point", vec![("x", int(1))]))),
         ]),
@@ -190,7 +190,7 @@ fn struct_literal_missing_field_reports_t0009() {
 #[test]
 fn field_access_on_unknown_field_reports_t0008() {
     let context = analyze(program(vec![
-        struct_def("Point", vec![("x", TypeExpression::Int)]),
+        pub_struct_def("Point", vec![("x", TypeExpression::Int)]),
         main_fn(vec![
             var_decl("p", no_type(), Some(struct_init("Point", vec![("x", int(1))]))),
             var_decl("elem", no_type(), Some(field_access(name_target("p"), "z"))),
@@ -215,8 +215,8 @@ fn field_access_on_non_struct_reports_t0007() {
 #[test]
 fn nested_struct_field_access_resolves_correctly() {
     let context = analyze(program(vec![
-        struct_def("Inner", vec![("value", TypeExpression::String)]),
-        struct_def("Outer", vec![("inner", TypeExpression::Ident(ident("Inner")))]),
+        pub_struct_def("Inner", vec![("value", TypeExpression::String)]),
+        pub_struct_def("Outer", vec![("inner", TypeExpression::Ident(ident("Inner")))]),
         main_fn(vec![
             var_decl("o", no_type(), Some(struct_init("Outer", vec![
                 ("inner", struct_init("Inner", vec![("value", string("hi"))])),
@@ -234,8 +234,8 @@ fn nested_struct_field_access_resolves_correctly() {
 #[test]
 fn struct_forward_reference_resolves_correctly() {
     let context = analyze(program(vec![
-        struct_def("Outer", vec![("inner", TypeExpression::Ident(ident("Inner")))]),
-        struct_def("Inner", vec![("value", TypeExpression::String)]),
+        pub_struct_def("Outer", vec![("inner", TypeExpression::Ident(ident("Inner")))]),
+        pub_struct_def("Inner", vec![("value", TypeExpression::String)]),
         main_fn(vec![
             var_decl("o", no_type(), Some(struct_init("Outer", vec![
                 ("inner", struct_init("Inner", vec![("value", string("hi"))])),
@@ -249,7 +249,7 @@ fn struct_forward_reference_resolves_correctly() {
 #[test]
 fn struct_field_assignment_type_mismatch_reports_t0001() {
     let context = analyze(program(vec![
-        struct_def("Point", vec![("x", TypeExpression::Int)]),
+        pub_struct_def("Point", vec![("x", TypeExpression::Int)]),
         main_fn(vec![
             var_decl("p", no_type(), Some(struct_init("Point", vec![("x", int(1))]))),
             assign(field_target(name_target("p"), "x"), string("not an int")),
@@ -358,7 +358,7 @@ fn taking_the_address_of_a_literal_reports_t0016() {
 #[test]
 fn taking_the_address_of_a_composite_literal_is_allowed() {
     let context = analyze(program(vec![
-        struct_def("Point", vec![("x", TypeExpression::Int)]),
+        pub_struct_def("Point", vec![("x", TypeExpression::Int)]),
         main_fn(vec![
             var_decl("p", no_type(), Some(reference(struct_init("Point", vec![("x", int(1))])))),
             var_decl("a", no_type(), Some(reference(array(vec![int(1), int(2)])))),
@@ -414,7 +414,7 @@ fn taking_the_address_of_an_unknown_name_reports_only_s0001() {
 #[test]
 fn field_access_through_a_pointer_auto_dereferences() {
     let context = analyze(program(vec![
-        struct_def("Point", vec![("x", TypeExpression::Int)]),
+        pub_struct_def("Point", vec![("x", TypeExpression::Int)]),
         main_fn(vec![
             var_decl("p", no_type(), Some(struct_init("Point", vec![("x", int(1))]))),
             var_decl("ptr", no_type(), Some(reference(mem_name("p")))),
@@ -432,7 +432,7 @@ fn field_access_through_a_pointer_auto_dereferences() {
 #[test]
 fn field_access_auto_dereferences_across_chained_pointer_fields() {
     let context = analyze(program(vec![
-        struct_def("Node", vec![
+        pub_struct_def("Node", vec![
             ("value", TypeExpression::Int),
             ("next", pointer_type(TypeExpression::Ident(ident("Node"))))
         ]),
@@ -565,8 +565,8 @@ fn go_struct_field_type(
     let field_type = context.struct_fields.get(&struct_sym)
         .expect("struct fields")
         .iter()
-        .find(|(name, _)| *name == field)
-        .map(|(_, type_id)| *type_id)
+        .find(|(name, _, _)| *name == field)
+        .map(|(_, type_id, _)| *type_id)
         .unwrap_or_else(|| panic!("no field `{field}` on `{qualified_name}`"));
 
     context.types[field_type.0 as usize].clone()
@@ -901,8 +901,8 @@ fn duplicate_top_level_function_reports_t0013() {
 #[test]
 fn first_top_level_declaration_stays_resolvable_after_a_duplicate() {
     let context = analyze(program(vec![
-        struct_def("Point", vec![("x", TypeExpression::Int)]),
-        struct_def("Point", vec![("y", TypeExpression::String)]),
+        pub_struct_def("Point", vec![("x", TypeExpression::Int)]),
+        pub_struct_def("Point", vec![("y", TypeExpression::String)]),
         main_fn(vec![
             var_decl("p", no_type(), Some(struct_init("Point", vec![("x", int(1))]))),
         ]),
@@ -1234,4 +1234,362 @@ fn calling_a_diverging_expression_does_not_report_t0002() {
     ]));
 
     assert!(!has_error_code(&context, "T0002"), "diagnostics: {:?}", context.diagnostics);
+}
+
+fn point_with_methods<'src>(methods: Vec<Method<'src>>) -> Statement<'src> {
+    struct_def_with_impl(
+        "Point",
+        vec![priv_field("x", TypeExpression::Int), pub_field("y", TypeExpression::Int)],
+        methods,
+    )
+}
+
+fn method_call<'src>(target: &'src str, method: &'src str, args: Vec<Expression<'src>>) -> Expression<'src> {
+    call(field_access(name_target(target), method), args)
+}
+
+#[test]
+fn a_instance_method_call_resolves_to_its_return_type() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            pub_method("get_x", vec![], type_(TypeExpression::Int), vec![
+                return_stmt(Some(field_access(name_target("self"), "x"))),
+            ]),
+        ]),
+        main_fn(vec![
+            var_decl("p", type_(TypeExpression::Ident(ident("Point"))), None),
+            var_decl("x", no_type(), Some(method_call("p", "get_x", vec![]))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let x = context.symbols.iter().find(|s| s.name == "x").expect("x symbol");
+    assert_eq!(context.types[x.type_.expect("x should have a type").0 as usize], Type::Int);
+}
+
+#[test]
+fn self_is_a_pointer_to_struct() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            pub_method("me", vec![], no_type(), vec![
+                var_decl("this", no_type(), Some(mem_name("self"))),
+            ]),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let this = context.symbols.iter().find(|s| s.name == "this").expect("this symbol");
+    let Type::Pointer(pointee) = context.types[this.type_.expect("this should have a type").0 as usize] else {
+        panic!("expected `self` to be a pointer, found {:?}", context.types[this.type_.unwrap().0 as usize]);
+    };
+
+    let Type::Struct(struct_symbol) = context.types[pointee.0 as usize] else {
+        panic!("expected `self` to point at a struct, found {:?}", context.types[pointee.0 as usize]);
+    };
+
+    assert_eq!(context.symbols[struct_symbol.0 as usize].name, "Point");
+}
+
+#[test]
+fn an_instance_method_that_is_not_called_is_a_function_value() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            pub_method("get_x", vec![], type_(TypeExpression::Int), vec![
+                return_stmt(Some(field_access(name_target("self"), "x"))),
+            ]),
+        ]),
+        main_fn(vec![
+            var_decl("p", type_(TypeExpression::Ident(ident("Point"))), None),
+            var_decl("getter", no_type(), Some(field_access(name_target("p"), "get_x"))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let getter = context.symbols.iter().find(|s| s.name == "getter").expect("getter symbol");
+    let int_type = context.types.iter().position(|t| *t == Type::Int).expect("int type");
+    assert_eq!(
+        context.types[getter.type_.expect("getter should have a type").0 as usize],
+        Type::Fn { params: vec![], return_type: TypeId(int_type as u32) },
+    );
+}
+
+#[test]
+fn an_instance_method_call_with_a_wrong_argument_type_reports_t0001() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            pub_method("shift", vec![("by", TypeExpression::Int)], no_type(), vec![]),
+        ]),
+        main_fn(vec![
+            var_decl("p", type_(TypeExpression::Ident(ident("Point"))), None),
+            expr_stmt(method_call("p", "shift", vec![string("not an int")])),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0001"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_private_field_read_from_outside_the_impl_block_reports_t0021() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![]),
+        main_fn(vec![
+            var_decl("p", type_(TypeExpression::Ident(ident("Point"))), None),
+            var_decl("x", no_type(), Some(field_access(name_target("p"), "x"))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0021"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_private_field_initialized_from_outside_the_impl_block_reports_t0021() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![]),
+        main_fn(vec![
+            var_decl("p", no_type(), Some(struct_init("Point", vec![("x", int(1)), ("y", int(2))]))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0021"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_public_field_is_reachable_from_outside_the_impl_block() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![]),
+        main_fn(vec![
+            var_decl("p", type_(TypeExpression::Ident(ident("Point"))), None),
+            var_decl("y", no_type(), Some(field_access(name_target("p"), "y"))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn private_fields_and_methods_are_reachable_from_another_method_of_the_same_struct() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            priv_method("raw_x", vec![], type_(TypeExpression::Int), vec![
+                return_stmt(Some(field_access(name_target("self"), "x"))),
+            ]),
+            pub_method("get_x", vec![], type_(TypeExpression::Int), vec![
+                return_stmt(Some(method_call("self", "raw_x", vec![]))),
+            ]),
+        ]),
+        main_fn(vec![
+            var_decl("p", type_(TypeExpression::Ident(ident("Point"))), None),
+            var_decl("x", no_type(), Some(method_call("p", "get_x", vec![]))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let x = context.symbols.iter().find(|s| s.name == "x").expect("x symbol");
+    assert_eq!(context.types[x.type_.expect("x should have a type").0 as usize], Type::Int);
+}
+
+#[test]
+fn a_private_method_called_from_outside_the_impl_block_reports_t0021() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            priv_method("raw_x", vec![], type_(TypeExpression::Int), vec![
+                return_stmt(Some(field_access(name_target("self"), "x"))),
+            ]),
+        ]),
+        main_fn(vec![
+            var_decl("p", type_(TypeExpression::Ident(ident("Point"))), None),
+            var_decl("x", no_type(), Some(method_call("p", "raw_x", vec![]))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0021"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_static_method_called_on_the_struct_name_resolves_to_its_return_type() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            pub_static_method("origin", vec![], type_(TypeExpression::Ident(ident("Point"))), vec![
+                return_stmt(Some(struct_init("Point", vec![("x", int(0)), ("y", int(0))]))),
+            ]),
+        ]),
+        main_fn(vec![
+            var_decl("p", no_type(), Some(method_call("Point", "origin", vec![]))),
+        ]),
+    ]));
+
+    assert!(context.diagnostics.is_empty(), "unexpected diagnostics: {:?}", context.diagnostics);
+
+    let p = context.symbols.iter().find(|s| s.name == "p").expect("p symbol");
+    let Type::Struct(struct_symbol) = context.types[p.type_.expect("p should have a type").0 as usize] else {
+        panic!("expected a struct, found {:?}", context.types[p.type_.unwrap().0 as usize]);
+    };
+
+    assert_eq!(context.symbols[struct_symbol.0 as usize].name, "Point");
+}
+
+#[test]
+fn an_instance_method_called_on_the_struct_name_reports_t0022() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            pub_method("get_x", vec![], type_(TypeExpression::Int), vec![
+                return_stmt(Some(field_access(name_target("self"), "x"))),
+            ]),
+        ]),
+        main_fn(vec![
+            var_decl("x", no_type(), Some(method_call("Point", "get_x", vec![]))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0022"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_static_method_called_on_an_instance_reports_t0022() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            pub_static_method("origin", vec![], type_(TypeExpression::Ident(ident("Point"))), vec![
+                return_stmt(Some(struct_init("Point", vec![("x", int(0)), ("y", int(0))]))),
+            ]),
+        ]),
+        main_fn(vec![
+            var_decl("p", type_(TypeExpression::Ident(ident("Point"))), None),
+            var_decl("other", no_type(), Some(method_call("p", "origin", vec![]))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0022"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_static_method_has_no_self_binding() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            pub_static_method("broken", vec![], type_(TypeExpression::Int), vec![
+                return_stmt(Some(field_access(name_target("self"), "x"))),
+            ]),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "S0001"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn assigning_to_a_method_reports_t0023() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            pub_method("get_x", vec![], type_(TypeExpression::Int), vec![
+                return_stmt(Some(field_access(name_target("self"), "x"))),
+            ]),
+            pub_static_method("origin", vec![], type_(TypeExpression::Int), vec![
+                return_stmt(Some(int(0))),
+            ]),
+        ]),
+        fn_def("zero", vec![], type_(TypeExpression::Int), vec![return_stmt(Some(int(0)))]),
+        main_fn(vec![
+            var_decl("p", type_(TypeExpression::Ident(ident("Point"))), None),
+            assign(field_target(name_target("p"), "get_x"), mem_name("zero")),
+            assign(field_target(name_target("Point"), "origin"), mem_name("zero")),
+        ]),
+    ]));
+
+    let count = context.diagnostics.iter().filter(|d| &*d.error_code == "T0023").count();
+    assert_eq!(count, 2, "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_field_reached_through_the_struct_name_reports_t0022() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![]),
+        main_fn(vec![
+            var_decl("y", no_type(), Some(field_access(name_target("Point"), "y"))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0022"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn an_unknown_member_on_a_struct_name_reports_t0017() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![]),
+        main_fn(vec![
+            var_decl("nothing", no_type(), Some(field_access(name_target("Point"), "nope"))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0017"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_private_field_written_from_outside_the_impl_block_reports_t0021() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![]),
+        main_fn(vec![
+            var_decl("p", type_(TypeExpression::Ident(ident("Point"))), None),
+            assign(field_target(name_target("p"), "x"), int(1)),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0021"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_private_static_method_called_from_outside_the_impl_block_reports_t0021() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            method(Visibility::Private, MethodKind::Static, "secret", vec![], type_(TypeExpression::Int), vec![
+                return_stmt(Some(int(0))),
+            ]),
+        ]),
+        main_fn(vec![
+            var_decl("x", no_type(), Some(method_call("Point", "secret", vec![]))),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0021"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_static_method_that_collides_with_a_top_level_name_reports_t0013() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            pub_static_method("new", vec![], type_(TypeExpression::Int), vec![return_stmt(Some(int(0)))]),
+        ]),
+        fn_def("Point_new", vec![], no_type(), vec![]),
+    ]));
+
+    assert!(has_error_code(&context, "T0013"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn two_static_methods_that_mangle_to_the_same_top_level_name_report_t0013() {
+    let context = analyze(program(vec![
+        struct_def_with_impl("A", vec![priv_field("v", TypeExpression::Int)], vec![
+            pub_static_method("b_c", vec![], type_(TypeExpression::Int), vec![return_stmt(Some(int(0)))]),
+        ]),
+        struct_def_with_impl("A_b", vec![priv_field("v", TypeExpression::Int)], vec![
+            pub_static_method("c", vec![], type_(TypeExpression::Int), vec![return_stmt(Some(int(0)))]),
+        ]),
+    ]));
+
+    assert!(has_error_code(&context, "T0013"), "diagnostics: {:?}", context.diagnostics);
+}
+
+#[test]
+fn a_method_that_reuses_a_field_or_method_name_reports_t0013() {
+    let context = analyze(program(vec![
+        point_with_methods(vec![
+            pub_method("x", vec![], type_(TypeExpression::Int), vec![return_stmt(Some(int(0)))]),
+            pub_method("get_x", vec![], type_(TypeExpression::Int), vec![return_stmt(Some(int(0)))]),
+            pub_method("get_x", vec![], type_(TypeExpression::Int), vec![return_stmt(Some(int(0)))]),
+        ]),
+    ]));
+
+    let count = context.diagnostics.iter().filter(|d| &*d.error_code == "T0013").count();
+    assert_eq!(count, 2, "diagnostics: {:?}", context.diagnostics);
 }
