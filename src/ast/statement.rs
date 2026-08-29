@@ -1,7 +1,7 @@
 use duckc_macros::ast_derive;
 
 use crate::ast::struct_definition::{ImplBlock, StructField};
-use crate::ast::type_expression::TypeAnnotation;
+use crate::ast::type_expression::{TypeAnnotation, TypeParam};
 use crate::ast::use_statement::UseStatement;
 use crate::ast::{Block, NodeId, ParameterList};
 use crate::ast::{Expression, Identifier, MemoryTarget, Span};
@@ -12,6 +12,7 @@ pub enum Stmt<'src> {
     FunctionDefinition {
         #[serde(borrow)]
         name: Identifier<'src>,
+        type_params: Vec<TypeParam<'src>>,
         params: ParameterList<'src>,
         body: Block<'src>,
         return_type: TypeAnnotation<'src>,
@@ -19,6 +20,7 @@ pub enum Stmt<'src> {
     StructDefinition {
         #[serde(borrow)]
         name: Identifier<'src>,
+        type_params: Vec<TypeParam<'src>>,
         fields: Vec<StructField<'src>>,
         impl_block: Option<ImplBlock<'src>>,
     },

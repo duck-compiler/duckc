@@ -1,17 +1,34 @@
 use std::collections::HashMap;
+use std::rc::Rc;
+
+use bumpalo::Bump;
 
 use crate::ast::struct_definition::{MethodKind, Visibility};
 use crate::ast::{AstRoot, assign_generate_node_ids};
-use crate::backend::semantics::{diagnostic::Diagnostic, go_resolve::GoResolver, module::{ModuleId, ModuleTables}, symbol::{Scope, ScopeId, SymbolData, SymbolId}, r#type::{Type, TypeId}};
+use crate::backend::semantics::{diagnostic::Diagnostic, go_resolve::GoResolver, module::{ModuleId, ModuleTables}, symbol::{Scope, ScopeId, SymbolData, SymbolId}, r#type::{Type, TypeId, TypeParamData, TypeParamId}};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct MethodSignature {
     pub kind: MethodKind,
     pub visibility: Visibility,
     pub value_type: TypeId,
+    pub type_params: Rc<[TypeParamId]>,
+}
+
+impl MethodSignature {
+    pub fn is_free_function(&self) -> bool {
+        matches!(self.kind, MethodKind::Static) || !self.type_params.is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FreeFunctionMethodKey<'src> {
+    pub struct_symbol: SymbolId,
+    pub method_name: &'src str,
 }
 
 pub struct SemanticsContext<'src> {
+    arena: &'src Bump,
     pub modules: Vec<ModuleTables<'src>>,
     pub symbols: Vec<SymbolData<'src>>,
     pub scopes: Vec<Scope>,
@@ -23,11 +40,15 @@ pub struct SemanticsContext<'src> {
     pub go_package_names: HashMap<String, &'src str>,
     pub struct_fields: HashMap<SymbolId, Vec<(&'src str, TypeId, Visibility)>>,
     pub struct_methods: HashMap<SymbolId, HashMap<&'src str, MethodSignature>>,
+    pub type_param_data: Vec<TypeParamData<'src>>,
+    pub symbol_type_params: HashMap<SymbolId, Vec<TypeParamId>>,
+    pub mangled_free_function_names: HashMap<FreeFunctionMethodKey<'src>, &'src str>,
 }
 
 impl<'src> SemanticsContext<'src> {
-    pub fn new() -> Self {
+    pub fn new(arena: &'src Bump) -> Self {
         Self {
+            arena,
             modules: Vec::new(),
             symbols: Vec::new(),
             scopes: Vec::new(),
@@ -39,7 +60,33 @@ impl<'src> SemanticsContext<'src> {
             go_package_names: HashMap::new(),
             struct_fields: HashMap::new(),
             struct_methods: HashMap::new(),
+            type_param_data: Vec::new(),
+            symbol_type_params: HashMap::new(),
+            mangled_free_function_names: HashMap::new(),
         }
+    }
+
+    pub fn alloc_str(&self, s: &str) -> &'src str {
+        self.arena.alloc_str(s)
+    }
+
+    pub fn free_function_method_name(&self, struct_name: &str, method_name: &str) -> &'src str {
+        self.alloc_str(&format!("{struct_name}_{method_name}"))
+    }
+
+    pub fn add_type_param(&mut self, name: &'src str) -> TypeParamId {
+        let id = TypeParamId(self.type_param_data.len() as u32);
+        self.type_param_data.push(TypeParamData { name });
+
+        id
+    }
+
+    pub fn type_param_name(&self, type_param: TypeParamId) -> &'src str {
+        self.type_param_data[type_param.0 as usize].name
+    }
+
+    pub fn type_params_of(&self, symbol: SymbolId) -> &[TypeParamId] {
+        self.symbol_type_params.get(&symbol).map(Vec::as_slice).unwrap_or_default()
     }
 
     pub fn add_module(&mut self, mut ast: AstRoot<'src>) -> ModuleId {

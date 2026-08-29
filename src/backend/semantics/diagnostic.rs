@@ -25,6 +25,7 @@ impl<'src> Diagnostic<'src> {
             SymbolKind::Variable => format!("variable not found: {}", name),
             SymbolKind::Struct => format!("struct not found: {}", name),
             SymbolKind::Param => format!("parameter not found: {}", name),
+            SymbolKind::TypeParam => format!("type parameter not found: {}", name),
             SymbolKind::Module => format!("package not found: {}", name),
         };
 
@@ -296,6 +297,100 @@ impl<'src> Diagnostic<'src> {
             message: message.into_boxed_str(),
             location,
             error_code: "T0022".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn tuple_index_out_of_range(
+        index: usize,
+        length: usize,
+        location: Span<'src>,
+    ) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!("tuple index {} out of range, it has {} element(s)", index, length).into_boxed_str(),
+            location,
+            error_code: "T0024".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn cannot_infer_type_param(name: &str, location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!(
+                "cannot infer type parameter `{}` from given context ",
+                name,
+            ).into_boxed_str(),
+            location,
+            error_code: "T0025".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn wrong_type_arg_count(
+        expected: usize,
+        found: usize,
+        location: Span<'src>,
+    ) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!("wrong number of type arguments: expected {}, found {}", expected, found).into_boxed_str(),
+            location,
+            error_code: "T0026".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn conflicting_type_param(
+        name: &str,
+        first: &str,
+        second: &str,
+        location: Span<'src>,
+    ) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!(
+                "type parameter `{}` can't be {} and {} at same",
+                name, first, second,
+            ).into_boxed_str(),
+            location,
+            error_code: "T0027".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn generic_member_needs_type_args(name: &str, location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!(
+                "`{}` is generic, it needs type args to be used as a value",
+                name,
+            ).into_boxed_str(),
+            location,
+            error_code: "T0031".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn generic_function_must_be_called(name: &str, location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!("`{}` is generic, it can only be called, not used as value", name).into_boxed_str(),
+            location,
+            error_code: "T0028".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn type_args_given_twice(location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: "type arguments already given".to_string().into_boxed_str(),
+            location,
+            error_code: "T0030".to_string().into_boxed_str(),
+            kind: DiagnosticKind::Error,
+        }
+    }
+
+    pub fn operator_on_type_param(name: &str, location: Span<'src>) -> Diagnostic<'src> {
+        Diagnostic {
+            message: format!("operators can't be used on values of the type parameter `{}.", name).into_boxed_str(),
+            location,
+            error_code: "T0029".to_string().into_boxed_str(),
             kind: DiagnosticKind::Error,
         }
     }

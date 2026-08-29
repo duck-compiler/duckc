@@ -1,26 +1,68 @@
 use std::cell::Cell;
 
-use crate::{ast::{Block, Expression, MemoryTarget, NodeId, ParameterList, Statement, TypeExpression, expression::{Expr, ExpressionList}, memory_target::MemTar, statement::Stmt, struct_definition::{Method, MethodKind, SELF_NAME}, type_expression::TypeAnnotation}, backend::{gost::go_tree::{GoExpression, GoStatement, GoType, StructField}, semantics::{context::SemanticsContext, module::ModuleId, symbol::static_method_name, r#type::{Type, TypeId}}}};
+use crate::{ast::{Block, Expression, Identifier, MemoryTarget, NodeId, ParameterList, Statement, TypeExpression, expression::{Expr, ExpressionList}, memory_target::MemTar, statement::Stmt, struct_definition::{Method, MethodKind, SELF_NAME}, type_expression::{TypeAnnotation, TypeParam}}, backend::{gost::go_tree::{GoExpression, GoStatement, GoType, StructField, tuple_field_name}, semantics::{context::SemanticsContext, module::{FreeFunctionMember, ModuleId}, symbol::Origin, r#type::{Type, TypeId}}}};
 
-fn leak<'src>(s: String) -> &'src str {
-    Box::leak(s.into_boxed_str())
+fn type_param_names<'src>(type_params: &[TypeParam<'src>]) -> Vec<&'src str> {
+    type_params.iter().map(|type_param| type_param.name.ident).collect()
+}
+
+fn member_access<'e, 'src>(
+    expr: &'e Expression<'src>,
+) -> Option<(&'e MemoryTarget<'src>, &'e Identifier<'src>)> {
+    let Expr::MemoryTarget(memory_target) = &*expr.variant else {
+        return None;
+    };
+
+    match &memory_target.variant {
+        MemTar::FieldAccess { target, field_name, .. } => Some((target, field_name)),
+        MemTar::Name(_) | MemTar::ArrayAccess { .. }
+        | MemTar::TupleIndex { .. } | MemTar::Dereference(_) => None,
+    }
 }
 
 pub struct Translator<'a, 'src> {
     pub context: &'a SemanticsContext<'src>,
     pub module: ModuleId,
     temp_counter: Cell<u32>,
+    tuple_counter: Cell<u32>,
+    closure_counter: Cell<u32>,
 }
 
 impl<'a, 'src> Translator<'a, 'src> {
     pub fn new(context: &'a SemanticsContext<'src>, module: ModuleId) -> Self {
-        Self { context, module, temp_counter: Cell::new(0) }
+        Self {
+            context,
+            module,
+            temp_counter: Cell::new(0),
+            tuple_counter: Cell::new(0),
+            closure_counter: Cell::new(0),
+        }
     }
 
-    fn fresh_temp_name(&self) -> &'src str {
-        let id = self.temp_counter.get();
-        self.temp_counter.set(id + 1);
-        leak(format!("__duck_if_{id}"))
+    fn next_id(counter: &Cell<u32>) -> u32 {
+        let id = counter.get();
+        counter.set(id + 1);
+        id
+    }
+
+    fn fresh_if_temp_name(&self) -> &'src str {
+        self.context.alloc_str(&format!("__duck_if_{}", Self::next_id(&self.temp_counter)))
+    }
+
+    fn fresh_tuple_temp_name(&self) -> &'src str {
+        self.context.alloc_str(&format!("__duck_tuple_{}", Self::next_id(&self.tuple_counter)))
+    }
+
+    fn fresh_closure_id(&self) -> u32 {
+        Self::next_id(&self.closure_counter)
+    }
+
+    fn receiver_temp_name(&self, closure: u32) -> &'src str {
+        self.context.alloc_str(&format!("__duck_receiver_{closure}"))
+    }
+
+    fn closure_param_name(&self, closure: u32, index: usize) -> &'src str {
+        self.context.alloc_str(&format!("__duck_arg_{closure}_{index}"))
     }
 
     fn translate_name_reference(&self, node: NodeId, fallback: &'src str) -> GoExpression<'src> {
@@ -33,10 +75,11 @@ impl<'a, 'src> Translator<'a, 'src> {
 
     pub fn translate_statement(&self, statement: &Statement<'src>) -> Vec<GoStatement<'src>> {
         match &statement.variant {
-            Stmt::FunctionDefinition { name, params, return_type, body } => {
+            Stmt::FunctionDefinition { name, type_params, params, return_type, body } => {
                 vec![GoStatement::FuncDef {
                     receiver: None,
                     name: name.ident,
+                    type_params: type_param_names(type_params),
                     params: self.translate_params(params),
                     return_type: self.translate_type_annotation(return_type),
                     body: self.translate_block(body),
@@ -59,6 +102,11 @@ impl<'a, 'src> Translator<'a, 'src> {
                             condition: condition_expr,
                             body: self.translate_block(body),
                         });
+                        prelude
+                    }
+                    Expr::FunctionCall { target, args, type_args: _ } if self.go_multi_result_types(target).is_some() => {
+                        let (mut prelude, call) = self.translate_call(target, args);
+                        prelude.push(GoStatement::Expr { expr: call });
                         prelude
                     }
                     _ => {
@@ -95,9 +143,10 @@ impl<'a, 'src> Translator<'a, 'src> {
 
                 prelude
             }
-            Stmt::StructDefinition { name, fields, impl_block } => {
+            Stmt::StructDefinition { name, type_params, fields, impl_block } => {
                 let type_declaration = GoStatement::TypeDecl {
                     name: name.ident,
+                    type_params: type_param_names(type_params),
                     type_: GoType::Struct {
                         fields: fields
                             .iter()
@@ -116,7 +165,7 @@ impl<'a, 'src> Translator<'a, 'src> {
                 let methods = impl_block
                     .iter()
                     .flat_map(|impl_block| &impl_block.methods)
-                    .map(|method| self.translate_method(name.ident, method));
+                    .map(|method| self.translate_method(name.ident, type_params, method));
 
                 std::iter::once(type_declaration).chain(methods).collect()
             }
@@ -137,34 +186,71 @@ impl<'a, 'src> Translator<'a, 'src> {
         }
     }
 
-    fn translate_method(&self, struct_name: &'src str, method: &Method<'src>) -> GoStatement<'src> {
-        let (receiver, name) = match method.kind {
-            MethodKind::Instance => (
-                Some((SELF_NAME, GoType::Pointer(Box::new(GoType::TypeName(struct_name))))),
-                method.name.ident,
-            ),
-            MethodKind::Static => (None, static_method_name(struct_name, method.name.ident)),
+    fn translate_method(
+        &self,
+        struct_name: &'src str,
+        struct_type_params: &[TypeParam<'src>],
+        method: &Method<'src>,
+    ) -> GoStatement<'src> {
+        let struct_type = GoType::Named {
+            name: struct_name,
+            type_args: type_param_names(struct_type_params)
+                .into_iter()
+                .map(|name| GoType::Named { name, type_args: vec![] })
+                .collect(),
         };
 
+        let stays_a_method = matches!(method.kind, MethodKind::Instance) && method.type_params.is_empty();
+
+        if stays_a_method {
+            return GoStatement::FuncDef {
+                receiver: Some((SELF_NAME, GoType::Pointer(Box::new(struct_type)))),
+                name: method.name.ident,
+                type_params: vec![],
+                params: self.translate_params(&method.params),
+                return_type: self.translate_type_annotation(&method.return_type),
+                body: self.translate_block(&method.body),
+            };
+        }
+
+        let mut params = Vec::with_capacity(method.params.list.len() + 1);
+        if matches!(method.kind, MethodKind::Instance) {
+            params.push((SELF_NAME, GoType::Pointer(Box::new(struct_type))));
+        }
+        params.extend(self.translate_params(&method.params));
+
+        let mut type_params = type_param_names(struct_type_params);
+        type_params.extend(type_param_names(&method.type_params));
+
         GoStatement::FuncDef {
-            receiver,
-            name,
-            params: self.translate_params(&method.params),
+            receiver: None,
+            name: self.context.free_function_method_name(struct_name, method.name.ident),
+            type_params,
+            params,
             return_type: self.translate_type_annotation(&method.return_type),
             body: self.translate_block(&method.body),
         }
     }
 
-    fn static_method_owner_name(&self, target: &MemoryTarget<'src>, method_name: &str) -> Option<&'src str> {
-        let MemTar::Name(identifier) = &target.variant else {
-            return None;
-        };
+    fn free_function_member(&self, node: NodeId) -> Option<&'a FreeFunctionMember<'src>> {
+        self.context.modules[self.module.0 as usize].free_function_members.get(&node)
+    }
 
-        let resolutions = &self.context.modules[self.module.0 as usize].resolutions;
-        let symbol = resolutions[identifier.id.0 as usize]?;
-        let signature = self.context.struct_methods.get(&symbol)?.get(method_name)?;
+    fn type_arguments(&self, node: NodeId) -> Vec<GoType<'src>> {
+        self.context.modules[self.module.0 as usize]
+            .type_arguments
+            .get(&node)
+            .map(|arguments| arguments.iter().map(|argument| self.go_type_from_type_id(*argument)).collect())
+            .unwrap_or_default()
+    }
 
-        matches!(signature.kind, MethodKind::Static).then(|| self.context.symbols[symbol.0 as usize].name)
+    fn instantiated(&self, base: GoExpression<'src>, node: NodeId) -> GoExpression<'src> {
+        let type_args = self.type_arguments(node);
+
+        match type_args.is_empty() {
+            true => base,
+            false => GoExpression::Instantiate { base: Box::new(base), type_args },
+        }
     }
 
     fn translate_type_annotation(&self, type_annotation: &TypeAnnotation<'src>) -> Option<GoType<'src>> {
@@ -189,7 +275,13 @@ impl<'a, 'src> Translator<'a, 'src> {
             TypeExpression::Bool => GoType::Bool,
             TypeExpression::Array { inner } => GoType::Array(Box::new(self.translate_type_expression(inner))),
             TypeExpression::Pointer { inner } => GoType::Pointer(Box::new(self.translate_type_expression(inner))),
-            TypeExpression::Ident(identifier) => GoType::TypeName(identifier.ident),
+            TypeExpression::Tuple(elements) => GoType::Tuple(
+                elements.iter().map(|element| self.translate_type_expression(element)).collect(),
+            ),
+            TypeExpression::Ident { name, type_args } => GoType::Named {
+                name: name.ident,
+                type_args: type_args.iter().map(|type_arg| self.translate_type_expression(type_arg)).collect(),
+            },
         }
     }
 
@@ -216,7 +308,17 @@ impl<'a, 'src> Translator<'a, 'src> {
             Type::String => GoType::String,
             Type::Array(inner) => GoType::Array(Box::new(self.go_type_from_type_id(*inner))),
             Type::Pointer(inner) => GoType::Pointer(Box::new(self.go_type_from_type_id(*inner))),
-            Type::Struct(sym) => GoType::TypeName(self.context.symbols[sym.0 as usize].name),
+            Type::Tuple(elements) => GoType::Tuple(
+                elements.iter().map(|element| self.go_type_from_type_id(*element)).collect(),
+            ),
+            Type::Struct(symbol, arguments) => GoType::Named {
+                name: self.context.symbols[symbol.0 as usize].name,
+                type_args: arguments.iter().map(|argument| self.go_type_from_type_id(*argument)).collect(),
+            },
+            Type::TypeParam(type_param) => GoType::Named {
+                name: self.context.type_param_name(*type_param),
+                type_args: vec![],
+            },
             Type::Unit | Type::Never => GoType::Struct { fields: vec![] },
             Type::Fn { params, return_type } => {
                 let return_type = *return_type;
@@ -319,16 +421,19 @@ impl<'a, 'src> Translator<'a, 'src> {
                 let (prelude, inner_expr) = self.translate_expression(inner);
                 (prelude, GoExpression::AddressOf(Box::new(inner_expr)))
             },
-            Expr::FunctionCall { target, args } => {
-                let (mut prelude, callee_expr) = self.translate_expression(target);
-                let (args_prelude, arg_exprs) = self.translate_expression_list(args);
+            Expr::FunctionCall { target, type_args: _, args } => {
+                let (mut prelude, call) = self.translate_call(target, args);
 
-                prelude.extend(args_prelude);
+                let Some(result_types) = self.go_multi_result_types(target) else {
+                    return (prelude, call);
+                };
 
-                (prelude, GoExpression::FuncCall {
-                    callee: Box::new(callee_expr),
-                    args: arg_exprs,
-                })
+                let names = result_types.iter().map(|_| self.fresh_tuple_temp_name()).collect::<Vec<_>>();
+                let values = names.iter().map(|name| GoExpression::Immediate(*name)).collect::<Vec<_>>();
+
+                prelude.push(GoStatement::MultiVarDecl { names, expr: call });
+
+                (prelude, GoExpression::TupleInit { elem_types: result_types, values })
             },
             Expr::MemoryTarget(memory_target) => {
                 self.translate_memory_target(memory_target)
@@ -353,7 +458,24 @@ impl<'a, 'src> Translator<'a, 'src> {
                     values,
                 })
             },
-            Expr::StructInit { type_name, fields } => {
+            Expr::TupleExpression { values } => {
+                let elem_types = match self.go_type_from_type_id(self.node_type(expr.id)) {
+                    GoType::Tuple(elem_types) => elem_types,
+                    case => unreachable!("tuple expression should have tuple type, found {:?}", case),
+                };
+
+                let mut prelude = Vec::new();
+
+                let mut translated_values = Vec::new();
+                for value in values {
+                    let (value_prelude, value_expr) = self.translate_expression(value);
+                    prelude.extend(value_prelude);
+                    translated_values.push(value_expr);
+                }
+
+                (prelude, GoExpression::TupleInit { elem_types, values: translated_values })
+            },
+            Expr::StructInit { type_name, type_args: _, fields } => {
                 let mut prelude = Vec::new();
 
                 let mut translated_fields = Vec::new();
@@ -363,13 +485,19 @@ impl<'a, 'src> Translator<'a, 'src> {
                     translated_fields.push((field.name.ident, field_expr));
                 }
 
+                let type_args = match self.go_type_from_type_id(self.node_type(expr.id)) {
+                    GoType::Named { type_args, .. } => type_args,
+                    case => unreachable!("struct init should have a named type, found {:?}", case),
+                };
+
                 (prelude, GoExpression::StructInit {
                     type_name: type_name.ident,
+                    type_args,
                     fields: translated_fields,
                 })
             },
             Expr::If { expr: condition, body, else_branch } => {
-                let temp_name = self.fresh_temp_name();
+                let temp_name = self.fresh_if_temp_name();
                 let go_type = self.go_type_from_type_id(self.node_type(expr.id));
 
                 let (mut prelude, condition_expr) = self.translate_expression(condition);
@@ -400,23 +528,160 @@ impl<'a, 'src> Translator<'a, 'src> {
                     body: self.translate_block(body),
                 });
 
-                (prelude, GoExpression::StructInit { type_name: "struct{}", fields: vec![] })
+                (prelude, GoExpression::StructInit { type_name: "struct{}", type_args: vec![], fields: vec![] })
             },
         }
+    }
+
+    fn translate_call(
+        &self,
+        target: &Expression<'src>,
+        args: &ExpressionList<'src>,
+    ) -> (Vec<GoStatement<'src>>, GoExpression<'src>) {
+        let (mut prelude, call_target, receiver) = self.translate_target(target);
+        let (args_prelude, arg_exprs) = self.translate_expression_list(args);
+
+        prelude.extend(args_prelude);
+
+        (prelude, GoExpression::FuncCall {
+            target: Box::new(call_target),
+            args: receiver.into_iter().chain(arg_exprs).collect(),
+        })
+    }
+
+    fn translate_target(
+        &self,
+        target: &Expression<'src>,
+    ) -> (Vec<GoStatement<'src>>, GoExpression<'src>, Option<GoExpression<'src>>) {
+        let member = member_access(target).and_then(|(receiver_target, field_name)| {
+            let member = self.free_function_member(field_name.id)?;
+            Some((receiver_target, field_name, member))
+        });
+
+        let Some((receiver_target, field_name, member)) = member else {
+            let (prelude, call_target) = self.translate_expression(target);
+            return (prelude, call_target, None);
+        };
+
+        let call_target = self.instantiated(GoExpression::Immediate(member.name), field_name.id);
+
+        let Some(receiver_type) = member.receiver_type else {
+            return (vec![], call_target, None);
+        };
+
+        let (prelude, receiver) = self.translate_memory_target(receiver_target);
+
+        (prelude, call_target, Some(self.receiver_argument(receiver, receiver_type)))
+    }
+
+    fn receiver_argument(&self, receiver: GoExpression<'src>, receiver_type: TypeId) -> GoExpression<'src> {
+        match self.context.types[receiver_type.0 as usize] {
+            Type::Pointer(_) => receiver,
+            _ => GoExpression::AddressOf(Box::new(receiver)),
+        }
+    }
+
+    fn receiver_pointer_type(&self, receiver_type: TypeId) -> GoType<'src> {
+        match self.context.types[receiver_type.0 as usize] {
+            Type::Pointer(_) => self.go_type_from_type_id(receiver_type),
+            _ => GoType::Pointer(Box::new(self.go_type_from_type_id(receiver_type))),
+        }
+    }
+
+    fn translate_member_closure(
+        &self,
+        receiver_target: &MemoryTarget<'src>,
+        field_name: &Identifier<'src>,
+        member: &FreeFunctionMember<'src>,
+        receiver_type: TypeId,
+    ) -> (Vec<GoStatement<'src>>, GoExpression<'src>) {
+        let Type::Fn { params, return_type } = &self.context.types[member.value_type.0 as usize] else {
+            unreachable!("a method value should have a function type, found {:?}", self.context.types[member.value_type.0 as usize]);
+        };
+
+        let closure = self.fresh_closure_id();
+        let receiver_name = self.receiver_temp_name(closure);
+
+        let (mut prelude, receiver) = self.translate_memory_target(receiver_target);
+        prelude.push(GoStatement::VarDecl {
+            name: receiver_name,
+            type_: Some(self.receiver_pointer_type(receiver_type)),
+            init_expression: Some(self.receiver_argument(receiver, receiver_type)),
+        });
+
+        let closure_params = params
+            .iter()
+            .enumerate()
+            .map(|(index, param)| (self.closure_param_name(closure, index), self.go_type_from_type_id(*param)))
+            .collect::<Vec<_>>();
+
+        let call = GoExpression::FuncCall {
+            target: Box::new(self.instantiated(GoExpression::Immediate(member.name), field_name.id)),
+            args: std::iter::once(GoExpression::Immediate(receiver_name))
+                .chain(closure_params.iter().map(|(name, _)| GoExpression::Immediate(name)))
+                .collect(),
+        };
+
+        let returns_value = !matches!(self.context.types[return_type.0 as usize], Type::Unit);
+
+        (prelude, GoExpression::FuncLiteral {
+            params: closure_params,
+            return_type: returns_value.then(|| self.go_type_from_type_id(*return_type)),
+            body: match returns_value {
+                true => vec![GoStatement::Return { value: Some(call) }],
+                false => vec![GoStatement::Expr { expr: call }],
+            },
+        })
+    }
+
+    fn go_multi_result_types(&self, target: &Expression<'src>) -> Option<Vec<GoType<'src>>> {
+        let Expr::MemoryTarget(memory_target) = &*target.variant else {
+            return None;
+        };
+
+        let MemTar::FieldAccess { target: package_target, .. } = &memory_target.variant else {
+            return None;
+        };
+
+        let MemTar::Name(identifier) = &package_target.variant else {
+            return None;
+        };
+
+        let resolutions = &self.context.modules[self.module.0 as usize].resolutions;
+        let symbol = resolutions[identifier.id.0 as usize]?;
+
+        if !matches!(self.context.symbols[symbol.0 as usize].origin, Origin::GoPackage { .. }) {
+            return None;
+        }
+
+        let Type::Fn { return_type, .. } = &self.context.types[self.node_type(target.id).0 as usize] else {
+            return None;
+        };
+
+        let Type::Tuple(elements) = &self.context.types[return_type.0 as usize] else {
+            return None;
+        };
+
+        Some(elements.iter().map(|element| self.go_type_from_type_id(*element)).collect())
     }
 
     fn translate_memory_target(&self, memory_target: &MemoryTarget<'src>) -> (Vec<GoStatement<'src>>, GoExpression<'src>) {
         match &memory_target.variant {
             MemTar::Name(identifier) => {
-                (vec![], self.translate_name_reference(identifier.id, identifier.ident))
+                let reference = self.translate_name_reference(identifier.id, identifier.ident);
+                (vec![], self.instantiated(reference, identifier.id))
             }
-            MemTar::FieldAccess { target, field_name } => {
-                if let Some(struct_name) = self.static_method_owner_name(target, field_name.ident) {
-                    return (vec![], GoExpression::Immediate(static_method_name(struct_name, field_name.ident)));
-                }
+            MemTar::FieldAccess { target, field_name, type_args: _ } => {
+                let Some(member) = self.free_function_member(field_name.id) else {
+                    let (prelude, base) = self.translate_memory_target(target);
+                    return (prelude, GoExpression::Selector { base: Box::new(base), field: field_name.ident });
+                };
 
-                let (prelude, base) = self.translate_memory_target(target);
-                (prelude, GoExpression::Selector { base: Box::new(base), field: field_name.ident })
+                let Some(receiver_type) = member.receiver_type else {
+                    return (vec![], self.instantiated(GoExpression::Immediate(member.name), field_name.id));
+                };
+
+                self.translate_member_closure(target, field_name, member, receiver_type)
             }
             MemTar::ArrayAccess { target, index_expression } => {
                 let (mut prelude, base) = self.translate_memory_target(target);
@@ -424,6 +689,11 @@ impl<'a, 'src> Translator<'a, 'src> {
                 prelude.extend(index_prelude);
 
                 (prelude, GoExpression::ArrayIndex { base: Box::new(base), index: Box::new(index) })
+            }
+            MemTar::TupleIndex { target, index } => {
+                let (prelude, base) = self.translate_memory_target(target);
+                let field = self.context.alloc_str(&tuple_field_name(*index));
+                (prelude, GoExpression::Selector { base: Box::new(base), field })
             }
             MemTar::Dereference(inner) => {
                 let (prelude, inner_expr) = self.translate_expression(inner);

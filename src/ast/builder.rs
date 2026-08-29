@@ -2,7 +2,7 @@
 //! these builders should never be used inside of parsers for constructing AST nodes
 
 use crate::ast::{
-    AstRoot, Block, Expression, Identifier, NodeId, Parameter, ParameterList, Span, Statement, TypeExpression, expression::{BinaryOperator, Expr, ExpressionList, FieldInit, UnaryOperator}, memory_target::{self, MemTar}, statement::Stmt, struct_definition::{ImplBlock, Method, MethodKind, StructField, Visibility}, type_expression::TypeAnnotation, use_statement::UseStatement
+    AstRoot, Block, Expression, Identifier, NodeId, Parameter, ParameterList, Span, Statement, TypeExpression, expression::{BinaryOperator, Expr, ExpressionList, FieldInit, UnaryOperator}, memory_target::{self, MemTar}, statement::Stmt, struct_definition::{ImplBlock, Method, MethodKind, StructField, Visibility}, type_expression::{TypeAnnotation, TypeParam}, use_statement::UseStatement
 };
 
 fn empty_span<'src>() -> Span<'src> {
@@ -19,6 +19,21 @@ pub fn ident<'src>(name: &'src str) -> Identifier<'src> {
         ident: name,
         span: empty_span(),
     }
+}
+
+pub fn named_type<'src>(name: &'src str) -> TypeExpression<'src> {
+    TypeExpression::Ident { name: ident(name), type_args: vec![] }
+}
+
+pub fn generic_type<'src>(name: &'src str, type_args: Vec<TypeExpression<'src>>) -> TypeExpression<'src> {
+    TypeExpression::Ident { name: ident(name), type_args }
+}
+
+fn type_params<'src>(names: Vec<&'src str>) -> Vec<TypeParam<'src>> {
+    names
+        .into_iter()
+        .map(|name| TypeParam { name: ident(name), span: empty_span() })
+        .collect()
 }
 
 pub fn type_<'src>(type_expr: TypeExpression) -> TypeAnnotation {
@@ -191,15 +206,47 @@ pub fn array_index<'src>(name: &'src str, index: Expression<'src>) -> Expression
     }))
 }
 
+pub fn tuple<'src>(values: Vec<Expression<'src>>) -> Expression<'src> {
+    expr(Expr::TupleExpression {
+        values: values.into_iter().map(Box::new).collect(),
+    })
+}
+
+pub fn tuple_type<'src>(elements: Vec<TypeExpression<'src>>) -> TypeExpression<'src> {
+    TypeExpression::Tuple(elements)
+}
+
+pub fn tuple_index_target<'src>(target: memory_target::MemTar<'src>, index: usize) -> memory_target::MemTar<'src> {
+    MemTar::TupleIndex {
+        target: Box::new(super::MemoryTarget {
+            variant: target,
+            span: empty_span(),
+        }),
+        index,
+    }
+}
+
+pub fn tuple_index<'src>(target: memory_target::MemTar<'src>, index: usize) -> Expression<'src> {
+    expr(Expr::MemoryTarget(super::MemoryTarget {
+        variant: tuple_index_target(target, index),
+        span: empty_span(),
+    }))
+}
+
 pub fn field_access<'src>(target: memory_target::MemTar<'src>, field: &'src str) -> Expression<'src> {
     expr(Expr::MemoryTarget(super::MemoryTarget {
-        variant: MemTar::FieldAccess {
-            target: Box::new(super::MemoryTarget {
-                variant: target,
-                span: empty_span(),
-            }),
-            field_name: ident(field),
-        },
+        variant: field_target(target, field),
+        span: empty_span(),
+    }))
+}
+
+pub fn generic_field_access<'src>(
+    target: memory_target::MemTar<'src>,
+    field: &'src str,
+    type_args: Vec<TypeExpression<'src>>,
+) -> Expression<'src> {
+    expr(Expr::MemoryTarget(super::MemoryTarget {
+        variant: generic_field_target(target, field, type_args),
         span: empty_span(),
     }))
 }
@@ -230,12 +277,21 @@ pub fn pointer_type<'src>(inner: TypeExpression<'src>) -> TypeExpression<'src> {
 }
 
 pub fn field_target<'src>(target: memory_target::MemTar<'src>, field: &'src str) -> memory_target::MemTar<'src> {
+    generic_field_target(target, field, vec![])
+}
+
+pub fn generic_field_target<'src>(
+    target: memory_target::MemTar<'src>,
+    field: &'src str,
+    type_args: Vec<TypeExpression<'src>>,
+) -> memory_target::MemTar<'src> {
     MemTar::FieldAccess {
         target: Box::new(super::MemoryTarget {
             variant: target,
             span: empty_span(),
         }),
         field_name: ident(field),
+        type_args,
     }
 }
 
@@ -250,8 +306,17 @@ pub fn call<'src>(
     target: Expression<'src>,
     args: Vec<Expression<'src>>
 ) -> Expression<'src> {
+    generic_call(target, vec![], args)
+}
+
+pub fn generic_call<'src>(
+    target: Expression<'src>,
+    type_args: Vec<TypeExpression<'src>>,
+    args: Vec<Expression<'src>>,
+) -> Expression<'src> {
     expr(Expr::FunctionCall {
         target: Box::new(target),
+        type_args,
         args: ExpressionList {
             list: args,
             span: empty_span(),
@@ -266,24 +331,47 @@ pub fn fn_call<'src>(
     call(mem_name(name), args)
 }
 
+pub fn generic_fn_call<'src>(
+    name: &'src str,
+    type_args: Vec<TypeExpression<'src>>,
+    args: Vec<Expression<'src>>,
+) -> Expression<'src> {
+    generic_call(mem_name(name), type_args, args)
+}
+
 pub fn fn_def<'src>(
     name: &'src str,
     params: Vec<(&'src str, TypeExpression<'src>)>,
     return_type: TypeAnnotation<'src>,
     body: Vec<Statement<'src>>,
 ) -> Statement<'src> {
+    generic_fn_def(name, vec![], params, return_type, body)
+}
+
+pub fn generic_fn_def<'src>(
+    name: &'src str,
+    type_param_names: Vec<&'src str>,
+    params: Vec<(&'src str, TypeExpression<'src>)>,
+    return_type: TypeAnnotation<'src>,
+    body: Vec<Statement<'src>>,
+) -> Statement<'src> {
     stmt(Stmt::FunctionDefinition {
         name: ident(name),
-        params: ParameterList {
-            list: params
-                .into_iter()
-                .map(|(param_name, param_type)| param(param_name, param_type))
-                .collect(),
-            span: empty_span(),
-        },
+        type_params: type_params(type_param_names),
+        params: parameter_list(params),
         body: block(body),
         return_type: return_type
     })
+}
+
+fn parameter_list<'src>(params: Vec<(&'src str, TypeExpression<'src>)>) -> ParameterList<'src> {
+    ParameterList {
+        list: params
+            .into_iter()
+            .map(|(param_name, param_type)| param(param_name, param_type))
+            .collect(),
+        span: empty_span(),
+    }
 }
 
 pub fn struct_field<'src>(
@@ -336,8 +424,18 @@ pub fn struct_def_with_impl<'src>(
     fields: Vec<StructField<'src>>,
     methods: Vec<Method<'src>>,
 ) -> Statement<'src> {
+    generic_struct_def(name, vec![], fields, methods)
+}
+
+pub fn generic_struct_def<'src>(
+    name: &'src str,
+    type_param_names: Vec<&'src str>,
+    fields: Vec<StructField<'src>>,
+    methods: Vec<Method<'src>>,
+) -> Statement<'src> {
     stmt(Stmt::StructDefinition {
         name: ident(name),
+        type_params: type_params(type_param_names),
         fields,
         impl_block: match methods.is_empty() {
             true => None,
@@ -354,17 +452,24 @@ pub fn method<'src>(
     return_type: TypeAnnotation<'src>,
     body: Vec<Statement<'src>>,
 ) -> Method<'src> {
+    generic_method(visibility, kind, name, vec![], params, return_type, body)
+}
+
+pub fn generic_method<'src>(
+    visibility: Visibility,
+    kind: MethodKind,
+    name: &'src str,
+    type_param_names: Vec<&'src str>,
+    params: Vec<(&'src str, TypeExpression<'src>)>,
+    return_type: TypeAnnotation<'src>,
+    body: Vec<Statement<'src>>,
+) -> Method<'src> {
     Method {
         visibility,
         kind,
         name: ident(name),
-        params: ParameterList {
-            list: params
-                .into_iter()
-                .map(|(param_name, param_type)| param(param_name, param_type))
-                .collect(),
-            span: empty_span(),
-        },
+        type_params: type_params(type_param_names),
+        params: parameter_list(params),
         return_type,
         body: block(body),
         span: empty_span(),
@@ -402,8 +507,17 @@ pub fn struct_init<'src>(
     type_name: &'src str,
     fields: Vec<(&'src str, Expression<'src>)>,
 ) -> Expression<'src> {
+    generic_struct_init(type_name, vec![], fields)
+}
+
+pub fn generic_struct_init<'src>(
+    type_name: &'src str,
+    type_args: Vec<TypeExpression<'src>>,
+    fields: Vec<(&'src str, Expression<'src>)>,
+) -> Expression<'src> {
     expr(Expr::StructInit {
         type_name: ident(type_name),
+        type_args,
         fields: fields
             .into_iter()
             .map(|(field_name, value)| FieldInit {
@@ -428,22 +542,7 @@ pub fn field_call<'src>(
     field: &'src str,
     args: Vec<Expression<'src>>
 ) -> Expression<'src> {
-    expr(Expr::FunctionCall {
-        target: Box::new(expr(Expr::MemoryTarget(super::MemoryTarget {
-            variant: MemTar::FieldAccess {
-                target: Box::new(super::MemoryTarget {
-                    variant: MemTar::Name(ident(module)),
-                    span: empty_span(),
-                }),
-                field_name: ident(field),
-            },
-            span: empty_span(),
-        }))),
-        args: ExpressionList {
-            list: args,
-            span: empty_span(),
-        },
-    })
+    call(field_access(name_target(module), field), args)
 }
 
 pub fn program<'src>(statements: Vec<Statement<'src>>) -> AstRoot<'src> {

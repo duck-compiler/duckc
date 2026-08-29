@@ -8,10 +8,6 @@ use crate::backend::semantics::{
     symbol::{Origin, SymbolData, SymbolKind},
 };
 
-fn leak<'src>(s: String) -> &'src str {
-    Box::leak(s.into_boxed_str())
-}
-
 pub fn short_go_package_name(path: &str) -> &str {
     let mut segments = path.rsplit('/');
     let last = segments.next().unwrap_or(path);
@@ -120,16 +116,16 @@ fn resolve_go_struct<'src>(
     resolving: &mut HashSet<String>,
 ) -> Option<TypeId> {
     if let Some(&symbol) = context.go_struct_symbols.get(qualified_name) {
-        return Some(context.intern(Type::Struct(symbol)));
+        return Some(context.intern(Type::Struct(symbol, vec![])));
     }
 
-    let name = leak(name_in_go(context, qualified_name));
+    let name = context.alloc_str(&name_in_go(context, qualified_name));
 
     let symbol = context.add_symbol(SymbolData {
         name,
         kind: SymbolKind::Struct,
         type_: None,
-        origin: Origin::GoType { package: leak(package.to_string()) },
+        origin: Origin::GoType { package: context.alloc_str(package) },
     });
 
     context.go_struct_symbols.insert(qualified_name.to_string(), symbol);
@@ -139,12 +135,12 @@ fn resolve_go_struct<'src>(
         .filter(|field| field.exported)
         .filter_map(|field| {
             let field_type = map_go_type_within(context, package, &field.type_, types, resolving)?;
-            Some((leak(field.name.clone()), field_type, Visibility::Public))
+            Some((context.alloc_str(&field.name), field_type, Visibility::Public))
         })
         .collect::<Vec<_>>();
 
     context.struct_fields.insert(symbol, mapped_fields);
-    Some(context.intern(Type::Struct(symbol)))
+    Some(context.intern(Type::Struct(symbol, vec![])))
 }
 
 pub fn map_go_signature<'src>(
@@ -184,7 +180,17 @@ pub fn map_go_signature<'src>(
     let return_type = match raw.results.len() {
         0 => context.intern(Type::Unit),
         1 => map_go_type(context, package, &raw.results[0], types)?,
-        _ => context.intern(Type::Unit), // todo: tuple types
+        _ => {
+            let results = raw.results
+                .iter()
+                .map(|result| map_go_type(context, package, result, types))
+                .collect::<Option<Vec<_>>>();
+
+            match results {
+                Some(results) => context.intern(Type::Tuple(results)),
+                None => context.intern(Type::Unit),
+            }
+        }
     };
 
     Some(context.intern(Type::Fn { params, return_type }))
@@ -192,6 +198,8 @@ pub fn map_go_signature<'src>(
 
 #[cfg(test)]
 mod tests {
+    use bumpalo::Bump;
+
     use super::*;
 
     fn empty_types() -> HashMap<String, RawType> {
@@ -210,7 +218,8 @@ mod tests {
 
     #[test]
     fn named_type_resolves_through_to_its_underlying_basic_kind() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let types = HashMap::from([
             ("pkg.Duration".to_string(), RawType::Basic { basic: "int64".to_string() }),
         ]);
@@ -223,9 +232,10 @@ mod tests {
 
     #[test]
     fn each_go_integer_width_maps_to_its_own_duck_type() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
 
-        let mapped = |context: &mut SemanticsContext<'static>, basic: &str| {
+        let mapped = |context: &mut SemanticsContext, basic: &str| {
             map_go_type(context, "pkg", &RawType::Basic { basic: basic.to_string() }, &empty_types())
                 .map(|id| context.types[id.0 as usize].clone())
         };
@@ -249,7 +259,8 @@ mod tests {
 
     #[test]
     fn pointer_params_map_to_duck_pointers_of_the_pointee_type() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let raw = RawFuncType {
             type_params: vec![],
             variadic: false,
@@ -267,7 +278,7 @@ mod tests {
         let fn_type = map_go_signature(&mut context, "pkg", &raw, &empty_types()).expect("should map");
 
         let Type::Fn { params, .. } = context.types[fn_type.0 as usize].clone() else { panic!("expected Fn") };
-        let poi = |context: &SemanticsContext<'static>, param: TypeId| {
+        let poi = |context: &SemanticsContext, param: TypeId| {
             let Type::Pointer(inner) = context.types[param.0 as usize] else {
                 panic!("expected pointer, found {:?}", context.types[param.0 as usize]);
             };
@@ -284,7 +295,8 @@ mod tests {
 
     #[test]
     fn pointer_to_a_named_type_maps_through_its_underlying_type() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let types = HashMap::from([
             ("time.Duration".to_string(), RawType::Basic { basic: "int64".to_string() }),
         ]);
@@ -302,7 +314,8 @@ mod tests {
 
     #[test]
     fn pointer_to_a_named_struct_maps_to_a_pointer_to_the_synthesized_struct() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let types = HashMap::from([(
             "pkg.Config".to_string(),
             RawType::Struct { fields: vec![basic_field("Name", "string", true)] },
@@ -316,13 +329,14 @@ mod tests {
         ).expect("should map");
 
         let Type::Pointer(inner) = context.types[resolved.0 as usize] else { panic!("expected pointer") };
-        let Type::Struct(sym) = context.types[inner.0 as usize] else { panic!("expected struct pointee") };
+        let Type::Struct(sym, _) = context.types[inner.0 as usize] else { panic!("expected struct pointee") };
         assert_eq!(context.symbols[sym.0 as usize].name, "pkg.Config");
     }
 
     #[test]
     fn named_struct_type_synthesizes_a_duck_struct_with_only_exported_fields() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let types = HashMap::from([(
             "image.Point".to_string(),
             RawType::Struct { fields: vec![basic_field("X", "int", true), basic_field("secret", "int", false)] },
@@ -331,7 +345,7 @@ mod tests {
         let resolved = map_go_type(&mut context, "image", &RawType::Named { r#ref: "image.Point".to_string() }, &types)
             .expect("should map");
 
-        let Type::Struct(sym) = context.types[resolved.0 as usize] else {
+        let Type::Struct(sym, _) = context.types[resolved.0 as usize] else {
             panic!("expected Type::Struct, found {:?}", context.types[resolved.0 as usize]);
         };
 
@@ -354,7 +368,8 @@ mod tests {
 
     #[test]
     fn synthesized_struct_name_uses_the_alias_the_import_binds() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         context.go_package_names.insert("image".to_string(), "im");
 
         let types = HashMap::from([(
@@ -365,13 +380,14 @@ mod tests {
         let resolved = map_go_type(&mut context, "image", &RawType::Named { r#ref: "image.Point".to_string() }, &types)
             .expect("should map");
 
-        let Type::Struct(sym) = context.types[resolved.0 as usize] else { panic!("expected struct") };
+        let Type::Struct(sym, _) = context.types[resolved.0 as usize] else { panic!("expected struct") };
         assert_eq!(context.symbols[sym.0 as usize].name, "im.Point");
     }
 
     #[test]
     fn synthesized_struct_name_shortens_a_multi_segment_import_path() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let types = HashMap::from([(
             "container/list.List".to_string(),
             RawType::Struct { fields: vec![basic_field("Value", "int", true)] },
@@ -384,13 +400,14 @@ mod tests {
             &types,
         ).expect("should map");
 
-        let Type::Struct(sym) = context.types[resolved.0 as usize] else { panic!("expected struct") };
+        let Type::Struct(sym, _) = context.types[resolved.0 as usize] else { panic!("expected struct") };
         assert_eq!(context.symbols[sym.0 as usize].name, "list.List");
     }
 
     #[test]
     fn same_named_struct_resolves_to_the_same_symbol_every_time() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let types = HashMap::from([(
             "image.Point".to_string(),
             RawType::Struct { fields: vec![basic_field("X", "int", true)] },
@@ -406,7 +423,8 @@ mod tests {
 
     #[test]
     fn struct_field_referencing_another_named_struct_resolves_recursively() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let types = HashMap::from([
             (
                 "pkg.Outer".to_string(),
@@ -426,11 +444,11 @@ mod tests {
         let resolved = map_go_type(&mut context, "pkg", &RawType::Named { r#ref: "pkg.Outer".to_string() }, &types)
             .expect("should map");
 
-        let Type::Struct(outer_sym) = context.types[resolved.0 as usize] else { panic!("expected struct") };
+        let Type::Struct(outer_sym, _) = context.types[resolved.0 as usize] else { panic!("expected struct") };
         let outer_fields = context.struct_fields.get(&outer_sym).unwrap();
         assert_eq!(outer_fields[0].0, "Inner");
 
-        let Type::Struct(inner_sym) = context.types[outer_fields[0].1.0 as usize] else { panic!("expected struct") };
+        let Type::Struct(inner_sym, _) = context.types[outer_fields[0].1.0 as usize] else { panic!("expected struct") };
         let string_type = context.intern(Type::String);
         let inner_fields = context.struct_fields.get(&inner_sym).unwrap();
         assert_eq!(inner_fields[0], ("Value", string_type, Visibility::Public));
@@ -438,7 +456,8 @@ mod tests {
 
     #[test]
     fn signature_with_an_unsupported_param_type_does_not_map_at_all() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let raw = RawFuncType {
             type_params: vec![],
             variadic: false,
@@ -451,7 +470,8 @@ mod tests {
 
     #[test]
     fn variadic_any_tail_maps_to_a_single_string_param() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let raw = RawFuncType {
             type_params: vec![],
             variadic: true,
@@ -468,7 +488,8 @@ mod tests {
 
     #[test]
     fn self_referential_pointer_alias_is_unsupported_instead_of_recursing_forever() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let types = HashMap::from([
             ("pkg.Loop".to_string(), RawType::Pointer { elem: Box::new(RawType::Named { r#ref: "pkg.Loop".to_string() }) }),
         ]);
@@ -478,7 +499,8 @@ mod tests {
 
     #[test]
     fn mutually_recursive_pointer_aliases_are_unsupported_instead_of_recursing_forever() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let types = HashMap::from([
             ("pkg.A".to_string(), RawType::Pointer { elem: Box::new(RawType::Named { r#ref: "pkg.B".to_string() }) }),
             ("pkg.B".to_string(), RawType::Pointer { elem: Box::new(RawType::Named { r#ref: "pkg.A".to_string() }) }),
@@ -489,7 +511,8 @@ mod tests {
 
     #[test]
     fn struct_pointing_at_itself_keeps_the_self_referential_field() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let types = HashMap::from([(
             "pkg.Node".to_string(),
             RawType::Struct {
@@ -509,7 +532,7 @@ mod tests {
         let resolved = map_go_type(&mut context, "pkg", &RawType::Named { r#ref: "pkg.Node".to_string() }, &types)
             .expect("should map");
 
-        let Type::Struct(sym) = context.types[resolved.0 as usize] else { panic!("expected struct") };
+        let Type::Struct(sym, _) = context.types[resolved.0 as usize] else { panic!("expected struct") };
         let fields = context.struct_fields.get(&sym).expect("struct_fields entry");
         assert_eq!(fields.len(), 2, "self-referential field must survive: {:?}", fields);
         assert_eq!(fields[1].0, "Next");
@@ -517,8 +540,58 @@ mod tests {
     }
 
     #[test]
+    fn multiple_results_map_to_tuple_return_type() {
+        let arena = Bump::new();
+        let mut contexts = SemanticsContext::new(&arena);
+
+        let raw = RawFuncType {
+            type_params: vec![],
+            variadic: false,
+            params: vec![RawType::Basic { basic: "string".to_string() }],
+            results: vec![
+                RawType::Basic { basic: "int".to_string() },
+                RawType::Basic { basic: "bool".to_string() },
+            ],
+        };
+
+        let fn_type = map_go_signature(&mut contexts, "pkg", &raw, &empty_types()).expect("should map");
+
+        let Type::Fn { return_type, .. } = contexts.types[fn_type.0 as usize].clone() else { panic!("expected Fn") };
+        let Type::Tuple(elements) = contexts.types[return_type.0 as usize].clone() else {
+            panic!("expected a tuple, found {:?}", contexts.types[return_type.0 as usize]);
+        };
+
+        let element_types = elements.iter().map(|id| contexts.types[id.0 as usize].clone()).collect::<Vec<_>>();
+        assert_eq!(element_types, vec![Type::Int, Type::Bool]);
+    }
+
+    #[test]
+    fn a_result_type_duck_cannot_express_keeps_the_unit_return_type() {
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
+        let types = HashMap::from([
+            ("error".to_string(), RawType::Interface { methods: vec![] }),
+        ]);
+        let raw = RawFuncType {
+            type_params: vec![],
+            variadic: false,
+            params: vec![RawType::Basic { basic: "string".to_string() }],
+            results: vec![
+                RawType::Basic { basic: "int".to_string() },
+                RawType::Named { r#ref: "error".to_string() },
+            ],
+        };
+
+        let fn_type = map_go_signature(&mut context, "pkg", &raw, &types).expect("should still map");
+
+        let Type::Fn { return_type, .. } = context.types[fn_type.0 as usize].clone() else { panic!("expected Fn") };
+        assert_eq!(context.types[return_type.0 as usize], Type::Unit);
+    }
+
+    #[test]
     fn generic_signature_is_unsupported() {
-        let mut context = SemanticsContext::new();
+        let arena = Bump::new();
+        let mut context = SemanticsContext::new(&arena);
         let raw = RawFuncType {
             type_params: vec![crate::backend::semantics::go_resolve::RawTypeParam {
                 name: "T".to_string(),

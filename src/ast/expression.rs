@@ -36,9 +36,13 @@ pub enum Expr<'src> {
     ArrayExpression {
         values_exprs: Vec<Box<Expression<'src>>>,
     },
+    TupleExpression {
+        values: Vec<Box<Expression<'src>>>,
+    },
     FunctionCall {
         #[serde(borrow)]
         target: Box<Expression<'src>>,
+        type_args: Vec<TypeExpression<'src>>,
         args: ExpressionList<'src>,
     },
     Binary {
@@ -66,6 +70,7 @@ pub enum Expr<'src> {
     StructInit {
         #[serde(borrow)]
         type_name: Identifier<'src>,
+        type_args: Vec<TypeExpression<'src>>,
         fields: Vec<FieldInit<'src>>,
     },
 }

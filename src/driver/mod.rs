@@ -5,6 +5,8 @@ mod toolchain;
 
 pub use toolchain::{GO_VERSION, ensure_go_toolchain, resolve_go_binary};
 
+use bumpalo::Bump;
+
 use crate::{
     ast::AstRoot,
     backend::{
@@ -24,6 +26,7 @@ pub enum CompileError {
 }
 
 pub fn run(file_path: &str) -> Result<CompileOutput, CompileError> {
+    let arena = Bump::new();
     let source = std::fs::read_to_string(file_path)
         .map_err(|err| CompileError::Io(format!("error reading {file_path}: {err}")))?;
 
@@ -32,7 +35,7 @@ pub fn run(file_path: &str) -> Result<CompileOutput, CompileError> {
     }
 
     let ast = parse(&source);
-    compile(ast)
+    compile(ast, &arena)
 }
 
 fn parse<'src>(source: &'src str) -> AstRoot<'src> {
@@ -40,8 +43,8 @@ fn parse<'src>(source: &'src str) -> AstRoot<'src> {
     mimic::test_struct_program()
 }
 
-fn compile<'src>(ast: AstRoot<'src>) -> Result<CompileOutput, CompileError> {
-    let mut context = SemanticsContext::new();
+fn compile<'src>(ast: AstRoot<'src>, arena: &'src Bump) -> Result<CompileOutput, CompileError> {
+    let mut context = SemanticsContext::new(arena);
     let module = context.add_module(ast);
 
     semantics::analyze_module(&mut context, module);

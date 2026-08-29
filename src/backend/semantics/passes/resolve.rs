@@ -1,6 +1,6 @@
 //! this compiler pass let's every named reference point to its declaration
 
-use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, ParameterList, Statement, expression::Expr, memory_target::MemTar, statement::Stmt, struct_definition::{Method, MethodKind, SELF_NAME}, type_expression::{TypeAnnotation, TypeExpression}, use_statement::UseStatement}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, go_map::short_go_package_name, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
+use crate::{ast::{AstRoot, Block, Expression, MemoryTarget, NodeId, ParameterList, Statement, expression::Expr, memory_target::MemTar, statement::Stmt, struct_definition::{Method, MethodKind, SELF_NAME}, type_expression::{TypeAnnotation, TypeExpression, TypeParam}, use_statement::UseStatement}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, go_map::short_go_package_name, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}, r#type::{Type, TypeParamId}}};
 
 pub fn resolve_module<'src>(
     module: ModuleId,
@@ -37,6 +37,10 @@ struct ScopeResolver<'a, 'src> {
 impl<'a, 'src> ScopeResolver<'a, 'src> {
     fn set_resolved(&mut self, node: NodeId, sym: SymbolId) {
         self.context.modules[self.module.0 as usize].resolutions[node.0 as usize] = Some(sym);
+    }
+
+    fn definition_of(&self, node: NodeId) -> Option<SymbolId> {
+        self.context.modules[self.module.0 as usize].definitions[node.0 as usize]
     }
 
     fn set_definition(&mut self, node: NodeId, sym: SymbolId) {
@@ -77,10 +81,13 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
 
     fn resolve_statement(&mut self, statement: &Statement<'src>) {
         match &statement.variant {
-            Stmt::FunctionDefinition { name: _, params, body, return_type } => {
+            Stmt::FunctionDefinition { name, type_params, params, body, return_type } => {
                 if self.in_function {
                     self.context.report(Diagnostic::nested_declaration_not_allowed(statement.span));
                 }
+
+                let (previous_scope, declared) = self.enter_type_param_scope(type_params);
+                self.store_symbol_type_params(name.id, declared);
 
                 for param in &params.list {
                     self.resolve_type_annotation(&param.type_);
@@ -88,23 +95,26 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
 
                 self.resolve_type_annotation(return_type);
                 self.resolve_body_in_new_scope(params, body, None);
+
+                self.scope = previous_scope;
             }
-            Stmt::StructDefinition { name: _, fields, impl_block } => {
+            Stmt::StructDefinition { name, type_params, fields, impl_block } => {
                 if self.in_function {
                     self.context.report(Diagnostic::nested_declaration_not_allowed(statement.span));
                 }
+
+                let (previous_scope, declared) = self.enter_type_param_scope(type_params);
+                self.store_symbol_type_params(name.id, declared);
 
                 for field in fields {
                     self.resolve_type_annotation(&field.type_);
                 }
 
-                let Some(impl_block) = impl_block else {
-                    return;
-                };
-
-                for method in &impl_block.methods {
+                for method in impl_block.iter().flat_map(|impl_block| &impl_block.methods) {
                     self.resolve_method(method);
                 }
+
+                self.scope = previous_scope;
             }
             Stmt::VariableDeclaration { name, type_, init_expression } => {
                 self.resolve_type_annotation(type_);
@@ -133,6 +143,9 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
     }
 
     fn resolve_method(&mut self, method: &Method<'src>) {
+        let (previous_scope, declared) = self.enter_type_param_scope(&method.type_params);
+        self.context.modules[self.module.0 as usize].method_type_params.insert(method.name.id, declared);
+
         for param in &method.params.list {
             self.resolve_type_annotation(&param.type_);
         }
@@ -145,6 +158,53 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
         };
 
         self.resolve_body_in_new_scope(&method.params, &method.body, instance_method);
+
+        self.scope = previous_scope;
+    }
+
+    fn enter_type_param_scope(
+        &mut self,
+        type_params: &[TypeParam<'src>],
+    ) -> (ScopeId, Vec<TypeParamId>) {
+        let previous_scope = self.scope;
+
+        if type_params.is_empty() {
+            return (previous_scope, Vec::new());
+        }
+
+        self.scope = self.context.new_scope(Some(previous_scope));
+
+        let declared = type_params
+            .iter()
+            .map(|type_param| {
+                let name = type_param.name.ident;
+
+                if self.context.lookup(self.scope, name).is_some() {
+                    self.context.report(Diagnostic::already_defined(name, type_param.name.span));
+                    return self.context.add_type_param(name);
+                }
+
+                self.declare_type_param(name, type_param.name.id)
+            })
+            .collect();
+
+        (previous_scope, declared)
+    }
+
+    fn store_symbol_type_params(&mut self, declaration: NodeId, declared: Vec<TypeParamId>) {
+        if let Some(owner) = self.definition_of(declaration) {
+            self.context.symbol_type_params.insert(owner, declared);
+        }
+    }
+
+    fn declare_type_param(&mut self, name: &'src str, declaration: NodeId) -> TypeParamId {
+        let type_param = self.context.add_type_param(name);
+        let type_ = self.context.intern(Type::TypeParam(type_param));
+
+        let symbol = self.declare(name, SymbolKind::TypeParam, declaration);
+        self.context.symbols[symbol.0 as usize].type_ = Some(type_);
+
+        type_param
     }
 
     fn declare_self(&mut self, method_name: NodeId) {
@@ -201,19 +261,26 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
 
     fn resolve_type_expr(&mut self, type_expr: &TypeExpression<'src>) {
         match type_expr {
-            TypeExpression::Ident(identifier) => {
-                if let Some(sym) = self.context.lookup(self.scope, identifier.ident) {
-                    self.set_resolved(identifier.id, sym);
+            TypeExpression::Ident { name, type_args } => {
+                if let Some(sym) = self.context.lookup(self.scope, name.ident) {
+                    self.set_resolved(name.id, sym);
                 } else {
                     self.context.report(Diagnostic::symbol_not_found(
                         SymbolKind::Struct,
-                        identifier.ident,
-                        identifier.span,
+                        name.ident,
+                        name.span,
                     ));
                 }
+
+                self.resolve_type_args(type_args);
             }
             TypeExpression::Array { inner } | TypeExpression::Pointer { inner } => {
                 self.resolve_type_expr(inner);
+            }
+            TypeExpression::Tuple(elements) => {
+                for element in elements {
+                    self.resolve_type_expr(element);
+                }
             }
             TypeExpression::Int | TypeExpression::Int8
             | TypeExpression::Int16 | TypeExpression::Int32
@@ -222,6 +289,12 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
             | TypeExpression::Uint32 | TypeExpression::Uint64
             | TypeExpression::Float | TypeExpression::Float32
             | TypeExpression::Bool | TypeExpression::String => {}
+        }
+    }
+
+    fn resolve_type_args(&mut self, type_args: &[TypeExpression<'src>]) {
+        for type_arg in type_args {
+            self.resolve_type_expr(type_arg);
         }
     }
 
@@ -245,8 +318,9 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
 
     fn resolve_expression(&mut self, expr: &Expression<'src>) {
         match &*expr.variant {
-            Expr::FunctionCall { target, args } => {
+            Expr::FunctionCall { target, type_args, args } => {
                 self.resolve_expression(target);
+                self.resolve_type_args(type_args);
 
                 for arg in &args.list {
                     self.resolve_expression(arg);
@@ -254,6 +328,11 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
             },
             Expr::ArrayExpression { values_exprs } => {
                 for expr in values_exprs {
+                    self.resolve_expression(expr);
+                }
+            }
+            Expr::TupleExpression { values } => {
+                for expr in values {
                     self.resolve_expression(expr);
                 }
             }
@@ -282,7 +361,7 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
             Expr::MemoryTarget(memory_target) => {
                 self.resolve_memory_target(memory_target);
             }
-            Expr::StructInit { type_name, fields } => {
+            Expr::StructInit { type_name, type_args, fields } => {
                 if let Some(sym) = self.context.lookup(self.scope, type_name.ident) {
                     self.set_resolved(type_name.id, sym);
                 } else {
@@ -292,6 +371,8 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                         type_name.span,
                     ));
                 }
+
+                self.resolve_type_args(type_args);
 
                 for field in fields {
                     self.resolve_expression(&field.value);
@@ -328,7 +409,11 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                 self.resolve_memory_target(target);
                 self.resolve_expression(index_expression);
             }
-            MemTar::FieldAccess { target, field_name: _ } => {
+            MemTar::FieldAccess { target, field_name: _, type_args } => {
+                self.resolve_memory_target(target);
+                self.resolve_type_args(type_args);
+            }
+            MemTar::TupleIndex { target, index: _ } => {
                 self.resolve_memory_target(target);
             }
         }

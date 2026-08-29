@@ -1,5 +1,9 @@
 use crate::ast::expression::{BinaryOperator, UnaryOperator};
 
+pub fn tuple_field_name(index: usize) -> String {
+    format!("_{index}")
+}
+
 #[derive(Debug)]
 pub struct GostRoot<'src> {
     pub body: Vec<GoStatement<'src>>,
@@ -23,7 +27,7 @@ pub enum GoExpression<'src> {
     AddressOf(Box<GoExpression<'src>>),
     Dereference(Box<GoExpression<'src>>),
     FuncCall {
-        callee: Box<GoExpression<'src>>,
+        target: Box<GoExpression<'src>>,
         args: Vec<GoExpression<'src>>,
     },
     // "field access"
@@ -41,7 +45,21 @@ pub enum GoExpression<'src> {
     },
     StructInit {
         type_name: &'src str,
+        type_args: Vec<GoType<'src>>,
         fields: Vec<(&'src str, GoExpression<'src>)>,
+    },
+    TupleInit {
+        elem_types: Vec<GoType<'src>>,
+        values: Vec<GoExpression<'src>>,
+    },
+    Instantiate {
+        base: Box<GoExpression<'src>>,
+        type_args: Vec<GoType<'src>>,
+    },
+    FuncLiteral {
+        params: Vec<(&'src str, GoType<'src>)>,
+        return_type: Option<GoType<'src>>,
+        body: Vec<GoStatement<'src>>,
     },
     Immediate(&'src str)
 }
@@ -74,7 +92,11 @@ pub enum GoType<'src> {
     Struct {
         fields: Vec<StructField<'src>>,
     },
-    TypeName(&'src str),
+    Tuple(Vec<GoType<'src>>),
+    Named {
+        name: &'src str,
+        type_args: Vec<GoType<'src>>,
+    },
     Func {
         params: Vec<GoType<'src>>,
         return_type: Option<Box<GoType<'src>>>,
@@ -90,6 +112,7 @@ pub enum GoStatement<'src> {
     FuncDef {
         receiver: Option<(&'src str, GoType<'src>)>,
         name: &'src str,
+        type_params: Vec<&'src str>,
         params: Vec<(&'src str, GoType<'src>)>,
         return_type: Option<GoType<'src>>,
         body: Vec<GoStatement<'src>>,
@@ -103,11 +126,16 @@ pub enum GoStatement<'src> {
         target: GoExpression<'src>,
         expr: GoExpression<'src>,
     },
+    MultiVarDecl {
+        names: Vec<&'src str>,
+        expr: GoExpression<'src>,
+    },
     Expr {
         expr: GoExpression<'src>,
     },
     TypeDecl {
         name: &'src str,
+        type_params: Vec<&'src str>,
         type_: GoType<'src>,
     },
     If {

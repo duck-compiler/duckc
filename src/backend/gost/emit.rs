@@ -1,5 +1,5 @@
 use crate::ast::expression::{BinaryOperator, UnaryOperator};
-use crate::backend::gost::go_tree::{GoExpression, GoStatement, GoType, GostRoot};
+use crate::backend::gost::go_tree::{GoExpression, GoStatement, GoType, GostRoot, tuple_field_name};
 
 pub fn emit_gost<'src>(root: GostRoot<'src>) -> String {
     let mut output = String::from("package main\n\n");
@@ -48,13 +48,42 @@ fn emit_type<'src>(go_type: &GoType<'src>) -> String {
                 .collect::<Vec<_>>()
                 .join("\n")
         ),
-        GoType::TypeName(name) => name.to_string(),
+        GoType::Tuple(elem_types) => format!("struct {{ {} }}", emit_tuple_fields(elem_types)),
+        GoType::Named { name, type_args } => format!("{name}{}", emit_type_args(type_args)),
         GoType::Func { params, return_type } => format!(
             "func({}){}",
             params.iter().map(emit_type).collect::<Vec<_>>().join(", "),
             return_type.as_ref().map(|rt| format!(" {}", emit_type(rt))).unwrap_or_default(),
         ),
     }
+}
+
+fn emit_type_args<'src>(type_args: &Vec<GoType<'src>>) -> String {
+    if type_args.is_empty() {
+        return "".to_string();
+    }
+
+    format!("[{}]", type_args.iter().map(emit_type).collect::<Vec<_>>().join(", "))
+}
+
+fn emit_type_params<'src>(type_params: &Vec<&'src str>) -> String {
+    if type_params.is_empty() {
+        return "".to_string();
+    }
+
+    format!(
+        "[{}]",
+        type_params.iter().map(|name| format!("{name} any")).collect::<Vec<_>>().join(", "),
+    )
+}
+
+fn emit_tuple_fields<'src>(elem_types: &Vec<GoType<'src>>) -> String {
+    elem_types
+        .iter()
+        .enumerate()
+        .map(|(index, elem_type)| format!("{} {}", tuple_field_name(index), emit_type(elem_type)))
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 fn maybe_emit_type<'src>(maybe_go_type: &Option<GoType<'src>>) -> String {
@@ -100,13 +129,14 @@ fn emit_gost_statement<'src>(statement: &GoStatement<'src>) -> String {
                     .unwrap_or_default()
             )
         }
-        GoStatement::FuncDef { receiver, name, params, return_type, body } => {
+        GoStatement::FuncDef { receiver, name, type_params, params, return_type, body } => {
             format!(
-                "func {}{name}({}) {} {}",
+                "func {}{name}{}({}) {} {}",
                 receiver
                     .as_ref()
                     .map(|(receiver_name, receiver_type)| format!("({receiver_name} {}) ", emit_type(receiver_type)))
                     .unwrap_or_default(),
+                emit_type_params(type_params),
                 emit_params(params),
                 if return_type.is_some() { maybe_emit_type(return_type) } else { "".to_string() },
                 emit_block(body)
@@ -126,8 +156,11 @@ fn emit_gost_statement<'src>(statement: &GoStatement<'src>) -> String {
         GoStatement::Assign { target, expr } => {
             format!("{} = {}", emit_expr(target), emit_expr(expr))
         },
-        GoStatement::TypeDecl { name, type_ } => {
-            format!("type {name} {}", emit_type(type_))
+        GoStatement::MultiVarDecl { names, expr } => {
+            format!("{} := {}", names.join(", "), emit_expr(expr))
+        },
+        GoStatement::TypeDecl { name, type_params, type_ } => {
+            format!("type {name}{} {}", emit_type_params(type_params), emit_type(type_))
         },
         GoStatement::If { condition, body, else_body } => {
             format!(
@@ -175,8 +208,8 @@ fn emit_unary_operator(op: &UnaryOperator) -> &'static str {
 fn emit_expr<'src>(expr: &GoExpression) -> String {
     match expr {
         GoExpression::String(str) => format!("\"{str}\""),
-        GoExpression::FuncCall { callee, args } => {
-            format!("{}({})", emit_expr(callee), emit_arguments(args))
+        GoExpression::FuncCall { target, args } => {
+            format!("{}({})", emit_expr(target), emit_arguments(args))
         },
         GoExpression::Selector { base, field } => {
             format!("{}.{field}", emit_expr(base))
@@ -187,14 +220,38 @@ fn emit_expr<'src>(expr: &GoExpression) -> String {
         GoExpression::ArrayIndex { base, index } => {
             format!("{}[{}]", emit_expr(base), emit_expr(index))
         },
-        GoExpression::StructInit { type_name, fields } => {
+        GoExpression::StructInit { type_name, type_args, fields } => {
             format!(
-                "{type_name}{{{}}}",
+                "{type_name}{}{{{}}}",
+                emit_type_args(type_args),
                 fields
                     .iter()
                     .map(|(name, value)| format!("{name}: {}", emit_expr(value)))
                     .collect::<Vec<_>>()
                     .join(", ")
+            )
+        },
+        GoExpression::TupleInit { elem_types, values } => {
+            format!(
+                "struct {{ {} }}{{{}}}",
+                emit_tuple_fields(elem_types),
+                values
+                    .iter()
+                    .enumerate()
+                    .map(|(index, value)| format!("{}: {}", tuple_field_name(index), emit_expr(value)))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        },
+        GoExpression::Instantiate { base, type_args } => {
+            format!("{}{}", emit_expr(base), emit_type_args(type_args))
+        },
+        GoExpression::FuncLiteral { params, return_type, body } => {
+            format!(
+                "func({}) {}{}",
+                emit_params(params),
+                maybe_emit_type(return_type),
+                emit_block(body),
             )
         },
         GoExpression::Bool(b) => format!("{b}"),

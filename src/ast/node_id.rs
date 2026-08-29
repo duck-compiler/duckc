@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::ast::{AstRoot, Block, Expr, Expression, Identifier, MemoryTarget, ParameterList, Statement, Stmt, TypeExpression, expression::{ExpressionList, FieldInit}, memory_target::MemTar, struct_definition::Method, type_expression::TypeAnnotation};
+use crate::ast::{AstRoot, Block, Expr, Expression, Identifier, MemoryTarget, ParameterList, Statement, Stmt, TypeExpression, expression::{ExpressionList, FieldInit}, memory_target::MemTar, struct_definition::Method, type_expression::{TypeAnnotation, TypeParam}};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct NodeId(pub u32);
@@ -36,14 +36,16 @@ impl NodeIdGenerator {
     fn generate_in_statement(&mut self, statement: &mut Statement) {
         statement.id = self.fresh();
         match &mut statement.variant {
-            Stmt::FunctionDefinition { name, params, body, return_type } => {
+            Stmt::FunctionDefinition { name, type_params, params, body, return_type } => {
                 self.generate_in_identifier(name);
+                self.generate_in_type_params(type_params);
                 self.generate_in_parameter_list(params);
                 self.generate_in_block(body);
                 self.generate_in_type_annotation(return_type);
             },
-            Stmt::StructDefinition { name, fields, impl_block } => {
+            Stmt::StructDefinition { name, type_params, fields, impl_block } => {
                 self.generate_in_identifier(name);
+                self.generate_in_type_params(type_params);
 
                 for field in fields {
                     self.generate_in_type_annotation(&mut field.type_);
@@ -87,6 +89,7 @@ impl NodeIdGenerator {
 
     fn generate_in_method(&mut self, method: &mut Method) {
         self.generate_in_identifier(&mut method.name);
+        self.generate_in_type_params(&mut method.type_params);
         self.generate_in_parameter_list(&mut method.params);
         self.generate_in_block(&mut method.body);
         self.generate_in_type_annotation(&mut method.return_type);
@@ -94,6 +97,18 @@ impl NodeIdGenerator {
 
     fn generate_in_identifier(&mut self, identifier: &mut Identifier) {
         identifier.id = self.fresh();
+    }
+
+    fn generate_in_type_params(&mut self, type_params: &mut Vec<TypeParam>) {
+        for type_param in type_params {
+            self.generate_in_identifier(&mut type_param.name);
+        }
+    }
+
+    fn generate_in_type_args(&mut self, type_args: &mut Vec<TypeExpression>) {
+        for type_arg in type_args {
+            self.generate_in_type_expr(type_arg);
+        }
     }
 
     fn generate_in_type_annotation(&mut self, type_: &mut TypeAnnotation) {
@@ -104,11 +119,17 @@ impl NodeIdGenerator {
 
     fn generate_in_type_expr(&mut self, type_: &mut TypeExpression) {
         match type_ {
-            TypeExpression::Ident(identifier) => {
-                self.generate_in_identifier(identifier);
+            TypeExpression::Ident { name, type_args } => {
+                self.generate_in_identifier(name);
+                self.generate_in_type_args(type_args);
             },
             TypeExpression::Array { inner } | TypeExpression::Pointer { inner } => {
                 self.generate_in_type_expr(inner);
+            },
+            TypeExpression::Tuple(elements) => {
+                for element in elements {
+                    self.generate_in_type_expr(element);
+                }
             },
             TypeExpression::String | TypeExpression::Bool
             | TypeExpression::Int | TypeExpression::Int8
@@ -145,9 +166,13 @@ impl NodeIdGenerator {
             MemTar::Dereference(expr) => {
                 self.generate_in_expression(expr);
             }
-            MemTar::FieldAccess { target, field_name } => {
+            MemTar::FieldAccess { target, field_name, type_args } => {
                 self.generate_in_memory_target(target);
                 self.generate_in_identifier(field_name);
+                self.generate_in_type_args(type_args);
+            }
+            MemTar::TupleIndex { target, index: _ } => {
+                self.generate_in_memory_target(target);
             }
         }
     }
@@ -178,8 +203,9 @@ impl NodeIdGenerator {
             Expr::MemoryTarget(memory_target) => {
                 self.generate_in_memory_target(memory_target);
             }
-            Expr::FunctionCall { target, args } => {
+            Expr::FunctionCall { target, type_args, args } => {
                 self.generate_in_expression(target);
+                self.generate_in_type_args(type_args);
                 self.generate_in_expression_list(args);
             }
             Expr::If { expr, body, else_branch } => {
@@ -194,8 +220,14 @@ impl NodeIdGenerator {
                     self.generate_in_expression(expr);
                 }
             }
-            Expr::StructInit { type_name, fields } => {
+            Expr::TupleExpression { values } => {
+                for expr in values {
+                    self.generate_in_expression(expr);
+                }
+            }
+            Expr::StructInit { type_name, type_args, fields } => {
                 self.generate_in_identifier(type_name);
+                self.generate_in_type_args(type_args);
                 for field in fields {
                     self.generate_in_field_init(field);
                 }

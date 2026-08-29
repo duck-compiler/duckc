@@ -3,9 +3,19 @@ use duckc_macros::ast_derive;
 use crate::ast::{Identifier, Span};
 
 #[ast_derive]
-pub enum TypeExpression<'src> {
+pub struct TypeParam<'src> {
     #[serde(borrow)]
-    Ident(Identifier<'src>),
+    pub name: Identifier<'src>,
+    pub span: Span<'src>,
+}
+
+#[ast_derive]
+pub enum TypeExpression<'src> {
+    Ident {
+        #[serde(borrow)]
+        name: Identifier<'src>,
+        type_args: Vec<TypeExpression<'src>>,
+    },
     Int,
     Int8,
     Int16,
@@ -26,6 +36,7 @@ pub enum TypeExpression<'src> {
     Pointer {
         inner: Box<TypeExpression<'src>>,
     },
+    Tuple(Vec<TypeExpression<'src>>),
 }
 
 #[ast_derive]

@@ -1,4 +1,4 @@
-use crate::{ast::{AstRoot, Identifier, Stmt, struct_definition::{ImplBlock, MethodKind}}, backend::semantics::{context::SemanticsContext, diagnostic::Diagnostic, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolKind, static_method_name}}};
+use crate::{ast::{AstRoot, Identifier, Stmt, struct_definition::{ImplBlock, MethodKind}}, backend::semantics::{context::{FreeFunctionMethodKey, SemanticsContext}, diagnostic::Diagnostic, module::ModuleId, symbol::{Origin, ScopeId, SymbolData, SymbolId, SymbolKind}}};
 
 pub fn collect_module<'src>(
     module: ModuleId,
@@ -17,8 +17,8 @@ pub fn collect_module<'src>(
                 declare_top_level(context, root, module, name, SymbolKind::Function);
             }
             Stmt::StructDefinition { name, impl_block, .. } => {
-                declare_top_level(context, root, module, name, SymbolKind::Struct);
-                reserve_static_method_names(context, root, module, name.ident, impl_block);
+                let struct_symbol = declare_top_level(context, root, module, name, SymbolKind::Struct);
+                reserve_free_function_method_names(context, root, module, struct_symbol, name.ident, impl_block);
             }
             Stmt::Use(_) => {}
             Stmt::VariableDeclaration { .. }
@@ -35,10 +35,11 @@ pub fn collect_module<'src>(
     context.modules[module.0 as usize].ast = ast;
 }
 
-fn reserve_static_method_names<'src>(
+fn reserve_free_function_method_names<'src>(
     context: &mut SemanticsContext<'src>,
     root: ScopeId,
     module: ModuleId,
+    struct_symbol: SymbolId,
     struct_name: &'src str,
     impl_block: &Option<ImplBlock<'src>>,
 ) {
@@ -47,11 +48,13 @@ fn reserve_static_method_names<'src>(
     };
 
     for method in &impl_block.methods {
-        if matches!(method.kind, MethodKind::Instance) {
+        if matches!(method.kind, MethodKind::Instance) && method.type_params.is_empty() {
             continue;
         }
 
-        let name = static_method_name(struct_name, method.name.ident);
+        let name = context.free_function_method_name(struct_name, method.name.ident);
+        let key = FreeFunctionMethodKey { struct_symbol, method_name: method.name.ident };
+        context.mangled_free_function_names.insert(key, name);
 
         if context.lookup(root, name).is_some() {
             context.report(Diagnostic::already_defined(name, method.name.span));
@@ -78,7 +81,7 @@ fn declare_top_level<'src>(
     module: ModuleId,
     name: &Identifier<'src>,
     kind: SymbolKind,
-) {
+) -> SymbolId {
     let symbol = context.add_symbol(SymbolData {
         name: name.ident,
         kind,
@@ -96,4 +99,6 @@ fn declare_top_level<'src>(
     }
 
     context.modules[module.0 as usize].definitions[name.id.0 as usize] = Some(symbol);
+
+    symbol
 }

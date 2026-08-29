@@ -1,6 +1,6 @@
 use duckc_macros::ast_derive;
 
-use crate::ast::type_expression::TypeAnnotation;
+use crate::ast::type_expression::{TypeAnnotation, TypeParam};
 use crate::ast::{Block, Identifier, ParameterList, Span};
 
 pub const SELF_NAME: &str = "self";
@@ -34,6 +34,7 @@ pub struct Method<'src> {
     pub kind: MethodKind,
     #[serde(borrow)]
     pub name: Identifier<'src>,
+    pub type_params: Vec<TypeParam<'src>>,
     pub params: ParameterList<'src>,
     pub return_type: TypeAnnotation<'src>,
     pub body: Block<'src>,

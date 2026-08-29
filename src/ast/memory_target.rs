@@ -1,5 +1,5 @@
 use crate::ast::Span;
-use crate::ast::{Expression, Identifier};
+use crate::ast::{Expression, Identifier, TypeExpression};
 use duckc_macros::ast_derive;
 
 #[ast_derive]
@@ -14,6 +14,11 @@ pub enum MemTar<'src> {
     FieldAccess {
         target: Box<MemoryTarget<'src>>,
         field_name: Identifier<'src>,
+        type_args: Vec<TypeExpression<'src>>,
+    },
+    TupleIndex {
+        target: Box<MemoryTarget<'src>>,
+        index: usize,
     },
 }
 

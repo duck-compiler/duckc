@@ -9,16 +9,13 @@ pub struct SymbolId(pub u32);
 pub struct ScopeId(pub u32);
 
 
-pub fn static_method_name<'src>(struct_name: &str, method_name: &str) -> &'src str {
-    Box::leak(format!("{struct_name}_{method_name}").into_boxed_str())
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SymbolKind {
     Function,
     Param,
     Variable,
     Struct,
+    TypeParam,
     Module,
 }
 
