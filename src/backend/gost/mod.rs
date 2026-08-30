@@ -12,7 +12,7 @@ pub use emit::emit_gost;
 mod gost_test;
 
 pub fn translate<'src>(context: &SemanticsContext<'src>, module: ModuleId) -> GostRoot<'src> {
-    let translator = translate::Translator::new(context, module);
+    let translator = translate::GostTranslator::new(context, module);
 
     let imports = collect_go_imports(context, module)
         .into_iter()

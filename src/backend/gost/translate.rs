@@ -20,7 +20,7 @@ fn member_access<'e, 'src>(
     }
 }
 
-pub struct Translator<'a, 'src> {
+pub struct GostTranslator<'a, 'src> {
     pub context: &'a SemanticsContext<'src>,
     pub module: ModuleId,
     temp_counter: Cell<u32>,
@@ -28,7 +28,7 @@ pub struct Translator<'a, 'src> {
     closure_counter: Cell<u32>,
 }
 
-impl<'a, 'src> Translator<'a, 'src> {
+impl<'a, 'src> GostTranslator<'a, 'src> {
     pub fn new(context: &'a SemanticsContext<'src>, module: ModuleId) -> Self {
         Self {
             context,
