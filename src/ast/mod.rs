@@ -11,6 +11,7 @@ pub mod use_statement;
 
 mod node_id;
 pub use node_id::NodeId;
+pub use node_id::NodeIdGenerator;
 pub use node_id::assign_generate_node_ids;
 
 use duckc_macros::ast_derive;

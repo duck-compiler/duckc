@@ -10,7 +10,7 @@ impl NodeId {
 }
 
 pub fn assign_generate_node_ids(ast: &mut AstRoot) -> usize {
-    let mut generator = NodeIdGenerator { next_id: 0 };
+    let mut generator = NodeIdGenerator::new();
     for statement in &mut ast.statements {
         generator.generate_in_statement(statement);
     }
@@ -23,6 +23,10 @@ pub struct NodeIdGenerator {
 }
 
 impl NodeIdGenerator {
+    pub fn new() -> Self {
+        Self { next_id: 0 }
+    }
+
     pub fn fresh(&mut self) -> NodeId {
         let id = NodeId(self.next_id);
         self.next_id += 1;
