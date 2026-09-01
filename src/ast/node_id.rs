@@ -164,19 +164,19 @@ impl NodeIdGenerator {
                 self.generate_in_identifier(ident);
             },
             MemTar::ArrayAccess { target, index_expression } => {
-                self.generate_in_memory_target(target);
+                self.generate_in_expression(target);
                 self.generate_in_expression(index_expression);
             }
             MemTar::Dereference(expr) => {
                 self.generate_in_expression(expr);
             }
             MemTar::FieldAccess { target, field_name, type_args } => {
-                self.generate_in_memory_target(target);
+                self.generate_in_expression(target);
                 self.generate_in_identifier(field_name);
                 self.generate_in_type_args(type_args);
             }
             MemTar::TupleIndex { target, index: _ } => {
-                self.generate_in_memory_target(target);
+                self.generate_in_expression(target);
             }
         }
     }

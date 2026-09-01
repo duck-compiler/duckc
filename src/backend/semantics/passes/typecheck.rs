@@ -633,7 +633,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
                 self.check_field_access(target, field_name, type_args, memory_target.span, usage)
             }
             MemTar::ArrayAccess { target, index_expression } => {
-                self.check_array_access(target, index_expression, memory_target.span, usage)
+                self.check_array_access(target, index_expression, memory_target.span)
             }
             MemTar::TupleIndex { target, index } => {
                 self.check_tuple_index(target, *index, memory_target.span, usage)
@@ -709,10 +709,30 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             return false;
         }
 
-        matches!(
-            &*expr.variant,
-            Expr::MemoryTarget(_) | Expr::StructInit { .. } | Expr::ArrayExpression { .. }
-        )
+        match &*expr.variant {
+            Expr::MemoryTarget(target) => self.is_addressable_mem_target(target),
+            Expr::StructInit { .. } | Expr::ArrayExpression { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn is_addressable_mem_target(&self, target: &MemoryTarget<'src>) -> bool {
+        match &target.variant {
+            MemTar::Name(_) | MemTar::Dereference(_) | MemTar::ArrayAccess { .. } => true,
+            MemTar::FieldAccess { target, .. } | MemTar::TupleIndex { target, .. } => {
+                self.can_assign_through(target, self.node_type(target.id))
+            }
+        }
+    }
+
+    fn can_assign_through(&self, target: &Expression<'src>, target_type: TypeId) -> bool {
+        matches!(self.context.types[target_type.0 as usize], Type::Pointer(_))
+            || self.is_addressable(target, target_type)
+    }
+
+    fn node_type(&self, node: NodeId) -> TypeId {
+        self.context.modules[self.module.0 as usize].node_types[node.0 as usize]
+            .expect("expr should already be typecheckd")
     }
 
     fn check_array_expression(
@@ -763,15 +783,19 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
 
     fn check_tuple_index(
         &mut self,
-        target: &MemoryTarget<'src>,
+        target: &Expression<'src>,
         index: usize,
         span: Span<'src>,
         usage: Usage,
     ) -> TypeId {
-        let target_type = self.check_memory_target(target, usage);
-
+        let target_type = self.check_expression(target);
         if self.is_poisoned(target_type) {
             return target_type;
+        }
+
+        if usage == Usage::Write && !self.can_assign_through(target, target_type) {
+            self.context.report(Diagnostic::not_addressable(span));
+            return self.context.intern(Type::TypeError);
         }
 
         let Type::Tuple(elements) = self.context.types[target_type.0 as usize].clone() else {
@@ -790,12 +814,11 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
 
     fn check_array_access(
         &mut self,
-        target: &MemoryTarget<'src>,
+        target: &Expression<'src>,
         index_expression: &Expression<'src>,
         span: Span<'src>,
-        usage: Usage,
     ) -> TypeId {
-        let target_type = self.check_memory_target(target, usage);
+        let target_type = self.check_expression(target);
         let index_type = self.check_expression(index_expression);
 
         let int_type = self.context.intern(Type::Int);
@@ -819,13 +842,15 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
 
     fn check_field_access(
         &mut self,
-        target: &MemoryTarget<'src>,
+        target: &Expression<'src>,
         field_name: &Identifier<'src>,
         type_args: &[TypeExpression<'src>],
         span: Span<'src>,
         usage: Usage,
     ) -> TypeId {
-        if let MemTar::Name(identifier) = &target.variant {
+        if let Expr::MemoryTarget(target_mem) = &*target.variant
+            && let MemTar::Name(identifier) = &target_mem.variant
+        {
             let go_package = self.resolution_of(identifier.id).and_then(|sym| {
                 match &self.context.symbols[sym.0 as usize].origin {
                     Origin::GoPackage { path } => Some(*path),
@@ -868,7 +893,7 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
             }
         }
 
-        let receiver_type = self.check_memory_target(target, Usage::Read);
+        let receiver_type = self.check_expression(target);
         let target_type = match &self.context.types[receiver_type.0 as usize] {
             Type::Pointer(pointee) => *pointee,
             _ => receiver_type,
@@ -876,6 +901,11 @@ impl<'a, 'src> TypeChecker<'a, 'src> {
 
         if self.is_poisoned(target_type) {
             return target_type;
+        }
+
+        if usage == Usage::Write && !self.can_assign_through(target, receiver_type) {
+            self.context.report(Diagnostic::not_addressable(span));
+            return self.context.intern(Type::TypeError);
         }
 
         match self.context.types[target_type.0 as usize].clone() {

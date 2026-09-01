@@ -8,7 +8,7 @@ fn type_param_names<'src>(type_params: &[TypeParam<'src>]) -> Vec<&'src str> {
 
 fn member_access<'e, 'src>(
     expr: &'e Expression<'src>,
-) -> Option<(&'e MemoryTarget<'src>, &'e Identifier<'src>)> {
+) -> Option<(&'e Expression<'src>, &'e Identifier<'src>)> {
     let Expr::MemoryTarget(memory_target) = &*expr.variant else {
         return None;
     };
@@ -569,7 +569,7 @@ impl<'a, 'src> GostTranslator<'a, 'src> {
             return (vec![], call_target, None);
         };
 
-        let (prelude, receiver) = self.translate_memory_target(receiver_target);
+        let (prelude, receiver) = self.translate_expression(receiver_target);
 
         (prelude, call_target, Some(self.receiver_argument(receiver, receiver_type)))
     }
@@ -590,7 +590,7 @@ impl<'a, 'src> GostTranslator<'a, 'src> {
 
     fn translate_member_closure(
         &self,
-        receiver_target: &MemoryTarget<'src>,
+        receiver_target: &Expression<'src>,
         field_name: &Identifier<'src>,
         member: &FreeFunctionMember<'src>,
         receiver_type: TypeId,
@@ -602,7 +602,7 @@ impl<'a, 'src> GostTranslator<'a, 'src> {
         let closure = self.fresh_closure_id();
         let receiver_name = self.receiver_temp_name(closure);
 
-        let (mut prelude, receiver) = self.translate_memory_target(receiver_target);
+        let (mut prelude, receiver) = self.translate_expression(receiver_target);
         prelude.push(GoStatement::VarDecl {
             name: receiver_name,
             type_: Some(self.receiver_pointer_type(receiver_type)),
@@ -643,7 +643,11 @@ impl<'a, 'src> GostTranslator<'a, 'src> {
             return None;
         };
 
-        let MemTar::Name(identifier) = &package_target.variant else {
+        let Expr::MemoryTarget(package_place) = &*package_target.variant else {
+            return None;
+        };
+
+        let MemTar::Name(identifier) = &package_place.variant else {
             return None;
         };
 
@@ -673,7 +677,7 @@ impl<'a, 'src> GostTranslator<'a, 'src> {
             }
             MemTar::FieldAccess { target, field_name, type_args: _ } => {
                 let Some(member) = self.free_function_member(field_name.id) else {
-                    let (prelude, base) = self.translate_memory_target(target);
+                    let (prelude, base) = self.translate_expression(target);
                     return (prelude, GoExpression::Selector { base: Box::new(base), field: field_name.ident });
                 };
 
@@ -684,14 +688,14 @@ impl<'a, 'src> GostTranslator<'a, 'src> {
                 self.translate_member_closure(target, field_name, member, receiver_type)
             }
             MemTar::ArrayAccess { target, index_expression } => {
-                let (mut prelude, base) = self.translate_memory_target(target);
+                let (mut prelude, base) = self.translate_expression(target);
                 let (index_prelude, index) = self.translate_expression(index_expression);
                 prelude.extend(index_prelude);
 
                 (prelude, GoExpression::ArrayIndex { base: Box::new(base), index: Box::new(index) })
             }
             MemTar::TupleIndex { target, index } => {
-                let (prelude, base) = self.translate_memory_target(target);
+                let (prelude, base) = self.translate_expression(target);
                 let field = self.context.alloc_str(&tuple_field_name(*index));
                 (prelude, GoExpression::Selector { base: Box::new(base), field })
             }

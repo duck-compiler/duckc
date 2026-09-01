@@ -196,10 +196,7 @@ pub fn array<'src>(values: Vec<Expression<'src>>) -> Expression<'src> {
 pub fn array_index<'src>(name: &'src str, index: Expression<'src>) -> Expression<'src> {
     expr(Expr::MemoryTarget(super::MemoryTarget {
         variant: MemTar::ArrayAccess {
-            target: Box::new(super::MemoryTarget {
-                variant: MemTar::Name(ident(name)),
-                span: empty_span(),
-            }),
+            target: Box::new(mem_name(name)),
             index_expression: Box::new(index),
         },
         span: empty_span(),
@@ -218,10 +215,10 @@ pub fn tuple_type<'src>(elements: Vec<TypeExpression<'src>>) -> TypeExpression<'
 
 pub fn tuple_index_target<'src>(target: memory_target::MemTar<'src>, index: usize) -> memory_target::MemTar<'src> {
     MemTar::TupleIndex {
-        target: Box::new(super::MemoryTarget {
+        target: Box::new(expr(Expr::MemoryTarget(super::MemoryTarget {
             variant: target,
             span: empty_span(),
-        }),
+        }))),
         index,
     }
 }
@@ -236,6 +233,17 @@ pub fn tuple_index<'src>(target: memory_target::MemTar<'src>, index: usize) -> E
 pub fn field_access<'src>(target: memory_target::MemTar<'src>, field: &'src str) -> Expression<'src> {
     expr(Expr::MemoryTarget(super::MemoryTarget {
         variant: field_target(target, field),
+        span: empty_span(),
+    }))
+}
+
+pub fn field_access_on<'src>(target: Expression<'src>, field: &'src str) -> Expression<'src> {
+    expr(Expr::MemoryTarget(super::MemoryTarget {
+        variant: MemTar::FieldAccess {
+            target: Box::new(target),
+            field_name: ident(field),
+            type_args: Vec::new(),
+        },
         span: empty_span(),
     }))
 }
@@ -286,10 +294,10 @@ pub fn generic_field_target<'src>(
     type_args: Vec<TypeExpression<'src>>,
 ) -> memory_target::MemTar<'src> {
     MemTar::FieldAccess {
-        target: Box::new(super::MemoryTarget {
+        target: Box::new(expr(Expr::MemoryTarget(super::MemoryTarget {
             variant: target,
             span: empty_span(),
-        }),
+        }))),
         field_name: ident(field),
         type_args,
     }

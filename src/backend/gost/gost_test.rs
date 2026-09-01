@@ -9,11 +9,11 @@ use crate::ast::builder::{array, generic_field_access, generic_fn_call, generic_
 use crate::backend::semantics::{analyze_module, context::SemanticsContext};
 use crate::backend::gost::{emit_gost, translate};
 
-fn go_run(go_source: &str, test_dir: &str) -> Option<String> {
-    let Ok(go_version) = Command::new("go").arg("version").output() else {
-        eprintln!("skip go build: go not found in PATH");
-        return None;
-    };
+fn go_run(go_source: &str, test_dir: &str) -> String {
+    let go_version = Command::new("go")
+        .arg("version")
+        .output()
+        .expect("go must be installed in PATH to run gost tests");
 
     assert!(go_version.status.success());
 
@@ -36,7 +36,7 @@ fn go_run(go_source: &str, test_dir: &str) -> Option<String> {
         String::from_utf8_lossy(&output.stderr),
     );
 
-    Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
 #[test]
@@ -68,7 +68,7 @@ fn array_literal_and_index_translate_to_valid_go() {
     assert!(go_source.contains(r#"[]string{"a", "b"}"#), "generated source: {go_source}");
     assert!(go_source.contains("arr[i]"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-array-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-array-test");
     assert_eq!(stdout, "a");
 }
 
@@ -100,7 +100,7 @@ fn struct_literal_and_field_access_translate_to_valid_go() {
     assert!(go_source.contains(r#"Point{x: "a", y: "b"}"#), "generated source: {go_source}");
     assert!(go_source.contains("p.x"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-struct-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-struct-test");
     assert_eq!(stdout, "a");
 }
 
@@ -130,7 +130,7 @@ fn go_stdlib_struct_return_type_synthesizes_a_duck_struct_and_translates_to_vali
 
     assert!(go_source.contains("time.Now()"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-go-struct-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-go-struct-test");
     assert_eq!(stdout, "ok");
 }
 
@@ -174,7 +174,7 @@ fn control_flow_arithmetic_and_assignment_translate_to_valid_go() {
     assert!(go_source.contains("(2 + (3 * 4))"), "generated source: {go_source}");
     assert!(go_source.contains("(!flag)"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-control-flow-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-control-flow-test");
     assert_eq!(stdout, "loop-body\ndone");
 }
 
@@ -224,7 +224,7 @@ fn if_else_used_as_a_value_translates_and_runs_correctly() {
     assert!(go_source.contains("} else {"), "generated source: {go_source}");
     assert!(go_source.contains("var label_true") && go_source.contains("= __duck_if_0"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-if-value-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-if-value-test");
     assert_eq!(stdout, "yes\nno");
 }
 
@@ -287,7 +287,7 @@ fn return_comparison_logic_and_loop_control_translate_and_run_correctly() {
     assert!(go_source.contains("break"), "generated source: {go_source}");
     assert!(go_source.contains("continue"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-return-control-flow-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-return-control-flow-test");
     assert_eq!(stdout, "looped");
 }
 
@@ -330,7 +330,7 @@ fn if_with_diverging_branch_used_as_a_value_translates_and_runs_correctly() {
     assert!(go_source.contains("return \"negative\""), "generated source: {go_source}");
     assert!(!go_source.contains("= \"negative\""), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-never-type-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-never-type-test");
     assert_eq!(stdout, "non-negative\nnegative");
 }
 
@@ -370,7 +370,7 @@ fn function_value_stored_in_a_variable_translates_and_runs_correctly() {
 
     assert!(go_source.contains("func(string) string"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-fn-value-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-fn-value-test");
     assert_eq!(stdout, "hi!");
 }
 
@@ -402,7 +402,7 @@ fn while_used_as_a_value_translates_and_runs_correctly() {
 
     assert!(go_source.contains("struct{}{}"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-while-value-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-while-value-test");
     assert_eq!(stdout, "done");
 }
 
@@ -440,7 +440,7 @@ fn pointer_parameter_writes_through_to_the_callers_variable() {
     assert!(go_source.contains("(*p) = v"), "generated source: {go_source}");
     assert!(go_source.contains("set((&x), 42)"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-pointer-param-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-pointer-param-test");
     assert_eq!(stdout, "42");
 }
 
@@ -483,7 +483,7 @@ fn pointer_to_struct_reads_and_writes_fields_through_auto_dereference() {
     assert!(go_source.contains("func shift(p *Point)"), "generated source: {go_source}");
     assert!(go_source.contains("p.x = (p.x + 10)"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-pointer-struct-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-pointer-struct-test");
     assert_eq!(stdout, "11");
 }
 
@@ -530,7 +530,7 @@ fn chained_pointer_fields_auto_dereference_and_run_correctly() {
     assert!(go_source.contains("next *Node"), "generated source: {go_source}");
     assert!(go_source.contains("first.next.next.value"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-linked-list-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-linked-list-test");
     assert_eq!(stdout, "3");
 }
 
@@ -561,7 +561,7 @@ fn sized_integer_declaration_emits_valid_go() {
 
     assert!(go_source.contains("var x int64 = 5"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-sized-int-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-sized-int-test");
     assert_eq!(stdout, "5");
 }
 
@@ -599,7 +599,7 @@ fn sixteen_bit_declarations_emit_valid_go() {
     assert!(go_source.contains("var signed int16 = (-32768)"), "generated source: {go_source}");
     assert!(go_source.contains("var unsigned uint16 = 65535"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-sixteen-bit-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-sixteen-bit-test");
     assert_eq!(stdout, "sixteen-bit-ok");
 }
 
@@ -638,7 +638,7 @@ fn go_function_taking_a_pointer_to_a_sized_int_writes_back_into_the_duck_variabl
     assert!(go_source.contains("var count int64 = 0"), "generated source: {go_source}");
     assert!(go_source.contains(r#"flag.Int64Var((&count), "n", 7, "how many")"#), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-go-pointer-param-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-go-pointer-param-test");
     assert_eq!(stdout, "7");
 }
 
@@ -669,7 +669,7 @@ fn aliased_go_import_uses_the_alias_for_the_import_and_for_synthesized_type_name
     assert!(go_source.contains("[]im.Point{im.Pt(1, 2)}"), "generated source: {go_source}");
     assert!(!go_source.contains("image.Point"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-aliased-import-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-aliased-import-test");
     assert_eq!(stdout, "ok");
 }
 
@@ -699,7 +699,7 @@ fn multi_segment_go_import_is_referenced_by_its_short_package_name() {
     assert!(go_source.contains(r#"import "container/list""#), "generated source: {go_source}");
     assert!(go_source.contains("[]*list.List{list.New()}"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-multi-segment-import-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-multi-segment-import-test");
     assert_eq!(stdout, "ok");
 }
 
@@ -729,7 +729,7 @@ fn a_versioned_go_import_is_referenced_by_the_package_name_go_binds() {
     assert!(go_source.contains(r#"import "math/rand/v2""#), "generated source: {go_source}");
     assert!(go_source.contains("rand.IntN(10)"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-versioned-import-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-versioned-import-test");
     assert_eq!(stdout, "ok");
 }
 
@@ -768,7 +768,7 @@ fn float_literals_emit_as_untyped_constants_that_fit_float32_and_float64() {
     assert!(go_source.contains("2.0"), "generated source: {go_source}");
     assert!(go_source.contains("strconv.FormatFloat(inferred, 102, 1, 64)"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-float-literal-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-float-literal-test");
     assert_eq!(stdout, "2.0\nnarrow-ok");
 }
 
@@ -815,7 +815,7 @@ fn negative_and_branch_valued_sized_literals_emit_valid_go() {
     assert!(go_source.contains("var __duck_if_0 int64"), "generated source: {go_source}");
     assert!(go_source.contains("[]int64{1, 2}"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-sized-literal-forms-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-sized-literal-forms-test");
     assert_eq!(stdout, "4");
 }
 
@@ -869,7 +869,7 @@ fn an_instance_method_writes_through_self_and_the_change_survives_the_call() {
     assert!(go_source.contains("self.add(by)"), "generated source: {go_source}");
     assert!(go_source.contains("c.bump(5)"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-instance-method-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-instance-method-test");
     assert_eq!(stdout, "7");
 }
 
@@ -931,7 +931,7 @@ fn a_struct_with_private_state_a_static_constructor_and_public_methods_runs_corr
     assert!(go_source.contains("= Point_new(3, 4)"), "generated source: {go_source}");
     assert!(go_source.contains("p.set_x(10)"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-struct-methods-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-struct-methods-test");
     assert_eq!(stdout, "14");
 }
 
@@ -983,7 +983,7 @@ fn tuple_survives_a_function_call() {
     assert!(go_source.contains("pair._0 = 7"), "generated source: {go_source}");
     assert!(go_source.contains("swapped._0"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-tuple-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-tuple-test");
     assert_eq!(stdout, "a\n7");
 }
 
@@ -1025,7 +1025,7 @@ fn go_multi_result_becomes_a_tuple() {
     assert!(go_source.contains("math.Frexp(2.0)"), "generated source: {go_source}");
     assert!(!go_source.contains("__duck_tuple_2"), "an unused go call must not be destructured: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-go-multi-result-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-go-multi-result-test");
     assert_eq!(stdout, "0.5\n4");
 }
 
@@ -1064,7 +1064,7 @@ fn a_wide_tuple_emits_valid_go() {
     assert!(go_source.contains("_19 int"), "generated source: {go_source}");
     assert!(go_source.contains("wide._19"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-wide-tuple-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-wide-tuple-test");
     assert_eq!(stdout, "19");
 }
 
@@ -1121,7 +1121,7 @@ fn generic_struct_function_and_constructor_run() {
     assert!(go_source.contains("boxed.get()"), "generated source: {go_source}");
     assert!(go_source.contains(r#"identity[string]("ok")"#), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-generic-struct-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-generic-struct-test");
     assert_eq!(stdout, "7ok");
 }
 
@@ -1173,7 +1173,7 @@ fn generic_method_becomes_a_free_function() {
     assert!(go_source.contains("Pair[T, U]{first: self.value, second: other}"), "generated source: {go_source}");
     assert!(go_source.contains(r#"Box_with[int, string]((&boxed), "three")"#), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-generic-method-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-generic-method-test");
     assert_eq!(stdout, "three");
 }
 
@@ -1226,7 +1226,7 @@ fn generic_methods_work_as_values() {
         "generated source: {go_source}",
     );
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-generic-method-value-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-generic-method-value-test");
     assert_eq!(stdout, "4!");
 }
 
@@ -1258,7 +1258,7 @@ fn explicit_type_argument_reaches_the_go_call() {
     assert!(go_source.contains("func empty[T any]() T"), "generated source: {go_source}");
     assert!(go_source.contains("empty[string]()"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-explicit-type-arg-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-explicit-type-arg-test");
     assert_eq!(stdout, "done");
 }
 
@@ -1294,7 +1294,7 @@ fn nested_generic_struct_instantiates_correctly() {
     assert!(go_source.contains("unwrap[Box[string]](outer)"), "generated source: {go_source}");
     assert!(go_source.contains("unwrap[string](unwrapped)"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-nested-generic-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-nested-generic-test");
     assert_eq!(stdout, "deep");
 }
 
@@ -1333,7 +1333,7 @@ fn recursive_generic_call_instantiates_correctly() {
     assert!(go_source.contains("twice[T](value, false)"), "generated source: {go_source}");
     assert!(go_source.contains(r#"twice[string]("echo", true)"#), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-generic-recursion-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-generic-recursion-test");
     assert_eq!(stdout, "echo");
 }
 
@@ -1373,7 +1373,7 @@ fn generic_method_runs_on_self_and_through_a_pointer() {
     assert!(go_source.contains("Box_with[T, string](self, text)"), "generated source: {go_source}");
     assert!(go_source.contains("pointer.shout(\"hi\")"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-generic-self-call-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-generic-self-call-test");
     assert_eq!(stdout, "hi");
 }
 
@@ -1416,7 +1416,7 @@ fn generic_method_on_a_plain_struct_becomes_a_free_function() {
     );
     assert!(go_source.contains(r#"Printer_show[string]((&printer), "shown")"#), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-plain-struct-generic-method-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-plain-struct-generic-method-test");
     assert_eq!(stdout, "shown");
 }
 
@@ -1453,7 +1453,7 @@ fn static_generic_method_works_as_a_value() {
 
     assert!(go_source.contains("= Box_of[string]"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-static-generic-value-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-static-generic-value-test");
     assert_eq!(stdout, "made");
 }
 
@@ -1494,7 +1494,7 @@ fn a_closure_survives_being_a_branch_value() {
     assert!(go_source.contains("__duck_receiver_0 *Box[int] = (&first)"), "generated source: {go_source}");
     assert!(go_source.contains("__duck_receiver_1 *Box[int] = (&second)"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-closure-in-branch-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-closure-in-branch-test");
     assert_eq!(stdout, "branch");
 }
 
@@ -1547,7 +1547,7 @@ fn static_method_type_parameters_follow_the_structs_own() {
     assert!(go_source.contains(r#"Box_make[string, int]("one", 1)"#), "generated source: {go_source}");
     assert!(go_source.contains(r#"Box_make[string, int]("two", 2)"#), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-static-own-type-param-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-static-own-type-param-test");
     assert_eq!(stdout, "onetwo");
 }
 
@@ -1581,6 +1581,6 @@ fn a_never_argument_does_not_poison_its_neighbors() {
 
     assert!(go_source.contains("two[int, struct {"), "generated source: {go_source}");
 
-    let Some(stdout) = go_run(&go_source, "duckc-gost-never-type-arg-test") else { return };
+    let stdout = go_run(&go_source, "duckc-gost-never-type-arg-test");
     assert_eq!(stdout, "before");
 }

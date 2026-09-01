@@ -406,15 +406,15 @@ impl<'a, 'src> ScopeResolver<'a, 'src> {
                 self.resolve_expression(&expr);
             }
             MemTar::ArrayAccess { target, index_expression } => {
-                self.resolve_memory_target(target);
+                self.resolve_expression(target);
                 self.resolve_expression(index_expression);
             }
             MemTar::FieldAccess { target, field_name: _, type_args } => {
-                self.resolve_memory_target(target);
+                self.resolve_expression(target);
                 self.resolve_type_args(type_args);
             }
             MemTar::TupleIndex { target, index: _ } => {
-                self.resolve_memory_target(target);
+                self.resolve_expression(target);
             }
         }
     }

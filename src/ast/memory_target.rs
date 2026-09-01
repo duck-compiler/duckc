@@ -8,16 +8,16 @@ pub enum MemTar<'src> {
     Name(Identifier<'src>),
     Dereference(Box<Expression<'src>>),
     ArrayAccess {
-        target: Box<MemoryTarget<'src>>,
+        target: Box<Expression<'src>>,
         index_expression: Box<Expression<'src>>,
     },
     FieldAccess {
-        target: Box<MemoryTarget<'src>>,
+        target: Box<Expression<'src>>,
         field_name: Identifier<'src>,
         type_args: Vec<TypeExpression<'src>>,
     },
     TupleIndex {
-        target: Box<MemoryTarget<'src>>,
+        target: Box<Expression<'src>>,
         index: usize,
     },
 }
