@@ -13,7 +13,7 @@ use crate::{
         gost,
         semantics::{self, context::SemanticsContext, diagnostic::DiagnosticKind},
     },
-    mimic,
+    frontend::parser,
 };
 
 pub struct CompileOutput {
@@ -22,6 +22,7 @@ pub struct CompileOutput {
 
 pub enum CompileError {
     Io(String),
+    Parse(String),
     Diagnostics(Vec<String>),
 }
 
@@ -34,13 +35,13 @@ pub fn run(file_path: &str) -> Result<CompileOutput, CompileError> {
         eprintln!("warning: {err}");
     }
 
-    let ast = parse(&source);
+    let ast = parse(file_path, &source)?;
     compile(ast, &arena)
 }
 
-fn parse<'src>(source: &'src str) -> AstRoot<'src> {
-    let _ = source;
-    mimic::test_struct_program()
+fn parse<'src>(file_path: &'src str, source: &'src str) -> Result<AstRoot<'src>, CompileError> {
+    parser::parse_module(file_path, source)
+        .map_err(|error| CompileError::Parse(error.to_string()))
 }
 
 fn compile<'src>(ast: AstRoot<'src>, arena: &'src Bump) -> Result<CompileOutput, CompileError> {
@@ -64,6 +65,7 @@ fn compile<'src>(ast: AstRoot<'src>, arena: &'src Bump) -> Result<CompileOutput,
 
     let gost_root = gost::translate(&context, module);
     let go_source = gost::emit_gost(gost_root);
+    println!("{}", go_source);
 
     Ok(CompileOutput { go_source })
 }
