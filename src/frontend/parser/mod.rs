@@ -4,6 +4,9 @@ mod statement;
 mod token_stream;
 mod type_expression;
 
+#[cfg(test)]
+mod parser_test;
+
 pub use error::ParseError;
 
 use crate::ast::{AstRoot, Identifier, NodeId, NodeIdGenerator, Span, Statement};

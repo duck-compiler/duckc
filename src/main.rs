@@ -4,6 +4,9 @@ mod driver;
 mod frontend;
 mod mimic;
 
+#[cfg(test)]
+mod compiler_test;
+
 fn main() {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
 
