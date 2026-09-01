@@ -29,14 +29,12 @@ pub enum LexDiag {
     EOF,
 }
 
-
 #[ast_derive]
 pub struct LexDiagnostic {
     pub variant: LexDiag,
     pub pos: usize,
     pub len: usize,
 }
-
 
 impl<'src> LexState<'src> {
     pub fn init(file_path: &'src str, file_text: &'src str) -> Self {
@@ -47,6 +45,21 @@ impl<'src> LexState<'src> {
             emitted_eof: false,
             str_interpolation_depth: 0,
             non_fail_diagnostics: Default::default(),
+        }
+    }
+
+    pub fn tokenize(file_path: &'src str, file_text: &'src str) -> Result<(Vec<Token<'src>>, Vec<LexDiagnostic>), LexDiagnostic> {
+        let mut lexer = LexState::init(file_path, file_text);
+        let mut tokens = Vec::new();
+
+        loop {
+            let token = lexer.lex_single()?;
+            let is_eof = matches!(token.variant, Tok::EOF);
+            tokens.push(token);
+
+            if is_eof {
+                return Ok((tokens, lexer.non_fail_diagnostics));
+            }
         }
     }
 
