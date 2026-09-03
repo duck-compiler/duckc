@@ -1,3 +1,9 @@
+use crate::ast::expression::{BinaryOperator, UnaryOperator};
+
+pub fn tuple_field_name(index: usize) -> String {
+    format!("_{index}")
+}
+
 #[derive(Debug)]
 pub struct GostRoot<'src> {
     pub body: Vec<GoStatement<'src>>,
@@ -6,19 +12,54 @@ pub struct GostRoot<'src> {
 #[derive(Debug)]
 pub enum GoExpression<'src> {
     String(&'src str),
-    Int(&'src i64),
-    Int8(&'src i8),
-    Int32(&'src i32),
-    Int64(&'src i64),
-    Uint(&'src u64),
-    Uint8(&'src u8),
-    Uint32(&'src u32),
-    Uint64(&'src u64),
-    Float32(&'src f32),
-    Float64(&'src f64),
+    Bool(bool),
+    Int(u64),
+    Float64(f64),
+    BinaryOp {
+        left: Box<GoExpression<'src>>,
+        op: BinaryOperator,
+        right: Box<GoExpression<'src>>,
+    },
+    UnaryOp {
+        op: UnaryOperator,
+        expr: Box<GoExpression<'src>>,
+    },
+    AddressOf(Box<GoExpression<'src>>),
+    Dereference(Box<GoExpression<'src>>),
     FuncCall {
-        callee: Box<GoExpression<'src>>,
+        target: Box<GoExpression<'src>>,
         args: Vec<GoExpression<'src>>,
+    },
+    // "field access"
+    Selector {
+        base: Box<GoExpression<'src>>,
+        field: &'src str,
+    },
+    Array {
+        elem_type: GoType<'src>,
+        values: Vec<GoExpression<'src>>,
+    },
+    ArrayIndex {
+        base: Box<GoExpression<'src>>,
+        index: Box<GoExpression<'src>>,
+    },
+    StructInit {
+        type_name: &'src str,
+        type_args: Vec<GoType<'src>>,
+        fields: Vec<(&'src str, GoExpression<'src>)>,
+    },
+    TupleInit {
+        elem_types: Vec<GoType<'src>>,
+        values: Vec<GoExpression<'src>>,
+    },
+    Instantiate {
+        base: Box<GoExpression<'src>>,
+        type_args: Vec<GoType<'src>>,
+    },
+    FuncLiteral {
+        params: Vec<(&'src str, GoType<'src>)>,
+        return_type: Option<GoType<'src>>,
+        body: Vec<GoStatement<'src>>,
     },
     Immediate(&'src str)
 }
@@ -34,10 +75,12 @@ pub struct StructField<'src> {
 pub enum GoType<'src> {
     Int,
     Int8,
+    Int16,
     Int32,
     Int64,
     Uint,
     Uint8,
+    Uint16,
     Uint32,
     Uint64,
     Float32,
@@ -45,10 +88,19 @@ pub enum GoType<'src> {
     String,
     Bool,
     Array(Box<GoType<'src>>),
+    Pointer(Box<GoType<'src>>),
     Struct {
         fields: Vec<StructField<'src>>,
     },
-    TypeName(&'src str),
+    Tuple(Vec<GoType<'src>>),
+    Named {
+        name: &'src str,
+        type_args: Vec<GoType<'src>>,
+    },
+    Func {
+        params: Vec<GoType<'src>>,
+        return_type: Option<Box<GoType<'src>>>,
+    },
 }
 
 #[derive(Debug)]
@@ -58,7 +110,9 @@ pub enum GoStatement<'src> {
         path: &'src str,
     },
     FuncDef {
+        receiver: Option<(&'src str, GoType<'src>)>,
         name: &'src str,
+        type_params: Vec<&'src str>,
         params: Vec<(&'src str, GoType<'src>)>,
         return_type: Option<GoType<'src>>,
         body: Vec<GoStatement<'src>>,
@@ -69,10 +123,33 @@ pub enum GoStatement<'src> {
         init_expression: Option<GoExpression<'src>>,
     },
     Assign {
-        target: &'src str,
+        target: GoExpression<'src>,
+        expr: GoExpression<'src>,
+    },
+    MultiVarDecl {
+        names: Vec<&'src str>,
         expr: GoExpression<'src>,
     },
     Expr {
         expr: GoExpression<'src>,
     },
+    TypeDecl {
+        name: &'src str,
+        type_params: Vec<&'src str>,
+        type_: GoType<'src>,
+    },
+    If {
+        condition: GoExpression<'src>,
+        body: Vec<GoStatement<'src>>,
+        else_body: Option<Vec<GoStatement<'src>>>,
+    },
+    While {
+        condition: GoExpression<'src>,
+        body: Vec<GoStatement<'src>>,
+    },
+    Return {
+        value: Option<GoExpression<'src>>,
+    },
+    Break,
+    Continue,
 }

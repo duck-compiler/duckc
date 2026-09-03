@@ -6,6 +6,8 @@ pub mod symbol;
 pub mod module;
 pub mod passes;
 pub mod diagnostic;
+pub mod go_resolve;
+pub mod go_map;
 
 #[cfg(test)]
 mod semantics_test;

@@ -1,43 +1,44 @@
-use crate::backend::{gost, semantics::{self, context::SemanticsContext, diagnostic::DiagnosticKind}};
-
 mod ast;
 mod backend;
+mod driver;
 mod frontend;
 mod mimic;
+
+#[cfg(test)]
+mod compiler_test;
 
 fn main() {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
 
     if args.len() != 1 {
-        println!("Usage: duckc <filename>");
-        return;
+        eprintln!("Usage: duckc <filename>");
+        std::process::exit(1);
     }
 
-    let file_name = &args[0];
-    let _src = match std::fs::read_to_string(file_name) {
-        Ok(src) => src,
-        Err(e) => {
-            println!("Error reading {file_name}: {e:?}");
-            return;
+    match driver::run(&args[0]) {
+        Ok(output) => {
+            let go_file = std::env::temp_dir().join(format!("duck-{}.go", std::process::id()));
+            std::fs::write(&go_file, output.go_source)
+                .expect("failed to write generated go source");
+
+            let status = std::process::Command::new(driver::resolve_go_binary())
+                .arg("run")
+                .arg(&go_file)
+                .status()
+                .expect("failed to run go");
+
+            let _ = std::fs::remove_file(&go_file);
+            std::process::exit(status.code().unwrap_or(1));
         }
-    };
-
-    let mut context = SemanticsContext::new();
-
-    let module = context.add_module(mimic::hello_world_program());
-    semantics::analyze_module(&mut context, module);
-
-    if !context.diagnostics.is_empty() {
-        for diagnostic in &context.diagnostics {
-            println!("{:?}", diagnostic);
-            if let DiagnosticKind::Error = diagnostic.kind {
-                return;
+        Err(driver::CompileError::Io(message)) | Err(driver::CompileError::Parse(message)) => {
+            eprintln!("{message}");
+            std::process::exit(1);
+        }
+        Err(driver::CompileError::Diagnostics(messages)) => {
+            for message in &messages {
+                eprintln!("{message}");
             }
+            std::process::exit(1);
         }
     }
-
-    let gost = gost::translate(&context, module);
-    let go_src = gost::emit_gost(gost);
-
-    println!("{go_src}");
 }

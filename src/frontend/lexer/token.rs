@@ -1,7 +1,6 @@
 use duckc_macros::ast_derive;
 
 use crate::ast::{Identifier, Span};
-use serde::{Deserialize, Serialize};
 
 #[ast_derive]
 pub enum StrPart<'src> {
@@ -9,6 +8,7 @@ pub enum StrPart<'src> {
     Newline,
     Tab,
     Octal(&'src str),
+    Interpolation(Vec<Token<'src>>),
 }
 
 #[ast_derive]
@@ -27,27 +27,43 @@ pub enum Tok<'src> {
     As,
     Return,
     If,
+    Else,
     While,
     Continue,
     Break,
+    Struct,
+    Impl,
+    Pub,
+    Use,
+    Static,
 
     // Type keywords
     Int,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Uint,
+    Uint8,
+    Uint16,
+    Uint32,
+    Uint64,
     Bool,
     Float,
+    Float32,
     String,
 
     // Control
     LeftParen,
     LeftSquare,
-    LeftAngle,
     LeftBrace,
 
     RightParen,
     RightSquare,
-    RightAngle,
     RightBrace,
 
+    Less,
+    Greater,
     LessEquals,
     GreaterEquals,
     DoubleEquals,
@@ -76,10 +92,16 @@ pub enum Tok<'src> {
     BarAssign,
 
     Semicolon,
+    Comma,
+    Dot,
+    Colon,
+    Arrow,
     Ampersand,
     Bang,
     Bar,
     Tilde,
+    And,
+    Or,
 
     // Stateful
     #[serde(borrow)]
